@@ -591,6 +591,12 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     let mut cpu = XtensaLx7::new();
     cpu.reset(bus).expect("xtensa reset");
 
+    // Auto-derive walk deletion under `event-scheduler` once every peripheral
+    // is scheduler-driven or Class-A inert. Production WASM/e2e paths call
+    // this configure (not from_config), so recompute here — same predicate as
+    // `from_config` with `walk_deleted = None`.
+    bus.recompute_walk_deletable();
+
     Esp32s3Wiring {
         cpu,
         icache_backing,

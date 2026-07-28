@@ -87,9 +87,13 @@ pub struct Nrf52Clock {
     hfxodebounce: u32,
     lfrcmode: u32,
 
-    // Flags raised by tick() on the same call the task was issued.
+    // Legacy deferred-start flags (kept for snapshot compatibility; writes now
+    // latch events synchronously so these stay false).
     pending_hfclk_started: bool,
     pending_lfclk_started: bool,
+
+    /// Scheduler level-IRQ chain armed (see `take_scheduled_events`).
+    chain_live: bool,
 
     // POWER state (register-surface; no dynamic logic).
     power_resetreas: u32,
@@ -113,6 +117,13 @@ impl Nrf52Clock {
             power_resetreas: 0x0000_0001,
             ..Self::default()
         }
+    }
+
+    /// Held level that the legacy walk re-asserted every tick: a started
+    /// event latched with its INTEN bit set.
+    fn irq_level_held(&self) -> bool {
+        (self.events_hfclkstarted != 0 && self.inten & INTEN_HFCLKSTARTED != 0)
+            || (self.events_lfclkstarted != 0 && self.inten & INTEN_LFCLKSTARTED != 0)
     }
 }
 
@@ -174,7 +185,10 @@ impl Peripheral for Nrf52Clock {
                 // HFCLKSTAT.STATE = running; SRC = bit 0 reflects LFCLKSRC bits — for
                 // our purposes (Zephyr clock_init), reporting 1<<16 is sufficient.
                 self.hfclkstat = (1 << 16) | 1; // xtal source, running
-                self.pending_hfclk_started = true;
+                                                // Instantaneous start (matches module doc + Zephyr busy-poll on
+                                                // EVENTS_HFCLKSTARTED). No deferred walk work remains.
+                self.events_hfclkstarted = 1;
+                self.pending_hfclk_started = false;
             }
             OFF_TASKS_HFCLKSTOP if value & 1 != 0 => {
                 self.hfclkrun = 0;
@@ -183,7 +197,8 @@ impl Peripheral for Nrf52Clock {
             OFF_TASKS_LFCLKSTART if value & 1 != 0 => {
                 self.lfclkrun = 1;
                 self.lfclkstat = (1 << 16) | (self.lfclksrc & 0x3);
-                self.pending_lfclk_started = true;
+                self.events_lfclkstarted = 1;
+                self.pending_lfclk_started = false;
             }
             OFF_TASKS_LFCLKSTOP if value & 1 != 0 => {
                 self.lfclkrun = 0;
@@ -224,25 +239,54 @@ impl Peripheral for Nrf52Clock {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        let mut irq = false;
-        if self.pending_hfclk_started {
-            self.pending_hfclk_started = false;
-            self.events_hfclkstarted = 1;
-            if self.inten & INTEN_HFCLKSTARTED != 0 {
-                irq = true;
+        // Feature-off / walk path: re-assert level IRQ while events+INTEN hold.
+        // Scheduler mode skips this (see `uses_scheduler`) and rides `on_event`.
+        if self.irq_level_held() {
+            PeripheralTickResult {
+                irq: true,
+                cycles: 1,
+                ..Default::default()
             }
+        } else {
+            PeripheralTickResult::default()
         }
-        if self.pending_lfclk_started {
-            self.pending_lfclk_started = false;
-            self.events_lfclkstarted = 1;
-            if self.inten & INTEN_LFCLKSTARTED != 0 {
-                irq = true;
-            }
-        }
+    }
 
-        PeripheralTickResult {
-            irq,
-            cycles: 1,
+    fn uses_scheduler(&self) -> bool {
+        // Always event-driven under `event-scheduler` builds (walk skip is
+        // feature-gated on the bus). Start events latch on the TASK write;
+        // level IRQ re-assert rides the delay-0/1 chain below.
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // Scheduler path covers every effect of the walk (events are write-
+        // synchronous; IRQ re-assert is event-scheduled). Feature-off still
+        // walks via the bus's feature gate, so the conservative default of
+        // `uses_scheduler()==true` alone is what unlocks walk-deletion.
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.irq_level_held() && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, 0)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let held = self.irq_level_held();
+        self.chain_live = held;
+        crate::sched::EventResult {
+            raise_own_irq: held,
+            reschedule_delay: held.then_some(1),
             ..Default::default()
         }
     }

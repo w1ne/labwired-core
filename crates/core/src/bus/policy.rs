@@ -72,15 +72,19 @@ impl SystemBus {
     /// `hcsr04_scheduling_disabled` override, which pins the legacy per-tick
     /// path. Callers (the wasm `recommended_tick_interval` getter) apply the
     /// result via `set_peripheral_tick_interval` at engine init.
+    ///
+    /// **H5 FLASH (`flash_models_ops`) is intentionally NOT a max_safe arm.**
+    /// Erase/bank-swap ops are drained per instruction boundary by
+    /// `Machine::apply_pending_flash_op`, and [`Self::requires_cycle_accurate`]
+    /// still clamps the CPU quantum to 1 so no op is lost mid-batch. That is
+    /// orthogonal to the peripheral tick interval: a walk-deleted H5 bus can
+    /// run `RECOMMENDED_TICK_INTERVAL` for scheduler-paced peripherals while
+    /// remaining cycle-accurate at the CPU/FLASH layer.
     pub fn max_safe_tick_interval(&self) -> u32 {
         #[cfg(feature = "event-scheduler")]
         {
             let hcsr04_forced_legacy = !self.hcsr04.is_empty() && self.hcsr04_scheduling_disabled;
-            if self.legacy_walk_disabled
-                && !self.has_iolink_master()
-                && !self.flash_models_ops
-                && !hcsr04_forced_legacy
-            {
+            if self.legacy_walk_disabled && !self.has_iolink_master() && !hcsr04_forced_legacy {
                 return RECOMMENDED_TICK_INTERVAL;
             }
         }

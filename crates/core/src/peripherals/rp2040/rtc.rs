@@ -57,7 +57,7 @@
 //!   why `SETUP_1.DOTW` must be programmed by the caller. A wrong `DOTW` in
 //!   equals a wrong `DOTW` out, as on silicon.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::cell::Cell;
 
 // Register offsets (relative to the RTC base) — SVD-verified.
@@ -223,6 +223,11 @@ pub struct Rp2040Rtc {
     /// The `RTC_1` read latch: `(date, time)` captured when `RTC_1` is read.
     /// `RTC_0` returns the time half of this, never the live value.
     latch: Cell<(u32, u32)>,
+    /// Bus-published cycle clock (event-scheduler). When present the model is
+    /// walk-independent: calendar advance rides scheduled events.
+    clock: Option<CycleClock>,
+    /// Bumped each arm so stale calendar events die on arrival.
+    arm_seq: u32,
 }
 
 impl Default for Rp2040Rtc {
@@ -246,6 +251,33 @@ impl Rp2040Rtc {
             inte: 0,
             intf: 0,
             latch: Cell::new((0, 0)),
+            clock: None,
+            arm_seq: 0,
+        }
+    }
+
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_scheduler_wake(&self) -> bool {
+        self.enabled || self.ints() != 0
+    }
+
+    /// One peripheral-tick of calendar advance + level IRQ vector.
+    fn step_one(&mut self) -> PeripheralTickResult {
+        if self.enabled {
+            if self.div_count >= self.clkdiv_m1 {
+                self.div_count = 0;
+                self.now.advance_second(self.force_notleapyear);
+            } else {
+                self.div_count += 1;
+            }
+        }
+        let explicit_irqs = (self.ints() != 0).then(|| vec![RTC_IRQ]);
+        PeripheralTickResult {
+            explicit_irqs,
+            ..Default::default()
         }
     }
 
@@ -397,21 +429,46 @@ impl Peripheral for Rp2040Rtc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if self.enabled {
-            if self.div_count >= self.clkdiv_m1 {
-                self.div_count = 0;
-                self.now.advance_second(self.force_notleapyear);
-            } else {
-                self.div_count += 1;
-            }
+        // Legacy / feature-off path. Scheduler mode skips the walk.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
+        self.step_one()
+    }
 
-        // Level-sensitive delivery, matching the timer, PWM and ADC models:
-        // RTC_IRQ is held while the masked alarm status is set. There is no
-        // raw-status write to acknowledge — firmware clears MATCH_ENA.
-        let explicit_irqs = (self.ints() != 0).then(|| vec![RTC_IRQ]);
-        PeripheralTickResult {
-            explicit_irqs,
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || !self.needs_scheduler_wake() {
+            return Vec::new();
+        }
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        vec![(0, self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        let res = self.step_one();
+        crate::sched::EventResult {
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: self.needs_scheduler_wake().then_some(1),
             ..Default::default()
         }
     }

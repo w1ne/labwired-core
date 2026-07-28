@@ -229,6 +229,12 @@ impl RtcCntlStub {
 }
 
 impl Peripheral for RtcCntlStub {
+    // Inert walk: RTC_CNTL register bank; TIME_UPDATE handshake settles on write.
+    // tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

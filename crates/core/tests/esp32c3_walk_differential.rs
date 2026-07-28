@@ -258,8 +258,8 @@ fn build_oled_lab(
             .dev
             .as_any_mut()
             .unwrap()
-            .downcast_mut::<labwired_core::peripherals::uart::Uart>()
-            .expect("uart0 is the shared Uart model")
+            .downcast_mut::<labwired_core::peripherals::esp_uart::EspUart>()
+            .expect("uart0 is the shared Espressif UART twin")
             .force_legacy_walk();
     }
 

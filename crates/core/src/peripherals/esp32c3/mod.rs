@@ -20,5 +20,6 @@ pub mod rtc_timer;
 pub mod sar_adc;
 pub mod sha;
 pub mod spi;
+pub mod uart;
 pub mod virtual_wifi;
 pub mod wifi_mac;

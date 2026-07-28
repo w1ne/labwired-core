@@ -32,8 +32,16 @@
 //! tick until firmware acknowledges by writing `INTR`), so the ISR always
 //! observes the source. Without this the us_ticker never fires, boot stalls in
 //! a critical section, and the RTOS aborts on the first mutex acquire.
+//!
+//! ## Walk-free (event-scheduler)
+//!
+//! With a bus-attached [`CycleClock`] the model reports `uses_scheduler` and
+//! leaves the legacy walk: counter advances lazily via `sync_to` / read-side
+//! clock sync, and alarm matches ride scheduled events with held-level IRQ
+//! re-emission at delay 1.
 
-use crate::{Peripheral, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use std::cell::Cell;
 
 // Register offsets (relative to the TIMER base).
 const TIMEHW: u64 = 0x00; // write high word (commits staged low word)
@@ -53,9 +61,10 @@ const INTS: u64 = 0x40; // masked status = (INTR | INTF) & INTE (read-only)
 
 #[derive(Debug)]
 pub struct Rp2040Timer {
-    /// Live 64-bit microsecond counter.
-    counter: u64,
-    /// `PAUSE.bit0` — when set, `tick` does not advance the counter.
+    /// Live 64-bit microsecond counter. `Cell` so `&self` reads can lazy-sync
+    /// under the event-scheduler path (batch-boundary freshness).
+    counter: Cell<u64>,
+    /// `PAUSE.bit0` — when set, advance does not move the counter.
     paused: bool,
     /// Low word staged by a `TIMELW` write (committed by `TIMEHW`).
     pending_low: u32,
@@ -70,6 +79,16 @@ pub struct Rp2040Timer {
     /// `INTF` — per-alarm interrupt force (pico-sdk sets this to fire an alarm
     /// whose target was already in the past).
     intf: u8,
+    /// Bus-published cycle clock (event-scheduler builds). When present the
+    /// model is walk-independent: counter advances lazily via `sync_to` and
+    /// alarm matches ride scheduled events.
+    clock: Option<CycleClock>,
+    /// CPU cycle of the last advance (Cell so `&self` read-sync is idempotent).
+    anchor: Cell<u64>,
+    /// Bumped each arm so stale compare events die on arrival.
+    arm_seq: u32,
+    /// True while a compare / level-IRQ event is live in the scheduler.
+    scheduled: bool,
 }
 
 impl Default for Rp2040Timer {
@@ -81,7 +100,7 @@ impl Default for Rp2040Timer {
 impl Rp2040Timer {
     pub fn new() -> Self {
         Self {
-            counter: 0,
+            counter: Cell::new(0),
             paused: false,
             pending_low: 0,
             alarm: [0; 4],
@@ -89,6 +108,10 @@ impl Rp2040Timer {
             intr: 0,
             inte: 0,
             intf: 0,
+            clock: None,
+            anchor: Cell::new(0),
+            arm_seq: 0,
+            scheduled: false,
         }
     }
 
@@ -97,13 +120,112 @@ impl Rp2040Timer {
     fn ints(&self) -> u8 {
         (self.intr | self.intf) & self.inte
     }
+
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Lazy advance of the free-running counter only (no alarm latch — that
+    /// needs `&mut` and rides write/`on_event`). Idempotent on `now`.
+    fn advance_counter_to(&self, now: u64) {
+        let anchor = self.anchor.get();
+        if now <= anchor {
+            return;
+        }
+        if !self.paused {
+            self.counter
+                .set(self.counter.get().wrapping_add(now - anchor));
+        }
+        self.anchor.set(now);
+    }
+
+    /// Pull "now" from the bus-published clock so polled `TIMERAWL` observes
+    /// forward progress under batching (batch-boundary freshness).
+    fn sync_from_clock(&self) {
+        if let Some(clock) = self.clock.as_ref() {
+            if self.scheduler_mode() {
+                self.advance_counter_to(clock.now());
+            }
+        }
+    }
+
+    /// Advance the free-running counter by `cycles` base ticks (one base tick
+    /// ≡ one legacy `tick()` call) and fire any alarm that lands on the way.
+    fn advance_cycles(&mut self, cycles: u64) -> PeripheralTickResult {
+        if cycles == 0 {
+            return self.level_irqs();
+        }
+        let start = self.counter.get();
+        if !self.paused {
+            // Fire armed alarms whose low-32 target is hit at some step
+            // k ∈ 1..=cycles: after k advances, low == (start + k) as u32.
+            for idx in 0..4u8 {
+                if self.armed & (1 << idx) == 0 {
+                    continue;
+                }
+                let target = self.alarm[idx as usize];
+                let start_low = start as u32;
+                // Steps after `start` until low equals target (never 0: a
+                // counter already at the target re-hits only after a full wrap).
+                let steps = if target == start_low {
+                    1u64 << 32
+                } else {
+                    target.wrapping_sub(start_low) as u64
+                };
+                if steps <= cycles {
+                    self.intr |= 1 << idx;
+                    self.armed &= !(1 << idx);
+                }
+            }
+            self.counter.set(start.wrapping_add(cycles));
+        }
+        self.level_irqs()
+    }
+
+    /// Level-sensitive IRQ vector for the current masked status.
+    fn level_irqs(&self) -> PeripheralTickResult {
+        let ints = self.ints();
+        let explicit_irqs = if ints != 0 {
+            Some((0..4).filter(|x| ints & (1 << x) != 0).collect())
+        } else {
+            None
+        };
+        PeripheralTickResult {
+            explicit_irqs,
+            ..Default::default()
+        }
+    }
+
+    /// CPU cycles until the next armed alarm match (or `None` if paused / none).
+    fn cycles_until_next_alarm(&self) -> Option<u64> {
+        if self.paused || self.armed == 0 {
+            return None;
+        }
+        let start_low = self.counter.get() as u32;
+        let mut best: Option<u64> = None;
+        for idx in 0..4u8 {
+            if self.armed & (1 << idx) == 0 {
+                continue;
+            }
+            let target = self.alarm[idx as usize];
+            let steps = if target == start_low {
+                1u64 << 32
+            } else {
+                target.wrapping_sub(start_low) as u64
+            };
+            best = Some(best.map_or(steps, |b| b.min(steps)));
+        }
+        best
+    }
 }
 
 impl Peripheral for Rp2040Timer {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        self.sync_from_clock();
+        let counter = self.counter.get();
         let val = match offset {
-            TIMERAWL | TIMELR => self.counter as u32,
-            TIMERAWH | TIMEHR => (self.counter >> 32) as u32,
+            TIMERAWL | TIMELR => counter as u32,
+            TIMERAWH | TIMEHR => (counter >> 32) as u32,
             ALARM0..=ALARM3 => self.alarm[((offset - ALARM0) / 4) as usize],
             ARMED => self.armed as u32,
             PAUSE => self.paused as u32,
@@ -117,12 +239,27 @@ impl Peripheral for Rp2040Timer {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // Sync free-running state before a write observes/mutates it (and fire
+        // any alarm that lands in the deferred window).
+        if self.scheduler_mode() {
+            if let Some(clock) = self.clock.as_ref() {
+                let now = clock.now();
+                let anchor = self.anchor.get();
+                if now > anchor {
+                    let delta = now - anchor;
+                    self.anchor.set(now);
+                    let _ = self.advance_cycles(delta);
+                }
+            }
+        }
         match offset {
             PAUSE => self.paused = value & 0x1 != 0,
             TIMELW => self.pending_low = value,
             // Writing the high word commits the staged low word as the new
             // counter base (datasheet: write TIMELW then TIMEHW).
-            TIMEHW => self.counter = ((value as u64) << 32) | self.pending_low as u64,
+            TIMEHW => self
+                .counter
+                .set(((value as u64) << 32) | self.pending_low as u64),
             // Writing a target arms the corresponding alarm.
             ALARM0..=ALARM3 => {
                 let idx = ((offset - ALARM0) / 4) as usize;
@@ -153,36 +290,94 @@ impl Peripheral for Rp2040Timer {
         self.write_u32(aligned, new)
     }
 
-    fn tick(&mut self) -> crate::PeripheralTickResult {
-        if !self.paused {
-            self.counter = self.counter.wrapping_add(1);
+    fn tick(&mut self) -> PeripheralTickResult {
+        // Legacy / feature-off path. Scheduler mode skips the walk.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
+        self.advance_cycles(1)
+    }
 
-        // Fire any armed alarm whose 32-bit target the counter has reached.
-        // Silicon compares the low word for exact equality; the monotonic
-        // +1 counter always hits it within one wrap. A target already in the
-        // past never matches here — pico-sdk forces those via INTF instead.
-        let low = self.counter as u32;
-        for idx in 0..4 {
-            if self.armed & (1 << idx) != 0 && self.alarm[idx as usize] == low {
-                self.intr |= 1 << idx;
-                self.armed &= !(1 << idx);
-            }
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if !self.scheduler_mode() {
+            return;
         }
+        let anchor = self.anchor.get();
+        if now_cycle <= anchor {
+            return;
+        }
+        let delta = now_cycle - anchor;
+        self.anchor.set(now_cycle);
+        let _ = self.advance_cycles(delta);
+    }
 
-        // Level-sensitive IRQ delivery: while an alarm's masked status is set,
-        // re-pend TIMER_IRQ_x (NVIC IRQ x) every tick until firmware writes
-        // INTR to acknowledge. Matches silicon's held IRQ line and guarantees
-        // the ISR sees the source even if it runs a tick after the pend.
-        let ints = self.ints();
-        let explicit_irqs = if ints != 0 {
-            Some((0..4).filter(|x| ints & (1 << x) != 0).collect())
-        } else {
-            None
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() {
+            self.scheduled = false;
+            return Vec::new();
+        }
+        // Arm for: (a) next alarm match, and/or (b) held level-IRQ re-pend.
+        // delay-0 → deadline current_cycle+1 (walk's next tick).
+        let alarm_delay = self.cycles_until_next_alarm().map(|d| d.saturating_sub(1));
+        let level_delay = (self.ints() != 0).then_some(0u64);
+        let delay = match (alarm_delay, level_delay) {
+            (Some(a), Some(l)) => Some(a.min(l)),
+            (Some(a), None) => Some(a),
+            (None, Some(l)) => Some(l),
+            (None, None) => None,
         };
+        let Some(d) = delay else {
+            self.scheduled = false;
+            return Vec::new();
+        };
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        self.scheduled = true;
+        vec![(d, self.arm_seq)]
+    }
 
-        crate::PeripheralTickResult {
-            explicit_irqs,
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        let now = sched.now();
+        let anchor = self.anchor.get();
+        let res = if now > anchor {
+            let delta = now - anchor;
+            self.anchor.set(now);
+            self.advance_cycles(delta)
+        } else {
+            // Level re-pend without counter motion (e.g. INTF-only).
+            self.level_irqs()
+        };
+        let next_alarm = self.cycles_until_next_alarm().map(|d| d.saturating_sub(1));
+        let next_level = (self.ints() != 0).then_some(1u64);
+        let reschedule = match (next_alarm, next_level) {
+            (Some(a), Some(l)) => Some(a.min(l)),
+            (Some(a), None) => Some(a),
+            (None, Some(l)) => Some(l),
+            (None, None) => None,
+        };
+        self.scheduled = reschedule.is_some();
+        crate::sched::EventResult {
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: reschedule,
             ..Default::default()
         }
     }

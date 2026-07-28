@@ -30,6 +30,9 @@ impl WasmSimulator {
     #[wasm_bindgen]
     pub fn install_arduino_esp32_quirks(&mut self, elf_bytes: &[u8]) -> Result<(), JsValue> {
         use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
+        // Re-install can happen after a soft re-run without a full construct;
+        // always start from a clean session-global slate.
+        rom_thunks::reset_esp32_session_state();
         let machine = self
             .machine
             .as_mut()

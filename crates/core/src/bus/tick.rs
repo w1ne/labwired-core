@@ -517,6 +517,14 @@ impl SystemBus {
                     if self.peripherals[idx].dev.legacy_tick_dynamic() {
                         self.refresh_legacy_tick_index(idx);
                     }
+                    // Walk-free: scheduler-driven peripherals (GPIOTE) that
+                    // latched pending work in `observe_gpio_change` need their
+                    // delay-0 drain events harvested here — the MMIO write
+                    // choke never sees a cross-peripheral edge.
+                    #[cfg(feature = "event-scheduler")]
+                    if self.peripherals[idx].dev.uses_scheduler() {
+                        self.collect_scheduled_events(idx);
+                    }
                 }
             }
 

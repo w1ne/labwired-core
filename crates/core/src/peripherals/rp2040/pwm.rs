@@ -40,7 +40,7 @@
 //! this block does not drive; `CC` is stored and read back faithfully so
 //! firmware computing duty cycles sees its own values.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of PWM slices on the RP2040.
 const SLICES: usize = 8;
@@ -155,6 +155,11 @@ pub struct Rp2040Pwm {
     intr: u8,
     inte: u8,
     intf: u8,
+    /// Bus-published cycle clock (event-scheduler). When present the model is
+    /// walk-independent: free-running counters ride scheduled events.
+    clock: Option<CycleClock>,
+    /// Bumped each arm so stale slice events die on arrival.
+    arm_seq: u32,
 }
 
 impl Default for Rp2040Pwm {
@@ -170,6 +175,8 @@ impl Rp2040Pwm {
             intr: 0,
             inte: 0,
             intf: 0,
+            clock: None,
+            arm_seq: 0,
         }
     }
 
@@ -180,6 +187,36 @@ impl Rp2040Pwm {
     /// `EN` collects bit 0 of every slice's `CSR`.
     fn en_bits(&self) -> u32 {
         (0..SLICES).fold(0u32, |acc, i| acc | ((self.slices[i].csr & CSR_EN) << i))
+    }
+
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn free_running_active(&self) -> bool {
+        self.slices.iter().any(|s| s.enabled() && s.free_running())
+    }
+
+    fn needs_scheduler_wake(&self) -> bool {
+        self.free_running_active() || self.ints() != 0
+    }
+
+    /// One peripheral-tick of free-running counter work + level IRQ vector.
+    fn step_one(&mut self) -> PeripheralTickResult {
+        for i in 0..SLICES {
+            let s = &mut self.slices[i];
+            if !s.enabled() || !s.free_running() {
+                continue;
+            }
+            if s.divider_fires() && s.step() {
+                self.intr |= 1 << i;
+            }
+        }
+        let explicit_irqs = (self.ints() != 0).then(|| vec![PWM_IRQ_WRAP]);
+        PeripheralTickResult {
+            explicit_irqs,
+            ..Default::default()
+        }
     }
 }
 
@@ -262,22 +299,46 @@ impl Peripheral for Rp2040Pwm {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        for i in 0..SLICES {
-            let s = &mut self.slices[i];
-            if !s.enabled() || !s.free_running() {
-                continue;
-            }
-            if s.divider_fires() && s.step() {
-                self.intr |= 1 << i;
-            }
+        // Legacy / feature-off path. Scheduler mode skips the walk.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
+        self.step_one()
+    }
 
-        // Level-sensitive delivery, matching the timer model: PWM_IRQ_WRAP is
-        // held while any slice's masked wrap status is set, so the ISR always
-        // observes the source even if it runs a tick after the pend.
-        let explicit_irqs = (self.ints() != 0).then(|| vec![PWM_IRQ_WRAP]);
-        PeripheralTickResult {
-            explicit_irqs,
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || !self.needs_scheduler_wake() {
+            return Vec::new();
+        }
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        vec![(0, self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        let res = self.step_one();
+        crate::sched::EventResult {
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: self.needs_scheduler_wake().then_some(1),
             ..Default::default()
         }
     }

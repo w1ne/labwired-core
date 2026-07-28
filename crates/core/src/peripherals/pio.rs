@@ -9,6 +9,9 @@ use crate::PeripheralTickResult;
 use crate::SimResult;
 use anyhow::Result;
 
+/// Event-token for the self-perpetuating SM step chain under `event-scheduler`.
+const EVT_SM_STEP: u32 = 1;
+
 #[derive(Debug, Default, Clone)]
 pub struct StateMachine {
     pub pc: u8,
@@ -57,6 +60,8 @@ pub struct Pio {
     write_acc: u32,
     write_acc_mask: u8, // bitmask of which bytes have been written (0b1111 = complete)
     write_acc_offset: u64, // register offset being accumulated
+    /// True while a delay-1 SM step event is live (event-scheduler).
+    chain_live: bool,
 }
 
 impl Default for Pio {
@@ -87,7 +92,13 @@ impl Pio {
             write_acc: 0,
             write_acc_mask: 0,
             write_acc_offset: 0xFFFF_FFFF,
+            chain_live: false,
         }
+    }
+
+    /// True while any state machine is enabled (needs per-cycle SM steps).
+    fn any_sm_enabled(&self) -> bool {
+        self.sm.iter().any(|s| s.enabled)
     }
 
     pub fn load_program_asm(&mut self, asm: &str) -> Result<()> {
@@ -511,6 +522,43 @@ impl Peripheral for Pio {
         PeripheralTickResult {
             irq: false,
             cycles: 0,
+            ..Default::default()
+        }
+    }
+
+    /// Always event-driven under `event-scheduler` builds so PIO does not pin
+    /// the walk. Feature-off still runs `tick()` via the legacy walk.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.any_sm_enabled() && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, EVT_SM_STEP)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token != EVT_SM_STEP {
+            return crate::sched::EventResult::default();
+        }
+        let _ = self.tick();
+        let active = self.any_sm_enabled();
+        self.chain_live = active;
+        crate::sched::EventResult {
+            reschedule_delay: active.then_some(1),
             ..Default::default()
         }
     }

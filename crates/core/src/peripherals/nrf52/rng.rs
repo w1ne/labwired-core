@@ -14,7 +14,7 @@
 //! is not matched; firmware that polls EVENTS_VALRDY or takes the IRQ
 //! sees the same control flow.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const OFF_TASKS_START: u64 = 0x000;
 const OFF_TASKS_STOP: u64 = 0x004;
@@ -49,6 +49,9 @@ pub struct Nrf52Rng {
     running: bool,
     prng_state: u32,
     accum: u32,
+    clock: Option<CycleClock>,
+    anchor: u64,
+    arm_seq: u32,
 }
 
 impl Default for Nrf52Rng {
@@ -62,6 +65,9 @@ impl Default for Nrf52Rng {
             running: false,
             prng_state: PRNG_SEED,
             accum: 0,
+            clock: None,
+            anchor: 0,
+            arm_seq: 0,
         }
     }
 }
@@ -124,28 +130,97 @@ impl Peripheral for Nrf52Rng {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if !self.running {
+        self.advance_cycles(1)
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        self.clock.is_none()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if self.clock.is_none() || now_cycle <= self.anchor {
+            return;
+        }
+        let delta = now_cycle - self.anchor;
+        self.anchor = now_cycle;
+        let _ = self.advance_cycles(delta);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.clock.is_none() || !self.running {
+            return Vec::new();
+        }
+        let remain = (BYTE_PERIOD - self.accum).max(1) as u64;
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        vec![(remain.saturating_sub(1), self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if self.clock.is_none() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        let now = sched.now();
+        let res = if now > self.anchor {
+            let d = now - self.anchor;
+            self.anchor = now;
+            self.advance_cycles(d)
+        } else {
+            // Deadline hit with no lag: produce one byte now.
+            self.accum = BYTE_PERIOD - 1;
+            self.advance_cycles(1)
+        };
+        let next = if self.running {
+            Some((BYTE_PERIOD - self.accum).max(1) as u64)
+        } else {
+            None
+        };
+        // Keep arm_seq so reschedule reuses this token.
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            reschedule_delay: next.map(|d| d.saturating_sub(1)),
+            ..Default::default()
+        }
+    }
+}
+
+impl Nrf52Rng {
+    fn advance_cycles(&mut self, cycles: u64) -> PeripheralTickResult {
+        if !self.running || cycles == 0 {
             return PeripheralTickResult::default();
         }
-
-        self.accum = self.accum.wrapping_add(1);
-        if self.accum < BYTE_PERIOD {
-            return PeripheralTickResult {
-                cycles: 1,
-                ..Default::default()
-            };
+        let mut left = cycles;
+        let mut irq = false;
+        while left > 0 && self.running {
+            let need = (BYTE_PERIOD - self.accum) as u64;
+            if left < need {
+                self.accum += left as u32;
+                break;
+            }
+            left -= need;
+            self.accum = 0;
+            self.value = self.next_byte() as u32;
+            self.events_valrdy = 1;
+            if self.shorts & SHORTS_VALRDY_STOP != 0 {
+                self.running = false;
+            }
+            if self.inten & INTEN_VALRDY != 0 {
+                irq = true;
+            }
+            // One byte per period; if more cycles remain keep producing.
         }
-        self.accum = 0;
-
-        self.value = self.next_byte() as u32;
-        self.events_valrdy = 1;
-
-        if self.shorts & SHORTS_VALRDY_STOP != 0 {
-            self.running = false;
-        }
-
-        let irq = self.inten & INTEN_VALRDY != 0;
-
         PeripheralTickResult {
             irq,
             cycles: 1,

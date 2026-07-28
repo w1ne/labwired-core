@@ -759,6 +759,38 @@ impl Peripheral for Systimer {
         Ok(())
     }
 
+    /// Word path used by the bus for every freerunning millis/`esp_timer`
+    /// poll. The default `Peripheral::read_u32` decomposes into four `read`
+    /// calls (four `read_word` matches); the C3 OLED busy path is dominated by
+    /// those polls, so one match per word is fidelity-identical and much
+    /// cheaper on the host.
+    fn read_u16(&self, offset: u64) -> SimResult<u16> {
+        let word = self.read_word(offset & !3);
+        let shift = (offset & 2) * 8;
+        Ok(((word >> shift) & 0xFFFF) as u16)
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_word(offset & !3))
+    }
+
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        let word_off = offset & !3;
+        let shift = (offset & 2) * 8;
+        let mut word = self.read_word(word_off);
+        word &= !(0xFFFFu32 << shift);
+        word |= (value as u32) << shift;
+        self.write_word(word_off, word);
+        Ok(())
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // Align down: silicon APB word ports ignore [1:0] the same way our
+        // byte path masks to the containing word.
+        self.write_word(offset & !3, value);
+        Ok(())
+    }
+
     /// One CPU cycle elapses per `tick`. Convert to SYSTIMER ticks at 16 MHz.
     /// At 80 MHz CPU clock, 5 CPU cycles == 1 SYSTIMER tick.
     fn tick(&mut self) -> PeripheralTickResult {

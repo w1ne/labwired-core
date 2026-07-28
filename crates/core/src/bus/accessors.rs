@@ -232,7 +232,6 @@ impl crate::Bus for SystemBus {
                 }
                 self.maybe_arm_hcsr04(idx);
                 self.maybe_start_dht22(idx);
-                self.maybe_start_dht22(idx);
                 self.maybe_clock_tm1637(idx);
                 self.maybe_clock_hx711(idx);
                 self.maybe_sample_seven_segment(idx);

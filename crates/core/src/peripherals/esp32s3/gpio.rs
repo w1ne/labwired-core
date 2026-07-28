@@ -58,7 +58,7 @@
 //! captures pad-level edges identically no matter which source or bank flips the
 //! pad. Bank 1 matters because the onboard NeoPixel on most S3 boards is GPIO48.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
 
 const BT_SELECT: u64 = 0x00;
@@ -205,10 +205,16 @@ pub struct Esp32s3Gpio {
     int_enable: u32,
     int_type: [u8; 32],
     cycle: u64,
+    /// Bus cycle clock — stamps pin edges when the walk is deleted.
+    clock: Option<CycleClock>,
     observers: Vec<Arc<dyn GpioObserver>>,
 }
 
 impl Esp32s3Gpio {
+    fn stamp_cycle(&self) -> u64 {
+        self.clock.as_ref().map(|c| c.now()).unwrap_or(self.cycle)
+    }
+
     pub fn new() -> Self {
         let mut regs = [0u32; NWORDS];
         let mut w = 0;
@@ -227,6 +233,7 @@ impl Esp32s3Gpio {
             int_enable: 0,
             int_type: [0; 32],
             cycle: 0,
+            clock: None,
             observers: Vec::new(),
         }
     }
@@ -329,7 +336,7 @@ impl Esp32s3Gpio {
                 let from = old & mask != 0;
                 let to = new & mask != 0;
                 for obs in &self.observers {
-                    obs.on_pin_change(pin, from, to, self.cycle);
+                    obs.on_pin_change(pin, from, to, self.stamp_cycle());
                 }
             }
         }
@@ -355,7 +362,7 @@ impl Esp32s3Gpio {
                 let to = new & mask != 0;
                 let pin = 32 + bit;
                 for obs in &self.observers {
-                    obs.on_pin_change(pin, from, to, self.cycle);
+                    obs.on_pin_change(pin, from, to, self.stamp_cycle());
                 }
             }
         }
@@ -467,6 +474,18 @@ impl Default for Esp32s3Gpio {
 }
 
 impl Peripheral for Esp32s3Gpio {
+    // Inert walk: pin level changes are write-settled; tick() only advances an
+    // observer cycle stamp. When the walk is deleted, stamps come from the
+    // attached cycle clock (stamp_cycle). bus_tick consumers (RMT) use
+    // drive_pad_output independently.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

@@ -152,6 +152,12 @@ impl Rp2040Sio {
 }
 
 impl Peripheral for Rp2040Sio {
+    /// GPIO latch + spinlocks are pure MMIO — `tick()` is the default no-op.
+    /// Dropping SIO from the walk is byte-identical (logic taps fire on write).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         if Self::is_spinlock(offset) {
             return Ok(self.claim_spinlock(offset));

@@ -55,6 +55,12 @@ impl Esp32s3Core1Control {
 }
 
 impl Peripheral for Esp32s3Core1Control {
+    // Inert walk: CORE_1_CONTROL register bank; APP_CPU release is a
+    // write-side edge. tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = Self::idx(offset).map(|i| self.regs[i]).unwrap_or(0);
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)

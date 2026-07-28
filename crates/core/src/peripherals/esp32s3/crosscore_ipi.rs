@@ -29,7 +29,7 @@
 //! Source numbering (esp-idf `soc/esp32s3/interrupts.h`):
 //!   FROM_CPU_INTR0 = 79, FROM_CPU_INTR1 = 80, INTR2 = 81, INTR3 = 82.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// MMIO base: `SYSTEM_CPU_INTR_FROM_CPU_0_REG` (`DR_REG_SYSTEM_BASE + 0x30`).
 pub const BASE: u64 = 0x600C_0030;
@@ -43,6 +43,9 @@ const FROM_CPU_SOURCE_BASE: u32 = 79;
 pub struct Esp32s3CrossCoreIpi {
     /// Latched value of FROM_CPU_0..3. Non-zero = the source is asserting.
     from_cpu: [u32; 4],
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3CrossCoreIpi {
@@ -104,6 +107,29 @@ impl Peripheral for Esp32s3CrossCoreIpi {
         PeripheralTickResult {
             explicit_irqs: if irqs.is_empty() { None } else { Some(irqs) },
             ..PeripheralTickResult::default()
+        }
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        for (n, &v) in self.from_cpu.iter().enumerate() {
+            if v != 0 {
+                out.push(FROM_CPU_SOURCE_BASE + n as u32);
+            }
         }
     }
 

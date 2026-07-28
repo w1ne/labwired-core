@@ -1191,6 +1191,12 @@ thread_local! {
         const { core::cell::RefCell::new(Vec::new()) };
 }
 
+/// Process-wide fake timer used by [`monotonic_counter_32`]. Must be reset when
+/// a new ESP32-classic sim session starts — otherwise a second
+/// `WasmSimulator` in the same worker inherits a large wall-time and races
+/// FreeRTOS bring-up into unmapped-memory faults (see PR-I / aids stability).
+static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
 /// Monotonic-counter thunk for `esp_timer_impl_get_counter_reg()` and
 /// similar 32-bit time-source readers. Returns an ever-increasing value
 /// (steps of 1000 per call) so callers polling for timeout deadlines
@@ -1198,10 +1204,34 @@ thread_local! {
 // CHEAT(THUNK-LIB): returns an incrementing counter as a fake timestamp — real:
 // the IDF reads a hardware timer (systimer/CCOUNT). See FIDELITY.md §A.
 pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
-    static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
     let v = MONOTONIC_TICKS.fetch_add(1000, core::sync::atomic::Ordering::Relaxed);
     RomThunkBank::return_with(cpu, v);
     Ok(())
+}
+
+/// Clear every process/thread-local ESP32-classic aids hook that outlives a
+/// single `Machine` / `WasmSimulator`.
+///
+/// Call this at the start of every new classic-ESP32 session (construct +
+/// `install_arduino_esp32_quirks`). Without it, a browser re-run of the
+/// labwired-ereader lab in the same worker reuses:
+/// - a non-zero [`MONOTONIC_TICKS`] (fake `esp_timer` already advanced),
+/// - leftover [`APPCPU_BOOT_ADDR`] / handshake flag lists,
+/// - the bump-allocator cursor if any heap thunk is still wired,
+///
+/// Without the reset, the second session can die with
+/// `Memory access violation at 0x33xxxx` while the first session was fine.
+pub fn reset_esp32_session_state() {
+    use core::sync::atomic::Ordering;
+    MONOTONIC_TICKS.store(0, Ordering::Relaxed);
+    PX_CURRENT_TCB_ADDR.with(|s| s.set(None));
+    APPCPU_BOOT_ADDR.with(|s| s.set(None));
+    APPCPU_RESET_RELEASED.with(|s| s.set(false));
+    APPCPU_UP_FLAGS.with(|flags| flags.borrow_mut().clear());
+    // SAFETY: single-threaded sim; this is the only writer at session start.
+    unsafe {
+        HEAP_BUMP_PTR = 0x3FFD_0000;
+    }
 }
 
 /// `esp_chip_info(esp_chip_info_t *out)` — fill the output struct with a

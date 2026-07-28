@@ -110,6 +110,13 @@ impl Default for Esp32s3IntMatrix {
 }
 
 impl Peripheral for Esp32s3IntMatrix {
+    // Inert walk: interrupt-matrix MAP/STATUS register bank; routing is
+    // applied by the bus from asserted source bitmaps, never from this
+    // model's tick (trait-default no-op).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         // Layout (each core's half is 0x800 apart on the shared base):
         //   CORE0: 0x000..0x18C — per-source map registers (route slot).

@@ -269,6 +269,7 @@ impl Peripheral for Nrf52Ecb {
     }
 
     fn needs_bus_tick(&self) -> bool {
+        // Dual path: bus_tick for bare-bus tests; on_event for scheduler.
         self.pending_start
     }
 
@@ -276,35 +277,11 @@ impl Peripheral for Nrf52Ecb {
         if !self.pending_start {
             return;
         }
-        self.pending_start = false;
-
-        let base = self.ecbdataptr as u64;
-
-        // Read 16-byte key (bytes 0..16) from ECBDATAPTR.
-        let mut key = [0u8; 16];
-        for (i, byte) in key.iter_mut().enumerate() {
-            *byte = bus.read_u8(base + i as u64).unwrap_or(0);
-        }
-
-        // Read 16-byte cleartext (bytes 16..32) from ECBDATAPTR+16.
-        let mut cleartext = [0u8; 16];
-        for (i, byte) in cleartext.iter_mut().enumerate() {
-            *byte = bus.read_u8(base + 16 + i as u64).unwrap_or(0);
-        }
-
-        // Compute AES-128-ECB encrypt.
-        let ciphertext = aes128_encrypt(&cleartext, &key);
-
-        // Write 16-byte ciphertext to ECBDATAPTR+32.
-        for (i, byte) in ciphertext.iter().enumerate() {
-            let _ = bus.write_u8(base + 32 + i as u64, *byte);
-        }
-
-        // Signal completion.
-        self.events_endecb = 1;
+        self.do_start(bus);
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Level re-assert while ENDECB + INTEN hold (legacy walk).
         if self.events_endecb != 0 && self.inten & INTEN_ENDECB != 0 {
             return PeripheralTickResult {
                 irq: true,
@@ -314,6 +291,66 @@ impl Peripheral for Nrf52Ecb {
             };
         }
         PeripheralTickResult::default()
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending_start {
+            vec![(0, 1)] // STARTECB drain
+        } else if self.events_endecb != 0 && self.inten & INTEN_ENDECB != 0 {
+            vec![(0, 2)] // level IRQ re-assert
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == 1 && self.pending_start {
+            self.do_start(bus);
+        }
+        let held = self.events_endecb != 0 && self.inten & INTEN_ENDECB != 0;
+        crate::sched::EventResult {
+            raise_own_irq: held,
+            fired_events: if held {
+                vec![OFF_EVENTS_ENDECB as u32]
+            } else {
+                Vec::new()
+            },
+            reschedule_delay: held.then_some(1),
+            ..Default::default()
+        }
+    }
+}
+
+impl Nrf52Ecb {
+    fn do_start(&mut self, bus: &mut dyn Bus) {
+        self.pending_start = false;
+        let base = self.ecbdataptr as u64;
+        let mut key = [0u8; 16];
+        for (i, byte) in key.iter_mut().enumerate() {
+            *byte = bus.read_u8(base + i as u64).unwrap_or(0);
+        }
+        let mut cleartext = [0u8; 16];
+        for (i, byte) in cleartext.iter_mut().enumerate() {
+            *byte = bus.read_u8(base + 16 + i as u64).unwrap_or(0);
+        }
+        let ciphertext = aes128_encrypt(&cleartext, &key);
+        for (i, byte) in ciphertext.iter().enumerate() {
+            let _ = bus.write_u8(base + 32 + i as u64, *byte);
+        }
+        self.events_endecb = 1;
     }
 }
 

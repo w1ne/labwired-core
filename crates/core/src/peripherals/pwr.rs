@@ -260,6 +260,12 @@ impl PwrH5 {
 }
 
 impl crate::Peripheral for PwrH5 {
+    // Inert walk: pure register bank (VOSRDY tracks VOSCR writes instantly);
+    // tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -340,6 +346,11 @@ impl PwrH7 {
 }
 
 impl crate::Peripheral for PwrH7 {
+    // Inert walk: register bank (voltage scaling completes in the write path).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -403,6 +414,11 @@ impl PwrL0 {
 }
 
 impl crate::Peripheral for PwrL0 {
+    // Inert walk: two-register bank; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -479,6 +495,11 @@ impl PwrWba {
 }
 
 impl crate::Peripheral for PwrWba {
+    // Inert walk: register storage with instant VOSRDY; tick() is no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;

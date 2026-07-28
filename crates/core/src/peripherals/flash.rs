@@ -744,8 +744,10 @@ impl Flash {
     /// True when this FLASH models hardware operations (sector erase / bank
     /// swap) as pending ops that must be drained and applied per instruction.
     /// Only the H5 layout records such ops, so the runner must execute the
-    /// firmware cycle-accurately (batch size 1) for the drain to fire on every
-    /// instruction — see `SystemBus::requires_cycle_accurate`.
+    /// firmware cycle-accurately (CPU quantum 1) for the drain to fire on every
+    /// instruction — see `SystemBus::requires_cycle_accurate`. This does **not**
+    /// pin `max_safe_tick_interval`: peripheral tick pacing is orthogonal to the
+    /// per-instruction FLASH op drain (H5 walk-free / tick-512 unlock).
     pub fn models_ops(&self) -> bool {
         matches!(self.layout, FlashRegisterLayout::Stm32H5)
     }

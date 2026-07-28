@@ -26,8 +26,10 @@ pub struct Nrf52Egu {
     events_triggered: [u32; 16],
     inten: u32,
     /// Bitmask of channels whose TASKS_TRIGGER fired since the last
-    /// tick(). Drained into fired_events + IRQ pend on tick.
+    /// tick()/on_event. Drained into fired_events + IRQ pend.
     pending_triggers: u32,
+    /// Scheduler delay-0 drain chain armed.
+    chain_live: bool,
 }
 
 impl Nrf52Egu {
@@ -100,6 +102,48 @@ impl Peripheral for Nrf52Egu {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Feature-off / walk path. Scheduler mode skips this via uses_scheduler.
+        self.drain_pending()
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        // Write-latch → delay-0 drain (PPI fired_events + IRQ). Always event-
+        // driven under `event-scheduler` builds so EGU does not pin the walk.
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending_triggers != 0 && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, 0)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let res = self.drain_pending();
+        self.chain_live = self.pending_triggers != 0;
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            reschedule_delay: self.chain_live.then_some(1),
+            ..Default::default()
+        }
+    }
+}
+
+impl Nrf52Egu {
+    fn drain_pending(&mut self) -> PeripheralTickResult {
         if self.pending_triggers == 0 {
             return PeripheralTickResult::default();
         }

@@ -87,6 +87,13 @@ impl Rp2040Spi {
 }
 
 impl Peripheral for Rp2040Spi {
+    /// Pure write-driven transfer engine — `tick()` is the default no-op.
+    /// Dropping this model from the walk is byte-identical for every firmware
+    /// state (loopback completes inside `SSPDR` writes).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
             SSPCR1 => self.cr1,

@@ -983,7 +983,91 @@ impl Peripheral for Nrf52Radio {
     }
 
     fn needs_bus_tick(&self) -> bool {
+        // Dual path: bus_tick for bare-bus tests; on_event for scheduler.
         self.pending_tx_dma || self.pending_rx_dma
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending_tx_dma || self.pending_rx_dma {
+            return vec![(0, 1)]; // DMA then countdown
+        }
+        if let Some(n) = self.tx_or_rx_cycles_remaining {
+            return vec![((n as u64).saturating_sub(1), 2)];
+        }
+        if self.pending_ready
+            || self.pending_address
+            || self.pending_payload
+            || self.pending_end
+            || self.pending_disabled
+        {
+            return vec![(0, 2)];
+        }
+        Vec::new()
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        // EasyDMA path (token 1, or any event that still has a pending DMA).
+        // Machine may also run `tick_with_bus` via `bus_tick_indices` in the
+        // same boundary *before* this drain — so the countdown can already be
+        // armed when we enter here with pending_tx_dma cleared.
+        if event_token == 1 || self.pending_tx_dma || self.pending_rx_dma {
+            self.tick_with_bus(bus);
+        }
+
+        // Multi-cycle bit-rate air time: commit the END deadline and return.
+        // Pin remaining to 1 so the delayed wake fires ADDRESS/PAYLOAD/END
+        // via `tick()` without re-arming another (n-1) forever. Collapsing
+        // on this same event used to make END fire immediately and hide
+        // MODE/length timing under the scheduler.
+        if let Some(n) = self.tx_or_rx_cycles_remaining {
+            if n > 1 {
+                self.tx_or_rx_cycles_remaining = Some(1);
+                return crate::sched::EventResult {
+                    reschedule_delay: Some((n as u64).saturating_sub(1)),
+                    ..Default::default()
+                };
+            }
+        }
+
+        // remaining is None or 1: drain READY / DISABLED / final air tick.
+        let res = self.tick();
+        let more = self.pending_tx_dma
+            || self.pending_rx_dma
+            || self.tx_or_rx_cycles_remaining.is_some()
+            || self.pending_ready
+            || self.pending_address
+            || self.pending_payload
+            || self.pending_end
+            || self.pending_disabled;
+        let delay = if self.pending_tx_dma || self.pending_rx_dma {
+            Some(0u64)
+        } else if let Some(n) = self.tx_or_rx_cycles_remaining {
+            Some((n as u64).saturating_sub(1))
+        } else if more {
+            Some(1u64)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            mmio_writes: res.mmio_writes,
+            reschedule_delay: delay,
+            ..Default::default()
+        }
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {

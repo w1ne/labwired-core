@@ -60,7 +60,7 @@
 //!   fix this alone; it is recorded here rather than papered over by ignoring
 //!   `CYCLES`.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 // Register offsets (relative to the WATCHDOG base) — SVD-verified.
 const CTRL: u64 = 0x00;
@@ -109,6 +109,11 @@ pub struct Rp2040Watchdog {
     /// The dog has bitten: the countdown stops until firmware reloads. Silicon
     /// would have reset the chip here; see the module header.
     bitten: bool,
+    /// Bus-published cycle clock (event-scheduler). When present the model is
+    /// walk-independent: countdown rides scheduled events.
+    clock: Option<CycleClock>,
+    /// Bumped each arm so stale countdown events die on arrival.
+    arm_seq: u32,
 }
 
 impl Default for Rp2040Watchdog {
@@ -131,6 +136,34 @@ impl Rp2040Watchdog {
             tick_enable: true,
             tick_count: 0,
             bitten: false,
+            clock: None,
+            arm_seq: 0,
+        }
+    }
+
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// True while the generator + dog can still change observable state.
+    fn countdown_active(&self) -> bool {
+        self.tick_running() && self.enabled && !self.bitten
+    }
+
+    /// One reference-clock edge of work (legacy `tick()` body).
+    fn step_one(&mut self) {
+        if !self.tick_generator_fires() {
+            return;
+        }
+        if !self.enabled || self.bitten {
+            return;
+        }
+        // Errata RP2040-E1: two counts per tick, so an odd LOAD lands on 0
+        // rather than stepping past it.
+        self.counter = self.counter.saturating_sub(DECREMENT_PER_TICK);
+        if self.counter == 0 {
+            self.bitten = true;
+            self.reason |= REASON_TIMER;
         }
     }
 
@@ -227,23 +260,52 @@ impl Peripheral for Rp2040Watchdog {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if !self.tick_generator_fires() {
+        // Legacy / feature-off path. Scheduler mode skips the walk.
+        if self.scheduler_mode() {
             return PeripheralTickResult::default();
         }
-        if !self.enabled || self.bitten {
-            return PeripheralTickResult::default();
-        }
-        // Errata RP2040-E1: two counts per tick, so an odd LOAD lands on 0
-        // rather than stepping past it.
-        self.counter = self.counter.saturating_sub(DECREMENT_PER_TICK);
-        if self.counter == 0 {
-            self.bitten = true;
-            self.reason |= REASON_TIMER;
-        }
+        self.step_one();
         // The RP2040 watchdog has no interrupt line — there is no
         // WATCHDOG_IRQ in the SVD's interrupt table. Expiry is observable
         // through REASON only.
         PeripheralTickResult::default()
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || !self.countdown_active() {
+            return Vec::new();
+        }
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        // delay-0 → next cycle, matching one legacy walk tick.
+        vec![(0, self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        self.step_one();
+        crate::sched::EventResult {
+            reschedule_delay: self.countdown_active().then_some(1),
+            ..Default::default()
+        }
     }
 }
 

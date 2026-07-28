@@ -65,7 +65,7 @@
 //! * **Sniff CRC** (`SNIFF_CTRL`/`SNIFF_DATA`) is register storage only — the
 //!   checksum accumulator is not computed.
 
-use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
+use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of DMA channels on the RP2040 (datasheet §2.5).
 const NUM_CHANNELS: usize = 12;
@@ -195,6 +195,10 @@ pub struct Rp2040Dma {
     intf1: u32,
     sniff_ctrl: u32,
     sniff_data: u32,
+    /// Bus-published cycle clock: presence means scheduler mode (walk-free).
+    clock: Option<CycleClock>,
+    /// True while a transfer / level-IRQ event chain is live.
+    chain_live: bool,
 }
 
 impl Default for Rp2040Dma {
@@ -214,6 +218,32 @@ impl Rp2040Dma {
             intf1: 0,
             sniff_ctrl: 0,
             sniff_data: 0,
+            clock: None,
+            chain_live: false,
+        }
+    }
+
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// True while there is transfer work or a held IRQ level to re-pend.
+    fn needs_event_chain(&self) -> bool {
+        self.any_busy() || self.ints0() != 0 || self.ints1() != 0
+    }
+
+    /// Level-sensitive IRQ vector for the two DMA lines.
+    fn level_irqs(&self) -> PeripheralTickResult {
+        let mut irqs = Vec::new();
+        if self.ints0() != 0 {
+            irqs.push(DMA_IRQ_0);
+        }
+        if self.ints1() != 0 {
+            irqs.push(DMA_IRQ_1);
+        }
+        PeripheralTickResult {
+            explicit_irqs: if irqs.is_empty() { None } else { Some(irqs) },
+            ..Default::default()
         }
     }
 
@@ -434,25 +464,64 @@ impl Peripheral for Rp2040Dma {
     }
 
     fn needs_bus_tick(&self) -> bool {
-        self.any_busy()
+        // Scheduler mode owns transfers via `on_event` (avoids double-drive).
+        !self.scheduler_mode() && self.any_busy()
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.scheduler_mode() {
+            return;
+        }
         self.run(bus);
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
         // Level-sensitive delivery: assert each DMA line while its aggregated
         // status holds, re-pending every tick until firmware acknowledges.
-        let mut irqs = Vec::new();
-        if self.ints0() != 0 {
-            irqs.push(DMA_IRQ_0);
+        // Scheduler mode skips the walk; the event chain owns re-emission.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
-        if self.ints1() != 0 {
-            irqs.push(DMA_IRQ_1);
+        self.level_irqs()
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || !self.needs_event_chain() || self.chain_live {
+            return Vec::new();
         }
-        PeripheralTickResult {
-            explicit_irqs: if irqs.is_empty() { None } else { Some(irqs) },
+        self.chain_live = true;
+        // delay-0 → deadline current_cycle+1 (walk's next tick).
+        vec![(0, 0)]
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() {
+            return crate::sched::EventResult::default();
+        }
+        // One beat per event cycle, matching BEATS_PER_TICK on the walk path.
+        self.run(bus);
+        let active = self.needs_event_chain();
+        self.chain_live = active;
+        crate::sched::EventResult {
+            explicit_irqs: self.level_irqs().explicit_irqs.unwrap_or_default(),
+            reschedule_delay: active.then_some(1),
             ..Default::default()
         }
     }

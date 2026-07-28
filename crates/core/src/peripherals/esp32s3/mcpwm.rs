@@ -95,7 +95,9 @@
 //! source per unit; firmware reads `INT_ST` to learn which timer/operator
 //! fired. `new(base_source_id)` takes that id (38 or 39).
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+const MCPWM_WAKE_TOKEN: u32 = 1;
 
 pub const MCPWM0_BASE: u32 = 0x6001_E000;
 pub const MCPWM1_BASE: u32 = 0x6002_C000;
@@ -371,6 +373,10 @@ pub struct Esp32s3Mcpwm {
     /// resets; writes apply the SVD writable mask. Word-indexed; the
     /// FSM-modeled offsets are dispatched before this file is consulted.
     extras: [u32; NWORDS],
+
+    clock: Option<CycleClock>,
+    last_tick: u64,
+    scheduled: bool,
 }
 
 impl Esp32s3Mcpwm {
@@ -402,6 +408,10 @@ impl Esp32s3Mcpwm {
             int_raw: 0,
             int_ena: 0,
             extras,
+
+            clock: None,
+            last_tick: 0,
+            scheduled: false,
         }
     }
 
@@ -741,6 +751,73 @@ impl Peripheral for Esp32s3Mcpwm {
             } else {
                 None
             },
+            ..Default::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.last_tick = clock.now();
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if !self.uses_scheduler() || now_cycle <= self.last_tick {
+            return;
+        }
+        let delta = now_cycle - self.last_tick;
+        // Advance one cycle at a time for fidelity of comparator edges.
+        for _ in 0..delta.min(10_000) {
+            let _ = self.tick();
+        }
+        // If delta is huge, advance remaining in bulk by repeated tick is too
+        // slow; clamp for MMIO sync. Alarms still fire via on_event pacing.
+        self.last_tick = now_cycle;
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if (self.int_raw & self.int_ena & INT_MODELED_MASK) != 0 {
+            out.push(self.intr_source_id);
+        }
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() {
+            return Vec::new();
+        }
+        let running = self.timers.iter().any(|t| (t.cfg1 & 0x7) != 0);
+        if running && !self.scheduled {
+            self.scheduled = true;
+            return vec![(1, MCPWM_WAKE_TOKEN)];
+        }
+        Vec::new()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let now = sched.now();
+        if now > self.last_tick {
+            let _ = self.tick();
+            self.last_tick = self.last_tick.saturating_add(1);
+        }
+        let keep = self.timers.iter().any(|t| (t.cfg1 & 0x7) != 0);
+        self.scheduled = keep;
+        let mut explicit_irqs = Vec::new();
+        self.matrix_irq_sources_into(&mut explicit_irqs);
+        crate::sched::EventResult {
+            explicit_irqs,
+            reschedule_delay: keep.then_some(1),
             ..Default::default()
         }
     }

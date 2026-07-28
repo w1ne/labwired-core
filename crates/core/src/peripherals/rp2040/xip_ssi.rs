@@ -199,6 +199,12 @@ impl Rp2040XipSsi {
 }
 
 impl Peripheral for Rp2040XipSsi {
+    /// SSI shift engine completes inside `DR0` writes — `tick()` is the default
+    /// no-op. Walk-deletion is byte-identical for boot2 status-poll sequences.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
             SR => self.status(),

@@ -105,6 +105,13 @@ impl Rp2040I2c {
 }
 
 impl Peripheral for Rp2040I2c {
+    /// Pure write-driven transfer engine — `tick()` is structural no-op for
+    /// the walk (Class-A). Address NACK / slave traffic fire inside
+    /// `IC_DATA_CMD` writes; no per-cycle work.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

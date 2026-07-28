@@ -133,9 +133,10 @@ impl FromStr for SpiRegisterLayout {
     }
 }
 
-/// Event token for the SPI bit engine's next-wire-transition event (the SPI
-/// has a single kind of scheduled wakeup, so the value is arbitrary).
+/// Event token for the SPI bit engine's next-wire-transition event (STM32).
 const SPI_DONE_TOKEN: u32 = 0;
+/// Event token for nRF52 SPIM EasyDMA completion (delay-0 scheduler path).
+const SPI_NRF52_EASYDMA_TOKEN: u32 = 1;
 
 // ── STM32 SPI wire (bit-level engine) ────────────────────────────────────────
 //
@@ -722,8 +723,9 @@ pub struct Spi {
     /// RX path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
     loopback: bool,
 
-    /// nRF52 SPIM: set when TASKS_START is written; cleared after
-    /// `tick_with_bus` completes the EasyDMA transfer.
+    /// nRF52 SPIM: set when TASKS_START is written; cleared by the EasyDMA
+    /// engine via either `tick_with_bus` (bare-bus / bus_tick_indices) or
+    /// `on_event` (Machine + event-scheduler, delay-0).
     #[serde(skip)]
     nrf52_pending_start: bool,
 
@@ -1528,6 +1530,10 @@ impl crate::Peripheral for Spi {
     /// deadline by up to one tick interval) and re-arms via `reschedule_delay`
     /// until the frame (and any queued frames) complete.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // nRF52 SPIM EasyDMA: delay-0 completion (next cycle after TASKS_START).
+        if self.nrf52_pending_start {
+            return vec![(0, SPI_NRF52_EASYDMA_TOKEN)];
+        }
         if self.frame.is_some() && !self.scheduled {
             self.scheduled = true;
             vec![(
@@ -1541,10 +1547,17 @@ impl crate::Peripheral for Spi {
 
     fn on_event(
         &mut self,
-        _event_token: u32,
+        event_token: u32,
         sched: &mut crate::sched::EventScheduler,
-        _bus: &mut dyn crate::Bus,
+        bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == SPI_NRF52_EASYDMA_TOKEN {
+            if self.nrf52_pending_start {
+                self.do_nrf52_easydma(bus);
+            }
+            return crate::sched::EventResult::default();
+        }
+
         self.scheduled = false;
         let Some(f) = &self.frame else {
             return crate::sched::EventResult::default();
@@ -1581,84 +1594,10 @@ impl crate::Peripheral for Spi {
         self.nrf52_pending_start
     }
 
-    /// nRF52 SPIM EasyDMA transfer engine.
-    ///
-    /// Reads TXD.MAXCNT bytes from RAM at TXD.PTR, clocks each through the
-    /// attached `SpiDevice` (or uses ORC when TXD is exhausted but RXD still
-    /// has capacity), writes received bytes to RAM at RXD.PTR up to
-    /// RXD.MAXCNT, then sets EVENTS_ENDTX / EVENTS_ENDRX / EVENTS_END and
-    /// updates TXD.AMOUNT / RXD.AMOUNT.
+    /// nRF52 SPIM EasyDMA transfer engine (bare-bus / bus_tick_indices path).
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        if !self.nrf52_pending_start {
-            return;
-        }
-        self.nrf52_pending_start = false;
-
-        let (txd_ptr, txd_maxcnt, rxd_ptr, rxd_maxcnt, orc) = if let SpiRegs::Nrf52(r) = &self.regs
-        {
-            (
-                r.txd_ptr as u64,
-                r.txd_maxcnt as usize,
-                r.rxd_ptr as u64,
-                r.rxd_maxcnt as usize,
-                (r.orc & 0xFF) as u8,
-            )
-        } else {
-            return;
-        };
-
-        // Determine the total number of byte-cycles to run: whichever
-        // descriptor is larger drives the clock count; the smaller one
-        // pads with ORC (TX side) or discards (RX side that is full).
-        let n_clocks = txd_maxcnt.max(rxd_maxcnt);
-
-        let mut txd_amount: u32 = 0;
-        let mut rxd_amount: u32 = 0;
-
-        for i in 0..n_clocks {
-            // Read MOSI byte: TX buffer while available, else ORC.
-            let mosi: u8 = if i < txd_maxcnt {
-                bus.read_u8(txd_ptr + i as u64).unwrap_or(0)
-            } else {
-                orc
-            };
-
-            if i < txd_maxcnt {
-                txd_amount += 1;
-            }
-
-            // Clock the byte through the attached device (or loopback /
-            // no-device — mirrors MOSI back).
-            let miso: u8 = if !self.attached_devices.is_empty() {
-                let mut resp: u8 = 0;
-                for dev in &mut self.attached_devices {
-                    let r = dev.transfer(mosi);
-                    if r != 0 {
-                        resp = r;
-                    }
-                }
-                resp
-            } else if self.loopback {
-                mosi
-            } else {
-                0
-            };
-
-            // Write MISO byte to RX buffer if there is still capacity.
-            if i < rxd_maxcnt {
-                let _ = bus.write_u8(rxd_ptr + i as u64, miso);
-                rxd_amount += 1;
-            }
-        }
-
-        // Update AMOUNT registers and fire completion events.
-        if let SpiRegs::Nrf52(r) = &mut self.regs {
-            r.txd_amount = txd_amount;
-            r.rxd_amount = rxd_amount;
-            // HW fires ENDTX, ENDRX, then END (PS §6.30 sequence).
-            r.events_endtx = 1;
-            r.events_endrx = 1;
-            r.events_end = 1;
+        if self.nrf52_pending_start {
+            self.do_nrf52_easydma(bus);
         }
     }
 
@@ -1736,6 +1675,89 @@ impl crate::Peripheral for Spi {
             }
         }
         false
+    }
+}
+
+impl Spi {
+    /// nRF52 SPIM EasyDMA engine shared by `tick_with_bus` and `on_event`.
+    ///
+    /// Reads TXD.MAXCNT bytes from RAM at TXD.PTR, clocks each through the
+    /// attached `SpiDevice` (or uses ORC when TXD is exhausted but RXD still
+    /// has capacity), writes received bytes to RAM at RXD.PTR up to
+    /// RXD.MAXCNT, then sets EVENTS_ENDTX / EVENTS_ENDRX / EVENTS_END and
+    /// updates TXD.AMOUNT / RXD.AMOUNT.
+    fn do_nrf52_easydma(&mut self, bus: &mut dyn Bus) {
+        if !self.nrf52_pending_start {
+            return;
+        }
+        self.nrf52_pending_start = false;
+
+        let (txd_ptr, txd_maxcnt, rxd_ptr, rxd_maxcnt, orc) = if let SpiRegs::Nrf52(r) = &self.regs
+        {
+            (
+                r.txd_ptr as u64,
+                r.txd_maxcnt as usize,
+                r.rxd_ptr as u64,
+                r.rxd_maxcnt as usize,
+                (r.orc & 0xFF) as u8,
+            )
+        } else {
+            return;
+        };
+
+        // Determine the total number of byte-cycles to run: whichever
+        // descriptor is larger drives the clock count; the smaller one
+        // pads with ORC (TX side) or discards (RX side that is full).
+        let n_clocks = txd_maxcnt.max(rxd_maxcnt);
+
+        let mut txd_amount: u32 = 0;
+        let mut rxd_amount: u32 = 0;
+
+        for i in 0..n_clocks {
+            // Read MOSI byte: TX buffer while available, else ORC.
+            let mosi: u8 = if i < txd_maxcnt {
+                bus.read_u8(txd_ptr + i as u64).unwrap_or(0)
+            } else {
+                orc
+            };
+
+            if i < txd_maxcnt {
+                txd_amount += 1;
+            }
+
+            // Clock the byte through the attached device (or loopback /
+            // no-device — mirrors MOSI back).
+            let miso: u8 = if !self.attached_devices.is_empty() {
+                let mut resp: u8 = 0;
+                for dev in &mut self.attached_devices {
+                    let r = dev.transfer(mosi);
+                    if r != 0 {
+                        resp = r;
+                    }
+                }
+                resp
+            } else if self.loopback {
+                mosi
+            } else {
+                0
+            };
+
+            // Write MISO byte to RX buffer if there is still capacity.
+            if i < rxd_maxcnt {
+                let _ = bus.write_u8(rxd_ptr + i as u64, miso);
+                rxd_amount += 1;
+            }
+        }
+
+        // Update AMOUNT registers and fire completion events.
+        if let SpiRegs::Nrf52(r) = &mut self.regs {
+            r.txd_amount = txd_amount;
+            r.rxd_amount = rxd_amount;
+            // HW fires ENDTX, ENDRX, then END (PS §6.30 sequence).
+            r.events_endtx = 1;
+            r.events_endrx = 1;
+            r.events_end = 1;
+        }
     }
 }
 

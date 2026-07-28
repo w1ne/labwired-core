@@ -64,7 +64,7 @@
 //!   model has no paced-transfer (DREQ) path yet, so a channel wired to
 //!   `DREQ_ADC` would not move. Draining the FIFO from the CPU works.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -173,6 +173,11 @@ pub struct Rp2040Adc {
     /// Per-input level in microvolts. Input 4 starts at the temperature
     /// sensor's output for [`TS_DIE_MILLI_C`]; inputs 0..3 start unbiased.
     inputs_uv: [i64; INPUTS],
+    /// Bus-published cycle clock (event-scheduler). When present the model is
+    /// walk-independent: free-running START_MANY rides scheduled events.
+    clock: Option<CycleClock>,
+    /// Bumped each arm so stale conversion events die on arrival.
+    arm_seq: u32,
 }
 
 impl Default for Rp2040Adc {
@@ -198,6 +203,39 @@ impl Rp2040Adc {
             inte: 0,
             intf: 0,
             inputs_uv,
+            clock: None,
+            arm_seq: 0,
+        }
+    }
+
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn free_running(&self) -> bool {
+        self.cs & CS_EN != 0 && self.cs & CS_START_MANY != 0
+    }
+
+    fn needs_scheduler_wake(&self) -> bool {
+        self.free_running() || self.ints() != 0
+    }
+
+    /// One peripheral-tick of free-running conversion + level IRQ vector.
+    fn step_one(&mut self) -> PeripheralTickResult {
+        if self.free_running() {
+            // DIV pacing: `1 + INT + FRAC/256` clocks per sample, DIV = 0 being
+            // back-to-back. Accumulate in 1/256 clocks so the fraction is real.
+            let period = if self.div == 0 { 256 } else { 256 + self.div };
+            self.div_acc += 256;
+            if self.div_acc >= period {
+                self.div_acc -= period;
+                self.convert();
+            }
+        }
+        let explicit_irqs = (self.ints() != 0).then(|| vec![ADC_IRQ_FIFO]);
+        PeripheralTickResult {
+            explicit_irqs,
+            ..Default::default()
         }
     }
 
@@ -414,22 +452,46 @@ impl Peripheral for Rp2040Adc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if self.cs & CS_EN != 0 && self.cs & CS_START_MANY != 0 {
-            // DIV pacing: `1 + INT + FRAC/256` clocks per sample, DIV = 0 being
-            // back-to-back. Accumulate in 1/256 clocks so the fraction is real.
-            let period = if self.div == 0 { 256 } else { 256 + self.div };
-            self.div_acc += 256;
-            if self.div_acc >= period {
-                self.div_acc -= period;
-                self.convert();
-            }
+        // Legacy / feature-off path. Scheduler mode skips the walk.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
+        self.step_one()
+    }
 
-        // Level-sensitive delivery, matching the timer and PWM models:
-        // ADC_IRQ_FIFO is held while the masked FIFO status is set.
-        let explicit_irqs = (self.ints() != 0).then(|| vec![ADC_IRQ_FIFO]);
-        PeripheralTickResult {
-            explicit_irqs,
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || !self.needs_scheduler_wake() {
+            return Vec::new();
+        }
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        vec![(0, self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        let res = self.step_one();
+        crate::sched::EventResult {
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: self.needs_scheduler_wake().then_some(1),
             ..Default::default()
         }
     }

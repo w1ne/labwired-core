@@ -12,7 +12,9 @@ use std::sync::Arc;
 
 /// `LABWIRED_TRACE_INSN` / `LABWIRED_TRACE_EXC` are developer trace gates read
 /// once per process. They used to be `std::env::var` calls evaluated on EVERY
-/// retired instruction, which cost ~830 host instructions per simulated one.
+/// retired instruction, which cost ~830 host instructions per simulated one
+/// (environ walk + strncmp). Hoisted into `OnceLock` so the hot path pays a
+/// single atomic load.
 fn trace_insn_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var("LABWIRED_TRACE_INSN").is_ok())

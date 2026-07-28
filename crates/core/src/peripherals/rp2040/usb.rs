@@ -226,6 +226,8 @@ pub struct Rp2040Usb {
 
     /// CDC bulk-IN bytes captured from the device, mirrored to the UART sink.
     sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// True while a delay-1 host/IRQ event chain is live (event-scheduler).
+    chain_live: bool,
 }
 
 impl Default for Rp2040Usb {
@@ -246,7 +248,45 @@ impl Rp2040Usb {
             out_data_sent: false,
             awaiting_idle: false,
             sink: None,
+            chain_live: false,
         }
+    }
+
+    /// True while the host state machine or a held IRQ level still needs ticks.
+    fn needs_event_chain(&self) -> bool {
+        if self.ints() != 0 {
+            return true;
+        }
+        match self.host {
+            HostState::Detached => {
+                // Attach debounce countdown after pull-up.
+                self.reg(MAIN_CTRL) & MAIN_CTRL_CONTROLLER_EN != 0
+                    && self.reg(SIE_CTRL) & SIE_CTRL_PULLUP_EN != 0
+            }
+            HostState::ResetIssued | HostState::Transfer => true,
+            HostState::Configured => self.service_needed(),
+        }
+    }
+
+    /// Cheap check: any bulk/control buffer the host should service this cycle.
+    fn service_needed(&self) -> bool {
+        if self.awaiting_idle {
+            return true;
+        }
+        // EP0 armed?
+        if self.dpram_u32(ep_in_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
+            || self.dpram_u32(ep_out_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
+        {
+            return true;
+        }
+        // Any bulk-IN armed?
+        for ep in 1..16usize {
+            let bc = self.dpram_u32(ep_in_buf_ctrl(ep));
+            if bc & BUF_CTRL_AVAIL != 0 && bc & BUF_CTRL_FULL != 0 {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>) {
@@ -529,6 +569,8 @@ impl Peripheral for Rp2040Usb {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Feature-off / direct-call path. Scheduler mode also uses this body
+        // from `on_event` (one tick's worth of host work + level IRQ).
         self.host_poll();
         let mut res = PeripheralTickResult::default();
         if self.ints() != 0 {
@@ -537,6 +579,42 @@ impl Peripheral for Rp2040Usb {
             res.explicit_irqs = Some(vec![USBCTRL_IRQ]);
         }
         res
+    }
+
+    /// Always event-driven under `event-scheduler` builds so USB does not pin
+    /// the walk. Attach debounce, enumeration, and held IRQ levels ride a
+    /// delay-1 self-perpetuating chain re-armed from MMIO writes.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.needs_event_chain() && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, 0)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let res = self.tick();
+        let active = self.needs_event_chain();
+        self.chain_live = active;
+        crate::sched::EventResult {
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: active.then_some(1),
+            ..Default::default()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

@@ -374,6 +374,96 @@ impl Nrf52Twim {
     }
 }
 
+impl Nrf52Twim {
+    fn irq_from_events(&self) -> PeripheralTickResult {
+        let events: &[(&u32, u32, u64)] = &[
+            (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
+            (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
+            (
+                &self.events_suspended,
+                INTEN_SUSPENDED,
+                OFF_EVENTS_SUSPENDED,
+            ),
+            (
+                &self.events_rxstarted,
+                INTEN_RXSTARTED,
+                OFF_EVENTS_RXSTARTED,
+            ),
+            (
+                &self.events_txstarted,
+                INTEN_TXSTARTED,
+                OFF_EVENTS_TXSTARTED,
+            ),
+            (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
+            (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
+        ];
+        let mut irq = false;
+        let mut fired: Vec<u32> = Vec::new();
+        for &(ev, mask, off) in events {
+            if *ev != 0 && self.inten & mask != 0 {
+                irq = true;
+                fired.push(off as u32);
+            }
+        }
+        PeripheralTickResult {
+            irq,
+            fired_events: fired,
+            ..Default::default()
+        }
+    }
+
+    fn run_pending_transfer(&mut self, bus: &mut dyn Bus) {
+        let pending = self.pending;
+        if pending == PENDING_NONE {
+            return;
+        }
+        if self.busy_cycles > 0 {
+            let interval = bus.config().peripheral_tick_interval.max(1);
+            self.busy_cycles = self.busy_cycles.saturating_sub(interval);
+            return;
+        }
+        self.pending = PENDING_NONE;
+        let addr7 = (self.address & ADDRESS_MASK) as u8;
+        match pending {
+            PENDING_STOP => {
+                self.events_stopped = 1;
+                if let Some(idx) = self.device_for(addr7) {
+                    self.attached_devices[idx].borrow_mut().stop();
+                }
+            }
+            PENDING_TX => {
+                let _nack = self.do_tx(bus);
+                if self.shorts & SHORT_LASTTX_STARTRX != 0 {
+                    self.pending = PENDING_RX;
+                    self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
+                } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
+                    self.events_suspended = 1;
+                } else if self.shorts & SHORT_LASTTX_STOP != 0 {
+                    self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                }
+            }
+            PENDING_RX => {
+                let _nack = self.do_rx(bus);
+                if self.shorts & SHORT_LASTRX_STOP != 0 {
+                    self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                } else if self.shorts & SHORT_LASTRX_SUSPEND != 0 {
+                    self.events_suspended = 1;
+                } else if self.shorts & SHORT_LASTRX_STARTTX != 0 {
+                    self.pending = PENDING_TX;
+                    self.busy_cycles = self.transfer_cycles(self.txd_maxcnt & MAXCNT_MASK);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Peripheral for Nrf52Twim {
     // Byte-granularity read/write are required to satisfy the Peripheral trait,
     // but nRF52 firmware always uses 32-bit STR/LDR for peripheral access.
@@ -517,126 +607,65 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn needs_bus_tick(&self) -> bool {
+        // EasyDMA still rides the bus-tick pump (works for bare-bus unit tests
+        // and for walk-deleted buses where bus_tick_indices keep running). The
+        // scheduler path also completes transfers in on_event as a dual path.
         self.pending != PENDING_NONE
     }
 
-    /// EasyDMA engine.  Called by the bus when `needs_bus_tick()` is true.
-    ///
-    /// Sequence (PS §6.31 state diagram):
-    /// 1. Execute the pending task (TX or RX or STOP).
-    /// 2. Check SHORTS to determine what to chain next.
-    /// 3. Fire EVENTS_SUSPENDED (bus held, no STOP) or EVENTS_STOPPED as
-    ///    appropriate, and reset the I2C device state on STOP.
+    /// EasyDMA engine (legacy walk / feature-off).
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        let pending = self.pending;
-        if pending == PENDING_NONE {
-            return;
-        }
-
-        // Model wire-transfer latency: hold the transfer "on the bus" until the
-        // configured per-tick instruction quantum has counted down the cycle
-        // budget set when the task was triggered. Until then the completion
-        // EVENTS (and the IRQ) do not fire, so an interrupt cannot preempt the
-        // driver's transfer-launch critical section. See `transfer_cycles`.
-        if self.busy_cycles > 0 {
-            let interval = bus.config().peripheral_tick_interval.max(1);
-            self.busy_cycles = self.busy_cycles.saturating_sub(interval);
-            return;
-        }
-
-        self.pending = PENDING_NONE;
-
-        let addr7 = (self.address & ADDRESS_MASK) as u8;
-
-        match pending {
-            PENDING_STOP => {
-                self.events_stopped = 1;
-                // STOP condition: reset I2C device register-address cursor.
-                if let Some(idx) = self.device_for(addr7) {
-                    self.attached_devices[idx].borrow_mut().stop();
-                }
-            }
-            PENDING_TX => {
-                let _nack = self.do_tx(bus);
-
-                // Honour SHORTS after LASTTX.
-                if self.shorts & SHORT_LASTTX_STARTRX != 0 {
-                    // Chain TX→RX via repeated-START (no STOP between them).
-                    // The follow-on RX is a fresh wire transfer: re-arm latency.
-                    self.pending = PENDING_RX;
-                    self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
-                } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
-                    // Bus held (no STOP); fires EVENTS_SUSPENDED.
-                    // nrfx uses this for TX_NO_STOP (write-then-read split into
-                    // two separate nrfx_twim_xfer calls).
-                    self.events_suspended = 1;
-                } else if self.shorts & SHORT_LASTTX_STOP != 0 {
-                    self.events_stopped = 1;
-                    if let Some(idx) = self.device_for(addr7) {
-                        self.attached_devices[idx].borrow_mut().stop();
-                    }
-                }
-                // If no SHORT matches, firmware drives TASKS_STOP or
-                // TASKS_STARTRX explicitly.
-            }
-            PENDING_RX => {
-                let _nack = self.do_rx(bus);
-
-                // Honour SHORTS after LASTRX.
-                if self.shorts & SHORT_LASTRX_STOP != 0 {
-                    self.events_stopped = 1;
-                    if let Some(idx) = self.device_for(addr7) {
-                        self.attached_devices[idx].borrow_mut().stop();
-                    }
-                } else if self.shorts & SHORT_LASTRX_SUSPEND != 0 {
-                    self.events_suspended = 1;
-                } else if self.shorts & SHORT_LASTRX_STARTTX != 0 {
-                    // Chain RX→TX: re-arm latency for the follow-on TX leg.
-                    self.pending = PENDING_TX;
-                    self.busy_cycles = self.transfer_cycles(self.txd_maxcnt & MAXCNT_MASK);
-                }
-            }
-            _ => {}
-        }
+        self.run_pending_transfer(bus);
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        // Raise IRQ for any enabled + pending event.
-        let events: &[(&u32, u32, u64)] = &[
-            (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
-            (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
-            (
-                &self.events_suspended,
-                INTEN_SUSPENDED,
-                OFF_EVENTS_SUSPENDED,
-            ),
-            (
-                &self.events_rxstarted,
-                INTEN_RXSTARTED,
-                OFF_EVENTS_RXSTARTED,
-            ),
-            (
-                &self.events_txstarted,
-                INTEN_TXSTARTED,
-                OFF_EVENTS_TXSTARTED,
-            ),
-            (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
-            (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
-        ];
+        self.irq_from_events()
+    }
 
-        let mut irq = false;
-        let mut fired: Vec<u32> = Vec::new();
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
 
-        for &(ev, mask, off) in events {
-            if *ev != 0 && self.inten & mask != 0 {
-                irq = true;
-                fired.push(off as u32);
-            }
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending != PENDING_NONE {
+            // Wire latency budget set at task write; 0 means run next cycle.
+            let d = self.busy_cycles.max(1) as u64;
+            vec![(d.saturating_sub(1), 1)]
+        } else if self.irq_from_events().irq {
+            vec![(0, 2)]
+        } else {
+            Vec::new()
         }
+    }
 
-        PeripheralTickResult {
-            irq,
-            fired_events: fired,
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == 1 && self.pending != PENDING_NONE {
+            // Consume the latency in one shot (event fires at the deadline).
+            self.busy_cycles = 0;
+            self.run_pending_transfer(bus);
+        }
+        let res = self.irq_from_events();
+        let more_xfer = self.pending != PENDING_NONE;
+        let delay = if more_xfer {
+            Some(self.busy_cycles.max(1) as u64 - 1)
+        } else if res.irq {
+            Some(1)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            reschedule_delay: delay,
             ..Default::default()
         }
     }

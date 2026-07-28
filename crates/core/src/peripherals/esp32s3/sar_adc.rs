@@ -82,7 +82,7 @@
 //! `ONETIME_SAMPLE` sits at 0x80 and `ARB_CTRL` at 0x38. (Some older IDF
 //! headers placed ONETIME at 0x20; we follow the current S3 map.)
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 // ---- Register offsets -----------------------------------------------------
 const CTRL: u64 = 0x00;
@@ -186,6 +186,10 @@ pub struct Esp32s3SarAdc {
     /// Source ID (interrupt-matrix source) to emit while INT_ST != 0.
     /// `ETS_APB_ADC_INTR_SOURCE` on the S3 = 64.
     source_id: u32,
+
+    /// Bus-published cycle clock (walk-free level export).
+    #[serde(skip, default)]
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3SarAdc {
@@ -234,6 +238,8 @@ impl Esp32s3SarAdc {
             lfsr: 0xACE1_5EED,
 
             source_id,
+
+            clock: None,
         }
     }
 
@@ -450,6 +456,27 @@ impl Peripheral for Esp32s3SarAdc {
             }
         } else {
             PeripheralTickResult::default()
+        }
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_st() != 0 {
+            out.push(self.source_id);
         }
     }
 

@@ -595,7 +595,36 @@ boards:
     #     interpreted (3400255 / 3040236), lit_px (782 / 442) and final pc.
     # Wire TIMING on the pads is unchanged; only host wake scheduling moved. No
     # live USB-JTAG re-capture warranted.
-    drift_ack: 2026-07-26
+    # 2026-07-27: walk-free / idle-FF / IRAM fetch-window / SYSTIMER word-path and
+    # I2C segment-wake cadence work under event-scheduler (wasm real-time fidelity
+    # stack). Reset-oracle registers and layout untouched; esp32c3_walk_differential
+    # (incl. framebuffer @ tick 512) and reset conformance remain the offline gates.
+    # No live USB-JTAG re-capture this session.
+    # 2026-07-28: UART0/UART1 now use the real Espressif register map. The chip
+    # yaml declared them as the vendor-neutral `type: "uart"`, which resolves to
+    # the STM32 layout (SR@0x00, DR@0x04) — so the C3's FIFO writes landed on a
+    # status register, STATUS@0x1C read back 0 (uart_ll_get_txfifo_len() saw all
+    # 128 entries free, always), and NOTHING ever asserted the UART interrupt
+    # (the 2026-07-18 note above already recorded "the ESP32-C3 ... declares
+    # uart0 with NO irq:"). ESP-IDF's blocking `uart_tx_all()` fills the TX FIFO
+    # and, for any write longer than it, enables UART_INTR_TXFIFO_EMPTY and
+    # blocks on tx_fifo_sem — which was never given, so any `Serial.print` over
+    # 128 bytes wedged the sketch forever (every task blocked, idle task in wfi).
+    # Reproduced on the shipped stats lab: the 165-byte HTTP body truncated at
+    # exactly 128 chars and the e-paper panel never left "FETCHING STATS".
+    # Both UARTs now wire crates/core/src/peripherals/esp32c3/uart.rs, which
+    # binds the shared Espressif twin (relocated esp32s3/uart.rs ->
+    # peripherals/esp_uart.rs; same IP, chip-neutral now that two families use
+    # it) with the C3's matrix sources (UART0=21, UART1=22) and 160 MHz core
+    # clock. Reset-oracle UNAFFECTED: no UART register is in the asserted set —
+    # the C3 UART console regs are explicitly excluded as ROM-touched/dynamic
+    # (see esp32c3_reset_conformance module docs). Walk participation unchanged:
+    # the twin is uses_scheduler() + matrix_irq_sources level export, so the
+    # OLED rom-boot bus stays walk-deletable (EXPECTED_PINNERS still empty).
+    # Serial RX injection keeps parity — the twin now exposes rx_buffer() and
+    # attach_uart_rx_source[_named] resolve it, so `uart_injections:` still
+    # works. No live USB-JTAG re-capture this session.
+    drift_ack: 2026-07-28
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -1158,7 +1187,37 @@ boards:
     # branches (encodings pinned by xtensa-esp32s3-elf-as HW oracle). Register
     # maps, reset values and MMIO paths untouched; S3/C3 silicon differentials,
     # ws2812_rmt, ssd1306 + 316 Xtensa CPU tests pass. No live re-capture.
-    drift_ack: 2026-07-25
+    # 2026-07-27: production-path walk-free (configure_xtensa_esp32s3 +
+    # recompute_walk_deletable) and Class-B scheduler migration for the S3
+    # peripheral bank (tick-512 inventory). Reset-state windows and RMT
+    # clock-gated anchor unchanged; esp32s3_walk_differential + reset
+    # conformance remain offline gates. No S3 board attached; no live re-capture.
+    # 2026-07-28: the UART twin moved from peripherals/esp32s3/uart.rs to the
+    # chip-neutral peripherals/esp_uart.rs (struct Esp32s3Uart -> EspUart, with
+    # esp32s3::uart re-exporting the old name so every S3 call site is
+    # unchanged). The ESP32-C3 carries the identical UART IP and now wires the
+    # same model, and the arch-isolation gate forbids a chip module reaching
+    # into another chip's — hence chip-neutral rather than an allow-list entry.
+    # TWO BEHAVIOURAL DELTAS, both shared with the S3:
+    #   * TX drain is measured in CYCLES, not tick calls. It was `drain_accum
+    #     += 1` per tick(), so the baud rate silently scaled with
+    #     peripheral_tick_interval (64x slow at interval 64, 512x at the
+    #     browser's 512) and the walk disagreed with the scheduler by the event
+    #     phase. Now the walk takes the batched interval via tick_elapsed() and
+    #     the scheduler anchors to absolute cycles from the push that filled the
+    #     FIFO. Caught by esp32c3_walk_differential's uart0 gate, which diverged
+    #     on ONE character of the boot log (an ESP-IDF timestamp, 4696 vs 4697
+    #     ms) — that gate is now byte-identical at interval 1 and framebuffer-
+    #     identical at 64. cycles_per_byte() also takes the core clock as a
+    #     constructor argument (S3 240 MHz unchanged, C3 160 MHz).
+    #   * rx_buffer() added, so attach_uart_rx_source[_named] resolve the twin
+    #     and `uart_injections:` reaches it; and attach_uart_tx_sink[_named] can
+    #     now SILENCE the stdout echo (never enable it — console-ness is still
+    #     decided at construction), so capture-only callers stop double-echoing.
+    # Register map, reset values and the 9-reg reset-state anchor are untouched;
+    # esp32s3 reset conformance + the GDMA UART-TX descriptor tests pass. No S3
+    # board attached; no live re-capture.
+    drift_ack: 2026-07-28
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

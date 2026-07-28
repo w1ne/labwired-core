@@ -4,7 +4,7 @@
     "excluded": 190,
     "level": 2,
     "name": "esp32c3",
-    "reg_match": 364
+    "reg_match": 380
   },
   {
     "behavior": true,

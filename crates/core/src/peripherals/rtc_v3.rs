@@ -28,8 +28,18 @@
 //!   DR constant (documented simplification).
 //! - Timestamp (TSTR/TSDR/TSSSR), wakeup timer expiry, and the
 //!   SHIFTR fine-adjust are not modeled; registers are storage/stub.
+//!
+//! ## Drive modes (walk-free H5 campaign)
+//!
+//! * **Scheduler mode** (`event-scheduler` + bus [`CycleClock`]): calendar
+//!   seconds ride absolute delay events (one event per BCD second). `sync_to`
+//!   advances the accumulator for write-path freshness; alarms fire on the
+//!   event that crosses a second boundary.
+//! * **Legacy mode** (feature off / no clock): per-cycle `tick()` is
+//!   byte-identical to the historical model.
 
-use crate::{PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use std::any::Any;
 
 /// Bus ticks per BCD calendar second (matches a 32.768 kHz LSE fed
 /// one-tick-per-cycle; deterministic for tests and trace replay).
@@ -110,6 +120,15 @@ pub struct RtcV3 {
     alrbbinr: u32,
     wpr: WprState,
     tick_accum: u32,
+    /// Bus-published cycle clock (scheduler mode).
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Cycle at which `tick_accum` was last advanced under the scheduler.
+    #[serde(skip)]
+    anchor: u64,
+    /// One live second-boundary event is outstanding.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl RtcV3 {
@@ -137,7 +156,21 @@ impl RtcV3 {
             alrbbinr: 0,
             wpr: WprState::Locked,
             tick_accum: 0,
+            clock: None,
+            anchor: 0,
+            chain_live: false,
         }
+    }
+
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock (legacy walk path).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
+        self.chain_live = false;
     }
 
     fn bypshad(&self) -> bool {
@@ -371,6 +404,64 @@ impl RtcV3 {
         }
         true
     }
+
+    /// Apply alarm comparators after a just-incremented second. Returns true
+    /// when a newly-latched flag has its interrupt enable on.
+    fn evaluate_alarms_after_second(&mut self) -> bool {
+        let mut new_flags = 0;
+        if self.cr & CR_ALRAE != 0 && self.sr & SR_ALRAF == 0 && self.alarm_matches(self.alrmar) {
+            new_flags |= SR_ALRAF;
+        }
+        if self.cr & CR_ALRBE != 0 && self.sr & SR_ALRBF == 0 && self.alarm_matches(self.alrmbr) {
+            new_flags |= SR_ALRBF;
+        }
+        self.sr |= new_flags;
+        let enabled = (if self.cr & CR_ALRAIE != 0 {
+            SR_ALRAF
+        } else {
+            0
+        }) | (if self.cr & CR_ALRBIE != 0 {
+            SR_ALRBF
+        } else {
+            0
+        });
+        new_flags & enabled != 0
+    }
+
+    /// Advance `n` bus ticks of calendar time. Shared by legacy `tick()` and
+    /// the scheduler `sync_to` / `on_event` path.
+    fn advance_n_ticks(&mut self, n: u64) -> bool {
+        if self.init || n == 0 {
+            return false;
+        }
+        let mut irq = false;
+        let mut remaining = n;
+        while remaining > 0 {
+            let to_second = u64::from(TICKS_PER_SECOND - self.tick_accum);
+            if remaining < to_second {
+                self.tick_accum += remaining as u32;
+                break;
+            }
+            remaining -= to_second;
+            self.tick_accum = 0;
+            self.increment_second();
+            if !self.bypshad() {
+                self.sync_shadow();
+            }
+            if self.evaluate_alarms_after_second() {
+                irq = true;
+            }
+        }
+        irq
+    }
+
+    /// Cycles until the next second boundary (at least 1 while running).
+    fn cycles_until_next_second(&self) -> Option<u64> {
+        if self.init {
+            return None;
+        }
+        Some(u64::from(TICKS_PER_SECOND - self.tick_accum).max(1))
+    }
 }
 
 #[inline]
@@ -389,7 +480,7 @@ impl Default for RtcV3 {
     }
 }
 
-impl crate::Peripheral for RtcV3 {
+impl Peripheral for RtcV3 {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let sh = ((offset & 3) * 8) as u32;
@@ -415,42 +506,86 @@ impl crate::Peripheral for RtcV3 {
     /// running behavior: TR 0x00123456 -> 0x00123457 across a second,
     /// capture 2026-06-11 NUCLEO-H563ZI).
     fn tick(&mut self) -> PeripheralTickResult {
-        if self.init {
+        if self.scheduler_mode() {
             return PeripheralTickResult::default();
         }
-        self.tick_accum += 1;
-        if self.tick_accum < TICKS_PER_SECOND {
-            return PeripheralTickResult::default();
-        }
-        self.tick_accum = 0;
-        self.increment_second();
-        if !self.bypshad() {
-            self.sync_shadow();
-        }
-
-        // Alarm comparators run on each second boundary.
-        let mut new_flags = 0;
-        if self.cr & CR_ALRAE != 0 && self.sr & SR_ALRAF == 0 && self.alarm_matches(self.alrmar) {
-            new_flags |= SR_ALRAF;
-        }
-        if self.cr & CR_ALRBE != 0 && self.sr & SR_ALRBF == 0 && self.alarm_matches(self.alrmbr) {
-            new_flags |= SR_ALRBF;
-        }
-        self.sr |= new_flags;
-
-        // Raise the IRQ line only for newly-set flags whose interrupt
-        // enable is on (MISR view of the new flags).
-        let enabled = (if self.cr & CR_ALRAIE != 0 {
-            SR_ALRAF
-        } else {
-            0
-        }) | (if self.cr & CR_ALRBIE != 0 {
-            SR_ALRBF
-        } else {
-            0
-        });
-        PeripheralTickResult::with_irq(new_flags & enabled != 0)
+        PeripheralTickResult::with_irq(self.advance_n_ticks(1))
     }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if !self.scheduler_mode() || now_cycle <= self.anchor {
+            return;
+        }
+        let delta = now_cycle - self.anchor;
+        self.anchor = now_cycle;
+        let _ = self.advance_n_ticks(delta);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || self.init || self.chain_live {
+            return Vec::new();
+        }
+        let Some(cycles) = self.cycles_until_next_second() else {
+            return Vec::new();
+        };
+        // Bus deadline = current_cycle + 1 + delay → fire in `cycles` ticks.
+        self.chain_live = true;
+        vec![(cycles.saturating_sub(1), 0)]
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() {
+            self.chain_live = false;
+            return crate::sched::EventResult::default();
+        }
+        if self.init {
+            self.chain_live = false;
+            return crate::sched::EventResult::default();
+        }
+        let now = sched.now();
+        let irq = if now > self.anchor {
+            let d = now - self.anchor;
+            self.anchor = now;
+            self.advance_n_ticks(d)
+        } else {
+            // Exact second-boundary fire: advance the remaining accumulator.
+            let need = self.cycles_until_next_second().unwrap_or(1);
+            self.anchor = now;
+            self.advance_n_ticks(need)
+        };
+        let next = self.cycles_until_next_second();
+        self.chain_live = next.is_some();
+        crate::sched::EventResult {
+            raise_own_irq: irq,
+            reschedule_delay: next.map(|c| c.saturating_sub(1)),
+            ..Default::default()
+        }
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }

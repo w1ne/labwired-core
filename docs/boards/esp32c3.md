@@ -27,7 +27,10 @@ MAC + radio front-end) drive real firmware; the remainder are declarative
 register windows validated for reset-state conformance and clean mapping (no
 bus faults). Wired blocks include:
 
-- **Core / console:** RV32IMC core, UART0/1, GPIO + `io_mux`, `gpio_sd`
+- **Core / console:** RV32IMC core, UART0/1
+  (`crates/core/src/peripherals/esp32c3/uart.rs` — the Espressif register map
+  with real 128-byte TX/RX FIFOs and the `TXFIFO_EMPTY`/`TX_DONE` interrupts
+  ESP-IDF's blocking `uart_tx_all()` waits on), GPIO + `io_mux`, `gpio_sd`
 - **Timers / clocks:** TIMG0/1, `systimer`, `system`, `apb_ctrl`, `rtc_cntl`
 - **Buses:** SPI0/1/2, I²C0, I²S0, `rmt`, `ledc`, `twai0`, `uhci0/1`, GDMA (`dma`)
 - **Radio:** `wifi_mac`, `radio_fe`, `radio_nrx`, `bb` (register-level MAC; see WiFi link above)

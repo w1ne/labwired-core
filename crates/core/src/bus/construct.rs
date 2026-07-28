@@ -375,7 +375,7 @@ impl SystemBus {
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
         use crate::peripherals::components::IolinkMaster;
         use crate::peripherals::esp32::uart::Esp32Uart;
-        use crate::peripherals::esp32s3::uart::Esp32s3Uart;
+        use crate::peripherals::esp_uart::EspUart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         use crate::peripherals::nrf54l::uarte::Nrf54lUarte;
         for p in &mut self.peripherals {
@@ -425,11 +425,14 @@ impl SystemBus {
             // and 2nd-stage bootloader print their banner/progress here, and
             // esp-hal's default `esp_println` targets UART0 too. Without this the
             // faithful S3 boot produces no captured serial (uart.log stays empty).
-            // Its `echo_stdout` is fixed at construction (uart0 defaults to true;
-            // the run service passes --no-uart-stdout, but only the CAPTURE sink
-            // matters there), so `set_sink` only wires the capture buffer.
-            if let Some(uart) = any.downcast_mut::<Esp32s3Uart>() {
+            // The same model backs the ESP32-C3's UART0/1 (identical IP), so this
+            // arm also carries the C3's Arduino `Serial` console.
+            if let Some(uart) = any.downcast_mut::<EspUart>() {
                 uart.set_sink(Some(sink.clone()));
+                // Capture-only callers (the browser bridge, `--no-uart-stdout`)
+                // must not also get a host-console echo; a quiet instance stays
+                // quiet either way.
+                uart.silence_stdout_echo_if(echo_stdout);
                 continue;
             }
             // RP2040 USB CDC: an Arduino Mbed-OS sketch's default `Serial` is
@@ -480,6 +483,8 @@ impl SystemBus {
             };
             if let Some(uart) = any.downcast_mut::<Uart>() {
                 uart.set_sink(None, false);
+            } else if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
+                uart.set_sink(None);
             }
         }
 
@@ -490,11 +495,19 @@ impl SystemBus {
             let Some(any) = p.dev.as_any_mut() else {
                 return false;
             };
-            let Some(uart) = any.downcast_mut::<Uart>() else {
-                return false;
-            };
-            uart.set_sink(Some(sink), echo_stdout);
-            return true;
+            if let Some(uart) = any.downcast_mut::<Uart>() {
+                uart.set_sink(Some(sink), echo_stdout);
+                return true;
+            }
+            // The Espressif twin (S3 UART0/1/2, C3 UART0/1) decides at
+            // construction whether it is a console, so `echo_stdout` can only
+            // silence it here — same as the by-type `attach_uart_tx_sink` path.
+            if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
+                uart.set_sink(Some(sink));
+                uart.silence_stdout_echo_if(echo_stdout);
+                return true;
+            }
+            return false;
         }
         false
     }
@@ -507,10 +520,13 @@ impl SystemBus {
             let Some(any) = p.dev.as_any() else {
                 continue;
             };
-            let Some(uart) = any.downcast_ref::<Uart>() else {
-                continue;
-            };
-            sources.push(uart.rx_buffer());
+            if let Some(uart) = any.downcast_ref::<Uart>() {
+                sources.push(uart.rx_buffer());
+            } else if let Some(uart) = any.downcast_ref::<crate::peripherals::esp_uart::EspUart>() {
+                // The Espressif twin (ESP32-S3 UART0/1/2, and the ESP32-C3's
+                // UART0/1, which are the same IP) exposes the same handle.
+                sources.push(uart.rx_buffer());
+            }
         }
         sources
     }
@@ -528,8 +544,12 @@ impl SystemBus {
                 continue;
             }
             let any = p.dev.as_any()?;
-            let uart = any.downcast_ref::<Uart>()?;
-            return Some(uart.rx_buffer());
+            if let Some(uart) = any.downcast_ref::<Uart>() {
+                return Some(uart.rx_buffer());
+            }
+            return any
+                .downcast_ref::<crate::peripherals::esp_uart::EspUart>()
+                .map(|uart| uart.rx_buffer());
         }
         None
     }

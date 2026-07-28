@@ -205,11 +205,15 @@ impl Peripheral for Nrf52SerialInstance {
     }
 
     fn uses_scheduler(&self) -> bool {
-        match self.active() {
-            ENABLE_TWIM => self.twim.uses_scheduler(),
-            ENABLE_SPIM => self.spim.uses_scheduler(),
-            _ => false,
-        }
+        // Both sub-peripherals are scheduler-driven; when neither is enabled
+        // the instance is a pure config surface (no walk work). Always true
+        // so ENABLE flips after bus construction cannot re-introduce a
+        // forcer on a walk-deleted bus.
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
     }
 
     fn sync_to(&mut self, tick_now: u64) {

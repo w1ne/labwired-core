@@ -700,6 +700,11 @@ impl WasmSimulator {
         manifest: &SystemManifest,
         firmware: &[u8],
     ) -> Result<WasmSimulator, JsValue> {
+        // Drop any leftover process/thread-local aids state from a prior
+        // WasmSimulator in this worker (re-run / lab switch). See
+        // `rom_thunks::reset_esp32_session_state`.
+        labwired_core::peripherals::esp_xtensa_common::rom_thunks::reset_esp32_session_state();
+
         let mut bus = SystemBus::new();
         let cpu = configure_xtensa_esp32(&mut bus);
 
@@ -1183,9 +1188,11 @@ impl WasmSimulator {
     /// The largest `peripheral_tick_interval` this machine's bus can run at
     /// without losing fidelity (see `SystemBus::max_safe_tick_interval`): a
     /// batching interval when every peripheral is scheduler-driven, `1` when
-    /// anything non-relaxable (IO-Link master, op-modeling FLASH, a live
-    /// legacy walk) is present. The TS side calls this once at engine init
-    /// and feeds the answer straight into `set_peripheral_tick_interval`.
+    /// anything non-relaxable (IO-Link master, a live legacy walk, forced
+    /// HC-SR04 legacy path) is present. H5 op-modeling FLASH still clamps
+    /// CPU quantum via `requires_cycle_accurate` but does not pin this
+    /// interval. The TS side calls this once at engine init and feeds the
+    /// answer straight into `set_peripheral_tick_interval`.
     #[wasm_bindgen]
     pub fn recommended_tick_interval(&mut self) -> u32 {
         self.machine().bus.max_safe_tick_interval()
@@ -1237,21 +1244,39 @@ impl WasmSimulator {
     /// are re-applied every 10k cycles (matching the e2e test cadence).
     /// Falls back to plain `step` if `install_esp32_arduino_quirks` hasn't
     /// been called yet.
+    ///
+    /// Dual-core machines use batched [`AdvanceRequest::run`] (same as
+    /// [`Self::step_batch`]) so idle fast-forward can engage while PRO_CPU is
+    /// WAITI-parked. The old N× `AdvanceRequest::single` path forced quantum-1
+    /// and permanently disabled idle FF for the classic-aids playground path.
     #[wasm_bindgen]
     pub fn step_with_esp32_aids(&mut self, cycles: u32) -> Result<(), JsValue> {
         // Real dual-core: a genuine APP_CPU is attached, so the handshake
         // keep-alive and the FROM_CPU IPI bridge below are unnecessary — the
-        // firmware drives the rendezvous itself and Machine::step delivers the
-        // cross-core IPI via the DPORT. Just step both cores.
+        // firmware drives the rendezvous itself and Machine::advance delivers
+        // the cross-core IPI via the DPORT. Use the batched run path so idle
+        // FF / WAITI coalesce work (see PR-I).
         if self
             .machine
             .as_ref()
             .is_some_and(|m| m.cpu_secondary.is_some())
+            || self.esp32_ipi.is_none()
         {
-            return self.step(cycles);
+            // Batched run (idle FF enabled when configured). Always surface
+            // CPU errors — unlike `step_batch`, which can return Ok(partial)
+            // after a mid-batch fault.
+            self.machine()
+                .advance(AdvanceRequest::run(Some(u64::from(cycles))))
+                .map(|_| ())
+                .map_err(|e| JsValue::from_str(&format!("Step Error: {e}")))
+        } else {
+            self.step_with_esp32_aids_singlecore_ipi(cycles)
         }
+    }
+
+    fn step_with_esp32_aids_singlecore_ipi(&mut self, cycles: u32) -> Result<(), JsValue> {
         if self.esp32_ipi.is_none() {
-            return self.step(cycles);
+            return self.step_batch(cycles).map(|_| ());
         }
         for i in 0..cycles {
             {
@@ -2018,12 +2043,18 @@ mod romboot_tests {
         apply_browser_c3_policy(&mut sim, rec);
 
         // Run the whole device pipeline: associate → DHCP → TCP → HTTP fetch of
-        // the AP's /v1/public-stats. Success = the real stats body arrives (the
-        // firmware would then paint it), not just association — the full "it
-        // works" the user builds the device for.
+        // the AP's /v1/public-stats → parse → repaint the e-paper panel. The
+        // success line is `PANEL UPDATED` AFTER `PARSED`, not the arrival of
+        // the body: stopping at the body is what let the UART-wedge bug ship.
+        // The sketch's `HTTP BODY:` line is 165 bytes, longer than the C3's
+        // 128-byte TX FIFO, so this only completes if the UART model reports
+        // real FIFO occupancy and raises TXFIFO_EMPTY (see
+        // `peripherals::esp32c3::uart`). Without that the device wedges here
+        // forever with the panel still reading "FETCHING STATS".
         let mut total: u64 = 0;
         let mut fetched = false;
-        while total < 12_000_000_000 {
+        let mut painted = false;
+        while total < 24_000_000_000 {
             let n = sim.step_batch(2_000_000).expect("step");
             if n == 0 {
                 break;
@@ -2032,11 +2063,20 @@ mod romboot_tests {
             let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
             // The AP serves the stats snapshot (boards_supported:9); the LBC3.1
             // sketch logs the fetched JSON body verbatim.
-            if out.contains("boards_supported") {
-                fetched = true;
-                break;
+            fetched |= out.contains("boards_supported");
+            // The sketch prints PARSED once the body is decoded, then repaints
+            // the panel and prints PANEL UPDATED — the third one is the stats
+            // paint (boot splash and "FETCHING STATS" are the first two).
+            if let Some(parsed_at) = out.find("PARSED boards=") {
+                if out[parsed_at..].contains("PANEL UPDATED") {
+                    painted = true;
+                    break;
+                }
             }
-            if out.contains("WiFi connect timeout") || out.contains("stats fetch failed") {
+            if out.contains("WiFi connect timeout")
+                || out.contains("stats fetch failed")
+                || out.contains("STATS FETCH FAILED")
+            {
                 break;
             }
         }
@@ -2049,6 +2089,18 @@ mod romboot_tests {
         assert!(
             fetched,
             "C3 must fetch /v1/public-stats over the modeled AP (full pipeline) on fast-start"
+        );
+        // The whole 165-byte body must make it out of the UART, not just the
+        // first FIFO-full of it.
+        assert!(
+            out.contains("\"active_sessions\":4900}"),
+            "the full stats body must reach the console — a truncated line means \
+             the TX FIFO never drained; serial:\n{out}"
+        );
+        assert!(
+            painted,
+            "C3 must parse the stats and repaint the panel — the device is only \
+             'working' once the panel shows the numbers; serial:\n{out}"
         );
     }
 
@@ -2120,5 +2172,224 @@ mod disasm_arch_tests {
         let s = format!("{:?}", decode_rv32c(hw));
         assert!(!s.is_empty());
         let _ = decode_thumb_16(hw);
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod esp32_classic_aids_stability_tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::time::Instant;
+
+    fn ereader_elf_bytes() -> Option<Vec<u8>> {
+        let mut candidates = Vec::new();
+        if let Ok(p) = std::env::var("LABWIRED_EREADER_ELF") {
+            candidates.push(PathBuf::from(p));
+        }
+        // cargo test -p labwired-wasm CWD is crates/wasm
+        candidates.push(PathBuf::from(
+            "../../../packages/playground/public/wasm/demo-labwired-ereader.elf",
+        ));
+        candidates.push(PathBuf::from(
+            "../../packages/playground/public/wasm/demo-labwired-ereader.elf",
+        ));
+        candidates
+            .into_iter()
+            .find(|p| p.exists())
+            .and_then(|p| std::fs::read(p).ok())
+    }
+
+    fn system_yaml() -> String {
+        // Prefer monorepo config; fall back to minimal inline.
+        let paths = [
+            PathBuf::from("../../../core/configs/systems/esp32-wroom-epaper.yaml"),
+            PathBuf::from("../../configs/systems/esp32-wroom-epaper.yaml"),
+            PathBuf::from("../configs/systems/esp32-wroom-epaper.yaml"),
+        ];
+        for p in paths {
+            if let Ok(s) = std::fs::read_to_string(&p) {
+                return s;
+            }
+        }
+        r#"
+name: "esp32-wroom-epaper"
+chip: "esp32"
+external_devices:
+  - id: "epaper"
+    type: "uc8151d_tricolor_290"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO5"
+      dc_pin: "GPIO17"
+"#
+        .to_string()
+    }
+
+    fn chip_yaml() -> String {
+        let paths = [
+            PathBuf::from("../../../core/configs/chips/esp32.yaml"),
+            PathBuf::from("../../configs/chips/esp32.yaml"),
+            PathBuf::from("../configs/chips/esp32.yaml"),
+        ];
+        for p in paths {
+            if let Ok(s) = std::fs::read_to_string(&p) {
+                return s;
+            }
+        }
+        panic!("esp32.yaml not found for wasm aids stability test");
+    }
+
+    fn dump(sim: &WasmSimulator, label: &str) {
+        let pc0 = sim.get_pc();
+        let sec_pc = sim
+            .machine
+            .as_ref()
+            .and_then(|m| m.cpu_secondary.as_ref())
+            .map(|c| c.get_pc())
+            .unwrap_or(0);
+        let parked0 = sim
+            .machine
+            .as_ref()
+            .map(|m| m.cpu.is_parked_idle())
+            .unwrap_or(false);
+        let parked1 = sim
+            .machine
+            .as_ref()
+            .and_then(|m| m.cpu_secondary.as_ref())
+            .map(|c| c.is_parked_idle())
+            .unwrap_or(false);
+        let skipped = sim.idle_fast_forward_cycles_skipped();
+        eprintln!(
+            "{label}: pc0={pc0:#010x} parked0={parked0} pc1={sec_pc:#010x} parked1={parked1} skipped={skipped}"
+        );
+    }
+
+    /// Exact browser entry: new_from_config + install_arduino_esp32_quirks +
+    /// step_with_esp32_aids (currently dual-core → N× single).
+    #[test]
+    fn wasm_simulator_ereader_aids_idle_ff_does_not_fault() {
+        let Some(fw) = ereader_elf_bytes() else {
+            eprintln!("[skip] no ereader elf");
+            return;
+        };
+        let mut sim =
+            WasmSimulator::new_from_config(&system_yaml(), &chip_yaml(), &fw, JsValue::NULL)
+                .expect("new_from_config esp32");
+        sim.install_arduino_esp32_quirks(&fw)
+            .expect("install quirks");
+        sim.set_idle_fast_forward_enabled(true);
+        let rec = sim.recommended_tick_interval();
+        sim.set_peripheral_tick_interval(rec);
+
+        let target_batches = 40u32; // 40 * 50k = 2M single-steps via aids
+        let batch = 50_000u32;
+        let t0 = Instant::now();
+        for i in 0..target_batches {
+            match sim.step_with_esp32_aids(batch) {
+                Ok(()) => {}
+                Err(e) => {
+                    let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
+                    dump(&sim, &format!("FAIL batch={i} err={msg}"));
+                    // Dispose safety: free/drop after error must not panic.
+                    drop(sim);
+                    panic!("step_with_esp32_aids fault at batch {i}: {msg}");
+                }
+            }
+            if i % 5 == 0 {
+                dump(&sim, &format!("progress batch={i}"));
+            }
+        }
+        let wall = t0.elapsed().as_secs_f64();
+        let cycles = u64::from(target_batches) * u64::from(batch);
+        eprintln!(
+            "OK aids: cycles={cycles} wall={wall:.3}s mips={:.3} skipped={}",
+            (cycles as f64 / wall) / 1e6,
+            sim.idle_fast_forward_cycles_skipped()
+        );
+        dump(&sim, "final");
+        drop(sim);
+    }
+
+    /// Preferred path after the PR-I fix: dual-core aids should use batched
+    /// AdvanceRequest::run so idle FF can engage.
+    #[test]
+    fn wasm_simulator_ereader_batch_run_idle_ff() {
+        let Some(fw) = ereader_elf_bytes() else {
+            eprintln!("[skip] no ereader elf");
+            return;
+        };
+        let mut sim =
+            WasmSimulator::new_from_config(&system_yaml(), &chip_yaml(), &fw, JsValue::NULL)
+                .expect("new_from_config");
+        sim.install_arduino_esp32_quirks(&fw).expect("quirks");
+        sim.set_idle_fast_forward_enabled(true);
+        let rec = sim.recommended_tick_interval();
+        sim.set_peripheral_tick_interval(rec);
+
+        // Drive Machine::advance(run) directly through step_batch — once aids
+        // routes dual-core here, this is the browser path.
+        let t0 = Instant::now();
+        let mut done = 0u32;
+        let target = 5_000_000u32;
+        while done < target {
+            let n = 200_000u32.min(target - done);
+            match sim.step_batch(n) {
+                Ok(e) => {
+                    done = done.saturating_add(e.max(1));
+                }
+                Err(e) => {
+                    let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
+                    dump(&sim, &format!("FAIL step_batch done={done} err={msg}"));
+                    drop(sim);
+                    panic!("step_batch fault: {msg}");
+                }
+            }
+        }
+        let wall = t0.elapsed().as_secs_f64();
+        eprintln!(
+            "OK step_batch: done={done} wall={wall:.3}s mips={:.3} skipped={}",
+            (done as f64 / wall) / 1e6,
+            sim.idle_fast_forward_cycles_skipped()
+        );
+        dump(&sim, "final");
+        assert!(
+            sim.idle_fast_forward_cycles_skipped() > 0,
+            "idle FF should engage on waiti while primary parks"
+        );
+        drop(sim);
+    }
+
+    /// PR-I: sequential WasmSimulator sessions in one process must not inherit
+    /// the prior session's fake timer / APPCPU TLS and fault at ~0x33xxxx.
+    #[test]
+    fn wasm_simulator_ereader_sequential_rerun_does_not_fault() {
+        let Some(fw) = ereader_elf_bytes() else {
+            eprintln!("[skip] no ereader elf");
+            return;
+        };
+        for label in ["A", "B", "C"] {
+            let mut sim =
+                WasmSimulator::new_from_config(&system_yaml(), &chip_yaml(), &fw, JsValue::NULL)
+                    .expect("new_from_config");
+            sim.install_arduino_esp32_quirks(&fw).expect("quirks");
+            sim.set_idle_fast_forward_enabled(true);
+            let rec = sim.recommended_tick_interval();
+            sim.set_peripheral_tick_interval(rec);
+            match sim.step_with_esp32_aids(2_000_000) {
+                Ok(()) => {
+                    eprintln!(
+                        "OK session {label}: skipped={}",
+                        sim.idle_fast_forward_cycles_skipped()
+                    );
+                }
+                Err(e) => {
+                    let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
+                    dump(&sim, &format!("FAIL session={label} err={msg}"));
+                    drop(sim);
+                    panic!("session {label} fault: {msg}");
+                }
+            }
+            drop(sim);
+        }
     }
 }

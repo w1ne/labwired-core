@@ -106,6 +106,10 @@ fn build_alarm_machine(
             })
             .expect("S3 bus registers a Systimer");
         systimer.force_legacy_walk();
+        // configure_xtensa_esp32s3 auto-derives walk deletion; pinning
+        // SYSTIMER back onto the walk requires a recompute so the walk
+        // actually runs for the reference lane.
+        bus.recompute_walk_deletable();
     }
 
     let mut cpu = wiring.cpu;

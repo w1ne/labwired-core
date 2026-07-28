@@ -34,12 +34,23 @@
 //!   transfer and CSR stays IDLEF.
 //! - Linked-list mode is not modeled: CLBAR / CLLR are plain storage
 //!   the engine ignores.
-//! - Transfers are paced one byte per `tick()` per channel and modeled
-//!   byte-wise internally; `CBR1.BNDT` counts bytes (RM0481 §16.4.6),
+//! - Transfers are paced one source data unit per tick/event per channel and
+//!   modeled byte-wise internally; `CBR1.BNDT` counts bytes (RM0481 §16.4.6),
 //!   so SDW/DDW widths wider than a byte still produce byte-exact
 //!   destination data and correct final addresses.
+//!
+//! ## Drive modes (walk-free H5 campaign)
+//!
+//! * **Scheduler mode** (`event-scheduler` + bus [`CycleClock`]): channel
+//!   transfers ride delay-0/1 events (Dma1 pattern). Enabling a channel
+//!   (CCR.EN 0→1 with SWREQ / linked-list) arms a delay-0 element event;
+//!   `on_event` moves one unit and self-perpetuates at delay 1 while the
+//!   channel stays active with work remaining (including linked-list node
+//!   fetch ticks).
+//! * **Legacy mode** (feature off / no clock): per-cycle `tick()` is
+//!   byte-identical to the historical model.
 
-use crate::{DmaDirection, DmaRequest, Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, DmaDirection, DmaRequest, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 
 // ---- Channel-relative register offsets (CMSIS stm32h563xx.h) ----
@@ -104,6 +115,9 @@ struct GpdmaChannel {
     active: bool,
     /// BNDT value latched at EN, used for the half-transfer (HTF) mark.
     bndt_initial: u32,
+    /// Scheduler mode: one live element/chain event per channel.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl GpdmaChannel {
@@ -132,6 +146,10 @@ pub struct Gpdma {
     /// Own bus base address (for linked-list node-fetch self-copies).
     #[serde(default)]
     base: u32,
+    /// Bus-published cycle clock. `Some` once registration attaches it;
+    /// `None` keeps the model on the legacy walk path.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
 }
 
 impl Gpdma {
@@ -153,6 +171,27 @@ impl Gpdma {
     pub fn with_base(mut self, base: u32) -> Self {
         self.base = base;
         self
+    }
+
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock so the model stays
+    /// on the legacy walk (`uses_scheduler() == false`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
+    }
+
+    /// True when channel `i` has work the walk/event path must service.
+    #[inline]
+    fn channel_needs_service(ch: &GpdmaChannel) -> bool {
+        if !ch.active {
+            return false;
+        }
+        let bndt = ch.cbr1 & BNDT_MASK;
+        bndt > 0 || ch.cllr != 0
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -273,6 +312,144 @@ impl Gpdma {
             _ => {} // reserved top-level offsets ignore writes
         }
     }
+
+    /// Service one active channel once (element transfer or linked-list
+    /// node fetch). Shared by the legacy walk and the scheduler path.
+    fn service_channel_once(
+        &mut self,
+        ch_idx: usize,
+    ) -> (Option<Vec<DmaRequest>>, bool, Option<Vec<u32>>) {
+        let mut dma_requests: Option<Vec<DmaRequest>> = None;
+        let mut irq = false;
+        let mut explicit_irqs: Option<Vec<u32>> = None;
+        let irq_base = self.irq_base;
+        let mut pend = |ch_idx: usize, irq_flag: &mut bool| match irq_base {
+            Some(base) => explicit_irqs
+                .get_or_insert_with(Vec::new)
+                .push(base + ch_idx as u32),
+            None => *irq_flag = true,
+        };
+
+        if ch_idx >= NUM_CHANNELS {
+            return (None, false, None);
+        }
+        let ch = &mut self.channels[ch_idx];
+        if !ch.active {
+            return (None, false, None);
+        }
+        let bndt = ch.cbr1 & BNDT_MASK;
+        if bndt == 0 {
+            if ch.cllr != 0 {
+                // Linked-list: fetch the next node (memory → own-register
+                // copies the bus executes after this service).
+                let node = ((ch.clbar & 0xFFFF_0000) | (ch.cllr & 0xFFFC)) as u64;
+                let regs: [(u32, u64); 8] = [
+                    (1 << 31, OFF_CTR1),
+                    (1 << 30, OFF_CTR2),
+                    (1 << 29, OFF_CBR1),
+                    (1 << 28, OFF_CSAR),
+                    (1 << 27, OFF_CDAR),
+                    (1 << 26, OFF_CTR3),
+                    (1 << 25, OFF_CBR2),
+                    (1 << 16, OFF_CLLR),
+                ];
+                let ch_base = self.base as u64 + CHAN_BASE + ch_idx as u64 * CHAN_STRIDE;
+                let mut word = 0u64;
+                for (flag, reg_off) in regs {
+                    if ch.cllr & flag != 0 {
+                        for k in 0..4u64 {
+                            dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
+                                src_addr: node + word * 4 + k,
+                                addr: ch_base + reg_off + k,
+                                val: 0,
+                                direction: DmaDirection::Copy,
+                                transform: None,
+                            });
+                        }
+                        word += 1;
+                    }
+                }
+            } else {
+                ch.active = false;
+            }
+            return (dma_requests, false, None);
+        }
+
+        // One source data unit (classic-DMA byte pacing). The bus applies
+        // CTR1 data-handling after this service.
+        let src_w = 1u32 << ((ch.ctr1 >> CTR1_SDW_SHIFT) & 0x3).min(2);
+        let dst_w = 1u32 << ((ch.ctr1 >> CTR1_DDW_SHIFT) & 0x3).min(2);
+        dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
+            src_addr: ch.csar as u64,
+            addr: ch.cdar as u64,
+            val: 0,
+            direction: DmaDirection::Copy,
+            transform: Some(crate::DmaUnitTransform {
+                src_width: src_w as u8,
+                dst_width: dst_w as u8,
+                pam: ((ch.ctr1 >> CTR1_PAM_SHIFT) & 0x3) as u8,
+                sbx: ch.ctr1 & CTR1_SBX != 0,
+                dbx: ch.ctr1 & CTR1_DBX != 0,
+                dhx: ch.ctr1 & CTR1_DHX != 0,
+            }),
+        });
+
+        // H5 GPDMA advances user-visible CSAR/CDAR as the transfer runs.
+        if ch.ctr1 & CTR1_SINC != 0 {
+            ch.csar = ch.csar.wrapping_add(src_w);
+        }
+        if ch.ctr1 & CTR1_DINC != 0 {
+            ch.cdar = ch.cdar.wrapping_add(dst_w);
+        }
+
+        let bndt = bndt.saturating_sub(src_w);
+        ch.cbr1 = (ch.cbr1 & !BNDT_MASK) | bndt;
+
+        if ch.bndt_initial >= 2 && bndt <= ch.bndt_initial / 2 && ch.flags & CSR_HTF == 0 {
+            ch.flags |= CSR_HTF;
+            if ch.ccr & CCR_HTIE != 0 {
+                pend(ch_idx, &mut irq);
+            }
+        }
+
+        if bndt == 0 {
+            ch.flags |= CSR_TCF;
+            if ch.ccr & CCR_TCIE != 0 {
+                pend(ch_idx, &mut irq);
+            }
+            if ch.cllr == 0 {
+                ch.ccr &= !CCR_EN;
+                ch.active = false;
+            }
+        }
+
+        (dma_requests, irq, explicit_irqs)
+    }
+
+    fn tick_channels_once(&mut self) -> PeripheralTickResult {
+        let mut dma_requests: Option<Vec<DmaRequest>> = None;
+        let mut irq = false;
+        let mut explicit_irqs: Option<Vec<u32>> = None;
+        for ch_idx in 0..NUM_CHANNELS {
+            let (reqs, chan_irq, chan_explicit) = self.service_channel_once(ch_idx);
+            if let Some(r) = reqs {
+                dma_requests.get_or_insert_with(Vec::new).extend(r);
+            }
+            irq |= chan_irq;
+            if let Some(e) = chan_explicit {
+                explicit_irqs.get_or_insert_with(Vec::new).extend(e);
+            }
+        }
+        PeripheralTickResult {
+            irq,
+            // Walk-free normalization (Dma1 B4): charge zero so walk-on
+            // reference and scheduler path agree cycle-for-cycle.
+            cycles: 0,
+            dma_requests,
+            explicit_irqs,
+            ..Default::default()
+        }
+    }
 }
 
 impl Peripheral for Gpdma {
@@ -297,146 +474,68 @@ impl Peripheral for Gpdma {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        let mut dma_requests = None;
-        let mut irq = false;
-        let mut explicit_irqs: Option<Vec<u32>> = None;
-        let irq_base = self.irq_base;
-        // Real GPDMA wires one NVIC line per channel (H563: 27 + n,
-        // silicon-pinned via the ch7 TCIE probe). With `irq_base` set,
-        // channel n pends its own line; otherwise the block's single
-        // configured line is used (legacy behavior).
-        let mut pend = |ch_idx: usize, irq_flag: &mut bool| match irq_base {
-            Some(base) => explicit_irqs
-                .get_or_insert_with(Vec::new)
-                .push(base + ch_idx as u32),
-            None => *irq_flag = true,
-        };
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
+        }
+        self.tick_channels_once()
+    }
 
-        for (ch_idx, ch) in self.channels.iter_mut().enumerate() {
-            if !ch.active {
-                continue;
-            }
-            let bndt = ch.cbr1 & BNDT_MASK;
-            if bndt == 0 {
-                if ch.cllr != 0 {
-                    // Linked-list: fetch the next node. The node lives at
-                    // {CLBAR[31:16], CLLR.LA[15:2]} and holds, in register
-                    // order, one word per update flag (UT1 CTR1, UT2 CTR2,
-                    // UB1 CBR1, USA CSAR, UDA CDAR, UT3 CTR3, UB2 CBR2,
-                    // ULL CLLR). Modeled as memory -> own-register copies
-                    // the bus executes after this tick; the channel stays
-                    // enabled and resumes once the fetched CBR1 lands.
-                    // Silicon-pinned (capture12): a 2-block chain copies
-                    // both blocks byte-exact, leaves CLLR = 0, BNDT = 0,
-                    // CSR = 0x301, and CCR keeps TCIE with EN cleared at
-                    // the end of the list.
-                    let node = ((ch.clbar & 0xFFFF_0000) | (ch.cllr & 0xFFFC)) as u64;
-                    let regs: [(u32, u64); 8] = [
-                        (1 << 31, OFF_CTR1),
-                        (1 << 30, OFF_CTR2),
-                        (1 << 29, OFF_CBR1),
-                        (1 << 28, OFF_CSAR),
-                        (1 << 27, OFF_CDAR),
-                        (1 << 26, OFF_CTR3),
-                        (1 << 25, OFF_CBR2),
-                        (1 << 16, OFF_CLLR),
-                    ];
-                    let ch_base = self.base as u64 + CHAN_BASE + ch_idx as u64 * CHAN_STRIDE;
-                    let mut word = 0u64;
-                    for (flag, reg_off) in regs {
-                        if ch.cllr & flag != 0 {
-                            for k in 0..4u64 {
-                                dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
-                                    src_addr: node + word * 4 + k,
-                                    addr: ch_base + reg_off + k,
-                                    val: 0,
-                                    direction: DmaDirection::Copy,
-                                    transform: None,
-                                });
-                            }
-                            word += 1;
-                        }
-                    }
-                } else {
-                    ch.active = false;
-                }
-                continue;
-            }
+    fn tick_elapsed_forced(&mut self, _cycles: u64) -> PeripheralTickResult {
+        // Oracle settle path: one element transition, even under scheduler mode.
+        self.tick_channels_once()
+    }
 
-            // One source data unit per tick (a byte-width unit mirrors the
-            // classic-DMA byte pacing). The bus executes the Copy after
-            // this tick, applying the CTR1 data-handling transform: width
-            // conversion (PAM zero-pad / sign-extend / truncate) and the
-            // SBX / DBX / DHX exchanges — pinned by the DMA_DataHandling
-            // HAL example's expected vectors + its on-board run.
-            let src_w = 1u32 << ((ch.ctr1 >> CTR1_SDW_SHIFT) & 0x3).min(2);
-            let dst_w = 1u32 << ((ch.ctr1 >> CTR1_DDW_SHIFT) & 0x3).min(2);
-            dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
-                src_addr: ch.csar as u64,
-                addr: ch.cdar as u64,
-                val: 0,
-                direction: DmaDirection::Copy,
-                transform: Some(crate::DmaUnitTransform {
-                    src_width: src_w as u8,
-                    dst_width: dst_w as u8,
-                    pam: ((ch.ctr1 >> CTR1_PAM_SHIFT) & 0x3) as u8,
-                    sbx: ch.ctr1 & CTR1_SBX != 0,
-                    dbx: ch.ctr1 & CTR1_DBX != 0,
-                    dhx: ch.ctr1 & CTR1_DHX != 0,
-                }),
-            });
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
 
-            // Pinned: the H5 GPDMA advances the user-visible CSAR / CDAR
-            // registers as the transfer runs (post-TC they read base + 16
-            // for a 16-byte block) — unlike the classic STM32 DMA, which
-            // keeps CPAR / CMAR at the programmed base.
-            if ch.ctr1 & CTR1_SINC != 0 {
-                ch.csar = ch.csar.wrapping_add(src_w);
-            }
-            if ch.ctr1 & CTR1_DINC != 0 {
-                ch.cdar = ch.cdar.wrapping_add(dst_w);
-            }
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
 
-            // BNDT counts SOURCE bytes (RM0481): one unit drains src_w.
-            let bndt = bndt.saturating_sub(src_w);
-            ch.cbr1 = (ch.cbr1 & !BNDT_MASK) | bndt;
+    fn sync_to(&mut self, _now_cycle: u64) {
+        // Readable registers mutate only at transfer events.
+    }
 
-            // HTF: latches at the half-transfer point and remains set
-            // (pinned: post-TC CSR is 0x301 = IDLEF | TCF | HTF).
-            if ch.bndt_initial >= 2 && bndt <= ch.bndt_initial / 2 && ch.flags & CSR_HTF == 0 {
-                ch.flags |= CSR_HTF;
-                if ch.ccr & CCR_HTIE != 0 {
-                    pend(ch_idx, &mut irq);
-                }
-            }
-
-            if bndt == 0 {
-                // Block complete: TCF latches per block (CTR2.TCEM default
-                // "at each linked-list item").
-                ch.flags |= CSR_TCF;
-                if ch.ccr & CCR_TCIE != 0 {
-                    pend(ch_idx, &mut irq);
-                }
-                if ch.cllr == 0 {
-                    // End of list (or plain single-block transfer): EN
-                    // auto-clears (interrupt enables retained — pinned:
-                    // CCR reads 0x100 after a TCIE|EN list), channel
-                    // returns to idle (IDLEF).
-                    ch.ccr &= !CCR_EN;
-                    ch.active = false;
-                }
-                // CLLR != 0: stay enabled — the next tick's empty-BNDT
-                // path fetches the node.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() {
+            return Vec::new();
+        }
+        let mut events = Vec::new();
+        for i in 0..NUM_CHANNELS {
+            let ch = &mut self.channels[i];
+            if Self::channel_needs_service(ch) && !ch.chain_live {
+                ch.chain_live = true;
+                events.push((0u64, i as u32));
             }
         }
+        events
+    }
 
-        PeripheralTickResult {
-            irq,
-            cycles: if dma_requests.is_none() { 0 } else { 1 },
-            dma_requests,
-            explicit_irqs,
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let i = event_token as usize;
+        if !self.scheduler_mode() || i >= NUM_CHANNELS {
+            return crate::sched::EventResult::default();
+        }
+        let (reqs, irq, explicit) = self.service_channel_once(i);
+        let reschedule = Self::channel_needs_service(&self.channels[i]);
+        self.channels[i].chain_live = reschedule;
+        crate::sched::EventResult {
+            raise_own_irq: irq && self.irq_base.is_none(),
+            explicit_irqs: explicit.unwrap_or_default(),
+            reschedule_delay: reschedule.then_some(1),
+            dma_requests: reqs.unwrap_or_default(),
             ..Default::default()
         }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
     }
 
     fn as_any(&self) -> Option<&dyn Any> {
@@ -582,7 +681,7 @@ mod tests {
 
         // One byte per tick: 16 ticks drains the block.
         for _ in 0..16 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
 
         // Destination bytes are byte-exact copies of the source.
@@ -610,15 +709,15 @@ mod tests {
 
         // After 7 ticks: remaining 9 > 8 — no flags yet, channel busy.
         for _ in 0..7 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), 0);
         // 8th tick crosses the half mark: HTF latches, no TCF, not idle.
-        bus.tick_peripherals_fully();
+        bus.tick_peripherals_fully_forced();
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), CSR_HTF);
         // Finish: HTF remains alongside TCF | IDLEF (pinned 0x301).
         for _ in 0..8 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), 0x0000_0301);
     }
@@ -629,7 +728,7 @@ mod tests {
         fill_src(&mut bus, 16);
         program_ch0_m2m(&mut bus, 16, 0);
         for _ in 0..16 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), 0x0000_0301);
 
@@ -646,7 +745,7 @@ mod tests {
         fill_src(&mut bus, 16);
         program_ch0_m2m(&mut bus, 16, 0);
         for _ in 0..16 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         bus.write_u32(CH0_CFCR, 0xFFFF_FFFF).unwrap();
 
@@ -663,7 +762,7 @@ mod tests {
         bus.write_u32(CH0_CDAR, DST2 as u32).unwrap();
         bus.write_u32(CH0_CCR, CCR_EN).unwrap();
         for _ in 0..16 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
 
         for i in 0..16u64 {
@@ -681,7 +780,7 @@ mod tests {
         fill_src(&mut bus, 16);
         program_ch0_m2m(&mut bus, 16, 0);
         for _ in 0..16 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), 0x0000_0301);
 
@@ -698,7 +797,7 @@ mod tests {
         fill_src(&mut bus, 16);
         program_ch0_m2m(&mut bus, 16, 0);
         for _ in 0..4 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         bus.write_u32(CH0_CCR, CCR_RESET).unwrap();
         assert_eq!(bus.read_u32(CH0_CCR).unwrap(), 0);
@@ -706,7 +805,7 @@ mod tests {
         assert_eq!(bus.read_u32(CH0_CSR).unwrap() & CSR_IDLEF, CSR_IDLEF);
         let frozen = bus.read_u32(CH0_CBR1).unwrap() & BNDT_MASK;
         assert_eq!(frozen, 12);
-        bus.tick_peripherals_fully();
+        bus.tick_peripherals_fully_forced();
         assert_eq!(bus.read_u32(CH0_CBR1).unwrap() & BNDT_MASK, frozen);
     }
 
@@ -724,7 +823,7 @@ mod tests {
         bus.write_u32(CH0_CCR, CCR_EN).unwrap();
 
         for _ in 0..4 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), CSR_IDLEF);
         assert_eq!(bus.read_u32(CH0_CBR1).unwrap() & BNDT_MASK, 16);
@@ -744,7 +843,7 @@ mod tests {
         bus.write_u32(CH0_CDAR, DST as u32).unwrap();
         bus.write_u32(CH0_CCR, CCR_EN).unwrap();
         for _ in 0..4 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         assert_eq!(bus.read_u8(DST).unwrap(), 0xA3); // last source byte
         assert_eq!(bus.read_u8(DST + 1).unwrap(), 0); // never touched
@@ -759,9 +858,9 @@ mod tests {
         fill_src(&mut bus, 2);
         program_ch0_m2m(&mut bus, 2, CCR_TCIE);
 
-        let (interrupts, _) = bus.tick_peripherals_fully();
+        let (interrupts, _) = bus.tick_peripherals_fully_forced();
         assert!(!interrupts.contains(&GPDMA_IRQ), "no IRQ before TC");
-        let (interrupts, _) = bus.tick_peripherals_fully();
+        let (interrupts, _) = bus.tick_peripherals_fully_forced();
         assert!(interrupts.contains(&GPDMA_IRQ), "TCIE should pend the IRQ");
     }
 
@@ -794,7 +893,7 @@ mod tests {
         bus.write_u32(CH0_CDAR, DST as u32).unwrap();
         bus.write_u32(CH0_CCR, CCR_EN).unwrap();
         for _ in 0..32 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
         (0..8u64).map(|i| bus.read_u8(DST + i).unwrap()).collect()
     }
@@ -877,7 +976,7 @@ mod tests {
         bus.write_u32(CH0_CCR, CCR_EN | CCR_TCIE).unwrap();
 
         for _ in 0..40 {
-            bus.tick_peripherals_fully();
+            bus.tick_peripherals_fully_forced();
         }
 
         for i in 0..8u64 {
