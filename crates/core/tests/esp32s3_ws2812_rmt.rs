@@ -107,8 +107,14 @@ fn rmt_drives_ws2812_frame_decoded_end_to_end() {
         .unwrap();
 
     // Play the whole waveform out (one bus tick per sim cycle). 72 bits × ~8
-    // cycles/bit ≈ 600; tick generously.
-    for _ in 0..1200 {
+    // cycles/bit ≈ 600; tick generously. GPIO stamps edges via the bus
+    // CycleClock (the walk-free path), so the current cycle must be published
+    // explicitly the way `Machine::commit_advance_boundary` does on real
+    // ticks — a bare `tick_peripherals()` loop leaves every edge stamped at
+    // cycle 0, collapsing every bit's HIGH duration to zero and starving the
+    // WS2812 decoder of any real timing to distinguish 0s from 1s.
+    for c in 0..1200u64 {
+        bus.set_current_cycle(c);
         bus.tick_peripherals();
     }
 

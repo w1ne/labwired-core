@@ -68,7 +68,10 @@ def main() -> int:
     lines.append("];")
     lines.append("")
 
-    OUT.write_text("\n".join(lines) + "\n")
+    # rstrip so re-running is idempotent: a trailing empty entry in `lines`
+    # would otherwise append one extra blank line per run, which makes the
+    # CI "regenerate everything and assert a clean tree" check fail forever.
+    OUT.write_text("\n".join(lines).rstrip("\n") + "\n")
     print(f"wrote {OUT.relative_to(ROOT)} ({len(regs)} registers)")
     return 0
 

@@ -20,6 +20,7 @@ declare -A TARGETS=(
   [stm32f411]=thumbv7em-none-eabi
   [stm32g474re]=thumbv7em-none-eabi
   [stm32h563]=thumbv7m-none-eabi
+  [stm32h735]=thumbv7em-none-eabi
   [stm32l073]=thumbv6m-none-eabi
   [stm32l476]=thumbv7em-none-eabi
   [stm32wb55]=thumbv7em-none-eabi
@@ -36,7 +37,7 @@ build_chip() {
 }
 
 for chip in stm32f103 stm32f401 stm32f407 stm32f411 stm32g474re stm32h563 \
-            stm32l073 stm32l476 stm32wb55 stm32wba52; do
+            stm32h735 stm32l073 stm32l476 stm32wb55 stm32wba52; do
   build_chip "$chip"
 done
 

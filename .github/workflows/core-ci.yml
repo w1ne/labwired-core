@@ -70,6 +70,22 @@ jobs:
           python3 scripts/generate_validation_status.py --check --drift
           python3 scripts/generate_firmware_exercise_matrix.py --check
 
+      # Universal staleness gate. Regenerates EVERY committed artifact derived
+      # from repo state and asserts the tree is clean. This catches the
+      # generators that have no --check flag of their own (7 of 9 at the time
+      # this landed, four of which no workflow referenced at all), including
+      # generated Rust source, and it automatically covers any generator added
+      # to regen-all.sh later.
+      - name: Generated artifacts — regenerate and assert no drift
+        run: |
+          python -m pip install --quiet pyyaml
+          ./scripts/regen-all.sh
+          if ! git diff --exit-code; then
+            echo "::error::A committed generated artifact is stale."
+            echo "Run scripts/regen-all.sh locally and commit the result."
+            exit 1
+          fi
+
       - name: Check Formatting
         run: cargo fmt --all -- --check
 

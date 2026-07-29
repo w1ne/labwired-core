@@ -1343,6 +1343,7 @@ impl Spi {
         // (`SPI.transfer()` on an unpopulated bus, which is the common case in
         // a simulator); found by the Arduino conformance sketch on F401.
         let rx_fifo = self.rx_fifo;
+        let driven = self.loopback || !self.attached_devices.is_empty();
         let level = &mut self.rx_fifo_level;
         if let SpiRegs::Stm32(r) = &mut self.regs {
             r.dr = f.miso;
@@ -1355,10 +1356,19 @@ impl Spi {
                 // → 16 bit, so a single 8-bit frame must NOT assert it. This is
                 // what a real NUCLEO-L476RG reports (SR=0x0002 after TX), and
                 // is why STM32duino sets FRXTH before 8-bit transfers.
-                *level = level.saturating_add(1);
-                let frxth = r.cr2 & (1 << 12) != 0;
-                if frxth || *level >= 2 {
-                    r.sr |= 0x0001;
+                // A slave (or loopback) must actually drive MISO for the FIFO
+                // to fill: a real NUCLEO-L476RG with nothing wired reports
+                // SR=0x0002 after a transmit even with FRXTH=1, which is the
+                // value pinned by test_nucleo_l476rg_spi_survival. Only once
+                // data is genuinely present does the CR2.FRXTH threshold decide
+                // whether one 8-bit frame is enough to raise RXNE (FRXTH=1) or
+                // whether 16 bits are required (FRXTH=0, the reset default).
+                if driven {
+                    *level = level.saturating_add(1);
+                    let frxth = r.cr2 & (1 << 12) != 0;
+                    if frxth || *level >= 2 {
+                        r.sr |= 0x0001;
+                    }
                 }
             }
         }
