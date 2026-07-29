@@ -843,6 +843,28 @@
       "inputs": []
     },
     {
+      "device_type": "uc8151d_tricolor_290",
+      "label": "UC8151D Tri-Color E-Paper",
+      "summary": "2.9\" tri-color (black/white/red) UC8151D-family e-paper over SPI.",
+      "detail": "Decodes UC8151D opcodes (PSR/PON/DTM1/DTM2/DRF) used by GxEPD2_290_C90c and WeAct 2.9\" B/W/R panels. Same plane layout as SSD1680; different command stream. Required on ESP32-C3 path (kit registry); classic ESP32 also attaches via attach_esp32_external_devices.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"GPIO7\"). Defaults to GPIO5."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for command framing."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "sn74hc165",
       "label": "74HC165 Shift Register",
       "summary": "8-bit parallel-in / serial-out shift register over SPI.",

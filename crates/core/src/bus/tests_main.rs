@@ -1110,6 +1110,53 @@ fn test_esp32c3_i2c_gpio_matrix_distinguishes_gpio45_from_gpio67() {
     );
 }
 
+/// ESP32-C3 attaches SPI externals through the PeripheralKit registry (not
+/// the Xtensa-only `attach_esp32_external_devices`). UC8151D must be in that
+/// registry — otherwise stats-display's panel is silently dropped and the
+/// twin stays blank forever.
+#[test]
+fn test_from_config_attaches_uc8151d_to_esp32c3_spi2() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+        .expect("load esp32c3.yaml");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: c3-uc8151d-attach
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "ep"
+    type: "uc8151d_tricolor_290"
+    connection: "spi2"
+    config:
+      cs_pin: "GPIO7"
+      dc_pin: "GPIO2"
+"#,
+    )
+    .expect("parse system manifest");
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("build C3 bus with uc8151d");
+    let spi_idx = bus
+        .find_peripheral_index_by_name("spi2")
+        .expect("spi2 must be registered on esp32c3");
+    let any = bus.peripherals[spi_idx].dev.as_any().unwrap();
+    let spi = any
+        .downcast_ref::<crate::peripherals::esp32c3::spi::Esp32c3Spi>()
+        .expect("spi2 must be Esp32c3Spi");
+    assert_eq!(
+        spi.attached_devices().len(),
+        1,
+        "uc8151d_tricolor_290 must attach to spi2 via PeripheralKit (blank twin = kit missing)"
+    );
+    assert_eq!(
+        spi.attached_devices()[0].cs_pin(),
+        "GPIO7",
+        "panel CS must come from system.yaml config.cs_pin"
+    );
+}
+
 /// Wiring guard for the ESP32-C3 behavioral I²C: a chip yaml declaring
 /// `i2c0` as `esp32c3_i2c` plus a system manifest declaring a BMP280 on
 /// `connection: "i2c0"` must attach that slave to the behavioral controller

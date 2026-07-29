@@ -706,8 +706,8 @@ impl SystemBus {
                 // and bg770a-cellular dispatch through the PeripheralKit
                 // registry above — see `peripherals::kit`.
                 // iolink-master dispatches through the PeripheralKit registry above.
-                // max31855, sn74hc165, ssd1680_tricolor_290, and pcd8544
-                // dispatch through the PeripheralKit registry above.
+                // max31855, sn74hc165, ssd1680_tricolor_290, uc8151d_tricolor_290,
+                // and pcd8544 dispatch through the PeripheralKit registry above.
                 // hc-sr04 / hcsr04 now dispatches through the declarative device
                 // path above (configs/devices/hc_sr04.yaml, `pulse_echo`
                 // primitive) — see super::declarative_device.
