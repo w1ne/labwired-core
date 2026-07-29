@@ -1040,6 +1040,7 @@ impl WasmSimulator {
     pub fn get_uc8151d_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
         use labwired_core::peripherals::components::Uc8151dTricolor290;
         use labwired_core::peripherals::esp32::spi::Esp32Spi;
+        use labwired_core::peripherals::esp32c3::spi::Esp32c3Spi;
         let machine = self.machine.as_ref().unwrap();
         let binding = self
             .board_io
@@ -1059,6 +1060,9 @@ impl WasmSimulator {
             .dev
             .as_any()
             .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+        // Same controller set as get_ssd1680_*: STM32 Spi, classic Esp32Spi,
+        // and Esp32c3Spi. Missing the C3 arm made stats-display attach the
+        // panel (kit registry) but never surface planes to the UI.
         let panel_bytes =
             if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
                 spi.attached_devices.iter().find_map(|dev| {
@@ -1068,6 +1072,12 @@ impl WasmSimulator {
                 })
             } else if let Some(spi) = any.downcast_ref::<Esp32Spi>() {
                 spi.attached_devices.iter().find_map(|dev| {
+                    dev.as_any()
+                        .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                        .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
+                })
+            } else if let Some(spi) = any.downcast_ref::<Esp32c3Spi>() {
+                spi.attached_devices().iter().find_map(|dev| {
                     dev.as_any()
                         .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
                         .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
@@ -1095,6 +1105,7 @@ impl WasmSimulator {
     pub fn get_uc8151d_refresh_generation(&self, device_id: &str) -> Result<u32, JsValue> {
         use labwired_core::peripherals::components::Uc8151dTricolor290;
         use labwired_core::peripherals::esp32::spi::Esp32Spi;
+        use labwired_core::peripherals::esp32c3::spi::Esp32c3Spi;
         let machine = self.machine.as_ref().unwrap();
         let binding = self
             .board_io
@@ -1122,6 +1133,12 @@ impl WasmSimulator {
             })
         } else if let Some(spi) = any.downcast_ref::<Esp32Spi>() {
             spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any()
+                    .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                    .map(|p| p.refresh_generation())
+            })
+        } else if let Some(spi) = any.downcast_ref::<Esp32c3Spi>() {
+            spi.attached_devices().iter().find_map(|dev| {
                 dev.as_any()
                     .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
                     .map(|p| p.refresh_generation())
