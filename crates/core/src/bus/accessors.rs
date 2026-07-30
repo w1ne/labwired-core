@@ -494,6 +494,11 @@ impl crate::Bus for SystemBus {
                     crate::bus::AtomicAliasOp::Set => cur | value,
                     crate::bus::AtomicAliasOp::Clr => cur & !value,
                 };
+                // Flag CLR so write-clear peripherals can accept an absolute
+                // post-clear image (pico-sdk) without treating it as a W1C mask.
+                if matches!(op, crate::bus::AtomicAliasOp::Clr) {
+                    return crate::bus::with_clr_alias_write(|| self.write_u32(base, new));
+                }
                 return self.write_u32(base, new);
             }
         }

@@ -132,6 +132,30 @@ pub enum AtomicAliasOp {
     Clr,
 }
 
+// True while SystemBus::write_u32 is applying an RP2040 CLR-alias (+0x3000)
+// as an absolute final value. Write-clear status registers (USB SIE_STATUS /
+// BUFF_STATUS) use this to distinguish CLR-alias (pico-sdk hw_clear) from
+// direct W1C (ArduinoCore-mbed USBPhyHw).
+thread_local! {
+    static CLR_ALIAS_WRITE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// See [`CLR_ALIAS_WRITE`].
+#[inline]
+pub fn is_clr_alias_write() -> bool {
+    CLR_ALIAS_WRITE.with(|c| c.get())
+}
+
+#[inline]
+pub(crate) fn with_clr_alias_write<R>(f: impl FnOnce() -> R) -> R {
+    CLR_ALIAS_WRITE.with(|c| {
+        let prev = c.replace(true);
+        let r = f();
+        c.set(prev);
+        r
+    })
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Esp32c3IrqCache {
     pub int_enable: u32,

@@ -73,6 +73,13 @@ const SIE_STATUS_CONNECTED: u32 = 1 << 16;
 const SIE_STATUS_SETUP_REC: u32 = 1 << 17;
 const SIE_STATUS_TRANS_COMPLETE: u32 = 1 << 18;
 const SIE_STATUS_BUS_RESET: u32 = 1 << 19;
+// Write-1-to-clear mask for direct stores (ArduinoCore-mbed USBPhyHw).
+// pico-sdk uses the CLR alias instead; see write_u32 dual-path handling.
+const SIE_STATUS_W1C: u32 = 0xFF00_0000 // [31:24] ACK/STALL/NAK-rec + errors
+    | SIE_STATUS_TRANS_COMPLETE
+    | SIE_STATUS_SETUP_REC
+    | SIE_STATUS_BUS_RESET
+    | (1 << 11); // RESUME
 
 // INTR/INTS bits (raw source register).
 const INTR_BUFF_STATUS: u32 = 1 << 4;
@@ -542,33 +549,30 @@ impl Peripheral for Rp2040Usb {
         }
         let local = offset - REG_BASE;
         match local {
-            // SIE_STATUS and BUFF_STATUS are write-clear (WC) registers on
-            // real silicon: the *only* way pico-sdk ever writes them is
-            // through the `hw_clear` atomic alias (`usb_hw_clear->sie_status
-            // = BUS_RESET_BIT`, `usb_hw_clear->buf_status = bit`, …) — never a
-            // direct, non-aliased store. The RP2040 bus fabric's CLR alias is
-            // a raw `REG &= ~value` on the physical bits, computed once by
-            // `SystemBus::write_u32`'s `atomic_register_aliases` redirect
-            // (`crates/core/src/bus/accessors.rs`), which then hands this
-            // peripheral the *already-correct final register value* — not
-            // the original clear-mask. Re-deriving a clear-mask from that
-            // final value here (as this code used to) double-applies the
-            // W1C logic: because the redirect already zeroed the intended
-            // bit, that bit reads 0 in `value`, so re-masking with
-            // `value & W1C` clears *nothing*, and the bit being acknowledged
-            // (e.g. BUS_RESET) never actually clears. That left the RP2040
-            // USB device model's enumeration handshake stuck asserting
-            // BUS_RESET forever — an interrupt storm that re-entered
-            // `dcd_rp2040_irq` on every tick and never let arduino-pico's
-            // `USB.begin()` return, so no sketch that touches USB (which is
-            // every arduino-pico core sketch, since `main()` calls it
-            // unconditionally before `setup()`) could progress. A plain
-            // store is the correct model: it works for the real (aliased)
-            // path, and for a hypothetical direct write the field's WC type
-            // means "value's 1 bits get cleared" is what silicon does too —
-            // but nothing in tree ever exercises that literally, so we don't
-            // need to reconstruct it.
-            SIE_STATUS | BUFF_STATUS => self.set_reg(local, value),
+            // SIE_STATUS / BUFF_STATUS are write-clear on silicon.
+            // Two software styles hit this model:
+            // 1) pico-sdk `hw_clear` → CLR alias (+0x3000): the bus applies
+            //    `cur & !mask` and re-enters write_u32 with the *final* image
+            //    under `is_clr_alias_write()` → absolute store.
+            // 2) ArduinoCore-mbed `USBPhyHw::process` → *direct* store of a
+            //    clear-mask to the base address (disassembled: `str <mask>,
+            //    [usb_hw + 0x50]`). Classic W1C: `cur & !(value & W1C_MASK)`.
+            // Using only (1) left mbed stuck with BUS_RESET latched forever
+            // (IRQ storm, empty Serial). Using only (2) double-clears on the
+            // CLR path. Dual-path below.
+            SIE_STATUS | BUFF_STATUS => {
+                if crate::bus::is_clr_alias_write() {
+                    self.set_reg(local, value);
+                } else {
+                    let cur = self.reg(local);
+                    let w1c = if local == SIE_STATUS {
+                        SIE_STATUS_W1C
+                    } else {
+                        u32::MAX // BUFF_STATUS: every bit is WC
+                    };
+                    self.set_reg(local, cur & !(value & w1c));
+                }
+            }
             INTR | INTS => {} // read-only
             l if l < 0x100 => self.set_reg(l, value),
             _ => {}
@@ -685,14 +689,10 @@ mod tests {
         // With BUS_RESET unmasked in INTE, the tick pends USBCTRL_IRQ.
         wr(&mut u, INTE, INTR_BUS_RESET);
         assert_eq!(u.tick().explicit_irqs, Some(vec![USBCTRL_IRQ]));
-        // Device acknowledges the reset the way real pico-sdk firmware does:
-        // through the `hw_clear` atomic alias, i.e. the *bus* computes
-        // `cur & !mask` and hands the peripheral that final value (see the
-        // long comment on the `SIE_STATUS | BUFF_STATUS` arm of
-        // `Rp2040Usb::write_u32` — the peripheral itself no longer re-derives
-        // a clear-mask from the incoming value).
+        // pico-sdk path: CLR alias already applied `cur & !mask`; bus marks
+        // the recursive write so we absolute-store the final image.
         let cleared = rd(&u, SIE_STATUS) & !SIE_STATUS_BUS_RESET;
-        wr(&mut u, SIE_STATUS, cleared);
+        crate::bus::with_clr_alias_write(|| wr(&mut u, SIE_STATUS, cleared));
         assert_eq!(rd(&u, INTR) & INTR_BUS_RESET, 0);
     }
 
@@ -700,10 +700,9 @@ mod tests {
     fn first_setup_sent_once_device_acks_reset() {
         let mut u = Rp2040Usb::new();
         attach(&mut u);
-        // Device clears the bus reset, as its ISR does (via the CLR alias —
-        // see comment above).
-        let cleared = rd(&u, SIE_STATUS) & !SIE_STATUS_BUS_RESET;
-        wr(&mut u, SIE_STATUS, cleared);
+        // Device clears the bus reset as mbed USBPhyHw does: direct W1C
+        // store of the BUS_RESET mask to the base address.
+        wr(&mut u, SIE_STATUS, SIE_STATUS_BUS_RESET);
         u.tick();
         // The host has delivered the first SETUP: the 8-byte packet lands in the
         // DPRAM setup buffer and SETUP_REC is latched.
@@ -720,11 +719,20 @@ mod tests {
         u.signal_buff(0, true); // EP0 IN
         u.signal_buff(2, false); // EP2 OUT
         assert_eq!(rd(&u, BUFF_STATUS), 0b1 | (1 << 5));
-        // ack EP0 IN only, via the CLR-alias-equivalent final value (see the
-        // `SIE_STATUS | BUFF_STATUS` comment in `Rp2040Usb::write_u32`).
-        let cleared = rd(&u, BUFF_STATUS) & !0b1;
-        wr(&mut u, BUFF_STATUS, cleared);
+        // ack EP0 IN only — direct W1C mask write (mbed style).
+        wr(&mut u, BUFF_STATUS, 0b1);
         assert_eq!(rd(&u, BUFF_STATUS), 1 << 5);
+    }
+
+    #[test]
+    fn sie_status_direct_w1c_clears_bus_reset_mbed_style() {
+        let mut u = Rp2040Usb::new();
+        attach(&mut u);
+        assert_ne!(rd(&u, SIE_STATUS) & SIE_STATUS_BUS_RESET, 0);
+        // ArduinoCore-mbed USBPhyHw: `str BUS_RESET, [usb_hw + 0x50]` — not CLR alias.
+        wr(&mut u, SIE_STATUS, SIE_STATUS_BUS_RESET);
+        assert_eq!(rd(&u, SIE_STATUS) & SIE_STATUS_BUS_RESET, 0);
+        assert_eq!(rd(&u, INTR) & INTR_BUS_RESET, 0);
     }
 
     #[test]
