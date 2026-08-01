@@ -48,8 +48,11 @@ The same firmware also renders live in the browser
 
 * HW-validated: the boot path was diffed against a physical ESP32-WROOM-32 over
   its UART (same banner, same `setup()` trace).
-* Driver class `GxEPD2_290_C90c` (UC8151D). Picking the wrong driver makes the
-  panel report success but render blank — caught in the sim, not on glass.
+* Driver class `GxEPD2_290_C90c` — an **SSD1680** controller, despite the name,
+  so the twin is `ssd1680_tricolor_290` (see `board.yaml`; the factory maps the
+  `gxepd2_290_c90c` alias for you). `uc8151d_tricolor_290` is the
+  `GxEPD2_290_Z13c` panel. Picking the wrong driver makes the panel report
+  success but render blank — caught in the sim, not on glass.
 
 See the writeup:
 [Render your Arduino e-paper firmware without the hardware](https://labwired.com/blog/arduino-epaper-digital-twin.html).

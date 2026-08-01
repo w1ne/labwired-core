@@ -23,10 +23,17 @@ impl WasmSimulator {
     /// the resolved PCs; calling this without the matching ELF is a no-op
     /// (symbols don't resolve → no thunks installed).
     ///
-    /// Also attaches a `Uc8151dTricolor290` panel to spi3 (the SSD1680
-    /// panel attached by default doesn't decode UC8151D opcodes
-    /// `0x00 PSR` / `0x04 PON` / `0x10 DTM1` / `0x12 DRF` / `0x13 DTM2`
-    /// that GxEPD2_290_C90c / Z13c emits).
+    /// Attaches no peripheral of its own: the panel (model, CS, DC) comes
+    /// from the board manifest via `attach_esp32_external_devices` at system
+    /// load — see the body below. This method used to hardcode a panel here;
+    /// that behaviour is gone, and the manifest is the single source of truth.
+    ///
+    /// For the record, because the deleted comment had it backwards:
+    /// `GxEPD2_290_C90c` is an **SSD1680** controller (0x12 SWRESET, 0x11 data
+    /// entry, 0x24/0x26 RAM, 0x22+0x20 update), not UC8151D. UC8151D
+    /// (`0x00 PSR` / `0x04 PON` / `0x10 DTM1` / `0x12 DRF` / `0x13 DTM2`) is
+    /// what `GxEPD2_290_Z13c` emits. `peripherals::kit::registry::TYPE_ALIASES`
+    /// owns that mapping.
     #[wasm_bindgen]
     pub fn install_arduino_esp32_quirks(&mut self, elf_bytes: &[u8]) -> Result<(), JsValue> {
         use labwired_core::peripherals::esp_xtensa_common::rom_thunks;

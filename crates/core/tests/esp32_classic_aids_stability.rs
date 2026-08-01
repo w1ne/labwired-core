@@ -234,13 +234,17 @@ fn build_machine(elf_path: &std::path::Path) -> Machine<XtensaLx7> {
     let image = labwired_loader::load_elf(elf_path).expect("parse elf");
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
+    // Mirrors configs/systems/esp32-wroom-epaper.yaml. The ereader ELF is a
+    // GxEPD2_290_C90c build, which emits SSD1680 opcodes — see
+    // epaper_twin_single_source.rs, which fails if this copy drifts from the
+    // committed manifest.
     let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
         r#"
 name: esp32-wroom-epaper
 chip: esp32
 external_devices:
   - id: epaper
-    type: uc8151d_tricolor_290
+    type: ssd1680_tricolor_290
     connection: spi3
     config:
       cs_pin: GPIO5

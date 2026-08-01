@@ -1,4 +1,4 @@
-# ESP32-WROOM-32 + Waveshare 2.9" tri-color e-paper system manifest.
+# ESP32-WROOM-32 + WeAct/Waveshare 2.9" tri-color e-paper system manifest.
 #
 # Standard Arduino-ESP32 SPI3 / VSPI wiring used by the GxEPD2 reference
 # constructors:
@@ -9,13 +9,24 @@
 #   SCK  = GPIO18
 #   MOSI = GPIO23
 #
-# Kept in sync with `examples/esp32-epaper-lab/system.yaml` manually — bump
-# both when the wiring ever needs to change.
+# The module is the `GxEPD2_290_C90c` (GDEY029Z90c) panel, which is an
+# **SSD1680** controller. `peripherals::kit::registry::TYPE_ALIASES` is the one
+# place that owns driver-class → controller. Despite the name, C90c emits
+# SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM, 0x22+0x20
+# update); `ssd1680_tricolor_290` is the `GxEPD2_290_Z13c` panel, and it decodes
+# that stream as PWR/LUT/DRF, never releases BUSY, and paints nothing.
+#
+# More than one manifest describes this board — this file (bundled by the
+# playground for the labwired-ereader demo), `examples/esp32-epaper-lab/
+# system.yaml` (esp-hal Rust lab), and `platformio/esp32-epaper-ereader/
+# board.yaml`. They are NOT hand-synced: `epaper_twin_single_source.rs` fails
+# if any two manifests wire the same chip + bus + CS + DC to different members
+# of the `*_tricolor_290` family.
 name: "esp32-wroom-epaper"
 chip: "../chips/esp32.yaml"
 external_devices:
   - id: "epaper"
-    type: "uc8151d_tricolor_290"
+    type: "ssd1680_tricolor_290"
     connection: "spi3"
     config:
       cs_pin: "GPIO5"
@@ -27,4 +38,4 @@ board_io:
     pin: 5
     signal: "input"
     active_high: true
-    device_type: "uc8151d_tricolor_290"
+    device_type: "ssd1680_tricolor_290"

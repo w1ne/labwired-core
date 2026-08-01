@@ -537,10 +537,16 @@ static SSD1680_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
     inputs: &[],
     device_type: "ssd1680_tricolor_290",
     label: "SSD1680 Tri-Color E-Paper",
-    summary: "2.9\" tri-color (black/white/red) SSD1680 e-paper over SPI.",
+    summary: "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class \
+              GxEPD2_290_C90c — the WeAct / Waveshare 2.9\" B/W/R module. Not \
+              interchangeable with the UC8151D part.",
     detail: "Full SPI command + display-data RAM state machine, validated by the e2e e-paper \
-             integration test. Same model drives both the STM32F103 lab and the ESP32 \
-             playground board.",
+             integration test. Same model drives the STM32F103 lab, the ESP32-classic \
+             playground board and the ESP32-C3 e-paper labs. Decodes SSD1680 opcodes \
+             (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM planes, 0x22+0x20 update) — the \
+             stream GxEPD2_290_C90c emits. If your sketch instantiates GxEPD2_290_Z13c \
+             instead, use uc8151d_tricolor_290; the two command sets share nothing, and the \
+             wrong one reports success and renders blank.",
     transport: Transport::Spi,
     category: Category::Spi,
     config_keys: &[

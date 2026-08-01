@@ -414,11 +414,17 @@ static UC8151D_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
     inputs: &[],
     device_type: "uc8151d_tricolor_290",
     label: "UC8151D Tri-Color E-Paper",
-    summary: "2.9\" tri-color (black/white/red) UC8151D-family e-paper over SPI.",
-    detail: "Decodes UC8151D opcodes (PSR/PON/DTM1/DTM2/DRF) used by GxEPD2_290_C90c \
-             and WeAct 2.9\" B/W/R panels. Same plane layout as SSD1680; different \
-             command stream. Required on ESP32-C3 path (kit registry); classic ESP32 \
-             also attaches via attach_esp32_external_devices.",
+    summary: "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class \
+              GxEPD2_290_Z13c. Different command set from the SSD1680 part — pick by the \
+              driver class your firmware instantiates, not by how the panel looks.",
+    detail: "Decodes UC8151D opcodes (0x00 PSR / 0x04 PON / 0x10 DTM1 / 0x13 DTM2 / \
+             0x12 DRF), the stream GxEPD2_290_Z13c emits. Same plane layout as SSD1680; \
+             different command stream, and BUSY is inverted (busy-LOW). GxEPD2_290_C90c is \
+             NOT this part — it is an SSD1680 controller; see \
+             peripherals::kit::registry::TYPE_ALIASES, which owns driver-class → \
+             controller. No board manifest in this repo ships this panel: every 2.9\" \
+             tri-color lab here is the C90c/SSD1680 module. It exists so firmware written \
+             against GxEPD2_290_Z13c has a faithful twin.",
     transport: Transport::Spi,
     category: Category::Spi,
     config_keys: &[

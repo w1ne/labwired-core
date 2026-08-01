@@ -2333,12 +2333,15 @@ mod esp32_classic_aids_stability_tests {
                 return s;
             }
         }
+        // Must stay byte-compatible with configs/systems/esp32-wroom-epaper.yaml
+        // — the ereader ELF is a GxEPD2_290_C90c build, which emits SSD1680
+        // opcodes. epaper_twin_single_source.rs fails if this copy drifts.
         r#"
 name: "esp32-wroom-epaper"
 chip: "esp32"
 external_devices:
   - id: "epaper"
-    type: "uc8151d_tricolor_290"
+    type: "ssd1680_tricolor_290"
     connection: "spi3"
     config:
       cs_pin: "GPIO5"
