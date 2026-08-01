@@ -6,19 +6,23 @@
 
 //! UC8151D tri-color 2.9" e-paper panel model.
 //!
-//! Waveshare GDEW029Z13c / GDEW029Z13 / GDEM029C90 variants ship with a
-//! UC8151D-family controller (not SSD1680) — same physical 128×296
-//! tri-color glass, completely different SPI command set. The
-//! `GxEPD2_290_Z13c` / `GxEPD2_290_C90c` Arduino driver emits
-//! UC8151D-style bytes: PSR (0x00), PWR (0x01), PON (0x04), DTM1 (0x10
-//! write-RAM-black), DTM2 (0x13 write-RAM-red), DRF (0x12 refresh),
-//! TRES (0x61 resolution), CDI (0x50 VCOM/data interval), etc.
+//! Waveshare GDEW029Z13c / GDEW029Z13 variants ship with a UC8151D-family
+//! controller (not SSD1680) — same physical 128×296 tri-color glass,
+//! completely different SPI command set. The `GxEPD2_290_Z13c` Arduino
+//! driver emits UC8151D-style bytes: PSR (0x00), PWR (0x01), PON (0x04),
+//! DTM1 (0x10 write-RAM-black), DTM2 (0x13 write-RAM-red), DRF (0x12
+//! refresh), TRES (0x61 resolution), CDI (0x50 VCOM/data interval), etc.
+//!
+//! `GxEPD2_290_C90c` (GDEY029Z90c) is NOT this part. Despite the similar
+//! name it is an **SSD1680** controller, and it is what the labwired-ereader
+//! firmware and the WeAct 2.9" module actually use.
+//! `peripherals::kit::registry::TYPE_ALIASES` owns driver-class → controller.
 //!
 //! These conflict with SSD1680 at multiple opcodes (0x10, 0x20, 0x22)
 //! so the two protocols can't share a single panel model. Use this one
-//! when the firmware is GxEPD2_290_Z13c / C90c (labwired-ereader); use
+//! when the firmware is GxEPD2_290_Z13c; use
 //! [`super::ssd1680_tricolor_290::Ssd1680Tricolor290`] for SSD1680-class
-//! firmware (the reference firmware).
+//! firmware, which is every e-paper lab in this repo.
 //!
 //! ## Cmd / Data routing
 //!

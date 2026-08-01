@@ -13,8 +13,8 @@
 # **SSD1680** controller. `peripherals::kit::registry::TYPE_ALIASES` is the one
 # place that owns driver-class → controller. Despite the name, C90c emits
 # SSD1680 opcodes (0x12 SWRESET, 0x11 data entry, 0x24/0x26 RAM, 0x22+0x20
-# update); `ssd1680_tricolor_290` is the `GxEPD2_290_Z13c` panel, and it decodes
-# that stream as PWR/LUT/DRF, never releases BUSY, and paints nothing.
+# update). `uc8151d_tricolor_290` is the `GxEPD2_290_Z13c` panel: it decodes that
+# stream as PWR/LUT/DRF, never releases BUSY, and paints nothing.
 #
 # More than one manifest describes this board — this file (bundled by the
 # playground for the labwired-ereader demo), `examples/esp32-epaper-lab/

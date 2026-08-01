@@ -76,7 +76,7 @@ fn uc8151d_paints_over_real_spi3_and_dc() {
         Box::new(Uc8151dTricolor290::new("GPIO5").with_dc_pin(DC_PIN)),
     );
 
-    // Real GxEPD2 (GxEPD2_290_C90c / UC8151D) init + refresh stream — same bytes
+    // Real GxEPD2 (GxEPD2_290_Z13c / UC8151D) init + refresh stream — same bytes
     // as uc8151d::tests::ereader_init_powers_panel_on, but clocked through SPI3.
     cmd(&mut bus, 0x00); // PSR
     dat(&mut bus, 0x8F);

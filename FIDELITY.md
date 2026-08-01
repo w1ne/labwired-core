@@ -331,9 +331,19 @@ trace by patching `GxEPD2_EPD.cpp` `_writeCommand`/`_writeData` to call an
 `uc8151d_tricolor_290.rs`, `ssd1680_tricolor_290.rs`: when no DC pin is wired,
 `transfer()` guesses command-vs-data from protocol state. INFER. The live ESP32
 e-paper paths (cli `arduino-esp32`, wasm, `attach_esp32_external_devices`, and
-the `e2e_labwired_ereader` harness) now all wire `dc_pin` and latch the real GPIO
-level, so this INFER fallback only applies when a panel is attached with no DC
-source — not on the proven ereader path.
+the `e2e_labwired_ereader` harness) all wire `dc_pin` and latch the real GPIO
+level — the module is genuine 4-wire SPI, so a modelled wire is the faithful
+reading. `epaper_twin_single_source::esp32_epaper_manifests_must_wire_a_real_dc_pin`
+now fails if any ESP32-family manifest attaches one of these panels without
+`dc_pin`, so that claim can no longer rot.
+
+**Where INFER is still reachable:** the two STM32F103 e-paper manifests —
+`examples/epaper-tricolor-lab/system.yaml` and
+`configs/systems/nucleo-f103rb-epaper.yaml` — declare `cs_pin: PA4` and no
+`dc_pin`, so `e2e_epaper_tricolor` exercises the guess. `dc_pin` is optional in
+`PeripheralKit::attach` for both panels, so making it mandatory would break those
+shipping labs; closing this means wiring DC in the F103 labs and their firmware
+first, not tightening the model.
 
 ---
 
