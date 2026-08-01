@@ -1383,6 +1383,36 @@ peripherals:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// THE SHALLOW-CLONE TRAP. CI checkouts are shallow by default, and on a
+    /// shallow clone a merge base is either unresolvable or wrong. Either way
+    /// the gate must refuse to run rather than report "no regressions".
+    #[test]
+    fn baseline_refuses_to_run_on_a_shallow_clone() {
+        let dir = std::env::temp_dir().join(format!("tier1-shallow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["config", "user.email", "t@example.com"],
+            vec!["config", "user.name", "t"],
+        ] {
+            git(&dir, &args).unwrap();
+        }
+        std::fs::write(dir.join("f"), "x").unwrap();
+        git(&dir, &["add", "-A"]).unwrap();
+        git(&dir, &["commit", "-qm", "seed", "--no-verify"]).unwrap();
+        // What `git clone --depth` leaves behind; `rev-parse
+        // --is-shallow-repository` keys on exactly this file.
+        std::fs::write(dir.join(".git/shallow"), "").unwrap();
+
+        let err = resolve_baseline_matrix_against(&dir, DEFAULT_BASELINE_REF)
+            .expect_err("a shallow clone must be an error, never a silent pass");
+        assert!(err.contains("SHALLOW"), "{err}");
+        assert!(err.contains("fetch-depth: 0"), "{err}");
+        assert!(err.contains("must not pass"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn baseline_resolves_in_this_repo_and_parses() {
         // Runs against the real checkout: proves the git plumbing works and
