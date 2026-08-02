@@ -19,16 +19,34 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             platform: linux-x86_64
+            binary: labwired
+            archive_format: tar.gz
+            shell: bash
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             platform: linux-aarch64
             cross: true
+            binary: labwired
+            archive_format: tar.gz
+            shell: bash
           - target: x86_64-apple-darwin
             runner: macos-latest
             platform: darwin-x86_64
+            binary: labwired
+            archive_format: tar.gz
+            shell: bash
           - target: aarch64-apple-darwin
             runner: macos-latest
             platform: darwin-aarch64
+            binary: labwired
+            archive_format: tar.gz
+            shell: bash
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            platform: windows-x86_64
+            binary: labwired.exe
+            archive_format: zip
+            shell: pwsh
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +74,8 @@ jobs:
         if: matrix.cross != true
         run: cargo build -p labwired-cli --release --target ${{ matrix.target }}
 
-      - name: Package binary
+      - name: Package Unix binary
+        if: matrix.archive_format == 'tar.gz'
         shell: bash
         run: |
           VERSION="${{ github.ref_name }}"
@@ -64,11 +83,22 @@ jobs:
           ARCHIVE="labwired-${VERSION}-${PLATFORM}.tar.gz"
 
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/labwired" dist/labwired
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" dist/labwired
           chmod +x dist/labwired
 
           tar -czf "${ARCHIVE}" -C dist labwired
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Package Windows binary
+        if: matrix.archive_format == 'zip'
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'
+          $archive = "labwired-$version-${{ matrix.platform }}.zip"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" 'dist/labwired.exe'
+          Compress-Archive -Path 'dist/labwired.exe' -DestinationPath $archive -Force
+          "ARCHIVE=$archive" >> $env:GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -89,6 +119,15 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Generate archive checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > dist/SHA256SUMS
+          test -s dist/SHA256SUMS
+
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v2
         with:
@@ -107,5 +146,5 @@ jobs:
             ```
 
             See the [full changelog](CHANGELOG.md) for what's new.
-          files: dist/*.tar.gz
+          files: dist/*
           fail_on_unmatched_files: true
