@@ -28,7 +28,7 @@ concurrency:
 jobs:
   arduino-matrix:
     name: arduino-${{ matrix.board }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -117,7 +117,7 @@ jobs:
 
   arduino-matrix-gate:
     name: arduino-matrix-gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 5
     needs: arduino-matrix
     if: always()

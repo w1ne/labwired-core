@@ -24,7 +24,7 @@ concurrency:
 jobs:
   onboarding-smoke:
     name: onboarding-${{ matrix.id }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -88,7 +88,7 @@ jobs:
 
   onboarding-scoreboard:
     name: onboarding-scoreboard
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 5
     needs: onboarding-smoke
     if: always()

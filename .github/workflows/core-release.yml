@@ -87,7 +87,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -121,7 +121,7 @@ jobs:
   publish:
     name: Publish CI runner image
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -152,7 +152,7 @@ jobs:
   release-smoke:
     name: Smoke released archives and runner image
     needs: [release, publish]
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
 

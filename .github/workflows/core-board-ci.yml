@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
@@ -52,7 +52,7 @@ jobs:
 
   board:
     needs: setup
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -118,7 +118,7 @@ jobs:
   # auto-committing to protected main: regenerate here and fail if it drifted, so
   # whoever changed the matrix must commit the regenerated scoreboard.
   coverage-staleness:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4

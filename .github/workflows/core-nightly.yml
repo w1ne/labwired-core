@@ -16,7 +16,7 @@ concurrency:
 jobs:
   validation:
     name: Advanced Validation
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
 
   example-smokes:
     name: Example Smokes (real-output autochecks)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -118,7 +118,7 @@ jobs:
 
   esp32s3-fixtures-e2e:
     name: ESP32-S3 Fixtures E2E (espup)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -187,7 +187,7 @@ jobs:
 
   tier1-fixture-drift:
     name: Tier-1 Fixture Drift Check
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     timeout-minutes: 60
     steps:
       # Gate to Sundays only for scheduled runs; workflow_dispatch always proceeds.

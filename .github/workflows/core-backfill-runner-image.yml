@@ -15,7 +15,7 @@ permissions:
 jobs:
   publish:
     name: Publish an existing release runner image
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["ubuntu-latest"]') }}
     steps:
       - name: Validate release tag
         shell: bash
