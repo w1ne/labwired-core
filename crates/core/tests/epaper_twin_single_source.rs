@@ -32,6 +32,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// One physical wiring: `(chip, connection, cs_pin, dc_pin, part_family)`. Two
+/// manifests that agree on all five describe the same module.
+type WiringKey = (String, String, String, String, String);
+
+/// `device_type` → the manifests that name it for a given [`WiringKey`]. More
+/// than one entry means the wiring has forked.
+type ModelSources = BTreeMap<String, Vec<String>>;
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -253,11 +261,7 @@ fn same_wiring_must_not_name_two_models_from_one_part_family() {
     );
 
     let wirings = all_wirings();
-    // (chip, connection, cs, dc, family) → device_type → sources
-    let mut groups: BTreeMap<
-        (String, String, String, String, String),
-        BTreeMap<String, Vec<String>>,
-    > = BTreeMap::new();
+    let mut groups: BTreeMap<WiringKey, ModelSources> = BTreeMap::new();
 
     for w in &wirings {
         let Some(family) = part_family(&w.device_type) else {
