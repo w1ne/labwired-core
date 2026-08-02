@@ -69,6 +69,47 @@ jobs:
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
 
+  # ── Native Windows CLI archive contract ───────────────────────────────────
+  # The desktop sidecar consumes a native Windows executable, so prove the
+  # exact build/package/extract shape on Windows before a tag release.
+  windows-cli:
+    name: core-windows-cli
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-windows-cli
+          workspaces: . -> target
+
+      - name: Build release CLI
+        run: cargo build -p labwired-cli --release --target x86_64-pc-windows-msvc
+
+      - name: Smoke the native executable
+        shell: pwsh
+        run: |
+          $binary = 'target/x86_64-pc-windows-msvc/release/labwired.exe'
+          & $binary --version
+
+      - name: Package and verify the Windows release ZIP
+        shell: pwsh
+        run: |
+          $binary = 'target/x86_64-pc-windows-msvc/release/labwired.exe'
+          $stage = Join-Path $env:RUNNER_TEMP 'labwired-windows-stage'
+          $verify = Join-Path $env:RUNNER_TEMP 'labwired-windows-verify'
+          $archive = Join-Path $env:RUNNER_TEMP 'labwired-v0.0.0-windows-x86_64.zip'
+          New-Item -ItemType Directory -Force -Path $stage, $verify | Out-Null
+          Copy-Item $binary (Join-Path $stage 'labwired.exe')
+          Compress-Archive -Path (Join-Path $stage 'labwired.exe') -DestinationPath $archive -Force
+          Expand-Archive -Path $archive -DestinationPath $verify -Force
+          & (Join-Path $verify 'labwired.exe') --version
+
   # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
   # Builds firmware fixtures, runs the complete workspace tests, the host-only
   # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it
