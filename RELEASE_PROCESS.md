@@ -68,10 +68,13 @@ This document outlines the standardized process for releasing new versions of La
 ### Artifacts
 - [ ] **Release Workflow**: Pushing `vX.Y.Z` triggers
   [`.github/workflows/core-release.yml`](.github/workflows/core-release.yml),
-  which builds CLI archives for Linux and macOS targets and uploads them to the
-  GitHub Release.
+  which builds CLI archives for Linux and macOS targets, a Windows x64 ZIP
+  containing `labwired.exe`, and a `SHA256SUMS` manifest, then uploads them to
+  the GitHub Release. Windows ARM64 is not a released target until it has been
+  separately validated.
 - [ ] **Workflow Verification**: Confirm the release workflow completed and the
-  expected `labwired-vX.Y.Z-<platform>.tar.gz` assets are attached.
+  expected Linux/macOS `labwired-vX.Y.Z-<platform>.tar.gz` assets, the
+  `labwired-vX.Y.Z-windows-x86_64.zip` asset, and `SHA256SUMS` are attached.
 - [ ] **Manual Fallback**: If the release workflow fails, build the CLI locally
   with `cargo build -p labwired-cli --release`, package the `labwired` binary,
   and attach the archive manually with a note in the release description.
