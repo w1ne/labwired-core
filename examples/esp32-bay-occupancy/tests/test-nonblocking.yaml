@@ -1,0 +1,35 @@
+# Ryan's test 12: sensor polling and display updates run continuously without
+# blocking one another.
+#
+# The firmware runs both off millis() deadlines with no delay() in loop(), at
+# deliberately different periods (poll 50 ms, display 120 ms). The observable
+# consequence of a coupling bug is asymmetric: if the display blocked polling,
+# STATE lines would stall; if polling blocked the display, the panel would
+# never finish painting.
+#
+# So this run asserts BOTH, in the same execution: many STATE lines spread
+# across the run AND a painted panel. A build where either starves the other
+# fails one of the two.
+#
+# Sensor values change mid-run so the STATE lines cannot be a repeated
+# unchanging string — a poll loop that had died would freeze at the old value.
+schema_version: "1.2"
+inputs:
+  profile: "arduino-esp32"
+  system: "../system.yaml"
+  firmware: "../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf"
+limits:
+  max_steps: 3000000000
+assertions:
+  - uart_contains: "bay-occupancy ready"
+  # Polling is alive BEFORE the change...
+  - uart_contains: "STATE E2000 E2000 E2000 E2000"
+  # ...and still alive AFTER it, i.e. it kept running while the panel painted.
+  - uart_contains: "STATE P3000 E2000 E2000 E2000"
+  # The display got its own time in the same run — panel paint is asserted by
+  # the runner from result.json's `inspect` block (no `display` clause exists
+  # in the CLI test script; it is MCP-only).
+stimuli:
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 300000000 }
+    value: 3000

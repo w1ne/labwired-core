@@ -373,35 +373,32 @@ impl SystemBus {
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
-        use crate::peripherals::components::IolinkMaster;
         use crate::peripherals::esp32::uart::Esp32Uart;
         use crate::peripherals::esp_uart::EspUart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         use crate::peripherals::nrf54l::uarte::Nrf54lUarte;
         for p in &mut self.peripherals {
+            // A UART hosting a protocol peer (an inter-chip cross-link, an
+            // IO-Link master) must stay OFF the console sink. Every node UART
+            // shares one capture buffer, so attaching a link UART here splices
+            // its octets into the console text: a two-C3 run printed
+            // `pPiInNgGer up` and no serial assertion could be trusted.
+            //
+            // Asked as a capability, not per model. The previous code tested
+            // this only inside the generic-`Uart` arm, so ESP UARTs -- the ones
+            // that made two C3s linkable at all -- were never covered.
+            if p.dev
+                .as_uart_stream_host()
+                .is_some_and(|u| u.hosts_protocol_peer())
+            {
+                continue;
+            }
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
             };
             // STM32-layout generic UART.
             if let Some(uart) = any.downcast_mut::<Uart>() {
-                // UARTs carrying an IO-Link master are the binary IO-Link C/Q
-                // wire, not a text console: their raw bytes must neither be
-                // echoed to stdout nor captured into the assertion buffer (they
-                // would pollute the console log and could collide with assertion
-                // substrings). A freshly built `Uart` defaults to
-                // `echo_stdout = true`, so we cannot simply skip it — we must
-                // explicitly clear the sink AND disable the echo. The master's
-                // own decoded records reach the capture sink via
-                // `attach_iolink_master_log_sink`.
-                let is_iolink_wire = uart
-                    .attached_streams
-                    .iter()
-                    .any(|s| s.as_any().map(|a| a.is::<IolinkMaster>()).unwrap_or(false));
-                if is_iolink_wire {
-                    uart.set_sink(None, false);
-                } else {
-                    uart.set_sink(Some(sink.clone()), echo_stdout);
-                }
+                uart.set_sink(Some(sink.clone()), echo_stdout);
                 continue;
             }
             // Real ESP32-classic UART (echo is fixed at construction time).

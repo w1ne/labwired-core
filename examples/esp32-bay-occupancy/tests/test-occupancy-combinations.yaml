@@ -1,0 +1,45 @@
+# Ryan's test 7: simultaneous occupancy across all four bays.
+#
+# The ENGINE proves all sixteen combinations read back exactly
+# (crates/core/tests/vcnl4010_bay_occupancy.rs ::
+# every_combination_of_four_bays_reads_back_exactly). This is the FIRMWARE
+# half: that the application maps a simultaneous multi-bay pattern onto four
+# independent published states, through one shared I2C switch.
+#
+# Three patterns are asserted, chosen so no two share a shape: all four
+# occupied, all four vacant, and an alternating pattern. Alternating is the one
+# that catches a mux-selection bug — if channel selection leaked, adjacent bays
+# would agree instead of alternating.
+schema_version: "1.2"
+inputs:
+  profile: "arduino-esp32"
+  system: "../system.yaml"
+  firmware: "../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf"
+limits:
+  max_steps: 3000000000
+assertions:
+  - uart_contains: "bay-occupancy ready"
+  # All four occupied.
+  - uart_contains: "STATE P3000 P3000 P3000 P3000"
+  # Alternating: 0 and 2 occupied, 1 and 3 vacant.
+  - uart_contains: "STATE P3000 E400 P3000 E400"
+stimuli:
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  - target: { component: "bay1", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  - target: { component: "bay2", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  - target: { component: "bay3", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  # Now clear the odd bays only.
+  - target: { component: "bay1", channel: "proximity" }
+    trigger: !after_cycles { cycles: 300000000 }
+    value: 400
+  - target: { component: "bay3", channel: "proximity" }
+    trigger: !after_cycles { cycles: 300000000 }
+    value: 400

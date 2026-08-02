@@ -123,14 +123,63 @@ fn world_rejects_a_direct_manifest_that_bypasses_file_validation() {
     assert!(error.contains("schema_version '2.0'"), "{error}");
 }
 
+/// A world node's architecture comes from its own chip descriptor, so a RISC-V
+/// node runs its real CPU in a world exactly as it does on its own. This
+/// replaces an earlier test that asserted the opposite: worlds used to reject
+/// every non-Cortex-M node, which made a two-ESP32 topology unbuildable even
+/// though the engine runs those chips individually.
 #[test]
-fn world_rejects_non_cortex_m_nodes_before_loading_firmware() {
+fn world_runs_riscv_nodes() {
     let manifest = EnvironmentManifest {
         schema_version: "1.0".to_string(),
         name: "riscv-world".to_string(),
+        nodes: vec![
+            NodeConfig {
+                id: "alpha".to_string(),
+                system: "configs/systems/ci-fixture-riscv-uart1.yaml".to_string(),
+                firmware: "tests/fixtures/riscv-ci-fixture.elf".to_string(),
+                config_overrides: HashMap::new(),
+            },
+            NodeConfig {
+                id: "beta".to_string(),
+                system: "configs/systems/ci-fixture-riscv-uart1.yaml".to_string(),
+                firmware: "tests/fixtures/riscv-ci-fixture.elf".to_string(),
+                config_overrides: HashMap::new(),
+            },
+        ],
+        interconnects: Vec::new(),
+    };
+
+    let mut world = World::from_manifest(manifest, &repo_root())
+        .expect("world with two RISC-V nodes must build");
+    assert_eq!(world.machines.len(), 2);
+
+    // Each node owns a CPU that actually retires instructions — the failure
+    // this guards against is a world that "runs" while a node sits inert.
+    for _ in 0..64 {
+        for result in world.step_all().values() {
+            result.as_ref().expect("node step");
+        }
+    }
+    for id in ["alpha", "beta"] {
+        assert_eq!(
+            world.machines.get(id).expect("node present").total_cycles(),
+            64,
+            "node '{id}' did not advance",
+        );
+    }
+}
+
+/// Architectures the engine has no machine for must fail loudly at build time
+/// rather than producing a node that silently does nothing.
+#[test]
+fn world_rejects_nodes_whose_chip_declares_no_known_architecture() {
+    let manifest = EnvironmentManifest {
+        schema_version: "1.0".to_string(),
+        name: "unknown-arch-world".to_string(),
         nodes: vec![NodeConfig {
-            id: "riscv".to_string(),
-            system: "configs/systems/ci-fixture-riscv-uart1.yaml".to_string(),
+            id: "mystery".to_string(),
+            system: "configs/systems/ci-fixture-unknown-arch.yaml".to_string(),
             firmware: "tests/fixtures/riscv-ci-fixture.elf".to_string(),
             config_overrides: HashMap::new(),
         }],
@@ -138,15 +187,16 @@ fn world_rejects_non_cortex_m_nodes_before_loading_firmware() {
     };
 
     let error = match World::from_manifest(manifest, &repo_root()) {
-        Ok(_) => panic!("World::from_manifest accepted a non-Cortex-M node"),
+        Ok(_) => panic!("a node with no known chip architecture must not build"),
         Err(error) => format!("{error:#}"),
     };
-
+    // Assert on the architecture message specifically: a missing fixture file
+    // would also produce an error, and would make this test pass for the wrong
+    // reason.
     assert!(
-        error.contains("environment worlds currently support only Cortex-M nodes"),
+        error.contains("does not declare a known architecture"),
         "{error}"
     );
-    assert!(error.contains("RiscV"), "{error}");
 }
 
 #[test]
@@ -159,7 +209,7 @@ fn world_rejects_non_cortex_m_arm_cores_before_constructing_a_cortex_m_machine()
         };
 
         assert!(
-            error.contains("requires an explicit Cortex-M core"),
+            error.contains("only Cortex-M cores are modelled"),
             "{name}: {error}"
         );
     }

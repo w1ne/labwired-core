@@ -157,6 +157,35 @@ impl PeripheralTickResult {
 }
 
 /// Trait for observing simulation events in a modular way.
+///
+/// # The per-instruction trace contract
+///
+/// Every CPU core MUST emit, for each retired instruction, in this order:
+///
+///   1. `on_step_start(pc, opcode)` — before execution, `pc` is the address
+///      being executed and `opcode` its raw little-endian encoding.
+///   2. `TraceEvent::InstructionRetired { pc, opcode }` via [`emit_trace_event`].
+///   3. `on_step_end(cycles, registers)` — after execution.
+///
+/// A core may skip all three when `observers.is_empty()` (building the
+/// register view is not free), but it may NOT skip them for any other reason:
+/// in particular a JIT/compiled-block fast path must fall back to the
+/// interpreter while anyone is observing, or the trace silently loses the
+/// instructions that matter most.
+///
+/// `registers` is arch-specific in its leading entries, but the **last two
+/// slots are standardized** so that arch-agnostic consumers work everywhere:
+///
+/// ```text
+///   [ .. architectural registers, ISA numbering .. , SP , PC ]
+/// ```
+///
+/// SP and PC are repeated in those trailing slots even when they already
+/// appear in the arch block (ARM's r13/r15, RISC-V's x2). The duplication is
+/// deliberate: it means a consumer never has to know which core produced a
+/// trace to find the two values it almost always wants. See
+/// [`SP_FROM_END`]/[`PC_FROM_END`], and `tests/cpu_trace_conformance.rs`,
+/// which runs every core and fails if one drifts from any of the above.
 pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_simulation_start(&self) {}
     fn on_simulation_stop(&self) {}
@@ -165,6 +194,23 @@ pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_step_end(&self, _cycles: u32, _registers: &[u32]) {}
     fn on_memory_write(&self, _addr: u64, _old: u8, _new: u8) {}
     fn on_peripheral_tick(&self, _name: &str, _cycles: u32) {}
+}
+
+/// Offset of the standardized PC slot from the end of an `on_step_end`
+/// register slice. See [`SimulationObserver`].
+pub const PC_FROM_END: usize = 1;
+/// Offset of the standardized SP slot from the end of an `on_step_end`
+/// register slice. See [`SimulationObserver`].
+pub const SP_FROM_END: usize = 2;
+
+/// SP and PC out of an `on_step_end` register slice, whatever core produced
+/// it. Returns `None` for a slice too short to carry the standard trailer.
+pub fn trace_sp_pc(registers: &[u32]) -> Option<(u32, u32)> {
+    let n = registers.len();
+    if n < SP_FROM_END {
+        return None;
+    }
+    Some((registers[n - SP_FROM_END], registers[n - PC_FROM_END]))
 }
 
 pub fn emit_trace_event(
@@ -688,6 +734,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+
+    /// This peripheral as an inter-chip UART cross-link endpoint, if it is one.
+    ///
+    /// Named capability rather than a downcast: `attach_uart_stream_by_id` used
+    /// to require the concrete [`crate::peripherals::uart::Uart`], which made
+    /// every family with its own UART model (the whole ESP32 line) unwireable.
+    /// Default `None` = not a UART.
+    fn as_uart_stream_host(&mut self) -> Option<&mut dyn crate::peripherals::uart::UartStreamHost> {
         None
     }
 
@@ -1246,6 +1302,12 @@ pub struct Machine<C: Cpu> {
     pub cpu_secondary: Option<C>,
     pub bus: bus::SystemBus,
     pub observers: Vec<Arc<dyn SimulationObserver>>,
+    /// Stack pointer to give the secondary CPU when it is released, if the
+    /// platform has one to give (ESP32 resolves `port_IntStackTop`). Set by
+    /// whoever configures the platform; consumed in
+    /// `release_secondary_cpu_if_requested` so a core is never released
+    /// without a stack.
+    pub secondary_boot_sp: Option<u32>,
 
     // Debug state
     pub breakpoints: std::collections::HashSet<u32>,
@@ -1598,6 +1660,7 @@ impl<C: Cpu> Machine<C> {
             cpu_secondary: None,
             bus,
             observers: Vec::new(),
+            secondary_boot_sp: None,
             breakpoints: HashSet::new(),
             last_breakpoint: None,
             total_cycles: 0,
@@ -2609,3 +2672,53 @@ impl<C: Cpu> DebugControl for Machine<C> {
         self.apply_snapshot(snapshot.clone())
     }
 }
+
+/// A fast, dependency-free hasher for small integer keys (register offsets).
+///
+/// Peripheral register banks are `HashMap<u64, u32>` keyed by offset and are
+/// read on nearly every tick — `UartCore::int_raw` alone walks several. With
+/// std's default SipHash, `sip::Hasher::write` profiled as the SECOND heaviest
+/// frame in a whole classic-ESP32 run, behind only the peripheral-walk loop.
+/// SipHash is a DoS-resistant hash for adversarial keys; a register offset the
+/// firmware chose is not that.
+///
+/// This is the same finding, and the same fix, that took the ESP32-C3 labs
+/// 2.343s -> 1.955s (see the scheduler-hash work). Multiply-xor, i.e. the FxHash
+/// construction, without taking a new dependency.
+#[derive(Default, Clone, Copy)]
+pub struct FastHasher(u64);
+
+impl std::hash::Hasher for FastHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.write_u8(b);
+        }
+    }
+    #[inline]
+    fn write_u8(&mut self, n: u8) {
+        self.write_u64(u64::from(n));
+    }
+    #[inline]
+    fn write_u32(&mut self, n: u32) {
+        self.write_u64(u64::from(n));
+    }
+    #[inline]
+    fn write_u64(&mut self, n: u64) {
+        // FxHash: rotate, xor, multiply by a large odd constant.
+        const SEED: u64 = 0x51_7c_c1_b7_27_22_0a_95;
+        self.0 = (self.0.rotate_left(5) ^ n).wrapping_mul(SEED);
+    }
+    #[inline]
+    fn write_usize(&mut self, n: usize) {
+        self.write_u64(n as u64);
+    }
+}
+
+/// Drop-in replacement for `HashMap` on integer keys. Same semantics, same
+/// iteration-order guarantees (i.e. none), just a cheaper hash.
+pub type FastMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<FastHasher>>;

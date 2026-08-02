@@ -41,8 +41,13 @@
 
 use crate::peripherals::spi::SpiDevice;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+/// Read once per process — this sits on the SPI transfer path.
+fn spi_debug_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("LABWIRED_SPI_DEBUG").is_ok())
+}
 
 const REG_CMD: u64 = 0x00;
 const REG_ADDR: u64 = 0x04;
@@ -127,7 +132,7 @@ pub struct Esp32Spi {
     miso_dlen: u32,
     fifo: [u32; 16],
     /// Round-trip every other offset so firmware RMW sequences observe their writes.
-    other: HashMap<u64, u32>,
+    other: crate::FastMap<u64, u32>,
 
     /// Modeled flash status register 1 (WIP/WEL). Instant-complete model:
     /// WIP never stays set; WEL tracks WREN/WRDI.
@@ -286,7 +291,7 @@ impl Esp32Spi {
         if cmd & FLASH_RES != 0 {
             // Resume-from-powerdown: no data the boot path consumes.
         }
-        if std::env::var("LABWIRED_SPI_DEBUG").is_ok() {
+        if spi_debug_enabled() {
             eprintln!(
                 "esp32_spi: dedicated cmd=0x{cmd:08x} status=0x{:04x} rd_status=0x{:08x}",
                 self.flash_status, self.rd_status
@@ -337,7 +342,7 @@ impl Esp32Spi {
         let read_bytes = (((self.miso_dlen & 0x7FF) + 1) / 8) as usize;
         let addr = (self.addr >> 8) as usize;
 
-        if std::env::var("LABWIRED_SPI_DEBUG").is_ok() {
+        if spi_debug_enabled() {
             eprintln!(
                 "esp32_spi: USR miso op=0x{opcode:02x} addr=0x{addr:06x} bytes={read_bytes} user2=0x{:08x}",
                 self.user2

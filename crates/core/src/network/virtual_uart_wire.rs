@@ -4,15 +4,20 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! Shared, in-process UART cross-link medium for browser multi-chip labs.
+//! The UART cross-link medium — one implementation for every host.
 //!
-//! The native [`crate::network::UartCrossLink`] wires two UARTs with mpsc
-//! channels owned by a `World`. In the browser, each chip is a separate
-//! `WasmSimulator` running inside the *same* wasm module, so there is no `World`
-//! to own channels. This provides the browser's equivalent: a [`VirtualWireBus`]
-//! that endpoints clone-share, so bytes one endpoint transmits land in the peer
-//! endpoint's inbox with no per-byte host round-trip — chips can keep stepping
-//! in batches and still exchange data.
+//! A [`VirtualWireBus`] is shared by cloning, so bytes one endpoint transmits
+//! land in the peer endpoint's inbox with no per-byte round-trip and no owner
+//! to tick it. That property is what lets a single medium serve every host:
+//! a native `World` that owns its machines, and the browser, where each chip is
+//! a separate `WasmSimulator` inside the same wasm module and there is no
+//! `World` to own channels.
+//!
+//! This replaced a second, native-only medium (`UartCrossLink`) that carried
+//! bytes over mpsc channels and needed a `World::step_all` tick to move them.
+//! Two media for one job meant a link behaved differently depending on which
+//! host ran it; the bus is a superset, so the mpsc one was deleted rather than
+//! kept in parallel.
 //!
 //! Every [`VirtualWireEndpoint`] minted from the *same* bus exchanges bytes;
 //! endpoints from *different* buses are fully isolated. This is what lets two
@@ -30,6 +35,10 @@ use std::sync::{Arc, Mutex};
 struct Link {
     /// `inbox[s]` holds bytes waiting to be received by the endpoint on side `s`.
     inbox: [VecDeque<u8>; 2],
+    /// `corrupt[s]` is how many further bytes *transmitted by* side `s` get
+    /// flipped before clean forwarding resumes — the wire-fault injection the
+    /// IO-Link station tests use to prove a master recovers from line noise.
+    corrupt: [u32; 2],
 }
 
 #[derive(Default)]
@@ -69,6 +78,16 @@ impl VirtualWireBus {
             w.links.clear();
         }
     }
+
+    /// Flip the next `n` bytes transmitted by `side` on `link_id` (each XORed
+    /// with `0xFF`), then forward cleanly again. Injecting the fault on the
+    /// medium rather than on an endpoint keeps it available to any host, and
+    /// means a corrupted byte is indistinguishable from line noise to both peers.
+    pub fn corrupt_next(&self, link_id: u32, side: u8, n: u32) {
+        if let Ok(mut w) = self.inner.lock() {
+            w.links.entry(link_id).or_default().corrupt[(side & 1) as usize] = n;
+        }
+    }
 }
 
 /// One endpoint of a shared UART cross-link. The two endpoints of a link are
@@ -88,9 +107,22 @@ impl UartStreamDevice for VirtualWireEndpoint {
 
     fn on_tx_byte(&mut self, byte: u8) {
         if let Ok(mut w) = self.wire.lock() {
+            let link = w.links.entry(self.link_id).or_default();
+            let byte = if link.corrupt[self.side] > 0 {
+                link.corrupt[self.side] -= 1;
+                byte ^ 0xFF
+            } else {
+                byte
+            };
             // Transmitted bytes are delivered to the PEER side's inbox.
-            w.links.entry(self.link_id).or_default().inbox[self.side ^ 1].push_back(byte);
+            link.inbox[self.side ^ 1].push_back(byte);
         }
+    }
+
+    /// A wire between two chips carries whatever protocol the firmware speaks,
+    /// not console text.
+    fn carries_protocol_octets(&self) -> bool {
+        true
     }
 }
 
@@ -117,6 +149,39 @@ mod tests {
         // A different link id on the same bus is isolated.
         let mut other = bus.endpoint(99, 0);
         assert_eq!(other.poll(0), None);
+    }
+
+    /// Wire-fault injection, ported from the deleted mpsc medium so the
+    /// behaviour the IO-Link station tests depend on is still covered here.
+    #[test]
+    fn corrupts_next_n_bytes_then_forwards_clean() {
+        let bus = VirtualWireBus::new();
+        let mut a = bus.endpoint(1, 0);
+        let mut b = bus.endpoint(1, 1);
+
+        bus.corrupt_next(1, 0, 1);
+        a.on_tx_byte(0x55);
+        a.on_tx_byte(0x66);
+        assert_eq!(b.poll(0), Some(0xAA), "first byte flipped (0x55 ^ 0xFF)");
+        assert_eq!(
+            b.poll(0),
+            Some(0x66),
+            "clean again after the budget runs out"
+        );
+    }
+
+    /// A fault on one direction must not disturb the other.
+    #[test]
+    fn corruption_is_per_direction() {
+        let bus = VirtualWireBus::new();
+        let mut a = bus.endpoint(2, 0);
+        let mut b = bus.endpoint(2, 1);
+
+        bus.corrupt_next(2, 1, 1); // only bytes transmitted BY side 1
+        a.on_tx_byte(0x11);
+        b.on_tx_byte(0x22);
+        assert_eq!(b.poll(0), Some(0x11), "A→B untouched");
+        assert_eq!(a.poll(0), Some(0xDD), "B→A flipped (0x22 ^ 0xFF)");
     }
 
     #[test]

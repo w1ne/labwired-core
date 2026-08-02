@@ -1,0 +1,55 @@
+# Ryan M Reynolds' bay-occupancy rig, as a LabWired system.
+#
+#   Adafruit ESP32 Feather V2 (PID 5400)
+#     +-- TCA9548A @ 0x70 (PID 2717)
+#     |     +-- ch0..ch3 -> VCNL4010 @ 0x13 (PID 466), one per channel
+#     +-- 2.4" TFT FeatherWing V2 (PID 3315), ILI9341 over SPI
+#
+# Four VCNL4010s cannot share a bus: 0x13 is fixed in silicon with no strap
+# pins. The mux is the entire reason this topology exists, so each sensor is
+# declared on its own channel and nothing is duplicated onto the trunk.
+name: "ryan-bay-occupancy"
+chip: "../../configs/chips/esp32.yaml"
+external_devices:
+  - id: "mux"
+    type: "tca9548a"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x70
+  - id: "bay0"
+    type: "vcnl4010"
+    connection: "mux"
+    channel: 0
+    config:
+      i2c_address: 0x13
+  - id: "bay1"
+    type: "vcnl4010"
+    connection: "mux"
+    channel: 1
+    config:
+      i2c_address: 0x13
+  - id: "bay2"
+    type: "vcnl4010"
+    connection: "mux"
+    channel: 2
+    config:
+      i2c_address: 0x13
+  - id: "bay3"
+    type: "vcnl4010"
+    connection: "mux"
+    channel: 3
+    config:
+      i2c_address: 0x13
+  - id: "tft"
+    type: "ili9341"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO15"
+      dc_pin: "GPIO33"
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 13
+    signal: "output"
+    active_high: true

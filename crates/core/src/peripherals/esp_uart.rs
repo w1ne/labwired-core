@@ -274,6 +274,11 @@ pub struct EspUart {
     /// same injection mechanism the generic `Uart` exposes, so a declarative
     /// `uart_injections:` entry (or interactive serial input) reaches this twin.
     rx_source: Arc<Mutex<VecDeque<u8>>>,
+    /// Peers bound to this UART (an inter-chip cross-link endpoint, a modelled
+    /// serial device). Empty on every ordinary instance, and every path that
+    /// touches it is guarded on non-empty, so an unlinked UART behaves exactly
+    /// as it did before this existed.
+    attached_streams: Vec<Box<dyn crate::peripherals::uart::UartStreamDevice>>,
 }
 
 impl std::fmt::Debug for EspUart {
@@ -307,6 +312,7 @@ impl EspUart {
         }
         Self {
             sink: None,
+            attached_streams: Vec::new(),
             echo_stdout,
             source_id,
             regs,
@@ -365,6 +371,28 @@ impl EspUart {
     fn ingest_rx_source_mut(&mut self) {
         if self.ingest_rx_source() > 0 {
             self.int_raw_sticky |= INT_RXFIFO_TOUT;
+        }
+    }
+
+    /// Give each attached peer `cycles` of simulated time and deliver whatever
+    /// it emits into the RX FIFO. The counterpart to the `on_tx_byte` forward
+    /// in `drain_cycles`: together they make a cross-linked UART bidirectional.
+    ///
+    /// No-op with nothing attached, which is every ordinary instance.
+    fn poll_attached_streams(&mut self, cycles: u64) {
+        if self.attached_streams.is_empty() {
+            return;
+        }
+        let hz = self.cpu_clock_hz.max(1);
+        let elapsed_us = (cycles.saturating_mul(1_000_000) / hz).min(u32::MAX as u64) as u32;
+        let mut bytes = Vec::new();
+        for stream in &mut self.attached_streams {
+            if let Some(byte) = stream.poll(elapsed_us) {
+                bytes.push(byte);
+            }
+        }
+        for byte in bytes {
+            self.push_rx(byte);
         }
     }
 
@@ -531,6 +559,12 @@ impl EspUart {
                         g.push(byte);
                     }
                 }
+                // A byte leaves the shift register exactly once, so this is the
+                // one place a peer can observe our TX — same point the sink
+                // sees it, hence the same baud pacing.
+                for stream in &mut self.attached_streams {
+                    stream.on_tx_byte(byte);
+                }
                 if self.echo_stdout {
                     let _ = io::stdout().write_all(&[byte]);
                     let _ = io::stdout().flush();
@@ -565,6 +599,23 @@ impl EspUart {
             }
         }
         // If not a config register: silently ignored (read-only or unmapped).
+    }
+}
+
+impl crate::peripherals::uart::UartStreamHost for EspUart {
+    fn attach_stream_device(&mut self, dev: Box<dyn crate::peripherals::uart::UartStreamDevice>) {
+        self.attached_streams.push(dev);
+    }
+
+    fn detach_console_sink(&mut self) {
+        self.sink = None;
+        self.echo_stdout = false;
+    }
+
+    fn hosts_protocol_peer(&self) -> bool {
+        self.attached_streams
+            .iter()
+            .any(|s| s.carries_protocol_octets())
     }
 }
 
@@ -641,6 +692,7 @@ impl Peripheral for EspUart {
     /// (`on_event`) is the one that anchors to absolute cycles.
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         self.ingest_rx_source_mut();
+        self.poll_attached_streams(cycles);
         self.drain_cycles(cycles);
 
         let asserting = self.int_raw() & self.reg(OFF_INT_ENA);
@@ -659,7 +711,10 @@ impl Peripheral for EspUart {
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        !self.uses_scheduler()
+        // A cross-linked UART must keep being ticked even under the scheduler:
+        // the peer is polled from `tick_elapsed`, and walk-deletion would
+        // starve it so the link would carry traffic one way only.
+        !self.uses_scheduler() || !self.attached_streams.is_empty()
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -728,6 +783,10 @@ impl Peripheral for EspUart {
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_uart_stream_host(&mut self) -> Option<&mut dyn crate::peripherals::uart::UartStreamHost> {
         Some(self)
     }
 

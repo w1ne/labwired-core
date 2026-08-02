@@ -1,0 +1,9 @@
+schema_version: "1.0"
+name: "two-riscv-node-smoke"
+nodes:
+  - id: alpha
+    system: "../../configs/systems/ci-fixture-riscv-uart1.yaml"
+    firmware: "../../tests/fixtures/riscv-ci-fixture.elf"
+  - id: beta
+    system: "../../configs/systems/ci-fixture-riscv-uart1.yaml"
+    firmware: "../../tests/fixtures/riscv-ci-fixture.elf"

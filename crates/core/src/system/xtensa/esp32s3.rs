@@ -39,6 +39,12 @@ pub struct Esp32s3Opts {
     /// fetches it as an on-demand asset and injects it here. `None` (default)
     /// → the native provision chain (env pins / toolchain / vendored blob).
     pub rom_images: Option<crate::boot::esp32s3_rom::RomImages>,
+    /// Caller-injected flash image, used instead of reading
+    /// `LABWIRED_ESP32S3_FLASH`. A process-global env var can only name one
+    /// image, so it cannot describe a world where two S3 nodes run *different*
+    /// firmware; passing the bytes in is what makes multi-node S3 topologies
+    /// expressible. `None` (default) keeps the env-var path unchanged.
+    pub flash_image: Option<Vec<u8>>,
 }
 
 impl Default for Esp32s3Opts {
@@ -53,6 +59,7 @@ impl Default for Esp32s3Opts {
             cpu_clock_hz: 80_000_000,
             real_reset_boot: false,
             rom_images: None,
+            flash_image: None,
         }
     }
 }
@@ -208,7 +215,11 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
     // bytes. In fast-boot this is unused; the legacy per-window backings apply.
     let shared_flash_backing = {
         let mut buf = vec![0xFFu8; opts.flash_size as usize];
-        if let Ok(p) = std::env::var("LABWIRED_ESP32S3_FLASH") {
+        if let Some(bytes) = opts.flash_image.as_deref() {
+            let n = bytes.len().min(buf.len());
+            buf[..n].copy_from_slice(&bytes[..n]);
+            eprintln!("configure_xtensa_esp32s3: loaded caller-supplied flash image ({n} bytes)");
+        } else if let Ok(p) = std::env::var("LABWIRED_ESP32S3_FLASH") {
             if let Ok(bytes) = std::fs::read(&p) {
                 let n = bytes.len().min(buf.len());
                 buf[..n].copy_from_slice(&bytes[..n]);

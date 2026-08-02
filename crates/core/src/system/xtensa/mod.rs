@@ -12,6 +12,8 @@
 use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
 
+mod arduino_esp32_profile;
+pub use arduino_esp32_profile::*;
 mod esp32;
 pub use esp32::*;
 mod esp32_rom_console;

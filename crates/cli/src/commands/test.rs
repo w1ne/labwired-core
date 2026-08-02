@@ -324,6 +324,13 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         _ => None,
     };
 
+    // Read before the destructuring match for the same reason as `chip`: only
+    // the 1.0 schema carries it, and the machine build needs it much later.
+    let script_profile = match &loaded {
+        LoadedTestScript::V1_0(script) => script.inputs.profile.clone(),
+        _ => None,
+    };
+
     let (
         script_firmware,
         script_system,
@@ -434,6 +441,14 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // gets a proportionally higher ceiling (wall-clock caps still apply).
     const MAX_ALLOWED_STEPS: u64 = 50_000_000;
     const MAX_ALLOWED_STEPS_ROM_BOOT: u64 = 500_000_000;
+    // An Arduino fast boot running a POLLING sketch is the most step-hungry
+    // shape we support: bring-up alone is tens of millions, and every poll
+    // costs four I2C sensor reads with a ready-spin. Ryan's rig reaches only
+    // ~126M cycles inside the 500M rom-boot ceiling — one status line, far too
+    // early to assert on anything a stimulus caused. The ceiling exists to
+    // catch CI misconfiguration, not to cap a legitimately long run, and the
+    // wall-clock caps still bound a runaway sim.
+    const MAX_ALLOWED_STEPS_ARDUINO_FAST_BOOT: u64 = 4_000_000_000;
     // A run boots the real ROM (and needs the higher ceiling) not only when
     // --rom-boot is set, but whenever it captures/resumes an app-entry snapshot
     // OR a flash-image env is present: the compiled-source ESP32-C3/S3 path
@@ -450,7 +465,19 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         || args.resume_snapshot.is_some()
         || flash_env_present("LABWIRED_ESP32C3_FLASH")
         || flash_env_present("LABWIRED_ESP32S3_FLASH");
-    let max_allowed_steps = if rom_boot_effective {
+    // An Arduino-ESP32 fast boot spends tens of millions of steps in
+    // initArduino + FreeRTOS bring-up before the sketch's setup() runs, and a
+    // sketch that then POLLS (Ryan's bay-occupancy rig reads four sensors
+    // through an I2C switch) needs many more before it has produced enough
+    // output to assert on. At the 50M ceiling such a run stopped with ~47
+    // bytes of UART and stop_reason=max_steps, which reads like a broken
+    // firmware rather than a budget the runner refused to grant. Give it the
+    // same headroom rom-boot already gets — acceptance markers still halt
+    // early, and the wall-clock caps still bound a runaway sim.
+    let arduino_fast_boot = script_profile.as_deref() == Some("arduino-esp32");
+    let max_allowed_steps = if arduino_fast_boot {
+        MAX_ALLOWED_STEPS_ARDUINO_FAST_BOOT
+    } else if rom_boot_effective {
         MAX_ALLOWED_STEPS_ROM_BOOT
     } else {
         MAX_ALLOWED_STEPS
@@ -1052,10 +1079,45 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     &mut machine.bus,
                     &firmware_bytes,
                 );
-                super::esp32_boot_state::install_xtensa_freertos_workarounds(
-                    &mut machine.bus,
-                    &firmware_bytes,
-                );
+                // Skipped under the arduino-esp32 profile: that profile installs
+                // the SAME `xthal_window_spill_nw` thunk. Installing it twice
+                // patches BREAK bytes over an already-patched site, so the saved
+                // original instruction is lost and the spill helper returns to
+                // garbage — setup() still completed but loop() then produced
+                // nothing, which looked like a firmware hang rather than a
+                // double-install. One owner per thunk.
+                if script_profile.as_deref() != Some("arduino-esp32") {
+                    super::esp32_boot_state::install_xtensa_freertos_workarounds(
+                        &mut machine.bus,
+                        &firmware_bytes,
+                    );
+                }
+                // `inputs.profile: arduino-esp32` opts into the FAST BOOT — the
+                // same profile `snapshot capture` installs, from the one shared
+                // home in core. Without it an Arduino-ESP32 sketch never
+                // reaches setup() here, so the runner that owns `stimuli:` and
+                // assertions could not exercise one at all.
+                //
+                // Installed AFTER the seeds above so its flash thunks are the
+                // last writes into flash — seeding order clobbers otherwise.
+                if script_profile.as_deref() == Some("arduino-esp32") {
+                    let symbols = labwired_loader::extract_arduino_esp32_thunks(&firmware_bytes);
+                    match labwired_core::system::xtensa::install_arduino_esp32_profile(
+                        &mut machine,
+                        symbols,
+                        program.entry_point as u32,
+                    ) {
+                        Ok(p) => eprintln!(
+                            "labwired-cli test: arduino-esp32 fast boot — {} thunks ({} symbols)",
+                            p.thunks_installed,
+                            p.symbols.len()
+                        ),
+                        Err(e) => {
+                            eprintln!("error: arduino-esp32 profile: {e}");
+                            return ExitCode::from(EXIT_RUNTIME_ERROR);
+                        }
+                    }
+                }
                 machine
             };
             let fault_evidence = handle_faults(&mut machine.bus, &faults);

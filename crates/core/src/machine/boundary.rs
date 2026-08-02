@@ -125,6 +125,8 @@ impl<C: Cpu> Machine<C> {
     }
 
     fn release_secondary_cpu_if_requested(&mut self) {
+        // Read before borrowing the CPU mutably.
+        let boot_sp = self.secondary_boot_sp;
         let Some(cpu1) = self.cpu_secondary.as_mut() else {
             return;
         };
@@ -132,6 +134,16 @@ impl<C: Cpu> Machine<C> {
             crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.take())
         {
             cpu1.set_pc(boot_addr);
+            // Releasing a core means giving it a PC *and* a stack. Without the
+            // SP the secondary starts at 0 and its first frame writes near
+            // 0xFFFF_FF3C — a memory-access violation ~86k cycles in, which
+            // reads like a firmware bug rather than a half-released core.
+            // Runners used to set this themselves right after unhalting, which
+            // is why one that drove the authoritative path got a core with no
+            // stack.
+            if let Some(sp) = boot_sp {
+                cpu1.set_sp(sp);
+            }
             cpu1.unhalt();
         }
     }

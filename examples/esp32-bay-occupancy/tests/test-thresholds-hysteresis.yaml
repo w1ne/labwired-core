@@ -1,0 +1,48 @@
+# Ryan's tests 4 and 5: thresholds, and hysteresis between them.
+#
+# Thresholds are entry=2200 (>= becomes PRESENT) and exit=1800 (< becomes
+# EMPTY). The band [1800, 2200) is the DEAD BAND: a count in there argues for
+# whatever the bay already is.
+#
+# Test 4 is the easy half. Test 5 is the half that needs two numbers: bay0 is
+# driven to 3000 (PRESENT) and then to 2000. 2000 is BELOW the entry
+# threshold, so a single-threshold implementation flips it to EMPTY here; with
+# hysteresis it must stay PRESENT. Bay1 walks the mirror image — raised to the
+# same 2000 from EMPTY, it must NOT become PRESENT.
+#
+# Same count, opposite states, in one line of output. No single-threshold
+# implementation can produce that, which is what makes this a real test of
+# hysteresis rather than of a wide margin.
+schema_version: "1.2"
+inputs:
+  # Fast boot: an Arduino-ESP32 sketch does not reach setup() on the
+  # faithful path yet. Named here so the run says which boot it took.
+  profile: "arduino-esp32"
+  system: "../system.yaml"
+  firmware: "../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf"
+limits:
+  max_steps: 3000000000
+assertions:
+  - uart_contains: "bay-occupancy ready"
+  - uart_contains: "BAY 0 ready"
+  - uart_contains: "BAY 3 ready"
+  # Test 4: 3000 is above entry -> PRESENT; 500 is below exit -> EMPTY.
+  - uart_contains: "STATE P3000 E500"
+  # Test 5: both bays now read 2000, inside the dead band, and hold opposite
+  # states because of where each came FROM.
+  - uart_contains: "STATE P2000 E2000"
+stimuli:
+  # Test 4 — unambiguous occupancy on bay0, unambiguous vacancy on bay1.
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  - target: { component: "bay1", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 500
+  # Test 5 — both to 2000. bay0 must stay PRESENT, bay1 must stay EMPTY.
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 400000000 }
+    value: 2000
+  - target: { component: "bay1", channel: "proximity" }
+    trigger: !after_cycles { cycles: 400000000 }
+    value: 2000

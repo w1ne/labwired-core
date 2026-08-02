@@ -1,0 +1,25 @@
+[package]
+name = "ci-two-c3-link"
+version = "0.1.0"
+edition = "2021"
+description = "Engine fixture: two ESP32-C3s exchanging bytes over a cross-linked UART1."
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+
+[[bin]]
+name = "client"
+path = "src/client.rs"
+
+[profile.release]
+opt-level = "s"
+lto = false
+codegen-units = 1
+debug = false
+strip = true
+panic = "abort"
+
+# Standalone: this fixture cross-compiles to riscv32imc and must not be pulled
+# into the host workspace build.
+[workspace]

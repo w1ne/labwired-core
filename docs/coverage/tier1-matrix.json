@@ -39,37 +39,37 @@
   },
   "esp32c3": {
     "adc": {
-      "status": "partial"
+      "status": "pass"
     },
     "clock": {
-      "status": "blocked"
+      "status": "unrecorded"
     },
     "dma": {
-      "status": "blocked"
+      "status": "unrecorded"
     },
     "gpio": {
-      "status": "partial"
+      "status": "pass"
     },
     "i2c": {
-      "status": "blocked"
+      "status": "pass"
     },
     "irq": {
-      "status": "partial"
+      "status": "pass"
     },
     "pwm": {
-      "status": "blocked"
+      "status": "pass"
     },
     "rtc": {
       "status": "na"
     },
     "spi": {
-      "status": "partial"
+      "status": "pass"
     },
     "timer": {
-      "status": "partial"
+      "status": "pass"
     },
     "uart": {
-      "status": "blocked"
+      "status": "pass"
     },
     "wdt": {
       "status": "na"

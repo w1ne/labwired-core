@@ -90,8 +90,18 @@ impl SystemBus {
                 })
                 .unwrap_or(false);
             if is_esp32 {
+                // Low bank in GPIO_OUT (base + 0x04), high bank in GPIO_OUT1
+                // (base + 0x10) with bit = pad - 32. The C3 has only one bank,
+                // and `parse_esp32_gpio_pin` never yields >= 32 for it because
+                // its pads stop at 21.
                 const GPIO_OUT_REG_OFFSET: u64 = 0x04;
-                return Some((bus.peripherals[idx].base + GPIO_OUT_REG_OFFSET, bit));
+                const GPIO_OUT1_REG_OFFSET: u64 = 0x10;
+                let (offset, bit) = if bit >= 32 {
+                    (GPIO_OUT1_REG_OFFSET, bit - 32)
+                } else {
+                    (GPIO_OUT_REG_OFFSET, bit)
+                };
+                return Some((bus.peripherals[idx].base + offset, bit));
             }
         }
         None
@@ -106,10 +116,13 @@ impl SystemBus {
             .trim_start_matches(|c: char| c.is_ascii_alphabetic())
             .trim();
         let num: u8 = digits.parse().ok()?;
-        if num > 31 {
-            return None;
-        }
-        Some(num)
+        // Classic ESP32 pads run 0..=39. The high bank (32..39) lives in
+        // OUT1/ENABLE1 and is modelled, so it must resolve too — capping at 31
+        // here made every high-bank pad unresolvable, and a device wired to one
+        // (an Adafruit TFT FeatherWing puts D/C on GPIO33) silently lost its
+        // control line: `set_dc_source` was never called, so the bus never
+        // latched D/C and the panel framed every byte as a command.
+        (num <= 39).then_some(num)
     }
 
     /// Parse an ESP32-S3 GPIO label ("GPIO48", "gpio8", "IO17", or a bare "48")
@@ -667,7 +680,7 @@ impl SystemBus {
     /// Attach a UART stream device (e.g. an inter-chip wire endpoint) to the
     /// UART peripheral registered under `uart_id`. This is the post-build
     /// counterpart to `AttachCtx::uart().attach_stream(..)`, used by
-    /// `World::from_manifest` to wire `UartCrossLink` endpoints between nodes.
+    /// `World::from_manifest` to wire cross-link endpoints between nodes.
     /// Errors if no such peripheral exists or it is not a UART.
     pub fn attach_uart_stream_by_id(
         &mut self,
@@ -677,15 +690,16 @@ impl SystemBus {
         let idx = self
             .find_peripheral_index_by_name(uart_id)
             .ok_or_else(|| anyhow::anyhow!("no peripheral '{uart_id}'"))?;
-        let any = self.peripherals[idx]
+        // Bind to the CAPABILITY, not a concrete struct. Downcasting to `Uart`
+        // used to reject every family with its own UART model — an ESP32-C3's
+        // `uart1` reported "is not a UART", so two C3s could not be linked at
+        // all. Any model that implements `UartStreamHost` is wireable here.
+        let uart = self.peripherals[idx]
             .dev
-            .as_any_mut()
-            .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not introspectable"))?;
-        let uart = any
-            .downcast_mut::<crate::peripherals::uart::Uart>()
+            .as_uart_stream_host()
             .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not a UART"))?;
-        uart.set_sink(None, false);
-        uart.attach_stream(dev);
+        uart.detach_console_sink();
+        uart.attach_stream_device(dev);
         // This is the one post-build path that appends to a UART's
         // `attached_streams`, so the `iolink_master_attached` cache that
         // `requires_cycle_accurate` reads would otherwise go stale here — a

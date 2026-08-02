@@ -24,6 +24,29 @@ pub struct UartTraceEvent {
     pub byte: u8,
 }
 
+/// A UART model that can host a [`UartStreamDevice`] — the contract an
+/// inter-chip cross-link binds to.
+///
+/// This exists so the cross-link seam names a CAPABILITY rather than one
+/// concrete struct. It used to downcast to [`Uart`], which silently excluded
+/// every chip family with its own UART model: an ESP32-C3's `uart1` reported
+/// "is not a UART" and two C3s could not be wired together at all. A new UART
+/// model now joins by implementing this trait, not by editing the seam.
+pub trait UartStreamHost {
+    /// Bind a peer to this UART's RX/TX paths.
+    fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>);
+
+    /// Stop mirroring TX to the console/capture sink. A cross-linked UART
+    /// carries raw protocol octets, not console text, and letting those into
+    /// the serial monitor floods it with binary that looks identical on both
+    /// peers.
+    fn detach_console_sink(&mut self);
+
+    /// True when any attached peer carries protocol octets — the test
+    /// `attach_uart_tx_sink` uses to leave a linked UART off the console sink.
+    fn hosts_protocol_peer(&self) -> bool;
+}
+
 /// A device that emits bytes through the UART's RX path (e.g. a GPS module).
 pub trait UartStreamDevice: Send {
     /// Called periodically by the bus tick. Returns the next byte to push into UART RX,
@@ -34,6 +57,17 @@ pub trait UartStreamDevice: Send {
     /// Bidirectional peers (e.g. an IO-Link master) override this to receive the
     /// device's responses, complementing `poll` which drives the RX path.
     fn on_tx_byte(&mut self, _byte: u8) {}
+
+    /// True when this peer's traffic is raw protocol octets rather than console
+    /// text, so the UART hosting it must be kept OFF the console capture sink.
+    ///
+    /// Without this, a node's link UART and its console UART push into the same
+    /// buffer and the two byte streams splice together — a two-chip run prints
+    /// `pPiInNgGer up` and no serial assertion can be trusted. Default `false`:
+    /// an ordinary stream device (a GPS emitting NMEA) is console-safe.
+    fn carries_protocol_octets(&self) -> bool {
+        false
+    }
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
@@ -1033,6 +1067,22 @@ impl Uart {
     }
 }
 
+impl UartStreamHost for Uart {
+    fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>) {
+        self.attach_stream(dev);
+    }
+
+    fn detach_console_sink(&mut self) {
+        self.set_sink(None, false);
+    }
+
+    fn hosts_protocol_peer(&self) -> bool {
+        self.attached_streams
+            .iter()
+            .any(|s| s.carries_protocol_octets())
+    }
+}
+
 impl crate::Peripheral for Uart {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let status = self.status_offset();
@@ -1214,6 +1264,10 @@ impl crate::Peripheral for Uart {
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_uart_stream_host(&mut self) -> Option<&mut dyn UartStreamHost> {
         Some(self)
     }
 

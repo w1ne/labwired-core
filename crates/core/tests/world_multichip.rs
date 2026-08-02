@@ -91,7 +91,7 @@ fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
 }
 
 // Task 5: the Phase-1 proof — a master chip running real iolinki-master firmware
-// drives a real iolinki DEVICE-firmware sensor chip over the UartCrossLink and
+// drives a real iolinki DEVICE-firmware sensor chip over the shared UART wire and
 // reaches OPERATE. Requires the built ELFs (master-fw/master.elf and the iolink-dido
 // device ELF); skipped with a clear message if they are missing.
 #[test]

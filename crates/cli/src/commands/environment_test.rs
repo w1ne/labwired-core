@@ -69,14 +69,25 @@ pub(crate) fn run_environment_test(
     if let Some(message) = unsupported_option_message(args) {
         return write_config_error(args, &limits, config, message);
     }
-    if limits.max_steps == 0 || limits.max_steps > 50_000_000 {
+    // Same ceiling rule the single-machine runner uses (see commands/test.rs):
+    // a node that boots the genuine mask ROM spends ~150M steps in the ROM and
+    // 2nd-stage bootloader BEFORE its app runs one instruction, so a flat 50M
+    // would stop every ESP32 world mid-boot and report it as a step limit. The
+    // environment path had no such exception only because worlds were Cortex-M
+    // when it was written.
+    let max_allowed_steps = if manifest_boots_rom(&manifest, &environment_path) {
+        MAX_ALLOWED_STEPS_ROM_BOOT
+    } else {
+        MAX_ALLOWED_STEPS
+    };
+    if limits.max_steps == 0 || limits.max_steps > max_allowed_steps {
         return write_config_error(
             args,
             &limits,
             config,
             format!(
-                "environment max_steps must be between 1 and 50000000 (got {})",
-                limits.max_steps
+                "environment max_steps must be between 1 and {} (got {})",
+                max_allowed_steps, limits.max_steps
             ),
         );
     }
@@ -348,6 +359,33 @@ fn unsupported_option_message(args: &TestArgs) -> Option<String> {
             "environment test scripts do not support {}; topology comes exclusively from inputs.env",
             unsupported.join(", ")
         )
+    })
+}
+
+/// Step ceilings, mirroring `commands::test`. They guard against a
+/// misconfigured run grinding for hours; wall-clock caps still apply on top.
+const MAX_ALLOWED_STEPS: u64 = 50_000_000;
+const MAX_ALLOWED_STEPS_ROM_BOOT: u64 = 500_000_000;
+
+/// True when any node boots from a flash image rather than an ELF.
+///
+/// Keyed off the same thing the node factory uses — the firmware file's magic
+/// bytes — rather than a flag, because an environment script has no `--rom-boot`
+/// to set: a node boots the ROM precisely when its firmware is not an ELF. A
+/// file that cannot be read yields `false` here and the node build reports the
+/// real error a moment later, so this never turns a missing file into a
+/// confusing budget message.
+fn manifest_boots_rom(manifest: &EnvironmentManifest, environment_path: &Path) -> bool {
+    let root = environment_path.parent().unwrap_or_else(|| Path::new("."));
+    manifest.nodes.iter().any(|node| {
+        let mut magic = [0u8; 4];
+        match std::fs::File::open(root.join(&node.firmware)) {
+            Ok(mut file) => {
+                use std::io::Read;
+                file.read_exact(&mut magic).is_ok() && magic != *b"\x7fELF"
+            }
+            Err(_) => false,
+        }
     })
 }
 
@@ -789,6 +827,13 @@ fn write_config_error(
     config: EnvironmentConfig,
     message: String,
 ) -> EnvironmentRunOutcome {
+    // Say it out loud. This used to land ONLY in result.json, so an
+    // environment run without `--output-dir` exited non-zero having printed
+    // nothing at all — a genuine misconfiguration ("peripheral 'uart1' is not
+    // a UART") was indistinguishable from a crash. Artifacts are still written
+    // below for machine consumers; this is for the human at the terminal.
+    eprintln!("error: {message}");
+
     let world_firmware_hash = config.world_firmware_hash.clone();
     let stop_reason = StopReason::ConfigError;
     let details = build_stop_reason_details(&stop_reason, limits, 0, 0, 0, 0, Duration::ZERO, 0);

@@ -2,7 +2,7 @@
 //
 // Task 4: a master chip running the phased service-script firmware
 // (`master-fw-svc`) drives a service-rich device chip (`device-fw-svc`) over the
-// UartCrossLink and, after reaching OPERATE, exercises the full iolinki-master
+// one shared UART wire and, after reaching OPERATE, exercises the full iolinki-master
 // feature surface on the wire: ISDU read (vendor name), cyclic PD output echo,
 // event trigger + read, and data-storage write/readback. Every result is
 // mirrored into `volatile` master globals that this test reads by ELF symbol.
@@ -69,13 +69,13 @@ fn master_u8(world: &World, addr: u64) -> u8 {
     world.machines.get("master").unwrap().read_u8(addr).unwrap()
 }
 
-// Reach the point-to-point C/Q wire as its concrete type for fault injection.
-fn crosslink(world: &mut World) -> &mut labwired_core::network::UartCrossLink {
-    world.interconnects[0]
-        .as_any_mut()
-        .expect("interconnect exposes as_any_mut")
-        .downcast_mut::<labwired_core::network::UartCrossLink>()
-        .expect("interconnect[0] is a UartCrossLink")
+// Corrupt the next `n` bytes the DEVICE (side 1) puts on the C/Q wire. The
+// medium carries the fault, so this reaches it by link id rather than by
+// downcasting an interconnect — serial links need no tick and are not
+// interconnects.
+fn corrupt_device_to_master(world: &World, n: u32) {
+    let link = world.uart_links().first().expect("station has a C/Q link");
+    world.uart_wires().corrupt_next(link.id, 1, n);
 }
 
 // Step every chip to OPERATE (raw master state 3). Returns the iteration it hit.
@@ -105,7 +105,7 @@ fn master_survives_single_crc_corrupted_frame() {
     eprintln!("[crc] reached OPERATE at iteration {op_at}");
 
     // Corrupt the next 2 device->master bytes = exactly one malformed frame.
-    crosslink(&mut world).set_corrupt_b_to_a(2);
+    corrupt_device_to_master(&world, 2);
 
     const MAX_AFTER: u64 = 2_000_000;
     let mut ck_at = None;
@@ -157,7 +157,7 @@ fn sustained_crc_corruption_drives_master_to_error_and_restart() {
     // Corrupt a long run of device->master bytes: spans several response frames,
     // so the retry budget (rx_retry_count < 2, then ERROR on the 3rd bad frame)
     // is exhausted and the port is driven to ERROR.
-    crosslink(&mut world).set_corrupt_b_to_a(32);
+    corrupt_device_to_master(&world, 32);
 
     const MAX_AFTER: u64 = 2_000_000;
     let mut saw_ck = false;

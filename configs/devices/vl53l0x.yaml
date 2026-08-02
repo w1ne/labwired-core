@@ -7,7 +7,8 @@
 #
 #   * `auto_increment` — ST's own API reads a 12-byte block from
 #     RESULT_RANGE_STATUS (0x14) to reach the range bytes at 0x1E, so the
-#     pointer must walk BYTES across declared registers and gaps alike.
+#     pointer must walk BYTES across declared registers and gaps alike. It walks
+#     them on WRITES too: ST block-writes the 6-byte reference-SPAD enable map.
 #   * `unmapped_byte: 0x00` — the hand model answered 0 for every address it
 #     did not decode, and a block read crosses several of those.
 #   * `clear_on_write` — the VL53L0X clears its interrupt when firmware writes
@@ -15,13 +16,39 @@
 #     modelling this as clear_on_read would let a driver that never
 #     acknowledges appear to work. That is the bug class the twin exists to catch.
 #
+# ── What this models, and what it refuses to ──────────────────────────────
+#
+# This descriptor models the registers a datasheet one-shot range needs AND the
+# registers ST's own initialisation sequence (API 1.0.2 — `VL53L0X_DataInit`,
+# `GetDeviceInfo`, `StaticInit`, `PerformRefSpadManagement`,
+# `PerformRefCalibration`, which is exactly what `Adafruit_VL53L0X::begin()`
+# runs) cannot get past. It still refuses to invent copper: an address ST merely
+# writes and never reads back, or reads into a parameter no control flow
+# consults, is left undeclared and answers `unmapped_byte` — the tuning-settings
+# table, the 0x89 supply-voltage pad bit, the 0x8A slave-address register and the
+# bank-1 dynamic-SPAD registers are all in that group. Only the addresses whose
+# ANSWER decides what the driver does next are declared, and each says why.
+#
+# The 0x1C/0x1D range alias the old model answered is still NOT carried over: it
+# was a guess ("some continuous reads"), not a datasheet register, and inventing
+# copper is worse than answering the unmapped default.
+#
 # Datasheet/API notes (ST VL53L0X API 1.0.2, DS UM2039):
 #
-#   0x00      SYSRANGE_START            write 0x01 = one-shot range
+#   0xFF      bank (page) select        selects which map 0x00/0x84/0xB6/… mean
+#   0x00      SYSRANGE_START            write 0x01 = one-shot range; bit 0 is
+#                                       momentary — silicon clears it
+#   0x01      SYSTEM_SEQUENCE_CONFIG    which steps a measurement runs
+#   0x0A      SYSTEM_INTERRUPT_CONFIG_GPIO  interrupt source select (0x04 = new
+#                                       sample ready)
 #   0x0B      SYSTEM_INTERRUPT_CLEAR    write-1-to-clear the range interrupt
-#   0x13      RESULT_INTERRUPT_STATUS   bits 2:0 = interrupt status
+#   0x13      RESULT_INTERRUPT_STATUS   bits 2:0 = asserted interrupt source
 #   0x14      RESULT_RANGE_STATUS       device/range status byte
 #   0x1E,0x1F RESULT_RANGE_VAL          range in mm, 16-bit BIG-endian
+#   0x83/0x90/0x94 (bank 7)             factory NVM readout port
+#   0xB0..0xB5 GLOBAL_CONFIG_SPAD_ENABLES_REF_0..5  reference-SPAD enable map
+#   0xB6 (bank 0) GLOBAL_CONFIG_REF_EN_START_SELECT
+#   0xB6 (bank 1) RESULT_PEAK_SIGNAL_RATE_REF  reference return rate, 9.7 MCPS
 #   0xC0      IDENTIFICATION_MODEL_ID   0xEE
 #   0xC1                                0xAA
 #   0xC2      IDENTIFICATION_REVISION_ID 0x10
@@ -39,10 +66,6 @@
 # ⚠️ On families with no absolute-µs source (STM32, ESP32-classic, nRF52) the
 # clock never advances and the bit degrades to always-ready — the same
 # always-ready constant this part had before. Documented in `DataReady`.
-#
-# The 0x1C/0x1D range alias the old model also answered is NOT carried over: it
-# was a guess ("some continuous reads"), not a datasheet register, and inventing
-# copper is worse than answering the unmapped default.
 type: vl53l0x
 
 behavior:
@@ -53,41 +76,194 @@ behavior:
     # for that to land on the right bytes.
     auto_increment: true
     unmapped_byte: 0x00
+    # ── Register banks ───────────────────────────────────────────────────
+    # The VL53L0X register space is bigger than its 8-bit pointer, so ST's API
+    # bank-switches through 0xFF and the SAME pointer means different silicon
+    # per bank. Two aliases are load-bearing for initialisation and both are
+    # declared below: 0xB6 (configuration in bank 0, a measured rate in bank 1)
+    # and 0x00 (SYSRANGE_START in bank 0, an internal register the "magic"
+    # unlock sequences poke in bank 1). Without the bank select, ST's
+    # `WrByte(0xFF,0x01); WrByte(0x00,0x01)` — which every measurement start
+    # issues — would fire a spurious range, and the reference-rate read would
+    # hand the driver back the configuration byte it had just written.
+    # Bank 0 is the reset state, so a driver that never touches 0xFF (the
+    # datasheet one-shot sequence) sees exactly the map it saw before.
+    page_register: 0xFF
     registers:
+      # The bank select itself: reachable from every bank, by definition.
+      - { name: PAGE_SELECT, addr: 0xFF, width: 1, endian: be, access: rw, reset: 0x00 }
+
+      # ── Bank 0: the documented map ───────────────────────────────────────
       # Firmware writes 0x01 to start a one-shot measurement. rw because the
       # write is what data_ready triggers on.
-      - { name: SYSRANGE_START, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      #
+      # `self_clearing: 0x01` is the fix that lets the vendor API start a
+      # measurement at all: `VL53L0X_StartMeasurement` writes the bit and then
+      # re-reads the register in a loop commented "Wait until start bit has been
+      # cleared", giving up with VL53L0X_ERROR_TIME_OUT after
+      # VL53L0X_DEFAULT_MAX_LOOP (200) polls. Bit 0 is momentary on silicon —
+      # the device clears it once the measurement is under way — so a register
+      # that echoed it back would make every vendor measurement time out.
+      - { name: SYSRANGE_START, addr: 0x00, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00, self_clearing: 0x01 }
+      # Which steps the measurement runs. Declared because ST's StaticInit
+      # writes it and then READS IT BACK to cache as `SequenceConfig`, and
+      # `perform_ref_signal_measurement` saves/restores it around each
+      # reference measurement. An undeclared address would hand back 0x00 and
+      # silently rewrite the driver's own cached sequence to "no steps".
+      - { name: SYSTEM_SEQUENCE_CONFIG, addr: 0x01, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Interrupt source select. StaticInit programs 0x04 = NEW_SAMPLE_READY
+      # (VL53L0X_REG_SYSTEM_INTERRUPT_GPIO_NEW_SAMPLE_READY), and that is the
+      # value `VL53L0X_GetMeasurementDataReady` compares RESULT_INTERRUPT_STATUS
+      # against — see the ready_mask note on the data_ready rule below.
+      - { name: SYSTEM_INTERRUPT_CONFIG_GPIO, addr: 0x0A, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
       # Write-1-to-clear interrupt acknowledge.
-      - { name: SYSTEM_INTERRUPT_CLEAR, addr: 0x0B, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: SYSTEM_INTERRUPT_CLEAR, addr: 0x0B, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
       # Interrupt status. Firmware owns none of it — the model drives bits 2:0
       # via data_ready — so it is read-only and reads 0 until a range completes.
-      - { name: RESULT_INTERRUPT_STATUS, addr: 0x13, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: RESULT_INTERRUPT_STATUS, addr: 0x13, page: 0x00, width: 1, endian: be, access: r, reset: 0x00 }
       # Device/range status. 0x00 = no error, matching the old model.
-      - { name: RESULT_RANGE_STATUS, addr: 0x14, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: RESULT_RANGE_STATUS, addr: 0x14, page: 0x00, width: 1, endian: be, access: r, reset: 0x00 }
       # The range itself: 16-bit big-endian millimetres straight off the
       # `distance` input channel. Raw mm IS the datasheet unit, so no scaling.
-      - { name: RESULT_RANGE_VAL, addr: 0x1E, width: 2, endian: be, access: r, source: distance }
+      - { name: RESULT_RANGE_VAL, addr: 0x1E, page: 0x00, width: 2, endian: be, access: r, source: distance }
+      # Reference-SPAD enable map, six bytes = 48 bits (44 used). ST's
+      # `set_ref_spad_map` block-WRITES all six and `get_ref_spad_map` reads them
+      # straight back and compares byte for byte, failing the whole init with
+      # VL53L0X_ERROR_REF_SPAD_INIT on any mismatch — so these must be real
+      # read/write storage, not undeclared addresses that swallow the write.
+      - { name: GLOBAL_CONFIG_SPAD_ENABLES_REF_0, addr: 0xB0, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GLOBAL_CONFIG_SPAD_ENABLES_REF_1, addr: 0xB1, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GLOBAL_CONFIG_SPAD_ENABLES_REF_2, addr: 0xB2, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GLOBAL_CONFIG_SPAD_ENABLES_REF_3, addr: 0xB3, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GLOBAL_CONFIG_SPAD_ENABLES_REF_4, addr: 0xB4, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GLOBAL_CONFIG_SPAD_ENABLES_REF_5, addr: 0xB5, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      # First reference SPAD of the window of interest (ST writes 0xB4).
+      # Declared so the bank-0 write cannot leak into the bank-1 measurement
+      # register that shares this pointer.
+      - { name: GLOBAL_CONFIG_REF_EN_START_SELECT, addr: 0xB6, page: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
       # Identification. Adafruit_VL53L0X and the ST API both refuse to
       # initialize unless the model id reads 0xEE, so these are load-bearing.
-      - { name: IDENTIFICATION_MODEL_ID, addr: 0xC0, width: 1, endian: be, access: r, reset: 0xEE }
-      - { name: IDENTIFICATION_MODEL_ID_1, addr: 0xC1, width: 1, endian: be, access: r, reset: 0xAA }
-      - { name: IDENTIFICATION_REVISION_ID, addr: 0xC2, width: 1, endian: be, access: r, reset: 0x10 }
+      # 0xC2 = 0x10 is also what makes `VL53L0X_get_device_info` report cut 1.1
+      # (ProductRevisionMinor = revision_id >> 4), which Adafruit's begin()
+      # rejects any other value of.
+      - { name: IDENTIFICATION_MODEL_ID, addr: 0xC0, page: 0x00, width: 1, endian: be, access: r, reset: 0xEE }
+      - { name: IDENTIFICATION_MODEL_ID_1, addr: 0xC1, page: 0x00, width: 1, endian: be, access: r, reset: 0xAA }
+      - { name: IDENTIFICATION_REVISION_ID, addr: 0xC2, page: 0x00, width: 1, endian: be, access: r, reset: 0x10 }
+
+      # ── Bank 1: the reference-path measurement ───────────────────────────
+      # RESULT_PEAK_SIGNAL_RATE_REF: the return rate of the INTERNAL reference
+      # path in 9.7 fixed-point MCPS, read by `perform_ref_signal_measurement`
+      # after every reference measurement.
+      #
+      # It is not a stimulus — no target distance changes it — it is set by how
+      # many reference SPADs are enabled, which is precisely the relation ST's
+      # `perform_ref_spad_management` closes its loop on: enable one more good
+      # SPAD, re-measure, stop when the rate reaches targetRefRate (0x0A00 =
+      # 20 MCPS). So the model IS that relation: rate = enabled reference SPADs
+      # × per-SPAD rate, counted straight off the enable map the driver just
+      # wrote. per_bit 0x0100 = 2.0 MCPS per SPAD, which is the calibration that
+      # makes the part self-consistent — it reaches ST's 20 MCPS target at 10
+      # SPADs, the same reference-SPAD count the factory NVM record below
+      # reports. A constant here would instead either stall that loop forever
+      # (rate never reaches the target) or push it down the "signal too high
+      # even at the minimum" branch that a real 20 MCPS part never takes.
+      - name: RESULT_PEAK_SIGNAL_RATE_REF
+        addr: 0xB6
+        page: 0x01
+        width: 2
+        endian: be
+        access: r
+        popcount:
+          registers:
+            - GLOBAL_CONFIG_SPAD_ENABLES_REF_0
+            - GLOBAL_CONFIG_SPAD_ENABLES_REF_1
+            - GLOBAL_CONFIG_SPAD_ENABLES_REF_2
+            - GLOBAL_CONFIG_SPAD_ENABLES_REF_3
+            - GLOBAL_CONFIG_SPAD_ENABLES_REF_4
+            - GLOBAL_CONFIG_SPAD_ENABLES_REF_5
+          per_bit: 0x0100
+
+      # ── Bank 7: the factory NVM readout port ─────────────────────────────
+      # `VL53L0X_get_info_from_device` reads the factory record through these
+      # three registers (see the `indexed_tables` entry below for the protocol).
+      # The strobe's bit 0 is the DEVICE's answer, so firmware may not write it:
+      # write_mask 0xFE leaves the other bits (ST sets bit 2 around the NVM
+      # access) as plain storage that round-trips its read-modify-write.
+      - { name: NVM_STROBE, addr: 0x83, page: 0x07, width: 1, endian: be, access: rw, reset: 0x00, write_mask: 0xFE }
+      - { name: NVM_DATA, addr: 0x90, page: 0x07, width: 4, endian: be, access: r, reset: 0x00 }
+      - { name: NVM_INDEX, addr: 0x94, page: 0x07, width: 1, endian: be, access: rw, reset: 0x00 }
+
+    # ── Factory NVM record ────────────────────────────────────────────────
+    # ST's API reads the part's factory record over an indexed port rather than
+    # from the register map: write the index to 0x94, hand the device the strobe
+    # (write 0x00 to 0x83), poll 0x83 until the device raises it, then read the
+    # 32-bit word out of 0x90. `VL53L0X_device_read_strobe` gives up with
+    # VL53L0X_ERROR_TIME_OUT after 200 polls, which fails BOTH
+    # `VL53L0X_GetDeviceInfo` and `VL53L0X_StaticInit` — a device that does not
+    # answer this port cannot be initialised by the vendor API at all.
+    #
+    # Only the two indices whose CONTENT decides control flow are stored. The
+    # rest of the record (module id, revision, the 18-character product id, the
+    # 400 mm signal-rate/distance calibration) is per-part factory data this
+    # twin has no way to know, and nothing on the initialisation path branches
+    # on it — those indices latch 0, the same answer an unprogrammed cell gives,
+    # and the API carries them through untouched. Inventing a serial number
+    # would be inventing copper.
+    #
+    #   0x6B  reference-SPAD record: count = bits 14:8, type = bit 15.
+    #         `VL53L0X_StaticInit` VALIDATES it (type > 1, or type 1 with count
+    #         > 32, or type 0 with count > 12 ⇒ "NVM value invalid") and falls
+    #         back to a full re-characterisation when it fails. 0x0A00 = 10
+    #         non-aperture SPADs: a valid record, and the same count ST's own
+    #         convergence lands on against this model's reference rate.
+    #   0x24  good-SPAD map bytes 0..3, 0x25 bytes 4..5 (only 44 of the 48 bits
+    #         are SPADs). All-good — which is exactly the map ST's reference
+    #         implementation documents itself as assuming ("Currently the good
+    #         spad map is initialised to 'All good'"). A blank map instead makes
+    #         `enable_ref_spads` fail immediately with
+    #         VL53L0X_ERROR_REF_SPAD_INIT, because there is no next good SPAD.
+    indexed_tables:
+      - name: nvm
+        index_register: NVM_INDEX
+        strobe_register: NVM_STROBE
+        strobe_arm_value: 0x00
+        strobe_mask: 0x01
+        data_register: NVM_DATA
+        # An on-die NVM fetch is sub-microsecond; the master cannot poll it
+        # faster than one I²C read frame (≈300 µs at 100 kHz), so silicon has
+        # always already finished by the first poll. Modelled as that, not as a
+        # bit that is simply wired high: the strobe drops when firmware arms it
+        # and only comes back after the fetch has latched.
+        access_us: 0
+        entries:
+          0x6B: 0x00000A00
+          0x24: 0xFFFFFFFF
+          0x25: 0xFFFF0000
+
     data_ready:
       # Write 0x01 to SYSRANGE_START → 33 ms later bits 2:0 of
       # RESULT_INTERRUPT_STATUS read set → firmware acknowledges by writing
       # SYSTEM_INTERRUPT_CLEAR. Reading the range does NOT clear it.
+      #
+      # ready_mask is 0x04, not "all three bits": bits 2:0 of
+      # RESULT_INTERRUPT_STATUS report WHICH source asserted, and the source
+      # every polling driver configures (via SYSTEM_INTERRUPT_CONFIG_GPIO above)
+      # is 0x04 = new sample ready. `VL53L0X_GetMeasurementDataReady` compares
+      # for EQUALITY with that configured functionality, so a status byte of
+      # 0x07 reads as "not ready" forever and every vendor measurement times
+      # out. Drivers that merely test `status & 0x07 != 0` are unaffected.
       - name: range
         start_register: SYSRANGE_START
         start_mask: 0x01
         ready_register: RESULT_INTERRUPT_STATUS
-        ready_mask: 0x07
+        ready_mask: 0x04
         conversion_us: 33000
         clear_on_write: [SYSTEM_INTERRUPT_CLEAR]
 
 metadata:
   label: "VL53L0X ToF"
   summary: "Laser time-of-flight distance sensor over I²C (ST VL53L0X)."
-  detail: "STMicroelectronics VL53L0X at 0x29. Identification and range-result registers for common Arduino drivers, with byte-wise pointer auto-increment so ST's own 12-byte block read from RESULT_RANGE_STATUS reaches the range bytes. A one-shot range takes ST's default 33 ms timing budget, after which RESULT_INTERRUPT_STATUS reads set until firmware writes SYSTEM_INTERRUPT_CLEAR. Host sets distance in mm via SimInput; the ranging algorithm itself is not simulated."
+  detail: "STMicroelectronics VL53L0X at 0x29. Models the datasheet one-shot range AND the register surface ST's own API 1.0.2 initialisation walks, so the stock Adafruit_VL53L0X library completes begin() and ranges: banked registers behind the 0xFF page select, the factory NVM readout port, the reference-SPAD enable map with a reference return rate that scales with the SPADs enabled, and a momentary SYSRANGE_START bit. A one-shot range takes ST's default 33 ms timing budget, after which RESULT_INTERRUPT_STATUS reports 0x04 (new sample ready) until firmware writes SYSTEM_INTERRUPT_CLEAR. Host sets distance in mm via SimInput; the ranging algorithm itself is not simulated."
   category: i2c
   config_keys:
     - name: i2c_address

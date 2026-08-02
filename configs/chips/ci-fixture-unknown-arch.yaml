@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Fixture for the world node factory's architecture dispatch: a chip that
+# parses cleanly but names no architecture the engine has a machine for. Used
+# to prove such a node fails at build time instead of joining the world as a
+# machine that never executes anything.
+name: "ci-fixture-unknown-arch"
+arch: "unknown"
+registers_count: 16
+flash:
+  base: 0x80000000
+  size: "128KB"
+ram:
+  base: 0x80020000
+  size: "64KB"
+peripherals:
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x4000C000
+    size: "1KB"

@@ -277,6 +277,31 @@ fn esp32_rom_ets_printf_formats_and_reaches_the_sink() {
     );
 }
 
+// An Adafruit TFT FeatherWing puts the panel's D/C line on GPIO33 — the HIGH
+// bank. The pin->output-register resolver capped at pad 31, so that pin was
+// unresolvable, `set_dc_source` was never called, and the bus never latched
+// D/C. The panel then framed every byte as a command: display on, zero pixels,
+// no error anywhere. Both banks must resolve, to the register that actually
+// holds the pad.
+#[test]
+fn esp32_high_bank_pads_resolve_to_the_out1_register() {
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+    let gpio_base = {
+        let idx = bus.find_peripheral_index_by_name("gpio").expect("gpio");
+        bus.peripherals[idx].base
+    };
+
+    let low = SystemBus::resolve_pin_odr_pub(&bus, "GPIO5").expect("low bank resolves");
+    assert_eq!(low, (gpio_base + 0x04, 5), "GPIO5 -> GPIO_OUT bit 5");
+
+    let high = SystemBus::resolve_pin_odr_pub(&bus, "GPIO33").expect("high bank must resolve");
+    assert_eq!(high, (gpio_base + 0x10, 1), "GPIO33 -> GPIO_OUT1 bit 1");
+
+    // Pads stop at 39 on this part; 40 is not a pin.
+    assert!(SystemBus::resolve_pin_odr_pub(&bus, "GPIO40").is_none());
+}
+
 #[test]
 fn esp32_uart0_ahb_fifo_emits_to_sink() {
     // Classic ESP32 IDF writes TX via UART_FIFO_AHB_REG(0)=0x6000_0000, not APB.

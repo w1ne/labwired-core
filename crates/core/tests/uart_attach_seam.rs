@@ -1,5 +1,5 @@
 // Task 2: prove SystemBus::attach_uart_stream_by_id wires a *live* stream onto a
-// named UART (the seam World::from_manifest uses to wire UartCrossLink endpoints).
+// named UART (the seam World::from_manifest uses to wire cross-link endpoints).
 
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::uart::UartStreamDevice;
