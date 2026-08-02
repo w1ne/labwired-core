@@ -298,6 +298,323 @@ pub fn ratchet_regressions(snapshot: &Tier1Matrix, live: &Tier1Matrix) -> Vec<St
     out
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Merge-base baseline ratchet
+//
+// WHY THIS EXISTS. `ratchet_regressions` compares the COMMITTED snapshot against
+// a live run. Any change that regenerates the snapshot makes those two equal by
+// construction, so the ratchet is green no matter how far a row drops. That is
+// not hypothetical: the ESP32-C3 row went from 8 `pass` cells to 0 across two
+// onboarding PRs (STM32H735 2026-07-21, STM32F401 2026-07-28) that touched no
+// C3 file at all — they simply regenerated the snapshot on machines where the
+// C3 fixture had gone stale. CI was green the whole way.
+//
+// The fix is to compare the live run against a baseline the author of the
+// change cannot move: the matrix as it is recorded OUTSIDE the change.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Repo-relative path of the committed matrix snapshot.
+pub const MATRIX_PATH: &str = "docs/coverage/tier1-matrix.json";
+
+/// Repo-relative path of the acknowledgement file for intentional drops.
+pub const RATCHET_ACK_PATH: &str = "docs/coverage/tier1-ratchet-ack.yaml";
+
+/// Ref the baseline is taken against when the env override is unset.
+pub const DEFAULT_BASELINE_REF: &str = "origin/main";
+
+/// Override for [`DEFAULT_BASELINE_REF`] — forks, release branches, and the
+/// gate's own proof runs. It selects WHICH ref plays the role of the trunk; it
+/// can never switch the gate off, and an unresolvable ref is a hard error.
+pub const BASELINE_REF_ENV: &str = "LABWIRED_TIER1_BASELINE_REF";
+
+/// Minimum length of an ack `reason`. An acknowledgement has to say something;
+/// "wip" is silence with extra steps.
+const MIN_ACK_REASON_LEN: usize = 30;
+
+/// A cell that dropped below the baseline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Regression {
+    pub chip: String,
+    pub class: String,
+    /// What the live run reported (the baseline side is always `pass`).
+    pub to: CellStatus,
+}
+
+impl Regression {
+    /// `chip/class` — the key an ack entry names.
+    pub fn cell(&self) -> String {
+        format!("{}/{}", self.chip, self.class)
+    }
+}
+
+impl std::fmt::Display for Regression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: pass -> {}", self.cell(), self.to.as_str())
+    }
+}
+
+/// Cells recorded `Pass` in `baseline` that are not `Pass` in `live`.
+///
+/// Deliberately identical in spirit to [`ratchet_regressions`], but structured
+/// so the ack matcher can key on chip+class. A chip absent from `live` is not
+/// reported here — that case is [`skipped_chips_with_recorded_passes`], which
+/// the gate runs against the baseline too.
+pub fn baseline_regressions(baseline: &Tier1Matrix, live: &Tier1Matrix) -> Vec<Regression> {
+    let mut out = Vec::new();
+    for (chip, row) in &baseline.0 {
+        for (class, base_cell) in row {
+            if base_cell.status != CellStatus::Pass {
+                continue;
+            }
+            let Some(live_cell) = live.0.get(chip).and_then(|r| r.get(class)) else {
+                continue; // chip/class not exercised in this run
+            };
+            if live_cell.status != CellStatus::Pass {
+                out.push(Regression {
+                    chip: chip.clone(),
+                    class: class.clone(),
+                    to: live_cell.status,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// One acknowledged, intentional drop. Named explicitly — silence is never
+/// sufficient. Mirrors the `drift_ack` convention in `validation/manifest.yaml`:
+/// one trailing key that has to COVER the specific observed drift, plus prose.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RatchetAck {
+    /// `chip/class`, e.g. `esp32c3/i2c`.
+    pub cell: String,
+    /// The status the live run is expected to report. An ack for `partial` does
+    /// NOT cover a later slide to `blocked`.
+    pub to: String,
+    /// Why the drop is intentional. Must be substantive.
+    pub reason: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RatchetAckDoc {
+    #[serde(default)]
+    acks: Vec<RatchetAck>,
+}
+
+/// Load the ack file. A missing file means "no acknowledgements" (the normal
+/// state); a malformed one is a hard error — a gate must never read a broken
+/// ack file as an empty one.
+pub fn load_ratchet_acks(root: &Path) -> Result<Vec<RatchetAck>, String> {
+    let path = root.join(RATCHET_ACK_PATH);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let doc: RatchetAckDoc =
+        serde_yaml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(doc.acks)
+}
+
+/// Resolve the baseline commit for the ratchet, as a `(description, commit)`
+/// pair. See [`resolve_baseline_matrix`] for the rule.
+fn git(root: &Path, args: &[&str]) -> Result<String, String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {}: {e}", args.join(" ")))?;
+    if !out.status.success() {
+        return Err(format!(
+            "git {} failed ({}): {}",
+            args.join(" "),
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The ref the baseline is taken against.
+pub fn baseline_ref() -> String {
+    std::env::var(BASELINE_REF_ENV).unwrap_or_else(|_| DEFAULT_BASELINE_REF.to_string())
+}
+
+/// Resolve the immovable baseline matrix, plus a human description of where it
+/// came from.
+///
+/// Rule, in one sentence: **compare against the newest recorded matrix that the
+/// change under test did not write.**
+///
+/// * `merge-base(HEAD, baseline_ref) != HEAD` — a branch. The baseline is the
+///   matrix at the merge base, i.e. what the trunk says today. Regenerating the
+///   snapshot on the branch cannot move it.
+/// * `merge-base == HEAD` — we ARE on (or at) the trunk. The baseline is the
+///   matrix as of the commit before the newest one that touched the file, so a
+///   commit that lowers the matrix is measured against the matrix it replaced.
+///   If HEAD did not touch the file there is nothing new to ratchet and the
+///   baseline is simply the current recorded matrix (the committed-vs-live
+///   ratchet still covers engine drift).
+///
+/// EVERY failure to establish a baseline is an error. This function never
+/// returns an "unknown, assume fine" value: a gate that cannot find its
+/// baseline and passes anyway is the same bug it exists to prevent.
+pub fn resolve_baseline_matrix(root: &Path) -> Result<(String, Tier1Matrix), String> {
+    resolve_baseline_matrix_against(root, &baseline_ref())
+}
+
+/// [`resolve_baseline_matrix`] with the trunk ref passed explicitly, so callers
+/// (and tests) never have to mutate the process environment to choose one.
+pub fn resolve_baseline_matrix_against(
+    root: &Path,
+    base_ref: &str,
+) -> Result<(String, Tier1Matrix), String> {
+    // A shallow clone cannot be trusted to resolve a merge base or to walk the
+    // file's history, and a wrong baseline is indistinguishable from a green
+    // gate. Fail loudly with the fix instead of guessing.
+    if git(root, &["rev-parse", "--is-shallow-repository"])? == "true" {
+        return Err(format!(
+            "tier1 ratchet: this is a SHALLOW clone, so the baseline cannot be established. \
+             Deepen it first (`git fetch --unshallow origin` or \
+             `actions/checkout` with `fetch-depth: 0`) and make sure `{base_ref}` exists. \
+             Refusing to run: a gate that cannot find its baseline must not pass."
+        ));
+    }
+
+    let head = git(root, &["rev-parse", "HEAD"])?;
+    let merge_base = git(root, &["merge-base", "HEAD", base_ref]).map_err(|e| {
+        format!(
+            "tier1 ratchet: cannot compute merge-base(HEAD, {base_ref}): {e}. \
+             Fetch the baseline ref (`git fetch --no-tags origin \
+             +refs/heads/main:refs/remotes/origin/main`) or point {BASELINE_REF_ENV} \
+             at a ref that exists. Refusing to run without a baseline."
+        )
+    })?;
+
+    let (commit, how) = if merge_base != head {
+        (merge_base.clone(), format!("merge-base with {base_ref}"))
+    } else {
+        // On the trunk: the newest commit that touched the matrix, and the one
+        // before it.
+        let log = git(
+            root,
+            &[
+                "log",
+                "--format=%H",
+                "--first-parent",
+                "HEAD",
+                "--",
+                MATRIX_PATH,
+            ],
+        )?;
+        let revs: Vec<&str> = log.lines().collect();
+        match revs.first() {
+            // HEAD itself changed the matrix — measure against what it replaced.
+            Some(&newest) if newest == head => match revs.get(1) {
+                Some(&prev) => (
+                    prev.to_string(),
+                    "previous recorded matrix (HEAD is on the baseline branch)".to_string(),
+                ),
+                // The commit that introduced the file. There is no earlier
+                // recorded state, so there are no `pass` cells to protect.
+                None => {
+                    return Ok((
+                        "no prior matrix revision (file introduced by HEAD)".to_string(),
+                        Tier1Matrix::default(),
+                    ))
+                }
+            },
+            // The matrix is unchanged at HEAD: nothing new to ratchet. The
+            // committed-vs-live ratchet still guards engine drift.
+            Some(&newest) => (
+                newest.to_string(),
+                "newest recorded matrix (unchanged at HEAD)".to_string(),
+            ),
+            None => {
+                return Ok((
+                    "no recorded matrix revision".to_string(),
+                    Tier1Matrix::default(),
+                ))
+            }
+        }
+    };
+
+    let blob = git(root, &["show", &format!("{commit}:{MATRIX_PATH}")]).map_err(|e| {
+        format!("tier1 ratchet: cannot read {MATRIX_PATH} at baseline {commit}: {e}")
+    })?;
+    let matrix: Tier1Matrix = serde_json::from_str(&blob).map_err(|e| {
+        format!("tier1 ratchet: baseline {MATRIX_PATH} at {commit} does not parse: {e}")
+    })?;
+    Ok((
+        format!("{} ({how})", &commit[..commit.len().min(12)]),
+        matrix,
+    ))
+}
+
+/// Run the baseline gate: every `pass` the baseline records must still pass
+/// live, unless an ack names it. Returns the list of failure lines — empty
+/// means the gate is green.
+///
+/// Failures come in four flavours, all fatal:
+/// 1. an unacknowledged drop;
+/// 2. an ack whose `to` does not match what the live run reported (an ack for
+///    `partial` must not silently cover a slide to `blocked`);
+/// 3. an ack with no substantive `reason`, or a malformed `cell`;
+/// 4. a STALE ack — one that matches no live regression. Stale acks are an
+///    error so the ratchet re-arms the moment a cell recovers, and so drops
+///    cannot be pre-acknowledged before they happen.
+pub fn baseline_gate_failures(
+    baseline: &Tier1Matrix,
+    live: &Tier1Matrix,
+    acks: &[RatchetAck],
+) -> Vec<String> {
+    let regressions = baseline_regressions(baseline, live);
+    let mut failures = Vec::new();
+    let mut matched: BTreeSet<String> = BTreeSet::new();
+
+    for ack in acks {
+        if ack.cell.split('/').count() != 2 || ack.cell.split('/').any(|p| p.is_empty()) {
+            failures.push(format!(
+                "{RATCHET_ACK_PATH}: malformed cell {:?} (want `chip/class`)",
+                ack.cell
+            ));
+            continue;
+        }
+        if ack.reason.trim().len() < MIN_ACK_REASON_LEN {
+            failures.push(format!(
+                "{RATCHET_ACK_PATH}: ack for {} has no substantive reason \
+                 (need >= {MIN_ACK_REASON_LEN} chars saying why the drop is intentional)",
+                ack.cell
+            ));
+            continue;
+        }
+        match regressions.iter().find(|r| r.cell() == ack.cell) {
+            Some(r) if r.to.as_str() == ack.to => {
+                matched.insert(ack.cell.clone());
+            }
+            Some(r) => failures.push(format!(
+                "{RATCHET_ACK_PATH}: ack for {} records to={:?} but the live run reports {:?}. \
+                 An ack must cover the drop actually observed.",
+                ack.cell,
+                ack.to,
+                r.to.as_str()
+            )),
+            None => failures.push(format!(
+                "{RATCHET_ACK_PATH}: STALE ack for {} — no such regression in this run. \
+                 Delete it (the cell recovered, and the ratchet must re-arm).",
+                ack.cell
+            )),
+        }
+    }
+
+    for r in &regressions {
+        if !matched.contains(&r.cell()) {
+            failures.push(format!("{r}"));
+        }
+    }
+    failures
+}
+
 /// One matrix target. Paths are workspace-root-relative.
 pub struct Tier1Target {
     pub chip: &'static str,
@@ -864,6 +1181,291 @@ peripherals:
         let skipped = vec!["esp32s3".to_string()];
         let disarmed = skipped_chips_with_recorded_passes(&snap, &skipped);
         assert!(disarmed.is_empty());
+    }
+
+    // ── merge-base baseline ratchet ──────────────────────────────────────
+
+    fn matrix(rows: &[(&str, &[(&str, CellStatus)])]) -> Tier1Matrix {
+        let mut m = Tier1Matrix::default();
+        for (chip, cells) in rows {
+            let row = m.0.entry((*chip).to_string()).or_default();
+            for (class, status) in *cells {
+                row.insert((*class).to_string(), cell(*status));
+            }
+        }
+        m
+    }
+
+    fn ack(cell: &str, to: &str) -> RatchetAck {
+        RatchetAck {
+            cell: cell.to_string(),
+            to: to.to_string(),
+            reason: "fixture retired on purpose; tracked in the follow-up issue".into(),
+        }
+    }
+
+    /// THE BUG THIS GATE EXISTS FOR: regenerating the snapshot makes the
+    /// committed-vs-live ratchet vacuous, while the baseline gate still bites.
+    #[test]
+    fn regenerating_the_snapshot_defeats_the_old_ratchet_but_not_the_baseline() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        // The change under test broke i2c AND regenerated the snapshot, so the
+        // committed snapshot and the live run agree.
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Blocked)])]);
+        let regenerated_snapshot = live.clone();
+
+        assert!(
+            ratchet_regressions(&regenerated_snapshot, &live).is_empty(),
+            "old ratchet is vacuous once the snapshot is regenerated"
+        );
+        assert_eq!(
+            baseline_gate_failures(&baseline, &live, &[]),
+            vec!["esp32c3/i2c: pass -> blocked".to_string()]
+        );
+    }
+
+    #[test]
+    fn baseline_gate_is_green_when_nothing_dropped() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        assert!(baseline_gate_failures(&baseline, &live, &[]).is_empty());
+    }
+
+    #[test]
+    fn improvements_and_non_pass_baseline_cells_move_freely() {
+        let baseline = matrix(&[(
+            "esp32c3",
+            &[("i2c", CellStatus::Blocked), ("spi", CellStatus::Partial)],
+        )]);
+        let live = matrix(&[(
+            "esp32c3",
+            &[("i2c", CellStatus::Pass), ("spi", CellStatus::Blocked)],
+        )]);
+        assert!(baseline_gate_failures(&baseline, &live, &[]).is_empty());
+    }
+
+    #[test]
+    fn every_non_pass_status_counts_as_a_drop() {
+        let baseline = matrix(&[(
+            "c",
+            &[
+                ("a", CellStatus::Pass),
+                ("b", CellStatus::Pass),
+                ("d", CellStatus::Pass),
+                ("e", CellStatus::Pass),
+            ],
+        )]);
+        let live = matrix(&[(
+            "c",
+            &[
+                ("a", CellStatus::Partial),
+                ("b", CellStatus::Blocked),
+                ("d", CellStatus::Unrecorded),
+                ("e", CellStatus::Na),
+            ],
+        )]);
+        assert_eq!(
+            baseline_gate_failures(&baseline, &live, &[]),
+            vec![
+                "c/a: pass -> partial",
+                "c/b: pass -> blocked",
+                "c/d: pass -> unrecorded",
+                "c/e: pass -> na",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_named_ack_covers_its_drop() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Blocked)])]);
+        assert!(
+            baseline_gate_failures(&baseline, &live, &[ack("esp32c3/i2c", "blocked")]).is_empty()
+        );
+    }
+
+    #[test]
+    fn an_ack_does_not_cover_a_different_drop() {
+        let baseline = matrix(&[(
+            "esp32c3",
+            &[("i2c", CellStatus::Pass), ("pwm", CellStatus::Pass)],
+        )]);
+        let live = matrix(&[(
+            "esp32c3",
+            &[("i2c", CellStatus::Blocked), ("pwm", CellStatus::Blocked)],
+        )]);
+        // Silence on pwm is not sufficient just because i2c was acked.
+        assert_eq!(
+            baseline_gate_failures(&baseline, &live, &[ack("esp32c3/i2c", "blocked")]),
+            vec!["esp32c3/pwm: pass -> blocked".to_string()]
+        );
+    }
+
+    #[test]
+    fn an_ack_must_cover_the_status_actually_observed() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Blocked)])]);
+        // Acked as `partial`, but the cell actually slid all the way to blocked.
+        let failures = baseline_gate_failures(&baseline, &live, &[ack("esp32c3/i2c", "partial")]);
+        // The mis-scoped ack is rejected AND the drop stays unacknowledged.
+        assert_eq!(failures.len(), 2, "{failures:?}");
+        assert!(
+            failures[0].contains("records to=\"partial\""),
+            "{failures:?}"
+        );
+        assert!(
+            failures[0].contains("live run reports \"blocked\""),
+            "{failures:?}"
+        );
+        assert_eq!(failures[1], "esp32c3/i2c: pass -> blocked");
+    }
+
+    #[test]
+    fn a_stale_ack_is_an_error_so_the_ratchet_re_arms() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]); // recovered
+        let failures = baseline_gate_failures(&baseline, &live, &[ack("esp32c3/i2c", "blocked")]);
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(failures[0].contains("STALE ack"), "{failures:?}");
+    }
+
+    #[test]
+    fn an_ack_without_a_substantive_reason_is_rejected() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Blocked)])]);
+        let mut a = ack("esp32c3/i2c", "blocked");
+        a.reason = "wip".into();
+        let failures = baseline_gate_failures(&baseline, &live, &[a]);
+        // Rejected as an ack AND the drop still reported.
+        assert_eq!(failures.len(), 2, "{failures:?}");
+        assert!(
+            failures[0].contains("no substantive reason"),
+            "{failures:?}"
+        );
+        assert_eq!(failures[1], "esp32c3/i2c: pass -> blocked");
+    }
+
+    #[test]
+    fn a_malformed_ack_cell_is_rejected() {
+        let baseline = matrix(&[("esp32c3", &[("i2c", CellStatus::Pass)])]);
+        let live = matrix(&[("esp32c3", &[("i2c", CellStatus::Blocked)])]);
+        let mut a = ack("esp32c3-i2c", "blocked");
+        a.cell = "esp32c3-i2c".into();
+        let failures = baseline_gate_failures(&baseline, &live, &[a]);
+        assert!(failures[0].contains("malformed cell"), "{failures:?}");
+    }
+
+    #[test]
+    fn ack_file_absent_means_no_acks_but_malformed_is_fatal() {
+        let dir = std::env::temp_dir().join(format!("tier1-acks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("docs/coverage")).unwrap();
+        assert!(load_ratchet_acks(&dir).unwrap().is_empty(), "absent = none");
+
+        std::fs::write(
+            dir.join(RATCHET_ACK_PATH),
+            "acks: [ this is not: a list ]\n",
+        )
+        .unwrap();
+        assert!(
+            load_ratchet_acks(&dir).is_err(),
+            "a broken ack file must never read as an empty one"
+        );
+
+        std::fs::write(
+            dir.join(RATCHET_ACK_PATH),
+            "acks:\n  - cell: esp32c3/i2c\n    to: blocked\n    reason: \"because reasons that are long enough\"\n",
+        )
+        .unwrap();
+        let acks = load_ratchet_acks(&dir).unwrap();
+        assert_eq!(acks.len(), 1);
+        assert_eq!(acks[0].cell, "esp32c3/i2c");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// THE SHALLOW-CLONE TRAP. CI checkouts are shallow by default, and on a
+    /// shallow clone a merge base is either unresolvable or wrong. Either way
+    /// the gate must refuse to run rather than report "no regressions".
+    #[test]
+    fn baseline_refuses_to_run_on_a_shallow_clone() {
+        let dir = std::env::temp_dir().join(format!("tier1-shallow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["config", "user.email", "t@example.com"],
+            vec!["config", "user.name", "t"],
+        ] {
+            git(&dir, &args).unwrap();
+        }
+        std::fs::write(dir.join("f"), "x").unwrap();
+        git(&dir, &["add", "-A"]).unwrap();
+        git(&dir, &["commit", "-qm", "seed", "--no-verify"]).unwrap();
+        // What `git clone --depth` leaves behind; `rev-parse
+        // --is-shallow-repository` keys on exactly this file.
+        std::fs::write(dir.join(".git/shallow"), "").unwrap();
+
+        let err = resolve_baseline_matrix_against(&dir, DEFAULT_BASELINE_REF)
+            .expect_err("a shallow clone must be an error, never a silent pass");
+        assert!(err.contains("SHALLOW"), "{err}");
+        assert!(err.contains("fetch-depth: 0"), "{err}");
+        assert!(err.contains("must not pass"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn baseline_resolves_in_this_repo_and_parses() {
+        // Runs against the real checkout: proves the git plumbing works and
+        // that whatever it returns is a parseable matrix.
+        let (desc, baseline) =
+            resolve_baseline_matrix_against(&workspace_root(), DEFAULT_BASELINE_REF)
+                .unwrap_or_else(|e| panic!("baseline resolution failed: {e}"));
+        assert!(!desc.is_empty());
+        // Either a real matrix, or the documented "no prior revision" empty one.
+        for row in baseline.0.values() {
+            assert!(!row.is_empty());
+        }
+    }
+
+    #[test]
+    fn baseline_fails_loudly_on_an_unresolvable_ref() {
+        let err = resolve_baseline_matrix_against(
+            &workspace_root(),
+            "refs/heads/definitely-not-a-real-ref",
+        )
+        .expect_err("an unresolvable baseline ref must be an error, not a pass");
+        assert!(err.contains("merge-base"), "{err}");
+        assert!(err.contains("Refusing to run"), "{err}");
+    }
+
+    #[test]
+    fn baseline_fails_loudly_outside_a_git_repo() {
+        let dir = std::env::temp_dir().join(format!("tier1-nogit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let err = resolve_baseline_matrix_against(&dir, DEFAULT_BASELINE_REF)
+            .expect_err("no git repo must be an error, not an empty baseline");
+        assert!(err.contains("git"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The shipped ack file must always be valid, whatever it contains.
+    #[test]
+    fn committed_ack_file_is_well_formed() {
+        let acks = load_ratchet_acks(&workspace_root()).expect("ack file parses");
+        for a in &acks {
+            assert_eq!(a.cell.split('/').count(), 2, "{:?}", a.cell);
+            assert!(
+                a.reason.trim().len() >= MIN_ACK_REASON_LEN,
+                "ack for {} needs a substantive reason",
+                a.cell
+            );
+            assert!(
+                ["pass", "partial", "blocked", "na", "unrecorded"].contains(&a.to.as_str()),
+                "ack for {} has unknown status {:?}",
+                a.cell,
+                a.to
+            );
+        }
     }
 
     #[test]

@@ -278,7 +278,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # fetch-depth: 0 — the Tier-1 baseline ratchet resolves its baseline from
+      # `git merge-base HEAD origin/main`. On a shallow checkout that cannot be
+      # computed, and the gate FAILS rather than guessing (see
+      # tier1::resolve_baseline_matrix). Do not lower this.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # actions/checkout fetches the checked-out ref only, so the
+      # origin/main remote-tracking ref the ratchet needs may not exist yet.
+      - name: Fetch Tier-1 ratchet baseline ref
+        run: git fetch --no-tags --prune origin +refs/heads/main:refs/remotes/origin/main
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
