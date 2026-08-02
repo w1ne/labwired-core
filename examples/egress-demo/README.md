@@ -34,6 +34,13 @@ interconnects:
       buffer_max: 4096
 ```
 
+`config` is a closed mapping: `uart`, `transport`, and `encoding` are optional
+non-empty strings; `url` is a required non-empty string; `topic` is required
+only for MQTT and invalid for TCP/HTTP; and `buffer_max` is a positive integer.
+The only transport values are `tcp`, `mqtt`, and `http`; the only encodings are
+`raw`, `ndjson-trace`, and `frames-json`. Unknown or mistyped keys are rejected
+before the world starts.
+
 ## Point it at your own backend
 
 | Transport | `url` | Notes |

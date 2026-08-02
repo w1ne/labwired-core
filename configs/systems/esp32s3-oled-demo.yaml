@@ -1,0 +1,33 @@
+# LabWired - ESP32-S3 + SSD1306 OLED lab.
+#
+# A Waveshare ESP32-S3-Zero drives a 128x64 SSD1306 OLED over the command-list
+# I2C0 controller (0x6001_3000). The panel sits at 0x3C on SDA=GPIO8 / SCL=GPIO9
+# (3V3 / GND power). The curated esp-hal firmware (demo-esp32s3-oled.elf) inits
+# I2C0, brings up the SSD1306, and paints an "S3 OK" / "LabWired" frame; the
+# browser twin boots that ELF FAITHFULLY on the genuine Espressif boot ROM
+# (zero thunks) and the register-level I2C driver drives the real panel model.
+name: "esp32s3-oled-demo"
+chip: "../chips/esp32s3.yaml"
+
+external_devices:
+  # SSD1306 OLED on I2C0 at 0x3C. The ESP32-S3 system builder attaches the
+  # panel to the command-list Esp32s3I2c at i2c0; the firmware's register-level
+  # driver drives it with genuine I2C transactions.
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x3C
+
+board_io:
+  # Framebuffer readback binding (WasmSimulator::get_ssd1306_framebuffer). The
+  # S3 GPIO matrix routes I2C0 SDA/SCL to GPIO8/GPIO9; the behavioral controller
+  # responds at its register block regardless, so the pin is documentation here.
+  - id: "oled"
+    kind: "i2c_device"
+    peripheral: "i2c0"
+    pin: 8
+    signal: "input"
+    active_high: true
+    i2c_address: 0x3C
+    device_type: "oled-ssd1306"

@@ -6,6 +6,7 @@
 
 //! `labwired machine` snapshot load/inspect.
 
+use crate::artifacts::Snapshot;
 use crate::*;
 
 pub(crate) fn run_machine_load(args: LoadArgs) -> ExitCode {
@@ -41,13 +42,26 @@ pub(crate) fn run_machine_load(args: LoadArgs) -> ExitCode {
     };
 
     // Reconstruct bus
-    let mut bus = match labwired_core::system::builder::build_system_bus(config.system.as_deref()) {
-        Ok(bus) => bus,
+    let reconstructed_system = match config
+        .system
+        .as_deref()
+        .map(labwired_config::ResolvedSystem::from_manifest_file)
+        .transpose()
+    {
+        Ok(s) => s,
         Err(e) => {
-            error!("Failed to reconstruct bus: {:#}", e);
+            error!("Failed to load system manifest: {:#}", e);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+    let mut bus =
+        match labwired_core::system::builder::build_system_bus(reconstructed_system.as_ref()) {
+            Ok(bus) => bus,
+            Err(e) => {
+                error!("Failed to reconstruct bus: {:#}", e);
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
 
     // Load original firmware (required for memory content that isn't in snapshot yet)
     // Note: Our snapshot currently doesn't include full RAM/Flash dumps to keep it small.

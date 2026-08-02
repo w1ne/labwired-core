@@ -1,0 +1,21 @@
+# LabWired - NUCLEO-L073RZ IO/UART smoke test
+#
+# Strict-onboarding gate. Flips stm32l073 from [SKIP] to [PASS] in
+# crates/core/tests/strict_onboarding.rs: builds the demo firmware (if absent),
+# runs it, and asserts the silicon-validated boot tokens appear on USART2.
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv6m-none-eabi/release/firmware-l073-demo"
+  system: "../system.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  # Device identity read back from the real DBGMCU (silicon-matched).
+  - uart_contains: "DEV=20086447"
+  # CLK=00000004 proves the stm32l0 RCC SW->SWS clock-switch readback fix.
+  - uart_contains: "CLK=00000004"
+  # CRC peripheral output — matches real silicon byte-for-byte.
+  - uart_contains: "CRC=B874177A"
+  # DMA mem-to-mem copy verified.
+  - uart_contains: "DMA=OK"
+  - expected_stop_reason: max_steps

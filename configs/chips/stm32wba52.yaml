@@ -51,7 +51,12 @@ peripherals:
   - id: "lpuart1"
     type: "uart"
     base_address: 0x46002400
-    irq: 45
+    # CMSIS LPUART1_IRQn = 48 (RM0493 / stm32wba52.svd). This read 45, which
+    # is SPI1_IRQn — and `spi1` below correctly claims 45, so the console UART
+    # and SPI1 were dispatching through the same NVIC vector: an LPUART1 RX
+    # interrupt ran the firmware's SPI1 handler, and a handler installed at
+    # LPUART1's real slot 48 never fired at all.
+    irq: 48
     config:
       profile: "stm32v2"
   - id: "flash"

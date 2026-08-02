@@ -529,6 +529,10 @@ use crate::peripherals::kit::{
 pub struct Ssd1680Tricolor290Kit;
 pub static SSD1680_TRICOLOR_290_KIT: Ssd1680Tricolor290Kit = Ssd1680Tricolor290Kit;
 
+/// Level the BUSY line rests at when the panel is not refreshing. SSD1680
+/// asserts BUSY HIGH, so idle is LOW.
+const BUSY_IDLE_LEVEL: bool = false;
+
 static SSD1680_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
     inputs: &[],
     device_type: "ssd1680_tricolor_290",
@@ -539,11 +543,25 @@ static SSD1680_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
              playground board.",
     transport: Transport::Spi,
     category: Category::Spi,
-    config_keys: &[ConfigKey {
-        name: "cs_pin",
-        ty: ConfigType::Str,
-        doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
-    }],
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
+        },
+        ConfigKey {
+            name: "dc_pin",
+            ty: ConfigType::Str,
+            doc: "Data/Command GPIO pin (e.g. \"GPIO17\"). Required for command framing.",
+        },
+        ConfigKey {
+            name: "busy_pin",
+            ty: ConfigType::Str,
+            doc: "BUSY status GPIO the host polls (e.g. \"GPIO4\"). Held LOW (idle) \
+                  because this model refreshes instantly; without it a driver that \
+                  waits on BUSY blocks until its timeout and the panel stays blank.",
+        },
+    ],
     labs: &[
         LabRef {
             board_id: "epaper-tricolor-lab",
@@ -577,6 +595,20 @@ impl PeripheralKit for Ssd1680Tricolor290Kit {
             })?;
             panel = panel.with_dc_pin(dc_pin.to_string());
             crate::peripherals::spi::SpiDevice::set_dc_source(&mut panel, odr_addr, bit);
+        }
+        // BUSY: SSD1680 drives it HIGH while refreshing, LOW when idle, and
+        // GxEPD2 blocks in _waitWhileBusy until it reads not-busy (its
+        // `_busy_level` is HIGH for this controller, and the escape timeout is
+        // 30 s — unreachable at simulated speed). This model refreshes
+        // instantaneously, so "always idle" is the faithful reading of it, and
+        // an undriven line is what left the ESP32 e-reader lab blank.
+        //
+        // NOTE: uc8151d_tricolor_290 is the exact opposite polarity — idle
+        // HIGH. Do not copy this constant across without checking the
+        // controller's datasheet and the driver's `_busy_level`.
+        if let Some(busy_pin) = ctx.config_str("busy_pin") {
+            let busy_pin = busy_pin.to_string();
+            ctx.drive_pin_input(&busy_pin, BUSY_IDLE_LEVEL)?;
         }
         ctx.attach_spi_device(Box::new(panel))?;
         Ok(())

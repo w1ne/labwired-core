@@ -2,7 +2,8 @@ name: Rust Core Nightly
 
 on:
   schedule:
-    - cron: '0 2 * * 0' # Sundays 02:00 UTC
+    # Nightly 02:00 UTC (was Sunday-only). Slow coverage / validation lives here.
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 permissions:

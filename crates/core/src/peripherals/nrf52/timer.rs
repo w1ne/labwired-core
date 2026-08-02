@@ -34,7 +34,7 @@
 //! firmware control flow depends on. Absolute wall-clock fidelity is
 //! left to a future cycle-budget calibration pass.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 // ── Register offsets (PS §6.30.13, table 159) ────────────────────────────────
 
@@ -79,10 +79,21 @@ pub struct Nrf52Timer {
     prescaler: u32,
     cc: [u32; 6],
 
-    // Dynamic state — driven by tick().
+    // Dynamic state — driven by tick() / scheduler sync.
     running: bool,
     counter: u32,
     prescaler_accum: u32,
+
+    /// Bus-published cycle clock (event-scheduler builds). When present the
+    /// model is walk-independent: counter advances lazily via `sync_to` and
+    /// compare matches ride scheduled events.
+    clock: Option<CycleClock>,
+    /// CPU cycle of the last `sync_to` / advance.
+    anchor: u64,
+    /// Bumped each arm so stale compare events die on arrival.
+    arm_seq: u32,
+    /// True while a compare event is live in the scheduler.
+    scheduled: bool,
 }
 
 impl Default for Nrf52Timer {
@@ -99,6 +110,10 @@ impl Default for Nrf52Timer {
             running: false,
             counter: 0,
             prescaler_accum: 0,
+            clock: None,
+            anchor: 0,
+            arm_seq: 0,
+            scheduled: false,
         }
     }
 }
@@ -139,9 +154,107 @@ impl Nrf52Timer {
             _ => unreachable!(),
         }
     }
+
+    fn scheduler_mode(&self) -> bool {
+        self.clock.is_some()
+    }
+
+    /// Advance the timer by `cycles` base ticks (one base tick ≡ one legacy
+    /// `tick()` call). Collects compare matches into `fired` / `irq`.
+    fn advance_cycles(&mut self, cycles: u64) -> PeripheralTickResult {
+        if !self.running || self.mode != MODE_TIMER || cycles == 0 {
+            return PeripheralTickResult::default();
+        }
+        let divider = 1u32 << (self.prescaler & 0xF);
+        let mask = self.counter_mask();
+        let mut irq = false;
+        let mut fired_events = Vec::new();
+        let mut remaining = cycles;
+        while remaining > 0 {
+            let need = (divider - self.prescaler_accum) as u64;
+            if remaining < need {
+                self.prescaler_accum = self.prescaler_accum.wrapping_add(remaining as u32);
+                break;
+            }
+            remaining -= need;
+            self.prescaler_accum = 0;
+            self.counter = self.counter.wrapping_add(1) & mask;
+            for i in 0..self.num_cc {
+                if self.counter == (self.cc[i] & mask) {
+                    self.events_compare[i] = 1;
+                    fired_events.push(OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32);
+                    if (self.inten >> (INTEN_COMPARE_SHIFT + i as u32)) & 1 != 0 {
+                        irq = true;
+                    }
+                    if (self.shorts >> (SHORT_COMPARE_CLEAR_SHIFT + i as u32)) & 1 != 0 {
+                        self.counter = 0;
+                    }
+                    if (self.shorts >> (SHORT_COMPARE_STOP_SHIFT + i as u32)) & 1 != 0 {
+                        self.running = false;
+                    }
+                }
+            }
+            if !self.running {
+                break;
+            }
+        }
+        PeripheralTickResult {
+            irq,
+            cycles: 1,
+            fired_events,
+            ..Default::default()
+        }
+    }
+
+    /// CPU cycles until the next compare match (prescaler-aware). None if
+    /// stopped / no finite compare.
+    fn cycles_until_next_compare(&self) -> Option<u64> {
+        if !self.running || self.mode != MODE_TIMER {
+            return None;
+        }
+        let divider = 1u32 << (self.prescaler & 0xF);
+        let mask = self.counter_mask();
+        let mut best: Option<u64> = None;
+        for i in 0..self.num_cc {
+            let target = self.cc[i] & mask;
+            let cur = self.counter & mask;
+            // Steps of counter until match (at least 1 if already equal —
+            // next wrap-around match, since match fires on the increment
+            // that lands on CC).
+            let steps = if target > cur {
+                (target - cur) as u64
+            } else {
+                // equal or behind: full period to re-hit
+                (mask as u64 + 1) - (cur as u64) + (target as u64)
+            };
+            // Cycles: finish current prescaler quantum, then (steps-1) full
+            // quanta, then the final quantum that increments onto target.
+            let first = (divider - self.prescaler_accum) as u64;
+            let cycles = first + (steps - 1) * divider as u64;
+            best = Some(best.map_or(cycles, |b| b.min(cycles)));
+        }
+        best
+    }
 }
 
 impl Peripheral for Nrf52Timer {
+    /// Not in the per-cycle walk while idle. `tick()` above early-returns a
+    /// default `PeripheralTickResult` in exactly this state, so skipping the
+    /// visit removes dispatch and never an effect — byte-identical.
+    ///
+    /// A stopped timer, or one in COUNTER mode (which advances only on TASKS_COUNT, an MMIO write), has nothing to advance per cycle.
+    ///
+    /// Paired with `legacy_tick_dynamic() -> true` because this condition can
+    /// change during the model's own tick; the bus also re-arms via
+    /// `refresh_legacy_tick_index()` on every MMIO write, which is what makes
+    /// the wake path (a firmware write to the start/trigger task) safe.
+    fn legacy_tick_active(&self) -> bool {
+        self.running && self.mode == MODE_TIMER
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -261,55 +374,76 @@ impl Peripheral for Nrf52Timer {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if !self.running || self.mode != MODE_TIMER {
-            return PeripheralTickResult::default();
+        // Legacy / feature-off path. Scheduler mode skips the walk.
+        self.advance_cycles(1)
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if !self.scheduler_mode() {
+            return;
         }
-
-        // Prescaler divides the base clock by 2^PRESCALER. We accumulate
-        // one base tick per call; when the accumulator reaches the divider
-        // we advance the main counter by one.
-        let divider = 1u32 << (self.prescaler & 0xF);
-        self.prescaler_accum = self.prescaler_accum.wrapping_add(1);
-        if self.prescaler_accum < divider {
-            return PeripheralTickResult {
-                cycles: 1,
-                ..Default::default()
-            };
+        if now_cycle <= self.anchor {
+            return;
         }
-        self.prescaler_accum = 0;
+        let delta = now_cycle - self.anchor;
+        self.anchor = now_cycle;
+        let _ = self.advance_cycles(delta);
+    }
 
-        let mask = self.counter_mask();
-        self.counter = self.counter.wrapping_add(1) & mask;
-
-        let mut irq = false;
-        let mut fired_events = Vec::new();
-        for i in 0..self.num_cc {
-            if self.counter == (self.cc[i] & mask) {
-                // Per PS §6.30.5: the compare-match pulse re-arms on every
-                // hardware tick — PPI and NVIC see it whether or not the
-                // EVENTS_COMPARE register is still latched from a prior
-                // match.  We always emit the fired_event; the register
-                // bit becomes a sticky latch that firmware clears.
-                self.events_compare[i] = 1;
-                fired_events.push(OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32);
-
-                if (self.inten >> (INTEN_COMPARE_SHIFT + i as u32)) & 1 != 0 {
-                    irq = true;
-                }
-
-                if (self.shorts >> (SHORT_COMPARE_CLEAR_SHIFT + i as u32)) & 1 != 0 {
-                    self.counter = 0;
-                }
-                if (self.shorts >> (SHORT_COMPARE_STOP_SHIFT + i as u32)) & 1 != 0 {
-                    self.running = false;
-                }
-            }
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() || !self.running || self.mode != MODE_TIMER {
+            self.scheduled = false;
+            return Vec::new();
         }
+        let Some(d) = self.cycles_until_next_compare() else {
+            self.scheduled = false;
+            return Vec::new();
+        };
+        // Always re-arm with a fresh token so a CC rewrite invalidates the
+        // previous deadline. Dedup is not required for correctness.
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        self.scheduled = true;
+        vec![(d.saturating_sub(1), self.arm_seq)]
+    }
 
-        PeripheralTickResult {
-            irq,
-            cycles: 1,
-            fired_events,
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        // Advance to the event's cycle; compare latch happens inside advance.
+        // Keep `arm_seq` unchanged so `reschedule_delay` reuses this token
+        // (Machine reschedules with the same event_token).
+        let now = sched.now();
+        let res = if now > self.anchor {
+            let delta = now - self.anchor;
+            self.anchor = now;
+            self.advance_cycles(delta)
+        } else {
+            PeripheralTickResult::default()
+        };
+        self.scheduled = self.running && self.mode == MODE_TIMER;
+        let next = self.cycles_until_next_compare();
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            reschedule_delay: next.map(|d| d.saturating_sub(1)),
             ..Default::default()
         }
     }

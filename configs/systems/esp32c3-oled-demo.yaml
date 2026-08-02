@@ -7,6 +7,7 @@
 # twin boots that flash image faithfully through the real mask ROM (rom-boot).
 name: "esp32c3-oled-demo"
 chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   # SSD1306 OLED on I2C0 at 0x3C. Attached to the C3 command-list controller by
@@ -15,13 +16,16 @@ external_devices:
   - id: "oled"
     type: "oled-ssd1306"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x3C
 
 board_io:
   # Framebuffer readback binding (WasmSimulator::get_ssd1306_framebuffer). The
-  # C3 GPIO matrix routes I2C0 SDA/SCL to GPIO4/GPIO5; the behavioral controller
-  # responds at its register block regardless, so the pin is documentation here.
+  # C3 GPIO matrix must route I2C0 SDA/SCL to the declared GPIO4/GPIO5 pads
+  # before the behavioral controller can reach this panel.
   - id: "oled"
     kind: "i2c_device"
     peripheral: "i2c0"

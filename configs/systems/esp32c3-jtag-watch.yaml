@@ -1,0 +1,20 @@
+# Headless Arduino watch fixture: input-only, no display or external devices.
+name: "esp32c3-jtag-watch"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices: []
+
+board_io:
+  - id: "mode"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 4
+    signal: "input"
+    active_high: false
+  - id: "set"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 5
+    signal: "input"
+    active_high: false

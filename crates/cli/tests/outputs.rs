@@ -178,6 +178,74 @@ bad_field: 123
 }
 
 #[test]
+fn test_env_script_missing_environment_reports_environment_shaped_config_error() {
+    let script = write_temp_file(
+        "script-env-missing-manifest",
+        r#"
+schema_version: "1.0"
+inputs:
+  env: "twonode-env.yaml"
+limits:
+  max_steps: 10
+assertions:
+  - memory_value:
+      node: tester
+      address: 0x20010000
+      expected_value: 1
+"#,
+    );
+
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let output_dir =
+        std::env::temp_dir().join(format!("labwired-tests-env-config-error-{}", nonce));
+    let _ = std::fs::remove_dir_all(&output_dir);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--script",
+            script.to_str().unwrap(),
+            "--no-uart-stdout",
+            "--output-dir",
+            output_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert_eq!(output.status.code(), Some(2)); // EXIT_CONFIG_ERROR
+
+    let result: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output_dir.join("result.json")).unwrap())
+            .unwrap();
+    assert_eq!(result["status"], "error");
+    assert_eq!(result["stop_reason"], "config_error");
+    assert_eq!(result["limits"]["max_steps"], 10);
+    assert!(result["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("failed to load environment"));
+    assert!(result["config"].get("firmware").is_none());
+    assert!(result["config"]["environment"]
+        .as_str()
+        .unwrap_or_default()
+        .ends_with("twonode-env.yaml"));
+
+    let snapshot: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output_dir.join("snapshot.json")).unwrap())
+            .unwrap();
+    assert_eq!(snapshot["type"], "environment");
+    assert_eq!(snapshot["status"], "error");
+    assert!(output_dir.join("uart.log").is_file());
+    let junit = std::fs::read_to_string(output_dir.join("junit.xml")).unwrap();
+    assert!(junit.contains("config error"));
+
+    let _ = std::fs::remove_dir_all(&output_dir);
+}
+
+#[test]
 fn test_cli_test_mode_junit_flag_writes_file() {
     let fw_abs = std::fs::canonicalize("../../tests/fixtures/uart-ok-thumbv7m.elf").unwrap();
     let script = write_temp_file(
@@ -435,6 +503,49 @@ limits:
     // Should fail due to MAX_ALLOWED_STEPS guard
     assert!(!output.status.success());
     assert_eq!(output.status.code(), Some(2)); // EXIT_CONFIG_ERROR
+}
+
+// A resume run IS a rom-boot run — it restarts from a snapshot the rom-boot
+// path captured — so it must get the rom-boot step ceiling, not the fast-boot
+// one. The hosted ESP32-S3 budget (100M) sits between the two, so applying the
+// wrong ceiling here rejects every cached S3 run before it executes a step.
+#[test]
+fn test_cli_resume_snapshot_uses_rom_boot_step_ceiling() {
+    let fw_abs = std::fs::canonicalize("../../tests/fixtures/uart-ok-thumbv7m.elf").unwrap();
+    let script = write_temp_file(
+        "script-resume-huge",
+        &format!(
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "{}"
+limits:
+  max_steps: 100000000
+  wall_time_ms: 1000
+"#,
+            fw_abs.to_str().unwrap()
+        ),
+    );
+    // The snapshot itself need not be loadable: the step-ceiling check runs
+    // before any snapshot is read, so its rejection is what this asserts on.
+    let missing_snapshot = std::env::temp_dir().join("labwired-no-such-snapshot.lwrs");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--script",
+            script.to_str().unwrap(),
+            "--resume-snapshot",
+            missing_snapshot.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("exceeds MAX_ALLOWED_STEPS"),
+        "a resume run must use the rom-boot ceiling; got: {stderr}"
+    );
 }
 
 #[test]

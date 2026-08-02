@@ -1,0 +1,41 @@
+schema_version: "1.0"
+# CLI smoke test for the nRF52840 + HC-SR04 proximity lab.
+#
+# Mirrors the browser demo and the Rust e2e test (e2e_nrf52840_proximity.rs),
+# but exercises the SAME firmware through the `labwired-cli test` harness so the
+# lab has a reproducible command-line entry point.
+#
+# IMPORTANT: this drives the lab via `test --script` (which loads system.yaml and
+# therefore WIRES the HC-SR04). `run --chip ...` does NOT attach the sensor, so
+# the ECHO line never fires and the ranging statics stay 0.
+#
+# The firmware ranges the sensor and BLE-broadcasts every cycle; a full cycle
+# (TRIG -> ECHO timing -> RADIO TX with blocking event waits) costs millions of
+# CPU steps, so the assertions need a multi-million step budget — a small budget
+# reads the statics before the first cycle completes (they are still 0).
+#
+# Build the firmware first:
+#   cargo build -p firmware-nrf52840-proximity --target thumbv7em-none-eabi --release
+# Then run:
+#   cargo run -q -p labwired-cli -- test \
+#     --script examples/nrf52840-proximity-lab/proximity-smoke.yaml \
+#     --output-dir out/nrf52840-proximity
+inputs:
+  system: "../system.yaml"
+  firmware: "../../../target/thumbv7em-none-eabi/release/firmware-nrf52840-proximity"
+limits:
+  max_steps: 6000000
+assertions:
+  # DISTANCE_MM (0x20000000) ranges the 10 cm target to ~99 mm (0x63). Proves
+  # the ECHO pulse was actually timed (not left at the 0 reset value).
+  - memory_value:
+      address: 0x20000000
+      expected_value: 99
+      size: 4
+  # IN_RANGE (0x20000004) latches to 1: 99 mm is inside the firmware's 500 mm
+  # (50 cm) threshold.
+  - memory_value:
+      address: 0x20000004
+      expected_value: 1
+      size: 4
+  - expected_stop_reason: max_steps

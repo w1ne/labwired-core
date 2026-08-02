@@ -3,6 +3,7 @@
 
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::system;
+use labwired_core::Bus;
 use labwired_core::Cpu;
 use labwired_core::Machine;
 use std::fs;
@@ -51,8 +52,10 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
         name: "test-bench".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

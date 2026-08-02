@@ -365,7 +365,8 @@ peripherals:
     type: "lptim"
     base_address: 0x40009400
     size: "1KB"
-    irq: 78
+    # STM32L476 LPTIM2_IRQn = 66 (SVD); 78 is LCD.
+    irq: 66
 
   # QUADSPI — quad-SPI memory interface (RM0351 §14).
   - id: "quadspi"

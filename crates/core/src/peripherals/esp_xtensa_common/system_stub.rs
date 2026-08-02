@@ -62,6 +62,16 @@ impl Default for SystemStub {
 }
 
 impl Peripheral for SystemStub {
+    // This is a register file only: all state changes happen synchronously on
+    // MMIO writes, with no elapsed-time state, IRQs, DMA, or events.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
@@ -219,6 +229,12 @@ impl RtcCntlStub {
 }
 
 impl Peripheral for RtcCntlStub {
+    // Inert walk: RTC_CNTL register bank; TIME_UPDATE handshake settles on write.
+    // tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
@@ -410,6 +426,16 @@ impl EfuseStub {
 }
 
 impl Peripheral for EfuseStub {
+    // eFuse reads are immutable canned values; the stub has no time-driven
+    // behavior to service from the legacy walk.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

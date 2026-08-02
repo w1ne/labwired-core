@@ -154,6 +154,12 @@ impl Esp32s3Extmem {
 }
 
 impl Peripheral for Esp32s3Extmem {
+    // Inert walk: cache controller; invalidate/sync complete at the
+    // launching write (done bits forced on read). tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.reg(offset & !3);
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)

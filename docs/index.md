@@ -54,4 +54,3 @@ Practical walkthroughs and technical deep-dives:
 
 - **[I2C Sensor Simulation](examples/i2c_sensor_example.md)**: Verify driver code against a mock I2C device.
 - **[DMA & Interrupts](examples/dma_exti_example.md)**: Understanding the two-phase execution model.
-- **[High-Fidelity ADXL345 Verification](verification_lessons_adxl345.md)**: Lessons learned from AI-generated asset "Solid Proofs".

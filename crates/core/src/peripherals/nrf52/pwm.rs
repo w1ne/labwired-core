@@ -13,8 +13,9 @@
 //! EasyDMA buffer in guest RAM (so the sequence registers genuinely drive the
 //! playback), then fires EVENTS_SEQSTARTED[n] (0x108 / 0x10C), EVENTS_SEQEND[n]
 //! (0x110 / 0x114) and EVENTS_PWMPERIODEND (0x118) to reflect the sequence
-//! having played to completion against COUNTERTOP. The RAM read runs on the
-//! next bus tick (same `needs_bus_tick`/`tick_with_bus` pattern as TWIM/SPIM).
+//! having played to completion against COUNTERTOP. The RAM read runs via
+//! dual-path EasyDMA (`tick_with_bus` for bare-bus tests, delay-0 `on_event`
+//! under Machine + event-scheduler).
 //!
 //! **TASKS_STOP (0x004):** fires EVENTS_STOPPED (0x104) synchronously.
 //!
@@ -86,7 +87,8 @@ pub struct Nrf52Pwm {
     seq: [u32; 12], // SEQ[0..1] x 4 words (PTR/CNT/REFRESH/ENDDELAY)
     psel_out: [u32; 4],
 
-    /// Sequence pending for `tick_with_bus`. One of PENDING_{NONE,SEQ0,SEQ1}.
+    /// Sequence pending for EasyDMA engine (`tick_with_bus` / `on_event`).
+    /// One of PENDING_{NONE,SEQ0,SEQ1}.
     pending: u8,
 }
 
@@ -101,6 +103,14 @@ impl Nrf52Pwm {
 }
 
 impl Peripheral for Nrf52Pwm {
+    /// Dual-path EasyDMA: scheduler delay-0 (`on_event`) under Machine +
+    /// walk-free + batched tick interval, and `tick_with_bus` for bare-bus
+    /// unit tests. No time-driven walk work — SEQSTART completes on the next
+    /// cycle via the scheduler under `rec_tick=512`, not at the bus-tick quantum.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -195,15 +205,47 @@ impl Peripheral for Nrf52Pwm {
         Ok(())
     }
 
+    /// Dual path: bus_tick for bare-bus tests; on_event for scheduler.
     fn needs_bus_tick(&self) -> bool {
         self.pending != PENDING_NONE
     }
 
-    /// Sequence playback engine. Runs on the bus tick after TASKS_SEQSTART[n]:
-    /// reads the SEQ[n].CNT duty values out of guest RAM at SEQ[n].PTR (so the
-    /// sequence registers genuinely drive playback) and fires SEQSTARTED[n],
-    /// SEQEND[n] and PWMPERIODEND to reflect the sequence having played.
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.pending != PENDING_NONE {
+            self.do_easydma_seq(bus);
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending != PENDING_NONE {
+            vec![(0, 1)] // SEQSTART EasyDMA drain (delay-0 → next cycle)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == 1 && self.pending != PENDING_NONE {
+            self.do_easydma_seq(bus);
+        }
+        crate::sched::EventResult::default()
+    }
+}
+
+impl Nrf52Pwm {
+    /// Sequence playback engine shared by `tick_with_bus` and `on_event`.
+    /// Reads SEQ[n].CNT duty values from guest RAM at SEQ[n].PTR and fires
+    /// SEQSTARTED[n], SEQEND[n], and PWMPERIODEND.
+    fn do_easydma_seq(&mut self, bus: &mut dyn Bus) {
         let n = match self.pending {
             PENDING_SEQ0 => 0usize,
             PENDING_SEQ1 => 1usize,
@@ -355,5 +397,38 @@ mod tests {
         p.write_u32(OFF_ENABLE, 1).unwrap();
         p.write_u32(OFF_TASKS_STOP, 1).unwrap();
         assert_eq!(p.read_u32(OFF_EVENTS_STOPPED).unwrap(), 1);
+    }
+
+    #[test]
+    fn seqstart_schedules_delay0_event() {
+        let mut p = Nrf52Pwm::new();
+        p.write_u32(OFF_ENABLE, 1).unwrap();
+        assert!(p.uses_scheduler());
+        assert!(p.take_scheduled_events().is_empty());
+        p.write_u32(OFF_TASKS_SEQSTART0, 1).unwrap();
+        assert_eq!(p.take_scheduled_events(), vec![(0, 1)]);
+    }
+
+    #[test]
+    fn on_event_completes_easydma_seq() {
+        use crate::sched::EventScheduler;
+
+        let mut p = Nrf52Pwm::new();
+        let mut bus = FlatRam::new();
+        let base: u64 = 0x2000_0000;
+        bus.write_slice(base, &[0x10, 0x80, 0x20, 0x80]);
+
+        p.write_u32(OFF_ENABLE, 1).unwrap();
+        p.write_u32(OFF_SEQ_FIRST, base as u32).unwrap();
+        p.write_u32(OFF_SEQ_FIRST + 4, 2).unwrap();
+        p.write_u32(OFF_TASKS_SEQSTART0, 1).unwrap();
+
+        let mut sched = EventScheduler::new();
+        let _ = p.on_event(1, &mut sched, &mut bus);
+
+        assert_eq!(p.read_u32(OFF_EVENTS_SEQSTARTED0).unwrap(), 1);
+        assert_eq!(p.read_u32(OFF_EVENTS_SEQEND0).unwrap(), 1);
+        assert_eq!(p.read_u32(OFF_EVENTS_PWMPERIODEND).unwrap(), 1);
+        assert!(!p.needs_bus_tick());
     }
 }

@@ -325,6 +325,11 @@ impl Ledc {
 }
 
 impl Peripheral for Ledc {
+    // Inert walk: classic-ESP32 LEDC is a config-introspection register bank — no PWM edges or timer-counter advance modeled (unlike the C3 LEDC, whose live up-counters DO real tick work); tick() is an explicit no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

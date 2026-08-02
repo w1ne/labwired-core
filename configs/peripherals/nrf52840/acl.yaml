@@ -1,0 +1,333 @@
+peripheral: ACL
+version: 0.1.0
+registers:
+- id: ACL0_ADDR
+  address_offset: 2048
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL0_SIZE
+  address_offset: 2052
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL0_PERM
+  address_offset: 2056
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL1_ADDR
+  address_offset: 2064
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL1_SIZE
+  address_offset: 2068
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL1_PERM
+  address_offset: 2072
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL2_ADDR
+  address_offset: 2080
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL2_SIZE
+  address_offset: 2084
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL2_PERM
+  address_offset: 2088
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL3_ADDR
+  address_offset: 2096
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL3_SIZE
+  address_offset: 2100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL3_PERM
+  address_offset: 2104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL4_ADDR
+  address_offset: 2112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL4_SIZE
+  address_offset: 2116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL4_PERM
+  address_offset: 2120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL5_ADDR
+  address_offset: 2128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL5_SIZE
+  address_offset: 2132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL5_PERM
+  address_offset: 2136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL6_ADDR
+  address_offset: 2144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL6_SIZE
+  address_offset: 2148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL6_PERM
+  address_offset: 2152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+- id: ACL7_ADDR
+  address_offset: 2160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 31
+    - 0
+    description: Start address of flash region n. The start address must point to a flash page boundary.
+  side_effects: null
+- id: ACL7_SIZE
+  address_offset: 2164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 31
+    - 0
+    description: Size of flash region n in bytes. Must be a multiple of the flash page size.
+  side_effects: null
+- id: ACL7_PERM
+  address_offset: 2168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WRITE
+    bit_range:
+    - 1
+    - 1
+    description: Configure write and erase permissions for region n. Writing a '0' has no effect.
+  - name: READ
+    bit_range:
+    - 2
+    - 2
+    description: Configure read permissions for region n. Writing a '0' has no effect.
+  side_effects: null
+interrupts: null
+timing: null

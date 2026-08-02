@@ -1,0 +1,11 @@
+# LabWired - MPU6050 IMU Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/mpu6050-sensor-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "MPU6050 IMU Lab"
+  - uart_contains: "WHO_AM_I=0x"
+  - expected_stop_reason: max_steps

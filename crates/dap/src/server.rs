@@ -1227,15 +1227,18 @@ impl DapServer {
 
                 let final_addr = (addr as i64 + offset) as u64;
 
-                match self.adapter.read_memory(final_addr, count) {
-                    Ok(data) => {
+                match self.adapter.peek_memory(final_addr, count) {
+                    Ok((data, unreadable)) => {
                         let encoded = base64::engine::general_purpose::STANDARD.encode(data);
                         sender.send_response(
                             req_seq,
                             "readMemory",
                             Some(json!({
                                 "address": format!("{:#x}", final_addr),
-                                "unreadableBytes": 0,
+                                // Real count, not a hardcoded 0: bytes outside any
+                                // mapped region are reported as unreadable so the
+                                // memory view shows gaps instead of plausible zeros.
+                                "unreadableBytes": unreadable,
                                 "data": encoded,
                             })),
                         )?;

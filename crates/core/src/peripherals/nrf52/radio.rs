@@ -50,7 +50,7 @@
 
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 // ── Global "virtual air" registry ────────────────────────────────────────────
 //
@@ -118,26 +118,68 @@ pub struct AirFrameTrace {
     pub whitening_iv: u8,
 }
 
-/// Public view of the current TX trace, intended for WASM consumption
-/// by the playground's BLE-air visualization. Most recent frames first.
-pub fn virtual_air_trace_snapshot() -> Vec<AirFrameTrace> {
-    let air = match virtual_air().lock() {
-        Ok(a) => a,
-        Err(_) => return Vec::new(),
-    };
-    air.tx_history.iter().rev().cloned().collect()
+/// A shared BLE "virtual air" medium. Radios minted with the same bus hear each
+/// other's frames (matched by frequency + mode + address); radios on different
+/// buses are fully isolated — the behaviour the former process-static `AIR`
+/// registry could not offer, so two BLE labs (or two workers) can coexist.
+/// `Arc<Mutex<…>>` keeps radios `Send` inside a `Machine` (native requires
+/// `MachineTrait: Send`); the browser is single-threaded so it never contends.
+#[derive(Debug, Clone, Default)]
+pub struct VirtualAirBus {
+    inner: Arc<Mutex<VirtualAir>>,
 }
 
-fn virtual_air() -> &'static Mutex<VirtualAir> {
-    static AIR: OnceLock<Mutex<VirtualAir>> = OnceLock::new();
-    AIR.get_or_init(|| Mutex::new(VirtualAir::default()))
-}
-
-/// Clear the global virtual air (test helper).
-pub fn clear_virtual_air() {
-    if let Ok(mut a) = virtual_air().lock() {
-        a.queues.clear();
+impl VirtualAirBus {
+    pub fn new() -> Self {
+        Self::default()
     }
+
+    /// Most-recent-first snapshot of the TX trace, for the playground's BLE-air
+    /// visualization.
+    pub fn trace_snapshot(&self) -> Vec<AirFrameTrace> {
+        match self.inner.lock() {
+            Ok(a) => a.tx_history.iter().rev().cloned().collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Drop every frequency queue on this bus. Keeps `tx_history` (the UI trace),
+    /// exactly as the former `clear_virtual_air` did.
+    pub fn clear(&self) {
+        if let Ok(mut a) = self.inner.lock() {
+            a.queues.clear();
+        }
+    }
+
+    /// Lock the underlying air for the radio's TX/RX paths (same module).
+    fn lock(&self) -> std::sync::LockResult<std::sync::MutexGuard<'_, VirtualAir>> {
+        self.inner.lock()
+    }
+}
+
+// --- Transitional process-global air (browser back-compat) -------------------
+//
+// Radios built via `Nrf52Radio::new()` share this one module-global bus, and the
+// wasm trace/clear exports below operate on it. One wasm module = one worker =
+// one lab, so this is byte-identical to the former `static AIR`. The follow-up
+// threads a per-lab-group `VirtualAirBus` through an attach seam, after which
+// this global and the two shims are deleted.
+fn default_air_bus() -> &'static VirtualAirBus {
+    static BUS: OnceLock<VirtualAirBus> = OnceLock::new();
+    BUS.get_or_init(VirtualAirBus::new)
+}
+
+/// Public view of the current TX trace on the process-global air, for WASM
+/// consumption by the playground's BLE-air visualization. Most recent first.
+/// Transitional; prefer [`VirtualAirBus::trace_snapshot`] on an owned bus.
+pub fn virtual_air_trace_snapshot() -> Vec<AirFrameTrace> {
+    default_air_bus().trace_snapshot()
+}
+
+/// Clear the process-global air (test/back-compat helper). Prefer
+/// [`VirtualAirBus::clear`] on an owned bus.
+pub fn clear_virtual_air() {
+    default_air_bus().clear();
 }
 
 // ── Tasks (PS §6.20.13, table 222) ───────────────────────────────────────────
@@ -359,6 +401,10 @@ pub struct Nrf52Radio {
     events_devmiss: u32,
     /// Deterministic PRNG state for RSSI sampling.
     rssi_prng: u32,
+    /// The shared air medium this radio transmits into and receives from.
+    /// Radios sharing a bus hear each other; `new()` uses the process-global
+    /// default, `with_air` binds an explicit per-group bus.
+    air: VirtualAirBus,
 }
 
 impl Nrf52Radio {
@@ -366,6 +412,7 @@ impl Nrf52Radio {
         Self {
             // Reset values per PS table 226.
             state: STATE_DISABLED,
+            air: default_air_bus().clone(),
             frequency: 0,
             mode: 0, // Nrf_1Mbit
             pcnf0: 0,
@@ -386,6 +433,13 @@ impl Nrf52Radio {
             modecnf0: 0,
             ..Self::default()
         }
+    }
+
+    /// Build a radio bound to an explicit air bus. Radios sharing a bus hear
+    /// each other; radios on different buses are isolated. Prefer this over
+    /// `new()`'s process-global default once the host owns per-lab-group buses.
+    pub fn with_air(air: VirtualAirBus) -> Self {
+        Self { air, ..Self::new() }
     }
 
     /// Apply SHORTS-style automatic task triggers when an event fires.
@@ -929,7 +983,91 @@ impl Peripheral for Nrf52Radio {
     }
 
     fn needs_bus_tick(&self) -> bool {
+        // Dual path: bus_tick for bare-bus tests; on_event for scheduler.
         self.pending_tx_dma || self.pending_rx_dma
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending_tx_dma || self.pending_rx_dma {
+            return vec![(0, 1)]; // DMA then countdown
+        }
+        if let Some(n) = self.tx_or_rx_cycles_remaining {
+            return vec![((n as u64).saturating_sub(1), 2)];
+        }
+        if self.pending_ready
+            || self.pending_address
+            || self.pending_payload
+            || self.pending_end
+            || self.pending_disabled
+        {
+            return vec![(0, 2)];
+        }
+        Vec::new()
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        // EasyDMA path (token 1, or any event that still has a pending DMA).
+        // Machine may also run `tick_with_bus` via `bus_tick_indices` in the
+        // same boundary *before* this drain — so the countdown can already be
+        // armed when we enter here with pending_tx_dma cleared.
+        if event_token == 1 || self.pending_tx_dma || self.pending_rx_dma {
+            self.tick_with_bus(bus);
+        }
+
+        // Multi-cycle bit-rate air time: commit the END deadline and return.
+        // Pin remaining to 1 so the delayed wake fires ADDRESS/PAYLOAD/END
+        // via `tick()` without re-arming another (n-1) forever. Collapsing
+        // on this same event used to make END fire immediately and hide
+        // MODE/length timing under the scheduler.
+        if let Some(n) = self.tx_or_rx_cycles_remaining {
+            if n > 1 {
+                self.tx_or_rx_cycles_remaining = Some(1);
+                return crate::sched::EventResult {
+                    reschedule_delay: Some((n as u64).saturating_sub(1)),
+                    ..Default::default()
+                };
+            }
+        }
+
+        // remaining is None or 1: drain READY / DISABLED / final air tick.
+        let res = self.tick();
+        let more = self.pending_tx_dma
+            || self.pending_rx_dma
+            || self.tx_or_rx_cycles_remaining.is_some()
+            || self.pending_ready
+            || self.pending_address
+            || self.pending_payload
+            || self.pending_end
+            || self.pending_disabled;
+        let delay = if self.pending_tx_dma || self.pending_rx_dma {
+            Some(0u64)
+        } else if let Some(n) = self.tx_or_rx_cycles_remaining {
+            Some((n as u64).saturating_sub(1))
+        } else if more {
+            Some(1u64)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            mmio_writes: res.mmio_writes,
+            reschedule_delay: delay,
+            ..Default::default()
+        }
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
@@ -1016,7 +1154,7 @@ impl Peripheral for Nrf52Radio {
             // Push to the global virtual air keyed by FREQUENCY. Frames carry
             // their MODE so receivers tuned to a different mode on the same
             // band correctly fail to decode.
-            if let Ok(mut air) = virtual_air().lock() {
+            if let Ok(mut air) = self.air.lock() {
                 let key = self.frequency as u8;
                 let trace = AirFrameTrace {
                     channel: key,
@@ -1056,7 +1194,7 @@ impl Peripheral for Nrf52Radio {
             // are also computed here against the DAB/DAP whitelist.
             let mut popped = None;
             let mut popped_frame_addr: Option<(u32, u8)> = None;
-            if let Ok(mut air) = virtual_air().lock() {
+            if let Ok(mut air) = self.air.lock() {
                 let key = self.frequency as u8;
                 if let Some(queue) = air.queues.get_mut(&key) {
                     let pos = queue
@@ -1459,6 +1597,78 @@ mod tests {
         assert_eq!(bus_rx.read_u8(0x2000_3003).unwrap(), 0xAD);
         assert_eq!(bus_rx.read_u8(0x2000_3004).unwrap(), 0xBE);
         assert_eq!(bus_rx.read_u8(0x2000_3005).unwrap(), 0xEF);
+    }
+
+    #[test]
+    fn air_bus_scopes_delivery() {
+        use crate::bus::SystemBus;
+        use crate::Bus;
+
+        // Run a full BLE TX→RX exchange with the TX radio bound to `tx_air` and
+        // the RX radio bound to `rx_air`; return (crc_status, first payload byte
+        // landed in RX RAM). Explicit per-radio buses — no AIR_GUARD needed.
+        fn exchange(tx_air: VirtualAirBus, rx_air: VirtualAirBus) -> (u32, u8) {
+            let mut bus_tx = SystemBus::new();
+            for (off, v) in [
+                (0u64, 0xAAu8),
+                (1, 4),
+                (2, 0xDE),
+                (3, 0xAD),
+                (4, 0xBE),
+                (5, 0xEF),
+            ] {
+                bus_tx.write_u8(0x2000_0000 + off, v).unwrap();
+            }
+            let mut tx = Nrf52Radio::with_air(tx_air);
+            tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+            tx.write_u32(OFF_PCNF1, 0xFF | (1 << 25)).unwrap();
+            tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+            tx.write_u32(OFF_FREQUENCY, 73).unwrap();
+            tx.write_u32(OFF_MODE, 3).unwrap();
+            tx.write_u32(OFF_DATAWHITEIV, 50).unwrap();
+            tx.write_u32(OFF_CRCINIT, 0x555555).unwrap();
+            tx.write_u32(OFF_BASE0, 0xCAFE_BA00).unwrap();
+            tx.write_u32(OFF_PREFIX0, 0xBE).unwrap();
+            tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+            tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+            tx.tick();
+            tx.write_u32(OFF_TASKS_START, 1).unwrap();
+            tx.tick();
+            tx.tick_with_bus(&mut bus_tx);
+
+            let mut bus_rx = SystemBus::new();
+            let mut rx = Nrf52Radio::with_air(rx_air);
+            rx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+            rx.write_u32(OFF_PCNF1, 0xFF | (1 << 25)).unwrap();
+            rx.write_u32(OFF_PACKETPTR, 0x2000_3000).unwrap();
+            rx.write_u32(OFF_FREQUENCY, 73).unwrap();
+            rx.write_u32(OFF_MODE, 3).unwrap();
+            rx.write_u32(OFF_DATAWHITEIV, 50).unwrap();
+            rx.write_u32(OFF_CRCINIT, 0x555555).unwrap();
+            rx.write_u32(OFF_BASE0, 0xCAFE_BA00).unwrap();
+            rx.write_u32(OFF_PREFIX0, 0xBE).unwrap();
+            rx.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+            rx.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+            rx.tick();
+            rx.write_u32(OFF_TASKS_START, 1).unwrap();
+            rx.tick();
+            rx.tick_with_bus(&mut bus_rx);
+            (rx.crc_status, bus_rx.read_u8(0x2000_3002).unwrap())
+        }
+
+        // Same bus → the frame crosses (positive control, mirrors the global path).
+        let shared = VirtualAirBus::new();
+        let (crc, payload) = exchange(shared.clone(), shared.clone());
+        assert_eq!(crc, 1, "same-bus radios must exchange the frame");
+        assert_eq!(payload, 0xDE);
+
+        // Different buses → silence. This is the isolation the process-static
+        // AIR could not provide.
+        let (crc_iso, _) = exchange(VirtualAirBus::new(), VirtualAirBus::new());
+        assert_eq!(
+            crc_iso, 0,
+            "radios on different air buses must not hear each other"
+        );
     }
 
     #[test]

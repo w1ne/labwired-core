@@ -4,7 +4,7 @@
 
 **Goal:** Publish a reproducible native Windows x64 LabWired simulator archive and prove its build/package contract in pull-request CI.
 
-**Architecture:** Extend the existing Core tag-release matrix with a `windows-latest` native `x86_64-pc-windows-msvc` build. Keep Unix tarball packaging unchanged; use a PowerShell ZIP path for `labwired.exe`. Add a Windows pull-request build/package/extract/smoke job and generate `SHA256SUMS` only after all release archives are collected.
+**Architecture:** Extend the existing Core tag-release matrix with a `windows-latest` native `x86_64-pc-windows-msvc` build. Keep Unix CLI/debug-adapter tarball packaging unchanged; use a PowerShell ZIP path for `labwired.exe` and `labwired-dap.exe`. Add a Windows pull-request build/package/extract/smoke job and generate `SHA256SUMS` only after all release archives are collected.
 
 **Tech Stack:** Existing Rust `labwired-cli`, GitHub Actions, `windows-latest`, PowerShell `Compress-Archive`/`Expand-Archive`, `sha256sum` on the release job.
 
@@ -33,24 +33,28 @@ Add this sibling job after `integrity` in `core-ci.yml`:
         with:
           shared-key: core-windows-cli
           workspaces: . -> target
-      - name: Build release CLI
-        run: cargo build -p labwired-cli --release --target x86_64-pc-windows-msvc
+      - name: Build release CLI and debug adapter
+        run: cargo build -p labwired-cli -p labwired-dap --release --target x86_64-pc-windows-msvc
       - name: Smoke the native executable
         shell: pwsh
         run: |
-          $binary = 'target/x86_64-pc-windows-msvc/release/labwired.exe'
-          & $binary --version
+          $cli = 'target/x86_64-pc-windows-msvc/release/labwired.exe'
+          $dap = 'target/x86_64-pc-windows-msvc/release/labwired-dap.exe'
+          & $cli --version
       - name: Package and verify the Windows release ZIP
         shell: pwsh
         run: |
-          $binary = 'target/x86_64-pc-windows-msvc/release/labwired.exe'
+          $cli = 'target/x86_64-pc-windows-msvc/release/labwired.exe'
+          $dap = 'target/x86_64-pc-windows-msvc/release/labwired-dap.exe'
           $stage = Join-Path $env:RUNNER_TEMP 'labwired-windows-stage'
           $verify = Join-Path $env:RUNNER_TEMP 'labwired-windows-verify'
           $archive = Join-Path $env:RUNNER_TEMP 'labwired-v0.0.0-windows-x86_64.zip'
           New-Item -ItemType Directory -Force -Path $stage, $verify | Out-Null
-          Copy-Item $binary (Join-Path $stage 'labwired.exe')
-          Compress-Archive -Path (Join-Path $stage 'labwired.exe') -DestinationPath $archive -Force
+          Copy-Item $cli (Join-Path $stage 'labwired.exe')
+          Copy-Item $dap (Join-Path $stage 'labwired-dap.exe')
+          Compress-Archive -Path (Join-Path $stage 'labwired.exe'), (Join-Path $stage 'labwired-dap.exe') -DestinationPath $archive -Force
           Expand-Archive -Path $archive -DestinationPath $verify -Force
+          if (!(Test-Path (Join-Path $verify 'labwired.exe')) -or !(Test-Path (Join-Path $verify 'labwired-dap.exe'))) { throw 'missing root-level release binary' }
           & (Join-Path $verify 'labwired.exe') --version
 ```
 
@@ -83,11 +87,13 @@ Add this entry to `jobs.build.strategy.matrix.include`:
             shell: pwsh
 ```
 
-Add `binary: labwired` and `archive_format: tar.gz`/`shell: bash` to each existing Unix entry so packaging is explicit rather than inferred.
+Keep the existing Unix CLI/debug-adapter package contents and add
+`binary: labwired` and `archive_format: tar.gz`/`shell: bash` to each Unix
+entry so platform packaging is explicit rather than inferred.
 
 - [ ] **Step 2: Split package commands by archive format**
 
-Keep the existing Bash tarball command for Unix builds, parameterized by `${{ matrix.binary }}`. Add a PowerShell packaging step for Windows:
+Keep the existing Bash CLI/debug-adapter tarball command for Unix builds. Add a PowerShell packaging step for Windows:
 
 ```yaml
       - name: Package Windows binary
@@ -98,7 +104,8 @@ Keep the existing Bash tarball command for Unix builds, parameterized by `${{ ma
           $archive = "labwired-$version-${{ matrix.platform }}.zip"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" 'dist/labwired.exe'
-          Compress-Archive -Path 'dist/labwired.exe' -DestinationPath $archive -Force
+          Copy-Item "target/${{ matrix.target }}/release/labwired-dap.exe" 'dist/labwired-dap.exe'
+          Compress-Archive -Path 'dist/labwired.exe', 'dist/labwired-dap.exe' -DestinationPath $archive -Force
           "ARCHIVE=$archive" >> $env:GITHUB_ENV
 ```
 
@@ -113,9 +120,12 @@ In the `release` job, after `actions/download-artifact@v4`, add:
         shell: bash
         run: |
           set -euo pipefail
-          find dist -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0 \
-            | sort -z \
-            | xargs -0 sha256sum > dist/SHA256SUMS
+          (
+            cd dist
+            find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -printf '%f\0' \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
           test -s dist/SHA256SUMS
 ```
 
@@ -148,7 +158,7 @@ git commit -m "release: publish Windows simulator archive"
 
 - [ ] **Step 1: Update release-process artifact expectations**
 
-State that tag releases publish Linux/macOS tarballs, a Windows x64 ZIP containing `labwired.exe`, and `SHA256SUMS`. State that Windows ARM64 is not a released target until separately validated.
+State that tag releases publish Linux/macOS CLI/debug-adapter tarballs, a Windows x64 ZIP containing `labwired.exe` and `labwired-dap.exe`, and `SHA256SUMS`. State that Windows ARM64 is not a released target until separately validated.
 
 - [ ] **Step 2: Verify the current host baseline remains clean**
 

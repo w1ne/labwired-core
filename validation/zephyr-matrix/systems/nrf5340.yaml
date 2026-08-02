@@ -1,0 +1,5 @@
+# Zephyr matrix system — no I2C model on nrf5340 yet (L3 skipped).
+name: "zephyr-matrix-nrf5340"
+chip: "../../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []

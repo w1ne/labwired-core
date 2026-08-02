@@ -5,6 +5,21 @@
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+const RCC_BASE: u32 = 0x4002_1000;
+const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
+const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
+
+/// Enable USART1 (APB2 bit 14) and I2C1 (APB1 bit 21). Required now that
+/// stm32f103.yaml clocks those peripherals — unclocked MMIO is dropped.
+fn enable_peripheral_clocks() {
+    unsafe {
+        let apb2 = core::ptr::read_volatile(RCC_APB2ENR);
+        core::ptr::write_volatile(RCC_APB2ENR, apb2 | (1 << 14)); // USART1EN
+        let apb1 = core::ptr::read_volatile(RCC_APB1ENR);
+        core::ptr::write_volatile(RCC_APB1ENR, apb1 | (1 << 21)); // I2C1EN
+    }
+}
+
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -112,6 +127,7 @@ fn read_i16_be(hi_reg: u8) -> i16 {
 
 #[entry]
 fn main() -> ! {
+    enable_peripheral_clocks();
     uart_str("MPU6050 IMU Lab\n");
 
     // Wake MPU6050: clear SLEEP bit in PWR_MGMT_1 (reg 0x6B)

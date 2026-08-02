@@ -15,6 +15,7 @@ members = [
     "crates/egress-relay",
     "crates/firmware",
     "crates/firmware-ci-fixture",
+    "crates/firmware-uart-echo-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
     "crates/firmware-f103-i2c-demo",
@@ -40,6 +41,7 @@ members = [
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-proximity",
     "crates/firmware-nrf52840-timer-blinky",
+    "crates/firmware-perf-spin",
     "crates/firmware-rp2040-demo",
     "crates/firmware-kw41z-demo",
     "crates/firmware-kw41z-lcd",
@@ -60,6 +62,9 @@ members = [
     "examples/nucleo-f407-i2c",
     "examples/riscv-virt",
     "examples/adxl345-sensor-lab",
+    "examples/ina219-power-lab",
+    "examples/ads1115-adc-lab",
+    "examples/ds3231-rtc-lab",
     "examples/mpu6050-sensor-lab",
     "examples/vl53l1x-tof-lab",
     "examples/bme280-weather-lab",
@@ -86,6 +91,7 @@ exclude = [
     "examples/esp32s3-blinky",
     "examples/esp32s3-hello-world",
     "examples/esp32s3-i2c-tmp102",
+    "examples/openai-deck-s3",
     "examples/esp32c3-hello-world",
     "examples/esp32-epaper-lab",
     "examples/tier1-fixture/esp32s3",
@@ -94,7 +100,7 @@ exclude = [
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
-version = "0.18.0"
+version = "0.21.0"
 edition = "2021"
 authors = ["Andrii Shylenko"]
 license = "MIT"
@@ -136,6 +142,10 @@ debug = true
 # not support globs or inheritance in profile sections, so each crate gets
 # its own block. Keep alphabetical.
 [profile.release.package.firmware-ci-fixture]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-uart-echo-fixture]
 codegen-units = 1
 opt-level = "s"
 
@@ -187,6 +197,10 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-perf-spin]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-rp2040-demo]
 codegen-units = 1
 opt-level = "s"
@@ -208,6 +222,21 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.adxl345-sensor-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ina219-power-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ads1115-adc-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ds3231-rtc-lab]
 codegen-units = 1
 debug = true
 opt-level = "s"

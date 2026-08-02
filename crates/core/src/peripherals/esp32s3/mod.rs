@@ -39,4 +39,8 @@ pub mod twai;
 pub mod uart;
 pub mod usb_otg;
 pub mod usb_serial_jtag;
+// Fake WiFi/lwIP functional-outcome thunks — behind an off-by-default feature
+// so this canned state can never compile into a production/run build. Only the
+// `e2e_labwired_wifi` bring-up harness enables it.
+#[cfg(feature = "wifi-thunks")]
 pub mod wifi_thunks;

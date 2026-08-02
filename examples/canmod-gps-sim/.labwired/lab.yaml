@@ -1,0 +1,20 @@
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/build/canmod_gps_sim.elf"
+limits:
+  max_steps: 300000
+assertions:
+  # Simulated CANmod.gps on the emulated F103 bxCAN (classical CAN, loopback).
+  - uart_contains: "CANMOD-GPS-SIM"
+  # Decoded, human-readable beat (tick 0):
+  - uart_contains: "FIX type=3 sats=11"
+  - uart_contains: "POS lat=55.676100 lon=12.568300"
+  - uart_contains: "SPEED 10.000 m/s"
+  # Raw frames — all 9 DBC IDs appear on the bus:
+  - uart_contains: "CAN_TX 0001: 5B"
+  - uart_contains: "CAN_TX 0003:"
+  - uart_contains: "CAN_TX 0007:"
+  - uart_contains: "CAN_TX 0009:"
+  - uart_contains: "CANMOD_OK frames=45"
+  - expected_stop_reason: max_steps

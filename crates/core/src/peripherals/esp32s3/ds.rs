@@ -94,7 +94,9 @@
 //! [`Peripheral::tick`]. The constructor still takes a `source_id` for API
 //! symmetry with the other S3 peripherals, but `tick()` never emits it.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+const DEFERRED_WAKE_TOKEN: u32 = 1;
 
 pub const DS_BASE: u32 = 0x6003_D000;
 pub const DS_SIZE: u64 = 0x1000;
@@ -164,6 +166,11 @@ pub struct Esp32s3Ds {
     check: u32,
 
     date: u32,
+
+    /// Bus-published cycle clock (walk-free deferred work).
+    clock: Option<CycleClock>,
+    /// Event armed for one-tick deferred work.
+    scheduled: bool,
 }
 
 impl std::fmt::Debug for Esp32s3Ds {
@@ -194,6 +201,9 @@ impl Esp32s3Ds {
             key_wrong: 0,
             check: 0,
             date: DS_DATE_RESET,
+
+            clock: None,
+            scheduled: false,
         }
     }
 
@@ -320,6 +330,51 @@ impl Peripheral for Esp32s3Ds {
             self.busy = false;
         }
         PeripheralTickResult::default()
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() {
+            return Vec::new();
+        }
+        if self.busy && !self.scheduled {
+            self.scheduled = true;
+            return vec![(1, DEFERRED_WAKE_TOKEN)];
+        }
+        Vec::new()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        // Same one-tick transition the legacy walk performed.
+        let _ = self.tick();
+        self.scheduled = false;
+        let reschedule = if self.busy {
+            self.scheduled = true;
+            Some(1)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            explicit_irqs: Vec::new(),
+            reschedule_delay: reschedule,
+            ..Default::default()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

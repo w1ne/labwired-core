@@ -35,6 +35,10 @@
     "modeled": 254,
     "total": 1540
   },
+  "stm32f411ceu6": {
+    "modeled": 279,
+    "total": 669
+  },
   "stm32g474re": {
     "modeled": 80,
     "total": 1585

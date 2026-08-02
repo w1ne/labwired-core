@@ -31,11 +31,26 @@ enum CpuFamily {
     RiscV,
 }
 
+/// Which toolchain produced the fixture. Lets coverage-per-HAL be read off the
+/// table instead of inferred from case-name substrings.
+// Read by the HAL-coverage assertions added in Task 8.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Hal {
+    /// Hand-written `no_std` / vendor-HAL firmware.
+    Bare,
+    /// Unmodified upstream Zephyr build.
+    Zephyr,
+    /// Arduino core sketch.
+    Arduino,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SurvivalCase {
     name: &'static str,
     core: &'static str,
     family: CpuFamily,
+    hal: Hal,
     chip: &'static str,
     system: &'static str,
     fixture: &'static str,
@@ -58,6 +73,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32f103_blinky",
         core: "cortex-m3",
         family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
         chip: "stm32f103",
         system: "stm32f103-bare",
         fixture: "stm32f103-blinky.elf",
@@ -69,6 +85,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32f401_blinky",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
         chip: "stm32f401",
         system: "nucleo-f401re",
         fixture: "stm32f401-blinky.elf",
@@ -84,6 +101,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32f401_zephyr",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32f401",
         system: "nucleo-f401re",
         fixture: "stm32f401-zephyr-hello.elf",
@@ -98,6 +116,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32f103_zephyr",
         core: "cortex-m3",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32f103",
         system: "nucleo-f103rb-epaper",
         fixture: "stm32f103-zephyr-hello.elf",
@@ -108,6 +127,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32l073_zephyr",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32l073",
         system: "nucleo-l073rz",
         fixture: "stm32l073-zephyr-hello.elf",
@@ -118,6 +138,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32l476_zephyr",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "stm32l476-zephyr-hello.elf",
@@ -128,6 +149,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32g474_zephyr",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32g474re",
         system: "nucleo_g474re",
         fixture: "stm32g474-zephyr-hello.elf",
@@ -138,6 +160,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32h563_zephyr",
         core: "cortex-m33",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32h563",
         system: "nucleo-h563zi-demo",
         fixture: "stm32h563-zephyr-hello.elf",
@@ -150,6 +173,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32wb55_zephyr",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32wb55",
         system: "mb1355c",
         fixture: "stm32wb55-zephyr-hello.elf",
@@ -162,6 +186,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32wba52_zephyr",
         core: "cortex-m33",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "stm32wba52",
         system: "nucleo_wba52cg",
         fixture: "stm32wba52-zephyr-hello.elf",
@@ -172,6 +197,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "rp2040_demo",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "rp2040",
         system: "rp2040-pico",
         fixture: "rp2040-demo.elf",
@@ -185,6 +211,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "rp2040_zephyr_hello",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "rp2040",
         system: "rp2040-pico",
         fixture: "rp2040-zephyr-hello.elf",
@@ -201,6 +228,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "rp2040_arduino_serial",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
         chip: "rp2040",
         system: "rp2040-pico",
         fixture: "rp2040-arduino-serial.elf",
@@ -211,6 +239,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "nrf52840",
         system: "nrf52840-dk",
         fixture: "nrf52840-demo.elf",
@@ -226,6 +255,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "nrf52840_arduino_serial",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
         chip: "nrf52840",
         system: "nrf52840-dk",
         fixture: "nrf52840-arduino-serial.elf",
@@ -241,6 +271,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "kw41z_smoke",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "mkw41z4",
         system: "frdm-kw41z",
         fixture: "kw41z-smoke.elf",
@@ -259,6 +290,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "kw41z_nxp",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "mkw41z4",
         system: "frdm-kw41z",
         fixture: "kw41z-nxp.elf",
@@ -274,6 +306,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "kw41z_zephyr",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "mkw41z4",
         system: "frdm-kw41z",
         fixture: "kw41z-zephyr-hello.elf",
@@ -294,6 +327,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "kw41z_zephyr_fxos8700",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "mkw41z4",
         system: "frdm-kw41z",
         fixture: "kw41z-zephyr-fxos8700.elf",
@@ -310,6 +344,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "kw41z_lcd_activity",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "mkw41z4",
         system: "frdm-kw41z-lcd",
         fixture: "kw41z-lcd-activity.elf",
@@ -328,16 +363,48 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "nrf5340_zephyr",
         core: "cortex-m33",
         family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
         chip: "nrf5340",
         system: "nrf5340dk",
         fixture: "nrf5340-zephyr-hello.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2007_FFFF)],
         expected_uart_output: b"Hello World! nrf5340dk/nrf5340/cpuapp",
     },
+    // nRF54L15: RRAM-based (NVM at 0x0, 1524 KB) rather than flash, and the
+    // 256 KB SRAM puts the initial SP at 0x2004_0000. The PC range covers
+    // RRAM; the firmware spins in main after the banner.
+    SurvivalCase {
+        name: "nrf54l15_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"nRF54L15 boot OK",
+    },
+    // Unmodified upstream Zephyr v4.4 hello_world for nrf54l15dk/nrf54l15/cpuapp.
+    // This is the tier marker: the profile satisfies the real nrfx/Zephyr boot
+    // path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, and the
+    // nRF54L-generation UARTE with its DMA.TX cluster), not just firmware
+    // written against the simulator's own assumptions.
+    SurvivalCase {
+        name: "nrf54l15_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Zephyr,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nrf54l15dk/nrf54l15/cpuapp",
+    },
     SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "nrf52832",
         system: "nrf52-dk",
         fixture: "nrf52832-demo.elf",
@@ -351,6 +418,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "stm32h563_demo",
         core: "cortex-m33",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32h563",
         system: "nucleo-h563zi-demo",
         fixture: "stm32h563-demo.elf",
@@ -361,6 +429,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "riscv_ci_fixture",
         core: "rv32i",
         family: CpuFamily::RiscV,
+        hal: Hal::Bare,
         chip: "ci-fixture-riscv",
         system: "ci-fixture-riscv-uart1",
         fixture: "riscv-ci-fixture.elf",
@@ -371,6 +440,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "esp32c3_demo",
         core: "rv32i",
         family: CpuFamily::RiscV,
+        hal: Hal::Bare,
         chip: "esp32c3",
         system: "esp32c3-devkit",
         fixture: "esp32c3-demo.elf",
@@ -386,6 +456,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "nucleo_l476rg_smoke",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-smoke.elf",
@@ -402,6 +473,7 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         name: "nucleo_l476rg_spi",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-spi.elf",
@@ -433,6 +505,7 @@ DONE\r\n",
         name: "nucleo_l476rg_pll",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-pll.elf",
@@ -456,6 +529,7 @@ DONE\r\n",
         name: "nucleo_l476rg_misc",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-misc.elf",
@@ -488,6 +562,7 @@ DONE\r\n",
         name: "nucleo_l476rg_l4periphs",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-l4periphs.elf",
@@ -524,9 +599,23 @@ DONE\r\n",
         // RCC, GPIO, USART, SPI, I2C, ADC, DMA — in one cohesive
         // bring-up sequence. The output stream below is captured
         // byte-for-byte from real NUCLEO-L476RG silicon.
+        //
+        // `BTN=` is the one line that was NOT a silicon capture. The demo
+        // prints `(GPIOC_IDR >> 13) & 1 == 0` — active-low, so `BTN=1` means
+        // *pressed*. This board's B1 is untouched, and real silicon holds PC13
+        // at VDD through R34, so silicon prints `BTN=0`. It read `BTN=1` here
+        // only because the `board_io` button binding materialised as nothing:
+        // PC13 sat at its reset-value 0 and the sim reported a phantom press.
+        // `firmware-l476-demo` documented that gap in its own source. Now that
+        // a button is a real bus-resident device driving its pin, this line
+        // agrees with silicon like every other line above.
+        // `board_io_button_stimulus.rs` runs this same ELF with B1 pressed and
+        // asserts it prints `BTN=1`, so both states are pinned, not just this
+        // one.
         name: "nucleo_l476rg_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-demo.elf",
@@ -539,7 +628,7 @@ ADC1 OK\r\n\
 DMA1 OK\r\n\
 LED ON\r\n\
 LED OFF\r\n\
-BTN=1\r\n\
+BTN=0\r\n\
 DONE\r\n",
     },
     SurvivalCase {
@@ -553,6 +642,7 @@ DONE\r\n",
         name: "nucleo_l476rg_dma",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-dma.elf",
@@ -580,6 +670,7 @@ DONE\r\n",
         name: "nucleo_l476rg_adc",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-adc.elf",
@@ -605,6 +696,7 @@ DONE\r\n",
         name: "nucleo_l476rg_i2c",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-i2c.elf",
@@ -642,6 +734,7 @@ DONE\r\n",
         name: "nucleo_l476rg_l4periphs2",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-l4periphs2.elf",
@@ -707,6 +800,7 @@ DONE\r\n",
         name: "nucleo_l476rg_cubemx_hal",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-cubemx-hal.elf",
@@ -729,6 +823,7 @@ DONE\r\n",
         name: "nucleo_l476rg_arduino_serial",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-arduino-serial.elf",
@@ -754,6 +849,7 @@ DONE\r\n",
         name: "nucleo_l476rg_tim1_advanced",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-tim1-advanced.elf",
@@ -787,6 +883,7 @@ DONE\r\n",
         name: "nucleo_l476rg_r11",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-r11.elf",
@@ -822,6 +919,7 @@ DONE\r\n",
         name: "nucleo_l476rg_r12",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l476",
         system: "nucleo-l476rg",
         fixture: "nucleo-l476rg-r12.elf",
@@ -859,6 +957,7 @@ DONE\r\n",
         name: "nucleo_f407_smoke",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32f407",
         system: "nucleo-f407",
         fixture: "nucleo-f407-smoke.elf",
@@ -880,6 +979,7 @@ DONE\r\n",
         name: "nucleo_f407_i2c",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32f407",
         system: "nucleo-f407",
         fixture: "nucleo-f407-i2c.elf",
@@ -914,6 +1014,7 @@ DONE\r\n",
         name: "nucleo_l073rz_smoke",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
+        hal: Hal::Bare,
         chip: "stm32l073",
         system: "nucleo-l073rz",
         fixture: "nucleo-l073rz-demo.elf",
@@ -1265,6 +1366,66 @@ fn test_nrf52832_demo_survival() {
 #[test]
 fn test_nrf5340_zephyr_survival() {
     run_survival_case(case_by_name("nrf5340_zephyr"));
+}
+
+#[test]
+fn test_nrf54l15_smoke_survival() {
+    run_survival_case(case_by_name("nrf54l15_smoke"));
+}
+
+/// End-to-end proof that GPIO reaches the pin, not just that the CPU survived.
+///
+/// This exists because the UART banner alone does NOT catch the most likely
+/// nRF54L15 profile bug. A Nordic GPIO devicetree node points at the OUT
+/// register (peripheral base + 0x500), so mapping the DT address as the
+/// peripheral base puts every GPIO register 0x500 too high. UART still works,
+/// the banner still prints, the survival test still passes — and the LED
+/// silently never lights. That mistake was made and caught here.
+#[test]
+fn test_nrf54l15_lights_dk_led0() {
+    use labwired_core::Bus;
+
+    // DK LED0 is P2.09 (board DT nrf54l15dk_common.dtsi, GPIO_ACTIVE_HIGH).
+    // Mapped P2 base = MDK NRF_P2_S_BASE (0x5005_0400) - 0x504, so the gpio
+    // model's nRF52-relative offsets land on the real registers: OUT ends up at
+    // 0x5005_0400 and DIR at 0x5005_0410, which is where the MDK puts them on
+    // this family (NRF_GPIO_Type has OUT at +0x000 here, unlike nRF52/nRF5340).
+    const GPIO_P2: u64 = 0x5004_FEFC;
+    const GPIO_OUT: u64 = 0x504;
+    const GPIO_DIR: u64 = 0x514;
+    const LED0: u32 = 1 << 9;
+
+    let (chip, manifest) = load_system("nrf54l15", "nrf54l15dk");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image =
+        labwired_loader::load_elf(&fixtures().join("nrf54l15-smoke.elf")).expect("load smoke elf");
+    machine.load_firmware(&image).expect("load fw");
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    let dir = machine.bus.read_u32(GPIO_P2 + GPIO_DIR).expect("read DIR");
+    let out = machine.bus.read_u32(GPIO_P2 + GPIO_OUT).expect("read OUT");
+
+    assert_ne!(
+        dir & LED0,
+        0,
+        "P2.09 was never configured as an output (DIRSET did not land)"
+    );
+    assert_ne!(
+        out & LED0,
+        0,
+        "P2.09 is an output but was never driven high — DK LED0 stayed dark"
+    );
+}
+
+#[test]
+fn test_nrf54l15_zephyr_survival() {
+    run_survival_case(case_by_name("nrf54l15_zephyr"));
 }
 
 #[test]

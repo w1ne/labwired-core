@@ -72,15 +72,23 @@ peripherals:
     # I2C1 is clocked from RCC_APB1ENR.I2C1EN (bit 21). Unclocked out of reset
     # (RM0090 §6.3.13) — registers read 0 / drop writes until the clock is on.
     clock: { reg: "apb1enr", bit: 21 }
+    # I2C1 has TWO NVIC lines: EV (below) and ER = 32. AF/BERR/ARLO/OVR raise
+    # ER under CR2.ITERREN, and an interrupt-mode HAL (STM32duino 3.x uses
+    # HAL_I2C_Master_Transmit_IT) only learns an address was NACKed there.
+    config:
+      irq_error: 32
   - id: "gpioe"
     type: "stm32f4_gpio"
     base_address: 0x40021000
     size: "1KB"
-  - id: "tim1"
+  # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares
+  # the pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 0).
+  - id: "tim1_pwm"
     type: "timer"
     base_address: 0x40010000
     size: "1KB"
     irq: 27
+    clock: { reg: "apb2enr", bit: 0 }
     config:
       advanced: true
   - id: "tim2"
@@ -189,6 +197,12 @@ peripherals:
     size: "1KB"
     config:
       lines: 23
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
   # IWDG — independent watchdog (RM0090 §21). Clocked from the dedicated LSI
   # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
   # gate. The KR key (0x5555) protects PR/RLR writes instead.
@@ -215,3 +229,39 @@ peripherals:
       # authoritative source. REV_ID=0x1001 = "Rev 1", the most common
       # silicon revision for STM32F407V/Z/IG.
       idcode: 0x10016413
+  # DMA1 / DMA2 — stream-based DMA controllers (RM0090 §10). Eight streams each;
+  # DMA2 additionally supports memory-to-memory transfers (RM0090 §10.3.3). Each
+  # stream has its own NVIC vector — the F4 stream lines are non-contiguous
+  # (stm32f407xx.h), so they are listed explicitly per stream. Clocked from
+  # RCC_AHB1ENR (DMA1EN bit 21, DMA2EN bit 22).
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x40026000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      # DMA1_Stream0..7 NVIC positions (stm32f407xx.h): 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x40026400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions (stm32f407xx.h): 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+  # FLASH interface + PWR — required by Arduino/STM32 core bring-up
+  # (HAL_RCC_ClockConfig waits on FLASH_ACR latency; SystemInit touches PWR).
+  # Same bindings as stm32f401.yaml; without them Arduino sketches bus-fault
+  # at 0x40023C00 / 0x40007000 (see validation/arduino-matrix).
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      profile: "f1"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"

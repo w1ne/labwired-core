@@ -9,7 +9,7 @@
 // changes — proving both new peripheral models work through real firmware.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
-use labwired_core::bus::SystemBus;
+use labwired_core::bus::{SystemBus, RECOMMENDED_TICK_INTERVAL};
 use labwired_core::cpu::cortex_m::CortexM;
 use labwired_core::peripherals::components::Pcd8544;
 use labwired_core::system::cortex_m::configure_cortex_m;
@@ -160,11 +160,18 @@ fn firmware_draws_and_ship_tracks_distance() {
 }
 
 /// Phase 1.6 gate: the splash framebuffer the panel receives over SPI must be
-/// byte-identical at `peripheral_tick_interval = 64` (the browser batching
-/// interval) and interval 1, through the real batched `Machine::run` loop.
-/// Before the cycle-exact scheduler conversion the tick-index timebase
-/// stretched every SPI frame ×interval, so the push was still in flight (or
-/// mis-clocked) at the same cycle budget.
+/// byte-identical at interval 1 and at the batching intervals the host uses,
+/// through the real batched `Machine::run` loop. Before the cycle-exact
+/// scheduler conversion the tick-index timebase stretched every SPI frame
+/// ×interval, so the push was still in flight (or mis-clocked) at the same
+/// cycle budget.
+///
+/// Checks BOTH 64 (the interval this gate was written against) and
+/// [`RECOMMENDED_TICK_INTERVAL`] — the interval the browser actually raises to
+/// on a walk-deleted bus. Taking the latter from the constant rather than a
+/// literal is the point: this file previously hard-coded `64` in two places,
+/// and when the constant moved to 512 the gate went on asserting a number
+/// nothing ships, undetected because the test is `#[ignore]`d.
 #[test]
 #[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
 fn splash_framebuffer_matches_across_tick_intervals() {
@@ -192,6 +199,12 @@ fn splash_framebuffer_matches_across_tick_intervals() {
         fb_at(64),
         "splash framebuffer must be byte-identical at tick interval 64"
     );
+    assert_eq!(
+        fb1,
+        fb_at(RECOMMENDED_TICK_INTERVAL),
+        "splash framebuffer must be byte-identical at the SHIPPING batching \
+         interval ({RECOMMENDED_TICK_INTERVAL})"
+    );
 }
 
 /// Walk-deletion output-safety differential: the machine built from the invaders
@@ -206,33 +219,56 @@ fn splash_framebuffer_matches_across_tick_intervals() {
 /// for correctness.
 ///
 /// It ALSO documents the perf reality honestly: the explicit-flag bus unlocks
-/// `max_safe_tick_interval == 64` (browser batching), while the flag-removed
-/// (derived) bus stays at 1 — the conservative derivation cannot recover the
-/// firmware-specific batching win, so removing the flag is a throughput
-/// regression even though it is output-safe.
+/// `max_safe_tick_interval == RECOMMENDED_TICK_INTERVAL` (browser batching),
+/// while the flag-removed (derived) bus stays at 1 — the conservative
+/// derivation cannot recover the firmware-specific batching win, so removing
+/// the flag is a throughput regression even though it is output-safe.
+///
+/// The expectation reads the CONSTANT, never a literal. It used to assert a
+/// bare `64`; `RECOMMENDED_TICK_INTERVAL` later moved to 512 and this gate went
+/// on demanding a number nothing ships. Nobody noticed because the test is
+/// `#[ignore]`d, so only `--include-ignored` ever runs it.
 #[test]
 #[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
 fn derived_and_explicit_walk_flag_are_output_identical() {
     let elf = ensure_firmware_built();
 
-    // Explicit Some(true): walk deleted. Derived None: walk kept (conservative).
-    let mut explicit = build_machine_with(&elf, Some(Some(true)));
-    let mut derived = build_machine_with(&elf, Some(None));
+    // The differential compares walk-DELETED against walk-KEPT, both stated
+    // EXPLICITLY. It used to pit `Some(true)` against `None` (derive) and lean
+    // on the derivation choosing walk-kept. The derivation has since caught up
+    // and now deletes the walk for this config too — which would have made the
+    // comparison two identical buses, i.e. a differential that always passes
+    // because it compares a thing to itself. Naming both sides keeps walk-on vs
+    // walk-off the thing actually under test, whatever the derivation decides.
+    let mut walk_deleted = build_machine_with(&elf, Some(Some(true)));
+    let mut walk_kept = build_machine_with(&elf, Some(Some(false)));
 
-    // Honest perf reality: the flag unlocks batching, the derivation does not.
+    // Honest perf reality: deleting the walk is what unlocks host batching.
     if cfg!(feature = "event-scheduler") {
-        assert_eq!(explicit.bus.max_safe_tick_interval(), 64);
         assert_eq!(
-            derived.bus.max_safe_tick_interval(),
+            walk_deleted.bus.max_safe_tick_interval(),
+            RECOMMENDED_TICK_INTERVAL
+        );
+        assert_eq!(
+            walk_kept.bus.max_safe_tick_interval(),
             1,
-            "conservative derivation keeps the walk for a chip with native timers"
+            "a bus still running the legacy walk must stay cycle-exact"
         );
     }
+
+    // Record — without asserting — what the conservative auto-derivation picks
+    // for this config. It is a policy decision that may legitimately move as
+    // more peripherals migrate to the scheduler; the OUTPUT-equivalence proved
+    // below is what makes any such move safe, and that is what this test gates.
+    let derived_interval = build_machine_with(&elf, Some(None))
+        .bus
+        .max_safe_tick_interval();
+    println!("NOKIA_WALK_DERIVATION derived_max_safe_tick_interval={derived_interval}");
 
     // Run both at interval 1 so the comparison isolates walk-on vs walk-off
     // (not batching). 20M cycles well past the splash + several game frames.
     let budget = 20_000_000u64;
-    for m in [&mut explicit, &mut derived] {
+    for m in [&mut walk_deleted, &mut walk_kept] {
         while m.total_cycles < budget {
             let remaining = (budget - m.total_cycles).min(u32::MAX as u64) as u32;
             m.run(Some(remaining)).expect("run");
@@ -240,17 +276,17 @@ fn derived_and_explicit_walk_flag_are_output_identical() {
     }
 
     assert_eq!(
-        explicit.total_cycles, derived.total_cycles,
+        walk_deleted.total_cycles, walk_kept.total_cycles,
         "total_cycles must match walk-deleted vs walk-kept"
     );
-    let fb_explicit = framebuffer(&explicit);
-    let fb_derived = framebuffer(&derived);
+    let fb_deleted = framebuffer(&walk_deleted);
+    let fb_kept = framebuffer(&walk_kept);
     assert!(
-        fb_explicit.iter().any(|&b| b != 0),
+        fb_deleted.iter().any(|&b| b != 0),
         "the firmware must have drawn to the framebuffer"
     );
     assert_eq!(
-        fb_explicit, fb_derived,
+        fb_deleted, fb_kept,
         "framebuffer must be byte-identical: walk deletion is output-safe here"
     );
 }

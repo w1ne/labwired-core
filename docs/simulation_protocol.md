@@ -19,7 +19,10 @@ The lifecycle of a headless simulation run is strictly defined as follows:
     - The system bus ticks all peripherals, incrementing cycle counts.
     - Limits and assertions are evaluated.
 4.  **Halt Condition**: The simulation stops when one of the terminal conditions (limits, assertions, or exceptions) evaluates to true.
-5.  **Artifact Emission**: The runner flushes final VCD traces, emits `result.json` and JUnit XML, and exits with a standardized code.
+5.  **Artifact Emission**: When `--output-dir` is supplied, the runner writes
+    `result.json`, `snapshot.json`, `uart.log`, and JUnit XML there;
+    `--junit` can request JUnit at a separate path. Requested traces are
+    flushed before the runner exits with a standardized code.
 
 ---
 
@@ -29,7 +32,9 @@ LabWired relies on declarative configuration files to define the "digital twin" 
 
 ### 2.1 Test Script (`test_script.yaml`)
 
-The test script dictates the bounds and expectations of the simulation.
+The test script dictates the bounds and expectations of the simulation. Its
+`inputs` object has one mutually exclusive v1.0 form: a single-machine
+`firmware`/`system` pair or an environment `env` reference.
 
 ```yaml
 schema_version: "1.0"
@@ -42,7 +47,6 @@ limits:
   wall_time_ms: 10000                # Optional: Timeout in real-world wall clock milliseconds
   max_uart_bytes: 512000             # Optional: Limit on total UART characters emitted
   no_progress_steps: 50000           # Optional: Halt if PC remains unchanged
-  max_energy_joules: 5.0             # Future (v1.1): Halt if estimated energy exceeds budget
 assertions:
   - expected_stop_reason: halt       # Halt instruction (e.g., BKPT, WFI loop)
   - uart_contains: "TEST PASSED"     # Substring match on the UART output stream
@@ -53,9 +57,49 @@ assertions:
       mask: 0x80                     # Optional: bitmask for comparison
 ```
 
+For a multi-node world, use `inputs.env`; topology and per-node firmware stay
+out of the test script:
+
+```yaml
+schema_version: "1.0"
+inputs:
+  env: "two-node-env.yaml"
+limits:
+  max_steps: 100000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000  # optional; default 100000
+  stop_when_assertions_pass_min_steps: 1000     # optional; default 0
+assertions:
+  - memory_value:
+      node: gateway
+      address: 0x20000000
+      expected_value: 0
+      size: 8
+```
+
+Environment assertions are node-qualified `memory_value` assertions. CLI
+`--firmware` and `--system` overrides apply only to a single-machine script,
+not to `inputs.env`. v0.19 environment worlds are Cortex-M-only: each resolved
+node chip must resolve to `arch: arm` and explicitly declare `core: cortex-m*`.
+Its firmware must be an `EM_ARM` ELF with a valid Cortex-M Thumb reset vector
+at `flash.base + reset_vector_offset`: the initial stack pointer is in RAM and
+the Thumb-bit reset handler is in flash. Anything outside that contract is a
+configuration error before a Cortex-M machine is constructed.
+
+Environment worlds may opt into `stop_when_assertions_pass`. The runner latches
+the first world round at or after `stop_when_assertions_pass_min_steps` where
+all node-qualified assertions pass, and accepts it only after they remain true
+for `stop_when_assertions_pass_settle_steps` rounds (default `100000`). The
+default is `false`; a regression resets the window, and a runtime error or
+same-round `wall_time_ms`, `max_cycles`, or `max_uart_bytes` limit takes
+precedence. `max_steps` remains the outer execution bound, so completion on its
+final allowed world round is reported as `stop_reason: assertions_passed`.
+
 ### 2.2 System Manifest (`system.yaml`)
 
-Defines the board topology, Memory Management overrides, and IO mappings.
+Defines the board topology, Memory Management overrides, and IO mappings. This
+same per-node `system.yaml` is shared with the Playground; CI environment
+manifests reference it rather than duplicating board configuration.
 
 ```yaml
 schema_version: "1.0"
@@ -71,22 +115,43 @@ board_io:
     active_high: true
 ```
 
-### 2.3 Environment Manifest (`environment.yaml` - Future v1.1)
+### 2.3 Environment Manifest (`environment.yaml`)
 
-To support Distributed Time-Travel Debugging (via Chandy-Lamport algorithms), the protocol introduces an environment manifest grouping multiple systems into a cluster.
+An environment manifest is a released v1.0 world description. Each node names
+the system manifest and firmware it runs; all topology is explicit in
+`interconnects`.
 
 ```yaml
-schema_version: "1.1-draft"
+schema_version: "1.0"
 name: "mesh-network-test"
 nodes:
   - id: "gateway"
     system: "gateway.yaml"
+    firmware: "gateway.elf"
   - id: "sensor-01"
     system: "sensor.yaml"
+    firmware: "sensor-01.elf"
 interconnects:
-  - type: "virtual_switch"
+  - type: "can_bus"
     nodes: ["gateway", "sensor-01"]
+    config:
+      peripheral: "can1"
 ```
+
+`nodes[].config_overrides` must be omitted in environment schema 1.0. Every
+explicit occurrence, including `{}` and `null`, is rejected. Interconnect
+membership and `config` are strict and closed:
+
+- `uart_cross_link` requires exactly two unique, known nodes and accepts only
+  optional non-empty string `node_a_uart` / `node_b_uart` keys (default
+  `uart2`).
+- `can_bus` requires at least two unique, known nodes and accepts only required
+  non-empty string `config.peripheral`.
+- `egress` requires exactly one known node and accepts only optional non-empty
+  strings `uart` (default `usart2`), `transport` (`tcp`, `mqtt`, `http`), and
+  `encoding` (`raw`, `ndjson-trace`, `frames-json`); required non-empty string
+  `url`; MQTT-only required non-empty string `topic`; and positive integer
+  `buffer_max`. `topic` is invalid for TCP and HTTP.
 
 ### 2.4 Hardware Descriptors (`chip.yaml` & `peripheral.yaml`)
 
@@ -122,43 +187,73 @@ Upon completion of a deterministic run, LabWired produces a bundle of artifacts.
 
 ### 4.1 Structured Summary (`result.json`)
 
-Provides programmatic access to the simulation's final state and metrics.
+Provides programmatic access to the simulation's final state and metrics. The
+common fields are `status`, `steps_executed`, `cycles`, `instructions`,
+`stop_reason`, `stop_reason_details`, `limits`, and `assertions`.
+`result.json` uses the same top-level `oneOf` union as the
+[CI Test Runner](ci_test_runner.md#resultjson-contract). The abbreviated schema
+below highlights its discriminators and provenance; the CI Test Runner page is
+the authoritative complete schema:
 
 ```json
 {
-  "result_schema_version": "1.0",
-  "status": "passed",
-  "steps_executed": 451203,
-  "cycles": 620001,
-  "instructions": 451203,
-  "energy_estimated_joules": 0.045, 
-  "carbon_impact_grams": 0.002,     
-  "stop_reason": "halt",
-  "stop_reason_details": {
-    "triggered_stop_condition": "halt",
-    "triggered_limit": null,
-    "observed": {
-      "name": "pc",
-      "value": 134218844
-    }
-  },
-  "limits": {
-    "max_steps": 100000000
-  },
-  "assertions": [
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
     {
-      "assertion": { "expected_stop_reason": { "expected_stop_reason": "halt" } },
-      "passed": true
+      "title": "single-machine result",
+      "type": "object",
+      "required": ["result_schema_version", "firmware_hash", "config"],
+      "properties": {
+        "result_schema_version": { "const": "1.0" },
+        "firmware_hash": { "type": "string" },
+        "config": {
+          "required": ["firmware", "system", "script"],
+          "properties": {
+            "firmware": { "type": "string" },
+            "system": { "type": ["string", "null"] },
+            "script": { "type": "string" }
+          }
+        }
+      }
+    },
+    {
+      "title": "environment/world result",
+      "type": "object",
+      "required": ["result_schema_version", "run_type", "config"],
+      "not": { "required": ["firmware_hash"] },
+      "properties": {
+        "result_schema_version": { "const": "1.0-environment" },
+        "run_type": { "const": "environment" },
+        "config": {
+          "required": ["script", "environment", "world_firmware_hash", "nodes"],
+          "properties": {
+            "script": { "type": "string" },
+            "environment": { "type": "string" },
+            "world_firmware_hash": { "type": "string" },
+            "nodes": {
+              "type": "array",
+              "items": {
+                "required": ["id", "system", "firmware", "system_hash", "firmware_hash"]
+              }
+            }
+          }
+        }
+      }
     }
-  ],
-  "firmware_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "config": {
-    "firmware": "test.elf",
-    "system": "system.yaml",
-    "script": "test.yaml"
-  }
+  ]
 }
 ```
+
+The environment arm deliberately has no top-level `firmware_hash`; it carries
+a whole-world identity in `config.world_firmware_hash` and per-node system and
+firmware provenance in `config.nodes`. Environment snapshots use
+`type: "environment"` and a `nodes` array rather than a single CPU snapshot.
+An explicit `config_overrides` field (including `{}` or `null`), a chip without
+an explicit Cortex-M core, an ARM ELF without a valid Thumb reset vector, or
+unknown, mistyped, or invalid `uart_cross_link`/`can_bus`/`egress`
+configuration is still emitted as this environment result arm (with a
+configuration error) when an output directory is requested: `status: "error"`
+and `stop_reason: "config_error"`.
 
 ### 4.2 Value Change Dump (`trace.vcd`)
 
@@ -183,20 +278,20 @@ LabWired CI runners exit with specific, predictable status codes.
 
 ### 5.1 Stop Reasons
 
-The `stop_reason` represents the exact trigger that transitioned the simulator out of the Execution Loop:
+The `stop_reason` represents the exact trigger that transitioned the simulator
+out of the Execution Loop. Result JSON uses snake-case values:
 
-- `ConfigError`: Configuration or parsing failed.
-- `MaxSteps`: Exceeded `max_steps` limit.
-- `MaxCycles`: Exceeded `max_cycles` limit.
-- `MaxUartBytes`: Exceeded `max_uart_bytes` limit.
-- `MaxEnergy`: (Future) Exceeded `max_energy_joules` sustainability budget.
-- `NoProgress`: CPU is spinning without meaningful state change (e.g., stuck in a tight loop reading the same address).
-- `WallTime`: Exceeded `wall_time_ms`.
-- `MemoryViolation`: Accessing unmapped memory or violating access permissions.
-- `DecodeError`: Encountered an invalid opcode.
-- `Halt`: The CPU hit a software breakpoint or halted intentionally.
-- `AgentIntervention`: (Future) An external AI actor issued a halt command via the MAESTRO API.
-- `FmiTimeout`: (Future) Hardware-in-the-loop (FMI 3.0) plant simulation diverged.
+- `config_error`: Configuration or parsing failed.
+- `max_steps`: Exceeded `max_steps`.
+- `max_cycles`: Exceeded `max_cycles`.
+- `max_uart_bytes`: Exceeded `max_uart_bytes`.
+- `no_progress`: The single-machine CPU made no progress for its configured limit.
+- `wall_time`: Exceeded `wall_time_ms`.
+- `assertions_passed`: Opt-in assertions remained true through their settling window.
+- `memory_violation`: Accessed unmapped memory or violated access permissions.
+- `decode_error`: Encountered an invalid opcode.
+- `halt`: Reached a software breakpoint or halted intentionally.
+- `exception`: The runner encountered another unrecoverable simulation exception.
 
 ---
 

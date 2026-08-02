@@ -166,7 +166,7 @@
 
 use crate::peripherals::esp32s3::gpspi::Esp32s3Spi;
 use crate::peripherals::esp32s3::i2s::Esp32s3I2s;
-use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
+use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of GDMA channels on the ESP32-S3.
 const NUM_CHANNELS: usize = 5;
@@ -507,6 +507,9 @@ pub struct Esp32s3Gdma {
     /// Interrupt-matrix source ID for IN channel 0 (66 on real silicon).
     /// IN_CHn = base + n; OUT_CHn = base + 5 + n.
     dma_in_ch0_source: u32,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3Gdma {
@@ -518,6 +521,8 @@ impl Esp32s3Gdma {
             channels: [Channel::default(); NUM_CHANNELS],
             misc_conf: 0,
             dma_in_ch0_source,
+
+            clock: None,
         }
     }
 
@@ -1449,6 +1454,32 @@ impl Peripheral for Esp32s3Gdma {
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         Esp32s3Gdma::do_tick_with_bus(self, bus);
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        for (n, c) in self.channels.iter().enumerate() {
+            if c.rx.int_raw & c.rx.int_ena != 0 {
+                out.push(self.dma_in_ch0_source + n as u32);
+            }
+            if c.tx.int_raw & c.tx.int_ena != 0 {
+                out.push(self.dma_in_ch0_source + NUM_CHANNELS as u32 + n as u32);
+            }
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

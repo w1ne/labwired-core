@@ -1,0 +1,100 @@
+# ST VL53L0X laser time-of-flight distance sensor — declarative I²C
+# register-pointer device with byte-wise auto-increment.
+#
+# Migrated from `peripherals/components/vl53l0x.rs`, which is deleted with this
+# descriptor. That model documented exactly what it needed before it could
+# become data, and this file exists because all three arrived:
+#
+#   * `auto_increment` — ST's own API reads a 12-byte block from
+#     RESULT_RANGE_STATUS (0x14) to reach the range bytes at 0x1E, so the
+#     pointer must walk BYTES across declared registers and gaps alike.
+#   * `unmapped_byte: 0x00` — the hand model answered 0 for every address it
+#     did not decode, and a block read crosses several of those.
+#   * `clear_on_write` — the VL53L0X clears its interrupt when firmware writes
+#     SYSTEM_INTERRUPT_CLEAR (0x0B). Reading the range does NOT clear it, so
+#     modelling this as clear_on_read would let a driver that never
+#     acknowledges appear to work. That is the bug class the twin exists to catch.
+#
+# Datasheet/API notes (ST VL53L0X API 1.0.2, DS UM2039):
+#
+#   0x00      SYSRANGE_START            write 0x01 = one-shot range
+#   0x0B      SYSTEM_INTERRUPT_CLEAR    write-1-to-clear the range interrupt
+#   0x13      RESULT_INTERRUPT_STATUS   bits 2:0 = interrupt status
+#   0x14      RESULT_RANGE_STATUS       device/range status byte
+#   0x1E,0x1F RESULT_RANGE_VAL          range in mm, 16-bit BIG-endian
+#   0xC0      IDENTIFICATION_MODEL_ID   0xEE
+#   0xC1                                0xAA
+#   0xC2      IDENTIFICATION_REVISION_ID 0x10
+#
+# ── One deliberate fidelity CHANGE from the model this replaces ────────────
+#
+# The old model set `ranging` on the first start and never cleared it, and had
+# no conversion time at all: the ready bit read set forever, from the first
+# range onward. Here the flag follows a real 33 ms conversion — ST's default
+# timing budget — and clears on acknowledge. Firmware that polls the status bit
+# and acknowledges works unchanged and is now honestly timed; firmware that
+# assumed a permanently-set flag was relying on a modelling shortcut, and that
+# is exactly what should surface.
+#
+# ⚠️ On families with no absolute-µs source (STM32, ESP32-classic, nRF52) the
+# clock never advances and the bit degrades to always-ready — the same
+# always-ready constant this part had before. Documented in `DataReady`.
+#
+# The 0x1C/0x1D range alias the old model also answered is NOT carried over: it
+# was a guess ("some continuous reads"), not a datasheet register, and inventing
+# copper is worse than answering the unmapped default.
+type: vl53l0x
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x29
+    # ST's API block-reads across undecoded addresses; both keys are required
+    # for that to land on the right bytes.
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      # Firmware writes 0x01 to start a one-shot measurement. rw because the
+      # write is what data_ready triggers on.
+      - { name: SYSRANGE_START, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Write-1-to-clear interrupt acknowledge.
+      - { name: SYSTEM_INTERRUPT_CLEAR, addr: 0x0B, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Interrupt status. Firmware owns none of it — the model drives bits 2:0
+      # via data_ready — so it is read-only and reads 0 until a range completes.
+      - { name: RESULT_INTERRUPT_STATUS, addr: 0x13, width: 1, endian: be, access: r, reset: 0x00 }
+      # Device/range status. 0x00 = no error, matching the old model.
+      - { name: RESULT_RANGE_STATUS, addr: 0x14, width: 1, endian: be, access: r, reset: 0x00 }
+      # The range itself: 16-bit big-endian millimetres straight off the
+      # `distance` input channel. Raw mm IS the datasheet unit, so no scaling.
+      - { name: RESULT_RANGE_VAL, addr: 0x1E, width: 2, endian: be, access: r, source: distance }
+      # Identification. Adafruit_VL53L0X and the ST API both refuse to
+      # initialize unless the model id reads 0xEE, so these are load-bearing.
+      - { name: IDENTIFICATION_MODEL_ID, addr: 0xC0, width: 1, endian: be, access: r, reset: 0xEE }
+      - { name: IDENTIFICATION_MODEL_ID_1, addr: 0xC1, width: 1, endian: be, access: r, reset: 0xAA }
+      - { name: IDENTIFICATION_REVISION_ID, addr: 0xC2, width: 1, endian: be, access: r, reset: 0x10 }
+    data_ready:
+      # Write 0x01 to SYSRANGE_START → 33 ms later bits 2:0 of
+      # RESULT_INTERRUPT_STATUS read set → firmware acknowledges by writing
+      # SYSTEM_INTERRUPT_CLEAR. Reading the range does NOT clear it.
+      - name: range
+        start_register: SYSRANGE_START
+        start_mask: 0x01
+        ready_register: RESULT_INTERRUPT_STATUS
+        ready_mask: 0x07
+        conversion_us: 33000
+        clear_on_write: [SYSTEM_INTERRUPT_CLEAR]
+
+metadata:
+  label: "VL53L0X ToF"
+  summary: "Laser time-of-flight distance sensor over I²C (ST VL53L0X)."
+  detail: "STMicroelectronics VL53L0X at 0x29. Identification and range-result registers for common Arduino drivers, with byte-wise pointer auto-increment so ST's own 12-byte block read from RESULT_RANGE_STATUS reaches the range bytes. A one-shot range takes ST's default 33 ms timing budget, after which RESULT_INTERRUPT_STATUS reads set until firmware writes SYSTEM_INTERRUPT_CLEAR. Host sets distance in mm via SimInput; the ranging algorithm itself is not simulated."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the VL53L0X power-on address 0x29."
+    - name: distance
+      ty: float
+      doc: "Initial distance in mm. Default 200. Drive it at runtime with the `distance` input channel."
+  inputs:
+    - { key: distance, label: "Distance", unit: mm, min: 0, max: 2000, default: 200 }

@@ -125,8 +125,12 @@ impl WasmSimulator {
     }
 
     /// Read back the current sensor data from each I2C sensor declared in `board_io`.
-    /// Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`
-    /// or `[{ id, kind: "bme280", temperature_c, humidity_pct, pressure_hpa }, ...]`.
+    /// Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`.
+    ///
+    /// BME280 is intentionally OMITTED: its component model exposes no
+    /// register-backed temperature/humidity/pressure value to read (static
+    /// factory registers only, not SimInput-drivable). Rather than fabricate a
+    /// number, we emit no entry so the panel shows a tracked gap.
     #[wasm_bindgen]
     pub fn get_i2c_sensor_states(&self) -> JsValue {
         let machine = self.machine.as_ref().unwrap();
@@ -134,7 +138,7 @@ impl WasmSimulator {
 
         for binding in &self.board_io {
             let device_type = match binding.device_type.as_deref() {
-                Some(t) if t == "adxl345" || t == "mpu6050" || t == "bme280" => t,
+                Some(t) if t == "adxl345" || t == "mpu6050" => t,
                 _ => continue,
             };
             let Some(idx) = machine
@@ -191,31 +195,6 @@ impl WasmSimulator {
                             "gx": gx,
                             "gy": gy,
                             "gz": gz,
-                        }));
-                        break;
-                    }
-                }
-            } else if device_type == "bme280" {
-                // Static values: hard-coded factory calibration produces ~25°C / 50%RH / 1013hPa
-                let address = binding.i2c_address.unwrap_or(0x76);
-                for device in i2c.attached_devices() {
-                    let device = device.borrow();
-                    if device.address() != address {
-                        continue;
-                    }
-                    if device
-                        .as_any()
-                        .and_then(|any| {
-                            any.downcast_ref::<labwired_core::peripherals::components::Bme280>()
-                        })
-                        .is_some()
-                    {
-                        states.push(serde_json::json!({
-                            "id": binding.id,
-                            "kind": "bme280",
-                            "temperature_c": 25.0_f64,
-                            "humidity_pct": 50.0_f64,
-                            "pressure_hpa": 1013.0_f64,
                         }));
                         break;
                     }
@@ -317,6 +296,69 @@ impl WasmSimulator {
         Ok(())
     }
 
+    /// Set the simulated wiper position on a potentiometer attached to an ADC channel.
+    ///
+    /// All divider math lives in Rust core (Potentiometer::wiper_output_mv).
+    /// This function only validates the position, recomputes wiper_mv via core,
+    /// and injects the result into the ADC peripheral's channel.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "potentiometer"`.
+    /// `position_pct` must be in 0..=100.
+    #[wasm_bindgen]
+    pub fn set_potentiometer(&mut self, device_id: &str, position_pct: f32) -> Result<(), JsValue> {
+        use labwired_core::peripherals::components::Potentiometer;
+
+        if !(0.0..=100.0).contains(&position_pct) {
+            return Err(JsValue::from_str(&format!(
+                "potentiometer position {} out of range (0..=100)",
+                position_pct
+            )));
+        }
+
+        // Find the board_io binding for this device.
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("potentiometer"))
+            .cloned()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "No potentiometer board_io binding '{}'",
+                    device_id
+                ))
+            })?;
+
+        let channel = binding.pin;
+
+        // Build a temporary pot model to compute the millivolt output — all math in core.
+        let mv = Potentiometer::new(channel, position_pct).wiper_output_mv();
+
+        // Inject the computed millivolt value into the matching ADC peripheral's channel.
+        let machine = self.machine.as_mut().unwrap();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "ADC peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| JsValue::from_str("ADC peripheral does not support downcasting"))?;
+        let adc = any.downcast_mut::<Adc>().ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "Peripheral '{}' is not an ADC",
+                binding.peripheral
+            ))
+        })?;
+
+        adc.set_channel_input(channel, mv);
+        Ok(())
+    }
+
     /// Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
     /// no shifter is wired. Lets the UI reflect the device's real state rather
     /// than tracking it in JS.
@@ -362,7 +404,7 @@ board_io:
     peripheral: "gpio"
     pin: 2
     signal: "input"
-    active_high: true
+    active_high: false
 "#,
         )
         .expect("parse system yaml");
@@ -395,7 +437,14 @@ board_io:
     #[test]
     fn esp32c3_board_io_button_press_updates_gpio_input_state() {
         let mut sim = c3_button_sim();
+        let machine = sim.machine.as_mut().expect("machine");
+        machine
+            .bus
+            .write_u32(0x6000_9000 + 0x04 + 2 * 4, 1 << 8)
+            .expect("enable GPIO2 FUN_WPU");
 
+        // An active-low button with INPUT_PULLUP is released high, so it must
+        // start inactive before the browser injects its first press.
         assert!(!button_active(&sim));
 
         sim.set_board_io_input("left", true).expect("press left");

@@ -4,82 +4,162 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! RP2040 I2C — Synopsys DesignWare APB I2C (`DW_apb_i2c`, datasheet §4.3,
-//! I2C0 base `0x40044000`).
+//! RP2040 I2C — Synopsys DesignWare APB I2C (`DW_apb_i2c`, datasheet §4.3).
 //!
-//! A minimal master transfer engine. The chip model attaches no I2C slave
-//! devices, so a master transfer to any target address gets no acknowledge —
-//! exactly as on a real bus with nothing connected. The model reproduces that
-//! response: with the controller enabled (`IC_ENABLE.ENABLE`) and a target set
-//! (`IC_TAR`), the first command pushed into `IC_DATA_CMD` raises the transmit
-//! abort interrupt (`IC_RAW_INTR_STAT.TX_ABRT`) and records the 7-bit
-//! address-NACK reason in `IC_TX_ABRT_SOURCE` (`ABRT_7B_ADDR_NOACK`). The TX
-//! FIFO is flushed on abort (per the IP), so `IC_TXFLR` returns 0.
+//! Master path with attached slaves (matrix kits). Supports:
+//! - Arduino Wire (poll TX_ABRT / STATUS)
+//! - Zephyr `i2c_dw` (INT: TX_EMPTY + STOP_DET after DATA_CMD)
 //!
-//! This is the same modelling choice the nRF52 TWIM uses for its address-NACK
-//! path — a genuine engine response, not a storage stub. Reading
-//! `IC_CLR_TX_ABRT` clears the abort (the IP's read-to-clear semantics).
-//!
-//! `IC_STATUS` reports a coherent steady state (TX FIFO empty + not full, RX
-//! FIFO empty); every other register is plain read/write storage.
+//! Zephyr init requires `IC_COMP_TYPE == 0x44570140`.
 
-use crate::{Peripheral, SimResult};
-use std::cell::Cell;
+use crate::peripherals::i2c::I2cDevice;
+use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::cell::{Cell, RefCell};
 
-// DW_apb_i2c register offsets (datasheet §4.3.17).
-const IC_DATA_CMD: u64 = 0x10; // TX/RX data + command
-const IC_RAW_INTR_STAT: u64 = 0x34; // raw interrupt status
-const IC_CLR_TX_ABRT: u64 = 0x54; // read-to-clear TX_ABRT
-const IC_ENABLE: u64 = 0x6c; // controller enable
-const IC_STATUS: u64 = 0x70; // FIFO / activity status
-const IC_TXFLR: u64 = 0x74; // TX FIFO level
-const IC_RXFLR: u64 = 0x78; // RX FIFO level
-const IC_TX_ABRT_SOURCE: u64 = 0x80; // abort reason bitmap
+const IC_CON: u64 = 0x00;
+const IC_TAR: u64 = 0x04;
+const IC_DATA_CMD: u64 = 0x10;
+const IC_INTR_STAT: u64 = 0x2c;
+const IC_INTR_MASK: u64 = 0x30;
+const IC_RAW_INTR_STAT: u64 = 0x34;
+const IC_CLR_TX_ABRT: u64 = 0x54;
+const IC_CLR_ACTIVITY: u64 = 0x5c;
+const IC_CLR_STOP_DET: u64 = 0x60;
+const IC_ENABLE: u64 = 0x6c;
+const IC_STATUS: u64 = 0x70;
+const IC_TXFLR: u64 = 0x74;
+const IC_RXFLR: u64 = 0x78;
+const IC_TX_ABRT_SOURCE: u64 = 0x80;
+const IC_COMP_TYPE: u64 = 0xfc;
+const IC_COMP_TYPE_MAGIC: u32 = 0x4457_0140;
 
-// IC_RAW_INTR_STAT bits.
+// RAW / MASK interrupt bits (DW_apb_i2c).
+const INTR_TX_EMPTY: u32 = 1 << 4;
 const INTR_TX_ABRT: u32 = 1 << 6;
+const INTR_ACTIVITY: u32 = 1 << 8;
+const INTR_STOP_DET: u32 = 1 << 9;
 
-// IC_TX_ABRT_SOURCE bits.
 const ABRT_7B_ADDR_NOACK: u32 = 1 << 0;
-
-// IC_ENABLE bits.
 const ENABLE_ENABLE: u32 = 1 << 0;
 
-// IC_STATUS bits.
-const STATUS_TFNF: u32 = 1 << 1; // TX FIFO not full
-const STATUS_TFE: u32 = 1 << 2; // TX FIFO empty
+const STATUS_ACTIVITY: u32 = 1 << 0;
+const STATUS_TFNF: u32 = 1 << 1;
+const STATUS_TFE: u32 = 1 << 2;
+const STATUS_RFNE: u32 = 1 << 3;
 
-#[derive(Debug, Default)]
+const DATA_CMD_READ: u32 = 1 << 8;
+const DATA_CMD_STOP: u32 = 1 << 9;
+
+#[derive(Default)]
 pub struct Rp2040I2c {
     enable: u32,
-    /// Latched abort interrupt (read-to-clear via `IC_CLR_TX_ABRT`). `Cell`
-    /// because the clear happens on a `&self` read.
-    tx_abrt: Cell<bool>,
+    tar: u32,
+    con: u32,
+    intr_mask: u32,
+    raw_intr: Cell<u32>,
     tx_abrt_source: Cell<u32>,
+    rx_byte: Cell<Option<u8>>,
+    activity: Cell<bool>,
+    attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+}
+
+impl std::fmt::Debug for Rp2040I2c {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Rp2040I2c")
+            .field("enable", &self.enable)
+            .field("tar", &self.tar)
+            .field("slaves", &self.attached_devices.len())
+            .finish()
+    }
 }
 
 impl Rp2040I2c {
     pub fn new() -> Self {
-        Self::default()
+        let s = Self::default();
+        // FIFO empty at reset → TX_EMPTY raw bit set (DW default behaviour).
+        s.raw_intr.set(INTR_TX_EMPTY);
+        s
+    }
+
+    pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
+        self.attached_devices.push(RefCell::new(device));
+    }
+
+    /// Resolve the attached device that answers to `addr7`. Uses
+    /// `claims_address` (not `address()`) so a bus switch can answer for the
+    /// devices behind its enabled channels — see
+    /// [`crate::peripherals::i2c::I2cDevice::claims_address`].
+    fn device_for(&self, addr7: u8) -> Option<usize> {
+        self.attached_devices
+            .iter()
+            .position(|d| d.borrow().claims_address(addr7))
+    }
+
+    fn set_raw(&self, bits: u32) {
+        self.raw_intr.set(self.raw_intr.get() | bits);
+    }
+
+    fn clr_raw(&self, bits: u32) {
+        self.raw_intr.set(self.raw_intr.get() & !bits);
+    }
+
+    fn irq_pending(&self) -> bool {
+        (self.raw_intr.get() & self.intr_mask) != 0
     }
 }
 
 impl Peripheral for Rp2040I2c {
+    /// Pure write-driven transfer engine — `tick()` is structural no-op for
+    /// the walk (Class-A). Address NACK / slave traffic fire inside
+    /// `IC_DATA_CMD` writes; no per-cycle work.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
+            IC_CON => self.con,
+            IC_TAR => self.tar,
             IC_ENABLE => self.enable,
-            IC_RAW_INTR_STAT if self.tx_abrt.get() => INTR_TX_ABRT,
-            IC_TX_ABRT_SOURCE => self.tx_abrt_source.get(),
-            // Reading IC_CLR_TX_ABRT clears the abort interrupt (read-to-clear).
+            IC_INTR_MASK => self.intr_mask,
+            IC_RAW_INTR_STAT => self.raw_intr.get(),
+            IC_INTR_STAT => self.raw_intr.get() & self.intr_mask,
             IC_CLR_TX_ABRT => {
-                self.tx_abrt.set(false);
+                self.clr_raw(INTR_TX_ABRT);
                 self.tx_abrt_source.set(0);
                 0
             }
-            // TX FIFO empties immediately (transfers complete synchronously);
-            // the RX FIFO is always empty (no slave returns data).
-            IC_STATUS => STATUS_TFE | STATUS_TFNF,
-            IC_TXFLR | IC_RXFLR => 0,
+            IC_CLR_ACTIVITY => {
+                self.clr_raw(INTR_ACTIVITY);
+                self.activity.set(false);
+                0
+            }
+            IC_CLR_STOP_DET => {
+                self.clr_raw(INTR_STOP_DET);
+                0
+            }
+            IC_DATA_CMD => self.rx_byte.take().unwrap_or(0xFF) as u32,
+            IC_STATUS => {
+                let mut s = STATUS_TFE | STATUS_TFNF;
+                if self.activity.get() {
+                    s |= STATUS_ACTIVITY;
+                }
+                if self.rx_byte.get().is_some() {
+                    s |= STATUS_RFNE;
+                }
+                s
+            }
+            IC_TXFLR => 0,
+            IC_RXFLR => u32::from(self.rx_byte.get().is_some()),
+            IC_TX_ABRT_SOURCE => self.tx_abrt_source.get(),
+            IC_COMP_TYPE => IC_COMP_TYPE_MAGIC,
             _ => 0,
         };
         Ok(val)
@@ -87,14 +167,56 @@ impl Peripheral for Rp2040I2c {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            IC_ENABLE => self.enable = value,
-            // A command issued while enabled drives the bus. With no slave
-            // attached the address phase gets no ACK → 7-bit address NACK
-            // abort. (A read command — CMD bit8 set — aborts the same way.)
+            IC_CON => self.con = value,
+            IC_TAR => self.tar = value & 0x3FF,
+            IC_INTR_MASK => self.intr_mask = value,
+            IC_ENABLE => {
+                self.enable = value;
+                if value & ENABLE_ENABLE != 0 {
+                    // Enabled with empty FIFO → TX_EMPTY asserted.
+                    self.set_raw(INTR_TX_EMPTY);
+                }
+            }
             IC_DATA_CMD if self.enable & ENABLE_ENABLE != 0 => {
-                self.tx_abrt.set(true);
-                self.tx_abrt_source
-                    .set(self.tx_abrt_source.get() | ABRT_7B_ADDR_NOACK);
+                let addr7 = (self.tar & 0x7F) as u8;
+                let stop = value & DATA_CMD_STOP != 0;
+                self.activity.set(true);
+                self.set_raw(INTR_ACTIVITY);
+                // Consuming a command clears TX_EMPTY until the engine finishes.
+                self.clr_raw(INTR_TX_EMPTY);
+                match self.device_for(addr7) {
+                    None => {
+                        self.set_raw(INTR_TX_ABRT);
+                        self.tx_abrt_source
+                            .set(self.tx_abrt_source.get() | ABRT_7B_ADDR_NOACK);
+                        self.activity.set(false);
+                        self.set_raw(INTR_TX_EMPTY);
+                        if stop {
+                            self.set_raw(INTR_STOP_DET);
+                        }
+                    }
+                    Some(idx) => {
+                        self.clr_raw(INTR_TX_ABRT);
+                        self.tx_abrt_source.set(0);
+                        self.attached_devices[idx]
+                            .borrow_mut()
+                            .select_address(addr7);
+                        if value & DATA_CMD_READ != 0 {
+                            let b = self.attached_devices[idx].borrow_mut().read();
+                            self.rx_byte.set(Some(b));
+                        } else {
+                            self.attached_devices[idx]
+                                .borrow_mut()
+                                .write((value & 0xFF) as u8);
+                        }
+                        // Instant complete — FIFO empty again.
+                        self.set_raw(INTR_TX_EMPTY);
+                        self.activity.set(false);
+                        if stop {
+                            self.set_raw(INTR_STOP_DET);
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -113,6 +235,13 @@ impl Peripheral for Rp2040I2c {
         let new = (cur & !(0xFF << shift)) | ((value as u32) << shift);
         self.write_u32(aligned, new)
     }
+
+    fn tick(&mut self) -> PeripheralTickResult {
+        PeripheralTickResult {
+            irq: self.irq_pending(),
+            ..Default::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -128,43 +257,121 @@ mod tests {
     #[test]
     fn unacked_transfer_aborts_with_addr_nack() {
         let mut i2c = enabled_i2c();
-        // No abort before any command.
         assert_eq!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
-        // Issue a write command to an (unconnected) target.
-        i2c.write_u32(IC_DATA_CMD, 0xDE).unwrap();
+        i2c.write_u32(IC_DATA_CMD, 0xDE | DATA_CMD_STOP).unwrap();
         assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
         assert_ne!(
             i2c.read_u32(IC_TX_ABRT_SOURCE).unwrap() & ABRT_7B_ADDR_NOACK,
             0
         );
-        // TX FIFO flushed on abort.
-        assert_eq!(i2c.read_u32(IC_TXFLR).unwrap(), 0);
+    }
+
+    #[test]
+    fn attached_slave_acks_write_and_stop_det() {
+        struct Dev {
+            addr: u8,
+            last: Cell<u8>,
+        }
+        impl I2cDevice for Dev {
+            fn address(&self) -> u8 {
+                self.addr
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, data: u8) {
+                self.last.set(data);
+            }
+        }
+        let mut i2c = enabled_i2c();
+        i2c.push_slave(Box::new(Dev {
+            addr: 0x40,
+            last: Cell::new(0),
+        }));
+        i2c.intr_mask = INTR_TX_EMPTY | INTR_STOP_DET | INTR_TX_ABRT;
+        i2c.write_u32(IC_TAR, 0x40).unwrap();
+        i2c.write_u32(IC_DATA_CMD, 0xAB | DATA_CMD_STOP).unwrap();
+        assert_eq!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
+        assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_STOP_DET, 0);
+        assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_EMPTY, 0);
+        assert!(i2c.tick().irq);
+    }
+
+    /// Four sensors at ONE fixed address behind a TCA9548A, on the RP2040's
+    /// DesignWare controller. Guards the same resolution seam as the nRF52 and
+    /// STM32 tests: `device_for` must ask `claims_address`, not compare
+    /// `address()` and take the first hit.
+    #[test]
+    fn four_same_address_sensors_behind_a_bus_switch_are_each_reachable() {
+        use crate::peripherals::components::tca9548a::Tca9548a;
+
+        struct Tag(u8);
+        impl I2cDevice for Tag {
+            fn address(&self) -> u8 {
+                0x13
+            }
+            fn read(&mut self) -> u8 {
+                self.0
+            }
+            fn write(&mut self, _data: u8) {}
+        }
+
+        let mut mux = Tca9548a::new(0x70);
+        for ch in 0..4u8 {
+            mux.attach(ch, Box::new(Tag(0xA0 + ch))).unwrap();
+        }
+
+        let mut i2c = enabled_i2c();
+        i2c.push_slave(Box::new(mux));
+
+        // Reset state: no channel enabled, so 0x13 is on no reachable segment.
+        i2c.write_u32(IC_TAR, 0x13).unwrap();
+        i2c.write_u32(IC_DATA_CMD, DATA_CMD_READ | DATA_CMD_STOP)
+            .unwrap();
+        assert_ne!(
+            i2c.read_u32(IC_TX_ABRT_SOURCE).unwrap() & ABRT_7B_ADDR_NOACK,
+            0,
+            "an unselected sensor must NACK like an empty bus"
+        );
+
+        for ch in 0..4u8 {
+            // Select the channel on the switch.
+            i2c.write_u32(IC_TAR, 0x70).unwrap();
+            i2c.write_u32(IC_DATA_CMD, (1u32 << ch) | DATA_CMD_STOP)
+                .unwrap();
+            assert_eq!(
+                i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT,
+                0,
+                "the switch must ACK its own address"
+            );
+
+            // Read the sensor behind it.
+            i2c.write_u32(IC_TAR, 0x13).unwrap();
+            i2c.write_u32(IC_DATA_CMD, DATA_CMD_READ | DATA_CMD_STOP)
+                .unwrap();
+            assert_eq!(
+                i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT,
+                0,
+                "channel {ch} is enabled, so 0x13 must ACK"
+            );
+            assert_eq!(
+                i2c.read_u32(IC_DATA_CMD).unwrap() & 0xFF,
+                (0xA0 + ch) as u32,
+                "channel {ch} must be answered by its own sensor"
+            );
+        }
+    }
+
+    #[test]
+    fn comp_type_is_designware_magic() {
+        let i2c = Rp2040I2c::new();
+        assert_eq!(i2c.read_u32(IC_COMP_TYPE).unwrap(), IC_COMP_TYPE_MAGIC);
     }
 
     #[test]
     fn disabled_controller_does_not_abort() {
-        let mut i2c = Rp2040I2c::new(); // not enabled
+        let mut i2c = Rp2040I2c::new();
         i2c.write_u32(IC_DATA_CMD, 0xDE).unwrap();
         assert_eq!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
-    }
-
-    #[test]
-    fn clr_tx_abrt_clears_the_abort() {
-        let mut i2c = enabled_i2c();
-        i2c.write_u32(IC_DATA_CMD, 0xDE).unwrap();
-        assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
-        let _ = i2c.read_u32(IC_CLR_TX_ABRT).unwrap();
-        assert_eq!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
-        assert_eq!(i2c.read_u32(IC_TX_ABRT_SOURCE).unwrap(), 0);
-    }
-
-    #[test]
-    fn status_steady_state() {
-        let i2c = enabled_i2c();
-        let s = i2c.read_u32(IC_STATUS).unwrap();
-        assert_ne!(s & STATUS_TFE, 0);
-        assert_ne!(s & STATUS_TFNF, 0);
-        // RX FIFO (bit 3) is always empty: no slave returns data.
-        assert_eq!(s & (1 << 3), 0);
     }
 }

@@ -1,0 +1,418 @@
+peripheral: UART0
+version: 0.1.0
+registers:
+- id: TASKS_STARTRX
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTRX
+    bit_range:
+    - 0
+    - 0
+    description: Start UART receiver
+  side_effects: null
+- id: TASKS_STOPRX
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STOPRX
+    bit_range:
+    - 0
+    - 0
+    description: Stop UART receiver
+  side_effects: null
+- id: TASKS_STARTTX
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTTX
+    bit_range:
+    - 0
+    - 0
+    description: Start UART transmitter
+  side_effects: null
+- id: TASKS_STOPTX
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STOPTX
+    bit_range:
+    - 0
+    - 0
+    description: Stop UART transmitter
+  side_effects: null
+- id: TASKS_SUSPEND
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_SUSPEND
+    bit_range:
+    - 0
+    - 0
+    description: Suspend UART
+  side_effects: null
+- id: EVENTS_CTS
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_CTS
+    bit_range:
+    - 0
+    - 0
+    description: CTS is activated (set low). Clear To Send.
+  side_effects: null
+- id: EVENTS_NCTS
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_NCTS
+    bit_range:
+    - 0
+    - 0
+    description: CTS is deactivated (set high). Not Clear To Send.
+  side_effects: null
+- id: EVENTS_RXDRDY
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_RXDRDY
+    bit_range:
+    - 0
+    - 0
+    description: Data received in RXD
+  side_effects: null
+- id: EVENTS_TXDRDY
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_TXDRDY
+    bit_range:
+    - 0
+    - 0
+    description: Data sent from TXD
+  side_effects: null
+- id: EVENTS_ERROR
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ERROR
+    bit_range:
+    - 0
+    - 0
+    description: Error detected
+  side_effects: null
+- id: EVENTS_RXTO
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_RXTO
+    bit_range:
+    - 0
+    - 0
+    description: Receiver timeout
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTS_STARTRX
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between event CTS and task STARTRX
+  - name: NCTS_STOPRX
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between event NCTS and task STOPRX
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTS
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable interrupt for event CTS
+  - name: NCTS
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to enable interrupt for event NCTS
+  - name: RXDRDY
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to enable interrupt for event RXDRDY
+  - name: TXDRDY
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to enable interrupt for event TXDRDY
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to enable interrupt for event ERROR
+  - name: RXTO
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to enable interrupt for event RXTO
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CTS
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable interrupt for event CTS
+  - name: NCTS
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to disable interrupt for event NCTS
+  - name: RXDRDY
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to disable interrupt for event RXDRDY
+  - name: TXDRDY
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to disable interrupt for event TXDRDY
+  - name: ERROR
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to disable interrupt for event ERROR
+  - name: RXTO
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to disable interrupt for event RXTO
+  side_effects: null
+- id: ERRORSRC
+  address_offset: 1152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OVERRUN
+    bit_range:
+    - 0
+    - 0
+    description: Overrun error
+  - name: PARITY
+    bit_range:
+    - 1
+    - 1
+    description: Parity error
+  - name: FRAMING
+    bit_range:
+    - 2
+    - 2
+    description: Framing error occurred
+  - name: BREAK
+    bit_range:
+    - 3
+    - 3
+    description: Break condition
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 3
+    - 0
+    description: Enable or disable UART
+  side_effects: null
+- id: PSEL_RTS
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_TXD
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_CTS
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_RXD
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: RXD
+  address_offset: 1304
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXD
+    bit_range:
+    - 7
+    - 0
+    description: RX data received in previous transfers, double buffered
+  side_effects: null
+- id: TXD
+  address_offset: 1308
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TXD
+    bit_range:
+    - 7
+    - 0
+    description: TX data to be transferred
+  side_effects: null
+- id: BAUDRATE
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 67108864
+  fields:
+  - name: BAUDRATE
+    bit_range:
+    - 31
+    - 0
+    description: Baud rate
+  side_effects: null
+- id: CONFIG
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HWFC
+    bit_range:
+    - 0
+    - 0
+    description: Hardware flow control
+  - name: PARITY
+    bit_range:
+    - 3
+    - 1
+    description: Parity
+  - name: STOP
+    bit_range:
+    - 4
+    - 4
+    description: Stop bits
+  side_effects: null
+interrupts:
+  UARTE0_UART0: 2
+timing: null

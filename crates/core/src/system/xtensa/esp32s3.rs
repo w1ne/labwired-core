@@ -11,7 +11,6 @@ use crate::peripherals::esp32s3::flash_xip::{new_mmu_table, Esp32s3MmuTable, Fla
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
 use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
-use crate::peripherals::esp32s3::tmp102::Tmp102;
 use crate::peripherals::esp_xtensa_common::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp_xtensa_common::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::{Bus, Cpu};
@@ -46,7 +45,10 @@ impl Default for Esp32s3Opts {
     fn default() -> Self {
         Self {
             iram_size: 512 * 1024,
-            dram_size: 480 * 1024,
+            // Match chip yaml / TRM internal SRAM data view (512 KiB from
+            // 0x3FC8_8000). The old 480 KiB cut off the top of the heap region
+            // firmware uses for deep FreeRTOS/RMT stacks.
+            dram_size: 512 * 1024,
             flash_size: 4 * 1024 * 1024,
             cpu_clock_hz: 80_000_000,
             real_reset_boot: false,
@@ -186,7 +188,21 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
         .rom_images
         .clone()
         .or_else(crate::boot::esp32s3_rom::provision_rom_images);
-    let mmu_model = opts.real_reset_boot;
+    // The real-firmware matrix path (ESP-IDF/Arduino) also opts into MMU XIP so
+    // `spi_flash_mmap` / partition-table load and `cache2phys` share one
+    // translation (the CLI seeds it via `seed_factory_mmu_for_cache2phys` after
+    // `fast_boot`; identity-only XIP made mmap of flash 0x8000 read the wrong
+    // dcache page). It requests this explicitly with `LABWIRED_ESP32S3_MMU_XIP`.
+    //
+    // `LABWIRED_ESP32S3_FASTBOOT` selects the *thunk ROM harness* (see
+    // `esp32s3_rom::provision_rom_images`) and is orthogonal to the XIP model —
+    // it must NOT force MMU XIP. A bare esp-hal fixture that boots via a plain
+    // `fast_boot` never programs DR_REG_MMU_TABLE, so an MMU-XIP window would
+    // translate every `.rodata`/`.text` read through an all-invalid table and
+    // return 0 (an early null-jump through a rodata jump-table entry). Such
+    // harness fixtures stay on identity XIP; only callers that program/seed the
+    // MMU (real-reset boot, or the matrix's factory seed) select the MMU model.
+    let mmu_model = opts.real_reset_boot || std::env::var_os("LABWIRED_ESP32S3_MMU_XIP").is_some();
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real
     // bytes. In fast-boot this is unused; the legacy per-window backings apply.
@@ -299,8 +315,21 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
             Esp32s3BootMode::Faithful
         }
         None => {
-            // DROM (0x3FF0_0000) is intentionally not mapped in harness mode;
-            // only the faithful path loads the real DROM image.
+            // Code ROM is thunk-backed. Still map DROM (0x3FF0_0000, 128 KiB)
+            // as zero RAM: Arduino/IDF reads ROM data tables through that
+            // window; leaving it unmapped faults at e.g. 0x3FF1_FFFC.
+            // Prefer vendored/env DROM image when present even in harness.
+            let drom_bytes = std::env::var("LABWIRED_ESP32S3_DROM")
+                .ok()
+                .and_then(|p| std::fs::read(p).ok())
+                .or_else(|| {
+                    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("roms/esp32s3/esp32s3_drom.bin");
+                    std::fs::read(p).ok()
+                })
+                .unwrap_or_else(|| vec![0u8; 0x2_0000]);
+            let drom = RamPeripheral::with_image(0x2_0000, &drom_bytes);
+            bus.add_peripheral("drom", 0x3FF0_0000, 0x2_0000, None, Box::new(drom));
             let mut rom_bank = RomThunkBank::new(0x4000_0000, 0x6_0000);
             register_default_thunks(&mut rom_bank);
             bus.add_peripheral(
@@ -311,8 +340,8 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
                 Box::new(rom_bank),
             );
             eprintln!(
-                "configure_xtensa_esp32s3: ESP32-S3 ROM not found; running in degraded harness mode \
-                 — install the ESP toolchain (or set LABWIRED_ESP32S3_ROM_ELF) for faithful simulation"
+                "configure_xtensa_esp32s3: ESP32-S3 ROM harness (thunk code + {} B DROM)",
+                drom_bytes.len()
             );
             Esp32s3BootMode::Harness
         }
@@ -387,16 +416,19 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         Box::new(crate::peripherals::esp32s3::crosscore_ipi::Esp32s3CrossCoreIpi::new()),
     );
     // ── SYSTEM_CORE_1_CONTROL (0x600C_0000) ──────────────────────────────
-    // APP_CPU reset/clock-gate control. Registered BEFORE the 0x600C_0000
-    // "system" catch-all so the RESETING 1→0 edge (APP_CPU out of reset) is
-    // observed and the run loop can boot core 1 from the real ROM.
-    bus.add_peripheral(
-        "core1_control",
-        0x600C_0000,
-        0x8,
-        None,
-        Box::new(crate::peripherals::esp32s3::core1_control::Esp32s3Core1Control::new()),
-    );
+    // NOT registered here, deliberately. `system_regs` window A (registered
+    // below at this same base) serves 0x600C_0000..0x030 and already models
+    // CORE_1_CONTROL_0/1 including the RESETING 1→0 edge that releases the
+    // APP_CPU — see the note there.
+    //
+    // A `core1_control` entry used to sit here with the comment "Registered
+    // BEFORE the 'system' catch-all so the RESETING edge is observed". That is
+    // backwards: equal starts resolve to the LAST registered, so registering
+    // first meant losing. The entry owned no address at all and its model never
+    // executed — dead code that read as the authoritative APP_CPU boot path.
+    // (The type itself is still live via the declarative factory's
+    // `esp32s3_core1_control`; only this shadowed registration is gone.)
+    // Guarded by tests::peripheral_reachability.
     // ── EXTMEM cache controller (0x600C_4000) ────────────────────────────
     // The boot ROM drives cache invalidate/writeback/sync through this block
     // using a launch-bit/done-bit handshake (CACHE_SYNC_CTRL @+0x28: write an
@@ -562,6 +594,12 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     let mut cpu = XtensaLx7::new();
     cpu.reset(bus).expect("xtensa reset");
 
+    // Auto-derive walk deletion under `event-scheduler` once every peripheral
+    // is scheduler-driven or Class-A inert. Production WASM/e2e paths call
+    // this configure (not from_config), so recompute here — same predicate as
+    // `from_config` with `walk_deleted = None`.
+    bus.recompute_walk_deletable();
+
     Esp32s3Wiring {
         cpu,
         icache_backing,
@@ -625,24 +663,12 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
         bus.add_peripheral(id, base, size, None, dev);
     }
 
-    // I2C0 carries board-specific I2C slaves the factory does not model: TMP102
-    // always, plus an opt-in PCA9685 (LABWIRED_ESP32S3_PCA9685) for the
-    // SpiceDispenser servos. Built directly so the slaves are attached.
+    // Register the on-chip I2C0 controller. Off-chip I2C slaves (TMP102, SSD1306,
+    // SH1107, PCA9685, …) are NOT attached here — they are wired from the board
+    // manifest's `external_devices` by `attach_esp32_external_devices`, the same
+    // way real hardware is: the board says what's on the bus, not the SoC config.
     let i2c0 = Esp32s3I2c::new();
-    // Register first, then attach every slave through the single bus choke point
-    // so each is wrapped into the shared bus trace (universal logic analyzer) —
-    // no per-callsite set_bus_trace ordering to get wrong.
     bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
-    bus.attach_i2c_slave("i2c0", Box::new(Tmp102::new()))
-        .expect("i2c0 just registered as Esp32s3I2c");
-    if std::env::var("LABWIRED_ESP32S3_PCA9685").is_ok() {
-        bus.attach_i2c_slave(
-            "i2c0",
-            Box::new(crate::peripherals::components::pca9685::Pca9685::new()),
-        )
-        .expect("i2c0 just registered as Esp32s3I2c");
-        eprintln!("configure_xtensa_esp32s3: attached PCA9685 @ 0x40 on I2C0");
-    }
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.
@@ -663,14 +689,26 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // ets_set_appcpu_boot_addr — single-core build skips this, but multicore
     // hal calls it to point cpu1 at park-loop. NOP is safe.
     bank.register(0x4000_0720, rom_thunks::ets_set_appcpu_boot_addr);
-    // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
-    // but the symbol may be linked in.
+    // intr_matrix_set / esp_rom_route_intr_matrix — binds peripheral source
+    // IDs to CPU IRQ slots (FROM_CPU yield, systimer tick, UART, …).
+    bank.register(0x4000_1b54, rom_thunks::esp32s3_rom_route_intr_matrix);
+    // ROM MD5 — `CONFIG_PARTITION_TABLE_MD5` hashes every 32-byte partition
+    // entry then compares the 0xEBEB trailer. Without real MD5, load_partitions
+    // fails MD5 verify → empty list → OTA `it != NULL` assert in initArduino.
+    bank.register(0x4000_1c5c, rom_thunks::rom_md5_init); // MD5Init / esp_rom_md5_init
+    bank.register(0x4000_1c68, rom_thunks::rom_md5_update); // MD5Update
+    bank.register(0x4000_1c74, rom_thunks::rom_md5_final); // MD5Final
+                                                           // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
+                                                           // but the symbol may be linked in.
     bank.register(0x4000_0a2c, rom_thunks::esp_rom_spiflash_unlock);
     // rtc_get_reset_reason(cpu_idx) — esp-hal queries this during init to
     // distinguish power-on from soft reset; we always report POWERON_RESET.
     bank.register(0x4000_057c, rom_thunks::rtc_get_reset_reason);
     // rom_config_data_cache_mode — analogous to instruction cache config; NOP.
     bank.register(0x4000_1a28, rom_thunks::nop_return_zero);
+    // ets_get_cpu_frequency() → MHz; Arduino log timestamps divide CCOUNT
+    // by (mhz*40)-ish — zero ⇒ IntegerDivideByZeroCause.
+    bank.register(0x4000_1a40, rom_thunks::rom_cpu_freq_240mhz);
     // ets_update_cpu_frequency(freq_mhz) — informs the ROM of the new clock
     // so subsequent ets_delay_us calls calibrate correctly. We don't model
     // ROM timing, so accepting and discarding the value is fine.
@@ -691,6 +729,8 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
                                                              // memcpy and __udivdi3 do real work — emulate them so the firmware
                                                              // doesn't get garbage from the boot-init copy paths.
     bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
+    // strlen — Print::write / Serial.println length; see rom_strlen docs.
+    bank.register(0x4000_1248, rom_thunks::rom_strlen);
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
     // libgcc 64-bit arithmetic + bit/byte helpers, in ROM. The full ESP-IDF
     // image pulls these from the C runtime (printf, timers, hashing). Each has
@@ -726,19 +766,24 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_11e8, rom_thunks::rom_memset);
     bank.register(0x4000_1200, rom_thunks::rom_memmove);
     bank.register(0x4000_120c, rom_thunks::rom_memcmp);
+    // qsort — heap reserved-region sort in soc_get_available_memory_regions.
+    bank.register(0x4000_1488, rom_thunks::rom_qsort);
     // ROM cache-management API. A full ESP-IDF/Arduino image drives the whole
     // family during flash/MMU bring-up; the esp-hal path only touched
     // suspend/resume-DCache (0x4000_18b4 / 0x4000_18c0, registered above).
-    // We model flash-XIP as identity-mapped, so every cache op — enable,
-    // disable, freeze, occupy, MMU size/info — is a no-op for the simulator.
-    // Addresses are ESP32-S3 ROM symbol-table values.
+    //
+    // IRAM wrappers for Suspend/Freeze_* poll EXTMEM CACHE_STATE (0x600C_4130)
+    // after the ROM call — those must drive the matching field. Enable/Disable
+    // update the same idle bits so a Disable→Suspend sequence (flash ops)
+    // observes state=1 after Suspend rather than spinning forever.
+    // MMU size/info / occupy / page-count remain nops (XIP is identity-mapped).
+    bank.register(0x4000_186c, rom_thunks::cache_disable_icache);
+    bank.register(0x4000_1878, rom_thunks::cache_enable_icache);
+    bank.register(0x4000_1884, rom_thunks::cache_disable_dcache);
+    bank.register(0x4000_1890, rom_thunks::cache_enable_dcache);
+    bank.register(0x4000_189c, rom_thunks::cache_suspend_icache);
+    bank.register(0x4000_18a8, rom_thunks::cache_resume_icache);
     for addr in [
-        0x4000_186c, // Cache_Disable_ICache
-        0x4000_1878, // Cache_Enable_ICache
-        0x4000_1884, // Cache_Disable_DCache
-        0x4000_1890, // Cache_Enable_DCache
-        0x4000_189c, // Cache_Suspend_ICache
-        0x4000_18a8, // Cache_Resume_ICache
         0x4000_1914, // Cache_Set_IDROM_MMU_Size
         0x4000_1950, // Cache_Set_IDROM_MMU_Info
         0x4000_1980, // Cache_Occupy_ICache_MEMORY
@@ -759,6 +804,37 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // live in ROM (not the loaded image) so they must be thunked.
     bank.register(0x4000_1c38, rom_thunks::xtos_set_intlevel); // _xtos_set_intlevel
     bank.register(0x4000_1c08, rom_thunks::xtos_restore_intlevel); // _xtos_restore_intlevel
+                                                                   // WDT + SYSTIMER ROM HALs — Arduino `system_early_init` / FreeRTOS tick
+                                                                   // setup call these. Without them the harness ROM bank returns 0 / faults
+                                                                   // on undecoded BREAK. NOP is enough: real TIMG/SYSTIMER MMIO models drive
+                                                                   // the observable side effects the app needs later.
+    for addr in [
+        0x4000_0dbc, // wdt_hal_init
+        0x4000_0dc8, // wdt_hal_deinit
+        0x4000_0dd4, // wdt_hal_config_stage
+        0x4000_0de0, // wdt_hal_write_protect_disable
+        0x4000_0dec, // wdt_hal_write_protect_enable
+        0x4000_0df8, // wdt_hal_enable
+        0x4000_0e04, // wdt_hal_disable
+        0x4000_0e10, // wdt_hal_handle_intr
+        0x4000_0e1c, // wdt_hal_feed
+        0x4000_0e28, // wdt_hal_set_flashboot_en
+        0x4000_0e34, // wdt_hal_is_enabled
+        0x4000_0e40, // systimer_hal_get_counter_value
+        0x4000_0e4c, // systimer_hal_get_time
+        0x4000_0e58, // systimer_hal_set_alarm_target
+        0x4000_0e64, // systimer_hal_set_alarm_period
+        0x4000_0e70, // systimer_hal_get_alarm_value
+        0x4000_0e7c, // systimer_hal_enable_alarm_int
+        0x4000_0e88, // systimer_hal_on_apb_freq_update
+        0x4000_0e94, // systimer_hal_counter_value_advance
+        0x4000_0ea0, // systimer_hal_enable_counter
+        0x4000_0eac, // systimer_hal_init
+        0x4000_0eb8, // systimer_hal_select_alarm_mode
+        0x4000_0ec4, // systimer_hal_connect_alarm_counter
+    ] {
+        bank.register(addr, rom_thunks::nop_return_zero);
+    }
 }
 
 // ── RamPeripheral helper ────────────────────────────────────────────────

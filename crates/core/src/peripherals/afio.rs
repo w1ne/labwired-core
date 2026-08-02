@@ -89,6 +89,16 @@ impl Peripheral for Afio {
         Ok(())
     }
 
+    fn needs_legacy_walk(&self) -> bool {
+        // AFIO is a pure configuration register bank (MAPR/EXTICR remap bits).
+        // It has no `tick()` override, so its per-cycle walk callback is the
+        // default no-op: it never mutates observable state, emits an IRQ/DMA
+        // request, or fires an event from the walk. Deleting the walk is
+        // therefore byte-identical for every reachable firmware state, so it
+        // must not pin the walk on for the rest of the bus.
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }

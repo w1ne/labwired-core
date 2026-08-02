@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Build the ESP32-C3 Tier-1 fixture ELF and copy it to the fixtures directory.
+# Build the ESP32-C3 Tier-1 fixture ELF and install it to the fixtures
+# directory.
 #
-# Usage: scripts/tier1/build_esp32c3.sh [--copy]
+# Usage: scripts/tier1/build_esp32c3.sh [--no-copy]
 #
-# With --copy (or when TIER1_COPY=1), the built ELF is copied to
-# tests/fixtures/tier1/esp32c3.elf so it can be committed.
+# By default the built ELF is copied to tests/fixtures/tier1/esp32c3.elf so
+# the committed blob always matches a fresh build (a committed blob that
+# silently diverges from source is exactly the drift this script exists to
+# prevent). Pass --no-copy (or TIER1_COPY=0) only for a build-only smoke
+# check; that mode never touches the committed fixture.
 #
 # Prerequisites:
 #   rustup target add riscv32imc-unknown-none-elf
@@ -30,8 +34,10 @@ echo "Building tier1-fixture-esp32c3..."
 
 echo "Built: ${FIXTURE_ELF}"
 
-if [[ "${1:-}" == "--copy" ]] || [[ "${TIER1_COPY:-0}" == "1" ]]; then
+if [[ "${1:-}" == "--no-copy" ]] || [[ "${TIER1_COPY:-1}" == "0" ]]; then
+    echo "NOT installed (--no-copy / TIER1_COPY=0): ${DEST_ELF} left untouched."
+else
     mkdir -p "$(dirname "${DEST_ELF}")"
     cp "${FIXTURE_ELF}" "${DEST_ELF}"
-    echo "Copied to: ${DEST_ELF}"
+    echo "Installed to: ${DEST_ELF}"
 fi

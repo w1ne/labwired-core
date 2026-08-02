@@ -2,7 +2,14 @@
 
 Source of truth for what CPU architectures and instructions LabWired Core
 actually decodes and executes. README or marketing claims must match this
-matrix. Last sync: hardware-validated against NUCLEO-L476RG (Cortex-M4F).
+matrix.
+
+> [!NOTE]
+> This matrix is maintained by hand and is not yet gated by CI, so it can lag
+> the decoder — it has understated coverage before. When it disagrees with
+> `crates/core/src/cpu/`, the code wins; please open a PR correcting the table.
+> Last audited against the decoder 2026-07-25; ARM rows hardware-validated
+> against NUCLEO-L476RG (Cortex-M4F).
 
 Convention:
 - ✅ **Decoded + executed** — tested path exists.
@@ -22,9 +29,8 @@ non-trivial bare-metal firmware (RCC/GPIO/USART/SPI/I2C/ADC/DMA
 bring-up, hex32 print loop with shift-by-register, FPU multiply).
 
 Still not claimed: the DSP extension (SMLAD / SMUAD / packed SIMD),
-saturating arithmetic (QADD/QSUB/SSAT/USAT), exclusive monitors
-(LDREX/STREX/CLREX), and ARMv8-M security extensions. Attempting to
-execute them raises `DecodeError`.
+saturating arithmetic (QADD/QSUB/SSAT/USAT), `CLREX`, and ARMv8-M security
+extensions. Attempting to execute them raises `DecodeError`.
 
 ### Implemented
 
@@ -48,6 +54,8 @@ execute them raises `DecodeError`.
 | **System regs**      | `MSR` / `MRS` for PRIMASK (SYSm=0x10); other SYSm accepted but unmodelled    |
 | **Wide multiply**    | `SMULL`, `UMULL`, `SMLAL`, `UMLAL` — 32×32 → 64-bit                          |
 | **Mul-accumulate**   | `MLA`, `MLS` — 32-bit `Rd = Ra ± (Rn*Rm)`                                    |
+| **Integer divide**   | `SDIV`, `UDIV` — div-by-zero yields 0, `INT_MIN / -1` saturates per spec     |
+| **Exclusives**       | `LDREX(B/H)`, `STREX(B/H)`, `LDAEX(B/H)`, `STLEX(B/H)` — monitor always succeeds (single-threaded sim, no preemption between pair); embassy's run-queue relies on this |
 | **VFPv4 (single)**   | `VLDR`, `VSTR`, `VMOV` (S↔Rt and S↔S), `VMUL`, `VADD`, `VSUB`, `VDIV` `.F32` |
 | Breakpoint           | `BKPT` (halts simulation with `SimulationError::Halt`)                       |
 
@@ -60,11 +68,10 @@ opcodes bubble up as `SimulationError::DecodeError`.
 
 | Category          | Missing                                                                     |
 |-------------------|-----------------------------------------------------------------------------|
-| Integer divide    | `SDIV`, `UDIV`                                                              |
 | Saturating arith  | `QADD`, `QSUB`, `SSAT`, `USAT`                                              |
 | ARMv7E-M DSP      | `SMLAD`, `SMUAD`, packed SIMD family — entire DSP extension                 |
 | FPU (VFPv4)       | `VSQRT`, `VABS`, `VNEG`, `VCMP`, `VCVT`, double-precision Dn/Dm — partial   |
-| Exclusives        | `LDREX`, `STREX`, `CLREX`                                                   |
+| Exclusives        | `CLREX` (the LDREX/STREX/LDAEX/STLEX family is implemented)                 |
 | TT / security     | `TT`, `TTA`, ARMv8-M security extensions                                    |
 
 ---

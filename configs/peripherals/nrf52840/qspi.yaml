@@ -1,0 +1,614 @@
+peripheral: QSPI
+version: 0.1.0
+registers:
+- id: TASKS_ACTIVATE
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_ACTIVATE
+    bit_range:
+    - 0
+    - 0
+    description: Activate QSPI interface
+  side_effects: null
+- id: TASKS_READSTART
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_READSTART
+    bit_range:
+    - 0
+    - 0
+    description: Start transfer from external flash memory to internal RAM
+  side_effects: null
+- id: TASKS_WRITESTART
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_WRITESTART
+    bit_range:
+    - 0
+    - 0
+    description: Start transfer from internal RAM to external flash memory
+  side_effects: null
+- id: TASKS_ERASESTART
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_ERASESTART
+    bit_range:
+    - 0
+    - 0
+    description: Start external flash memory erase operation
+  side_effects: null
+- id: TASKS_DEACTIVATE
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_DEACTIVATE
+    bit_range:
+    - 0
+    - 0
+    description: Deactivate QSPI interface
+  side_effects: null
+- id: EVENTS_READY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_READY
+    bit_range:
+    - 0
+    - 0
+    description: QSPI peripheral is ready. This event will be generated as a response to any QSPI task.
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for event READY
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable interrupt for event READY
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable interrupt for event READY
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable QSPI
+  side_effects: null
+- id: READ_SRC
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 31
+    - 0
+    description: Word-aligned flash memory source address.
+  side_effects: null
+- id: READ_DST
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DST
+    bit_range:
+    - 31
+    - 0
+    description: Word-aligned RAM destination address.
+  side_effects: null
+- id: READ_CNT
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 17
+    - 0
+    description: Read transfer length in number of bytes. The length must be a multiple of 4 bytes.
+  side_effects: null
+- id: WRITE_DST
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DST
+    bit_range:
+    - 31
+    - 0
+    description: Word-aligned flash destination address.
+  side_effects: null
+- id: WRITE_SRC
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SRC
+    bit_range:
+    - 31
+    - 0
+    description: Word-aligned RAM source address.
+  side_effects: null
+- id: WRITE_CNT
+  address_offset: 1304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 17
+    - 0
+    description: Write transfer length in number of bytes. The length must be a multiple of 4 bytes.
+  side_effects: null
+- id: ERASE_PTR
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Word-aligned start address of block to be erased.
+  side_effects: null
+- id: ERASE_LEN
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LEN
+    bit_range:
+    - 1
+    - 0
+    description: LEN
+  side_effects: null
+- id: PSEL_SCK
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_CSN
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_IO0
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_IO1
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_IO2
+  address_offset: 1336
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_IO3
+  address_offset: 1340
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: XIPOFFSET
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XIPOFFSET
+    bit_range:
+    - 31
+    - 0
+    description: Address offset into the external memory for Execute in Place operation. Value must be a multiple of 4.
+  side_effects: null
+- id: IFCONFIG0
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READOC
+    bit_range:
+    - 2
+    - 0
+    description: Configure number of data lines and opcode used for reading.
+  - name: WRITEOC
+    bit_range:
+    - 5
+    - 3
+    description: Configure number of data lines and opcode used for writing.
+  - name: ADDRMODE
+    bit_range:
+    - 6
+    - 6
+    description: Addressing mode.
+  - name: DPMENABLE
+    bit_range:
+    - 7
+    - 7
+    description: Enable deep power-down mode (DPM) feature.
+  - name: PPSIZE
+    bit_range:
+    - 12
+    - 12
+    description: Page size for commands PP, PP2O, PP4O and PP4IO.
+  side_effects: null
+- id: IFCONFIG1
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 263296
+  fields:
+  - name: SCKDELAY
+    bit_range:
+    - 7
+    - 0
+    description: Minimum amount of time that the CSN pin must stay high before it can go low again. Value is specified in number of 16 MHz periods (62.5 ns).
+  - name: DPMEN
+    bit_range:
+    - 24
+    - 24
+    description: Enter/exit deep power-down mode (DPM) for external flash memory.
+  - name: SPIMODE
+    bit_range:
+    - 25
+    - 25
+    description: Select SPI mode.
+  - name: SCKFREQ
+    bit_range:
+    - 31
+    - 28
+    description: SCK frequency is given as 32 MHz / (SCKFREQ + 1).
+  side_effects: null
+- id: STATUS
+  address_offset: 1540
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DPM
+    bit_range:
+    - 2
+    - 2
+    description: Deep power-down mode (DPM) status of external flash.
+  - name: READY
+    bit_range:
+    - 3
+    - 3
+    description: Ready status.
+  - name: SREG
+    bit_range:
+    - 31
+    - 24
+    description: Value of external flash device Status Register. When the external flash has two bytes status register this field includes the value of the low byte.
+  side_effects: null
+- id: DPMDUR
+  address_offset: 1556
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: ENTER
+    bit_range:
+    - 15
+    - 0
+    description: Duration needed by external flash to enter DPM. Duration is given as ENTER * 256 * 62.5 ns.
+  - name: EXIT
+    bit_range:
+    - 31
+    - 16
+    description: Duration needed by external flash to exit DPM. Duration is given as EXIT * 256 * 62.5 ns.
+  side_effects: null
+- id: ADDRCONF
+  address_offset: 1572
+  size: 32
+  access: READ_WRITE
+  reset_value: 183
+  fields:
+  - name: OPCODE
+    bit_range:
+    - 7
+    - 0
+    description: Opcode that enters the 32-bit addressing mode.
+  - name: BYTE0
+    bit_range:
+    - 15
+    - 8
+    description: Byte 0 following opcode.
+  - name: BYTE1
+    bit_range:
+    - 23
+    - 16
+    description: Byte 1 following byte 0.
+  - name: MODE
+    bit_range:
+    - 25
+    - 24
+    description: Extended addressing mode.
+  - name: WIPWAIT
+    bit_range:
+    - 26
+    - 26
+    description: Wait for write complete before sending command.
+  - name: WREN
+    bit_range:
+    - 27
+    - 27
+    description: Send WREN (write enable opcode 0x06) before instruction.
+  side_effects: null
+- id: CINSTRCONF
+  address_offset: 1588
+  size: 32
+  access: READ_WRITE
+  reset_value: 8192
+  fields:
+  - name: OPCODE
+    bit_range:
+    - 7
+    - 0
+    description: Opcode of Custom instruction.
+  - name: LENGTH
+    bit_range:
+    - 11
+    - 8
+    description: Length of custom instruction in number of bytes.
+  - name: LIO2
+    bit_range:
+    - 12
+    - 12
+    description: Level of the IO2 pin (if connected) during transmission of custom instruction.
+  - name: LIO3
+    bit_range:
+    - 13
+    - 13
+    description: Level of the IO3 pin (if connected) during transmission of custom instruction.
+  - name: WIPWAIT
+    bit_range:
+    - 14
+    - 14
+    description: Wait for write complete before sending command.
+  - name: WREN
+    bit_range:
+    - 15
+    - 15
+    description: Send WREN (write enable opcode 0x06) before instruction.
+  - name: LFEN
+    bit_range:
+    - 16
+    - 16
+    description: Enable long frame mode. When enabled, a custom instruction transaction has to be ended by writing the LFSTOP field.
+  - name: LFSTOP
+    bit_range:
+    - 17
+    - 17
+    description: Stop (finalize) long frame transaction
+  side_effects: null
+- id: CINSTRDAT0
+  address_offset: 1592
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BYTE0
+    bit_range:
+    - 7
+    - 0
+    description: Data byte 0
+  - name: BYTE1
+    bit_range:
+    - 15
+    - 8
+    description: Data byte 1
+  - name: BYTE2
+    bit_range:
+    - 23
+    - 16
+    description: Data byte 2
+  - name: BYTE3
+    bit_range:
+    - 31
+    - 24
+    description: Data byte 3
+  side_effects: null
+- id: CINSTRDAT1
+  address_offset: 1596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BYTE4
+    bit_range:
+    - 7
+    - 0
+    description: Data byte 4
+  - name: BYTE5
+    bit_range:
+    - 15
+    - 8
+    description: Data byte 5
+  - name: BYTE6
+    bit_range:
+    - 23
+    - 16
+    description: Data byte 6
+  - name: BYTE7
+    bit_range:
+    - 31
+    - 24
+    description: Data byte 7
+  side_effects: null
+- id: IFTIMING
+  address_offset: 1600
+  size: 32
+  access: READ_WRITE
+  reset_value: 512
+  fields:
+  - name: RXDELAY
+    bit_range:
+    - 10
+    - 8
+    description: Timing related to sampling of the input serial data. The value of RXDELAY specifies the number of 64 MHz cycles (15.625 ns) delay from the the rising edge of the SPI Clock (SCK) until the input serial data is sampled. As en example, if set to 0 the input serial data is sampled on the rising edge of SCK.
+  side_effects: null
+interrupts:
+  QSPI: 41
+timing: null

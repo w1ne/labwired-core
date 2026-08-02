@@ -117,6 +117,7 @@ pub fn finalize_fault_evidence(
 mod tests {
     use super::*;
     use labwired_config::{FaultKind, FaultSpec, FaultTarget, FaultTrigger};
+    use labwired_core::Bus;
 
     fn spec(id: &str, kind: FaultKind, target: FaultTarget, value: Option<u64>) -> FaultSpec {
         FaultSpec {

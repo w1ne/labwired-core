@@ -1,0 +1,27 @@
+# LabWired - STM32F411CEU6 Black Pill IO smoke test
+#
+# Runs the prebuilt tier-1 fixture ELF (raw-register peripheral self-tests) and
+# asserts the TIER1 transcript over USART2. The firmware path points at the
+# committed tier-1 fixture blob rather than a build output, so the
+# strict-onboarding gate needs no cross-compile.
+#
+# `spi PASS` covers SPI1 *and* SPI5 — SPI5 is the only peripheral instance the
+# F411 adds over the F401, and its clock-gate bit (RCC_APB2ENR bit 20) is
+# declared in no public F411 SVD, so this assertion is its only executable check.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/stm32f411.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 timer PASS"
+  - uart_contains: "TIER1 i2c PASS"
+  - uart_contains: "TIER1 spi PASS"
+  - uart_contains: "TIER1 adc PASS"
+  - uart_contains: "TIER1 wdt PASS"
+  - uart_contains: "TIER1 rtc PASS"
+  - uart_contains: "TIER1 done"
+  - expected_stop_reason: max_steps

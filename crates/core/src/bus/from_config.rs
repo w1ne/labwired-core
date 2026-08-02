@@ -12,8 +12,94 @@ use crate::Peripheral;
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
 use std::cell::Cell;
+use std::path::{Path, PathBuf};
+
+/// Default on-disk dumps when `image_env` is unset. Keeps copyrighted ROMs out
+/// of the repo path contract (env still wins) while letting matrix/CLI find the
+/// in-tree `crates/core/roms/esp32c3/*` copies used by e2e gates.
+fn default_region_image_path(env: &str) -> Option<PathBuf> {
+    let rel = match env {
+        "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
+        "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        // In-tree minimal B0 bootrom so Arduino/Zephyr `rom_func_lookup` works
+        // on plain `labwired test` without exporting the env. Bare-metal ELFs
+        // that need the Cortex-M flash boot alias at 0 (PIO onboarding) can
+        // set LABWIRED_RP2040_BOOTROM= (empty) to skip the image — from_config
+        // then leaves the region out so flash alias wins.
+        "LABWIRED_RP2040_BOOTROM" => "roms/rp2040/bootrom.bin",
+        _ => return None,
+    };
+    // Walk: CWD, CWD/crates/core, crate-relative from this source tree layout.
+    let mut candidates = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join(rel));
+        candidates.push(cwd.join("crates/core").join(rel));
+    }
+    // `CARGO_MANIFEST_DIR` for labwired-core when tests run from the crate.
+    if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+        candidates.push(Path::new(&manifest).join(rel));
+        // crates/cli → ../../crates/core/roms/...
+        candidates.push(Path::new(&manifest).join("../core").join(rel));
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
 
 impl SystemBus {
+    /// Collect debugger-only register schemas from each peripheral's optional
+    /// `config.debug_schema` path.
+    ///
+    /// This is for NATIVE peripherals — those modeled in hand-written Rust,
+    /// which advertise no `describe_registers()` and therefore inspect as
+    /// `registers: []`. The schema names what the model already holds; it never
+    /// changes what the bus does. See [`SystemBus::debug_schemas`].
+    ///
+    /// A `debug_schema` on a `declarative` peripheral is redundant (it already
+    /// describes itself from its own descriptor) and simply loses to
+    /// `describe_registers()` at inspect time.
+    ///
+    /// Resolution mirrors the declarative descriptor path exactly: embedded
+    /// first (wasm32 has no `std::fs`), filesystem second. A path that resolves
+    /// to neither is skipped with a warning rather than failing the build —
+    /// a missing debugger convenience must never stop a simulation from running.
+    fn load_debug_schemas(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+    ) -> std::collections::HashMap<String, Vec<crate::inspect::RegisterSchema>> {
+        let mut out = std::collections::HashMap::new();
+
+        for p_cfg in &chip.peripherals {
+            let Some(path) = p_cfg.config.get("debug_schema").and_then(|v| v.as_str()) else {
+                continue;
+            };
+
+            let descriptor = if let Some(embedded) = super::embedded_descriptors::lookup(path) {
+                labwired_config::PeripheralDescriptor::from_yaml(embedded).ok()
+            } else {
+                let resolved = Self::resolve_peripheral_path(manifest, path);
+                labwired_config::PeripheralDescriptor::from_file(&resolved).ok()
+            };
+
+            match descriptor {
+                Some(descriptor) => {
+                    out.insert(
+                        p_cfg.id.clone(),
+                        crate::inspect::schema_from_descriptor(&descriptor),
+                    );
+                }
+                None => {
+                    tracing::warn!(
+                        "debug_schema '{}' for peripheral '{}' could not be loaded; \
+                         its registers will inspect unnamed",
+                        path,
+                        p_cfg.id
+                    );
+                }
+            }
+        }
+
+        out
+    }
+
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         let flash_size = parse_size(&chip.flash.size)?;
         let ram_size = parse_size(&chip.ram.size)?;
@@ -25,12 +111,23 @@ impl SystemBus {
             // Optionally preload a raw binary image (e.g. a dumped mask ROM)
             // from a path given by an env var. Copyrighted vendor blobs are not
             // committed, so a missing image just leaves the region zero-filled.
+            let mut loaded_image = false;
             if let Some(env) = &region.image_env {
-                if let Ok(path) = std::env::var(env) {
+                // Env pin first; else well-known in-tree dumps so Arduino-matrix
+                // / plain `labwired test` can call C3 ROM helpers without
+                // requiring the operator to export LABWIRED_ESP32C3_ROM*.
+                // Explicit empty env → skip image (opt-out of in-tree default).
+                let path_owned = match std::env::var(env) {
+                    Ok(p) if p.is_empty() => None,
+                    Ok(p) => Some(p),
+                    Err(_) => default_region_image_path(env).map(|p| p.display().to_string()),
+                };
+                if let Some(path) = path_owned {
                     match std::fs::read(&path) {
                         Ok(bytes) => {
                             let n = bytes.len().min(mem.data.len());
                             mem.data[..n].copy_from_slice(&bytes[..n]);
+                            loaded_image = n > 0;
                             tracing::info!(
                                 "loaded {n} bytes into '{}' region @ {:#010x} from {path}",
                                 region.name,
@@ -44,6 +141,26 @@ impl SystemBus {
                     }
                 }
             }
+            // Skip an empty image_env region *only* when it's based at address
+            // 0: a zero-filled window there would shadow the Cortex-M flash boot
+            // alias (breaks RP2040 bare-metal onboarding ELFs that rely on
+            // VTOR=0 → flash). Nonzero-based ROM windows (e.g. the C3 IROM @
+            // 0x40000000 / DROM @ 0x3FF00000) must stay installed as zeros even
+            // with no on-disk image: on the wasm/browser path there is no
+            // filesystem to preload from, and the ROM arrives later as blobs
+            // that `inject_rom_regions` copies into these slots. Dropping them
+            // here left no slot to fill, which is what surfaced to users as
+            // "C3 flash fast-start: chip YAML declares no IROM region at
+            // 0x40000000". Regions without image_env (plain RAM holes) are
+            // always installed as zeros.
+            if region.image_env.is_some() && !loaded_image && region.base == 0 {
+                tracing::debug!(
+                    "skipping empty image_env region '{}' @ {:#010x}",
+                    region.name,
+                    region.base
+                );
+                continue;
+            }
             extra_mem.push(mem);
         }
 
@@ -53,6 +170,7 @@ impl SystemBus {
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
             extra_mem,
             peripherals: Vec::new(),
+            debug_schemas: Self::load_debug_schemas(chip, manifest),
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
@@ -67,13 +185,29 @@ impl SystemBus {
             peripheral_ranges: Vec::new(),
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
+            scheduler_driver_indices: Vec::new(),
+            matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
+            last_gap: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            freerunning_timer_poll_mmio: Cell::new(0),
+            side_effecting_mmio: Cell::new(0),
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
+            gpio_devices: Vec::new(),
+            ws2812: Vec::new(),
+            servos: Vec::new(),
+            step_dir_motors: Vec::new(),
+            h_bridge_motors: Vec::new(),
+            unipolar_steppers: Vec::new(),
             tm1637: Vec::new(),
+            hx711: Vec::new(),
+            seven_segment: Vec::new(),
+            analog_inputs: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -82,9 +216,14 @@ impl SystemBus {
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
+            iolink_master_attached: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
@@ -131,6 +270,21 @@ impl SystemBus {
         let mut attached_i2c_ext_ids: std::collections::HashSet<&str> =
             std::collections::HashSet::new();
 
+        // I²C bus-switch topology. `external_devices[].connection` may name
+        // another external device's id instead of a controller — that is how a
+        // slave is placed behind a TCA9548A, the only way several devices with
+        // the same fixed address can share one bus. Validate the whole shape up
+        // front (this runs for EVERY family, since every peripheral factory is
+        // invoked from this loop) so a mis-wired switch is a loud error rather
+        // than a device that quietly answers nothing.
+        //
+        // Every device behind a switch is marked attached here: it is wired as
+        // part of its parent by `build_i2c_tree`, and letting it also reach the
+        // generic attach loop below would put a second copy straight on the
+        // controller — on the wrong bus segment, ahead of the switch.
+        let mux_children = crate::peripherals::components::validate_i2c_mux_topology(manifest)?;
+        attached_i2c_ext_ids.extend(mux_children.iter().copied());
+
         for p_cfg in &merged_peripherals {
             let canonical_type = Self::canonical_peripheral_type(&p_cfg.r#type);
             if canonical_type != p_cfg.r#type.to_ascii_lowercase() {
@@ -157,6 +311,14 @@ impl SystemBus {
                             manifest,
                             &bus.bus_trace,
                         )
+                    })
+                    .or_else(|| {
+                        crate::peripherals::nrf54l::factory::try_build(
+                            &canonical_type,
+                            p_cfg,
+                            manifest,
+                            &bus.bus_trace,
+                        )
                     });
             if let Some(dev) = family_dev {
                 // The nRF52 serial-instance mux (SPIM0/TWIM0) attaches all
@@ -164,9 +326,36 @@ impl SystemBus {
                 // so mark them here so the kit registry pass below does not
                 // try to attach them a second time (which would fail because
                 // Nrf52SerialInstance is not an I2c/Esp32c3I2c).
-                if canonical_type == "nrf52_serial_instance" {
+                //
+                // The standalone TWIM model does the same thing in its own
+                // factory arm and needs the same bookkeeping. Without it a
+                // device on a TWIM bus is attached twice when its type is in
+                // the kit registry (mpu6050), and emits a bogus "Unsupported
+                // external device" WARN when it is not (max30102, cap1188,
+                // drv2605) — despite having been attached correctly. Found
+                // while bringing up the nRF54L15 smart-ring system.
+                if canonical_type == "nrf52_serial_instance"
+                    || canonical_type == "nrf52840_twim"
+                    || canonical_type == "nrf52_twim"
+                    || canonical_type == "nrf54l_twim"
+                {
                     for ext in &manifest.external_devices {
-                        if ext.connection == p_cfg.id {
+                        if ext.connection != p_cfg.id {
+                            continue;
+                        }
+                        // Only suppress the kit pass when the family factory
+                        // actually can build this type. Kit-only devices were
+                        // previously marked attached even when the factory
+                        // warned "unknown device type" and skipped them —
+                        // leaving the bus empty (matrix L3 nRF ANACK on INA219).
+                        let factory_handles =
+                            crate::peripherals::components::build_external_i2c_device(
+                                &ext.r#type,
+                                &ext.id,
+                                &ext.config,
+                            )
+                            .is_some();
+                        if factory_handles {
                             attached_i2c_ext_ids.insert(ext.id.as_str());
                         }
                     }
@@ -209,18 +398,29 @@ impl SystemBus {
                 } else {
                     let layout: crate::peripherals::i2c::I2cRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "I2C")?;
-                    Box::new(crate::peripherals::i2c::I2c::new_with_layout(layout))
+                    let mut ctl = crate::peripherals::i2c::I2c::new_with_layout(layout);
+                    // Optional ERROR-line vector. STM32 splits I2C into two NVIC
+                    // lines: EVENT (the peripheral's `irq:`) and ERROR. AF/BERR/
+                    // ARLO/OVR raise ERROR, and an interrupt-mode HAL only learns
+                    // an address was NACKed via that handler, so a chip that
+                    // declares only the EVENT vector makes every NACK look like a
+                    // 100 ms timeout to real firmware.
+                    if let Some(err_irq) = p_cfg.config.get("irq_error").and_then(|v| v.as_u64()) {
+                        ctl.set_error_irq(err_irq as u32);
+                    }
+                    Box::new(ctl)
                 };
                 bus.push_peripheral(p_cfg, controller)?;
                 for ext in &manifest.external_devices {
                     if ext.connection != p_cfg.id {
                         continue;
                     }
-                    match crate::peripherals::components::build_external_i2c_device(
-                        &ext.r#type,
-                        &ext.id,
-                        &ext.config,
-                    ) {
+                    // `build_i2c_tree`, not the bare factory: when `ext` is a
+                    // bus switch this also builds every device wired behind it
+                    // and buckets them onto its channels, so what reaches the
+                    // attach choke point below is ONE assembled unit — the
+                    // switch — exactly as on the board.
+                    match crate::peripherals::components::build_i2c_tree(manifest, ext)? {
                         Some(device) => {
                             tracing::info!(
                                 "i2c attach: '{}' (type={}) -> '{}'",
@@ -228,7 +428,7 @@ impl SystemBus {
                                 ext.r#type,
                                 p_cfg.id
                             );
-                            bus.attach_i2c_slave(&p_cfg.id, device)?;
+                            bus.attach_i2c_slave_with_route(&p_cfg.id, device, Some(&ext.route))?;
                             attached_i2c_ext_ids.insert(ext.id.as_str());
                         }
                         None => {
@@ -509,67 +709,236 @@ impl SystemBus {
                 kit.attach(&mut ctx)?;
                 continue;
             }
+            // Second-pass: the GPIO / pin-timing family migrated to declarative
+            // `configs/devices/*.yaml` descriptors. `attach_declarative_device`
+            // resolves the descriptor's pin bindings and instantiates the named
+            // primitive — no hand-written arm here.
+            if let Some(desc) = super::declarative_device::lookup(&ext.r#type)? {
+                bus.attach_declarative_device(ext, &desc)?;
+                continue;
+            }
             match ext.r#type.as_str() {
                 // ili9341, adxl345/mpu6050/bme280/oled-ssd1306, neo6m-gps,
                 // and bg770a-cellular dispatch through the PeripheralKit
                 // registry above — see `peripherals::kit`.
                 // iolink-master dispatches through the PeripheralKit registry above.
-                // max31855, sn74hc165, ssd1680_tricolor_290, and pcd8544
-                // dispatch through the PeripheralKit registry above.
-                "hc-sr04" | "hcsr04" => {
-                    // GPIO-wired ultrasonic sensor — no SPI/I2C connection. The
-                    // bus services it each tick: reads TRIG (an MCU output) and
-                    // drives ECHO (an MCU input) with a distance-proportional
-                    // pulse. `distance_cm` is the host-controlled "hand position".
-                    let trig = ext
+                // max31855, sn74hc165, ssd1680_tricolor_290, uc8151d_tricolor_290,
+                // and pcd8544 dispatch through the PeripheralKit registry above.
+                // hc-sr04 / hcsr04 now dispatches through the declarative device
+                // path above (configs/devices/hc_sr04.yaml, `pulse_echo`
+                // primitive) — see super::declarative_device.
+                // dht22 / am2302 now dispatches through the declarative device
+                // path above (configs/devices/dht22.yaml, `one_wire` primitive) —
+                // see super::declarative_device.
+                // rotary-encoder / rotary_encoder now dispatches through the
+                // declarative device path above (configs/devices/rotary_encoder.yaml,
+                // `quadrature` primitive) — see super::declarative_device.
+                // keypad now dispatches through the declarative device path above
+                // (configs/devices/keypad.yaml, `matrix` primitive) — see
+                // super::declarative_device.
+                "neopixel" | "ws2812" => {
+                    // Addressable LED strip driven by a single-wire, self-clocked
+                    // bit-stream on ONE GPIO. On the ESP32-S3 the RMT peripheral
+                    // generates that waveform and the GPIO matrix (FUNC_OUT_SEL)
+                    // routes it to the pad; this decoder attaches as a GPIO
+                    // observer on the data pin and reconstructs pixels from the
+                    // edge timing — purely edge-driven, no per-tick pass. On
+                    // non-S3 boards there is no RMT→pad drive path yet, so the
+                    // strip is stored for readback but simply never sees an edge.
+                    let data = ext
                         .config
-                        .get("trig_pin")
+                        .get("data_pin")
                         .and_then(|v| v.as_str())
-                        .unwrap_or("PA8")
+                        .unwrap_or("GPIO48")
                         .to_string();
-                    let echo = ext
+                    let num_pixels = ext
                         .config
-                        .get("echo_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA9")
-                        .to_string();
-                    let distance_cm = ext
-                        .config
-                        .get("distance_cm")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(50.0) as f32;
+                        .get("num_pixels")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize;
                     let cpu_hz = ext
                         .config
                         .get("cpu_hz")
                         .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    let (trig_addr, trig_bit) =
-                        Self::resolve_pin_odr(&bus, &trig).ok_or_else(|| {
+                        .unwrap_or(160_000_000);
+                    let pin = Self::parse_esp32s3_gpio_pin(&data).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "neopixel '{}' data_pin '{}' could not be parsed to an ESP32-S3 GPIO (0..=48)",
+                            ext.id,
+                            data
+                        )
+                    })?;
+                    let strip =
+                        std::sync::Arc::new(crate::peripherals::components::ws2812::Ws2812::new(
+                            pin, num_pixels, cpu_hz,
+                        ));
+                    // Install as a GPIO observer on the S3 GPIO peripheral, if one
+                    // is registered (walk-free: filters by pin internally).
+                    if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+                        if let Some(gpio) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                            a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                        }) {
+                            gpio.add_observer(strip.clone());
+                        }
+                    }
+                    bus.ws2812.push(strip);
+                }
+                "servo" | "sg90" | "mg996r" => {
+                    // Hobby PWM servo twin. Driven by GPIO edges and/or LEDC
+                    // duty observers (ledcWrite path). Part id is stored so
+                    // WASM `get_actuator_states` can key canvas animation.
+                    let pin_label = ext
+                        .config
+                        .get("signal_pin")
+                        .or_else(|| ext.config.get("control_pin"))
+                        .or_else(|| ext.config.get("pwm_pin"))
+                        .or_else(|| ext.config.get("pin"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("GPIO18");
+                    let pin = Self::parse_esp32s3_gpio_pin(pin_label)
+                        .or_else(|| Self::parse_esp32_gpio_pin(pin_label))
+                        .ok_or_else(|| {
                             anyhow::anyhow!(
-                                "HC-SR04 '{}' trig_pin '{}' could not be resolved to a GPIO",
+                                "servo '{}' control/signal pin '{}' is not a parseable GPIO",
                                 ext.id,
-                                trig
+                                pin_label
                             )
                         })?;
-                    let (echo_addr, echo_bit) =
-                        Self::resolve_pin_idr(&bus, &echo).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "HC-SR04 '{}' echo_pin '{}' could not be resolved to a GPIO",
-                                ext.id,
-                                echo
-                            )
-                        })?;
-
-                    bus.hcsr04.push(crate::peripherals::hc_sr04::HcSr04::new(
-                        ext.id.clone(),
-                        trig_addr,
-                        trig_bit,
-                        echo_addr,
-                        echo_bit,
-                        cpu_hz,
-                        distance_cm,
-                    ));
+                    // Prefer explicit config.model; fall back to the type alias
+                    // (sg90/mg996r as top-level type) then standard cal.
+                    let model = ext
+                        .config
+                        .get("model")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(ext.r#type.as_str());
+                    let cal = match model {
+                        "sg90" => crate::peripherals::components::servo::ServoCal::sg90(),
+                        "mg996r" => crate::peripherals::components::servo::ServoCal::mg996r(),
+                        _ => crate::peripherals::components::servo::ServoCal::standard(),
+                    };
+                    let servo =
+                        std::sync::Arc::new(crate::peripherals::components::servo::Servo::with_id(
+                            ext.id.clone(),
+                            cal,
+                            pin,
+                        ));
+                    Self::install_gpio_observer(&mut bus, servo.clone());
+                    // LEDC duty path (classic ESP32). Optional `ledc_channel`
+                    // binds one channel; otherwise fan out to all channels
+                    // (fine for single-servo boards).
+                    let ledc_channel = ext.config.get("ledc_channel").and_then(|v| v.as_u64());
+                    for name in ["ledc", "LEDC"] {
+                        if let Some(idx) = bus.find_peripheral_index_by_name(name) {
+                            if let Some(ledc) =
+                                bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                                    a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>()
+                                })
+                            {
+                                if let Some(ch) = ledc_channel {
+                                    ledc.add_duty_observer(std::sync::Arc::new(
+                                        crate::peripherals::components::servo::LedcServoDriver::new(
+                                            ch,
+                                            servo.clone(),
+                                        ),
+                                    ));
+                                } else {
+                                    for ch in 0..16u64 {
+                                        ledc.add_duty_observer(std::sync::Arc::new(
+                                            crate::peripherals::components::servo::LedcServoDriver::new(
+                                                ch,
+                                                servo.clone(),
+                                            ),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    bus.servos.push(servo);
+                }
+                "a4988" | "drv8825" | "tmc2209" => {
+                    let step = Self::gpio_from_config(ext, "step_pin", "STEP", "GPIO16")?;
+                    let dir = Self::gpio_from_config(ext, "dir_pin", "DIR", "GPIO17")?;
+                    let en = Self::optional_gpio_from_config(ext, "en_pin", "EN");
+                    let mut motor =
+                        crate::peripherals::components::step_dir_motor::StepDirMotor::new(
+                            &ext.id, step, dir, en,
+                        );
+                    if ext.r#type == "tmc2209" {
+                        // SilentStepStick often 1/16 microstep default → treat as 1.8/16
+                        motor = motor.with_config(
+                            crate::peripherals::components::step_dir_motor::StepDirConfig {
+                                degrees_per_step: 1.8 / 16.0,
+                                enable_active_low: true,
+                            },
+                        );
+                    }
+                    let motor = std::sync::Arc::new(motor);
+                    Self::install_gpio_observer(&mut bus, motor.clone());
+                    bus.step_dir_motors.push(motor);
+                }
+                "l298n" | "tb6612" | "l293d" => {
+                    // First motor channel (A)
+                    let in1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")
+                        .or_else(|_| Self::gpio_from_config(ext, "ain1_pin", "AIN1", "GPIO16"))?;
+                    let in2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")
+                        .or_else(|_| Self::gpio_from_config(ext, "ain2_pin", "AIN2", "GPIO17"))?;
+                    let en = Self::optional_gpio_from_config(ext, "en_pin", "ENA")
+                        .or_else(|| Self::optional_gpio_from_config(ext, "pwma_pin", "PWMA"));
+                    let motor = std::sync::Arc::new(
+                        crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
+                            format!("{}-a", ext.id),
+                            in1,
+                            in2,
+                            en,
+                        ),
+                    );
+                    Self::install_gpio_observer(&mut bus, motor.clone());
+                    bus.h_bridge_motors.push(motor);
+                    // Optional B channel when IN3/IN4 (or BIN*) are configured.
+                    let has_b = ext.config.contains_key("in3_pin")
+                        || ext.config.contains_key("IN3")
+                        || ext.config.contains_key("bin1_pin")
+                        || ext.config.contains_key("BIN1");
+                    if has_b {
+                        if let (Ok(b1), Ok(b2)) = (
+                            Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18").or_else(|_| {
+                                Self::gpio_from_config(ext, "bin1_pin", "BIN1", "GPIO18")
+                            }),
+                            Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19").or_else(|_| {
+                                Self::gpio_from_config(ext, "bin2_pin", "BIN2", "GPIO19")
+                            }),
+                        ) {
+                            let enb = Self::optional_gpio_from_config(ext, "enb_pin", "ENB")
+                                .or_else(|| {
+                                    Self::optional_gpio_from_config(ext, "pwmb_pin", "PWMB")
+                                });
+                            let motor_b = std::sync::Arc::new(
+                                crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
+                                    format!("{}-b", ext.id),
+                                    b1,
+                                    b2,
+                                    enb,
+                                ),
+                            );
+                            Self::install_gpio_observer(&mut bus, motor_b.clone());
+                            bus.h_bridge_motors.push(motor_b);
+                        }
+                    }
+                }
+                "uln2003" | "stepper-28byj48" => {
+                    let p1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")?;
+                    let p2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")?;
+                    let p3 = Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18")?;
+                    let p4 = Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19")?;
+                    let motor = std::sync::Arc::new(
+                        crate::peripherals::components::unipolar_stepper::UnipolarStepper::new_28byj48(
+                            &ext.id,
+                            [p1, p2, p3, p4],
+                        ),
+                    );
+                    Self::install_gpio_observer(&mut bus, motor.clone());
+                    bus.unipolar_steppers.push(motor);
                 }
                 "can-diagnostic-tester" | "uds-diagnostic-tester" => {
                     if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
@@ -700,6 +1069,18 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // Buttons/switches declared in `board_io` become bus-resident stimulus
+        // devices. They are the one input family the canvas emits WITHOUT an
+        // external_devices entry (a passive contact needs no device block), so
+        // without this pass a button on the canvas is inert in a headless run:
+        // it drives no pin and exposes no `pressed` channel, and every stimulus
+        // naming it is rejected as an unknown channel. Ranges must already be
+        // rebuilt — the IDR address is resolved through the registered GPIO.
+        bus.attach_board_io_buttons(manifest);
+        // ESP32-C3: share IO_MUX pad controls with GPIO so an Arduino
+        // `INPUT_PULLUP` changes the floating input level. No-op for every
+        // other chip.
+        bus.wire_esp32c3_pad_controls();
         // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
         // the C3 GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
@@ -732,5 +1113,212 @@ impl SystemBus {
             None => bus.derive_walk_deletable(),
         };
         Ok(bus)
+    }
+
+    /// Materialise every `board_io` button/switch binding as a bus-resident
+    /// [`Button`](crate::peripherals::components::button::Button).
+    ///
+    /// `board_io` is the canvas compiler's existing output for passive contacts
+    /// — it already carries the owning GPIO peripheral, the pin index, and the
+    /// `active_high` polarity derived from which rail the other terminal is
+    /// wired to. Reading it here rather than inventing a second declaration
+    /// keeps ONE source of truth for "there is a button on this pin".
+    ///
+    /// Only `signal: input` bindings attach: a `kind: button` emitted as an
+    /// output is not a contact the firmware samples. A binding naming a
+    /// peripheral that is not registered is skipped with a warning rather than
+    /// failing the build — the rest of the system still runs, the button simply
+    /// stays undrivable.
+    ///
+    /// The button is anchored to its GPIO by that peripheral's BASE address, not
+    /// by an input-register address: the level is applied through the owning
+    /// peripheral's `set_gpio_input`, which every GPIO model implements, so this
+    /// works for a per-port register model (STM32, Nordic, Kinetis) and a single
+    /// GPIO-matrix model (ESP32/C3/S3) alike.
+    fn attach_board_io_buttons(&mut self, manifest: &SystemManifest) {
+        use labwired_config::{BoardIoKind, BoardIoSignal};
+
+        for binding in &manifest.board_io {
+            if binding.kind != BoardIoKind::Button || binding.signal != BoardIoSignal::Input {
+                continue;
+            }
+            let Some(idx) = self.find_peripheral_index_by_name(&binding.peripheral) else {
+                tracing::warn!(
+                    "board_io button '{}' names unregistered peripheral '{}'; \
+                     the button will not be drivable",
+                    binding.id,
+                    binding.peripheral
+                );
+                continue;
+            };
+            let anchor = self.peripherals[idx].base;
+            let mut button = crate::peripherals::components::button::Button::with_channel(
+                binding.id.clone(),
+                (anchor, binding.pin),
+                binding.active_high,
+                binding.channel.as_deref(),
+            );
+
+            // Settle the released level NOW, before the firmware's first sample:
+            // an active-low button whose pin is left at the input register's
+            // reset value of 0 reads as a press that is never released, so a
+            // sketch waiting on the button fires immediately at boot.
+            //
+            // Then PROVE the level landed. A GPIO model that does not honour an
+            // externally driven level would leave a button that discovery
+            // advertises, `set_input` accepts, and the firmware never sees move
+            // — a stimulus that reports success and proves nothing. Where we
+            // cannot demonstrate the drive, we do not claim the capability: the
+            // button is dropped and the pin is left exactly as that chip had it.
+            let (level, _) = button.service();
+            let landed = self.drive_input_bit(anchor, binding.pin, level)
+                && self.peripherals[idx].dev.read_gpio_input(binding.pin) == Some(level);
+            if !landed {
+                tracing::warn!(
+                    "board_io button '{}' on '{}' pin {}: this GPIO model does not reflect an \
+                     externally driven input level, so the button is not attached and cannot be \
+                     driven by a stimulus",
+                    binding.id,
+                    binding.peripheral,
+                    binding.pin
+                );
+                continue;
+            }
+            self.gpio_devices.push(Box::new(button));
+        }
+    }
+
+    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>)
+    where
+        T: crate::peripherals::esp32s3::gpio::GpioObserver
+            + crate::peripherals::esp32::gpio::GpioObserver
+            + 'static,
+    {
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            let any = bus.peripherals[idx].dev.as_any_mut();
+            if let Some(gpio) =
+                any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
+            {
+                gpio.add_observer(observer);
+                return;
+            }
+        }
+        // Classic ESP32 GPIO (separate type).
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+            {
+                gpio.add_observer(observer);
+            }
+        }
+    }
+
+    fn gpio_from_config(
+        ext: &labwired_config::ExternalDevice,
+        key: &str,
+        alt_key: &str,
+        default: &str,
+    ) -> anyhow::Result<u8> {
+        let label = ext
+            .config
+            .get(key)
+            .or_else(|| ext.config.get(alt_key))
+            .and_then(|v| v.as_str())
+            .unwrap_or(default);
+        Self::parse_esp32s3_gpio_pin(label)
+            .or_else(|| Self::parse_esp32_gpio_pin(label))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{}: pin '{}' (config {}/{}) is not a parseable GPIO",
+                    ext.id,
+                    label,
+                    key,
+                    alt_key
+                )
+            })
+    }
+
+    fn optional_gpio_from_config(
+        ext: &labwired_config::ExternalDevice,
+        key: &str,
+        alt_key: &str,
+    ) -> Option<u8> {
+        let label = ext
+            .config
+            .get(key)
+            .or_else(|| ext.config.get(alt_key))
+            .and_then(|v| v.as_str())?;
+        Self::parse_esp32s3_gpio_pin(label).or_else(|| Self::parse_esp32_gpio_pin(label))
+    }
+}
+
+#[cfg(test)]
+mod image_env_region_tests {
+    use super::*;
+
+    /// A nonzero-based `image_env` region with no loadable image must still be
+    /// installed (zero-filled) so a later filler — `inject_rom_regions` on the
+    /// wasm/browser fast-start path — has a slot to copy the ROM blobs into.
+    /// Only a region based at address 0 (the RP2040 bootrom, which would shadow
+    /// the Cortex-M flash boot alias) is dropped when empty.
+    ///
+    /// Regression for the browser "C3 flash fast-start: chip YAML declares no
+    /// IROM region at 0x40000000" failure: with no filesystem to preload from,
+    /// `from_config` used to drop the C3 IROM window entirely, leaving
+    /// `inject_rom_regions` nothing to fill.
+    #[test]
+    fn empty_image_env_region_kept_unless_based_at_zero() {
+        // `LABWIRED_TEST_MISSING_ROM` has no default image path and is never
+        // set, so both regions below fail to load an image — exactly the
+        // wasm/browser condition — without touching any real env var or file.
+        let chip_yaml = r#"
+name: "test-image-env"
+arch: "riscv"
+flash:
+  base: 0x42000000
+  size: "1KB"
+ram:
+  base: 0x3FC80000
+  size: "1KB"
+memory_regions:
+  - name: "irom"
+    base: 0x40000000
+    size: "1KB"
+    image_env: "LABWIRED_TEST_MISSING_ROM"
+  - name: "bootrom_at_zero"
+    base: 0x0
+    size: "1KB"
+    image_env: "LABWIRED_TEST_MISSING_ROM"
+peripherals: []
+"#;
+        let manifest_yaml = r#"
+name: "test-image-env-system"
+chip: "test-image-env"
+"#;
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).expect("parse chip");
+        let manifest: SystemManifest = serde_yaml::from_str(manifest_yaml).expect("parse manifest");
+
+        // Guard the hermeticity assumption: if some ambient env ever defines
+        // this name, the test would silently stop exercising the empty path.
+        assert!(
+            std::env::var("LABWIRED_TEST_MISSING_ROM").is_err(),
+            "test env var must be unset for this regression to be meaningful"
+        );
+
+        let bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+
+        assert!(
+            bus.extra_mem.iter().any(|m| m.base_addr == 0x4000_0000),
+            "nonzero-based empty image_env region must be installed so \
+             inject_rom_regions can fill it (was dropped → browser IROM error)"
+        );
+        assert!(
+            !bus.extra_mem.iter().any(|m| m.base_addr == 0),
+            "empty image_env region based at 0 must be dropped so it can't \
+             shadow the flash boot alias"
+        );
     }
 }

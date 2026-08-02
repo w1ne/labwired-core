@@ -81,8 +81,13 @@ MOLD: mold risk: HIGH - sustained damp (surface condensation)
 ```
 
 The `system-stuffy.yaml` scene (cold exterior wall, damp room) drives this to
-`SEVERE`; `system-fresh.yaml` (warm surface, dry air) never condenses — the
-negative control. This is the differentiating channel from the Leo "moisture
+`SEVERE` early and holds it there; `system-fresh.yaml` (warm surface, dry air)
+never condenses — the negative control. Note that the NORMAL scene's air-RH
+ladder asymptotes at 70.1 %, a hair over the firmware's 70 % "very damp" step, so
+NORMAL also tips from `HIGH` to `SEVERE` in its last few samples. The mold
+verdict therefore separates fresh from the other two, but not normal from stuffy;
+**CO₂ is what separates NORMAL from STUFFY** (1394 ppm vs 1791 ppm, either side
+of the 1400 ppm "ventilate now" threshold). This is the differentiating channel from the Leo "moisture
 first" product direction, exercised end-to-end over the real C3 I²C bus.
 
 ## How it works
@@ -96,10 +101,29 @@ vendor drivers decode them exactly. The platform shim
 driving the C3 I²C0 command-list engine directly — every byte the driver reads
 is fetched by a real simulated I²C transaction.
 
-The numbers **move**: each sensor advances a deterministic ramp on every
-measurement, so a closed room fills up — CO₂ climbs from ~450 toward ~1400 ppm,
-particulates drift up, the light dims toward evening — and the firmware's verdict
-flips. The verdict thresholds are firmware policy, blind to the scene config.
+The numbers **move**, and there is exactly one thing that moves them: the
+`stimuli:` ladder in the test script, applied through `set_input`. The sensor
+models hold whatever value they were last given — they do **not** self-advance a
+ramp. So a closed room fills up — CO₂ climbs from ~450 toward ~1400 ppm,
+particulates drift up, the light dims toward evening — because the script drives
+it, and the firmware's verdict flips. The verdict thresholds are firmware policy,
+blind to the scene config.
+
+Each ladder rung is an absolute cycle count (`after_cycles`), so the rungs must
+land inside the window in which the firmware is still sampling. Two real wires
+set that window, and both are clocked at their real rate: I²C0 shifts every
+transaction bit-by-bit, and UART0 shifts one 10-bit frame per baud period out of
+a 128-entry TX FIFO that **drops** a write when it is full — so `c3_uart.c` waits
+for a free FIFO entry before every byte (real flow control) and clocks the
+console at 2 Mbaud, because at the power-on 115200 the ~24 kB this demo prints
+would need ~2.1 s of wire time (~340M core cycles) on its own. Measured against
+the committed ELF (NORMAL): a measurement cycle costs ~250k core cycles while the
+room is quiet and ~1.0M once the longer condensation/mold lines push a cycle's
+telemetry past the FIFO (~585k on average); sample `t=4` is read at ~1.5M cycles, sample `t=60`
+at ~34.5M, and all 64 samples plus `LEO DONE` and the final OLED frame dump are
+done by ~21.5M steps / ~54.5M cycles. A rung placed past that window is dead — it
+changes no reading, and the scenario it belongs to then passes or fails for
+reasons unrelated to the story it claims to tell.
 
 > Note: the SGP41 VOC Index reads 0 for the first ~45 cycles. That is the **real**
 > Gas Index Algorithm's warm-up/blackout behaviour, not a stub — it gates output

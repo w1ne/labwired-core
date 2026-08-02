@@ -1,0 +1,35 @@
+# LabWired - Adafruit ESP32 Feather V2 System Configuration
+#
+# Adafruit PID 5400: ESP32-D0WD-V3 (dual-core LX6) with 8 MiB flash and 2 MiB
+# PSRAM, plus a STEMMA QT / Qwiic connector. Runs through the arduino-esp32
+# snapshot profile like the WROOM-32 board — same chip descriptor, different
+# board wiring.
+#
+# The board_io below is NOT a copy of the DevKit's. Three Feather-specific pins
+# matter enough that getting them wrong makes a correct sketch look broken, and
+# all three are taken from the Arduino core's own variant header
+# (variants/adafruit_feather_esp32_v2/pins_arduino.h), not from a pinout
+# picture:
+#
+#   * GPIO13 is the user LED (LED_BUILTIN), NOT GPIO2. GPIO2 on this board is
+#     the STEMMA QT / NeoPixel power switch.
+#   * GPIO2 (NEOPIXEL_I2C_POWER) gates the I2C rail AND the NeoPixel, and it
+#     comes up LOW. A sketch that scans I2C before driving it HIGH sees every
+#     address as absent — which reads as bad wiring rather than an unpowered
+#     bus.
+#   * I2C is SDA=GPIO22 / SCL=GPIO20, not the DevKit's 21/22.
+name: "adafruit-feather-esp32-v2"
+chip: "../chips/esp32.yaml"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 13         # LED_BUILTIN — the red user LED beside the USB connector
+    signal: "output"
+    active_high: true
+# GPIO2 (NEOPIXEL_I2C_POWER) is deliberately NOT declared here. board_io binds
+# canvas-visible devices, and there is no "plain driven output" kind — declaring
+# it as `led` would paint a phantom LED on the board that does not exist. The
+# firmware drives the pin either way; what matters is that sketch authors know
+# to raise it, which the board's architectFirmwareGuidance says.

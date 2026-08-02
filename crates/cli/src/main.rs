@@ -4,10 +4,11 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod artifacts;
 mod commands;
 mod wifi_frames;
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -26,6 +27,9 @@ mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
 
+use artifacts::{
+    AssertionResult, NamedU64, Snapshot, StimulusOutcome, StopReasonDetails, TestConfig, TestResult,
+};
 use labwired_config::{
     load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
 };
@@ -47,6 +51,21 @@ fn parse_u32_addr(s: &str) -> Result<u32, String> {
     } else {
         u32::from_str(trimmed).map_err(|e| format!("Invalid address '{}': {}", s, e))
     }
+}
+
+/// Parse a `--watch-gpio` ref `peripheral:pin` into `(peripheral, pin)`. The pin
+/// is a decimal `u8`; the peripheral is any non-empty name resolved against the
+/// bus at run time (`gpio8`, `gpioa`, …). Returns `None` for a malformed ref
+/// (missing colon, empty peripheral, or an out-of-range/non-numeric pin) — the
+/// caller logs and skips it rather than aborting the whole run.
+fn parse_watch_gpio_ref(spec: &str) -> Option<(String, u8)> {
+    let (name, pin) = spec.trim().rsplit_once(':')?;
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let pin: u8 = pin.trim().parse().ok()?;
+    Some((name.to_string(), pin))
 }
 
 #[derive(Parser, Debug)]
@@ -103,6 +122,10 @@ enum Commands {
     /// Deterministic, CI-friendly runner mode driven by a test script (YAML).
     Test(TestArgs),
 
+    /// List the chips bundled with this CLI, usable as `inputs.chip` in a test
+    /// script or as a manifest's `chip:` field without copying any YAML.
+    Chips,
+
     /// Machine control operations (load, etc.)
     Machine(MachineArgs),
 
@@ -132,6 +155,10 @@ enum Commands {
     /// Run the Tier-1 chip × peripheral validation matrix and export it.
     Tier1Matrix(Tier1MatrixArgs),
 
+    /// Step a manifest-declared co-simulation model through the real
+    /// runner/adapter chain and print the routed outputs.
+    CosimStep(commands::cosim::CosimStepArgs),
+
     /// Coverage-guided fuzz a firmware in the silicon-validated simulator.
     ///
     /// Mutates an input byte stream injected into the firmware's RAM buffer,
@@ -142,6 +169,14 @@ enum Commands {
     /// findings, not emulation false positives. Exits non-zero if a crash is
     /// found (CI-friendly).
     Fuzz(FuzzArgs),
+
+    /// One-shot agent debug probe (JSON on stdout or --output-dir/result.json).
+    ///
+    /// Loads machine + firmware, resolves optional breakpoints (address /
+    /// symbol / line), runs until stop or max-steps, and returns stop reason,
+    /// PC, location, registers, and serial. Observational only: never claims
+    /// oracle proof (`proven` is always false).
+    DebugProbe(commands::debug_probe::DebugProbeArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -264,18 +299,28 @@ pub struct SnapshotCaptureArgs {
     #[arg(long)]
     pub system: Option<PathBuf>,
 
-    /// Firmware profile to use. Currently only `agentdeck` is supported —
-    /// installs the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps
-    /// thunks, dual-core handshake fakery, IPI bridge, image header,
-    /// SSD1680 tri-color panel attached to spi3 / GPIO5). Each Arduino-ESP32
-    /// firmware has a different set of thunk PCs, so the profile name maps
-    /// to a hand-curated address list inside the binary.
-    #[arg(long, default_value = "agentdeck")]
+    /// Firmware profile to use. Only `arduino-esp32` is supported — installs
+    /// the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps thunks, dual-core
+    /// handshake, IPI bridge, image header) with thunk PCs resolved from the
+    /// ELF symbol table (no hand-curated per-firmware address list). External
+    /// peripherals come from the `--system` board manifest.
+    #[arg(long, default_value = "arduino-esp32")]
     pub profile: String,
 
     /// Print a progress line every N steps. 0 = silent.
     #[arg(long, default_value = "5000000")]
     pub progress_every: u64,
+
+    /// Write a JSON instruction trace here. Records the LAST `--trace-last`
+    /// retired instructions, which is the window that matters when a run
+    /// faults. Attaching a trace forces the interpreter (compiled blocks can't
+    /// emit per-step events), so the capture runs slower.
+    #[arg(long = "trace-out", value_name = "PATH")]
+    pub trace_out: Option<PathBuf>,
+
+    /// How many retired instructions to keep in the trace ring.
+    #[arg(long = "trace-last", value_name = "N", default_value = "4096")]
+    pub trace_last: usize,
 }
 
 #[derive(Parser, Debug)]
@@ -323,6 +368,16 @@ pub struct RunArgs {
     /// `--break-at` fires — for tracing ROM pointer chains. Repeatable.
     #[arg(long = "watch-mem", value_name = "HEX")]
     pub watch_mem: Vec<String>,
+
+    /// ARM-only: an additional flash piece placed at an explicit absolute
+    /// address, `<path>@<hex-offset>`. Repeatable — compose e.g. a Nordic
+    /// SoftDevice at `0x0` with an application ELF (`--firmware`) linked to
+    /// run above it. Each piece may be an ELF, an Intel HEX (`.hex`), or a
+    /// raw binary blob; overlapping pieces (with each other or with
+    /// `--firmware`) are a hard error. `--firmware` keeps working exactly as
+    /// before when no `--flash-image` is given.
+    #[arg(long = "flash-image", value_name = "PATH@HEX")]
+    pub flash_image: Vec<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -589,8 +644,8 @@ struct TestArgs {
     vcd: Option<PathBuf>,
 
     /// Maximum number of instructions to trace
-    #[arg(long, default_value = "100000")]
-    trace_max: usize,
+    #[arg(long)]
+    trace_max: Option<usize>,
 
     /// Collect firmware statement coverage. Writes coverage.info (LCOV) and
     /// coverage.json into --output-dir. Distinct from `labwired coverage`,
@@ -638,130 +693,16 @@ struct TestArgs {
     /// Useful for local development and testing.
     #[arg(long)]
     no_key: bool,
-}
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TestResult {
-    result_schema_version: String,
-    status: String,
-    steps_executed: u64,
-    cycles: u64,
-    instructions: u64,
-    stop_reason: StopReason,
-    stop_reason_details: StopReasonDetails,
-    limits: TestLimits,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
-    assertions: Vec<AssertionResult>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cpu_state: Option<labwired_core::snapshot::CpuSnapshot>,
-    firmware_hash: String,
-    config: TestConfig,
-    /// Universal inspect block: final-state decoded register + artifact
-    /// metadata for every peripheral (summary mode — framebuffer bytes omitted,
-    /// hashed via `meta.generation`). Absent on config-error runs that never
-    /// built a machine.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    inspect: Option<labwired_core::inspect::MachineInspect>,
-    /// Structured coverage gaps the model hit during the run: unmapped MMIO and
-    /// undecoded instructions, flattened from core's thread-local
-    /// `FidelityReport`. Empty (and omitted) on a clean run, so honest runs stay
-    /// clean. The builder maps this into `/run`'s `unmodeled_access[]`.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    fidelity: Vec<labwired_core::fidelity::FidelityGap>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct StopReasonDetails {
-    triggered_stop_condition: StopReason,
-    triggered_limit: Option<NamedU64>,
-    observed: Option<NamedU64>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct NamedU64 {
-    name: String,
-    value: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct AssertionResult {
-    assertion: TestAssertion,
-    passed: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TestConfig {
-    firmware: PathBuf,
-    system: Option<PathBuf>,
-    script: PathBuf,
-}
-
-use labwired_core::snapshot::CpuSnapshot;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PeripheralSnapshot {
-    name: String,
-    base: u64,
-    size: u64,
-    irq: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    state: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct InteractiveSnapshotConfig {
-    firmware: PathBuf,
-    system: Option<PathBuf>,
-    max_steps: usize,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum Snapshot {
-    Standard {
-        cpu: CpuSnapshot,
-        steps_executed: u64,
-        cycles: u64,
-        instructions: u64,
-        stop_reason: StopReason,
-        stop_reason_details: StopReasonDetails,
-        limits: TestLimits,
-        firmware_hash: String,
-        config: TestConfig,
-    },
-    ConfigError {
-        message: String,
-        stop_reason_details: StopReasonDetails,
-        limits: TestLimits,
-        config: TestConfig,
-    },
-    Interactive {
-        snapshot_schema_version: String,
-        status: String,
-        steps_executed: u64,
-        cycles: u64,
-        instructions: u64,
-        stop_reason: StopReason,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<String>,
-        firmware_hash: String,
-        cpu: CpuSnapshot,
-        peripherals: Vec<PeripheralSnapshot>,
-        config: InteractiveSnapshotConfig,
-    },
-}
-
-// snapshot_cortexm_cpu removed, use cpu.snapshot() directly
-
-struct InteractiveSnapshotInputs<'a> {
-    firmware_path: &'a Path,
-    system_path: Option<&'a PathBuf>,
-    max_steps: usize,
-    steps_executed: u64,
-    stop_reason: StopReason,
-    message: Option<String>,
+    /// Watch a GPIO pad's output for the deterministic logic-analyzer edge
+    /// capture, as `peripheral:pin` (e.g. `gpio8:8`, `gpioa:5`). Repeatable —
+    /// each ref is a channel (CH0, CH1, … in argument order). The captured
+    /// per-channel edge series lands in `result.json`'s `logic_edges` block, so
+    /// the oracle can prove a pad actually toggled / at a given period (the
+    /// prove-blink evidence). Edges are drained from the same in-engine tap the
+    /// browser logic analyzer uses. No watch → zero overhead, no block emitted.
+    #[arg(long = "watch-gpio", value_name = "PERIPHERAL:PIN")]
+    watch_gpio: Vec<String>,
 }
 
 /// Unified error response for agent consumption
@@ -805,87 +746,6 @@ pub(crate) fn emit_error(
     }
 }
 
-fn write_interactive_snapshot<C: labwired_core::Cpu>(
-    path: &Path,
-    metrics: &labwired_core::metrics::PerformanceMetrics,
-    machine: &labwired_core::Machine<C>,
-    inputs: InteractiveSnapshotInputs<'_>,
-) {
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            error!("Failed to create snapshot parent dir {:?}: {}", parent, e);
-            return;
-        }
-    }
-
-    let firmware_hash = match std::fs::read(inputs.firmware_path) {
-        Ok(bytes) => {
-            let mut hasher = Sha256::new();
-            hasher.update(&bytes);
-            format!("{:x}", hasher.finalize())
-        }
-        Err(e) => {
-            error!(
-                "Failed to read firmware for snapshot hash {:?}: {}",
-                inputs.firmware_path, e
-            );
-            String::new()
-        }
-    };
-
-    let machine_snapshot = machine.snapshot();
-    let peripherals = machine
-        .bus
-        .peripherals
-        .iter()
-        .map(|p| {
-            let state = machine_snapshot.peripherals.get(&p.name).cloned();
-            PeripheralSnapshot {
-                name: p.name.clone(),
-                base: p.base,
-                size: p.size,
-                irq: p.irq,
-                state,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let cpu_snapshot = machine.cpu.snapshot();
-
-    let snapshot = Snapshot::Interactive {
-        snapshot_schema_version: "1.0".to_string(),
-        status: if matches!(
-            inputs.stop_reason,
-            StopReason::MemoryViolation | StopReason::DecodeError
-        ) {
-            "error".to_string()
-        } else {
-            "ok".to_string()
-        },
-        steps_executed: inputs.steps_executed,
-        cycles: metrics.get_cycles(),
-        instructions: metrics.get_instructions(),
-        stop_reason: inputs.stop_reason,
-        message: inputs.message,
-        firmware_hash,
-        cpu: cpu_snapshot,
-        peripherals,
-        config: InteractiveSnapshotConfig {
-            firmware: inputs.firmware_path.to_path_buf(),
-            system: inputs.system_path.cloned(),
-            max_steps: inputs.max_steps,
-        },
-    };
-
-    match std::fs::File::create(path) {
-        Ok(f) => {
-            if let Err(e) = serde_json::to_writer_pretty(f, &snapshot) {
-                error!("Failed to write snapshot {:?}: {}", path, e);
-            }
-        }
-        Err(e) => error!("Failed to create snapshot {:?}: {}", path, e),
-    }
-}
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -903,6 +763,12 @@ fn main() -> ExitCode {
     }
 
     match cli.command {
+        Some(Commands::Chips) => {
+            for name in labwired_config::BUILTIN_CHIP_NAMES {
+                println!("{name}");
+            }
+            ExitCode::SUCCESS
+        }
         Some(Commands::Test(args)) => commands::test::run_test(args),
         Some(Commands::Machine(args)) => run_machine(args),
         Some(Commands::Asset(args)) => run_asset(args),
@@ -910,7 +776,9 @@ fn main() -> ExitCode {
         Some(Commands::Snapshot(args)) => commands::snapshot::run_snapshot(args),
         Some(Commands::Coverage(args)) => commands::coverage::run_coverage(args),
         Some(Commands::Tier1Matrix(args)) => commands::tier1::run_tier1_matrix(args),
+        Some(Commands::CosimStep(args)) => commands::cosim::run_cosim_step(args),
         Some(Commands::Fuzz(args)) => commands::fuzz::run_fuzz(args),
+        Some(Commands::DebugProbe(args)) => commands::debug_probe::run(args),
         None => commands::run::run_interactive(cli),
     }
 }
@@ -1068,6 +936,10 @@ fn run_two_c3_wifi(
                 uart.set_stdout_prefix(label);
             }
         }
+        // `attach_to_medium` flips the MAC's `needs_bus_tick()` on (medium
+        // stations poll their inbox + beacon each tick) but is a non-MMIO
+        // toggle, so rebuild the bus tick-index once to make the MAC resident.
+        m.bus.refresh_peripheral_index();
     }
 
     let limit = args.max_steps.unwrap_or(u64::MAX);
@@ -1082,6 +954,114 @@ fn run_two_c3_wifi(
         }
     }
     eprintln!("[dual] run complete");
+    ExitCode::SUCCESS
+}
+
+/// Single-station WiFi run: one ESP32-C3 on the shared [`virtual_wifi`] medium.
+/// It associates with the virtual AP, gets a DHCP lease, and reaches the AP's
+/// DHCP + HTTP servers — the LBC3.1 stats-device demo path. Mirrors the dual
+/// harness (own minimal step loop, non-zero factory MAC, UART echo) rather than
+/// bolting medium mode onto the standard run loop, which does not keep the MAC
+/// resident (auth never completes).
+pub(crate) fn run_one_c3_wifi(
+    args: &RunArgs,
+    chip: &labwired_config::ChipDescriptor,
+    manifest: &labwired_config::SystemManifest,
+) -> ExitCode {
+    use labwired_core::bus::SystemBus;
+    use labwired_core::peripherals::esp32c3::virtual_wifi::{ApConfig, VirtualWifiBus};
+    use labwired_core::peripherals::esp32c3::{virtual_wifi, wifi_mac::Esp32c3WifiMac};
+
+    virtual_wifi::reset();
+    eprintln!("[solo] one C3 on VirtualWifi: STA=02:00:00:00:00:02 (AP hosts DHCP + HTTP)");
+
+    // If the manifest declares a `wifi_ap`, host a medium with that config;
+    // otherwise the MACs bind the process-global default AP (byte-identical to
+    // the former hardcoded behaviour).
+    let configured_bus = manifest.wifi_ap.as_ref().map(|ap| {
+        let ip = {
+            let octets: Vec<u8> = ap
+                .ip
+                .split('.')
+                .filter_map(|o| o.parse::<u8>().ok())
+                .collect();
+            (octets.len() == 4).then(|| [octets[0], octets[1], octets[2], octets[3]])
+        };
+        VirtualWifiBus::with_config(ApConfig::from_parts(
+            Some(ap.ssid.clone()),
+            ip,
+            Some(&ap.serves),
+        ))
+    });
+
+    let bus = match SystemBus::from_config(chip, manifest) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: failed to build system bus: {e:#}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let mut m = match build_c3_rom_boot_machine(bus, Some([0x02, 0, 0, 0, 0, 0x02])) {
+        Ok(m) => m,
+        Err(c) => return c,
+    };
+    for p in m.bus.peripherals.iter_mut() {
+        let Some(any) = p.dev.as_any_mut() else {
+            continue;
+        };
+        if let Some(mac) = any.downcast_mut::<Esp32c3WifiMac>() {
+            if let Some(bus) = configured_bus.as_ref() {
+                mac.set_wifi_bus(bus.clone());
+            }
+            mac.attach_to_medium();
+        } else if let Some(uart) = any.downcast_mut::<labwired_core::peripherals::uart::Uart>() {
+            uart.set_stdout_prefix("");
+        }
+    }
+    m.bus.refresh_peripheral_index();
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    // Measurement/parity path (env LABWIRED_WIFI_FF=1): drive the station via
+    // the authoritative `advance(run)` loop with scheduler-safe idle
+    // fast-forward enabled — exactly what the browser bridge does for a heavy
+    // C3 chip (`isHeavyBrowserChip` → `set_idle_fast_forward_enabled(true)`).
+    // The default `step()` loop stays the faithful per-instruction reference so
+    // the two can be diffed for byte-identical WiFi output.
+    if std::env::var("LABWIRED_WIFI_FF").is_ok() {
+        use labwired_core::AdvanceRequest;
+        m.config.idle_fast_forward_enabled = true;
+        eprintln!("[solo] idle fast-forward ENABLED (advance/run path)");
+        let mut done: u64 = 0;
+        while done < limit {
+            let chunk = (limit - done).min(2_000_000);
+            match m.advance(AdvanceRequest::run(Some(chunk))) {
+                Ok(_report) => {}
+                Err(e) => {
+                    eprintln!("[solo] station halted after {done} cycles: {e}");
+                    break;
+                }
+            }
+            done = done.saturating_add(chunk);
+            if m.total_cycles == 0 {
+                break;
+            }
+        }
+        eprintln!(
+            "[solo] run complete — total_cycles={} idle_ff_cycles_skipped={}",
+            m.total_cycles, m.idle_fast_forward_cycles_skipped
+        );
+        return ExitCode::SUCCESS;
+    }
+    for i in 0..limit {
+        if let Err(e) = m.step() {
+            eprintln!("[solo] station halted at step {i}: {e}");
+            break;
+        }
+    }
+    eprintln!(
+        "[solo] run complete — total_cycles={} (no idle-ff)",
+        m.total_cycles
+    );
     ExitCode::SUCCESS
 }
 
@@ -1364,6 +1344,9 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &None,
         &[],
         None,
+        None,
+        // Load/reset failed before the run loop, so no stimulus was attempted.
+        Vec::new(),
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1403,6 +1386,69 @@ fn assertion_currently_passes(
     }
 }
 
+/// Does this `labwired test` run qualify for the RV32IMC wasm-JIT fast path?
+///
+/// True ⇔ the target is RISC-V (ESP32-C3), batch mode is on, and NONE of the
+/// per-instruction-visibility features that force the JIT's correctness gate
+/// shut is active. This is the SAME set of conditions that would otherwise pin
+/// the CLI batch to one instruction (`batch_size` in `execute_test_loop`) or
+/// make `RiscV::jit_gate_allows` refuse to run — folded into one predicate the
+/// caller evaluates BEFORE installing observers, so the eligible path can skip
+/// the metrics step observer entirely (its presence gates the JIT off) and
+/// source cycles/instructions from the machine's own counters instead.
+///
+/// Deliberately conservative: any `--trace`/`--coverage`/`--vcd`/`--breakpoint`/
+/// `--detect-stuck`/`--watch-gpio`, a `stop_when_assertions_pass` early-stop, or
+/// a cycle-accurate/poll-mode peripheral drops the run onto the exact current
+/// observer-based path (`jit_eligible == false`).
+fn riscv_jit_test_eligible<C: labwired_core::Cpu>(
+    args: &TestArgs,
+    limits: &TestLimits,
+    machine: &labwired_core::Machine<C>,
+    arch: labwired_core::Arch,
+) -> bool {
+    // NOTE: `batch_mode_enabled` is deliberately NOT required. The eligible path
+    // drives `Machine::advance`, which batches to the peripheral-tick cadence
+    // regardless of that flag — indeed the C3 rom-boot machine turns it OFF (its
+    // fixed-width step_batch loop freezes FreeRTOS), which is exactly the case we
+    // want to accelerate.
+    matches!(arch, labwired_core::Arch::RiscV)
+        && !args.trace
+        && !args.coverage
+        && args.vcd.is_none()
+        && args.breakpoint.is_empty()
+        && args.watch_gpio.is_empty()
+        && args.capture_app_entry.is_none()
+        && limits.no_progress_steps.is_none()
+        && !limits.stop_when_assertions_pass
+        && !machine.bus.requires_cycle_accurate()
+        && !machine.logic_poll_active()
+}
+
+/// Map a core `SimulationError` to the CLI `StopReason` so a halt or fault from
+/// `Machine::advance` ends the run with the CLI's established reason.
+fn map_sim_error_to_stop_reason(e: &labwired_core::SimulationError) -> StopReason {
+    use labwired_core::SimulationError as E;
+    match e {
+        E::MemoryViolation(_) => StopReason::MemoryViolation,
+        E::DecodeError(_) => StopReason::DecodeError,
+        E::Halt => StopReason::Halt,
+        E::SnapshotSchemaMismatch { .. } => StopReason::Exception,
+        E::Other(_) => StopReason::Exception,
+        E::NotImplemented(_) => StopReason::Exception,
+        E::BreakpointHit(_) => StopReason::Halt,
+        E::ExceptionRaised { .. } => StopReason::Exception,
+    }
+}
+
+/// Instruction budget per `Machine::advance` call on the JIT-eligible C3 path. The
+/// stimulus/limit checks at the top of `execute_test_loop`'s run loop run once
+/// per chunk, so this bounds their granularity; the chunk is further clamped so
+/// a run never steps PAST the nearest pending cycle threshold (time-triggered
+/// stimulus or `max_cycles`), keeping those firing points cycle-tight and
+/// identical between the JIT-on and JIT-off arms.
+const JIT_RUN_CHUNK: u32 = 1_000_000;
+
 #[allow(clippy::too_many_arguments)]
 fn execute_test_loop<C: labwired_core::Cpu>(
     args: &TestArgs,
@@ -1418,6 +1464,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     require_fault_fired: bool,
     mut fault_evidence: Vec<labwired_cli::faults::FaultEvidence>,
     stimuli: &[labwired_config::StimulusSpec],
+    uart_injections: &[labwired_config::UartInjectionSpec],
+    // True when this run qualifies for the RV32IMC wasm-JIT fast path (decided
+    // by `riscv_jit_test_eligible` in the caller): RiscV arch, batch mode, and
+    // NONE of the per-instruction-visibility features that gate the JIT off.
+    // In this mode `metrics` was NOT installed as a step observer (its presence
+    // forces the JIT's correctness gate shut), so the loop mirrors the machine's
+    // own counters into `metrics` before each cycle-sensitive check.
+    jit_eligible: bool,
 ) -> ExitCode {
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -1430,7 +1484,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut steps_executed: u64 = 0;
 
     let trace_observer = if args.trace {
-        let obs = Arc::new(labwired_core::trace::TraceObserver::new(args.trace_max));
+        let obs = Arc::new(labwired_core::trace::TraceObserver::new(
+            args.trace_max.unwrap_or(100_000),
+        ));
         machine.observers.push(obs.clone());
         Some(obs)
     } else {
@@ -1455,6 +1511,108 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
 
+    // ── --watch-gpio: arm the deterministic logic-analyzer edge capture ──────
+    // Resolve each `peripheral:pin` ref ONCE (to a peripheral index + pin),
+    // exactly as the wasm `watch_logic_signals` accessor does, arm the in-engine
+    // tap, and keep the per-channel identity so the drained edges can be shaped
+    // into `result.json`'s `logic_edges` block after the run. An empty watch set
+    // is a no-op (no channels installed → zero-overhead capture path).
+    let logic_watch_meta: Vec<labwired_core::logic_capture::LogicChannelMeta> = {
+        let refs: Vec<(String, u8)> = args
+            .watch_gpio
+            .iter()
+            .filter_map(|spec| parse_watch_gpio_ref(spec))
+            .collect();
+        if refs.len() != args.watch_gpio.len() {
+            for spec in &args.watch_gpio {
+                if parse_watch_gpio_ref(spec).is_none() {
+                    error!("--watch-gpio: ignoring malformed ref {spec:?} (want `peripheral:pin`)");
+                }
+            }
+        }
+        if refs.is_empty() {
+            Vec::new()
+        } else {
+            let resolved: Vec<Option<(usize, u8)>> = refs
+                .iter()
+                .map(|(name, pin)| {
+                    machine
+                        .bus
+                        .find_peripheral_index_by_name(name)
+                        .map(|idx| (idx, *pin))
+                })
+                .collect();
+            for ((name, _), r) in refs.iter().zip(resolved.iter()) {
+                if r.is_none() {
+                    error!("--watch-gpio: peripheral {name:?} not found on the bus; channel will stay flat");
+                }
+            }
+            let initial = machine.logic_watch(&resolved);
+            refs.iter()
+                .zip(initial)
+                .enumerate()
+                .map(
+                    |(ch, ((name, pin), value))| labwired_core::logic_capture::LogicChannelMeta {
+                        ch: ch as u32,
+                        peripheral: name.clone(),
+                        pin: *pin,
+                        initial: value,
+                    },
+                )
+                .collect()
+        }
+    };
+    let logic_capture_armed = !logic_watch_meta.is_empty();
+
+    // ── JIT-eligible cycle/instruction sourcing (RISC-V / ESP32-C3) ──────────
+    // When eligible, engage the RV32IMC wasm-JIT for this run and source the
+    // metrics counters from the machine's own state (no step observer). Sourcing
+    // cycles from `machine.total_cycles` (not the observer's per-step
+    // `on_step_end` tap) is what makes JIT-on and JIT-off byte-identical:
+    // compiled blocks retire WITHOUT firing `on_step_end`, so an observer would
+    // undercount them. Both JIT arms (`LABWIRED_RISCV_JIT=1` on, default off)
+    // STAY in this same machine-sourced regime, so they are byte-identical
+    // (proven by tests/riscv_jit_c3_oled_test_differential); the metrics numbers
+    // never depend on whether a batch was interpreted or compiled.
+    if jit_eligible {
+        // JIT is OPT-IN (LABWIRED_RISCV_JIT=1), NOT default-on. Measured on the
+        // esp32c3-oled-demo oracle lab, the wasmtime RV32IMC JIT is ~18× SLOWER
+        // than the interpreter here: the hot path is tight FreeRTOS/idle loops
+        // (~1.9 guest instr per compiled-block run), so the per-block-dispatch
+        // FFI overhead dwarfs the interpreted cost and ~⅔ of instructions still
+        // fall back to the interpreter. The genuine speedup on this path is the
+        // tick-interval widening below (`Machine::advance` at the bus max-safe
+        // interval: ~2.6× faster than the pre-change single-step tick-1 oracle),
+        // which is applied UNCONDITIONALLY when eligible. The JIT stays wired,
+        // proven byte-identical, and one env var away for compute-heavy firmware
+        // where straight-line blocks amortize the dispatch cost. See the report.
+        let jit_on = std::env::var("LABWIRED_RISCV_JIT").as_deref() == Ok("1");
+        machine.config.riscv_jit_enabled = jit_on;
+        machine.bus.config.riscv_jit_enabled = jit_on;
+        // Widen the peripheral-tick interval to RECOMMENDED_TICK_INTERVAL so
+        // `Machine::advance`'s per-tick batch is wide enough
+        // for compiled blocks to retire, and the peripheral tick count drops
+        // ~64×. The C3 rom-boot peripherals are walk-deletable, so this is
+        // observably identical to interval-1 (esp32c3_walk_differential); the
+        // eligibility gate already excludes any `requires_cycle_accurate` bus.
+        // `max_safe_tick_interval` is NOT used here because it only returns the
+        // wide interval under the `event-scheduler` feature, which the CLI does
+        // not enable (see crates/cli/Cargo.toml). Crucially this is applied to
+        // BOTH JIT arms, so it never perturbs the JIT-on vs JIT-off differential.
+        // TEST-ONLY escape hatch (regression gate riscv_jit_c3_oled_test_differential):
+        // override the widened interval with LABWIRED_TICK_INTERVAL so the
+        // interval-64 (widened) vs interval-1 (baseline) fidelity gate can be
+        // proven empirically with EVERYTHING else identical (same machine-sourced
+        // cycle counting, same eligible code path) — the tick interval is the ONLY
+        // variable. Unset = default (RECOMMENDED_TICK_INTERVAL).
+        let interval = std::env::var("LABWIRED_TICK_INTERVAL")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(labwired_core::bus::RECOMMENDED_TICK_INTERVAL);
+        machine.config.peripheral_tick_interval = interval;
+        machine.bus.config.peripheral_tick_interval = interval;
+    }
+
     let batch_size = if machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
         && detect_stuck.is_none()
@@ -1463,6 +1621,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         // correctly when peripherals tick between every instruction; instruction
         // batching freezes them across the batch and the firmware measures 0.
         && !machine.bus.requires_cycle_accurate()
+        // A logic-analyzer POLL-mode channel must be sampled at EVERY cycle
+        // boundary, so clamp the batch to one instruction while one is armed
+        // (mirrors `Machine::advance`). Push-mode channels report their own edges
+        // from the write sites and keep the full batch width.
+        && !machine.logic_poll_active()
     {
         10000.min(max_steps)
     } else {
@@ -1474,23 +1637,49 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // wiring. `at_start` fires now; `after_cycles` fires the first loop
     // iteration at or past its cycle threshold. The closure takes `machine` as
     // an argument (captures nothing) so it can be called both here and mid-loop.
+    //
+    // The closure RETURNS the outcome rather than swallowing it. This used to
+    // only `error!` a rejection into the log and carry on, so a run whose input
+    // never reached the device still reported `status: "pass"` — a surface that
+    // claims success having proved nothing. Every outcome is now recorded in
+    // `stimulus_outcomes`, surfaced in `result.json`'s `stimuli` block, and a
+    // rejection fails the run (see the verdict below).
+    let mut stimulus_outcomes: Vec<StimulusOutcome> = Vec::new();
     let apply_stimulus = |machine: &mut labwired_core::Machine<C>,
                           s: &labwired_config::StimulusSpec| {
         let result = match s.target.component.as_deref() {
             Some(component) => machine.set_input_on(component, &s.target.channel, s.value),
             None => machine.set_input(&s.target.channel, s.value),
         };
-        match result {
-            Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
-            Err(e) => error!(
-                "stimulus '{}' = {} could not be applied: {:?}",
-                s.target.channel, s.value, e
-            ),
+        let (outcome, error) = match result {
+            Ok(()) => {
+                info!("stimulus: {} = {} applied", s.target.channel, s.value);
+                (artifacts::STIMULUS_APPLIED, None)
+            }
+            // `SimInputError`'s Display is the author-facing sentence ("no
+            // attached input device exposes channel 'pressed'"); the old `{:?}`
+            // Debug form leaked Rust variant names into the log.
+            Err(e) => {
+                error!(
+                    "stimulus '{}' = {} could not be applied: {e}",
+                    s.target.channel, s.value
+                );
+                (artifacts::STIMULUS_REJECTED, Some(e.to_string()))
+            }
+        };
+        StimulusOutcome {
+            channel: s.target.channel.clone(),
+            component: s.target.component.clone(),
+            value: s.value,
+            trigger: s.trigger.clone(),
+            outcome: outcome.to_string(),
+            at_cycle: machine.total_cycles,
+            error,
         }
     };
     for s in stimuli {
         if matches!(s.trigger, labwired_config::FaultTrigger::AtStart) {
-            apply_stimulus(machine, s);
+            stimulus_outcomes.push(apply_stimulus(machine, s));
         }
     }
     // Time-triggered stimuli, each tagged with whether it has fired yet.
@@ -1499,6 +1688,62 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         .filter(|s| matches!(s.trigger, labwired_config::FaultTrigger::AfterCycles { .. }))
         .map(|s| (s, false))
         .collect();
+
+    // Declarative UART RX injections (schema_version 1.2). Resolved against
+    // the built bus by peripheral name via the same `attach_uart_rx_source`
+    // family used by the wasm bridge (`attach_uart_rx_source_named`), then
+    // pushed straight into the UART's RX `VecDeque` — the shared mechanism
+    // that already backs interactive serial input. A byte pushed before the
+    // firmware configures/reads the UART is buffered, not dropped: RX
+    // presence is derived from the queue being non-empty (see
+    // `Uart::read`), with no enable-bit gating. `at_start` delivers
+    // immediately (before the firmware executes its first instruction);
+    // `after_cycles` delivers the first loop iteration at or past its cycle
+    // threshold, mirroring `apply_stimulus` above. A named UART that isn't
+    // found on the bus is a hard config error — silently dropping serial
+    // input a script depends on would be a false pass.
+    let mut uart_injection_error = false;
+    let apply_uart_injection =
+        |machine: &mut labwired_core::Machine<C>, u: &labwired_config::UartInjectionSpec| {
+            match machine.bus.attach_uart_rx_source_named(&u.uart) {
+                Some(rx) => {
+                    let bytes = u.bytes.as_bytes();
+                    match rx.lock() {
+                        Ok(mut guard) => {
+                            guard.extend(bytes.iter().copied());
+                            info!(
+                                "uart_injection: {} byte(s) delivered to '{}'",
+                                bytes.len(),
+                                u.uart
+                            );
+                        }
+                        Err(e) => error!("uart_injection '{}': RX buffer poisoned: {e}", u.uart),
+                    }
+                    None
+                }
+                None => Some(format!(
+                    "uart_injection: UART peripheral '{}' not found on the bus",
+                    u.uart
+                )),
+            }
+        };
+    for u in uart_injections {
+        if matches!(u.trigger, labwired_config::FaultTrigger::AtStart) {
+            if let Some(err) = apply_uart_injection(machine, u) {
+                error!("{err}");
+                uart_injection_error = true;
+            }
+        }
+    }
+    if uart_injection_error {
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+    let mut pending_uart_injections: Vec<(&labwired_config::UartInjectionSpec, bool)> =
+        uart_injections
+            .iter()
+            .filter(|u| matches!(u.trigger, labwired_config::FaultTrigger::AfterCycles { .. }))
+            .map(|u| (u, false))
+            .collect();
 
     // Tracks the step at which all runtime assertions first passed. The
     // `stop_when_assertions_pass` early-stop is only accepted after the machine
@@ -1552,6 +1797,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     let mut step = 0;
     while step < max_steps {
+        // JIT-eligible path: mirror the machine's authoritative counters into
+        // `metrics` BEFORE the cycle-sensitive checks below (stimulus
+        // `after_cycles`, `max_cycles`), so they fire at exactly the same batch
+        // boundary the observer path would. `step` is the retired-instruction
+        // count (accumulated from `step_batch` return values); `total_cycles`
+        // is the machine's canonical cycle counter. No-op for the non-eligible
+        // path, where `metrics` IS the live step observer.
+        if jit_eligible {
+            metrics.set_cycles(machine.total_cycles);
+            metrics.set_instructions(step);
+        }
         // --capture-app-entry: detect the first instant execution reaches the
         // application, snapshot the live machine, and write the resume blob.
         if let Some(cap) = &app_entry_capture {
@@ -1586,7 +1842,25 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 if let labwired_config::FaultTrigger::AfterCycles { cycles: threshold } = s.trigger
                 {
                     if cycles >= threshold {
-                        apply_stimulus(machine, s);
+                        stimulus_outcomes.push(apply_stimulus(machine, s));
+                        *fired = true;
+                    }
+                }
+            }
+        }
+        // Fire any `after_cycles` UART injection whose threshold has been reached.
+        if !pending_uart_injections.is_empty() {
+            let cycles = metrics.get_cycles();
+            for (u, fired) in pending_uart_injections.iter_mut() {
+                if *fired {
+                    continue;
+                }
+                if let labwired_config::FaultTrigger::AfterCycles { cycles: threshold } = u.trigger
+                {
+                    if cycles >= threshold {
+                        if let Some(err) = apply_uart_injection(machine, u) {
+                            error!("{err}");
+                        }
                         *fired = true;
                     }
                 }
@@ -1625,127 +1899,58 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let current_batch = batch_size as u32;
         let to_execute = current_batch.min(remaining);
 
-        if to_execute > 1 {
-            match machine.cpu.step_batch(
-                &mut machine.bus,
-                &machine.observers,
-                &machine.config,
-                to_execute,
-            ) {
-                Ok(executed) => {
-                    let prev_cycles = machine.total_cycles;
-                    step += executed as u64;
-                    steps_executed = step;
-                    machine.total_cycles += executed as u64;
-
-                    // Cycle-accurate tick propagation for batch runs
-                    let tick_interval = machine.config.peripheral_tick_interval as u64;
-                    let ticks_before = prev_cycles / tick_interval;
-                    let ticks_after = machine.total_cycles / tick_interval;
-
-                    for _ in ticks_before..ticks_after {
-                        let (interrupts, costs) = machine.bus.tick_peripherals_fully();
-                        for c in costs {
-                            machine.total_cycles += c.cycles as u64;
-                            if let Some(p) = machine.bus.peripherals.get(c.index) {
-                                for observer in &machine.observers {
-                                    observer.on_peripheral_tick(&p.name, c.cycles);
-                                }
-                            }
-                        }
-                        for irq in interrupts {
-                            machine.cpu.set_exception_pending(irq);
-                        }
-                    }
-
-                    // Honor a firmware-requested system reset (AIRCR
-                    // SYSRESETREQ with VECTKEY) latched by the batch just
-                    // executed. The single-step `else` branch gets this via
-                    // `machine.step()`; the batched path must drain it
-                    // explicitly or the reboot never fires.
-                    if machine.drain_scb_reset_request() {
-                        if let Err(e) = machine.reset() {
-                            sim_error_happened = true;
-                            stop_reason = match e {
-                                labwired_core::SimulationError::MemoryViolation(_) => {
-                                    StopReason::MemoryViolation
-                                }
-                                labwired_core::SimulationError::DecodeError(_) => {
-                                    StopReason::DecodeError
-                                }
-                                labwired_core::SimulationError::Halt => StopReason::Halt,
-                                labwired_core::SimulationError::SnapshotSchemaMismatch {
-                                    ..
-                                } => StopReason::Exception,
-                                labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                                labwired_core::SimulationError::NotImplemented(_) => {
-                                    StopReason::Exception
-                                }
-                                labwired_core::SimulationError::BreakpointHit(_) => {
-                                    StopReason::Halt
-                                }
-                                labwired_core::SimulationError::ExceptionRaised { .. } => {
-                                    StopReason::Exception
-                                }
-                            };
-                            error!("Reset error at step {}: {}", step, e);
-                            break;
-                        }
-                    }
-
-                    if executed < to_execute {
-                        // Bailed out early (e.g. exception/branch)
-                        continue;
+        let (mut limit, batch_cap) = if jit_eligible {
+            let chunk = remaining.min(JIT_RUN_CHUNK);
+            (u64::from(chunk), chunk)
+        } else {
+            (u64::from(to_execute), current_batch)
+        };
+        let current_cycle = machine.total_cycles;
+        for (stimulus, fired) in &pending_stimuli {
+            if !*fired {
+                if let labwired_config::FaultTrigger::AfterCycles { cycles } = stimulus.trigger {
+                    if cycles > current_cycle {
+                        limit = limit.min(cycles - current_cycle);
                     }
                 }
-                Err(e) => {
-                    sim_error_happened = true;
-                    stop_reason = match e {
-                        labwired_core::SimulationError::MemoryViolation(_) => {
-                            StopReason::MemoryViolation
-                        }
-                        labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
-                        labwired_core::SimulationError::Halt => StopReason::Halt,
-                        labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
-                            StopReason::Exception
-                        }
-                        labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                        labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
-                        labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
-                        labwired_core::SimulationError::ExceptionRaised { .. } => {
-                            StopReason::Exception
-                        }
-                    };
-                    if stop_reason != StopReason::Halt {
-                        error!("Simulation error at step {}: {}", step, e);
+            }
+        }
+        for (injection, fired) in &pending_uart_injections {
+            if !*fired {
+                if let labwired_config::FaultTrigger::AfterCycles { cycles } = injection.trigger {
+                    if cycles > current_cycle {
+                        limit = limit.min(cycles - current_cycle);
                     }
+                }
+            }
+        }
+        if let Some(cycle_limit) = max_cycles {
+            if cycle_limit > current_cycle {
+                limit = limit.min(cycle_limit - current_cycle);
+            }
+        }
+        let request = labwired_core::AdvanceRequest::run(Some(limit.max(1)))
+            .with_batch_cap(
+                std::num::NonZeroU32::new(batch_cap.max(1)).expect("advance batch cap is non-zero"),
+            )
+            .with_breakpoints(labwired_core::BreakpointPolicy::Ignore);
+        match machine.advance(request) {
+            Ok(report) => {
+                step += report.primary_steps;
+                steps_executed = step;
+                if report.primary_steps == 0 && report.idle_cycles == 0 {
+                    stop_reason = StopReason::Halt;
                     break;
                 }
             }
-        } else {
-            steps_executed = step + 1;
-            if let Err(e) = machine.step() {
+            Err(error) => {
                 sim_error_happened = true;
-                stop_reason = match e {
-                    labwired_core::SimulationError::MemoryViolation(_) => {
-                        StopReason::MemoryViolation
-                    }
-                    labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
-                    labwired_core::SimulationError::Halt => StopReason::Halt,
-                    labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
-                        StopReason::Exception
-                    }
-                    labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                    labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
-                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
-                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Exception,
-                };
+                stop_reason = map_sim_error_to_stop_reason(&error);
                 if stop_reason != StopReason::Halt {
-                    error!("Simulation error at step {}: {}", step, e);
+                    error!("Simulation error at step {}: {}", step, error);
                 }
                 break;
             }
-            step += 1;
         }
 
         // Check no_progress (PC stuck) - only if batching disabled or not possible
@@ -1804,6 +2009,29 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                 }
             }
+        }
+    }
+
+    // Final counter mirror for the JIT-eligible path: the loop-top sync runs
+    // before the LAST batch, so capture that batch's retired cycles/instructions
+    // here — `result.json` (`cycles`/`instructions`) and `stop_reason_details`
+    // read `metrics` below and must report the true totals.
+    if jit_eligible {
+        metrics.set_cycles(machine.total_cycles);
+        metrics.set_instructions(steps_executed);
+    }
+
+    // Opt-in JIT non-vacuity / diagnostic: prove hot blocks actually compiled
+    // and ran on this oracle run (LABWIRED_JIT_STATS=1). `jit_engine_stats` is a
+    // feature-agnostic Cpu-trait accessor: `Some(..)` only in a `jit-core` build
+    // whose JIT engine was created, `None` otherwise (interpreter-only).
+    if jit_eligible && std::env::var("LABWIRED_JIT_STATS").is_ok() {
+        match machine.cpu.jit_engine_stats() {
+            Some(s) => eprintln!(
+                "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
+                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+            ),
+            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
         }
     }
 
@@ -1903,7 +2131,62 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         StopReason::WallTime | StopReason::MaxUartBytes | StopReason::NoProgress
     );
 
-    let status = if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
+    // Any `after_cycles` stimulus whose threshold the run never reached also
+    // proved nothing about that input, so it is recorded rather than dropped.
+    // Unlike a rejection this is NOT fatal: a run can legitimately stop early
+    // (`stop_when_assertions_pass`) with a later rung of a stimulus ladder
+    // unfired, and failing those would flip existing green runs red on a pacing
+    // judgement call. It is reported so the reader can see it.
+    {
+        let end_cycle = metrics.get_cycles();
+        for (s, fired) in &pending_stimuli {
+            if *fired {
+                continue;
+            }
+            let threshold = match s.trigger {
+                labwired_config::FaultTrigger::AfterCycles { cycles } => cycles,
+                _ => continue,
+            };
+            error!(
+                "stimulus '{}' = {} never fired: the run ended at cycle {end_cycle}, before its \
+                 after_cycles threshold {threshold}",
+                s.target.channel, s.value
+            );
+            stimulus_outcomes.push(StimulusOutcome {
+                channel: s.target.channel.clone(),
+                component: s.target.component.clone(),
+                value: s.value,
+                trigger: s.trigger.clone(),
+                outcome: artifacts::STIMULUS_NOT_REACHED.to_string(),
+                at_cycle: end_cycle,
+                error: Some(format!(
+                    "never fired: the run ended at cycle {end_cycle}, before the after_cycles \
+                     threshold {threshold}"
+                )),
+            });
+        }
+    }
+
+    // A stimulus the engine REFUSED never reached the device, so nothing the
+    // run observed can be attributed to it — a "pass" here would be a run that
+    // proved nothing, which is the single most expensive failure mode in this
+    // codebase. It is therefore an invalid run, not a firmware verdict:
+    // `status: "error"` + `EXIT_CONFIG_ERROR`, exactly like the `uart_injection`
+    // peripheral-not-found gate above, which is the same class of failure
+    // (declared input never delivered) and already hard-fails.
+    let stimuli_rejected = stimulus_outcomes.iter().filter(|o| o.is_rejected()).count();
+    if stimuli_rejected > 0 {
+        error!(
+            "{stimuli_rejected} stimulus/stimuli could not be applied; the run is invalid \
+             (nothing it observed can be attributed to them)"
+        );
+    }
+
+    // `rejected` dominates the other verdicts on purpose: a "fail" produced by a
+    // run whose inputs were never delivered is not a trustworthy fail either.
+    let status = if stimuli_rejected > 0 {
+        "error"
+    } else if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
         "fail"
     } else if sim_error_happened && !expected_stop_reason_matched {
         "error"
@@ -1946,6 +2229,24 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         },
     );
 
+    // Drain the deterministic logic-analyzer edge capture for THIS run and shape
+    // it into the shared per-channel series form. Reading from cursor 0 returns
+    // every retained edge; `dropped` (surfaced in the block) is non-zero only if
+    // the 64k ring overflowed, which the oracle treats as fail-loud. This is the
+    // SAME `logic_read_edges` drain the wasm `read_logic_edges` accessor uses, so
+    // the CLI `result.json` edges and the browser edges are edge-for-edge equal.
+    let logic_edges = if logic_capture_armed {
+        let now_cycle = machine.logic_now_cycle();
+        let batch = machine.logic_read_edges(0);
+        Some(labwired_core::logic_capture::build_logic_edges_result(
+            &logic_watch_meta,
+            &batch,
+            now_cycle,
+        ))
+    } else {
+        None
+    };
+
     write_outputs(
         args,
         status,
@@ -1965,9 +2266,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         &coverage_observer,
         &fault_evidence,
         Some(inspect_block),
+        logic_edges,
+        stimulus_outcomes,
     );
 
-    if !all_passed
+    if stimuli_rejected > 0 {
+        ExitCode::from(EXIT_CONFIG_ERROR)
+    } else if !all_passed
         || fault_gate_failed
         || (stop_requires_assertion && !expected_stop_reason_matched)
     {
@@ -1999,6 +2304,8 @@ fn write_outputs<C: labwired_core::Cpu>(
     coverage_observer: &Option<Arc<labwired_core::pc_coverage::PcCoverageObserver>>,
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
     inspect: Option<labwired_core::inspect::MachineInspect>,
+    logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    stimuli: Vec<StimulusOutcome>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -2011,6 +2318,24 @@ fn write_outputs<C: labwired_core::Cpu>(
     // is the sole call site on the run path.
     let fidelity = labwired_core::fidelity::take().to_gaps();
 
+    // Derive the top-level `message` from the stimulus block rather than taking
+    // it as a second parameter, so the human sentence and the structured
+    // evidence cannot drift apart — one source of truth. A rejected stimulus is
+    // fatal, so a reader who only ever looks at `status` + `message` still
+    // cannot miss it.
+    let rejected: Vec<String> = stimuli
+        .iter()
+        .filter(|o| o.is_rejected())
+        .map(|o| o.describe())
+        .collect();
+    let message = (!rejected.is_empty()).then(|| {
+        format!(
+            "{} stimulus/stimuli could not be applied, so the run proved nothing about them: {}",
+            rejected.len(),
+            rejected.join("; ")
+        )
+    });
+
     let assertions_for_junit = assertions.clone();
     let result = TestResult {
         result_schema_version: RESULT_SCHEMA_VERSION.to_string(),
@@ -2021,7 +2346,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         stop_reason,
         stop_reason_details: stop_reason_details.clone(),
         limits: limits.clone(),
-        message: None,
+        message,
         assertions,
         cpu_state: Some(cpu.snapshot()),
         firmware_hash,
@@ -2032,6 +2357,8 @@ fn write_outputs<C: labwired_core::Cpu>(
         },
         inspect,
         fidelity,
+        logic_edges,
+        stimuli,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2354,6 +2681,11 @@ pub(crate) fn write_config_error_outputs(
         inspect: None,
         // Config error: the sim never ran, so there are no coverage gaps to report.
         fidelity: Vec::new(),
+        // Nor any logic-analyzer edges — capture never armed.
+        logic_edges: None,
+        // Nor any stimulus outcomes: the run was rejected before a machine
+        // existed, so no stimulus was ever attempted.
+        stimuli: Vec::new(),
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2786,5 +3118,36 @@ mod tests {
         };
         let err = evaluate_uds_tester(&testers, &details).unwrap_err();
         assert!(err.contains("ghost-tester"), "missing id in: {err}");
+    }
+
+    #[test]
+    fn config_error_snapshot_keeps_serde_tag() {
+        let snapshot = crate::artifacts::Snapshot::ConfigError {
+            message: "invalid test config".to_string(),
+            stop_reason_details: crate::artifacts::StopReasonDetails {
+                triggered_stop_condition: StopReason::ConfigError,
+                triggered_limit: None,
+                observed: None,
+            },
+            limits: TestLimits {
+                max_steps: 1,
+                max_cycles: None,
+                max_uart_bytes: None,
+                no_progress_steps: None,
+                wall_time_ms: None,
+                max_vcd_bytes: None,
+                stop_when_assertions_pass: false,
+                stop_when_assertions_pass_settle_steps: 0,
+                stop_when_assertions_pass_min_steps: 0,
+            },
+            config: crate::artifacts::TestConfig {
+                firmware: std::path::PathBuf::from("firmware.elf"),
+                system: None,
+                script: std::path::PathBuf::from("test.yaml"),
+            },
+        };
+
+        let json = serde_json::to_value(snapshot).expect("snapshot should serialize");
+        assert_eq!(json["type"], "config_error");
     }
 }

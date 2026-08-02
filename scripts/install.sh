@@ -14,6 +14,7 @@ set -eu
 
 REPO="w1ne/labwired-core"
 BINARY_NAME="labwired"
+DAP_BINARY_NAME="labwired-dap"
 INSTALL_DIR="${LABWIRED_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${LABWIRED_VERSION:-latest}"
 FROM_SOURCE="${LABWIRED_FROM_SOURCE:-0}"
@@ -163,6 +164,20 @@ install_prebuilt() {
   mkdir -p "$INSTALL_DIR"
   cp "$_extracted" "${INSTALL_DIR}/${BINARY_NAME}"
   chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+
+  # labwired-dap is the Debug Adapter the VS Code extension spawns for F5.
+  # Optional: tarballs from before v0.19.3 only carry the CLI, so a missing
+  # binary here means "older release", not a failed install.
+  _dap="${_tmpdir}/${DAP_BINARY_NAME}"
+  if [ ! -f "$_dap" ]; then
+    _dap="$(find "$_tmpdir" -name "$DAP_BINARY_NAME" -type f | head -1)"
+  fi
+  if [ -n "$_dap" ] && [ -f "$_dap" ]; then
+    cp "$_dap" "${INSTALL_DIR}/${DAP_BINARY_NAME}"
+    chmod +x "${INSTALL_DIR}/${DAP_BINARY_NAME}"
+    ok "Installed prebuilt ${DAP_BINARY_NAME} ${_version} → ${INSTALL_DIR}/${DAP_BINARY_NAME}"
+  fi
+
   rm -rf "$_tmpdir"
   ok "Installed prebuilt ${BINARY_NAME} ${_version} → ${INSTALL_DIR}/${BINARY_NAME}"
   return 0
@@ -202,7 +217,7 @@ install_from_source() {
   cargo install --locked \
     --git "https://github.com/${REPO}" \
     ${_version_arg} \
-    labwired-cli \
+    labwired-cli labwired-dap \
     --root "$INSTALL_DIR/.."
 
   # cargo install puts into {root}/bin — adjust INSTALL_DIR for PATH message
@@ -268,7 +283,7 @@ main() {
   printf '%s  Installation complete!%s\n' "${bld}${cyn}" "${rst}"
   printf '\n'
   printf '  Run:  %s%s --version%s\n'      "$bld" "$BINARY_NAME" "$rst"
-  printf '  Docs: %shttps://labwired.com/docs/%s\n\n' "$cyn" "$rst"
+  printf '  Docs: %shttps://docs.labwired.com/%s\n\n' "$cyn" "$rst"
 
   if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
     warn "Restart your shell or run:  source ~/.bashrc  (or ~/.zshrc)"

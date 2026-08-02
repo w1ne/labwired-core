@@ -16,6 +16,7 @@
 //! produce identical lines on the board (VCP) and in the simulator.
 
 use labwired_config::ChipDescriptor;
+use labwired_core::Bus;
 
 fn h563_bus() -> labwired_core::bus::SystemBus {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -27,8 +28,10 @@ fn h563_bus() -> labwired_core::bus::SystemBus {
         name: "h563-conformance".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

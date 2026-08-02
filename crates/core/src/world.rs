@@ -33,6 +33,36 @@ pub trait MachineTrait: Send {
         uart_id: &str,
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()>;
+    /// Attach a per-node UART capture sink. The default is intentionally a
+    /// no-op so existing third-party/mock `MachineTrait` implementations stay
+    /// source-compatible; real [`Machine`] instances wire every console UART.
+    fn attach_uart_tx_sink(
+        &mut self,
+        _sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        _echo_stdout: bool,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+    /// Return a final machine snapshot for a world artifact. Mocks that do not
+    /// model state may retain the default `None`; concrete machines provide the
+    /// complete snapshot.
+    fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
+        None
+    }
+    /// Attach one endpoint of a `CanBus` to a named FDCAN peripheral. The
+    /// default keeps third-party mock machines source-compatible while making
+    /// an unsupported topology error explicit.
+    fn attach_can_bus(
+        &mut self,
+        can_id: &str,
+        _tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        _rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!(
+            "machine '{}' cannot attach CAN bus endpoint '{can_id}'",
+            self.name()
+        )
+    }
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -68,6 +98,28 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
     ) -> anyhow::Result<()> {
         self.bus.attach_uart_stream_by_id(uart_id, dev)
     }
+
+    fn attach_uart_tx_sink(
+        &mut self,
+        sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        echo_stdout: bool,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_uart_tx_sink(sink, echo_stdout);
+        Ok(())
+    }
+
+    fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
+        Some(Machine::snapshot(self))
+    }
+
+    fn attach_can_bus(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_can_bus_by_id(can_id, tx, rx)
+    }
 }
 
 impl World {
@@ -94,8 +146,15 @@ impl World {
     /// Chandy-Lamport for distributed snapshots.
     pub fn step_all(&mut self) -> HashMap<String, SimResult<()>> {
         let mut results = HashMap::new();
-        for (id, machine) in &mut self.machines {
-            results.insert(id.clone(), machine.step());
+        let mut ids: Vec<_> = self.machines.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let result = self
+                .machines
+                .get_mut(&id)
+                .expect("machine id was collected from this world")
+                .step();
+            results.insert(id, result);
         }
         for interconnect in &mut self.interconnects {
             if let Err(e) = interconnect.tick() {
@@ -107,8 +166,15 @@ impl World {
 
     pub fn reset_all(&mut self) -> HashMap<String, SimResult<()>> {
         let mut results = HashMap::new();
-        for (id, machine) in &mut self.machines {
-            results.insert(id.clone(), machine.reset());
+        let mut ids: Vec<_> = self.machines.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let result = self
+                .machines
+                .get_mut(&id)
+                .expect("machine id was collected from this world")
+                .reset();
+            results.insert(id, result);
         }
         results
     }
@@ -127,6 +193,9 @@ impl World {
     ) -> anyhow::Result<Self> {
         use anyhow::Context;
 
+        manifest
+            .validate()
+            .context("invalid environment manifest")?;
         let mut world = World::new(manifest.name.clone());
 
         for node in &manifest.nodes {
@@ -139,12 +208,23 @@ impl World {
                 .join(&sysman.chip);
             let chip = labwired_config::ChipDescriptor::from_file(&chip_path)
                 .with_context(|| format!("node '{}': chip {:?}", node.id, chip_path))?;
-            let bus = crate::bus::SystemBus::from_config(&chip, &sysman)
-                .with_context(|| format!("node '{}': build bus", node.id))?;
-            let mut machine = Machine::new(crate::cpu::cortex_m::CortexM::new(), bus);
+            if !is_cortex_m_chip(&chip) {
+                anyhow::bail!(
+                    "node '{}': environment worlds currently support only Cortex-M nodes; each node requires an explicit Cortex-M core (`chip.arch: arm`, `chip.core: cortex-m*`). chip '{}' has architecture {:?} and core {:?}",
+                    node.id,
+                    chip.name,
+                    chip.arch,
+                    chip.core
+                );
+            }
             let fw_path = root_dir.join(&node.firmware);
             let image = load_elf_image(&fw_path)
                 .with_context(|| format!("node '{}': firmware {:?}", node.id, fw_path))?;
+            validate_cortex_m_firmware(&node.id, &chip, &image)?;
+            let mut bus = crate::bus::SystemBus::from_config(&chip, &sysman)
+                .with_context(|| format!("node '{}': build bus", node.id))?;
+            let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+            let mut machine = Machine::new(cpu, bus);
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{}': load firmware: {e:?}", node.id))?;
@@ -170,8 +250,17 @@ impl World {
         for ic in &manifest.interconnects {
             match ic.r#type.as_str() {
                 "uart_cross_link" => {
-                    let a = ic.nodes.first().context("uart_cross_link needs nodes[0]")?;
-                    let b = ic.nodes.get(1).context("uart_cross_link needs nodes[1]")?;
+                    if ic.nodes.len() != 2 || ic.nodes[0] == ic.nodes[1] {
+                        anyhow::bail!("uart_cross_link: requires exactly two unique nodes");
+                    }
+                    let a = &ic.nodes[0];
+                    let b = &ic.nodes[1];
+                    if !world.machines.contains_key(a) {
+                        anyhow::bail!("uart_cross_link: unknown node '{a}'");
+                    }
+                    if !world.machines.contains_key(b) {
+                        anyhow::bail!("uart_cross_link: unknown node '{b}'");
+                    }
                     let a_uart = ic
                         .config
                         .get("node_a_uart")
@@ -195,7 +284,48 @@ impl World {
                         .attach_uart_stream(b_uart, Box::new(eb))?;
                     world.add_interconnect(Box::new(link));
                 }
+                "can_bus" => {
+                    let peripheral = ic
+                        .config
+                        .get("peripheral")
+                        .and_then(|value| value.as_str())
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .context("can_bus: missing nonblank config.peripheral")?;
+                    // A manifest's membership order must not alter the behavior
+                    // of an otherwise identical topology. CanBus drains attached
+                    // endpoints in this order, so use the same lexical ordering
+                    // as World::step_all for validation and attachment.
+                    let mut node_ids = ic.nodes.clone();
+                    node_ids.sort();
+                    if node_ids.len() < 2 || node_ids.windows(2).any(|nodes| nodes[0] == nodes[1]) {
+                        anyhow::bail!("can_bus: requires at least two unique nodes");
+                    }
+                    for node_id in &node_ids {
+                        if !world.machines.contains_key(node_id) {
+                            anyhow::bail!("can_bus: unknown node '{node_id}'");
+                        }
+                    }
+
+                    let mut can_bus = crate::network::CanBus::new();
+                    for node_id in &node_ids {
+                        let (tx, rx) = can_bus.attach();
+                        world
+                            .machines
+                            .get_mut(node_id)
+                            .expect("all can_bus nodes were validated above")
+                            .attach_can_bus(peripheral, tx, rx)
+                            .with_context(|| format!("can_bus node '{node_id}'"))?;
+                    }
+                    world.add_interconnect(Box::new(can_bus));
+                }
                 "egress" => {
+                    if ic.nodes.len() != 1 {
+                        anyhow::bail!("egress: requires exactly one node");
+                    }
+                    if !world.machines.contains_key(&ic.nodes[0]) {
+                        anyhow::bail!("egress: unknown node '{}'", ic.nodes[0]);
+                    }
                     let (node, uart, tx, bus) = build_egress(ic)?;
                     world
                         .machines
@@ -215,6 +345,81 @@ impl World {
     }
 }
 
+fn is_cortex_m_chip(chip: &labwired_config::ChipDescriptor) -> bool {
+    chip.arch == labwired_config::Arch::Arm
+        && chip
+            .core
+            .as_deref()
+            .is_some_and(|core| core.trim().to_ascii_lowercase().starts_with("cortex-m"))
+}
+
+fn validate_cortex_m_firmware(
+    node_id: &str,
+    chip: &labwired_config::ChipDescriptor,
+    image: &crate::memory::ProgramImage,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    if image.arch != crate::Arch::Arm {
+        anyhow::bail!(
+            "node '{}': firmware architecture {:?} is incompatible with Cortex-M system chip '{}'; environment worlds require an ARM ELF with a valid Cortex-M Thumb reset vector",
+            node_id,
+            image.arch,
+            chip.name
+        );
+    }
+
+    let flash_size = labwired_config::parse_size(&chip.flash.size).with_context(|| {
+        format!(
+            "node '{}': invalid flash size for chip '{}'",
+            node_id, chip.name
+        )
+    })?;
+    let ram_size = labwired_config::parse_size(&chip.ram.size).with_context(|| {
+        format!(
+            "node '{}': invalid RAM size for chip '{}'",
+            node_id, chip.name
+        )
+    })?;
+    let vector_base = chip
+        .flash
+        .base
+        .checked_add(chip.reset_vector_offset)
+        .context("Cortex-M reset vector address overflow")?;
+    let stack_pointer = image_u32_at(image, vector_base);
+    let reset_handler = image_u32_at(image, vector_base.saturating_add(4));
+    let reset_target = reset_handler.map(|handler| u64::from(handler & !1));
+    let valid_stack = stack_pointer.is_some_and(|stack| {
+        let stack = u64::from(stack);
+        stack >= chip.ram.base && stack <= chip.ram.base.saturating_add(ram_size)
+    });
+    let valid_reset = reset_handler.is_some_and(|handler| handler & 1 == 1)
+        && reset_target.is_some_and(|target| {
+            target >= chip.flash.base && target < chip.flash.base.saturating_add(flash_size)
+        });
+    if !valid_stack || !valid_reset {
+        anyhow::bail!(
+            "node '{}': firmware does not contain a valid Cortex-M Thumb reset vector for chip '{}'",
+            node_id,
+            chip.name
+        );
+    }
+
+    Ok(())
+}
+
+fn image_u32_at(image: &crate::memory::ProgramImage, address: u64) -> Option<u32> {
+    let mut bytes = [0_u8; 4];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        let byte_address = address.checked_add(index as u64)?;
+        *byte = image.segments.iter().find_map(|segment| {
+            let offset = usize::try_from(byte_address.checked_sub(segment.start_addr)?).ok()?;
+            segment.data.get(offset).copied()
+        })?;
+    }
+    Some(u32::from_le_bytes(bytes))
+}
+
 /// Parse an ELF file into a `ProgramImage` using goblin (core cannot depend on
 /// the `loader` crate — it depends on core). PT_LOAD segments are placed at
 /// their load address (`p_paddr`), matching how Cortex-M flash images and the
@@ -229,7 +434,9 @@ fn load_elf_image(path: &std::path::Path) -> anyhow::Result<crate::memory::Progr
     let arch = match elf.header.e_machine {
         goblin::elf::header::EM_ARM => crate::Arch::Arm,
         goblin::elf::header::EM_RISCV => crate::Arch::RiscV,
-        _ => crate::Arch::Arm,
+        machine => anyhow::bail!(
+            "unsupported ELF machine type {machine} in {path:?}; environment worlds support Arm firmware only"
+        ),
     };
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {

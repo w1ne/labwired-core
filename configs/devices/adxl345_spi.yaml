@@ -1,0 +1,33 @@
+# Analog Devices ADXL345 3-axis accelerometer — declarative SPI register device.
+# 4-wire SPI: command byte = [R/W(bit7) | MB(bit6) | addr(bits5:0)]; data is
+# little-endian per axis. Modeled in full-resolution mode (256 LSB/g, 3.9 mg/LSB,
+# constant across ranges) — the common driver default. NOT modeled: the MB
+# multi-byte bit (our engine auto-increments unconditionally, which matches a
+# burst read); fixed-10-bit range scaling; interrupts/FIFO.
+#
+# type is `adxl345_spi`, not `adxl345`: a hand-written I2C ADXL345 kit
+# (components/adxl345.rs) already registers device_type "adxl345" — the
+# registry requires unique device_type strings, so this SPI variant gets a
+# distinct type to coexist with it.
+type: adxl345_spi
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing: { command_bytes: 1, rw_bit: 7, rw_read_high: true, addr_mask: 0x3F, auto_increment: true }
+    registers:
+      - { name: DEVID,       addr: 0x00, width: 1, endian: le, access: r,  reset: 0xE5 }
+      - { name: POWER_CTL,   addr: 0x2D, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: DATA_FORMAT, addr: 0x31, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: DATAX0, addr: 0x32, width: 2, endian: le, access: r, signed: true, source: accel_x, encode: { scale: 256.0 } }
+      - { name: DATAY0, addr: 0x34, width: 2, endian: le, access: r, signed: true, source: accel_y, encode: { scale: 256.0 } }
+      - { name: DATAZ0, addr: 0x36, width: 2, endian: le, access: r, signed: true, source: accel_z, encode: { scale: 256.0 } }
+
+metadata:
+  label: "ADXL345 accelerometer"
+  summary: "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g)."
+  category: spi
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: g, min: -16, max: 16, default: 0 }
+    - { key: accel_y, label: "Accel Y", unit: g, min: -16, max: 16, default: 0 }
+    - { key: accel_z, label: "Accel Z", unit: g, min: -16, max: 16, default: 1 }

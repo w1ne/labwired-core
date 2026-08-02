@@ -1,0 +1,11 @@
+# LabWired - ADS1115 ADC Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ads1115-adc-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "ADS1115 ADC Lab"
+  - uart_contains: "A0_raw="
+  - expected_stop_reason: max_steps

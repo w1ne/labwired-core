@@ -1,0 +1,20 @@
+# Drive INA219 SimInput mid-run; firmware must print the new current.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ina219-power-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "INA219 Power Lab"
+  - uart_contains: "Vbus_mV="
+  # After stimulus: 1.5 A → model ~1500 mA at 0.1 mA/count
+  - uart_contains: "I_mA=1500"
+  - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ina219", channel: "current" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 1.5
+  - target: { component: "ina219", channel: "bus_voltage" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 12.0

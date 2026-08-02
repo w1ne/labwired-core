@@ -20,32 +20,9 @@
 //! frame updates that digit's segment pattern; [`Hc5957Seg::text`] renders the
 //! four decoded characters.
 
+use crate::peripherals::components::seven_seg_font;
 use crate::peripherals::spi::SpiDevice;
 use std::any::Any;
-
-/// Standard 7-segment font, bit layout `0b0gfedcba` (segment `a` = bit 0 …
-/// `g` = bit 6). Indexed lookups below decode a latched segment byte back to
-/// the character a human would read off the panel.
-const FONT: &[(u8, char)] = &[
-    (0x3F, '0'),
-    (0x06, '1'),
-    (0x5B, '2'),
-    (0x4F, '3'),
-    (0x66, '4'),
-    (0x6D, '5'),
-    (0x7D, '6'),
-    (0x07, '7'),
-    (0x7F, '8'),
-    (0x6F, '9'),
-    (0x77, 'A'),
-    (0x7C, 'b'),
-    (0x39, 'C'),
-    (0x5E, 'd'),
-    (0x79, 'E'),
-    (0x71, 'F'),
-    (0x40, '-'),
-    (0x00, ' '),
-];
 
 const DIGITS: usize = 4;
 
@@ -81,11 +58,7 @@ impl Hc5957Seg {
     /// point (bit 7) is ignored for the glyph match; unknown patterns render as
     /// `?` so a mis-driven panel is visible rather than silently blank.
     fn decode(seg: u8) -> char {
-        let glyph = seg & 0x7F;
-        FONT.iter()
-            .find(|(pattern, _)| *pattern == glyph)
-            .map(|(_, ch)| *ch)
-            .unwrap_or('?')
+        seven_seg_font::decode(seg)
     }
 
     /// The four decoded characters, leftmost digit first.

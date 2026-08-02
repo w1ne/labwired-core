@@ -1,0 +1,21 @@
+# LabWired - Open smart-ring (nRF54L15) IO/I²C smoke test
+#
+# Runs the committed bare-metal sensor-probe fixture on the smart-ring system
+# and asserts every I²C part on TWIM21 answers its WHO_AM_I over the modelled
+# bus — the honest end-to-end check that the ring's realistic BOM is wired and
+# addressable.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/nrf54l15-smart-ring.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "smart-ring nRF54L15 I2C sensor probe"
+  # TWIM21 EasyDMA reaches each slave and reads back its real identity byte.
+  - uart_contains: "imu    BMI270    addr=0x68 reg=0x00 -> id=0x24 ack=Y [OK]"
+  - uart_contains: "ppg    MAX30102  addr=0x57 reg=0xff -> id=0x15 ack=Y [OK]"
+  - uart_contains: "temp   TMP117   addr=0x48 reg=0x0f -> id=0x0117 ack=Y [OK]"
+  - uart_contains: "haptic DRV2605   addr=0x5a reg=0x00 -> id=0xe0 ack=Y [OK]"
+  - uart_contains: "probe done"
+  - expected_stop_reason: max_steps

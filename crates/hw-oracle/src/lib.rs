@@ -632,6 +632,7 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     use labwired_core::bus::SystemBus;
     use labwired_core::cpu::xtensa_lx7::XtensaLx7;
     use labwired_core::cpu::xtensa_sr::{EPC1 as EPC1_SR, EXCCAUSE as EXCCAUSE_SR};
+    use labwired_core::Bus;
     use labwired_core::{Cpu, SimulationError};
     use ram_peripheral::RamPeripheral;
 

@@ -307,6 +307,7 @@ static void oled_dump_ascii(void) {
 }
 
 int main(void) {
+    uart_init();
     sensirion_i2c_hal_init();
     uart_puts("LEO BOOT\r\n");
     uart_puts("Leo air-quality sensor: ESP32-C3 + SCD41/SGP41/SPS30 + VEML7700 "

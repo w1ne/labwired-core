@@ -246,11 +246,33 @@ impl Nrf52Twim {
         self.attached_devices.push(RefCell::new(device));
     }
 
-    /// Find the first attached device whose `address()` matches `addr7`.
+    /// The attached I²C slaves, in attach order. Mirrors
+    /// [`crate::peripherals::i2c::I2c::attached_devices`] so callers can reach
+    /// a device by a path independent of the sim-input walk.
+    pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        &self.attached_devices
+    }
+
+    /// Find the attached device that answers to `addr7` and tell it which
+    /// address was selected.
+    ///
+    /// Resolution goes through `claims_address`, not `address()`: a bus switch
+    /// (TCA9548A) answers for every device behind its enabled channels, and a
+    /// flat `address()` comparison is first-match — four identical sensors on
+    /// four channels would collapse onto one. `select_address` then hands the
+    /// matched device the wire address so a switch knows whether the
+    /// transaction is for its own control register or for a downstream device.
+    /// Slaves sit behind `RefCell`, so the selection is possible from `&self`
+    /// and every call site gets it without a separate step to forget.
     fn device_for(&self, addr7: u8) -> Option<usize> {
-        self.attached_devices
+        let idx = self
+            .attached_devices
             .iter()
-            .position(|d| d.borrow().address() == addr7)
+            .position(|d| d.borrow().claims_address(addr7))?;
+        self.attached_devices[idx]
+            .borrow_mut()
+            .select_address(addr7);
+        Some(idx)
     }
 
     /// Core-cycle latency of a `bytes`-byte wire transfer at the configured SCL
@@ -364,6 +386,96 @@ impl Nrf52Twim {
         self.rxd_amount = amount;
         self.events_lastrx = 1;
         false // no NACK
+    }
+}
+
+impl Nrf52Twim {
+    fn irq_from_events(&self) -> PeripheralTickResult {
+        let events: &[(&u32, u32, u64)] = &[
+            (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
+            (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
+            (
+                &self.events_suspended,
+                INTEN_SUSPENDED,
+                OFF_EVENTS_SUSPENDED,
+            ),
+            (
+                &self.events_rxstarted,
+                INTEN_RXSTARTED,
+                OFF_EVENTS_RXSTARTED,
+            ),
+            (
+                &self.events_txstarted,
+                INTEN_TXSTARTED,
+                OFF_EVENTS_TXSTARTED,
+            ),
+            (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
+            (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
+        ];
+        let mut irq = false;
+        let mut fired: Vec<u32> = Vec::new();
+        for &(ev, mask, off) in events {
+            if *ev != 0 && self.inten & mask != 0 {
+                irq = true;
+                fired.push(off as u32);
+            }
+        }
+        PeripheralTickResult {
+            irq,
+            fired_events: fired,
+            ..Default::default()
+        }
+    }
+
+    fn run_pending_transfer(&mut self, bus: &mut dyn Bus) {
+        let pending = self.pending;
+        if pending == PENDING_NONE {
+            return;
+        }
+        if self.busy_cycles > 0 {
+            let interval = bus.config().peripheral_tick_interval.max(1);
+            self.busy_cycles = self.busy_cycles.saturating_sub(interval);
+            return;
+        }
+        self.pending = PENDING_NONE;
+        let addr7 = (self.address & ADDRESS_MASK) as u8;
+        match pending {
+            PENDING_STOP => {
+                self.events_stopped = 1;
+                if let Some(idx) = self.device_for(addr7) {
+                    self.attached_devices[idx].borrow_mut().stop();
+                }
+            }
+            PENDING_TX => {
+                let _nack = self.do_tx(bus);
+                if self.shorts & SHORT_LASTTX_STARTRX != 0 {
+                    self.pending = PENDING_RX;
+                    self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
+                } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
+                    self.events_suspended = 1;
+                } else if self.shorts & SHORT_LASTTX_STOP != 0 {
+                    self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                }
+            }
+            PENDING_RX => {
+                let _nack = self.do_rx(bus);
+                if self.shorts & SHORT_LASTRX_STOP != 0 {
+                    self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                } else if self.shorts & SHORT_LASTRX_SUSPEND != 0 {
+                    self.events_suspended = 1;
+                } else if self.shorts & SHORT_LASTRX_STARTTX != 0 {
+                    self.pending = PENDING_TX;
+                    self.busy_cycles = self.transfer_cycles(self.txd_maxcnt & MAXCNT_MASK);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -510,128 +622,95 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn needs_bus_tick(&self) -> bool {
+        // EasyDMA still rides the bus-tick pump (works for bare-bus unit tests
+        // and for walk-deleted buses where bus_tick_indices keep running). The
+        // scheduler path also completes transfers in on_event as a dual path.
         self.pending != PENDING_NONE
     }
 
-    /// EasyDMA engine.  Called by the bus when `needs_bus_tick()` is true.
-    ///
-    /// Sequence (PS §6.31 state diagram):
-    /// 1. Execute the pending task (TX or RX or STOP).
-    /// 2. Check SHORTS to determine what to chain next.
-    /// 3. Fire EVENTS_SUSPENDED (bus held, no STOP) or EVENTS_STOPPED as
-    ///    appropriate, and reset the I2C device state on STOP.
+    /// EasyDMA engine (legacy walk / feature-off).
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        let pending = self.pending;
-        if pending == PENDING_NONE {
-            return;
-        }
-
-        // Model wire-transfer latency: hold the transfer "on the bus" until the
-        // configured per-tick instruction quantum has counted down the cycle
-        // budget set when the task was triggered. Until then the completion
-        // EVENTS (and the IRQ) do not fire, so an interrupt cannot preempt the
-        // driver's transfer-launch critical section. See `transfer_cycles`.
-        if self.busy_cycles > 0 {
-            let interval = bus.config().peripheral_tick_interval.max(1);
-            self.busy_cycles = self.busy_cycles.saturating_sub(interval);
-            return;
-        }
-
-        self.pending = PENDING_NONE;
-
-        let addr7 = (self.address & ADDRESS_MASK) as u8;
-
-        match pending {
-            PENDING_STOP => {
-                self.events_stopped = 1;
-                // STOP condition: reset I2C device register-address cursor.
-                if let Some(idx) = self.device_for(addr7) {
-                    self.attached_devices[idx].borrow_mut().stop();
-                }
-            }
-            PENDING_TX => {
-                let _nack = self.do_tx(bus);
-
-                // Honour SHORTS after LASTTX.
-                if self.shorts & SHORT_LASTTX_STARTRX != 0 {
-                    // Chain TX→RX via repeated-START (no STOP between them).
-                    // The follow-on RX is a fresh wire transfer: re-arm latency.
-                    self.pending = PENDING_RX;
-                    self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
-                } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
-                    // Bus held (no STOP); fires EVENTS_SUSPENDED.
-                    // nrfx uses this for TX_NO_STOP (write-then-read split into
-                    // two separate nrfx_twim_xfer calls).
-                    self.events_suspended = 1;
-                } else if self.shorts & SHORT_LASTTX_STOP != 0 {
-                    self.events_stopped = 1;
-                    if let Some(idx) = self.device_for(addr7) {
-                        self.attached_devices[idx].borrow_mut().stop();
-                    }
-                }
-                // If no SHORT matches, firmware drives TASKS_STOP or
-                // TASKS_STARTRX explicitly.
-            }
-            PENDING_RX => {
-                let _nack = self.do_rx(bus);
-
-                // Honour SHORTS after LASTRX.
-                if self.shorts & SHORT_LASTRX_STOP != 0 {
-                    self.events_stopped = 1;
-                    if let Some(idx) = self.device_for(addr7) {
-                        self.attached_devices[idx].borrow_mut().stop();
-                    }
-                } else if self.shorts & SHORT_LASTRX_SUSPEND != 0 {
-                    self.events_suspended = 1;
-                } else if self.shorts & SHORT_LASTRX_STARTTX != 0 {
-                    // Chain RX→TX: re-arm latency for the follow-on TX leg.
-                    self.pending = PENDING_TX;
-                    self.busy_cycles = self.transfer_cycles(self.txd_maxcnt & MAXCNT_MASK);
-                }
-            }
-            _ => {}
-        }
+        self.run_pending_transfer(bus);
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        // Raise IRQ for any enabled + pending event.
-        let events: &[(&u32, u32, u64)] = &[
-            (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
-            (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
-            (
-                &self.events_suspended,
-                INTEN_SUSPENDED,
-                OFF_EVENTS_SUSPENDED,
-            ),
-            (
-                &self.events_rxstarted,
-                INTEN_RXSTARTED,
-                OFF_EVENTS_RXSTARTED,
-            ),
-            (
-                &self.events_txstarted,
-                INTEN_TXSTARTED,
-                OFF_EVENTS_TXSTARTED,
-            ),
-            (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
-            (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
-        ];
+        self.irq_from_events()
+    }
 
-        let mut irq = false;
-        let mut fired: Vec<u32> = Vec::new();
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
 
-        for &(ev, mask, off) in events {
-            if *ev != 0 && self.inten & mask != 0 {
-                irq = true;
-                fired.push(off as u32);
-            }
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending != PENDING_NONE {
+            // Wire latency budget set at task write; 0 means run next cycle.
+            let d = self.busy_cycles.max(1) as u64;
+            vec![(d.saturating_sub(1), 1)]
+        } else if self.irq_from_events().irq {
+            vec![(0, 2)]
+        } else {
+            Vec::new()
         }
+    }
 
-        PeripheralTickResult {
-            irq,
-            fired_events: fired,
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == 1 && self.pending != PENDING_NONE {
+            // Consume the latency in one shot (event fires at the deadline).
+            self.busy_cycles = 0;
+            self.run_pending_transfer(bus);
+        }
+        let res = self.irq_from_events();
+        let more_xfer = self.pending != PENDING_NONE;
+        let delay = if more_xfer {
+            Some(self.busy_cycles.max(1) as u64 - 1)
+        } else if res.irq {
+            Some(1)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            reschedule_delay: delay,
             ..Default::default()
         }
+    }
+
+    /// Required for [`crate::bus::SystemBus::attach_i2c_slave`] to downcast to
+    /// `Nrf52Twim`. Without these, that downcast can never match and attaching
+    /// any I²C slave to a TWIM controller fails loudly at attach time — which
+    /// removed the whole nRF52 board line from programmatic attach.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    /// TWIM holds its slaves behind `RefCell`, like the generic `I2c`.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for cell in self.attached_devices.iter_mut() {
+            // `for_each_sim_input`, not `as_sim_input_mut`: a container slave
+            // (TCA9548A mux) exposes the inputs of the devices behind it, which
+            // a single-surface accessor cannot represent.
+            if cell.borrow_mut().for_each_sim_input(f) {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -1053,6 +1132,93 @@ mod tests {
         let rx = bus.read_slice(rx_base, 4);
         assert_eq!(rx, read_seq, "RXD RAM contains device bytes");
         assert_eq!(read32(&t, OFF_ERRORSRC), 0, "no error");
+    }
+
+    /// Four sensors that share ONE fixed address, behind a TCA9548A: the TWIM
+    /// must reach each of them independently.
+    ///
+    /// Guards the resolution seam, not the switch. `device_for` used to compare
+    /// `address()` and take the first match, which made this shape impossible —
+    /// the switch answers for its channels through `claims_address`, and the
+    /// TWIM must ask that question instead.
+    #[test]
+    fn twim_reaches_four_same_address_sensors_behind_a_bus_switch() {
+        use crate::peripherals::components::tca9548a::Tca9548a;
+
+        const MUX: u8 = 0x70;
+        const SENSOR: u8 = 0x13;
+
+        let mut mux = Tca9548a::new(MUX);
+        for ch in 0..4u8 {
+            mux.attach(ch, Box::new(RecordingDevice::new(SENSOR, vec![0xA0 + ch])))
+                .unwrap();
+        }
+
+        let mut t = Nrf52Twim::new();
+        t.push_slave(Box::new(mux));
+        let mut bus = FlatRam::new();
+
+        let tx_base: u64 = 0x2000_0400;
+        let rx_base: u64 = 0x2000_0500;
+        write32(&mut t, OFF_ENABLE, 6);
+
+        for ch in 0..4u8 {
+            // Select the channel: one byte written to the switch's own address.
+            bus.write_slice(tx_base, &[1 << ch]);
+            write32(&mut t, OFF_ADDRESS, MUX as u32);
+            write32(&mut t, OFF_TXD_PTR, tx_base as u32);
+            write32(&mut t, OFF_TXD_MAXCNT, 1);
+            write32(&mut t, OFF_TASKS_STARTTX, 1);
+            run_leg(&mut t, &mut bus);
+            assert_eq!(read32(&t, OFF_ERRORSRC), 0, "switch must ACK its address");
+
+            // Read the sensor at the fixed address behind that channel.
+            write32(&mut t, OFF_ADDRESS, SENSOR as u32);
+            write32(&mut t, OFF_RXD_PTR, rx_base as u32);
+            write32(&mut t, OFF_RXD_MAXCNT, 1);
+            write32(&mut t, OFF_TASKS_STARTRX, 1);
+            run_leg(&mut t, &mut bus);
+
+            assert_eq!(
+                read32(&t, OFF_ERRORSRC),
+                0,
+                "channel {ch} is enabled, so 0x13 must ACK"
+            );
+            assert_eq!(
+                bus.read_slice(rx_base, 1),
+                vec![0xA0 + ch],
+                "channel {ch} must be answered by its own sensor"
+            );
+        }
+    }
+
+    /// With every channel isolated the sensor address is off the bus, and the
+    /// TWIM must report ANACK exactly as it does for an empty bus. A switch
+    /// that ACKed unconditionally would hide a missing channel select.
+    #[test]
+    fn twim_anacks_a_sensor_behind_a_disabled_switch_channel() {
+        use crate::peripherals::components::tca9548a::Tca9548a;
+
+        let mut mux = Tca9548a::new(0x70);
+        mux.attach(0, Box::new(RecordingDevice::new(0x13, vec![0xAA])))
+            .unwrap();
+
+        let mut t = Nrf52Twim::new();
+        t.push_slave(Box::new(mux));
+        let mut bus = FlatRam::new();
+
+        write32(&mut t, OFF_ENABLE, 6);
+        write32(&mut t, OFF_ADDRESS, 0x13);
+        write32(&mut t, OFF_RXD_PTR, 0x2000_0600);
+        write32(&mut t, OFF_RXD_MAXCNT, 1);
+        write32(&mut t, OFF_TASKS_STARTRX, 1);
+        run_leg(&mut t, &mut bus);
+
+        assert_ne!(
+            read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK,
+            0,
+            "reset state disables every channel, so 0x13 is on no reachable segment"
+        );
     }
 
     /// RX with no device: RAM filled with 0xFF, ANACK fired.

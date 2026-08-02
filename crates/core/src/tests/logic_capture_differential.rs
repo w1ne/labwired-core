@@ -8,10 +8,12 @@
 //! and assert the edge streams are BYTE-IDENTICAL (same cycles, values,
 //! order). Poll is the reference semantics; if push disagrees, push is wrong.
 //!
-//! Also proves the two costs push removes are actually removed: the armed
-//! batch clamp (push runs keep multi-instruction batches) and — under the
-//! `event-scheduler` feature — the idle fast-forward disable (a WFI firmware
-//! skips idle cycles while probed, with an identical edge stream).
+//! Push instrumentation itself does not require poll capture's armed batch
+//! clamp. This Cortex-M fixture is independently clamped to one instruction
+//! per boundary by SCB reset fidelity, so both modes have the same batch
+//! profile; the oracle here remains byte-identical edge streams. Under the
+//! `event-scheduler` feature, it also proves push keeps idle fast-forward
+//! enabled while probed.
 
 #[cfg(test)]
 mod logic_capture_differential_tests {
@@ -89,10 +91,10 @@ mod logic_capture_differential_tests {
         instructions: u64,
     }
 
-    /// THE gate: bit-banged GPIO, wide tick interval. Poll (clamped, sampled
-    /// per cycle) and push (event-driven, full batches) must produce
-    /// byte-identical edge streams — and push must actually have kept its
-    /// batches wide (no armed clamp).
+    /// THE gate: bit-banged GPIO, wide tick interval. Poll capture requests a
+    /// per-instruction clamp; push capture does not, but this Cortex-M fixture
+    /// is independently clamped per instruction by SCB reset fidelity. Their
+    /// edge streams must remain byte-identical.
     #[test]
     fn stm32_bitbang_push_stream_is_byte_identical_to_poll() {
         for tick_interval in [1u32, 8, 64] {
@@ -111,44 +113,74 @@ mod logic_capture_differential_tests {
             );
             assert_eq!(poll.dropped, push.dropped);
 
-            // Poll clamps to one instruction per batch; push must not.
+            // Poll capture requests a per-instruction clamp. Push capture does
+            // not, but this fixture's SCB reset-fidelity clamp independently
+            // keeps push execution at one instruction per boundary too.
             assert_eq!(
                 poll.batches, poll.instructions,
                 "tick={tick_interval}: poll fallback runs one instruction per batch"
             );
             if tick_interval > 1 {
-                assert!(
-                    push.batches < push.instructions,
-                    "tick={tick_interval}: push capture must keep multi-instruction \
-                     batches ({} batches for {} instructions)",
-                    push.batches,
-                    push.instructions
+                // This Cortex-M fixture contains an SCB, so the machine's
+                // permanent reset-fidelity clamp intentionally keeps both
+                // capture modes at one instruction per boundary.
+                assert_eq!(
+                    push.batches, push.instructions,
+                    "tick={tick_interval}: SCB-equipped push capture must remain cycle-accurate"
                 );
             }
         }
     }
 
-    /// Peripheral tick-COST cycles (SysTick charges one cycle per tick while
-    /// enabled) shift the observation cycle past the batch boundary — the
+    /// A legacy walker that charges one tick-cost cycle per walk tick — the
+    /// dedicated cost source for the fixture below. (This role used to be
+    /// played by an armed SysTick, whose `cycles: 1` per enabled tick was a
+    /// sim artifact; the walk-free B1 batch normalised SysTick/SCB to zero
+    /// cost so the walk-on reference and the scheduler path agree
+    /// cycle-for-cycle. The logic-capture cost path itself is still real —
+    /// any future peripheral may charge cost — so it keeps coverage here.)
+    #[derive(Debug)]
+    struct CostTicker;
+
+    impl Peripheral for CostTicker {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn tick(&mut self) -> crate::PeripheralTickResult {
+            crate::PeripheralTickResult {
+                cycles: 1,
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Peripheral tick-COST cycles (the CostTicker charges one cycle per walk
+    /// tick) shift the observation cycle past the batch boundary — the
     /// poll loop samples only after costs are charged, so push stamps
     /// finalised at the boundary must land on the same post-cost cycle. This
     /// is the only fixture that exercises the boundary→now finalisation with
     /// `now > boundary`.
     #[test]
     fn stm32_bitbang_with_tick_costs_push_stream_is_byte_identical_to_poll() {
-        const SYST_CSR: u64 = 0xE000_E010;
-        const SYST_RVR: u64 = 0xE000_E014;
         let build = |tick_interval: u32| {
             let mut machine = bitbang_machine(tick_interval);
-            machine.bus.write_u32(SYST_RVR, 9).unwrap();
-            machine.bus.write_u32(SYST_CSR, 1).unwrap(); // ENABLE, no interrupt
+            machine.bus.add_peripheral(
+                "cost_ticker",
+                0x5100_0000,
+                0x100,
+                None,
+                Box::new(CostTicker),
+            );
             machine
         };
         for tick_interval in [1u32, 8] {
             let poll = run_bitbang(build(tick_interval), true, 600);
             let push = run_bitbang(build(tick_interval), false, 600);
             assert!(poll.edges.len() >= 300);
-            // SysTick's per-tick cost must actually be in play: with it, some
+            // The CostTicker's per-tick cost must actually be in play: with it, some
             // observation cycles exceed their instruction count.
             assert!(
                 poll.edges.last().unwrap().cycle > 600,
@@ -201,7 +233,9 @@ mod logic_capture_differential_tests {
     const SIG_I2CEXT0_SCL: u32 = 53;
     const SIG_I2CEXT0_SDA: u32 = 54;
     const ENABLE_W1TS: u64 = 0x24;
+    const FUNC_IN_SEL: u64 = 0x154;
     const FUNC_OUT_SEL: u64 = 0x554;
+    const MATRIX_INPUT_SELECT: u32 = 1 << 6;
     const REG_CTR: u64 = 0x04;
     const REG_DATA: u64 = 0x1C;
     const REG_CMD0: u64 = 0x58;
@@ -227,7 +261,11 @@ mod logic_capture_differential_tests {
             None,
             Box::new(crate::peripherals::esp32c3::i2c::Esp32c3I2c::new()),
         );
-        bus.attach_i2c_slave("i2c0", Box::new(Ssd1306::new(0x3C)))
+        let route = std::collections::BTreeMap::from([
+            ("sda".to_string(), format!("GPIO{SDA_PIN}")),
+            ("scl".to_string(), format!("GPIO{SCL_PIN}")),
+        ]);
+        bus.attach_i2c_slave_with_route("i2c0", Box::new(Ssd1306::new(0x3C)), Some(&route))
             .unwrap();
         bus.wire_esp32c3_i2c_pads();
 
@@ -256,6 +294,16 @@ mod logic_capture_differential_tests {
         bus.write_u32(
             C3_GPIO_BASE + FUNC_OUT_SEL + (SCL_PIN as u64) * 4,
             SIG_I2CEXT0_SCL,
+        )
+        .unwrap();
+        bus.write_u32(
+            C3_GPIO_BASE + FUNC_IN_SEL + u64::from(SIG_I2CEXT0_SDA) * 4,
+            MATRIX_INPUT_SELECT | u32::from(SDA_PIN),
+        )
+        .unwrap();
+        bus.write_u32(
+            C3_GPIO_BASE + FUNC_IN_SEL + u64::from(SIG_I2CEXT0_SCL) * 4,
+            MATRIX_INPUT_SELECT | u32::from(SCL_PIN),
         )
         .unwrap();
         bus.write_u32(I2C_BASE, 199).unwrap(); // SCL_LOW_PERIOD

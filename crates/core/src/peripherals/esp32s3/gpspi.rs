@@ -81,7 +81,7 @@
 //! interrupt matrix.
 
 use crate::peripherals::spi::SpiDevice;
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const CMD: u64 = 0x00;
 const ADDR: u64 = 0x04;
@@ -205,6 +205,9 @@ pub struct Esp32s3Spi {
     /// the shared `Spi`): transfers broadcast to every device, first
     /// non-zero MISO byte wins (single-device labs in practice).
     attached_devices: Vec<Box<dyn SpiDevice>>,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl std::fmt::Debug for Esp32s3Spi {
@@ -240,6 +243,8 @@ impl Esp32s3Spi {
             int_raw: 0,
             pending_dma: None,
             attached_devices: Vec::new(),
+
+            clock: None,
         }
     }
 
@@ -494,12 +499,47 @@ impl Peripheral for Esp32s3Spi {
         }
     }
 
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_st() != 0 {
+            out.push(self.source_id);
+        }
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for dev in self.attached_devices.iter_mut() {
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 

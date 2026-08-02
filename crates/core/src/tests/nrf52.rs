@@ -144,7 +144,7 @@ fn nrf52840_onboarding_timer0_fires_compare_and_pends_irq() {
     let mut compare_fired = false;
     let mut irq_pended = false;
     for _ in 0..200 {
-        let (interrupts, _costs) = bus.tick_peripherals_fully();
+        let (interrupts, _costs) = bus.tick_peripherals_fully_forced();
         if interrupts.contains(&TIMER0_IRQ) {
             irq_pended = true;
         }
@@ -195,7 +195,7 @@ fn nrf52840_onboarding_rtc0_fires_compare_and_pends_irq() {
     let mut compare_fired = false;
     let mut irq_pended = false;
     for _ in 0..10000 {
-        let (interrupts, _costs) = bus.tick_peripherals_fully();
+        let (interrupts, _costs) = bus.tick_peripherals_fully_forced();
         if interrupts.contains(&RTC0_IRQ) {
             irq_pended = true;
         }
@@ -243,7 +243,7 @@ fn nrf52840_onboarding_clock_boot_pattern_completes() {
     let mut hf_done = false;
     let mut lf_done = false;
     for _ in 0..16 {
-        bus.tick_peripherals_fully();
+        bus.tick_peripherals_fully_forced();
         if bus.read_u32(EVENTS_HFCLKSTARTED).unwrap() != 0 {
             hf_done = true;
         }
@@ -328,7 +328,7 @@ fn nrf52840_onboarding_gpiote_event_in_fires_on_edge() {
     bus.write_u32(GPIOTE_INTENSET, 1).unwrap(); // IN[0] interrupt
 
     // Initial tick — snapshots current GPIO IN (all zero) as baseline.
-    bus.tick_peripherals_fully();
+    bus.tick_peripherals_fully_forced();
     assert_eq!(
         bus.read_u32(GPIOTE_EVENTS_IN_0).unwrap(),
         0,
@@ -342,7 +342,7 @@ fn nrf52840_onboarding_gpiote_event_in_fires_on_edge() {
     // observes the change.  Second tick: GPIOTE drains pending events.
     let mut irq_seen = false;
     for _ in 0..4 {
-        let (irqs, _costs) = bus.tick_peripherals_fully();
+        let (irqs, _costs) = bus.tick_peripherals_fully_forced();
         if irqs.contains(&6) {
             irq_seen = true;
         }
@@ -435,7 +435,7 @@ fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
     let mut transitions = 0;
     let mut compare_observed_at: Vec<usize> = Vec::new();
     for tick in 0usize..200 {
-        bus.tick_peripherals_fully();
+        bus.tick_peripherals_fully_forced();
         if bus.read_u32(TIMER0_EVENTS_COMPARE0).unwrap() != 0
             && compare_observed_at.last().copied() != Some(tick.saturating_sub(1))
         {
@@ -963,7 +963,7 @@ fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
     bus.write_u32(0x4000_3010, 1).unwrap();
 
     // EasyDMA runs during the bus-tick phase (tick_with_bus).
-    bus.tick_peripherals_fully();
+    bus.tick_peripherals_fully_forced();
 
     assert_eq!(
         bus.read_u32(0x4000_3118).unwrap(),

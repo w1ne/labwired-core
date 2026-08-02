@@ -138,6 +138,18 @@ impl Peripheral for Rsim {
         self.data.get(offset as usize).copied()
     }
 
+    /// Walk-free (kw41z): the RSIM is purely combinational — `RF_OSC_READY` is
+    /// recomputed from the enable/override bits on every CONTROL write
+    /// (`refresh_control`), every other register is plain storage, and there is
+    /// NO `tick()`/`tick_elapsed()` override. The crystal start-up is modelled
+    /// as instantaneous (no timed handshake), so the model has zero
+    /// time-dependent state and the per-cycle walk can never change any
+    /// observable output. Proven inert (`needs_legacy_walk() == false`) by the
+    /// differential gate `crates/core/tests/kw41z_walk_free_differential.rs`.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }

@@ -82,6 +82,12 @@ impl crate::Peripheral for Hsem {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
+
+    /// Pure register bank / grant-on-read lock model — no time-driven state.
+    /// Class A walk-free: default no-op `tick()` is a genuine no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -104,5 +110,16 @@ mod tests {
         let mut h = Hsem::new();
         h.write_u32(0x110, 0xDEAD_BEEF).unwrap(); // ICR/IER region
         assert_eq!(h.read_u32(0x110).unwrap(), 0xDEAD_BEEF);
+    }
+
+    #[test]
+    fn class_a_walk_free() {
+        let mut h = Hsem::new();
+        assert!(!h.needs_legacy_walk());
+        // Default tick is a genuine no-op on an armed instance.
+        let r = h.tick();
+        assert!(!r.irq);
+        assert_eq!(r.cycles, 0);
+        assert!(r.explicit_irqs.is_none());
     }
 }

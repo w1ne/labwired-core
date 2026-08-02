@@ -22,6 +22,7 @@
 
 use labwired_config::ChipDescriptor;
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 
 // Peripherals at the non-secure alias the cpuapp DT uses (peripheral@50000000).
 const CLOCK: u64 = 0x5000_5000;
@@ -46,8 +47,10 @@ fn nrf5340_bus() -> SystemBus {
         name: "nrf5340-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

@@ -227,6 +227,16 @@ pub enum Instruction {
         as_: u8,
         offset: i32,
     },
+    /// bt bs, target : branch if boolean register BR[bs] == 1 (Boolean Option).
+    Bt {
+        bs: u8,
+        offset: i32,
+    },
+    /// bf bs, target : branch if boolean register BR[bs] == 0 (Boolean Option).
+    Bf {
+        bs: u8,
+        offset: i32,
+    },
     Beqi {
         as_: u8,
         imm: i32,
@@ -1946,15 +1956,27 @@ fn decode_si(w: u32) -> Instruction {
                     Instruction::Entry { as_: s, imm: imm12 }
                 }
                 1 => {
-                    // n=3, m=1: LOOP family (BRI8-shaped, r selects variant).
-                    // Per Xtensa ISA RM §7.4 Zero-Overhead Loop Option:
+                    // n=3, m=1 (BRI8-shaped, r selects variant):
+                    //   r=0  → BF bs, imm8 (Boolean Option, backward-capable)
+                    //   r=1  → BT bs, imm8 (Boolean Option, backward-capable)
                     //   r=8  → LOOP   as_, imm8 (always taken)
                     //   r=9  → LOOPNEZ as_, imm8 (skip body if as_==0)
                     //   r=10 → LOOPGTZ as_, imm8 (skip body if as_<=0 signed)
-                    // imm8 in bits[23:16], offset relative to PC+4.
+                    // imm8 in bits[23:16], offset relative to PC+4. LOOP imm8 is
+                    // an unsigned forward span; BT/BF imm8 is signed (`bf` can
+                    // branch back). HW-oracle (xtensa-esp32s3-elf-as, esp-15.2.0):
+                    //   bt b0,. → 021076 (r=1,s=0); bf b5,. → ff0576 (r=0,s=5).
                     let imm8 = (w >> 16) & 0xFF;
                     let offset = imm8 as i32 + 4;
                     match r {
+                        0 => Instruction::Bf {
+                            bs: s,
+                            offset: sext8(imm8) + 4,
+                        },
+                        1 => Instruction::Bt {
+                            bs: s,
+                            offset: sext8(imm8) + 4,
+                        },
                         8 => Instruction::Loop { as_: s, offset },
                         9 => Instruction::Loopnez { as_: s, offset },
                         10 => Instruction::Loopgtz { as_: s, offset },
@@ -2200,7 +2222,10 @@ impl Instruction {
             | MovgezS { .. }
             | MovfS { .. }
             | MovtS { .. }
-            | CmpS { .. } => 0,
+            | CmpS { .. }
+            // BT/BF read a boolean register (BR[bs]), not a windowed AR.
+            | Bt { .. }
+            | Bf { .. } => 0,
             Rfr { ar, .. } => ar,
             Wfr { as_, .. } => as_,
             FloatS { as_, .. } | UfloatS { as_, .. } => as_,
@@ -2264,5 +2289,17 @@ mod salt_saltu_tests {
                 at: 8
             }
         );
+    }
+
+    #[test]
+    fn decodes_bt_bf() {
+        // Boolean-Option branches (op0=6, n=3, m=1; r=1→BT, r=0→BF).
+        // HW-oracle (xtensa-esp32s3-elf-as, esp-15.2.0_20250920):
+        //   `bt b0, .+6` → 0x021076 (bs=0, imm8=0x02 → offset = 2+4 = 6)
+        //   `bf b5, .+3` → 0xff0576 (bs=5, imm8=0xff → offset = -1+4 = 3)
+        assert_eq!(decode(0x021076), Instruction::Bt { bs: 0, offset: 6 });
+        assert_eq!(decode(0xff0576), Instruction::Bf { bs: 5, offset: 3 });
+        // LOOP variants at the same n/m must still decode (r=8/9/10).
+        assert!(matches!(decode(0x008076), Instruction::Loop { .. }));
     }
 }

@@ -70,6 +70,11 @@ peripherals:
     # so its registers read 0 / drop writes until firmware enables the clock
     # (RM0008 §7.3.8) — the tier-1 fixture proves the dead-while-gated state.
     clock: { reg: "apb1enr", bit: 21 }
+    # I2C1 has TWO NVIC lines: EV (below) and ER = 32. AF/BERR/ARLO/OVR raise
+    # ER under CR2.ITERREN, and an interrupt-mode HAL (STM32duino 3.x uses
+    # HAL_I2C_Master_Transmit_IT) only learns an address was NACKed there.
+    config:
+      irq_error: 32
   - id: "i2c2"
     type: "i2c"
     base_address: 0x40005800

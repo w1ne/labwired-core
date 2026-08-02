@@ -133,9 +133,10 @@ impl FromStr for SpiRegisterLayout {
     }
 }
 
-/// Event token for the SPI bit engine's next-wire-transition event (the SPI
-/// has a single kind of scheduled wakeup, so the value is arbitrary).
+/// Event token for the SPI bit engine's next-wire-transition event (STM32).
 const SPI_DONE_TOKEN: u32 = 0;
+/// Event token for nRF52 SPIM EasyDMA completion (delay-0 scheduler path).
+const SPI_NRF52_EASYDMA_TOKEN: u32 = 1;
 
 // ── STM32 SPI wire (bit-level engine) ────────────────────────────────────────
 //
@@ -378,6 +379,8 @@ struct Stm32H5SpiRegs {
     sr: u32,
     /// SR.CTSIZE — remaining-frame count, loaded from CR2.TSIZE at SPE set.
     ctsize: u32,
+    /// RXDR — the frame captured on MISO by the most recent transfer.
+    rxdr: u32,
     crcpoly: u32,
     txcrc: u32,
     rxcrc: u32,
@@ -398,6 +401,7 @@ const H5_CR1_SSI: u32 = 1 << 12;
 const H5_CR1_WRITABLE: u32 = 0x0001_FB01;
 
 /// SR: TX-packet space available — always set (sim TX path is bottomless).
+const H5_SR_RXP: u32 = 1 << 0;
 const H5_SR_TXP: u32 = 1 << 1;
 /// SR: end of transfer (CTSIZE reached 0).
 const H5_SR_EOT: u32 = 1 << 3;
@@ -453,9 +457,10 @@ impl Stm32H5SpiRegs {
             0x10 => self.ier,
             // SR[31:16] = CTSIZE remaining-frame count, flags below.
             0x14 => (self.ctsize << 16) | self.sr,
-            // IFCR (0x18) and TXDR (0x20) are write-only and read 0; RXDR
-            // (0x30) reads 0 in the TX-only model (see struct docs).
-            0x18 | 0x20 | 0x30 => 0,
+            // IFCR (0x18) and TXDR (0x20) are write-only and read 0.
+            0x18 | 0x20 => 0,
+            // RXDR: the captured MISO frame.
+            0x30 => self.rxdr,
             0x40 => self.crcpoly,
             0x44 => self.txcrc,
             0x48 => self.rxcrc,
@@ -695,6 +700,16 @@ impl Default for SpiRegs {
 pub struct Spi {
     regs: SpiRegs,
 
+    /// True for the FIFO-equipped STM32 SPI (L4/F7/G4). On those parts RXNE
+    /// asserts only when the RX FIFO reaches the CR2.FRXTH threshold, so a
+    /// single 8-bit frame with FRXTH=0 (the reset default, threshold = 16 bit)
+    /// leaves RXNE CLEAR. Verified against a real NUCLEO-L476RG: SR reads
+    /// 0x0002 after a transmit with no slave wired. The classic F1/F4 port has
+    /// no FIFO and sets RXNE on every completed frame.
+    rx_fifo: bool,
+    /// Bytes sitting in the modelled RX FIFO (FIFO layout only).
+    rx_fifo_level: u8,
+
     // STM32 bit-engine state (classic/FIFO layout only; the other register
     // families keep their own transfer semantics).
     /// The frame currently clocking on the wire, if any.
@@ -722,8 +737,9 @@ pub struct Spi {
     /// RX path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
     loopback: bool,
 
-    /// nRF52 SPIM: set when TASKS_START is written; cleared after
-    /// `tick_with_bus` completes the EasyDMA transfer.
+    /// nRF52 SPIM: set when TASKS_START is written; cleared by the EasyDMA
+    /// engine via either `tick_with_bus` (bare-bus / bus_tick_indices) or
+    /// `on_event` (Machine + event-scheduler, delay-0).
     #[serde(skip)]
     nrf52_pending_start: bool,
 
@@ -767,6 +783,7 @@ impl Spi {
     /// Like [`new_with_layout`] but with an explicit classic-SPI CR2 writable
     /// mask — the per-part delta (F1 `0xE7`, F4 `0xF7` for the FRF bit).
     pub fn new_with_layout_cr2(layout: SpiRegisterLayout, cr2_mask: u32) -> Self {
+        let rx_fifo = matches!(layout, SpiRegisterLayout::Stm32Fifo);
         let regs = match layout {
             // CR2 reset is silicon-verified over SWD:
             //   FIFO SPI (L4/F7): CR2 = 0x0700 (DS=0b0111 8-bit + FRXTH).
@@ -789,6 +806,8 @@ impl Spi {
         };
         Self {
             regs,
+            rx_fifo,
+            rx_fifo_level: 0,
             cr2_mask,
             ..Default::default()
         }
@@ -1084,8 +1103,27 @@ impl Spi {
                     // but not consumed by the TX-only engine: the low byte is
                     // broadcast, matching the v1 byte-wide device routing.
                     let mosi = (value & 0xFF) as u8;
+                    // Full-duplex: every transmitted frame simultaneously
+                    // clocks one IN. Silicon fills RXDR and raises SR.RXP
+                    // whether or not a slave drives MISO — with nothing
+                    // driving, the captured value is just the idle line level.
+                    // Without this the peripheral was TX-only, and any driver
+                    // that writes TXDR then waits for RXP (which is what
+                    // HAL_SPI_TransmitReceive, and therefore Arduino's
+                    // SPI.transfer(), does) hung forever.
+                    let mut miso: u8 = 0;
                     for dev in &mut self.attached_devices {
-                        dev.transfer(mosi);
+                        let r = dev.transfer(mosi);
+                        if r != 0 {
+                            miso = r;
+                        }
+                    }
+                    if self.loopback && self.attached_devices.is_empty() {
+                        miso = mosi;
+                    }
+                    if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                        r.rxdr = miso as u32;
+                        r.sr |= H5_SR_RXP;
                     }
                     if let SpiRegs::Stm32H5(r) = &mut self.regs {
                         if r.ctsize > 0 {
@@ -1294,14 +1332,44 @@ impl Spi {
             self.stm32_drive_levels();
             return;
         }
-        // Frame complete: exchange lands in the RX path. A wired slave drove
-        // its byte onto MISO during the frame; loopback mirrors MOSI. Without
-        // either, RXNE stays clear (real silicon: no MISO data).
-        let deliver_rx = self.loopback || !self.attached_devices.is_empty();
+        // Frame complete: the exchange lands in the RX path.
+        //
+        // In full-duplex master mode silicon ALWAYS completes the receive: the
+        // shift register samples the MISO line every frame and RXNE asserts
+        // when the RX buffer fills, whether or not a slave is driving. With no
+        // slave the captured value is just the idle line level — it is not an
+        // absent event. Gating RXNE on an attached device made every polling
+        // driver hang forever waiting for a flag that could never arrive
+        // (`SPI.transfer()` on an unpopulated bus, which is the common case in
+        // a simulator); found by the Arduino conformance sketch on F401.
+        let rx_fifo = self.rx_fifo;
+        let driven = self.loopback || !self.attached_devices.is_empty();
+        let level = &mut self.rx_fifo_level;
         if let SpiRegs::Stm32(r) = &mut self.regs {
-            if deliver_rx {
-                r.dr = f.miso;
-                r.sr |= 0x0001; // RXNE
+            r.dr = f.miso;
+            if !rx_fifo {
+                // Classic F1/F4 port: no FIFO, RXNE on every frame.
+                r.sr |= 0x0001;
+            } else {
+                // FIFO port: RXNE follows CR2.FRXTH (bit 12). FRXTH=1 → the
+                // threshold is 8 bit, so one frame asserts it; FRXTH=0 (reset)
+                // → 16 bit, so a single 8-bit frame must NOT assert it. This is
+                // what a real NUCLEO-L476RG reports (SR=0x0002 after TX), and
+                // is why STM32duino sets FRXTH before 8-bit transfers.
+                // A slave (or loopback) must actually drive MISO for the FIFO
+                // to fill: a real NUCLEO-L476RG with nothing wired reports
+                // SR=0x0002 after a transmit even with FRXTH=1, which is the
+                // value pinned by test_nucleo_l476rg_spi_survival. Only once
+                // data is genuinely present does the CR2.FRXTH threshold decide
+                // whether one 8-bit frame is enough to raise RXNE (FRXTH=1) or
+                // whether 16 bits are required (FRXTH=0, the reset default).
+                if driven {
+                    *level = level.saturating_add(1);
+                    let frxth = r.cr2 & (1 << 12) != 0;
+                    if frxth || *level >= 2 {
+                        r.sr |= 0x0001;
+                    }
+                }
             }
         }
         if !self.tx_queue.is_empty() {
@@ -1528,6 +1596,10 @@ impl crate::Peripheral for Spi {
     /// deadline by up to one tick interval) and re-arms via `reschedule_delay`
     /// until the frame (and any queued frames) complete.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // nRF52 SPIM EasyDMA: delay-0 completion (next cycle after TASKS_START).
+        if self.nrf52_pending_start {
+            return vec![(0, SPI_NRF52_EASYDMA_TOKEN)];
+        }
         if self.frame.is_some() && !self.scheduled {
             self.scheduled = true;
             vec![(
@@ -1541,10 +1613,17 @@ impl crate::Peripheral for Spi {
 
     fn on_event(
         &mut self,
-        _event_token: u32,
+        event_token: u32,
         sched: &mut crate::sched::EventScheduler,
-        _bus: &mut dyn crate::Bus,
+        bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
+        if event_token == SPI_NRF52_EASYDMA_TOKEN {
+            if self.nrf52_pending_start {
+                self.do_nrf52_easydma(bus);
+            }
+            return crate::sched::EventResult::default();
+        }
+
         self.scheduled = false;
         let Some(f) = &self.frame else {
             return crate::sched::EventResult::default();
@@ -1581,14 +1660,99 @@ impl crate::Peripheral for Spi {
         self.nrf52_pending_start
     }
 
-    /// nRF52 SPIM EasyDMA transfer engine.
+    /// nRF52 SPIM EasyDMA transfer engine (bare-bus / bus_tick_indices path).
+    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.nrf52_pending_start {
+            self.do_nrf52_easydma(bus);
+        }
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    /// Legacy-walk clocking (non-event-scheduler builds): advance the bit
+    /// engine by the elapsed peripheral-clock cycles. The event-scheduler
+    /// build never calls this for the SPI (the walk skips scheduler-driven
+    /// peripherals), so the two clocking paths cannot double-advance.
+    fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
+        let mut irq = false;
+        let mut fired: Vec<u32> = Vec::new();
+
+        // ── nRF52 SPIM: raise IRQ for any enabled+pending EVENTS ─────────────
+        if let SpiRegs::Nrf52(r) = &self.regs {
+            // Check each event against its INTEN bit.
+            if r.events_stopped != 0 && r.inten & INTEN_STOPPED != 0 {
+                irq = true;
+                fired.push(0x104);
+            }
+            if r.events_endrx != 0 && r.inten & INTEN_ENDRX != 0 {
+                irq = true;
+                fired.push(0x110);
+            }
+            if r.events_end != 0 && r.inten & INTEN_END != 0 {
+                irq = true;
+                fired.push(0x118);
+            }
+            if r.events_endtx != 0 && r.inten & INTEN_ENDTX != 0 {
+                irq = true;
+                fired.push(0x120);
+            }
+            return crate::PeripheralTickResult {
+                irq,
+                fired_events: fired,
+                ..Default::default()
+            };
+        }
+
+        // ── STM32 SPI: bit engine clocks the frame on the wire ───────────────
+        if self.frame.is_some() && self.stm32_advance_units(cycles) {
+            irq = true; // TXEIE at frame completion
+        }
+
+        crate::PeripheralTickResult {
+            irq,
+            cycles: 0,
+            ..Default::default()
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for dev in self.attached_devices.iter_mut() {
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+impl Spi {
+    /// nRF52 SPIM EasyDMA engine shared by `tick_with_bus` and `on_event`.
     ///
     /// Reads TXD.MAXCNT bytes from RAM at TXD.PTR, clocks each through the
     /// attached `SpiDevice` (or uses ORC when TXD is exhausted but RXD still
     /// has capacity), writes received bytes to RAM at RXD.PTR up to
     /// RXD.MAXCNT, then sets EVENTS_ENDTX / EVENTS_ENDRX / EVENTS_END and
     /// updates TXD.AMOUNT / RXD.AMOUNT.
-    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+    fn do_nrf52_easydma(&mut self, bus: &mut dyn Bus) {
         if !self.nrf52_pending_start {
             return;
         }
@@ -1660,68 +1824,6 @@ impl crate::Peripheral for Spi {
             r.events_endrx = 1;
             r.events_end = 1;
         }
-    }
-
-    fn tick(&mut self) -> crate::PeripheralTickResult {
-        self.tick_elapsed(1)
-    }
-
-    /// Legacy-walk clocking (non-event-scheduler builds): advance the bit
-    /// engine by the elapsed peripheral-clock cycles. The event-scheduler
-    /// build never calls this for the SPI (the walk skips scheduler-driven
-    /// peripherals), so the two clocking paths cannot double-advance.
-    fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
-        let mut irq = false;
-        let mut fired: Vec<u32> = Vec::new();
-
-        // ── nRF52 SPIM: raise IRQ for any enabled+pending EVENTS ─────────────
-        if let SpiRegs::Nrf52(r) = &self.regs {
-            // Check each event against its INTEN bit.
-            if r.events_stopped != 0 && r.inten & INTEN_STOPPED != 0 {
-                irq = true;
-                fired.push(0x104);
-            }
-            if r.events_endrx != 0 && r.inten & INTEN_ENDRX != 0 {
-                irq = true;
-                fired.push(0x110);
-            }
-            if r.events_end != 0 && r.inten & INTEN_END != 0 {
-                irq = true;
-                fired.push(0x118);
-            }
-            if r.events_endtx != 0 && r.inten & INTEN_ENDTX != 0 {
-                irq = true;
-                fired.push(0x120);
-            }
-            return crate::PeripheralTickResult {
-                irq,
-                fired_events: fired,
-                ..Default::default()
-            };
-        }
-
-        // ── STM32 SPI: bit engine clocks the frame on the wire ───────────────
-        if self.frame.is_some() && self.stm32_advance_units(cycles) {
-            irq = true; // TXEIE at frame completion
-        }
-
-        crate::PeripheralTickResult {
-            irq,
-            cycles: 0,
-            ..Default::default()
-        }
-    }
-
-    fn snapshot(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
-    }
-
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
-    }
-
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
     }
 }
 
@@ -1837,9 +1939,31 @@ mod tests {
         let sr = spi.read(0x08).unwrap();
         assert_eq!(sr & 0x80, 0, "BSY cleared after transfer");
         assert_ne!(sr & 0x02, 0, "TXE set after transfer");
-        // No slave wired → no MISO data → RXNE stays clear, DR reads 0.
-        assert_eq!(sr & 0x01, 0, "RXNE NOT set without a slave");
-        assert_eq!(spi.read(0x0C).unwrap(), 0x00, "DR=0 with no MISO data");
+        // Full-duplex master: the receive ALWAYS completes. Silicon samples the
+        // MISO line every frame and asserts RXNE when the RX buffer fills, slave
+        // or no slave — with nothing driving, the captured value is simply the
+        // idle line level (0x00 here), which is data, not a missing event.
+        //
+        // This assertion previously read `RXNE NOT set without a slave`, pinning
+        // the opposite. That was wrong about the hardware and had a real cost:
+        // any polling driver that writes DR then waits for RXNE — which is what
+        // HAL_SPI_TransmitReceive and therefore Arduino's SPI.transfer() do —
+        // hung forever on an unpopulated bus. Corrected when the Arduino
+        // conformance sketch on F401 hung in SPI.transfer().
+        // CLASSIC (F1/F4) port — no RX FIFO, so a completed full-duplex frame
+        // always asserts RXNE, slave or no slave: silicon samples MISO every
+        // frame and the captured value is simply the idle level.
+        //
+        // This is the opposite of the FIFO port (L4/F7/G4), where RXNE follows
+        // CR2.FRXTH and a single 8-bit frame at the reset threshold (16 bit)
+        // leaves RXNE clear — verified on a real NUCLEO-L476RG, SR=0x0002.
+        // Both behaviours are now modelled; do not "unify" them.
+        assert_ne!(sr & 0x01, 0, "classic port sets RXNE on every frame");
+        assert_eq!(
+            spi.read(0x0C).unwrap(),
+            0x00,
+            "DR holds the idle MISO level when no slave drives"
+        );
     }
 
     /// Analytic wire time: a frame completes at EXACTLY `bits × 2^(BR+1)`
@@ -2554,12 +2678,22 @@ mod tests {
         spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12)); // SPE|CSTART|SSI
         h5_write(&mut spi, 0x20, 0x11);
-        assert_eq!(h5_read(&spi, 0x14), 0x0001_0012, "CTSIZE 2→1, TXP|TXTF");
+        assert_eq!(
+            h5_read(&spi, 0x14),
+            0x0001_0013,
+            "CTSIZE 2->1, TXP|TXTF|RXP (each frame clocks one in)"
+        );
         h5_write(&mut spi, 0x20, 0x22);
         assert_eq!(captured(&spi), vec![0x11, 0x22], "both frames on the bus");
-        assert_eq!(h5_read(&spi, 0x14), 0x0000_101A, "EOT|TXC at CTSIZE=0");
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_101B, "EOT|TXC|RXP at CTSIZE=0");
         assert_eq!(h5_read(&spi, 0x00), 0x0000_1001, "CSTART HW-cleared");
-        assert_eq!(h5_read(&spi, 0x30), 0, "RXDR TX-only: reads 0");
+        // Full duplex: each transmitted frame clocks one in. With no slave
+        // attached the captured value is the idle line level (0), but RXP is
+        // set and RXDR is readable — the receive EVENT happens regardless.
+        // This previously asserted a TX-only engine, which hung every driver
+        // that writes TXDR then waits on RXP (HAL_SPI_TransmitReceive, and so
+        // Arduino SPI.transfer()).
+        assert_eq!(h5_read(&spi, 0x30), 0, "RXDR holds the idle MISO level");
     }
 
     /// TXDR writes are inert while SPE=0: no TXTF, nothing transmitted.

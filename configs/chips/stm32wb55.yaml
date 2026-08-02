@@ -8,13 +8,27 @@ flash:
 ram:
   base: 0x20000000
   size: "256KB"
+# System memory (bootloader ROM) + option-byte window. Arduino/STM32Cube
+# startup reads package/flash-size fingerprints around 0x1FFF73xx (RM0434
+# system memory). Unmapped → bus fault mid-init; zero-filled is honest for
+# a generic WB55 model (unknown package → default path).
+memory_regions:
+  - name: "system_memory"
+    base: 0x1FFF0000
+    size: "32KB"
 
 peripherals:
   - id: "rcc"
     type: "rcc"
     base_address: 0x58000000
     config:
-      profile: "stm32v2"
+      # RM0434 §6.4 — NOT the H5-style "stm32v2" block. WB shares the whole
+      # modern-V2 clock tree but places its enable/reset registers in the
+      # L4-shaped block (AHB2ENR@0x4C, APB1ENR1@0x58, APB2ENR@0x60). Under
+      # "stm32v2" they sat at 0x8C/0x9C/0xA4, so every real STM32Cube / Zephyr
+      # / Arduino clock-enable write landed on an unmapped offset and was
+      # dropped — 0x9C is RCC_HSECR on this part, not an enable register.
+      profile: "stm32wb"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x48000000
@@ -45,13 +59,15 @@ peripherals:
   - id: "usart1"
     type: "uart"
     base_address: 0x40013800
-    irq: 37
+    # CMSIS USART1_IRQn = 36 (not 37 — that is LPUART1_IRQn on WB55).
+    irq: 36
     config:
       profile: "stm32v2"
   - id: "lpuart1"
     type: "uart"
     base_address: 0x40008000
-    irq: 70
+    # CMSIS LPUART1_IRQn = 37 (RM0434 / stm32wb55xx.h).
+    irq: 37
     config:
       profile: "stm32v2"
   - id: "flash"
@@ -68,10 +84,10 @@ peripherals:
     type: "hsem"
     base_address: 0x58001400
     size: "1KB"
-  # ── Tier-1 peripherals (RM0434). The RCC model is profile stm32v2, so the
-  # clock-gate `reg:` names resolve to the V2 enable-register offsets
-  # (ahb2enr@0x8C, apb1lenr@0x9C, apb2enr@0xA4); the `bit:` values are the
-  # silicon RM0434 §6.4 enable bits for each block's real bus. ─────────────
+  # ── Tier-1 peripherals (RM0434). The RCC model is profile stm32wb, so the
+  # clock-gate `reg:` names resolve to the real RM0434 §6.4 enable-register
+  # offsets (ahb2enr@0x4C, apb1enr1@0x58, apb2enr@0x60); the `bit:` values are
+  # the silicon enable bits for each block's real bus. ─────────────────────
   # TIM2 — 32-bit GP timer (APB1). RCC_APB1ENR1.TIM2EN (bit 0).
   - id: "tim2"
     type: "timer"

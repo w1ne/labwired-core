@@ -47,6 +47,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "exti",
     "afio",
     "dma",
+    "stm32f4_dma",
     "gpdma",
     "adc",
     "pio",
@@ -74,18 +75,34 @@ pub const MODEL_TYPES: &[&str] = &[
     "comp",
     "tsc",
     "fmc",
-    // RP2040 native peripherals (built here).
+    // RP2040 native peripherals (built here). `rp2040_adc` and `rp2040_rtc`
+    // MUST be listed: the fuzzy fallbacks below match `contains("adc")` and
+    // `contains("rtc")`, so without membership here they would be coerced onto
+    // the STM32 ADC / RTC register maps — a silently wrong model, not an error.
     "rp2040_timer",
+    "rp2040_dma",
     "rp2040_spi",
     "rp2040_i2c",
+    "rp2040_pwm",
+    "rp2040_adc",
+    "rp2040_rtc",
+    "rp2040_watchdog",
+    "rp2040_sio",
+    "rp2040_clkrst",
     "rp2040_xip_ssi",
     "rp2040_usb",
     // ESP32-C3 behavioral models (esp32 factory).
     "esp32c3_i2c",
     "esp32c3_spi",
     "esp32c3_gpio",
+    "esp32c3_io_mux",
     "esp32c3_apb_saradc",
     "esp32c3_ledc",
+    "esp32c3_rmt",
+    // MUST be listed: the fuzzy fallback matches `contains("uart")`, which
+    // would coerce the C3's UART onto the STM32 register map — the silently
+    // wrong model that wedged every `Serial.print` over 128 bytes.
+    "esp32c3_uart",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -94,6 +111,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf52840_twis",
     "nrf52840_uart",
     "nrf52_gpiote",
+    // nRF54L behavioral models (nrf54l factory). Listed here so the fuzzy
+    // `contains("uart")` heuristic cannot coerce `nrf54l_uarte` onto the
+    // generic STM32 UART layout — it is a distinct silicon register map.
+    "nrf54l_uarte",
+    "nrf54l_twim",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -106,8 +128,8 @@ pub fn is_canonical_model_type(t: &str) -> bool {
 pub fn try_build(
     canonical_type: &str,
     p_cfg: &PeripheralConfig,
-    manifest: &SystemManifest,
-    bus_trace: &crate::bus::bus_trace::BusTrace,
+    _manifest: &SystemManifest,
+    _bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "systick" | "arm_generictimer" => {
@@ -235,32 +257,8 @@ pub fn try_build(
             if let Some(cr1_mask) = p_cfg.config.get("cr1_mask").and_then(|v| v.as_u64()) {
                 spi.set_cr1_mask(cr1_mask as u16);
             }
-            // Declarative IR SPI devices (`type: ir`) attach here,
-            // mirroring the I2C path. Hand-written SPI devices attach via
-            // the PeripheralKit registry pass, which ignores `type: ir`,
-            // so the two dispatch paths never double-attach the same bus.
-            for ext in &manifest.external_devices {
-                if ext.connection != p_cfg.id || !ext.r#type.eq_ignore_ascii_case("ir") {
-                    continue;
-                }
-                match crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config) {
-                    Some(device) => {
-                        tracing::info!("spi attach: '{}' (type=ir) -> '{}'", ext.id, p_cfg.id);
-                        // Wrap through the single trace helper (this factory
-                        // attaches before the peripheral is on the bus).
-                        spi.push_device(crate::bus::bus_trace::wrap_spi(
-                            &p_cfg.id, bus_trace, device,
-                        ));
-                    }
-                    None => {
-                        tracing::warn!(
-                            "spi attach skipped: invalid ir spec for external id '{}' on bus '{}'",
-                            ext.id,
-                            p_cfg.id
-                        );
-                    }
-                }
-            }
+            // Hand-written SPI devices attach via the PeripheralKit registry
+            // pass, so no external-device attach loop is needed here.
             Box::new(spi)
         }
         "pwr" => {
@@ -268,11 +266,17 @@ pub fn try_build(
             // (VOSCR/VOSSR voltage scaling); default stays L4.
             match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32h5") | Some("h5") => Box::new(crate::peripherals::pwr::PwrH5::new()),
+                // H7 voltage scaling: VOSRDY/ACTVOSRDY handshake the HAL polls
+                // before touching the PLL (RM0468 D3CR/SRDCR + CSR1).
+                Some("stm32h7") | Some("h7") => Box::new(crate::peripherals::pwr::PwrH7::new()),
                 // L0 has a two-register surface (CR/CSR), not the L4
                 // CR1..CR4 / PUCRx set — a distinct reset shape.
                 Some("stm32l0") | Some("l0") => Box::new(crate::peripherals::pwr::PwrL0::new()),
                 // WBA: VOSR (0x0C) VOS→VOSRDY handshake the SoC init polls.
                 Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
+                // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
+                // shape from the L4 CR1..CR4 / PUCRx set.
+                Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -312,9 +316,14 @@ pub fn try_build(
             p_cfg.base_address,
         )),
         "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
         "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
+        "rp2040_pwm" => Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new()),
+        "rp2040_adc" => Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::new()),
+        "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
+        "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2040_usb" => Box::new(crate::peripherals::rp2040::usb::Rp2040Usb::new()),
         "crc" => {
@@ -366,6 +375,33 @@ pub fn try_build(
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
         "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+        // STM32F4 stream-based DMA (RM0090 §10). `config: { dma2: true }` marks
+        // the DMA2 instance (memory-to-memory capable); `config: { stream_irqs:
+        // [..8..] }` routes each stream to its own NVIC vector (F4 stream IRQs
+        // are non-contiguous, e.g. DMA1_Stream7 = 47).
+        "stm32f4_dma" => {
+            let mut dma = crate::peripherals::stm32f4_dma::StreamDma::new();
+            if p_cfg
+                .config
+                .get("dma2")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                dma = dma.as_dma2();
+            }
+            if let Some(arr) = p_cfg
+                .config
+                .get("stream_irqs")
+                .and_then(|v| v.as_sequence())
+            {
+                let irqs: Vec<u32> = arr
+                    .iter()
+                    .filter_map(|v| v.as_u64().map(|n| n as u32))
+                    .collect();
+                dma = dma.with_stream_irqs(irqs);
+            }
+            Box::new(dma)
+        }
         "gpdma" => {
             // `config: { irq_base: N }` routes channel n to NVIC
             // line N + n (H563 GPDMA1: 27..34). Without it the
@@ -388,14 +424,39 @@ pub fn try_build(
             }
             Box::new(pio)
         }
-        "esp32_timg" => Box::new(crate::peripherals::esp32::timg::Timg::new(
-            p_cfg.base_address as u32,
-        )),
+        "esp32_timg" => {
+            // The only config-driven consumer of `esp32_timg` is the ESP32-C3
+            // (ESP32-classic builds its TIMGs from the embedded descriptor
+            // table via esp32/factory.rs, which stays on the canned-ratio
+            // path). Give the C3 TIMGs the silicon-faithful RTC_SLOW cal
+            // profile so IDF's `rtc_clk_cal` recovers exactly the same
+            // RTC_SLOW rate the RTC_CNTL counter ticks at — one constant,
+            // no second pin. (Only TIMG0 is ever calibrated by IDF; handing
+            // TIMG1 the same profile is harmless and keeps the path uniform.)
+            use crate::peripherals::esp32c3::rtc_timer::{C3_XTAL_HZ, RTC_SLOW_HZ_MEASURED};
+            Box::new(
+                crate::peripherals::esp32::timg::Timg::new(p_cfg.base_address as u32).with_rtc_cal(
+                    crate::peripherals::esp32::timg::RtcCalProfile {
+                        xtal_hz: C3_XTAL_HZ,
+                        slow_hz: RTC_SLOW_HZ_MEASURED,
+                    },
+                ),
+            )
+        }
         // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
         // enables the cache via ICACHE_CR.EN and never polls a completion flag,
         // so a read-as-zero stub keeps the enable sequence from bus-faulting.
         // No cache behaviour is modelled — the simulator has flat memory.
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        // SYSCFG — mostly EXTI source select (harmless read-0 stub), plus the H7
+        // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:
+        // CCCSR @ 0x20, READY = bit 8. Seed it so the poll exits (EN is a
+        // read-modify-write the stub drops, but the READY read returns the seed).
+        "syscfg" => {
+            let mut s = crate::peripherals::stub::StubPeripheral::new(0x00);
+            s.values.insert(0x20, 0x0000_0100);
+            Box::new(s)
+        }
         // Hardware semaphore (WB/WL dual-core inter-core lock). Single-core sim
         // grants every lock to CPU1, so the read-lock path succeeds at once.
         "hsem" => Box::new(crate::peripherals::hsem::Hsem::new()),

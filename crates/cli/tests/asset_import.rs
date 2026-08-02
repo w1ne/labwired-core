@@ -3,8 +3,6 @@ use std::process::Command;
 
 #[test]
 fn test_asset_import_fixtures() {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-
     // Determine workspace root.
     // Tests run in `core/crates/cli`, so workspace root is `../../`
     let workspace_root = std::env::current_dir()
@@ -42,11 +40,7 @@ fn test_asset_import_fixtures() {
         // Output file will be side-by-side with .json extension
         let output_path = svd_path.with_extension("test_output.json");
 
-        let status = Command::new(&cargo)
-            .arg("run")
-            .arg("-p")
-            .arg("labwired-cli")
-            .arg("--")
+        let status = Command::new(env!("CARGO_BIN_EXE_labwired"))
             .arg("asset")
             .arg("import-svd")
             .arg("--input")

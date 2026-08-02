@@ -156,6 +156,11 @@ impl Default for Pwr {
 }
 
 impl crate::Peripheral for Pwr {
+    // Inert walk: register bank (voltage scaling resolves in the write path); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -255,6 +260,97 @@ impl PwrH5 {
 }
 
 impl crate::Peripheral for PwrH5 {
+    // Inert walk: pure register bank (VOSRDY tracks VOSCR writes instantly);
+    // tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+/// PWR — STM32H7 layout (RM0468 / RM0433).
+///
+/// Voltage scaling completes instantly in the sim so foreign H7 firmware
+/// (stm32h7xx-hal / embassy) clears its bring-up polls: `pwr.freeze()` waits on
+/// D3CR/SRDCR (0x18) VOSRDY (bit 13) and CSR1 (0x04) ACTVOSRDY (bit 13), and
+/// requires CSR1.ACTVOS[15:14] to mirror the D3CR.VOS[15:14] it just wrote.
+/// CR1/CR2/CR3 round-trip (the HAL sets CR3.LDOEN/SMPSEN then asserts the
+/// read-back, sets CR1.DBP then polls it, and enables CR2.BREN then polls
+/// BRRDY). NOT silicon-verified — reference-manual-derived (no H7 bench part).
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrH7 {
+    cr1: u32,
+    cr2: u32,
+    cr3: u32,
+    /// D3CR/SRDCR (0x18) — only VOS[15:14] is stored; VOSRDY is synthesized.
+    d3cr: u32,
+}
+
+impl PwrH7 {
+    pub fn new() -> Self {
+        Self {
+            // CR3 reset 0x00000006: LDOEN (bit 1) + SDEN/SMPSEN (bit 2) both up
+            // out of reset, matching silicon — the HAL's default LDO supply path
+            // asserts CR3.LDOEN is set.
+            cr3: 0x0000_0006,
+            ..Default::default()
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr1,
+            // CSR1: ACTVOS[15:14] mirrors the requested D3CR.VOS, ACTVOSRDY (13) up.
+            0x04 => (self.d3cr & (0x3 << 14)) | (1 << 13),
+            // CR2: BRRDY (bit 16) follows BREN (bit 0) — backup regulator ready.
+            0x08 => {
+                if self.cr2 & 1 != 0 {
+                    self.cr2 | (1 << 16)
+                } else {
+                    self.cr2 & !(1 << 16)
+                }
+            }
+            0x0C => self.cr3,
+            // D3CR/SRDCR: stored VOS[15:14] with VOSRDY (bit 13) always ready.
+            0x18 => self.d3cr | (1 << 13),
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr1 = value,
+            0x08 => self.cr2 = value,
+            0x0C => self.cr3 = value,
+            0x18 => self.d3cr = value & (0x3 << 14),
+            _ => {}
+        }
+    }
+}
+
+impl crate::Peripheral for PwrH7 {
+    // Inert walk: register bank (voltage scaling completes in the write path).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -318,6 +414,11 @@ impl PwrL0 {
 }
 
 impl crate::Peripheral for PwrL0 {
+    // Inert walk: two-register bank; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -340,9 +441,14 @@ impl crate::Peripheral for PwrL0 {
 /// STM32WBA PWR (RM0493). Zephyr's set_regu_voltage writes PWR_VOSR (0x0C) to
 /// select the voltage range/EPOD boost, then spins on VOSRDY (bit 15) before the
 /// PLL is configured; the SoC init also flips enable bits in other PWR registers
-/// and reads them straight back. Model VOSR so any VOS/EPOD enable acknowledges
-/// instantly (VOSRDY bit 15 + BOOSTRDY bit 14); all other registers are plain
-/// read-back storage so the self-confirming enables (e.g. PWR @ 0x28 bit0) pass.
+/// and reads them straight back. Arduino-HAL `HAL_PWREx_ControlVoltageScaling`
+/// additionally polls **SVMSR** @ 0x3C for **ACTVOSRDY** (bit 15) and compares
+/// **ACTVOS** (bit 16) to the requested scale.
+///
+/// Model:
+/// - VOSR writes: VOSRDY (15) always after a program; BOOSTRDY (14) if EPOD (18).
+/// - SVMSR reads: synthesize ACTVOS from VOSR.VOS and ACTVOSRDY once VOS is set
+///   (or after any VOSR write). Other regs are plain read-back storage.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PwrWba {
     regs: std::collections::HashMap<u64, u32>,
@@ -354,25 +460,46 @@ impl PwrWba {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        if offset == 0x3C {
+            // SVMSR: ACTVOS mirrors VOSR.VOS; ACTVOSRDY follows VOSRDY.
+            let vosr = self.regs.get(&0x0C).copied().unwrap_or(0);
+            let mut svmsr = self.regs.get(&0x3C).copied().unwrap_or(0);
+            // Clear hardware status bits we synthesize, keep software-visible others.
+            svmsr &= !((1 << 15) | (1 << 16));
+            let vos = vosr & (0x3 << 16);
+            if vos != 0 || (vosr & (1 << 15)) != 0 {
+                svmsr |= 1 << 15; // ACTVOSRDY
+                svmsr |= vos; // ACTVOS[16:17] / ACTVOS bit16 on WBA55
+            }
+            return svmsr;
+        }
         self.regs.get(&offset).copied().unwrap_or(0)
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         let mut v = value;
         if offset == 0x0C {
-            // VOS[16:17] selected → VOSRDY (15); EPOD boost (18) → BOOSTRDY (14).
-            if v & (0x3 << 16) != 0 {
-                v |= 1 << 15;
-            }
+            // Any VOS program completes instantly: VOSRDY (15).
+            // CMSIS: VOS is bit 16 (single); mask [16:17] for forward-compat.
+            v |= 1 << 15; // VOSRDY
             if v & (1 << 18) != 0 {
-                v |= 1 << 14;
+                v |= 1 << 14; // BOOSTRDY with EPOD
             }
+        }
+        if offset == 0x3C {
+            // SVMSR is mostly status; ignore FW writes to ACTVOS/ACTVOSRDY.
+            return;
         }
         self.regs.insert(offset, v);
     }
 }
 
 impl crate::Peripheral for PwrWba {
+    // Inert walk: register storage with instant VOSRDY; tick() is no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -389,6 +516,110 @@ impl crate::Peripheral for PwrWba {
     }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+/// PWR — STM32F4 layout (RM0368 §5.4, STM32F401). Only two registers exist:
+/// PWR_CR (0x00) and PWR_CSR (0x04) — none of the L4 CR1..CR4 / PUCRx surface.
+/// Reset values pinned to the STM32F401 CMSIS SVD (the reset-conformance
+/// oracle): CR = 0x0000_0000, CSR = 0x0000_0000. (RM0368 §5.4.1 prints CR =
+/// 0x0000_8000 for the VOS = Scale-2 default, but the ST SVD — and the
+/// register_coverage gate built from it — pin CR = 0; VOSRDY is asserted only
+/// after firmware programs a scale, below.)
+///
+/// Foreign firmware (HAL / Zephyr) enables the PWR clock, programs PWR_CR.VOS,
+/// then spins on PWR_CSR.VOSRDY (bit 14) before touching the PLL. Voltage
+/// scaling completes instantly in the sim: any write to PWR_CR latches VOSRDY,
+/// so the reset read still returns 0 (matching silicon) but the boot poll
+/// resolves as soon as firmware selects a scale.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrF4 {
+    cr: u32,
+    csr: u32,
+}
+
+impl PwrF4 {
+    pub fn new() -> Self {
+        Self { cr: 0, csr: 0 }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.csr,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // CR writable bits: VOS[15:14], ADCDC1(13), MRLVDS(11), LPLVDS(10),
+            // FPDS(9), DBP(8), PLS[7:5], PVDE(4), PDDS(1), LPDS(0). CSBF(3) and
+            // CWUF(2) are write-only strobes that always read 0; bit 12 and
+            // [31:16] are reserved. Selecting a voltage scale asserts VOSRDY.
+            0x00 => {
+                self.cr = value & 0x0000_EFF3;
+                self.csr |= 1 << 14; // VOSRDY — scaling completes instantly
+            }
+            // CSR: EWUP (bit 8) and BRE (bit 9) are the only writable bits;
+            // VOSRDY/BRR/PVDO/SBF/WUF are hardware status.
+            0x04 => self.csr = (self.csr & !0x0000_0300) | (value & 0x0000_0300),
+            _ => {}
+        }
+    }
+}
+
+impl crate::Peripheral for PwrF4 {
+    // Inert walk: pure register bank (voltage scaling resolves in the write path).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod f4_tests {
+    use super::PwrF4;
+    use crate::Peripheral;
+
+    #[test]
+    fn pwr_f4_reset_matches_rm0368() {
+        let pwr = PwrF4::new();
+        // STM32F401 CMSIS SVD (register_coverage oracle).
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 0x0000_0000, "PWR_CR reset");
+        assert_eq!(pwr.read_u32(0x04).unwrap(), 0x0000_0000, "PWR_CSR reset");
+        // The L4 CR3 / SR2 / PUCRx surface must not exist on F4.
+        assert_eq!(pwr.read_u32(0x08).unwrap(), 0, "no register at 0x08");
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0, "no register at 0x14");
+    }
+
+    #[test]
+    fn pwr_f4_vosrdy_sets_on_scale_select() {
+        let mut pwr = PwrF4::new();
+        // Firmware selects Scale 1 (VOS = 0b11) then polls VOSRDY.
+        pwr.write_u32(0x00, 0x0000_C000).unwrap();
+        assert_ne!(
+            pwr.read_u32(0x04).unwrap() & (1 << 14),
+            0,
+            "VOSRDY asserted"
+        );
     }
 }
 
@@ -423,6 +654,17 @@ mod wba_tests {
         // EPOD boost (bit18) acks BOOSTRDY (bit14).
         pwr.write_u32(0x0C, 1 << 18).unwrap();
         assert_ne!(pwr.read_u32(0x0C).unwrap() & (1 << 14), 0, "BOOSTRDY acked");
+    }
+
+    #[test]
+    fn svmsr_mirrors_actvos_for_hal_voltage_scaling() {
+        // Arduino HAL_PWREx_ControlVoltageScaling polls SVMSR.ACTVOSRDY (bit15)
+        // and compares SVMSR.ACTVOS (bit16) to the requested scale.
+        let mut pwr = PwrWba::new();
+        pwr.write_u32(0x0C, 1 << 16).unwrap();
+        let svmsr = pwr.read_u32(0x3C).unwrap();
+        assert_ne!(svmsr & (1 << 15), 0, "ACTVOSRDY");
+        assert_ne!(svmsr & (1 << 16), 0, "ACTVOS mirrors VOS");
     }
 
     #[test]

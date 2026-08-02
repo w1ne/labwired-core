@@ -52,6 +52,16 @@ impl Default for Esp32s3IoMux {
 }
 
 impl Peripheral for Esp32s3IoMux {
+    // Pin-function selection is a synchronous register file. It has no
+    // elapsed-time state, IRQs, DMA, or scheduled events.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

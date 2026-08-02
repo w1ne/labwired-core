@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-perf-spin"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-perf-spin"
+path = "src/main.rs"
+test = false
+bench = false

@@ -1,0 +1,10 @@
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/h563_uds_ecu.elf"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "H563-UDS-ECU"
+  - uart_contains: "ECU_READY"
+  - uds_tester: { id: "uds-tester", result: done }

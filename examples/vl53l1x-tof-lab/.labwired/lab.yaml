@@ -1,0 +1,13 @@
+# LabWired - VL53L1X ToF Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/vl53l1x-tof-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "VL53L1X ToF Lab"
+  - uart_contains: "MODEL_ID=0xEACC OK"
+  # Default host distance is 500 mm; with a 300 mm threshold that classifies as FAR.
+  - uart_contains: "RANGE=500 mm PROXIMITY=FAR"
+  - expected_stop_reason: max_steps

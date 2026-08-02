@@ -134,6 +134,19 @@ fn leo_normal_scenario_boots_all_sensors_and_flips_verdict() {
     assert_contains(&run.uart, "air quality is good", ctx);
     assert_contains(&run.uart, "crack a window", ctx);
 
+    // ...and stops there. The NORMAL room's CO₂ ladder asymptotes at 1394 ppm,
+    // deliberately just under the 1400 ppm "ventilate now" threshold, so this is
+    // what separates NORMAL from STUFFY. Without it the scenario would still
+    // pass if the ladder were re-paced or re-scaled into the stuffy range —
+    // exactly the vacuous pass that hid the mis-paced stimuli ladder before.
+    assert!(
+        !run.uart.contains("ventilate now"),
+        "{ctx}: NORMAL must stay below the 1400 ppm 'ventilate now' threshold \
+         (that is the STUFFY scenario); the CO₂ ladder tops out at 1394 ppm\n\
+         --- uart ---\n{}",
+        run.uart
+    );
+
     // Mold Index: as the closed room's humidity climbs into the mold-favorable
     // band, the derived mold risk escalates from low — the metric Leo's
     // mold-detection use case is built around.

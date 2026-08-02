@@ -1,0 +1,282 @@
+peripheral: TEMP
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_START
+    bit_range:
+    - 0
+    - 0
+    description: Start temperature measurement
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Stop temperature measurement
+  side_effects: null
+- id: EVENTS_DATARDY
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_DATARDY
+    bit_range:
+    - 0
+    - 0
+    description: Temperature measurement complete, data ready
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATARDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable interrupt for event DATARDY
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATARDY
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable interrupt for event DATARDY
+  side_effects: null
+- id: TEMP
+  address_offset: 1288
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TEMP
+    bit_range:
+    - 31
+    - 0
+    description: Temperature in degC (0.25deg steps)
+  side_effects: null
+- id: A0
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 806
+  fields:
+  - name: A0
+    bit_range:
+    - 11
+    - 0
+    description: Slope of first piecewise linear function
+  side_effects: null
+- id: A1
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 840
+  fields:
+  - name: A1
+    bit_range:
+    - 11
+    - 0
+    description: Slope of second piecewise linear function
+  side_effects: null
+- id: A2
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 938
+  fields:
+  - name: A2
+    bit_range:
+    - 11
+    - 0
+    description: Slope of third piecewise linear function
+  side_effects: null
+- id: A3
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 1038
+  fields:
+  - name: A3
+    bit_range:
+    - 11
+    - 0
+    description: Slope of fourth piecewise linear function
+  side_effects: null
+- id: A4
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 1213
+  fields:
+  - name: A4
+    bit_range:
+    - 11
+    - 0
+    description: Slope of fifth piecewise linear function
+  side_effects: null
+- id: A5
+  address_offset: 1332
+  size: 32
+  access: READ_WRITE
+  reset_value: 1443
+  fields:
+  - name: A5
+    bit_range:
+    - 11
+    - 0
+    description: Slope of sixth piecewise linear function
+  side_effects: null
+- id: B0
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 16367
+  fields:
+  - name: B0
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of first piecewise linear function
+  side_effects: null
+- id: B1
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 16318
+  fields:
+  - name: B1
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of second piecewise linear function
+  side_effects: null
+- id: B2
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 16318
+  fields:
+  - name: B2
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of third piecewise linear function
+  side_effects: null
+- id: B3
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 18
+  fields:
+  - name: B3
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of fourth piecewise linear function
+  side_effects: null
+- id: B4
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 292
+  fields:
+  - name: B4
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of fifth piecewise linear function
+  side_effects: null
+- id: B5
+  address_offset: 1364
+  size: 32
+  access: READ_WRITE
+  reset_value: 636
+  fields:
+  - name: B5
+    bit_range:
+    - 13
+    - 0
+    description: y-intercept of sixth piecewise linear function
+  side_effects: null
+- id: T0
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 226
+  fields:
+  - name: T0
+    bit_range:
+    - 7
+    - 0
+    description: End point of first piecewise linear function
+  side_effects: null
+- id: T1
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: T1
+    bit_range:
+    - 7
+    - 0
+    description: End point of second piecewise linear function
+  side_effects: null
+- id: T2
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 25
+  fields:
+  - name: T2
+    bit_range:
+    - 7
+    - 0
+    description: End point of third piecewise linear function
+  side_effects: null
+- id: T3
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 60
+  fields:
+  - name: T3
+    bit_range:
+    - 7
+    - 0
+    description: End point of fourth piecewise linear function
+  side_effects: null
+- id: T4
+  address_offset: 1392
+  size: 32
+  access: READ_WRITE
+  reset_value: 80
+  fields:
+  - name: T4
+    bit_range:
+    - 7
+    - 0
+    description: End point of fifth piecewise linear function
+  side_effects: null
+interrupts:
+  TEMP: 12
+timing: null

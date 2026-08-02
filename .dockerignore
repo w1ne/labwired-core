@@ -1,0 +1,12 @@
+# Local and VCS state is never needed to compile the release CLI.
+.git
+target
+out
+dist
+coverage
+
+# Locally produced archives, logs, and OS metadata only enlarge the build context.
+*.tar.gz
+*.zip
+*.log
+.DS_Store

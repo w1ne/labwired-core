@@ -27,12 +27,19 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
+      # SWD/JTAG defaults (RM0368 §8.4 / STM32F401 SVD): PA13/14/15 in AF mode.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
   - id: "gpiob"
     type: "gpio"
     base_address: 0x40020400
     size: "1KB"
     config:
       profile: "stm32v2"
+      # JTAG defaults (RM0368 §8.4 / STM32F401 SVD): PB3 (JTDO/SWO), PB4 (NJTRST).
+      reset_moder: 0x00000280
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
   - id: "gpioc"
     type: "gpio"
     base_address: 0x40020800
@@ -51,17 +58,31 @@ peripherals:
     type: "i2c"
     base_address: 0x40005400
     size: "1KB"
+    # I2C1 has TWO NVIC lines on F4 (RM0368 §11.1.3): EV = 31 (below) and
+    # ER = 32. AF/BERR/ARLO/OVR raise ER under CR2.ITERREN, and an
+    # interrupt-mode HAL only learns an address was NACKed from the ER
+    # handler — STM32duino 3.x drives I2C via HAL_I2C_Master_Transmit_IT, so
+    # without ER every NACK surfaced as a 100 ms timeout instead of a NACK.
     irq: 31
+    config:
+      irq_error: 32
   - id: "flash"
     type: "flash"
     base_address: 0x40023C00
     size: "1KB"
     config:
-      profile: "f1"
+      # F4 embedded-flash interface (RM0368 §3.8): ACR reset 0 (no F1-style
+      # prefetch default), CR LOCK at bit 31, OPTCR present. The F1 profile's
+      # 0x30 ACR default and bit-7 LOCK are silicon-wrong for F401.
+      profile: "stm32f4"
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
     size: "1KB"
+    config:
+      # F4 PWR (RM0368 §5.4): only PWR_CR/PWR_CSR exist, both reset 0. The
+      # default L4 model surfaced CR1=0x200 / CR3=0x8000 and phantom PUCRx regs.
+      profile: "stm32f4"
   - id: "uart1"
     type: "uart"
     base_address: 0x40011000
@@ -113,3 +134,64 @@ peripherals:
     type: "rtc"
     base_address: 0x40002800
     size: "1KB"
+  # EXTI — external interrupt/event controller (RM0368 §10.2). The F401
+  # implements 23 lines (0..22): 16 GPIO + PVD + RTC alarm + USB OTG FS wakeup
+  # + RTC tamper/timestamp + RTC wakeup. Sits on APB2 but has no RCC enable bit
+  # of its own — the SYSCFG clock gates the line *muxing*, not the EXTI block.
+  - id: "exti"
+    type: "exti"
+    base_address: 0x4001_3C00
+    size: "1KB"
+    config:
+      lines: 23
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE004_2000
+    size: "1KB"
+    config:
+      # DBGMCU_IDCODE per tests/fixtures/real_world/stm32f401.svd: resetValue
+      # 0x10006411 (DEV_ID=0x411, REV_ID=0x1000). The brief's assumed
+      # DEV_ID=0x433 (F401xD/xE per RM0368 §24.6.1) does not match the
+      # shipped SVD, which the SVD wins per project convention — using the
+      # SVD-verified value here instead.
+      idcode: 0x10006411
+  # TIM1 — advanced-control PWM timer (APB2, RM0368 §12). The `_pwm` id suffix
+  # declares the pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 0),
+  # verified against tests/fixtures/real_world/stm32f401.svd.
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x4001_0000
+    size: "1KB"
+    irq: 25
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      advanced: true
+  # DMA1 / DMA2 — stream-based DMA controllers (RM0368 §9; same IP as F407,
+  # RM0090 §10). Eight streams each; DMA2 additionally supports
+  # memory-to-memory transfers (RM0368 §9.3.3). Clocked from RCC_AHB1ENR
+  # (DMA1EN bit 21, DMA2EN bit 22 — verified against the SVD).
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x4002_6000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      # DMA1_Stream0..7 NVIC positions, verified against
+      # tests/fixtures/real_world/stm32f401.svd: 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x4002_6400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions, verified against
+      # tests/fixtures/real_world/stm32f401.svd: 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]

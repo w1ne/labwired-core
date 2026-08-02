@@ -14,6 +14,8 @@ use crate::cpu::xtensa_lx7::XtensaLx7;
 
 mod esp32;
 pub use esp32::*;
+mod esp32_rom_console;
+pub use esp32_rom_console::*;
 mod esp32s3;
 pub use esp32s3::*;
 
@@ -84,6 +86,17 @@ impl std::fmt::Debug for RamPeripheral {
 }
 
 impl crate::Peripheral for RamPeripheral {
+    // RAM/ROM windows only store and serve bytes. They have no elapsed-time
+    // state, IRQs, DMA, or scheduled events, so the legacy per-step walk is
+    // provably unnecessary for every firmware state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> crate::SimResult<u8> {
         Ok(*self.data.borrow().get(offset as usize).unwrap_or(&0))
     }
@@ -443,13 +456,39 @@ mod tests {
     }
 
     #[test]
-    fn configure_registers_i2c0_with_tmp102_attached() {
+    fn configure_registers_i2c0_and_factory_attaches_manifest_tmp102() {
         let mut bus = SystemBus::new();
         let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
 
         // I2C0 should be present at 0x6001_3000.
         let names: Vec<_> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"i2c0"), "i2c0 missing; have: {names:?}");
+
+        // The TMP102 is NOT hardcoded by the builder — it is wired from the board
+        // manifest's external_devices through the generic factory, exactly as the
+        // app/CLI do. Declare it, attach it, then probe below.
+        let manifest = labwired_config::SystemManifest {
+            cosim_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "test-s3-tmp102".to_string(),
+            chip: "esp32s3.yaml".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            peripherals: vec![],
+            external_devices: vec![labwired_config::ExternalDevice {
+                id: "tmp102".to_string(),
+                r#type: "tmp102".to_string(),
+                connection: "i2c0".to_string(),
+                channel: None,
+                route: Default::default(),
+                config: std::collections::HashMap::new(),
+            }],
+            board_io: vec![],
+            debug_uart: None,
+            wifi_ap: None,
+        };
+        attach_esp32_external_devices(&mut bus, &manifest)
+            .expect("attach TMP102 from manifest must succeed");
 
         // The attached TMP102 should respond at address 0x48 by setting
         // INT_NACK to 0 after a one-byte write probe.
@@ -482,21 +521,26 @@ mod tests {
     }
 
     #[test]
-    fn flash_xip_windows_have_independent_backings() {
-        // Real silicon shares the SPI flash between both windows but each has
-        // its own MMU page table; for fast-boot we model this as two distinct
-        // backing buffers so that ELFs with .rodata at 0x3c000020 and .text at
-        // 0x42000020 don't collide on the same physical offset. Force fast-boot
-        // so the assertion is deterministic regardless of whether the host has
+    fn flash_xip_windows_share_mmu_backed_flash() {
+        // Current fast-boot path uses MMU-backed XIP so `spi_flash_mmap` /
+        // `cache2phys` share one translation with the SPI controller (seeded
+        // after `fast_boot`). Both windows alias the same physical flash
+        // backing; reads need a valid MMU entry. Force the MMU-XIP path so
+        // the assertion is deterministic regardless of whether the host has
         // the ESP toolchain ROM installed (which would auto-select faithful mode).
-        std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
+        std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
         let mut bus = SystemBus::new();
         let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
-        std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
+        std::env::remove_var("LABWIRED_ESP32S3_MMU_XIP");
+        // Seed physical flash and map virt page 0 → phys page 0 for both windows.
         wiring.icache_backing.lock().unwrap()[0] = 0xCA;
-        wiring.dcache_backing.lock().unwrap()[0] = 0xFE;
-        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache alias");
-        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xFE, "D-cache alias");
+        // Program MMU entry 0 (IROM 0x4200_0000 and DROM 0x3C00_0000 share
+        // entry id 0 under the S3 32 MiB window mask for these bases' low bits).
+        // S3 entry: phys page in low bits; valid when invalid_bit clear.
+        bus.write_u32(0x600C_5000, 0).unwrap(); // entry 0 → phys 0, valid
+        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache via MMU");
+        // Same physical byte via D-cache window (shared backing).
+        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xCA, "D-cache via MMU");
     }
 
     /// `configure_xtensa_esp32` + `attach_esp32_external_devices` must register
@@ -519,6 +563,7 @@ mod tests {
             serde_yaml::Value::String("GPIO5".to_string()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-esp32-epaper".to_string(),
@@ -529,10 +574,13 @@ mod tests {
                 id: "epaper".to_string(),
                 r#type: "ssd1680_tricolor_290".to_string(),
                 connection: "spi3".to_string(),
+                channel: None,
+                route: Default::default(),
                 config,
             }],
             board_io: vec![],
             debug_uart: None,
+            wifi_ap: None,
         };
 
         let mut bus = SystemBus::new();
@@ -591,6 +639,7 @@ mod tests {
             serde_yaml::Value::String("GPIO10".to_string()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-esp32s3-epaper".to_string(),
@@ -601,10 +650,13 @@ mod tests {
                 id: "epaper".to_string(),
                 r#type: "ssd1680_tricolor_290".to_string(),
                 connection: "spi3_s3".to_string(),
+                channel: None,
+                route: Default::default(),
                 config,
             }],
             board_io: vec![],
             debug_uart: None,
+            wifi_ap: None,
         };
 
         // Register spi3_s3 exactly as the production S3 bring-up does
@@ -643,6 +695,7 @@ mod tests {
         use labwired_config::{ExternalDevice, SystemManifest};
 
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test".to_string(),
@@ -653,10 +706,13 @@ mod tests {
                 id: "epaper".to_string(),
                 r#type: "ssd1680_tricolor_290".to_string(),
                 connection: "spi99".to_string(), // does not exist
+                channel: None,
+                route: Default::default(),
                 config: std::collections::HashMap::new(),
             }],
             board_io: vec![],
             debug_uart: None,
+            wifi_ap: None,
         };
 
         let mut bus = SystemBus::new();

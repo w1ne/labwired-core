@@ -6,6 +6,7 @@
 
 //! `labwired run` + interactive (gdb/dap) drivers across ARM / RISC-V / Xtensa.
 
+use crate::artifacts::{write_interactive_snapshot, InteractiveSnapshotInputs};
 use crate::*;
 
 /// Export the bus trace (logic analyzer) captured by `bus`, if
@@ -67,8 +68,10 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         chip: args.chip.to_string_lossy().into_owned(),
         memory_overrides: Default::default(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         walk_deleted: Some(false),
     };
@@ -78,6 +81,15 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
     // distinct DHCP leases, and exchange traffic over one virtual AP.
     if args.rom_boot && std::env::var("LABWIRED_WIFI_DUAL").is_ok() {
         return run_two_c3_wifi(&args, &chip, &manifest);
+    }
+
+    // Single-station WiFi run (env LABWIRED_WIFI_SOLO): one C3 on the shared
+    // VirtualWifi medium — associates, gets a DHCP lease, and reaches the AP's
+    // DHCP + HTTP servers (the LBC3.1 stats-device demo). Uses its own minimal
+    // step loop like the dual path; bolting medium mode onto the standard run
+    // loop below does not keep the MAC resident (auth never completes).
+    if args.rom_boot && std::env::var("LABWIRED_WIFI_SOLO").is_ok() {
+        return crate::run_one_c3_wifi(&args, &chip, &manifest);
     }
 
     let mut bus = match SystemBus::from_config(&chip, &manifest) {
@@ -119,6 +131,12 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         machine
     };
 
+    // Keep the RISC-V fast-boot path observable through the same UART capture
+    // mechanism as ARM/Xtensa. This is an output transport, not a timing or
+    // CPU-model shortcut: the C3 UART peripheral still produces every byte.
+    let uart_sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    machine.bus.attach_uart_tx_sink(uart_sink, true);
+
     let break_at: Vec<u32> = args
         .break_at
         .iter()
@@ -148,6 +166,21 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
     let bridge = std::env::var("LABWIRED_WIFI_BRIDGE").is_ok()
         || std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
     let dhcp_trace = std::env::var("LABWIRED_DHCP_TRACE").is_ok();
+
+    // ── Non-instrumented hot path: batch through Machine::run ────────────────
+    // When nothing needs per-instruction visibility (no --break-at, no WiFi
+    // bridge, no DHCP trace), run in batches through `Machine::run` so the
+    // RV32IMC wasm-JIT can engage (it only compiles multi-instruction batches,
+    // and its correctness gate refuses to run when observers/breakpoints/etc.
+    // are present). The debug / bridge / dhcp paths below keep single-stepping
+    // via `machine.step()`, which pins the batch to one instruction and so keeps
+    // the JIT correctly OFF — preserving every existing break/halt-trail/inject
+    // behavior. Byte-identity of the batched (JIT-on) path to the single-step
+    // interpreter is proven by tests/riscv_jit_c3_oled_differential.rs.
+    if !debug && !bridge && !dhcp_trace {
+        return run_firmware_riscv_batched(machine, &args, limit);
+    }
+
     // Find the behavioral wifi_mac model by type (the declarative chip-yaml
     // "wifi_mac" shares the name; routing uses ours via greatest-start-wins, but
     // name lookup would return the declarative one).
@@ -303,6 +336,87 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
                 eprintln!("[trail] {}", trail.join(" -> "));
             }
             break;
+        }
+    }
+
+    export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    ExitCode::from(EXIT_PASS)
+}
+
+/// The RISC-V (ESP32-C3) non-instrumented hot path: run in batches through
+/// `Machine::run` so the RV32IMC wasm-JIT (core feature `jit`, CLI feature
+/// `jit-core`) can engage on multi-instruction batches. Only reached when no
+/// per-instruction instrumentation (--break-at / WiFi bridge / DHCP trace) is
+/// active, so the JIT's correctness gate (no observers, no push tap, not
+/// cycle-accurate) is satisfied and compiled blocks retire atomically.
+///
+/// The JIT is byte-identical to the single-step interpreter — proven on the
+/// real C3 OLED lab by tests/riscv_jit_c3_oled_differential.rs. It is default-ON
+/// here; set `LABWIRED_RISCV_JIT=0` to force the interpreter (the escape hatch).
+/// Preserves the single-step path's semantics: EXIT_PASS on completion, a halt
+/// ends the run, and the bus trace is exported if requested.
+fn run_firmware_riscv_batched(
+    mut machine: labwired_core::Machine<labwired_core::cpu::RiscV>,
+    args: &RunArgs,
+    limit: u64,
+) -> ExitCode {
+    use labwired_core::bus::RECOMMENDED_TICK_INTERVAL;
+    use labwired_core::DebugControl;
+
+    // Escape hatch: LABWIRED_RISCV_JIT=0 forces the interpreter (default on).
+    let jit_on = std::env::var("LABWIRED_RISCV_JIT").as_deref() != Ok("0");
+
+    // The C3 is walk-deletable at rom-boot: its peripherals are scheduler-driven,
+    // so batching at RECOMMENDED_TICK_INTERVAL is byte-identical to
+    // interval-1 while giving the JIT a batch window wide enough to retire whole
+    // basic blocks between peripheral ticks (see the differential gate). Set on
+    // BOTH machine.config and machine.bus.config, exactly as the gate does.
+    machine.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    machine.bus.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    machine.config.riscv_jit_enabled = jit_on;
+    machine.bus.config.riscv_jit_enabled = jit_on;
+
+    // Chunk the run so a u64::MAX `limit` (no --max-steps) stays bounded per
+    // `Machine::run` call. `Machine::run` batches internally at the tick
+    // interval; we only cap the total instruction budget here.
+    const CHUNK: u32 = 4_000_000;
+    let mut ran: u64 = 0;
+    while ran < limit {
+        let n = if limit == u64::MAX {
+            CHUNK
+        } else {
+            CHUNK.min((limit - ran) as u32)
+        };
+        let before = machine.step_profile().cpu_instructions;
+        match machine.run(Some(n)) {
+            Ok(_) => {}
+            Err(e) => {
+                // A halt is the normal end of a fixture run; the fault PC/reason
+                // is only surfaced on the debug (--break-at) path.
+                tracing::debug!("labwired-riscv (batched): halt: {e}");
+                break;
+            }
+        }
+        let delta = machine.step_profile().cpu_instructions - before;
+        ran += delta;
+        // No forward progress (idle with no fast-forward budget): stop rather
+        // than spin re-issuing empty batches up to `limit`.
+        if delta == 0 {
+            break;
+        }
+    }
+
+    // Opt-in non-vacuity / diagnostic: prove the JIT actually compiled and ran
+    // hot blocks on this run (LABWIRED_JIT_STATS=1). Only meaningful in a
+    // `jit-core` build; the accessor does not exist otherwise.
+    #[cfg(feature = "jit-core")]
+    if std::env::var("LABWIRED_JIT_STATS").is_ok() {
+        match machine.cpu.jit_stats() {
+            Some(s) => eprintln!(
+                "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
+                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+            ),
+            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
         }
     }
 
@@ -541,6 +655,7 @@ pub(crate) fn run_firmware(args: RunArgs) -> ExitCode {
                 stack_top_fallback: 0x3FCD_FFF0,
                 icache_backing: Some(wiring.icache_backing),
                 dcache_backing: Some(wiring.dcache_backing),
+                factory_flash_base: None,
             },
         ) {
             Ok(b) => b,
@@ -867,7 +982,24 @@ pub(crate) fn run_interactive(cli: Cli) -> ExitCode {
     };
 
     let system_path = cli.system.clone();
-    let bus = match labwired_core::system::builder::build_system_bus(system_path.as_deref()) {
+    let resolved_system = match system_path
+        .as_deref()
+        .map(labwired_config::ResolvedSystem::from_manifest_file)
+        .transpose()
+    {
+        Ok(s) => s,
+        Err(e) => {
+            emit_error(
+                cli.json,
+                "ConfigError",
+                format!("Failed to load system manifest: {e:#}"),
+                None,
+                EXIT_CONFIG_ERROR,
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let bus = match labwired_core::system::builder::build_system_bus(resolved_system.as_ref()) {
         Ok(bus) => bus,
         Err(e) => {
             emit_error(
@@ -908,11 +1040,8 @@ pub(crate) fn run_interactive(cli: Cli) -> ExitCode {
     let cpu_arch = if let Some(sys_path) = &system_path {
         match labwired_config::SystemManifest::from_file(sys_path) {
             Ok(manifest) => {
-                let chip_path = sys_path
-                    .parent()
-                    .unwrap_or_else(|| Path::new("."))
-                    .join(&manifest.chip);
-                match labwired_config::ChipDescriptor::from_file(&chip_path) {
+                let chip_dir = sys_path.parent().unwrap_or_else(|| Path::new("."));
+                match labwired_config::ChipDescriptor::resolve(&manifest.chip, chip_dir) {
                     Ok(c) => c.arch,
                     Err(e) => {
                         emit_error(
@@ -920,7 +1049,7 @@ pub(crate) fn run_interactive(cli: Cli) -> ExitCode {
                             "ConfigError",
                             format!("Failed to parse chip descriptor: {:#}", e),
                             Some(serde_json::json!({
-                                "chip_path": chip_path.display().to_string(),
+                                "chip": manifest.chip.clone(),
                             })),
                             EXIT_CONFIG_ERROR,
                         );
@@ -1043,13 +1172,87 @@ pub(crate) fn run_firmware_arm(args: &RunArgs, chip_yaml: &str) -> ExitCode {
     let mut machine = Machine::new(cpu, bus);
 
     // Load ELF.
-    let image = match labwired_loader::load_elf(&args.firmware) {
+    let mut image = match labwired_loader::load_elf(&args.firmware) {
         Ok(img) => img,
         Err(e) => {
             eprintln!("error: cannot load firmware ELF {:?}: {e}", args.firmware);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
+
+    // Multi-image flash composition (`--flash-image <path>@<hex-offset>`,
+    // repeatable): additional pieces (SoftDevice, bootloader, ...) placed at
+    // explicit absolute addresses alongside `--firmware`. Only touched when
+    // at least one `--flash-image` is given, so the single-image path above
+    // is completely unaffected when it is not.
+    if !args.flash_image.is_empty() {
+        use labwired_loader::multi_image::{
+            check_no_overlaps, elf_alloc_sections, load_flash_piece, parse_flash_image_arg,
+        };
+
+        // Re-derive the primary --firmware's own segments from its ELF
+        // section headers (SHF_ALLOC sections with real bytes) rather than
+        // the PT_LOAD-based `image.segments` from `load_elf` above: some
+        // toolchains (e.g. Adafruit's nRF52 core, whose linker scripts
+        // request 64KB PT_LOAD alignment for DFU) emit a PT_LOAD segment
+        // whose p_paddr is rounded down below the real code, backed on disk
+        // by nothing but ELF-header bytes and zero padding — loading that
+        // via p_paddr would plant that padding over a legitimately-owned
+        // range (e.g. the SoftDevice below the app). See
+        // `elf_alloc_sections` for the full rationale. Only applies when
+        // `--flash-image` is in play; the single-image path above is
+        // unaffected.
+        let firmware_bytes = match std::fs::read(&args.firmware) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!(
+                    "error: cannot re-read firmware ELF {:?}: {e}",
+                    args.firmware
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+        image.segments = match elf_alloc_sections(&firmware_bytes) {
+            Ok(secs) => secs
+                .into_iter()
+                .map(|(addr, data)| labwired_core::memory::Segment {
+                    start_addr: addr,
+                    data,
+                })
+                .collect(),
+            Err(e) => {
+                eprintln!(
+                    "error: cannot extract ALLOC sections from firmware ELF {:?}: {e:#}",
+                    args.firmware
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+
+        for arg in &args.flash_image {
+            let (path, offset) = match parse_flash_image_arg(arg) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("error: invalid --flash-image {arg:?}: {e:#}");
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            };
+            let piece = match load_flash_piece(&path, offset) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("error: cannot load --flash-image {arg:?}: {e:#}");
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            };
+            image.segments.extend(piece.segments);
+        }
+
+        if let Err(e) = check_no_overlaps(&image.segments) {
+            eprintln!("error: --flash-image composition failed: {e:#}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    }
+
     if let Err(e) = machine.load_firmware(&image) {
         eprintln!("error: cannot map firmware into bus: {e}");
         return ExitCode::from(EXIT_RUNTIME_ERROR);
@@ -1057,7 +1260,14 @@ pub(crate) fn run_firmware_arm(args: &RunArgs, chip_yaml: &str) -> ExitCode {
 
     // Run the step loop.
     let limit = args.max_steps.unwrap_or(u64::MAX);
-    for _ in 0..limit {
+    let dbg_trace: u64 = std::env::var("LABWIRED_ARM_TRACE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    for i in 0..limit {
+        if dbg_trace != 0 && i % dbg_trace == 0 {
+            eprintln!("[arm-trace] step {i} pc={:#010x}", machine.cpu.get_pc());
+        }
         match machine.step() {
             Ok(()) => {}
             Err(e) => {

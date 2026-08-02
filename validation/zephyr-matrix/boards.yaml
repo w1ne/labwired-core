@@ -1,0 +1,118 @@
+# Zephyr × LabWired board matrix
+# board: west -b target (Zephyr 3.7 board name / qualifier)
+# system: path under configs/systems/
+# chip: configs/chips stem (for docs)
+# max_steps: sim budget (sleep levels need more than bare hello)
+
+levels:
+  - id: L0_hello
+    sample: samples/L0_hello
+    marker: LW_Z0_OK
+    max_steps: 2000000
+    notes: "main() + printk after kernel boot"
+
+  - id: L1_sleep
+    sample: samples/L1_sleep
+    marker: LW_Z1_OK
+    # G474/H563 need ~15–25M steps for first k_msleep(50) under sim tick rates
+    max_steps: 30000000
+    notes: "k_msleep loop — kernel tick must advance"
+
+  - id: L2_blink
+    sample: samples/L2_blink
+    marker: LW_Z2_OK
+    max_steps: 12000000
+    notes: "GPIO led0 toggle + k_msleep + serial"
+
+  - id: L3_i2c_sensor
+    sample: samples/L3_i2c_sensor
+    marker: LW_Z3_OK
+    max_steps: 15000000
+    notes: "I2C probe INA219 @ 0x40 (system external_devices)"
+
+boards:
+  # systems/: matrix-local YAML with INA219 kit; chip path → configs/chips/
+  - id: stm32f103
+    chip: stm32f103
+    system: systems/stm32f103.yaml
+    zephyr_board: nucleo_f103rb
+    family: stm32
+
+  - id: stm32f401
+    chip: stm32f401
+    system: systems/stm32f401.yaml
+    zephyr_board: nucleo_f401re
+    family: stm32
+
+  - id: stm32l073
+    chip: stm32l073
+    system: systems/stm32l073.yaml
+    zephyr_board: nucleo_l073rz
+    family: stm32
+    # L4 I2C Wire.begin hang analogue — Zephyr i2c_write may still need PE/clock
+
+  - id: stm32l476
+    chip: stm32l476
+    system: systems/stm32l476.yaml
+    zephyr_board: nucleo_l476rg
+    family: stm32
+
+  - id: stm32g474
+    chip: stm32g474re
+    system: systems/stm32g474.yaml
+    zephyr_board: nucleo_g474re
+    family: stm32
+
+  - id: stm32h563
+    chip: stm32h563
+    system: systems/stm32h563.yaml
+    zephyr_board: nucleo_h563zi
+    family: stm32
+
+  - id: stm32wb55
+    chip: stm32wb55
+    system: systems/stm32wb55.yaml
+    zephyr_board: nucleo_wb55rg
+    family: stm32
+
+  - id: stm32wba52
+    chip: stm32wba52
+    system: systems/stm32wba52.yaml
+    zephyr_board: nucleo_wba52cg
+    family: stm32
+
+  - id: rp2040
+    chip: rp2040
+    system: systems/rp2040.yaml
+    zephyr_board: rpi_pico
+    family: rp2040
+    max_steps_bonus: 4000000  # USB/boot bring-up budget headroom
+
+  - id: nrf5340
+    chip: nrf5340
+    system: systems/nrf5340.yaml
+    zephyr_board: nrf5340dk/nrf5340/cpuapp
+    family: nordic
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "nRF5340 chip model has no I2C/TWIM peripheral yet"
+
+  - id: kw41z
+    chip: mkw41z4
+    system: systems/kw41z.yaml
+    zephyr_board: frdm_kw41z
+    family: nxp
+
+  - id: nrf52840
+    chip: nrf52840
+    system: systems/nrf52840.yaml
+    zephyr_board: nrf52840dk/nrf52840
+    family: nordic
+    notes: "INA219 on i2c0 (TWIM0 / arduino_i2c)"
+
+  - id: nrf52832
+    chip: nrf52832
+    system: systems/nrf52832.yaml
+    zephyr_board: nrf52dk/nrf52832
+    family: nordic
+    notes: "INA219 on twi1 (TWIM1 model)"

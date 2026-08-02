@@ -29,7 +29,7 @@
 //! This is the SimNet-facing endpoint of the bridge; the frame source/sink (a
 //! frame-level `VirtualAp`) pushes/pulls via `queue_rx_frame` / `take_tx_frames`.
 
-use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
+use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
 
@@ -38,6 +38,25 @@ use std::sync::atomic::AtomicU32;
 /// the driver's reads relative to the buffer (RE'ing the rx-control header
 /// format). 0 = no delivery yet.
 pub static RX_DBG_BUF: AtomicU32 = AtomicU32::new(0);
+
+/// Process-cached `LABWIRED_RXBUF_TRACE` gate. The trace guard sits on the
+/// hottest path in the engine (`Bus::read_u32` — every load instruction), and
+/// `std::env::var` is a real syscall-backed lookup; checking it per read cost
+/// measurable native/wasm throughput (profiling artifact found on the C3 OLED
+/// lab). The env var is read ONCE per process — set it before launch, as with
+/// any debug trace.
+pub(crate) fn rxbuf_trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("LABWIRED_RXBUF_TRACE").is_ok())
+}
+
+/// Device-cycle interval between medium-mode AP beacons. Matches the previous
+/// call-counter cadence (one beacon per 2,000,000 per-cycle ticks) but is now
+/// expressed in device cycles so it holds under CPU idle fast-forward, where
+/// `tick_with_bus` no longer runs once per cycle. At 160 MHz this is ~12.5 ms —
+/// well inside the STA's beacon-timeout, and far shorter than association /
+/// DHCP / socket timeouts, so association survives fast-forward.
+const MEDIUM_BEACON_INTERVAL_CYCLES: u64 = 2_000_000;
 
 const MAC_READY: u64 = 0xD14; // bit0 polled by hal_init
 const RX_RING_BASE: u64 = 0x88; // driver writes the RX descriptor-list head here
@@ -121,8 +140,32 @@ pub struct Esp32c3WifiMac {
     /// it transmits — so we needn't predict the eFuse byte order. Used to pull
     /// this station's medium inbox and to beacon it.
     medium_mac: Option<[u8; 6]>,
-    /// Tick counter for periodic beacon injection in medium mode.
-    medium_beacon_ctr: u32,
+    /// Next DEVICE cycle at which to inject a periodic beacon in medium mode.
+    /// Keyed on `clock.now()` (not a tick-call counter) so the beacon cadence is
+    /// invariant to how often `tick_with_bus` runs — per cycle in normal
+    /// execution, once per idle-poll quantum under CPU idle fast-forward. 0 means
+    /// "not yet armed"; armed lazily on the first medium tick.
+    medium_next_beacon_cycle: u64,
+    /// Bus-published cycle clock (walk-free plan). `Some` once
+    /// [`SystemBus::add_peripheral`](crate::bus::SystemBus) attaches it (under
+    /// the `event-scheduler` feature); its presence flips the model onto the
+    /// event-scheduler drive mode. In that mode the per-cycle legacy walk skips
+    /// this peripheral: the MAC interrupt LEVEL (source 0, asserted while an
+    /// event is pending) is exported through [`Self::matrix_irq_sources`] and
+    /// re-derived by the bus (`refresh_esp32c3_sched_sources`, run on the event
+    /// path and — crucially, on a walk-DELETED bus — at the MMIO write choke so
+    /// the level de-asserts after `EVENT_CLR`), rather than re-emitted every
+    /// tick by [`Self::tick`]. The descriptor-ring PUMP is orthogonal: it rides
+    /// the write-armed, self-perpetuating bus-tick path
+    /// ([`Self::needs_bus_tick`]), so it costs nothing while WiFi is idle. `None`
+    /// (feature off, a hand-built bus, or the differential's
+    /// [`Self::force_legacy_walk`]) keeps the legacy per-cycle walk. Not
+    /// serialized — re-attached by the bus.
+    clock: Option<CycleClock>,
+    /// The shared WiFi medium this MAC submits to / pulls its inbox from in
+    /// medium mode. `new()` binds the process-global default; `with_wifi` binds
+    /// an explicit per-group bus (MACs sharing a bus form one virtual network).
+    wifi: super::virtual_wifi::VirtualWifiBus,
 }
 
 impl Default for Esp32c3WifiMac {
@@ -143,8 +186,37 @@ impl Esp32c3WifiMac {
             trace_seq: 0,
             medium_mode: false,
             medium_mac: None,
-            medium_beacon_ctr: 0,
+            medium_next_beacon_cycle: 0,
+            clock: None,
+            wifi: super::virtual_wifi::default_medium(),
         }
+    }
+
+    /// Build a MAC bound to an explicit WiFi bus. MACs sharing a bus form one
+    /// virtual network (same AP, DHCP, STA↔STA routing); MACs on different buses
+    /// are isolated. Prefer over `new()`'s process-global default.
+    pub fn with_wifi(wifi: super::virtual_wifi::VirtualWifiBus) -> Self {
+        Self {
+            wifi,
+            ..Self::new()
+        }
+    }
+
+    /// True when the event scheduler owns this block's interrupt-level drive
+    /// (feature on AND bus clock attached). One predicate so the walk and
+    /// scheduler drive modes can never mix, mirroring the C3 SARADC/I²C/LEDC
+    /// migrations.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gates to build the reference config
+    /// from the same bus assembly (mirrors `Esp32c3ApbSarAdc::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 
     /// Attach this MAC to the shared [`virtual_wifi`] medium. Enables medium
@@ -153,6 +225,15 @@ impl Esp32c3WifiMac {
     /// ring each tick. Two C3 instances both attached share one virtual AP.
     pub fn attach_to_medium(&mut self) {
         self.medium_mode = true;
+    }
+
+    /// Rebind this MAC to an explicit WiFi bus AFTER construction (the browser
+    /// path builds the machine first, then attaches the configured medium once
+    /// the manifest's `wifi_ap` is known). Does not touch medium mode or the
+    /// learned `medium_mac` — pair with [`Self::attach_to_medium`], exactly as
+    /// the CLI's post-build attach loop does.
+    pub fn set_wifi_bus(&mut self, bus: super::virtual_wifi::VirtualWifiBus) {
+        self.wifi = bus;
     }
 
     /// Record a captured frame in the analyzer ring buffer (oldest dropped at
@@ -245,7 +326,7 @@ impl Esp32c3WifiMac {
                 if self.medium_mac.is_none() && sa != [0u8; 6] {
                     self.medium_mac = Some(sa);
                 }
-                super::virtual_wifi::submit(sa, &raw);
+                self.wifi.submit(sa, &raw);
             }
         } else {
             self.tx_out.push_back(raw);
@@ -346,7 +427,7 @@ impl Esp32c3WifiMac {
                 self.regs[(0x8c / 4) as usize] = next;
                 self.set_event(EVENT_RX_DONE);
                 RX_DBG_BUF.store(buf, std::sync::atomic::Ordering::Relaxed);
-                if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+                if rxbuf_trace_enabled() {
                     eprintln!(
                         "[rxinj] desc={desc:#010x} buf={buf:#010x} total={total} (hdr48+frame{})",
                         frame.len()
@@ -428,8 +509,46 @@ impl Peripheral for Esp32c3WifiMac {
         Ok(())
     }
 
+    /// Walk-free plan (the descriptor-ring PUMP axis): the bus runs
+    /// [`Self::tick_with_bus`] only while WiFi is actually up, so an idle MAC
+    /// (WiFi off / unconfigured — the OLED demo never enables WiFi) arms NOTHING
+    /// and drops out of the bus-tick set. This is what lets a walk-DELETED C3
+    /// bus take the trivial per-cycle path (`per_cycle_tick_is_trivial` requires
+    /// an empty `bus_tick_indices`).
+    ///
+    /// Each condition is a WRITE-ARMED / setup flag re-consulted by the bus's
+    /// existing `refresh_bus_tick_index` (called after every MMIO write and
+    /// after every `tick_with_bus`), so no new event machinery is needed:
+    ///
+    /// * `rx_ring != 0` — the driver enabled the RX ring by writing its head to
+    ///   `0x88` (an MMIO write, so it arms the pump through the write choke) and
+    ///   the ring stays live for the whole WiFi session. Keying RX on the ring
+    ///   (NOT `pending_rx`) is deliberate: `queue_rx_frame` is a non-MMIO
+    ///   bridge/medium injection that can't refresh the index — but a frame can
+    ///   only be delivered once the ring exists, and once it does the MAC is
+    ///   already resident, so externally-queued frames are pumped without any
+    ///   extra re-arm. RX-down (ring never enabled) ⇒ idle.
+    /// * `!pending_tx.is_empty()` — a driver PLCP0 kick write (`0xC000_0000`
+    ///   bits) queued a frame to transmit; the pump drains it and drops out.
+    /// * `medium_mode` — a two-C3 medium station polls its shared inbox and
+    ///   beacons each tick; the toggle is one-time setup (`attach_to_medium`),
+    ///   which rebuilds the tick index once.
+    ///
+    /// The set is self-perpetuating: after every `tick_with_bus` the bus calls
+    /// `refresh_bus_tick_index`, so the pump keeps ticking until it has drained.
     fn needs_bus_tick(&self) -> bool {
-        true
+        self.rx_ring != 0 || !self.pending_tx.is_empty() || self.medium_mode
+    }
+
+    /// Medium mode services an EXTERNAL shared-AP inbox and beacons the station;
+    /// its frames would be starved for a whole CPU-idle skip window without a
+    /// bounded poll. Opt in so idle fast-forward caps its skip to a poll quantum
+    /// and runs the bus-tick pass at the deadline. The beacon is device-cycle
+    /// keyed (see [`MEDIUM_BEACON_INTERVAL_CYCLES`]), so the varying tick cadence
+    /// is safe. Non-medium single-device runs (CLI bridge) stay false — their RX
+    /// is driven by explicit `queue_rx_*` calls, not a live medium.
+    fn idle_poll_bus_tick(&self) -> bool {
+        self.medium_mode
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
@@ -440,11 +559,25 @@ impl Peripheral for Esp32c3WifiMac {
         if self.medium_mode {
             if let Some(mac) = self.medium_mac {
                 // Periodic beacon so the scanning station keeps seeing the AP.
-                self.medium_beacon_ctr = self.medium_beacon_ctr.wrapping_add(1);
-                if self.medium_beacon_ctr % 2_000_000 == 0 {
-                    super::virtual_wifi::queue_beacon(mac, 1);
+                // Cadence is keyed on the DEVICE cycle (`clock.now()`), not on
+                // tick-call count, so it stays regular even when idle
+                // fast-forward makes this tick run once per poll quantum instead
+                // of once per cycle. The `while` catches up if a single skip
+                // crossed more than one beacon boundary.
+                let now = self.clock.as_ref().map(|c| c.now()).unwrap_or(0);
+                if self.medium_next_beacon_cycle == 0 {
+                    self.medium_next_beacon_cycle =
+                        now.saturating_add(MEDIUM_BEACON_INTERVAL_CYCLES);
                 }
-                for frame in super::virtual_wifi::take_inbox(mac) {
+                while now >= self.medium_next_beacon_cycle {
+                    self.wifi.queue_beacon(mac, 1);
+                    self.medium_next_beacon_cycle = self
+                        .medium_next_beacon_cycle
+                        .saturating_add(MEDIUM_BEACON_INTERVAL_CYCLES);
+                }
+                // NAT sockets (real internet) → station inbox before we drain.
+                self.wifi.poll();
+                for frame in self.wifi.take_inbox(mac) {
                     self.pending_rx.push_back(frame);
                 }
             }
@@ -452,10 +585,14 @@ impl Peripheral for Esp32c3WifiMac {
         self.deliver_one_rx(bus);
     }
 
+    /// LEGACY per-cycle walk path (the interrupt-LEVEL axis): re-assert the MAC
+    /// interrupt source while an event is pending so `wDev_ProcessFiq` runs and
+    /// clears it via `EVENT_CLR`. In scheduler mode ([`Self::uses_scheduler`]
+    /// true) the walk skips this peripheral and the bus re-derives the level
+    /// from [`Self::matrix_irq_sources`] instead; this reporter is a pure no-op
+    /// on state, so a stray call is harmless. Matches the SYSTIMER/SARADC level
+    /// delivery model.
     fn tick(&mut self) -> PeripheralTickResult {
-        // Level-sensitive: while an RX (or other) event is pending, keep
-        // asserting the MAC interrupt source so wDev_ProcessFiq runs and clears
-        // it via EVENT_CLR. Matches the SYSTIMER alarm delivery model.
         if self.event() != 0 {
             PeripheralTickResult {
                 explicit_irqs: Some(vec![MAC_INTR_SOURCE]),
@@ -472,6 +609,46 @@ impl Peripheral for Esp32c3WifiMac {
 
     fn legacy_tick_dynamic(&self) -> bool {
         true
+    }
+
+    /// Walk-free plan: driven by the event scheduler once the bus has attached
+    /// its cycle clock (production `add_peripheral` always does, under the
+    /// `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral's interrupt-level reporter; the MAC level is exported through
+    /// [`Self::matrix_irq_sources`] and re-derived by the bus. Without a clock
+    /// (feature off, a hand-built bus, or `force_legacy_walk`) it stays on the
+    /// legacy walk so those callers keep the old exact semantics.
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    /// The MAC interrupt LEVEL — re-asserting source 0 every walk tick while an
+    /// event is pending — is fully reproduced in scheduler mode by the level
+    /// export ([`Self::matrix_irq_sources`]) + the write-choke re-derivation, so
+    /// the walk is unnecessary there. The descriptor-ring pump does NOT need the
+    /// legacy walk either: it rides the write-armed bus-tick path
+    /// ([`Self::needs_bus_tick`]), which is orthogonal to the walk. In legacy
+    /// mode (no clock / feature off) the walk does real level work and the
+    /// conservative `true` stands.
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the MAC source (0) while an event is pending —
+    /// the exact condition [`Self::tick`] pushes on the legacy walk. In
+    /// scheduler mode the walk no longer re-emits it, so the bus re-derives the
+    /// level from here (`refresh_esp32c3_sched_sources`, polled on the event
+    /// path and at the MMIO write choke) so the level-sensitive IRQ stays routed
+    /// and de-asserts the tick/write after firmware clears the event via
+    /// `EVENT_CLR`.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.event() != 0 {
+            out.push(MAC_INTR_SOURCE);
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -598,6 +775,66 @@ mod tests {
         assert_eq!(
             mac.tick().explicit_irqs.as_deref(),
             Some(&[MAC_INTR_SOURCE][..])
+        );
+    }
+
+    #[test]
+    fn idle_poll_bus_tick_tracks_medium_mode() {
+        // Only a medium-attached station needs the CPU idle fast-forward path to
+        // keep pumping it (its inbox is fed by an external AP). A single-device
+        // MAC drains RX from explicit `queue_rx_*` calls, so it must NOT shorten
+        // the idle window — doing so would needlessly slow every non-medium run.
+        let mut m = Esp32c3WifiMac::new();
+        assert!(
+            !m.idle_poll_bus_tick(),
+            "single-device MAC must not force bounded idle polling"
+        );
+        m.attach_to_medium();
+        assert!(
+            m.idle_poll_bus_tick(),
+            "medium-mode MAC must opt into bounded idle polling so fast-forward \
+             cannot starve its inbox and break association"
+        );
+    }
+
+    #[test]
+    fn beacon_cadence_is_device_cycle_keyed_not_call_count() {
+        // Regression for the WiFi-under-fast-forward fix: the AP beacon fires on
+        // DEVICE cycles, so the number a station sees over a fixed cycle span is
+        // invariant to how often `tick_with_bus` runs. Idle fast-forward calls it
+        // once per poll quantum instead of once per cycle; if the cadence were
+        // keyed on call count (as it was), beacons would all but stop and the
+        // station would deauth.
+        fn beacons_over(call_stride: u64, total_cycles: u64) -> usize {
+            let wifi = super::super::virtual_wifi::VirtualWifiBus::new();
+            let mut m = Esp32c3WifiMac::with_wifi(wifi);
+            let clock = CycleClock::default();
+            m.medium_mode = true;
+            m.medium_mac = Some([0x02, 0, 0, 0, 0, 0x02]);
+            m.clock = Some(clock.clone());
+            let mut bus = SystemBus::new();
+            // No RX ring configured (rx_ring == 0), so `deliver_one_rx` is a
+            // no-op and every beacon the tick pulls from the medium stays parked
+            // in `pending_rx` — a direct count of beacons injected.
+            let mut cyc = 0u64;
+            while cyc <= total_cycles {
+                clock.publish(cyc);
+                m.tick_with_bus(&mut bus);
+                cyc += call_stride;
+            }
+            m.pending_rx.len()
+        }
+
+        // ~10 beacons expected over 20M cycles at a 2M-cycle interval.
+        let dense = beacons_over(1_000, 20_000_000); // ~per-cycle execution
+        let sparse = beacons_over(8_000, 20_000_000); // ~one idle poll quantum
+        assert_eq!(
+            dense, sparse,
+            "beacon count must depend on device cycles, not tick-call frequency"
+        );
+        assert!(
+            dense >= 9,
+            "expected ~10 beacons over 20M cycles / {MEDIUM_BEACON_INTERVAL_CYCLES}-cycle interval, got {dense}"
         );
     }
 }

@@ -186,6 +186,8 @@ impl CanonicalConfig {
     /// All TS emitters are ported: legacy I²C devices ([`emit_legacy_i2c_device`]),
     /// GPIO/ADC `board_io` from point-to-point wires ([`emit_board_io_from_wires`]),
     /// SPI devices ([`emit_spi_device`]), ultrasonic ([`emit_ultrasonic`]),
+    /// dht22 ([`emit_dht22`]),
+    /// the direct-drive seven-segment ([`emit_seven_segment`]),
     /// pcd8544 ([`emit_pcd8544`]), sn74hc165 ([`emit_sn74hc165`]), iolink-master
     /// ([`emit_iolink_master`]), neo6m-gps ([`emit_neo6m_gps`]) and the CAN
     /// diagnostic tester ([`emit_can_diagnostic_tool`]). They are invoked in the
@@ -274,10 +276,35 @@ impl CanonicalConfig {
                 }
             };
 
-            // 1. Ultrasonic (HC-SR04).
+            // The GPIO / pin-timing family (ultrasonic, dht22, rotary, keypad)
+            // is emitted from its `configs/devices/*.yaml` descriptor's `emit:`
+            // block via one interpreter — the same spec the TS emitter reads.
+            // The canvas part type maps to the descriptor type (e.g. part
+            // `ultrasonic` → descriptor `hc-sr04`).
             for part in non_mcu() {
-                if part.r#type == "ultrasonic" {
-                    let (ext, bio) = emit_ultrasonic(&board, &wires, mcu_id, part);
+                let desc_type = match part.r#type.as_str() {
+                    "ultrasonic" => Some("hc-sr04"),
+                    "dht22" => Some("dht22"),
+                    "rotary-encoder" => Some("rotary_encoder"),
+                    "keypad" => Some("keypad"),
+                    _ => None,
+                };
+                if let Some(desc_type) = desc_type {
+                    let (ext, bio) = emit_declarative(desc_type, &board, &wires, mcu_id, part);
+                    push(ext, bio);
+                }
+            }
+            // 1b. Direct-drive seven-segment (nine GPIO pins).
+            for part in non_mcu() {
+                if part.r#type == "seven-segment" {
+                    let (ext, bio) = emit_seven_segment(&wires, mcu_id, &part.id);
+                    push(ext, bio);
+                }
+            }
+            // 1b2. NeoPixel / WS2812 addressable strip (single GPIO data wire).
+            for part in non_mcu() {
+                if part.r#type == "neopixel" || part.r#type == "ws2812" {
+                    let (ext, bio) = emit_neopixel(&board, &wires, mcu_id, part);
                     push(ext, bio);
                 }
             }
@@ -350,7 +377,7 @@ impl CanonicalConfig {
             &self.parts,
         ));
 
-        Ok(build_system_yaml(&external_devices, &board_io))
+        Ok(build_system_yaml(&external_devices, &board_io, &board))
     }
 }
 
@@ -401,11 +428,19 @@ const STM32_BOARDS: &[&str] = &[
     "stm32f401cdu6",
     "stm32l476",
     "stm32h563",
+    "stm32h735",
 ];
 
 /// SPI display/sensor devices addressed by their own emitter
 /// (port of the TS `SPI_DEVICE_TYPES` set).
-const SPI_DEVICE_TYPES: &[&str] = &["ili9341", "max31855", "ssd1680_tricolor_290"];
+const SPI_DEVICE_TYPES: &[&str] = &[
+    "ili9341",
+    "max31855",
+    "ssd1680_tricolor_290",
+    // Was missing while `device_class` already classed it as a spi_device, so a
+    // diagram with this panel emitted no external_devices entry at all.
+    "uc8151d_tricolor_290",
+];
 
 /// Map an MCU part `type` to the chip-family key the pin map is keyed by.
 /// Ported from `BOARDS` (`mcuComponentType` → `chip`); falls back to the type
@@ -445,9 +480,14 @@ fn i2c_device_address(part_type: &str) -> Option<u32> {
 /// verbatim, including the `i2c_device`/`spi_device`/`uart_device` kinds:
 /// [`emit_board_io_from_wires`] mirrors the TS emitter, which skips the legacy
 /// I²C set, the [`SPI_DEVICE_TYPES`] set and the dedicated-emitter parts, then
-/// emits whatever kind remains for any other wired part (e.g. a `pca9685` or
-/// `seven-segment` wired straight to GPIO). `adc_input` remaps its peripheral to
-/// the pin's ADC controller in that emitter.
+/// emits whatever kind remains for any other wired part (e.g. a `pca9685` wired
+/// straight to GPIO). `adc_input` remaps its peripheral to the pin's ADC
+/// controller in that emitter.
+///
+/// Parts the CATALOG gives no `boardIoKind` return `None` — including the
+/// direct-drive displays `seven-segment` and `tm1637-7seg`, which are owned by
+/// dedicated emitters ([`emit_seven_segment`]) rather than the generic
+/// `board_io` path.
 fn board_io_kind(part_type: &str) -> Option<&'static str> {
     match part_type {
         "led" | "rgb-led" => Some("led"),
@@ -464,11 +504,10 @@ fn board_io_kind(part_type: &str) -> Option<&'static str> {
         | "max31855"
         | "neopixel"
         | "pcd8544"
-        | "seven-segment"
         | "sn74hc165"
         | "ssd1680_tricolor_290"
         | "uc8151d_tricolor_290" => Some("spi_device"),
-        "ldr" | "ntc-thermistor" | "potentiometer" => Some("adc_input"),
+        "ldr" | "ntc-thermistor" | "potentiometer" | "mq-6" | "soil-moisture" => Some("adc_input"),
         "iolink-master" | "neo6m-gps" => Some("uart_device"),
         _ => None,
     }
@@ -903,30 +942,245 @@ fn format_js_number(n: f64) -> String {
 /// `emitUltrasonic`). `distance_cm` defaults to 100; `cpu_hz` is 250000 on
 /// stm32l476, else 80000000. Never emits `board_io` (ultrasonic is in the
 /// wire-emitter skip set).
-fn emit_ultrasonic(
+/// Emit a declarative device's `external_devices` (+ optional `board_io`)
+/// fragments by interpreting the descriptor's `emit:` block — the SINGLE spec
+/// both this Rust emitter and the TypeScript `compile()` emitter read.
+///
+/// Loads the descriptor for `desc_type` from the config crate's single embed
+/// point and delegates to [`emit_from_descriptor`]. Replaces the former
+/// per-device `emit_ultrasonic`/`emit_dht22`/`emit_rotary_encoder`/`emit_keypad`
+/// hand-written pair (the byte-parity `resolve_matches_ts_oracle` gate proves
+/// the output is unchanged).
+fn emit_declarative(
+    desc_type: &str,
     board: &str,
     wires: &[Wire],
     mcu_id: &str,
     part: &CanonicalPart,
 ) -> (Option<String>, Option<String>) {
-    let trig = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "TRIG");
-    let echo = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "ECHO");
-    let (Some(trig), Some(echo)) = (trig, echo) else {
+    match crate::DeviceDescriptor::embedded(desc_type) {
+        Ok(Some(desc)) => emit_from_descriptor(&desc, board, wires, mcu_id, part),
+        _ => (None, None),
+    }
+}
+
+/// Interpret a [`DeviceEmit`](crate::DeviceEmit) spec into the emitted fragments.
+///
+/// The `external_devices` block (`ext`) is emitted only when every pin-binding
+/// config entry resolves — a partially-wired device emits none. The auxiliary
+/// `board_io` block is computed INDEPENDENTLY (a rotary encoder's SW button is
+/// emitted even when CLK/DT are unwired — see the `rotary-sw-only` oracle case).
+fn emit_from_descriptor(
+    desc: &crate::DeviceDescriptor,
+    board: &str,
+    wires: &[Wire],
+    mcu_id: &str,
+    part: &CanonicalPart,
+) -> (Option<String>, Option<String>) {
+    let Some(emit) = &desc.emit else {
         return (None, None);
     };
-    let distance_cm = attr_string(part, "distance")
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .filter(|d| d.is_finite())
-        .unwrap_or(100.0);
-    let cpu_hz = if board == "stm32l476" {
-        250_000
+    let device_type = emit.device_type.as_deref().unwrap_or(&desc.r#type);
+    let first_wired = |names: &[String]| -> Option<String> {
+        names
+            .iter()
+            .find_map(|n| mcu_pin_for_part_pin(wires, mcu_id, &part.id, n).map(|p| p.to_string()))
+    };
+
+    // external_devices: one line per config entry; a missing pin binding drops
+    // the whole block.
+    let mut lines: Vec<String> = Vec::with_capacity(emit.config.len());
+    let mut ext_ok = true;
+    for c in &emit.config {
+        let value = if let Some(names) = &c.from_part_pin {
+            match first_wired(names) {
+                Some(pin) => format!("\"{pin}\""),
+                None => {
+                    ext_ok = false;
+                    break;
+                }
+            }
+        } else if let Some(names) = &c.from_part_pins {
+            let mut pins = Vec::with_capacity(names.len());
+            for n in names {
+                match mcu_pin_for_part_pin(wires, mcu_id, &part.id, n) {
+                    Some(p) => pins.push(p.to_string()),
+                    None => {
+                        ext_ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ext_ok {
+                break;
+            }
+            format!("[\"{}\"]", pins.join("\", \""))
+        } else if let Some(source) = &c.from {
+            match computed_source(source, board) {
+                Some(v) => format!("{v}"),
+                None => {
+                    ext_ok = false;
+                    break;
+                }
+            }
+        } else if let Some(attr) = &c.from_attr {
+            let default = c.default.unwrap_or(0.0);
+            let n = attr_string(part, attr)
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .filter(|d| d.is_finite())
+                .unwrap_or(default);
+            format_js_number(n)
+        } else {
+            ext_ok = false;
+            break;
+        };
+        lines.push(format!("      {}: {value}", c.key));
+    }
+    let ext = if ext_ok {
+        Some(format!(
+            "  - id: \"{}\"\n    type: \"{device_type}\"\n    connection: \"{}\"\n    config:\n{}",
+            part.id,
+            emit.connection,
+            lines.join("\n")
+        ))
+    } else {
+        None
+    };
+
+    // board_io (aux) — independent of the external_devices gating.
+    let mut bio = None;
+    for b in &emit.board_io {
+        if let Some(pin) = first_wired(&b.from_part_pin) {
+            if let Some((peripheral, pin_num)) = parse_mcu_pin(&pin) {
+                bio = Some(format!(
+                    "  - id: \"{}\"\n    kind: \"{}\"\n    peripheral: \"{peripheral}\"\n    pin: {pin_num}\n    signal: \"{}\"\n    active_high: {}",
+                    part.id, b.kind, b.signal, b.active_high
+                ));
+            }
+        }
+    }
+
+    (ext, bio)
+}
+
+/// A named computed emit source. `sim_cpu_hz` is the firmware clock (self-timing
+/// devices); `echo_pacing_cpu_hz` is the HC-SR04-SPECIFIC echo-pacing override
+/// (NOT a board clock — 250 kHz on stm32l476 shrinks the echo pulse so labs run
+/// fast, harmless only because the firmware times the echo itself).
+fn computed_source(name: &str, board: &str) -> Option<u64> {
+    match name {
+        "sim_cpu_hz" => Some(sim_cpu_hz(board)),
+        "echo_pacing_cpu_hz" => Some(if board == "stm32l476" {
+            250_000
+        } else {
+            80_000_000
+        }),
+        _ => None,
+    }
+}
+
+/// The simulated core clock for a device that generates its own waveform from
+/// `cpu_hz` (port of `simCpuHz`).
+///
+/// Mirrors the top-level `cpu_hz` pacing rather than the HC-SR04 override table
+/// in [`emit_ultrasonic`]: 160 MHz on esp32c3, the core default otherwise. A
+/// self-timing device converts microseconds to cycles as `us * cpu_hz / 1e6`, so
+/// this value must be the clock the FIRMWARE was built against — anything else
+/// scales every bit cell and the decode becomes noise. `board` is already the
+/// chip key here (see [`mcu_type_to_board_key`]), so this compares it directly
+/// where the TS calls `boardChipId`.
+fn sim_cpu_hz(board: &str) -> u64 {
+    if board == "esp32c3" {
+        160_000_000
     } else {
         80_000_000
+    }
+}
+
+/// Emit the `external_devices` fragment for a `neopixel` / `ws2812` addressable
+/// LED strip (port target for the TS `emitNeopixel`).
+///
+/// A NeoPixel is driven by a single-wire, self-clocked bit-stream a GPIO pad
+/// carries (on the ESP32-S3 the RMT peripheral generates it and the GPIO matrix
+/// routes it to the pad). Like the DHT22 it therefore cannot be a `board_io`
+/// entry — the decoder needs the data pin plus the firmware clock (`cpu_hz`,
+/// from [`sim_cpu_hz`]) to time WS2812 bit cells — so it leaves the generic
+/// `board_io` path (it is in the wire-emitter skip set) for this dedicated
+/// emitter.
+///
+/// The data pin is resolved from the wire on the part's data-in pin (`DIN`, with
+/// `DATA`/`IN` accepted as aliases). `num_pixels` comes from the `pixels` /
+/// `num_pixels` attr (default 1). Emits no `board_io`.
+///
+/// NOTE: the RMT→pad→observer drive path exists only on ESP32-S3 today. On other
+/// boards the device is still emitted (and read back as an idle strip) but no
+/// model drives its pad — see the engine's `from_config` neopixel arm.
+fn emit_neopixel(
+    board: &str,
+    wires: &[Wire],
+    mcu_id: &str,
+    part: &CanonicalPart,
+) -> (Option<String>, Option<String>) {
+    let data = ["DIN", "DATA", "IN"]
+        .iter()
+        .find_map(|p| mcu_pin_for_part_pin(wires, mcu_id, &part.id, p));
+    let Some(data) = data else {
+        return (None, None);
     };
+    let num_pixels = attr_string(part, "pixels")
+        .or_else(|| attr_string(part, "num_pixels"))
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(1);
+    let cpu_hz = sim_cpu_hz(board);
     let ext = format!(
-        "  - id: \"{}\"\n    type: \"hc-sr04\"\n    connection: \"gpio\"\n    config:\n      trig_pin: \"{trig}\"\n      echo_pin: \"{echo}\"\n      distance_cm: {}\n      cpu_hz: {cpu_hz}",
-        part.id,
-        format_js_number(distance_cm)
+        "  - id: \"{}\"\n    type: \"neopixel\"\n    connection: \"gpio\"\n    config:\n      data_pin: \"{data}\"\n      num_pixels: {num_pixels}\n      cpu_hz: {cpu_hz}",
+        part.id
+    );
+    (Some(ext), None)
+}
+
+/// Emit the `external_devices` fragment for a direct-drive `seven-segment` part
+/// (port of `emitSevenSegment`).
+///
+/// Nine pins go straight to GPIO. Unlike the TM1637, the pins need NOT share one
+/// GPIO peripheral — the kit resolves each pin's output register independently,
+/// so `connection` carries the COM pin's peripheral purely as the grouping key.
+/// A–G and COM are required (any unwired one emits nothing); DP is optional and
+/// is simply omitted from `config` when unwired.
+fn emit_seven_segment(
+    wires: &[Wire],
+    mcu_id: &str,
+    part_id: &str,
+) -> (Option<String>, Option<String>) {
+    const SEGS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
+
+    let mut seg_pins: Vec<&str> = Vec::with_capacity(SEGS.len());
+    for seg in SEGS {
+        let Some(pin) = mcu_pin_for_part_pin(wires, mcu_id, part_id, seg) else {
+            return (None, None);
+        };
+        seg_pins.push(pin);
+    }
+    let Some(com_pin) = mcu_pin_for_part_pin(wires, mcu_id, part_id, "COM") else {
+        return (None, None);
+    };
+    // `gpioForMcuPin` — the COM pin's GPIO peripheral is the grouping key.
+    let Some((com_peripheral, _)) = parse_mcu_pin(com_pin) else {
+        return (None, None);
+    };
+    let dp_pin = mcu_pin_for_part_pin(wires, mcu_id, part_id, "DP");
+
+    let seg_config = SEGS
+        .iter()
+        .zip(&seg_pins)
+        .map(|(seg, pin)| format!("      {}_pin: \"{pin}\"", seg.to_ascii_lowercase()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let dp_config = dp_pin.map_or_else(String::new, |p| format!("\n      dp_pin: \"{p}\""));
+
+    let ext = format!(
+        "  - id: \"{part_id}\"\n    type: \"seven-segment\"\n    connection: \"{com_peripheral}\"\n    config:\n{seg_config}{dp_config}\n      com_pin: \"{com_pin}\""
     );
     (Some(ext), None)
 }
@@ -1015,8 +1269,19 @@ fn emit_spi_device(
     let (Some(connection), Some(cs_pin)) = (connection, cs_pin) else {
         return (None, None);
     };
+    // DC and BUSY are optional sidebands: emit them whenever the diagram wires
+    // them, for whichever MCU the part is wired to. A device that needs BUSY
+    // and never receives the key silently blocks its driver, so the wire being
+    // present in the diagram is what must decide this — not a per-board list.
+    let mut config = format!("      cs_pin: \"{cs_pin}\"");
+    if let Some(dc_pin) = mcu_pin_for_part_pin(wires, mcu_id, part_id, "DC") {
+        config.push_str(&format!("\n      dc_pin: \"{dc_pin}\""));
+    }
+    if let Some(busy_pin) = mcu_pin_for_part_pin(wires, mcu_id, part_id, "BUSY") {
+        config.push_str(&format!("\n      busy_pin: \"{busy_pin}\""));
+    }
     let ext = format!(
-        "  - id: \"{part_id}\"\n    type: \"{part_type}\"\n    connection: \"{connection}\"\n    config:\n      cs_pin: \"{cs_pin}\""
+        "  - id: \"{part_id}\"\n    type: \"{part_type}\"\n    connection: \"{connection}\"\n    config:\n{config}"
     );
     let bio = parse_mcu_pin(cs_pin).map(|(_, pin)| {
         format!(
@@ -1108,12 +1373,21 @@ fn emit_board_io_from_wires(
     // Types owned by dedicated emitters (port of the TS `skipTypes` set).
     const SKIP_TYPES: &[&str] = &[
         "ultrasonic",
+        "dht22",
+        "rotary-encoder",
+        "keypad",
         "pcd8544",
         "sn74hc165",
         "iolink-master",
         "neo6m-gps",
         "can-transceiver",
         "can-diagnostic-tool",
+        "seven-segment",
+        // NeoPixel/WS2812 own a dedicated emitter (`emit_neopixel`); the catalog
+        // `boardIoKind` still lists it as `spi_device`, which is WRONG for a
+        // single-wire WS2812 line, so it must be skipped here.
+        "neopixel",
+        "ws2812",
     ];
 
     let mut entries = Vec::new();
@@ -1168,7 +1442,22 @@ fn emit_board_io_from_wires(
 /// Assemble the system YAML string from the fragment arrays (port of
 /// `buildSystemYaml`), byte-identical including the `  []` empty-list sentinel
 /// and the trailing newline.
-fn build_system_yaml(external_devices: &[String], board_io: &[String]) -> String {
+fn build_system_yaml(external_devices: &[String], board_io: &[String], board: &str) -> String {
+    // Top-level clock pacing: esp32c3 runs at 160 MHz, every other board takes
+    // the core default and the line is omitted entirely.
+    //
+    // The literal `160_000_000` here vs. the bare `160000000` a device-level
+    // `cpu_hz` carries is NOT a typo — do not "unify" them. TS hard-codes this
+    // one as the string `'cpu_hz: 160_000_000\n'`, while device-level values go
+    // through `format_js_number` (the `${n}` template literal), which never
+    // emits underscores. The engine's YAML parser accepts both, but this string
+    // is gated byte-for-byte against the TS oracle, so the asymmetry is load-
+    // bearing.
+    let pacing = if board == "esp32c3" {
+        "cpu_hz: 160_000_000\n"
+    } else {
+        ""
+    };
     let ext = if external_devices.is_empty() {
         "  []".to_string()
     } else {
@@ -1179,7 +1468,9 @@ fn build_system_yaml(external_devices: &[String], board_io: &[String]) -> String
     } else {
         board_io.join("\n")
     };
-    format!("name: \"playground-board\"\nchip: \"inline\"\nexternal_devices:\n{ext}\nboard_io:\n{bio}\n")
+    format!(
+        "name: \"playground-board\"\nchip: \"inline\"\n{pacing}external_devices:\n{ext}\nboard_io:\n{bio}\n"
+    )
 }
 
 #[cfg(test)]
@@ -1547,6 +1838,310 @@ board_io:
   []
 "#;
 
+    /// No `attrs` — exercises the diagram-contract defaults (25 / 50), which the
+    /// emitter writes explicitly rather than leaving to the engine reader.
+    const FIXTURE_DHT22: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "th", "type": "dht22" }
+      ],
+      "connections": [
+        ["mcu:PA8", "th:DATA"],
+        ["mcu:3V3", "th:VCC"],
+        ["mcu:GND", "th:GND"]
+      ]
+    }"#;
+
+    const EXPECTED_DHT22: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "th"
+    type: "dht22"
+    connection: "gpio"
+    config:
+      data_pin: "PA8"
+      temperature_c: 25
+      humidity_pct: 50
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
+    /// The same part with explicit attrs — and a non-integer humidity, to pin the
+    /// `${n}` number formatting the TS template literal produces.
+    const FIXTURE_DHT22_ATTRS: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "th", "type": "dht22", "attrs": { "temperature": "-7", "humidity": "41.5" } }
+      ],
+      "connections": [
+        ["mcu:PB4", "th:DATA"]
+      ]
+    }"#;
+
+    const EXPECTED_DHT22_ATTRS: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "th"
+    type: "dht22"
+    connection: "gpio"
+    config:
+      data_pin: "PB4"
+      temperature_c: -7
+      humidity_pct: 41.5
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
+    /// The esp32c3 branch of [`sim_cpu_hz`] — the only board that is not the
+    /// 80 MHz core default.
+    const FIXTURE_DHT22_ESP32C3: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-c3-supermini" },
+        { "id": "th", "type": "dht22" }
+      ],
+      "connections": [
+        ["mcu:GPIO4", "th:DATA"]
+      ]
+    }"#;
+
+    const EXPECTED_DHT22_ESP32C3: &str = r#"name: "playground-board"
+chip: "inline"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "th"
+    type: "dht22"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO4"
+      temperature_c: 25
+      humidity_pct: 50
+      cpu_hz: 160000000
+board_io:
+  []
+"#;
+
+    /// Regression pin: stm32l476 must get the 80 MHz core default, NOT the
+    /// 250 kHz HC-SR04 echo-pacing override that `emit_ultrasonic` applies. A
+    /// self-timing device on that override decodes 320x-stretched bit cells.
+    const FIXTURE_DHT22_L476: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-l476rg" },
+        { "id": "th", "type": "dht22" }
+      ],
+      "connections": [
+        ["mcu:PA8", "th:DATA"]
+      ]
+    }"#;
+
+    const EXPECTED_DHT22_L476: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "th"
+    type: "dht22"
+    connection: "gpio"
+    config:
+      data_pin: "PA8"
+      temperature_c: 25
+      humidity_pct: 50
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
+    /// Full rotary encoder on STM32: CLK/DT become the quadrature device, SW
+    /// becomes a plain board_io button.
+    const FIXTURE_ROTARY: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "enc", "type": "rotary-encoder" }
+      ],
+      "connections": [
+        ["mcu:PA0", "enc:CLK"],
+        ["mcu:PA1", "enc:DT"],
+        ["mcu:PA2", "enc:SW"]
+      ]
+    }"#;
+
+    const EXPECTED_ROTARY: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "enc"
+    type: "rotary-encoder"
+    connection: "gpio"
+    config:
+      clk_pin: "PA0"
+      dt_pin: "PA1"
+      cpu_hz: 80000000
+board_io:
+  - id: "enc"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 2
+    signal: "input"
+    active_high: true
+"#;
+
+    /// esp32c3 encoder with no push switch: exercises the top-level 160 MHz
+    /// pacing line and the CLK/DT-only path (empty board_io).
+    const FIXTURE_ROTARY_ESP32C3: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-c3-supermini" },
+        { "id": "enc", "type": "rotary-encoder" }
+      ],
+      "connections": [
+        ["mcu:GPIO2", "enc:CLK"],
+        ["mcu:GPIO3", "enc:DT"]
+      ]
+    }"#;
+
+    const EXPECTED_ROTARY_ESP32C3: &str = r#"name: "playground-board"
+chip: "inline"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "enc"
+    type: "rotary-encoder"
+    connection: "gpio"
+    config:
+      clk_pin: "GPIO2"
+      dt_pin: "GPIO3"
+      cpu_hz: 160000000
+board_io:
+  []
+"#;
+
+    /// Missing CLK: no quadrature device is emitted (CLK and DT are both
+    /// required), but a wired SW still yields its button.
+    const FIXTURE_ROTARY_SW_ONLY: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "enc", "type": "rotary-encoder" }
+      ],
+      "connections": [
+        ["mcu:PA1", "enc:DT"],
+        ["mcu:PA2", "enc:SW"]
+      ]
+    }"#;
+
+    const EXPECTED_ROTARY_SW_ONLY: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  []
+board_io:
+  - id: "enc"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 2
+    signal: "input"
+    active_high: true
+"#;
+
+    /// Full stm32 4×4 keypad: eight GPIO pins (R1..R4 = PA0..PA3, C1..C4 =
+    /// PA4..PA7) become ONE `keypad` external device — a real matrix scan, not
+    /// a collapsed board_io button (which is what the wire emitter would have
+    /// produced before this device existed).
+    const FIXTURE_KEYPAD: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "kp", "type": "keypad" }
+      ],
+      "connections": [
+        ["mcu:PA0", "kp:R1"],
+        ["mcu:PA1", "kp:R2"],
+        ["mcu:PA2", "kp:R3"],
+        ["mcu:PA3", "kp:R4"],
+        ["mcu:PA4", "kp:C1"],
+        ["mcu:PA5", "kp:C2"],
+        ["mcu:PA6", "kp:C3"],
+        ["mcu:PA7", "kp:C4"]
+      ]
+    }"#;
+
+    const EXPECTED_KEYPAD: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "kp"
+    type: "keypad"
+    connection: "gpio"
+    config:
+      row_pins: ["PA0", "PA1", "PA2", "PA3"]
+      col_pins: ["PA4", "PA5", "PA6", "PA7"]
+board_io:
+  []
+"#;
+
+    /// esp32c3 keypad: exercises the top-level 160 MHz pacing line (the keypad
+    /// itself carries NO device-level `cpu_hz` — it does not self-time).
+    const FIXTURE_KEYPAD_ESP32C3: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-c3-supermini" },
+        { "id": "kp", "type": "keypad" }
+      ],
+      "connections": [
+        ["mcu:GPIO2", "kp:R1"],
+        ["mcu:GPIO3", "kp:R2"],
+        ["mcu:GPIO4", "kp:R3"],
+        ["mcu:GPIO5", "kp:R4"],
+        ["mcu:GPIO6", "kp:C1"],
+        ["mcu:GPIO7", "kp:C2"],
+        ["mcu:GPIO8", "kp:C3"],
+        ["mcu:GPIO10", "kp:C4"]
+      ]
+    }"#;
+
+    const EXPECTED_KEYPAD_ESP32C3: &str = r#"name: "playground-board"
+chip: "inline"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "kp"
+    type: "keypad"
+    connection: "gpio"
+    config:
+      row_pins: ["GPIO2", "GPIO3", "GPIO4", "GPIO5"]
+      col_pins: ["GPIO6", "GPIO7", "GPIO8", "GPIO10"]
+board_io:
+  []
+"#;
+
+    /// A partially-wired keypad (column C4 missing): all eight pins are required
+    /// to scan a matrix, so the device emits NOTHING rather than a degraded
+    /// half-keypad — and, being in the skip set, produces no board_io button
+    /// either.
+    const FIXTURE_KEYPAD_PARTIAL: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "kp", "type": "keypad" }
+      ],
+      "connections": [
+        ["mcu:PA0", "kp:R1"],
+        ["mcu:PA1", "kp:R2"],
+        ["mcu:PA2", "kp:R3"],
+        ["mcu:PA3", "kp:R4"],
+        ["mcu:PA4", "kp:C1"],
+        ["mcu:PA5", "kp:C2"],
+        ["mcu:PA6", "kp:C3"]
+      ]
+    }"#;
+
+    const EXPECTED_KEYPAD_PARTIAL: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  []
+board_io:
+  []
+"#;
+
     const FIXTURE_PCD8544: &str = r#"{
       "version": 1,
       "parts": [
@@ -1725,6 +2320,142 @@ board_io:
     active_high: true
 "#;
 
+    const FIXTURE_SEVEN_SEGMENT: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "seg", "type": "seven-segment" }
+      ],
+      "connections": [
+        ["mcu:PA0", "seg:A"],
+        ["mcu:PA1", "seg:B"],
+        ["mcu:PA4", "seg:C"],
+        ["mcu:PA5", "seg:D"],
+        ["mcu:PA6", "seg:E"],
+        ["mcu:PA7", "seg:F"],
+        ["mcu:PA8", "seg:G"],
+        ["mcu:PA9", "seg:DP"],
+        ["mcu:PB0", "seg:COM"]
+      ]
+    }"#;
+
+    const EXPECTED_SEVEN_SEGMENT: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "seg"
+    type: "seven-segment"
+    connection: "gpiob"
+    config:
+      a_pin: "PA0"
+      b_pin: "PA1"
+      c_pin: "PA4"
+      d_pin: "PA5"
+      e_pin: "PA6"
+      f_pin: "PA7"
+      g_pin: "PA8"
+      dp_pin: "PA9"
+      com_pin: "PB0"
+board_io:
+  []
+"#;
+
+    /// DP is optional: the same panel with `DP` left unwired drops the
+    /// `dp_pin:` line and emits everything else unchanged.
+    /// NeoPixel on an esp32-s3-zero: single data wire (GPIO48, the onboard
+    /// pixel), default 1 pixel. `cpu_hz` is the S3 core default (80 MHz via
+    /// [`sim_cpu_hz`]); the top-level pacing line is omitted (only esp32c3 emits
+    /// it). No `board_io` — the dedicated emitter owns it (skip set).
+    const FIXTURE_NEOPIXEL: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-s3-zero" },
+        { "id": "np", "type": "neopixel" }
+      ],
+      "connections": [
+        ["mcu:GPIO48", "np:DIN"],
+        ["mcu:5V", "np:VCC"],
+        ["mcu:GND", "np:GND"]
+      ]
+    }"#;
+
+    const EXPECTED_NEOPIXEL: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "np"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO48"
+      num_pixels: 1
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
+    /// NeoPixel strip with an explicit `pixels` attr on a low GPIO — pins the
+    /// `num_pixels` attr read and a non-48 data pin.
+    const FIXTURE_NEOPIXEL_STRIP: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-s3-zero" },
+        { "id": "strip", "type": "neopixel", "attrs": { "pixels": "8" } }
+      ],
+      "connections": [
+        ["mcu:GPIO8", "strip:DIN"]
+      ]
+    }"#;
+
+    const EXPECTED_NEOPIXEL_STRIP: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "strip"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 8
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
+    const FIXTURE_SEVEN_SEGMENT_NO_DP: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "seg", "type": "seven-segment" }
+      ],
+      "connections": [
+        ["mcu:PA0", "seg:A"],
+        ["mcu:PA1", "seg:B"],
+        ["mcu:PA4", "seg:C"],
+        ["mcu:PA5", "seg:D"],
+        ["mcu:PA6", "seg:E"],
+        ["mcu:PA7", "seg:F"],
+        ["mcu:PA8", "seg:G"],
+        ["mcu:PB0", "seg:COM"]
+      ]
+    }"#;
+
+    const EXPECTED_SEVEN_SEGMENT_NO_DP: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "seg"
+    type: "seven-segment"
+    connection: "gpiob"
+    config:
+      a_pin: "PA0"
+      b_pin: "PA1"
+      c_pin: "PA4"
+      d_pin: "PA5"
+      e_pin: "PA6"
+      f_pin: "PA7"
+      g_pin: "PA8"
+      com_pin: "PB0"
+board_io:
+  []
+"#;
+
     /// THE parity gate: for each fixture, the Rust `resolve()` must produce the
     /// exact `systemYaml` the TS oracle emits (byte-for-byte). Every fixture
     /// under packages/board-config/test/fixtures/canonical/*.json that has a
@@ -1743,6 +2474,36 @@ board_io:
             ("spi-max31855", FIXTURE_SPI_MAX31855, EXPECTED_SPI_MAX31855),
             ("spi-ssd1680", FIXTURE_SPI_SSD1680, EXPECTED_SPI_SSD1680),
             ("ultrasonic", FIXTURE_ULTRASONIC, EXPECTED_ULTRASONIC),
+            ("dht22", FIXTURE_DHT22, EXPECTED_DHT22),
+            ("rotary", FIXTURE_ROTARY, EXPECTED_ROTARY),
+            (
+                "rotary-esp32c3",
+                FIXTURE_ROTARY_ESP32C3,
+                EXPECTED_ROTARY_ESP32C3,
+            ),
+            (
+                "rotary-sw-only",
+                FIXTURE_ROTARY_SW_ONLY,
+                EXPECTED_ROTARY_SW_ONLY,
+            ),
+            ("keypad", FIXTURE_KEYPAD, EXPECTED_KEYPAD),
+            (
+                "keypad-esp32c3",
+                FIXTURE_KEYPAD_ESP32C3,
+                EXPECTED_KEYPAD_ESP32C3,
+            ),
+            (
+                "keypad-partial",
+                FIXTURE_KEYPAD_PARTIAL,
+                EXPECTED_KEYPAD_PARTIAL,
+            ),
+            ("dht22-attrs", FIXTURE_DHT22_ATTRS, EXPECTED_DHT22_ATTRS),
+            (
+                "dht22-esp32c3",
+                FIXTURE_DHT22_ESP32C3,
+                EXPECTED_DHT22_ESP32C3,
+            ),
+            ("dht22-l476", FIXTURE_DHT22_L476, EXPECTED_DHT22_L476),
             ("pcd8544", FIXTURE_PCD8544, EXPECTED_PCD8544),
             ("sn74hc165", FIXTURE_SN74HC165, EXPECTED_SN74HC165),
             (
@@ -1757,6 +2518,22 @@ board_io:
                 EXPECTED_CAN_DIAGNOSTIC_TOOL,
             ),
             ("adc-input", FIXTURE_ADC_INPUT, EXPECTED_ADC_INPUT),
+            (
+                "seven-segment",
+                FIXTURE_SEVEN_SEGMENT,
+                EXPECTED_SEVEN_SEGMENT,
+            ),
+            (
+                "seven-segment-no-dp",
+                FIXTURE_SEVEN_SEGMENT_NO_DP,
+                EXPECTED_SEVEN_SEGMENT_NO_DP,
+            ),
+            ("neopixel", FIXTURE_NEOPIXEL, EXPECTED_NEOPIXEL),
+            (
+                "neopixel-strip",
+                FIXTURE_NEOPIXEL_STRIP,
+                EXPECTED_NEOPIXEL_STRIP,
+            ),
         ] {
             let cfg = CanonicalConfig::from_json(fixture)
                 .unwrap_or_else(|e| panic!("{name}: fixture failed to parse/validate: {e}"));

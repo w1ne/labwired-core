@@ -115,8 +115,8 @@ impl<'a> AttachCtx<'a> {
         // `connection:` resolves to. There is no untraced attach path.
         let connection = self.ext.connection.clone();
         self.bus
-            .attach_i2c_slave(&connection, device)
-            .map_err(|_| wrong_transport_err(self.ext, "I2C"))
+            .attach_i2c_slave_with_route(&connection, device, Some(&self.ext.route))
+            .map_err(|err| anyhow::anyhow!("{}: {err:#}", wrong_transport_err(self.ext, "I2C")))
     }
 
     /// Attach an [`SpiDevice`] to whichever SPI controller the `connection:`
@@ -152,12 +152,69 @@ impl<'a> AttachCtx<'a> {
             .ok_or_else(|| wrong_transport_err(ext, "ADC"))
     }
 
+    /// Attach an analog stimulus source (potentiometer wiper, thermistor
+    /// divider) to `channel` of whichever ADC the `connection:` field names.
+    ///
+    /// The model is *retained* on the bus rather than being used once to
+    /// compute a boot level and dropped — that retention is what makes the
+    /// part drivable at runtime through `set_input`. The current level is
+    /// seeded immediately so the firmware sees a correct value before any
+    /// stimulus arrives.
+    pub fn attach_analog_source(
+        &mut self,
+        channel: u8,
+        mut source: Box<dyn crate::bus::sim_inputs::AnalogSource>,
+    ) -> Result<()> {
+        // Same identity stamp as `attach_i2c_device`.
+        source.set_component_id(self.ext.id.clone());
+        let connection = self.ext.connection.clone();
+        let mv = source.output_mv();
+        if !self.bus.seed_adc_channel(&connection, channel, mv) {
+            return Err(wrong_transport_err(self.ext, "ADC"));
+        }
+        self.bus
+            .analog_inputs
+            .push(crate::bus::sim_inputs::AnalogInputSource {
+                connection,
+                channel,
+                source,
+            });
+        Ok(())
+    }
+
     /// Resolve an STM32 pin label (e.g. `"PC7"`) to its `(ODR address, bit)`
     /// so a SPI display can sample the host's D/C line directly from the
     /// driving GPIO's output register. Returns None for unknown ports or
     /// pin labels.
     pub fn resolve_pin_odr(&self, pin: &str) -> Option<(u64, u8)> {
         SystemBus::resolve_pin_odr_pub(self.bus, pin)
+    }
+
+    /// Hold an MCU input pin at `level` — for device status lines the host
+    /// polls but nothing else drives (an e-paper BUSY, a sensor DRDY).
+    ///
+    /// Resolution goes through `resolve_pin_idr`, which understands the chip
+    /// pin-map, STM32/Nordic pad labels and ESP `GPIO`n alike, so a kit gets
+    /// this on every supported MCU without knowing which one it is wired to.
+    ///
+    /// This must go through the GPIO peripheral rather than an MMIO write:
+    /// input registers ignore stores (that is what makes them inputs), so a
+    /// bus write would be silently dropped.
+    ///
+    /// A line left undriven reads whatever the input register happens to hold,
+    /// and a driver that waits on it then blocks until its timeout — which at
+    /// simulated speed is effectively forever. That is not a hang to debug; it
+    /// is a peripheral nobody modelled.
+    pub fn drive_pin_input(&mut self, pin: &str, level: bool) -> Result<()> {
+        let (device_type, device_id) =
+            (self.device_type().to_string(), self.device_id().to_string());
+        if !SystemBus::drive_pin_input(self.bus, pin, level) {
+            anyhow::bail!(
+                "{device_type} '{device_id}': pin '{pin}' could not be driven as a \
+                 GPIO input (unresolvable pin, or the GPIO block refused it)"
+            );
+        }
+        Ok(())
     }
 
     /// Read the optional `i2c_address` config key, returning `default` when

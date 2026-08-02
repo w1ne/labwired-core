@@ -31,28 +31,7 @@
 /// GRID registers the TM1637 exposes (the 4-digit module wires the first four).
 const GRIDS: usize = 6;
 
-/// Standard 7-segment font, bit layout `0b0gfedcba` (segment `a` = bit 0 …
-/// `g` = bit 6). Shared convention with the 74HC595 module.
-const FONT: &[(u8, char)] = &[
-    (0x3F, '0'),
-    (0x06, '1'),
-    (0x5B, '2'),
-    (0x4F, '3'),
-    (0x66, '4'),
-    (0x6D, '5'),
-    (0x7D, '6'),
-    (0x07, '7'),
-    (0x7F, '8'),
-    (0x6F, '9'),
-    (0x77, 'A'),
-    (0x7C, 'b'),
-    (0x39, 'C'),
-    (0x5E, 'd'),
-    (0x79, 'E'),
-    (0x71, 'F'),
-    (0x40, '-'),
-    (0x00, ' '),
-];
+use crate::peripherals::components::seven_seg_font;
 
 /// One TM1637 display wired to a `CLK` output pin and a `DIO` output pin.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -153,11 +132,7 @@ impl Tm1637 {
     }
 
     fn decode(seg: u8) -> char {
-        let glyph = seg & 0x7F;
-        FONT.iter()
-            .find(|(pattern, _)| *pattern == glyph)
-            .map(|(_, ch)| *ch)
-            .unwrap_or('?')
+        seven_seg_font::decode(seg)
     }
 
     /// The four leftmost digits, decoded to characters.

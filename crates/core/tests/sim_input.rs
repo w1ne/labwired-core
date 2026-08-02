@@ -132,7 +132,7 @@ fn set_input_rejects_unknown_channel_and_out_of_range() {
 // exercise `component` disambiguation.
 
 use labwired_core::peripherals::components::{
-    Adxl345, Max31855, Mpu6050, Neo6mGps, Sn74hc165, Vl53l1x,
+    Adxl345, GenericSpiDevice, Mpu6050, Neo6mGps, Sn74hc165, Vl53l1x,
 };
 use labwired_core::peripherals::spi::Spi;
 use labwired_core::peripherals::uart::Uart;
@@ -290,9 +290,13 @@ fn component_disambiguates_colliding_channel_keys() {
     // …and component-directed sets must hit exactly the named owner.
     bus.set_input(Some("spi2"), "temperature", 300.0)
         .expect("drive thermo2");
-    let (tc2, _) = with_device::<Max31855, _>(&mut bus, "spi2", |t| t.temperature());
+    let tc2 = with_device::<GenericSpiDevice, _>(&mut bus, "spi2", |t| {
+        t.input_value("temperature").unwrap()
+    });
     assert_eq!(tc2, 300.0);
-    let (tc1, _) = with_device::<Max31855, _>(&mut bus, "spi1", |t| t.temperature());
+    let tc1 = with_device::<GenericSpiDevice, _>(&mut bus, "spi1", |t| {
+        t.input_value("temperature").unwrap()
+    });
     assert_eq!(tc1, 25.0, "spi1 thermocouple must keep its default");
 
     bus.set_input(Some("i2c1"), "distance", 250.0)
@@ -430,7 +434,9 @@ fn external_device_id_works_as_component() {
     // model at attach).
     bus.set_input(Some("thermo1"), "temperature", 40.0)
         .expect("drive thermo1 by external-device id");
-    let (tc1, _) = with_device::<Max31855, _>(&mut bus, "spi1", |t| t.temperature());
+    let tc1 = with_device::<GenericSpiDevice, _>(&mut bus, "spi1", |t| {
+        t.input_value("temperature").unwrap()
+    });
     assert_eq!(tc1, 40.0);
 
     bus.set_input(Some("tof"), "distance", 777.0)

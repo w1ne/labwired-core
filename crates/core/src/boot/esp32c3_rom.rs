@@ -23,6 +23,7 @@
 //! overlay for sections in no PT_LOAD segment.
 
 use super::esp32s3_rom::{build_window, DramWindow, RomImages};
+use crate::Bus; // seed writes below route through the single Bus-trait accessor
 use goblin::elf::Elf;
 use std::path::PathBuf;
 
@@ -439,12 +440,16 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
         // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
         // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
         // alarm fires on that source.
-        Box::new(
-            crate::peripherals::esp32s3::systimer::Systimer::new_with_source_legacy_tick(
-                160_000_000,
-                37,
-            ),
-        ),
+        //
+        // Walk-free (C3 SYSTIMER batch): scheduler mode. The free-running
+        // counter advances lazily (write-path `sync_to` + the OP-update snapshot
+        // pulling the bus-published `CycleClock`, both to the batch-start
+        // cycle), and alarms fire as scheduled events at their exact expiry
+        // cycle, delivered through the C3 interrupt matrix by
+        // `apply_event_result`'s C3 routing arm. This un-pins SYSTIMER from the
+        // per-cycle walk; delivery stays cycle-identical to the legacy walk at
+        // a given tick interval (differential-gated).
+        Box::new(crate::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 37)),
     );
     // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
     // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
@@ -482,6 +487,20 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // matrix into the CPU's external interrupt lines. FreeRTOS's first
     // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
     bus.esp32c3_irq_routing = true;
+    // Re-derive walk-deletion over the COMPLETE rom-boot bus. `from_config`
+    // computed `legacy_walk_disabled` from the chip-yaml peripheral set alone,
+    // BEFORE the rom-boot path appended its real walk workers above (notably the
+    // walk-pinning `wifi_mac`, plus the behavioral rtc_cntl_timer/systimer). Once
+    // every chip-yaml peripheral is scheduler-migrated (the LEDC timer port
+    // emptied the last chip-yaml pinner), that early derivation would read
+    // walk-DELETED and leave the per-cycle walk globally skipped — starving
+    // wifi_mac's tick(). Recomputing here over the full set restores the correct
+    // value (wifi_mac pins → walk enabled → interval 1), keeping the rom-boot
+    // behavior byte-identical to before the migration.
+    #[cfg(feature = "event-scheduler")]
+    {
+        bus.legacy_walk_disabled = bus.derive_walk_deletable();
+    }
     if let Some(mac) = opts.efuse_mac {
         let lo =
             mac[5] as u32 | (mac[4] as u32) << 8 | (mac[3] as u32) << 16 | (mac[2] as u32) << 24;
@@ -514,17 +533,39 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
 /// browser path so both provision the ROM identically.
 pub fn inject_rom_regions(bus: &mut crate::bus::SystemBus, images: &RomImages) -> bool {
     let mut irom_present = false;
+    let mut drom_present = false;
     for mem in bus.extra_mem.iter_mut() {
         let src = if mem.base_addr == IROM_BASE as u64 {
             irom_present = true;
             &images.irom
         } else if mem.base_addr == DROM_BASE as u64 {
+            drom_present = true;
             &images.drom
         } else {
             continue;
         };
         let n = src.len().min(mem.data.len());
         mem.data[..n].copy_from_slice(&src[..n]);
+    }
+    // The chip YAML declares these windows with `image_env`, and
+    // SystemBus::from_config drops any image_env region whose dump did not
+    // load — always the case in wasm, where no env/filesystem exists and the
+    // ROM arrives as a caller-supplied blob instead. Materialize the missing
+    // windows from the blobs so the browser boot paths never depend on the
+    // filesystem load having succeeded. Native runs with the dumps on disk
+    // hit the loop above and are unchanged.
+    if !irom_present && !images.irom.is_empty() {
+        let mut mem = crate::memory::LinearMemory::new(IROM_SIZE, IROM_BASE as u64);
+        let n = images.irom.len().min(mem.data.len());
+        mem.data[..n].copy_from_slice(&images.irom[..n]);
+        bus.extra_mem.push(mem);
+        irom_present = true;
+    }
+    if !drom_present && !images.drom.is_empty() {
+        let mut mem = crate::memory::LinearMemory::new(DROM_SIZE, DROM_BASE as u64);
+        let n = images.drom.len().min(mem.data.len());
+        mem.data[..n].copy_from_slice(&images.drom[..n]);
+        bus.extra_mem.push(mem);
     }
     irom_present
 }

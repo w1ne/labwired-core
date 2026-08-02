@@ -391,6 +391,90 @@ impl SpiDevice for Uc8151dTricolor290 {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+//
+// ESP32-C3 (and other non-Xtensa boards) attach SPI externals via the kit
+// registry in `bus/from_config.rs`. Without this kit, `uc8151d_tricolor_290`
+// on C3 was silently skipped ("Unsupported external device") so the twin
+// stayed blank while the same type painted on classic ESP32 (which uses
+// `attach_esp32_external_devices`). Stats-display hit that gap.
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Uc8151dTricolor290Kit;
+pub static UC8151D_TRICOLOR_290_KIT: Uc8151dTricolor290Kit = Uc8151dTricolor290Kit;
+
+/// Level the BUSY line rests at when the panel is not refreshing. UC8151D
+/// pulls BUSY LOW while busy and releases it HIGH — inverted from SSD1680.
+const BUSY_IDLE_LEVEL: bool = true;
+
+static UC8151D_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "uc8151d_tricolor_290",
+    label: "UC8151D Tri-Color E-Paper",
+    summary: "2.9\" tri-color (black/white/red) UC8151D-family e-paper over SPI.",
+    detail: "Decodes UC8151D opcodes (PSR/PON/DTM1/DTM2/DRF) used by GxEPD2_290_C90c \
+             and WeAct 2.9\" B/W/R panels. Same plane layout as SSD1680; different \
+             command stream. Required on ESP32-C3 path (kit registry); classic ESP32 \
+             also attaches via attach_esp32_external_devices.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "Chip-select GPIO pin (e.g. \"GPIO7\"). Defaults to GPIO5.",
+        },
+        ConfigKey {
+            name: "dc_pin",
+            ty: ConfigType::Str,
+            doc: "Data/Command GPIO pin (e.g. \"GPIO2\"). Required for command framing.",
+        },
+        ConfigKey {
+            name: "busy_pin",
+            ty: ConfigType::Str,
+            doc: "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) — \
+                  UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290.",
+        },
+    ],
+    // No core/examples/* lab with system.yaml yet (stats-display is playground-hosted).
+    labs: &[],
+};
+
+impl PeripheralKit for Uc8151dTricolor290Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &UC8151D_TRICOLOR_290_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("GPIO5").to_string();
+        let mut panel = Uc8151dTricolor290::new(cs_pin);
+        if let Some(dc_pin) = ctx.config_str("dc_pin") {
+            let (odr_addr, bit) = ctx.resolve_pin_odr(dc_pin).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "uc8151d_tricolor_290 '{}' dc_pin '{}' could not be resolved to a GPIO output",
+                    ctx.device_id(),
+                    dc_pin
+                )
+            })?;
+            panel = panel.with_dc_pin(dc_pin.to_string());
+            crate::peripherals::spi::SpiDevice::set_dc_source(&mut panel, odr_addr, bit);
+        }
+        // BUSY: UC8151D holds it LOW while refreshing and releases it HIGH when
+        // idle — the OPPOSITE of ssd1680_tricolor_290, whose idle is LOW. The
+        // matching GxEPD2 class (`GxEPD2_290_Z13c`) passes `_busy_level = LOW`.
+        // Driving the wrong polarity here pins the driver in _waitWhileBusy
+        // forever and looks exactly like a hung CPU.
+        if let Some(busy_pin) = ctx.config_str("busy_pin") {
+            let busy_pin = busy_pin.to_string();
+            ctx.drive_pin_input(&busy_pin, BUSY_IDLE_LEVEL)?;
+        }
+        ctx.attach_spi_device(Box::new(panel))?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

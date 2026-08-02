@@ -2,7 +2,11 @@
 
 pub mod asset;
 pub mod codegen;
+pub mod cosim;
 pub mod coverage;
+pub mod debug_probe;
+pub mod environment_test;
+pub mod esp32_boot_state;
 pub mod fuzz;
 pub mod machine;
 pub mod run;

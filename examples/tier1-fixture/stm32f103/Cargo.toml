@@ -19,6 +19,7 @@ description = "stm32f103 Tier-1 fixture firmware: raw-register peripheral self-t
 [dependencies]
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
+tier1-fixture-common = { path = "../common" }
 
 [[bin]]
 name = "tier1-fixture-stm32f103"

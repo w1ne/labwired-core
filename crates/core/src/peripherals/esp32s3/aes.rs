@@ -65,7 +65,7 @@
 //! interrupt is emitted via `PeripheralTickResult.explicit_irqs` while
 //! `int_raw & int_ena != 0`, level-sensitive, matching the SYSTIMER twin.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 // ── Register offsets (relative to DR_REG_AES_BASE) ──
 const KEY_BASE: u64 = 0x00; // KEY_0..7  (0x00..0x1C)
@@ -164,6 +164,9 @@ pub struct Esp32s3Aes {
     int_raw: bool,
     /// AES_INT_ENA bit 0.
     int_ena: bool,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3Aes {
@@ -184,6 +187,8 @@ impl Esp32s3Aes {
             inc_sel: 0,
             int_raw: false,
             int_ena: false,
+
+            clock: None,
         }
     }
 
@@ -341,6 +346,27 @@ impl Peripheral for Esp32s3Aes {
             }
         } else {
             PeripheralTickResult::default()
+        }
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_raw && self.int_ena {
+            out.push(self.source_id);
         }
     }
 

@@ -374,6 +374,12 @@ impl Esp32s3System {
 }
 
 impl Peripheral for Esp32s3System {
+    // Inert walk: SYSTEM clock/reset register file; all state is write-settled.
+    // tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let abs = offset + self.window_base;
         let word = self.word_value(abs);

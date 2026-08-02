@@ -19,8 +19,9 @@
 //! EVENTS_RESULTDONE (0x10C). The sample is a real conversion of a fixed
 //! internal source scaled to the configured RESOLUTION (see `sample_code`), so
 //! it changes when firmware changes RESOLUTION — not a hardcoded constant. The
-//! memory write runs on the next bus tick (same `needs_bus_tick`/`tick_with_bus`
-//! pattern as TWIM/SPIM), keeping the register write itself synchronous.
+//! memory write runs via dual-path EasyDMA (`tick_with_bus` for bare-bus tests,
+//! delay-0 `on_event` under Machine + event-scheduler), keeping the register
+//! write itself synchronous.
 //!
 //! **TASKS_STOP (0x008):** fires EVENTS_STOPPED (0x114).
 //!
@@ -83,7 +84,15 @@ const OFF_EVENTS_CALIBRATEDONE: u64 = 0x110;
 const OFF_EVENTS_STOPPED: u64 = 0x114;
 // EVENTS_CH[i].LIMITH at 0x118 + 0x10*i, .LIMITL at 0x11C + 0x10*i.
 const OFF_EVENTS_CH_FIRST: u64 = 0x118;
-const OFF_EVENTS_CH_LAST: u64 = 0x184; // CH[7].LIMITL
+// CH[n].LIMITH = 0x118 + n*8, CH[n].LIMITL = 0x11C + n*8, for n = 0..=7.
+// The last one is therefore CH[7].LIMITL at 0x154 — 16 words, matching
+// `events_ch: [u32; 16]`.
+//
+// This was 0x184, which spans 28 words. Offsets 0x158..=0x184 indexed past the
+// end of the array and panicked the whole simulator, on the READ path, for any
+// firmware that touched them. Reads there now fall through to the default arm
+// like any other unmodeled offset.
+const OFF_EVENTS_CH_LAST: u64 = 0x154; // CH[7].LIMITL
 
 const OFF_INTEN: u64 = 0x300;
 const OFF_INTENSET: u64 = 0x304;
@@ -124,7 +133,8 @@ pub struct Nrf52Saadc {
     result_maxcnt: u32,
     result_amount: u32,
 
-    /// Conversion pending for `tick_with_bus`. One of PENDING_{NONE,SAMPLE}.
+    /// Conversion pending for EasyDMA engine (`tick_with_bus` / `on_event`).
+    /// One of PENDING_{NONE,SAMPLE}.
     pending: u8,
 }
 
@@ -139,6 +149,14 @@ impl Nrf52Saadc {
 }
 
 impl Peripheral for Nrf52Saadc {
+    /// Dual-path EasyDMA: scheduler delay-0 (`on_event`) under Machine +
+    /// walk-free + batched tick interval, and `tick_with_bus` for bare-bus
+    /// unit tests. No time-driven walk work — SAMPLE completes on the next
+    /// cycle via the scheduler under `rec_tick=512`, not at the bus-tick quantum.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -220,15 +238,48 @@ impl Peripheral for Nrf52Saadc {
         Ok(())
     }
 
+    /// Dual path: bus_tick for bare-bus tests; on_event for scheduler.
     fn needs_bus_tick(&self) -> bool {
         self.pending != PENDING_NONE
     }
 
-    /// Conversion engine. Runs on the bus tick after TASKS_SAMPLE: writes
-    /// `RESULT.MAXCNT` derived 16-bit samples (fixed source scaled to RESOLUTION)
-    /// into the EasyDMA buffer at `RESULT.PTR`, sets RESULT.AMOUNT, and fires
-    /// EVENTS_END + RESULTDONE.
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.pending == PENDING_SAMPLE {
+            self.do_easydma_sample(bus);
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.pending == PENDING_SAMPLE {
+            vec![(0, 1)] // SAMPLE EasyDMA drain (delay-0 → next cycle)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == 1 && self.pending == PENDING_SAMPLE {
+            self.do_easydma_sample(bus);
+        }
+        crate::sched::EventResult::default()
+    }
+}
+
+impl Nrf52Saadc {
+    /// Conversion engine shared by `tick_with_bus` and `on_event`. Writes
+    /// `RESULT.MAXCNT` derived 16-bit samples (fixed source scaled to
+    /// RESOLUTION) into the EasyDMA buffer at `RESULT.PTR`, sets RESULT.AMOUNT,
+    /// and fires EVENTS_END + RESULTDONE.
+    fn do_easydma_sample(&mut self, bus: &mut dyn Bus) {
         if self.pending != PENDING_SAMPLE {
             return;
         }
@@ -411,5 +462,41 @@ mod tests {
         s.write_u32(OFF_ENABLE, 1).unwrap();
         s.write_u32(OFF_TASKS_STOP, 1).unwrap();
         assert_eq!(s.read_u32(OFF_EVENTS_STOPPED).unwrap(), 1);
+    }
+
+    #[test]
+    fn sample_schedules_delay0_event() {
+        let mut s = Nrf52Saadc::new();
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        assert!(s.uses_scheduler());
+        assert!(s.take_scheduled_events().is_empty());
+        s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+        assert_eq!(s.take_scheduled_events(), vec![(0, 1)]);
+    }
+
+    #[test]
+    fn on_event_completes_easydma_sample() {
+        use crate::sched::EventScheduler;
+
+        let mut s = Nrf52Saadc::new();
+        let mut bus = FlatRam::new();
+        let base: u64 = 0x2000_0000;
+
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        s.write_u32(OFF_RESOLUTION, 2).unwrap(); // 12-bit
+        s.write_u32(OFF_RESULT_PTR, base as u32).unwrap();
+        s.write_u32(OFF_RESULT_MAXCNT, 2).unwrap();
+        s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+
+        let mut sched = EventScheduler::new();
+        let _ = s.on_event(1, &mut sched, &mut bus);
+
+        assert_eq!(s.read_u32(OFF_EVENTS_END).unwrap(), 1);
+        assert_eq!(s.read_u32(OFF_EVENTS_RESULTDONE).unwrap(), 1);
+        assert_eq!(s.read_u32(OFF_RESULT_AMOUNT).unwrap(), 2);
+        assert!(!s.needs_bus_tick());
+        let code = sample_code(2);
+        let expect: Vec<u8> = (0..2).flat_map(|_| code.to_le_bytes()).collect();
+        assert_eq!(bus.read_slice(base, 4), expect);
     }
 }

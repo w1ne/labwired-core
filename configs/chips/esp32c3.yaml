@@ -48,8 +48,16 @@ memory_regions:
     size: "128KB"
     image_env: "LABWIRED_ESP32C3_ROM_DATA"
 peripherals:
+  # The Espressif UART IP (crates/core/src/peripherals/esp32c3/uart.rs), NOT the
+  # vendor-neutral `uart` type — that resolves to the STM32 register map, on
+  # which the C3's FIFO writes hit a status register, STATUS reads back 0 (so
+  # the driver believes the 128-byte TX FIFO is always empty) and nothing ever
+  # asserts the UART interrupt. ESP-IDF's blocking `uart_tx_all()` then waits
+  # forever on `tx_fifo_sem` for any write longer than the FIFO, wedging the
+  # sketch on its first `Serial.print` over 128 bytes.
   - id: "uart0"
-    type: "uart"
+    type: "esp32c3_uart"
+    irq: 21 # ETS_UART0_INTR_SOURCE
     base_address: 0x60000000
     size: "512B"
   - id: "gpio"
@@ -68,7 +76,8 @@ peripherals:
   # --- live ESP32-C3 (rev v0.4) reset-state capture (366/423 reg reset values
   # --- matched; the rest are ROM-touched/dynamic). See examples/esp32c3/VALIDATION.md.
   - id: "uart1"
-    type: "uart"
+    type: "esp32c3_uart"
+    irq: 22 # ETS_UART1_INTR_SOURCE
     base_address: 0x60010000
     size: "512B"
   - id: "timg1"
@@ -95,7 +104,7 @@ peripherals:
     config:
       path: "../peripherals/esp32c3/systimer.yaml"
   - id: "io_mux"
-    type: "declarative"
+    type: "esp32c3_io_mux"
     base_address: 0x60009000
     config:
       path: "../peripherals/esp32c3/io_mux.yaml"
@@ -130,11 +139,14 @@ peripherals:
     type: "esp32c3_ledc"
     base_address: 0x60019000
     size: "1KB"
+  # Behavioral RMT (instant TX_END + TX_START count / LogicTap edges).
+  # Arduino LED_BUILTIN / pin 30 → rgbLedWrite → RMT TX. Declarative SVD
+  # stub never completed TX → digitalWrite hung; dual-stack add in test left
+  # led_watch on the stub while MMIO hit the twin (edges=0, rmt count green).
   - id: "rmt"
-    type: "declarative"
+    type: "esp32c3_rmt"
     base_address: 0x60016000
-    config:
-      path: "../peripherals/esp32c3/rmt.yaml"
+    size: "2KB"
   # --- Estate completion 2026-06-11: the remaining SVD-documented blocks the
   # --- ESP32-C3 silicon exposes. Bases are authoritative from the ESP32-C3 SVD
   # --- (tests/fixtures/real_world/esp32c3.svd). Reset values silicon-validated

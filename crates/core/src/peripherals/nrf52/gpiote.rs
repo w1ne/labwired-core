@@ -108,6 +108,8 @@ pub struct Nrf52Gpiote {
     /// flip the target bit and leave all other pad-driven bits unchanged.
     /// `GPIO.OUT` (0x504) is never touched by GPIOTE tasks.
     idr_shadow: [u32; 2],
+    /// Scheduler delay-0 drain chain armed.
+    chain_live: bool,
 }
 
 impl Nrf52Gpiote {
@@ -176,6 +178,29 @@ impl Nrf52Gpiote {
             }
         };
         self.queue_pin_action(channel, new_level);
+    }
+
+    fn has_pending(&self) -> bool {
+        !self.pending_gpio_writes.is_empty()
+            || !self.pending_in_events.is_empty()
+            || self.pending_in_mask != 0
+    }
+
+    fn drain_pending(&mut self) -> PeripheralTickResult {
+        if !self.has_pending() {
+            return PeripheralTickResult::default();
+        }
+        let writes = std::mem::take(&mut self.pending_gpio_writes);
+        let fired = std::mem::take(&mut self.pending_in_events);
+        let irq = self.pending_in_mask & self.inten != 0;
+        self.pending_in_mask = 0;
+        PeripheralTickResult {
+            irq,
+            cycles: 1,
+            mmio_writes: writes,
+            fired_events: fired,
+            ..Default::default()
+        }
     }
 }
 
@@ -257,21 +282,51 @@ impl Peripheral for Nrf52Gpiote {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if self.pending_gpio_writes.is_empty()
-            && self.pending_in_events.is_empty()
-            && self.pending_in_mask == 0
-        {
-            return PeripheralTickResult::default();
+        self.drain_pending()
+    }
+
+    /// `tick()` is a genuine no-op unless it has a pending GPIO write, IN
+    /// event, or IN-mask to deliver.
+    fn legacy_tick_active(&self) -> bool {
+        self.has_pending()
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        // Pending OUT/IN delivery is a write/edge latch drained by delay-0
+        // events (and still by the legacy walk when the feature is off).
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.has_pending() && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, 0)]
+        } else {
+            Vec::new()
         }
-        let writes = std::mem::take(&mut self.pending_gpio_writes);
-        let fired = std::mem::take(&mut self.pending_in_events);
-        let irq = self.pending_in_mask & self.inten != 0;
-        self.pending_in_mask = 0;
-        PeripheralTickResult {
-            irq,
-            cycles: 1,
-            mmio_writes: writes,
-            fired_events: fired,
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let res = self.drain_pending();
+        self.chain_live = self.has_pending();
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            mmio_writes: res.mmio_writes,
+            fired_events: res.fired_events,
+            reschedule_delay: self.chain_live.then_some(1),
             ..Default::default()
         }
     }

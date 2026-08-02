@@ -28,7 +28,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     let xml = fs::read_to_string(&args.input).context("Failed to read SVD file")?;
-    let device = svd_parser::parse(&xml).context("Failed to parse SVD XML")?;
+    let device = svd_ingestor::parse_svd(&xml)
+        .map_err(|e| anyhow::anyhow!(e))
+        .context("Failed to parse SVD XML")?;
 
     fs::create_dir_all(&args.output_dir).context("Failed to create output directory")?;
 

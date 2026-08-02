@@ -326,7 +326,8 @@ peripherals:
     type: "rng"
     base_address: 0x40025000
     size: "1KB"
-    irq: 20
+    # STM32L0 RNG shares AES_RNG_LPUART1_IRQn = 29 (SVD); 20 is TIM21.
+    irq: 29
 
   # --- EXTI (single-bank, <32 lines on L0 → stm32f1-style register file) ----
   - id: "exti"

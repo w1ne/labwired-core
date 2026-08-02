@@ -11,11 +11,13 @@ pub mod config;
 pub mod cosim;
 pub mod coverage;
 pub mod cpu;
+pub mod cycle_clock;
 pub mod decoder;
 pub mod fidelity;
 pub mod inspect;
 pub mod interrupt;
 pub mod logic_capture;
+pub mod machine;
 pub mod memory;
 pub mod metrics;
 pub mod multi_core;
@@ -34,6 +36,11 @@ pub mod vfi;
 pub mod world;
 
 pub use config::SimulationConfig;
+pub use cycle_clock::CycleClock;
+pub use machine::{
+    AdvanceLimits, AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy,
+    IdlePolicy,
+};
 
 use std::any::Any;
 use std::sync::Arc;
@@ -150,6 +157,35 @@ impl PeripheralTickResult {
 }
 
 /// Trait for observing simulation events in a modular way.
+///
+/// # The per-instruction trace contract
+///
+/// Every CPU core MUST emit, for each retired instruction, in this order:
+///
+///   1. `on_step_start(pc, opcode)` — before execution, `pc` is the address
+///      being executed and `opcode` its raw little-endian encoding.
+///   2. `TraceEvent::InstructionRetired { pc, opcode }` via [`emit_trace_event`].
+///   3. `on_step_end(cycles, registers)` — after execution.
+///
+/// A core may skip all three when `observers.is_empty()` (building the
+/// register view is not free), but it may NOT skip them for any other reason:
+/// in particular a JIT/compiled-block fast path must fall back to the
+/// interpreter while anyone is observing, or the trace silently loses the
+/// instructions that matter most.
+///
+/// `registers` is arch-specific in its leading entries, but the **last two
+/// slots are standardized** so that arch-agnostic consumers work everywhere:
+///
+/// ```text
+///   [ .. architectural registers, ISA numbering .. , SP , PC ]
+/// ```
+///
+/// SP and PC are repeated in those trailing slots even when they already
+/// appear in the arch block (ARM's r13/r15, RISC-V's x2). The duplication is
+/// deliberate: it means a consumer never has to know which core produced a
+/// trace to find the two values it almost always wants. See
+/// [`SP_FROM_END`]/[`PC_FROM_END`], and `tests/cpu_trace_conformance.rs`,
+/// which runs every core and fails if one drifts from any of the above.
 pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_simulation_start(&self) {}
     fn on_simulation_stop(&self) {}
@@ -158,6 +194,23 @@ pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_step_end(&self, _cycles: u32, _registers: &[u32]) {}
     fn on_memory_write(&self, _addr: u64, _old: u8, _new: u8) {}
     fn on_peripheral_tick(&self, _name: &str, _cycles: u32) {}
+}
+
+/// Offset of the standardized PC slot from the end of an `on_step_end`
+/// register slice. See [`SimulationObserver`].
+pub const PC_FROM_END: usize = 1;
+/// Offset of the standardized SP slot from the end of an `on_step_end`
+/// register slice. See [`SimulationObserver`].
+pub const SP_FROM_END: usize = 2;
+
+/// SP and PC out of an `on_step_end` register slice, whatever core produced
+/// it. Returns `None` for a slice too short to carry the standard trailer.
+pub fn trace_sp_pc(registers: &[u32]) -> Option<(u32, u32)> {
+    let n = registers.len();
+    if n < SP_FROM_END {
+        return None;
+    }
+    Some((registers[n - SP_FROM_END], registers[n - PC_FROM_END]))
 }
 
 pub fn emit_trace_event(
@@ -170,8 +223,31 @@ pub fn emit_trace_event(
 }
 
 /// Trait representing a CPU architecture
+/// Feature-agnostic JIT engine run counters, mirrored from a concrete CPU's
+/// engine so generic (`C: Cpu`) callers can observe non-vacuity without pulling
+/// in the JIT-only `EngineStats` type. All-zero / absent for interpreter-only
+/// CPUs and for runs where the JIT engine was never created.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CpuJitStats {
+    /// Blocks that crossed the hot threshold and were compiled + installed.
+    pub compiled: u64,
+    /// Compiled-block invocations.
+    pub block_runs: u64,
+    /// Guest instructions retired inside compiled blocks.
+    pub block_instrs: u64,
+    /// Guest instructions retired on the interpreter fallback path.
+    pub interpreted: u64,
+}
+
 pub trait Cpu: Send {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()>;
+    /// JIT engine counters for this CPU, if it ran a JIT that was created.
+    /// Default `None` (interpreter-only CPUs / non-JIT builds). Lets generic
+    /// `C: Cpu` callers — e.g. the CLI oracle loop — assert the compiled path
+    /// was non-vacuously exercised without downcasting to the concrete CPU.
+    fn jit_engine_stats(&self) -> Option<CpuJitStats> {
+        None
+    }
     /// Downcast escape hatch for runtime fast-paths that need the
     /// concrete CPU type (e.g. the browser-side JIT prototype in
     /// `labwired-wasm` reaches into `XtensaLx7` for direct register
@@ -283,6 +359,16 @@ pub trait Cpu: Send {
     /// default is a no-op for CPUs that do not opt into idle fast-forwarding.
     fn fast_forward_idle_cycles(&mut self, _cycles: u64) {}
 
+    /// True while this core is parked in an architectural wait (e.g. Xtensa
+    /// `WAITI`) and will only retire work when an interrupt wakes it.
+    ///
+    /// Dual-core machines use this to batch the primary core while a secondary
+    /// APP CPU sits in FreeRTOS idle: lockstep quantum-1 is only required when
+    /// the secondary is actively executing or still held in reset (`halted`).
+    fn is_parked_idle(&self) -> bool {
+        false
+    }
+
     /// Phase 3.2 JIT pilot (issue #124): total number of times any
     /// JIT-compiled block on this CPU has been invoked. Default 0 for
     /// CPUs/builds without JIT support so callers can unconditionally
@@ -389,12 +475,32 @@ impl Cpu for Box<dyn Cpu> {
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {
         (**self).fast_forward_idle_cycles(cycles)
     }
+    fn is_parked_idle(&self) -> bool {
+        (**self).is_parked_idle()
+    }
     fn jit_hit_count(&self) -> u64 {
         (**self).jit_hit_count()
     }
 }
 
 /// Trait representing a memory-mapped peripheral
+/// Host-side classification of one MMIO access for idle/coalesce policy.
+///
+/// **CPU-agnostic:** the bus never hardcodes chip register maps. Each
+/// peripheral model opts in via [`Peripheral::mmio_access_class`]. Default is
+/// [`SideEffecting`](MmioAccessClass::SideEffecting) so unknown devices never
+/// get accelerated and one CPU's optim path cannot silently affect another.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MmioAccessClass {
+    /// May change peripheral or world state — disqualifies poll-coalesce.
+    SideEffecting,
+    /// Freerunning timer snapshot only (busy-poll loops). Coalesce-eligible
+    /// under idle FF; device time still advances to the next event.
+    FreerunningTimerPoll,
+    /// Side-effect-free window (e.g. XIP code/rodata). Ignored for bookkeeping.
+    SideEffectFree,
+}
+
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
@@ -443,6 +549,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that care about elapsed CPU cycles override this.
     fn tick_elapsed(&mut self, _cycles: u64) -> PeripheralTickResult {
         self.tick()
+    }
+    /// Specialized compatibility hook for a bare-CPU hardware oracle that
+    /// freezes the CPU and settles peripherals through their historical walk
+    /// even when the production event scheduler owns them.
+    ///
+    /// The default preserves ordinary tick behavior. Scheduler-driven models
+    /// whose regular `tick` deliberately no-ops may override this to expose
+    /// their legacy one-tick transition to that oracle only.
+    #[doc(hidden)]
+    fn tick_elapsed_forced(&mut self, cycles: u64) -> PeripheralTickResult {
+        self.tick_elapsed(cycles)
     }
     /// PPI hook: given absolute addresses of events that just fired
     /// across the bus, return absolute addresses of tasks to trigger.
@@ -532,6 +649,45 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn needs_bus_tick(&self) -> bool {
         false
     }
+
+    /// Bare-CPU-oracle twin of [`Self::needs_bus_tick`] — the `tick_with_bus`
+    /// counterpart of [`Self::tick_elapsed_forced`].
+    ///
+    /// A model whose real work lives in `tick_with_bus` (it moves bytes over
+    /// the bus) and which self-guards that hook on `scheduler_mode()` is
+    /// invisible to the forced walk: `tick_elapsed_forced` never reaches the
+    /// transfer engine, and the bus-tick pass never even selects the model
+    /// because `needs_bus_tick()` already reported `false`. Overriding this
+    /// pair re-exposes the historical one-tick transfer to the oracle only.
+    ///
+    /// The default forwards to `needs_bus_tick`, so the ordinary walk and every
+    /// model that does not opt in are unchanged.
+    #[doc(hidden)]
+    fn needs_bus_tick_forced(&self) -> bool {
+        self.needs_bus_tick()
+    }
+
+    /// Bare-CPU-oracle twin of [`Self::tick_with_bus`]; see
+    /// [`Self::needs_bus_tick_forced`]. Default forwards to `tick_with_bus`.
+    #[doc(hidden)]
+    fn tick_with_bus_forced(&mut self, bus: &mut dyn Bus) {
+        self.tick_with_bus(bus)
+    }
+
+    /// True if this peripheral's `tick_with_bus` must keep running at a bounded
+    /// cadence even while the CPU is idle-fast-forwarding — because it services
+    /// an *external* medium (a WiFi station polling a shared-AP inbox and
+    /// beaconing) whose frames would otherwise be starved for the whole skip
+    /// window, breaking association. Idle fast-forward caps its skip to a small
+    /// poll quantum and runs the bus-tick pass at the deadline when any bus
+    /// peripheral returns true here. Default false: every self-contained
+    /// peripheral drives entirely off CPU cycles / scheduler events and never
+    /// needs the idle window shortened. Peripherals that opt in MUST key their
+    /// internal cadence (beacons, timeouts) on device cycles — NOT on
+    /// tick_with_bus call count — since the call frequency now varies.
+    fn idle_poll_bus_tick(&self) -> bool {
+        false
+    }
     /// True if this peripheral needs the legacy per-tick `tick()` walk.
     ///
     /// The conservative default is true: hand-written behavioral peripherals
@@ -580,12 +736,109 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         None
     }
+
+    /// Stimulus reachability: call `f` once for every device attached to this
+    /// controller that accepts simulated input, in attach order.
+    ///
+    /// This is the seam behind [`crate::bus::SystemBus::list_inputs`] and
+    /// `set_input`. The bus walks peripherals and asks each one this question;
+    /// it does NOT know which concrete controller types can host devices. That
+    /// is the whole point — the previous implementation was a downcast chain
+    /// over three hardcoded types, so every controller added afterwards
+    /// (ESP32-C3 I²C/SPI, ESP32-S3 I²C) silently hosted devices that no agent,
+    /// test script, MCP call, or UI panel could drive. The component unit tests
+    /// still passed; the devices were simply unreachable.
+    ///
+    /// **A controller that can host attachable devices MUST override this.**
+    /// If it does not, its devices are undrivable: they answer no
+    /// `list_inputs` query and `set_input` fails with `NoDevice`. There is no
+    /// diagnostic for this — the default below is indistinguishable from an
+    /// honest "I host nothing", which is exactly how the bug survived. The
+    /// rule of thumb: if a type appears in
+    /// [`crate::bus::SystemBus::attach_i2c_slave`] or `attach_spi_device`, it
+    /// owes an implementation here.
+    ///
+    /// Early stop: `f` returns `true` to request that the walk stop. An
+    /// implementation MUST stop calling `f` at that point and propagate
+    /// `true` as its own return value; return `false` when the walk ran to
+    /// completion. The bus relies on this to make `set_input` apply to exactly
+    /// one device.
+    fn for_each_attached_sim_input(
+        &mut self,
+        _f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        false
+    }
+
+    /// Authoritative simulated wall-clock, in microseconds, if this peripheral
+    /// is a system time source firmware reads for *elapsed time*.
+    ///
+    /// This is the honest generalization of what the nRF54L TWIM already does by
+    /// hand — reading the GRTC SYSCOUNTER (µs) over the bus before servicing a
+    /// slave. Instead of a hardcoded register address, the machine asks every
+    /// peripheral this question and uses the answer to drive attached I²C
+    /// devices' `advance_time_us` data-ready clocks (see
+    /// [`Machine::advance`] / `SystemBus::advance_central_i2c_time`).
+    ///
+    /// Only implemented by peripherals that model a genuine *absolute* µs-grade
+    /// counter firmware uses to measure elapsed time — the ESP32 SYSTIMER (a
+    /// silicon 16 MHz free-running counter). A wrapping down-counter (Cortex-M
+    /// SysTick) or a wrap-at-ARR timer (STM32 TIMx) does NOT qualify: it holds
+    /// no absolute time, and fabricating one from a per-board core frequency
+    /// would be a pinned-clock cheat. Those families return `None` (default), so
+    /// a `delay_us` device on them stays effectively always-ready, exactly as
+    /// before this hook existed — no observable behavior changes for them.
+    ///
+    /// The value MUST be monotonic within a run except across an explicit
+    /// counter reload (the machine re-anchors on a backward jump rather than
+    /// advancing devices by a negative delta).
+    fn sim_time_us(&self) -> Option<u64> {
+        None
+    }
+
+    /// True if this controller hosts I²C slaves whose data-ready clocks the
+    /// machine's central time drive should advance (see
+    /// [`Self::advance_attached_i2c_us`]). Default `false`.
+    ///
+    /// The nRF54L TWIM deliberately does NOT opt in: it drives its slaves'
+    /// `advance_time_us` itself off the GRTC, per transaction, so opting into
+    /// the central drive too would advance time twice. Every other I²C
+    /// controller that hosts attachable slaves returns `true`, and the bus
+    /// caches their indices at assembly so the per-slice drive is O(controllers)
+    /// with no per-tick peripheral walk.
+    fn drives_central_i2c_time(&self) -> bool {
+        false
+    }
+
+    /// Advance every attached I²C slave's free-running sample/measurement clock
+    /// by `us` microseconds (see [`crate::peripherals::i2c::I2cDevice::advance_time_us`]).
+    ///
+    /// The machine calls this once per scheduler slice on each controller that
+    /// [`drives_central_i2c_time`](Self::drives_central_i2c_time), handing over
+    /// the microseconds that elapsed on the chip's authoritative
+    /// [`sim_time_us`](Self::sim_time_us) source since the previous slice. A
+    /// controller overriding this walks its attached-device list and forwards
+    /// `us` to each. Default no-op (non-I²C peripherals, and the self-driving
+    /// nRF54L TWIM).
+    fn advance_attached_i2c_us(&mut self, _us: u64) {}
+
     fn dma_request(&mut self, _request_id: u32) {}
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
     fn restore(&mut self, _state: serde_json::Value) -> SimResult<()> {
         Ok(())
+    }
+
+    /// Optional source register descriptor for debugger clients that need the
+    /// config-level layout (including reset values and descriptions), rather
+    /// than the display-oriented [`Self::describe_registers`] schema.
+    ///
+    /// Declarative peripherals return their original descriptor. Behavioral
+    /// peripherals that replace a declarative register surface may do the same
+    /// to keep debugger integrations faithful to the configured chip.
+    fn peripheral_descriptor(&self) -> Option<labwired_config::PeripheralDescriptor> {
+        None
     }
 
     /// Optional register-layout schema for the universal inspect interface.
@@ -659,9 +912,10 @@ pub trait Peripheral: std::fmt::Debug + Send {
     ) {
     }
 
-    /// Phase 2B.1: when `true`, `Machine::step` skips this peripheral's
-    /// legacy `tick()` walk and relies on the scheduler to drive it. Default
-    /// `false` preserves existing per-cycle tick behaviour.
+    /// Phase 2B.1: when `true`, the authoritative [`Machine::advance`]
+    /// lifecycle skips this peripheral's legacy `tick()` walk and relies on
+    /// the scheduler to drive it. Default `false` preserves existing per-cycle
+    /// tick behaviour.
     fn uses_scheduler(&self) -> bool {
         false
     }
@@ -690,6 +944,71 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// override.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         Vec::new()
+    }
+
+    /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
+    /// can lazily sync `Cell`-held counter state to the published "now"
+    /// (batch-boundary freshness — exact at batch boundaries, < one
+    /// `peripheral_tick_interval` stale mid-batch, the same bound as the
+    /// write-path [`Self::sync_to`]).
+    ///
+    /// Called once by `SystemBus::add_peripheral` at attach time. Default
+    /// no-op: peripherals that don't opt in never see it. A read-polled
+    /// counter model overrides this to store the clock; the conservative
+    /// contract is that WITHOUT an attached clock the model must stay on
+    /// its legacy walk path (`uses_scheduler() == false`), so hand-built
+    /// buses that bypass `add_peripheral` keep the old exact semantics.
+    fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
+
+    /// Tell the peripheral which NVIC/matrix line it was registered with (the
+    /// `irq` of its `PeripheralEntry`), or `None` when the descriptor wired
+    /// none. Called once at the same attach choke points as
+    /// [`Peripheral::attach_cycle_clock`] (`add_peripheral` / `push_peripheral`).
+    ///
+    /// Exists because [`crate::sched::EventResult::raise_own_irq`] is DROPPED by
+    /// the machine when the entry has no `irq` (`lib.rs`, `apply_event_result`):
+    /// a model whose only reason to wake per cycle is holding a level-triggered
+    /// own-IRQ is doing provably unobservable work on such a bus, and can stop
+    /// scheduling itself. Only the shared `Uart` opts in today.
+    ///
+    /// Default no-op, and the conservative contract matches
+    /// `attach_cycle_clock`: a model that never receives this must assume its
+    /// IRQ *is* wired and keep its legacy wakeup cadence, so hand-built buses
+    /// that bypass the choke points keep the old exact semantics.
+    fn attach_irq_line(&mut self, _irq: Option<u32>) {}
+
+    /// Classify an MMIO access at `offset` for host idle/coalesce policy.
+    /// Default [`MmioAccessClass::SideEffecting`] — only models that are
+    /// proven poll-safe (or proven side-effect-free) override this.
+    fn mmio_access_class(&self, _offset: u64) -> MmioAccessClass {
+        MmioAccessClass::SideEffecting
+    }
+
+    /// Walk-free plan (ESP32-C3): the interrupt-matrix source IDs this
+    /// peripheral is asserting RIGHT NOW (level-sensitive). The per-cycle walk
+    /// normally re-emits a level source every tick via `PeripheralTickResult::
+    /// explicit_irqs`, and the bus rebuilds the C3 asserted-source bitmap from
+    /// that each tick. A scheduler-driven peripheral is skipped by the walk, so
+    /// the bus re-derives its live level from this method instead
+    /// (`SystemBus::refresh_esp32c3_sched_sources`, called from the event path
+    /// and the walk-tick aggregation). Default empty — only scheduler-driven
+    /// peripherals that raise C3 matrix IRQs override it.
+    ///
+    /// Push-based twin of [`Self::matrix_irq_sources`]: the bus polls this on
+    /// the per-batch IRQ-level re-derivation path (`poll_scheduler_matrix_sources`)
+    /// with a RETAINED scratch buffer, so a scheduler-driven peripheral no longer
+    /// allocates a fresh `Vec` per poll. Override THIS (not the returning form) in
+    /// new models; the returning `matrix_irq_sources` defaults to a thin wrapper.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        let _ = out;
+    }
+
+    /// Convenience returning form (tests, one-shot callers). The hot per-batch
+    /// poll uses [`Self::matrix_irq_sources_into`] with retained scratch instead.
+    fn matrix_irq_sources(&self) -> Vec<u32> {
+        let mut out = Vec::new();
+        self.matrix_irq_sources_into(&mut out);
+        out
     }
 }
 
@@ -754,6 +1073,49 @@ pub trait Bus {
     fn external_irq_lines(&self) -> u32 {
         0
     }
+
+    /// Event-scheduler Gap-#1 hook: `true` iff an MMIO write executed since the
+    /// last `drain_scheduler_events` armed a peripheral event that has not yet
+    /// been moved into the scheduler heap (it is sitting in `pending_schedule`).
+    /// A CPU batch loop polls this after each interpreted instruction while the
+    /// tick interval is widened (> 1) so it can END the batch on the arming
+    /// write — the just-armed event is then enqueued by the post-batch drain and
+    /// the NEXT batch's `next_event_deadline` clamp delivers it at its exact
+    /// cycle, instead of the batch overrunning the deadline. O(1); default false
+    /// for buses that don't model the scheduler.
+    #[cfg(feature = "event-scheduler")]
+    fn has_pending_schedule(&self) -> bool {
+        false
+    }
+
+    /// Earliest absolute cycle among events sitting in `pending_schedule`
+    /// (not yet on the scheduler heap). Used by the CPU batch loop to **clamp**
+    /// the remaining batch to that deadline instead of ending on the first arm
+    /// (far-future timers would otherwise force ~tens-of-instruction batches).
+    /// Fidelity: we still never retire past the deadline without a drain.
+    /// Default `None`.
+    #[cfg(feature = "event-scheduler")]
+    fn earliest_pending_deadline(&self) -> Option<u64> {
+        None
+    }
+
+    /// The bus's mirrored "current cycle" (what lazy peripherals read through the
+    /// shared `CycleClock`). A CPU batch loop reads this once at batch entry to
+    /// learn the batch-start cycle, then republishes the EXACT cycle before each
+    /// interpreted instruction via [`Self::publish_cycle`] so a mid-batch MMIO
+    /// read of a lazily-derived counter sees `batch_start + retired` — the same
+    /// value interval-1 would show — instead of the stale batch-start value.
+    /// Default 0 for buses that don't model a cycle clock.
+    #[cfg(feature = "event-scheduler")]
+    fn current_cycle(&self) -> u64 {
+        0
+    }
+
+    /// Republish the shared `CycleClock` to `cycle` (see [`Self::current_cycle`]).
+    /// Called per interpreted instruction while the tick interval is widened, so
+    /// the cost is a single relaxed atomic store on the hot path. Default no-op.
+    #[cfg(feature = "event-scheduler")]
+    fn publish_cycle(&mut self, _cycle: u64) {}
 
     /// Plan 2: deliver a coherent 32-bit value to peripherals after the
     /// four byte writes that compose a write_u32 have been dispatched.
@@ -847,6 +1209,25 @@ pub trait DebugControl {
     fn read_memory(&self, addr: u32, len: usize) -> SimResult<Vec<u8>>;
     fn write_memory(&mut self, addr: u32, data: &[u8]) -> SimResult<()>;
 
+    /// Side-effect-free decode of peripheral state, for debugger and agent views.
+    ///
+    /// Prefer this over [`Self::read_memory`] for anything a *human is merely
+    /// looking at*. `read_memory` goes through the real bus read path, so it
+    /// fires read side effects — a read-to-clear status register is cleared by
+    /// the act of displaying it, and the firmware under test then misses the
+    /// event. `inspect` uses `peek` throughout and cannot perturb the run.
+    fn inspect(
+        &self,
+        name: Option<&str>,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::MachineInspect;
+
+    /// Side-effect-free raw read. Bytes outside any mapped region or peripheral
+    /// window come back as [`crate::inspect::PeekByte::Unmapped`] rather than a
+    /// silent zero, so a debugger can render unmodeled space honestly instead of
+    /// showing a convincing `0x00000000`.
+    fn peek(&self, addr: u64, len: usize) -> crate::inspect::PeekResult;
+
     fn get_pc(&self) -> u32;
     fn set_pc(&mut self, addr: u32);
     fn get_register_names(&self) -> Vec<String>;
@@ -872,6 +1253,14 @@ pub enum StopReason {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Counters collected during one measured machine run.
+///
+/// These are execution-path counters, not wall-clock or workload markers:
+/// `cpu_instructions` counts retired instructions, `cpu_batches` counts CPU
+/// dispatch batches, and the remaining fields describe peripheral/bus work
+/// driven by that same pass. Workload-specific observables (for example an
+/// OLED first-paint cycle or a serial completion marker) belong to the
+/// workload harness and must not be added here.
 pub struct StepProfile {
     pub cpu_instructions: u64,
     pub cpu_batches: u64,
@@ -880,6 +1269,17 @@ pub struct StepProfile {
     pub bus_tick_entries: u64,
     pub legacy_tick_entries: u64,
 }
+
+/// Maximum cycles CPU idle fast-forward may skip in one step while a bus
+/// peripheral needs bounded external-medium polling (a medium-mode WiFi MAC —
+/// see [`Peripheral::idle_poll_bus_tick`]). Each skip runs the medium pump at
+/// its deadline, so this sets the worst-case frame-delivery latency: ~8192
+/// cycles ≈ 51 µs at 160 MHz, far under any WiFi association/DHCP/socket
+/// timeout, while still collapsing the millions of idle cycles the CPU would
+/// otherwise execute one-by-one. Non-WiFi buses never consult this. Only the
+/// event-scheduler fast-forward path consults the medium poll quantum.
+#[cfg(feature = "event-scheduler")]
+const WIFI_MEDIUM_IDLE_POLL_QUANTUM: u64 = 8192;
 
 pub struct Machine<C: Cpu> {
     pub cpu: C,
@@ -897,6 +1297,10 @@ pub struct Machine<C: Cpu> {
     pub breakpoints: std::collections::HashSet<u32>,
     pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
+    /// Cumulative CPU cycles advanced by idle fast-forward (WFI skip), not
+    /// interpreted. Lets the browser `?perf=1` HUD prove FF is firing; 0 means
+    /// either FF is off or firmware never parks in a skippable idle.
+    pub idle_fast_forward_cycles_skipped: u64,
     pub config: SimulationConfig,
     step_profile: StepProfile,
 
@@ -942,6 +1346,40 @@ pub struct Machine<C: Cpu> {
     /// feature.
     #[allow(dead_code)]
     hcsr04_edge_scratch: Vec<(usize, u64, u64)>,
+    /// Reusable scratch for the per-tick `tick_peripherals_fully` interrupt
+    /// harvest, so the steady-state peripheral tick pushes pending NVIC IRQs
+    /// into a retained buffer instead of allocating a fresh `Vec` every tick
+    /// (the ~731k `RawVec::grow_one` the callgrind profile blamed on the C3
+    /// SYSTIMER tick). Cleared, not reallocated, each tick. Same pattern as
+    /// [`Self::hcsr04_edge_scratch`].
+    tick_irq_scratch: Vec<u32>,
+    /// Reusable scratch for the per-tick peripheral-cost list, paired with
+    /// [`Self::tick_irq_scratch`]. Empty on the walk-free fast path.
+    tick_cost_scratch: Vec<bus::PeripheralTickCost>,
+    /// Reusable scratch for `drain_scheduler_events`'s pending-schedule harvest.
+    /// Swapped with `bus.pending_schedule` and drained in place so the drain
+    /// reuses the buffer's capacity instead of `mem::take` freeing and later
+    /// reallocating a fresh `Vec` every time write-context events were buffered.
+    /// Semantics are identical (same entries, same order). Always present; only
+    /// used under the `event-scheduler` feature.
+    #[allow(dead_code)]
+    pending_schedule_scratch: Vec<(usize, u64, u32)>,
+    /// Reusable scratch for the due-events batch drained out of the scheduler
+    /// each `drain_scheduler_events`. Taken out, filled by
+    /// `EventScheduler::drain_due_into`, iterated, then restored — so the
+    /// steady-state SYSTIMER tick (which drains an event nearly every batch)
+    /// reuses the buffer's capacity instead of allocating a fresh `Vec` per
+    /// drain. Always present; only used under the `event-scheduler` feature.
+    #[allow(dead_code)]
+    due_events_scratch: Vec<sched::ScheduledEvent>,
+    /// Reusable no-op stand-in for the peripheral swap-out dance in
+    /// `drain_scheduler_events` (a peripheral's `on_event` needs `&mut self.bus`,
+    /// so the peripheral is temporarily replaced by a stub). Held here and
+    /// swapped in/out so the hot scheduler event path (the ESP32-C3 SYSTIMER
+    /// alarm fires one per drain) does not `Box::new` + free a fresh stub every
+    /// event. Always `Some` between events. Only used under `event-scheduler`.
+    #[allow(dead_code)]
+    event_placeholder: Option<Box<dyn Peripheral>>,
 
     /// In-engine logic-analyzer edge capture (see [`crate::logic_capture`]).
     /// Empty/inactive by default — the step loop pays a single `is_active`
@@ -955,9 +1393,37 @@ pub struct Machine<C: Cpu> {
     /// differential oracle tests use to compare the two capture modes; it is
     /// NOT user-facing configuration.
     logic_force_poll: bool,
+
+    /// Cached bus index of the chip's authoritative simulated-µs source (first
+    /// peripheral whose [`Peripheral::sim_time_us`] answers `Some` — the ESP32
+    /// SYSTIMER). `None` on families with no absolute-µs counter (Cortex-M
+    /// SysTick/TIM, nRF52), where declarative `delay_us` devices stay
+    /// effectively always-ready exactly as before this hook. Resolved once at
+    /// construction, like [`Self::rtc_cntl_index`].
+    i2c_time_source_index: Option<usize>,
+    /// Cached bus indices of I²C controllers that opt into the central time
+    /// drive ([`Peripheral::drives_central_i2c_time`]). Excludes the nRF54L
+    /// TWIM, which drives its slaves' `advance_time_us` itself off the GRTC —
+    /// so time is advanced exactly once. Empty ⇒ the drive short-circuits.
+    i2c_time_controller_indices: Vec<usize>,
+    /// Last authoritative µs the I²C slaves were advanced to. `u64::MAX` seeds
+    /// "not yet anchored" so the first drive sets the mark without advancing
+    /// (mirrors the nRF54L TWIM `last_us` seeding). A backward jump (SYSTIMER
+    /// LOAD) re-anchors rather than advancing by a negative delta.
+    last_i2c_time_us: u64,
 }
 
 impl<C: Cpu> Machine<C> {
+    /// Whether any logic-analyzer / signal probe is armed (poll or push mode).
+    /// The `jit_framework` [`SafetyGate`](crate::cpu::jit_framework::fallback::SafetyGate)
+    /// reads this to force the interpreter while a probe needs per-cycle pad
+    /// visibility. `logic_capture` is module-private, so this crate-internal
+    /// accessor is how the RISC-V JIT host reaches it.
+    #[cfg(any(feature = "jit", feature = "jit-framework"))]
+    pub(crate) fn logic_probes_active(&self) -> bool {
+        self.logic_capture.poll_active() || self.logic_capture.push_active()
+    }
+
     /// Discover the drivable input channels on this machine (delegates to
     /// [`bus::SystemBus::list_inputs`]). See [`crate::sim_input`].
     pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
@@ -1078,9 +1544,9 @@ impl<C: Cpu> Machine<C> {
         self.logic_force_poll = force;
     }
 
-    /// Drain logic edges newer than `cursor` (see
-    /// [`logic_capture::LogicCapture::read_edges`]).
-    pub fn logic_read_edges(&self, cursor: u64) -> logic_capture::LogicEdgeBatch {
+    /// Read logic edges newer than `cursor`, acknowledging retained edges
+    /// before it (see [`logic_capture::LogicCapture::read_edges`]).
+    pub fn logic_read_edges(&mut self, cursor: u64) -> logic_capture::LogicEdgeBatch {
         self.logic_capture.read_edges(cursor)
     }
 
@@ -1088,6 +1554,17 @@ impl<C: Cpu> Machine<C> {
     /// read so the UI can extend flat traces to "now".
     pub fn logic_now_cycle(&self) -> u64 {
         self.total_cycles
+    }
+
+    /// `true` while at least one watched channel is on the per-cycle poll
+    /// fallback. Frontends inspect this when choosing an outer request batch
+    /// limit; [`Machine::advance`] independently clamps each internal batch to
+    /// one so polled pads are sampled at every cycle boundary. Push-only watch
+    /// sets keep the full batch width because their peripherals report edges
+    /// from the write sites.
+    #[inline]
+    pub fn logic_poll_active(&self) -> bool {
+        self.logic_capture.poll_active()
     }
 
     /// Observe the watched channels at the current cycle boundary: drain the
@@ -1146,6 +1623,22 @@ impl<C: Cpu> Machine<C> {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
                 .is_some()
         });
+        // Central I²C data-ready time drive (Option A): the authoritative µs
+        // source is the first peripheral that reports one (ESP32 SYSTIMER); the
+        // fan-out targets are the opted-in I²C controllers. Both are stable for
+        // the life of the bus (chip peripherals are added at assembly; slaves
+        // attach to already-present controllers), so resolve once here.
+        let i2c_time_source_index = bus
+            .peripherals
+            .iter()
+            .position(|p| p.dev.sim_time_us().is_some());
+        let i2c_time_controller_indices = bus
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.dev.drives_central_i2c_time())
+            .map(|(i, _)| i)
+            .collect();
         Self {
             cpu,
             cpu_secondary: None,
@@ -1154,6 +1647,7 @@ impl<C: Cpu> Machine<C> {
             breakpoints: HashSet::new(),
             last_breakpoint: None,
             total_cycles: 0,
+            idle_fast_forward_cycles_skipped: 0,
             config: SimulationConfig::default(),
             step_profile: StepProfile::default(),
             sched: sched::EventScheduler::new(),
@@ -1163,9 +1657,59 @@ impl<C: Cpu> Machine<C> {
             scb_index,
             scheduler_bootstrapped: false,
             hcsr04_edge_scratch: Vec::new(),
+            tick_irq_scratch: Vec::new(),
+            tick_cost_scratch: Vec::new(),
+            pending_schedule_scratch: Vec::new(),
+            due_events_scratch: Vec::new(),
+            event_placeholder: Some(Box::new(crate::peripherals::stub::StubPeripheral::new(0))),
             logic_capture: logic_capture::LogicCapture::new(),
             logic_force_poll: false,
+            i2c_time_source_index,
+            i2c_time_controller_indices,
+            last_i2c_time_us: u64::MAX,
         }
+    }
+
+    /// Advance every centrally-driven I²C slave's data-ready clock to the chip's
+    /// authoritative simulated-µs "now" (Option A). Called once per scheduler
+    /// slice from [`Self::commit_advance_boundary`].
+    ///
+    /// This is the honest generalization of the nRF54L TWIM's per-transaction
+    /// GRTC advance: instead of a hardcoded µs register, the machine reads
+    /// whichever peripheral models an absolute-µs counter ([`Peripheral::sim_time_us`])
+    /// and hands the elapsed delta to each opted-in controller. Families with no
+    /// such source (Cortex-M, nRF52) short-circuit here, so their behavior is
+    /// unchanged. The nRF54L TWIM is never in the controller list (it does not
+    /// opt in), so its slaves are advanced exactly once — by TWIM itself.
+    fn advance_central_i2c_time(&mut self) {
+        let Some(src) = self.i2c_time_source_index else {
+            return;
+        };
+        if self.i2c_time_controller_indices.is_empty() {
+            return;
+        }
+        let now = match self.bus.peripherals[src].dev.sim_time_us() {
+            Some(now) => now,
+            None => return,
+        };
+        let last = self.last_i2c_time_us;
+        if last == u64::MAX || now < last {
+            // First slice, or a counter reload jumped time backward: re-anchor
+            // without advancing (never hand a slave a negative delta).
+            self.last_i2c_time_us = now;
+            return;
+        }
+        if now == last {
+            return;
+        }
+        let delta = now - last;
+        // Index by value so the immutable read of the cached list and the
+        // mutable peripheral borrow don't overlap.
+        for i in 0..self.i2c_time_controller_indices.len() {
+            let idx = self.i2c_time_controller_indices[i];
+            self.bus.peripherals[idx].dev.advance_attached_i2c_us(delta);
+        }
+        self.last_i2c_time_us = now;
     }
 
     /// Enable dual-core mode by attaching a secondary CPU instance.
@@ -1193,7 +1737,12 @@ impl<C: Cpu> Machine<C> {
         self.step_profile.legacy_tick_entries += legacy_tick_entries as u64;
     }
 
-    fn try_idle_fast_forward(&mut self, _max_steps: Option<u32>, _steps: u32) -> u32 {
+    fn try_idle_fast_forward(
+        &mut self,
+        _max_steps: Option<u64>,
+        _steps: u64,
+        breakpoints_block_idle: bool,
+    ) -> u64 {
         // POLLED logic capture disables the skip: a scheduler event inside the
         // skipped window could toggle a watched pad, and the per-cycle poll
         // guarantee must hold even under this opt-in acceleration. Push-only
@@ -1201,7 +1750,7 @@ impl<C: Cpu> Machine<C> {
         // instrumented peripheral code, which pushes its own edge with the
         // post-skip tap clock (seeded below before the scheduler drain).
         if !self.config.idle_fast_forward_enabled
-            || !self.breakpoints.is_empty()
+            || breakpoints_block_idle
             || self.bus.requires_cycle_accurate()
             || self.logic_capture.poll_active()
         {
@@ -1223,33 +1772,62 @@ impl<C: Cpu> Machine<C> {
             // which case the CPU must resume normally instead of skipping.
             self.drain_scheduler_events();
 
-            let mut budget = match self.cpu.idle_fast_forward_budget(&self.bus) {
+            // Two coalesce sources under the same idle-FF flag:
+            // 1) Architectural WFI / wait-for-interrupt (existing).
+            // 2) Pure freerunning-timer poll batches (peripherals opt in via
+            //    MmioAccessClass::FreerunningTimerPoll — e.g. ESP SYSTIMER
+            //    snapshot regs for Arduino millis). Device time still advances
+            //    to the next scheduled event; we only skip empty spin. Bus
+            //    stays CPU-agnostic: chip register maps live in peripheral
+            //    models, not SystemBus.
+            let wfi_budget = self.cpu.idle_fast_forward_budget(&self.bus);
+            let timer_poll = self.bus.take_timer_poll_coalesce_eligible();
+            let mut budget = match wfi_budget {
                 Some(budget) if budget > 0 => budget,
+                _ if timer_poll => u64::MAX,
                 _ => return 0,
             };
             let remaining = _max_steps
-                .map(|limit| limit.saturating_sub(_steps) as u64)
+                .map(|limit| limit.saturating_sub(_steps))
                 .unwrap_or(1_000_000);
             if remaining == 0 {
                 return 0;
             }
             budget = budget.min(remaining);
 
-            let generations = self.bus.peripheral_generations();
-            if let Some(deadline_cycle) = self.sched.next_event_deadline(&generations) {
+            // A bus peripheral servicing an external medium (a medium-mode WiFi
+            // MAC) must keep being pumped through the idle window or its inbound
+            // frames are starved for the whole skip — breaking WiFi association
+            // under fast-forward. Cap the skip to a small poll quantum and run
+            // the bus-tick pump at the deadline (below, after the skip commits).
+            // Gated on the tiny bus-tick set, so it is free on every other bus.
+            let idle_poll = self.bus.idle_poll_bus_tick_active();
+            if idle_poll {
+                budget = budget.min(WIFI_MEDIUM_IDLE_POLL_QUANTUM);
+            }
+
+            if let Some(deadline_cycle) = self.sched.next_event_deadline() {
                 if deadline_cycle <= self.total_cycles {
                     return 0;
                 }
                 budget = budget.min(deadline_cycle - self.total_cycles);
+            } else if timer_poll && wfi_budget.is_none() {
+                // No scheduled event and not WFI: cap pure millis spins so a
+                // single batch cannot leap the whole step budget when the heap
+                // is empty (still advances real device time, just bounded).
+                budget = budget.min(1_000_000);
             }
 
-            if budget == 0 {
+            // Tiny windows are not worth the skip bookkeeping on the timer-poll
+            // path (WFI may still skip short waits).
+            if budget == 0 || (timer_poll && wfi_budget.is_none() && budget < 1024) {
                 return 0;
             }
             let skipped = budget.min(u32::MAX as u64) as u32;
             self.cpu.fast_forward_idle_cycles(skipped as u64);
             self.total_cycles += skipped as u64;
-            self.bus.current_cycle = self.total_cycles;
+            self.idle_fast_forward_cycles_skipped += skipped as u64;
+            self.bus.set_current_cycle(self.total_cycles);
             self.bus.bus_trace.set_cycle(self.total_cycles);
             // Push-mode logic capture: stamp any pad writes made by the
             // scheduler events due at the end of the skipped window with the
@@ -1261,7 +1839,15 @@ impl<C: Cpu> Machine<C> {
             }
             self.sched.advance_to(self.total_cycles);
             self.drain_scheduler_events();
-            skipped
+            // Pump the external-medium bus-tick peripherals at the poll deadline
+            // (current_cycle was published above), so a WiFi station pulls the
+            // AP's queued auth/assoc/data frames and beacons on schedule even
+            // though the CPU skipped the idle window. `idle_poll` bounded the
+            // skip to the quantum, keeping this cadence fine-grained.
+            if idle_poll {
+                self.bus.run_idle_poll_bus_tick();
+            }
+            u64::from(skipped)
         }
     }
 
@@ -1411,25 +1997,36 @@ impl<C: Cpu> Machine<C> {
         }
         self.reset()?;
 
-        // Resolve the reset vector. Reset reads the initial (SP, PC) from the
-        // vector table at VTOR, which defaults to 0 and aliases to the flash
-        // base — correct for the common case (STM32/nRF/etc.). Some SoCs
-        // prepend a second-stage bootloader: the RP2040 bootrom runs a 256-byte
-        // stage-2 (boot2) blob from flash and only then enters the application
-        // vector table at `flash_base + reset_vector_offset`. We don't execute
-        // boot2 (flash is directly mapped), so when the flash-base vectors are
-        // not valid, relocate to the declared post-stage-2 table — emulating
-        // boot2's only observable effect.
+        // Resolve the reset vector.
+        //
+        // `cpu.reset` reads (SP, PC) from VTOR (default 0). On STM32/nRF that
+        // aliases the flash image, so reset is already correct. On RP2040 the
+        // in-tree mask ROM is mapped at 0 (`LABWIRED_RP2040_BOOTROM` default),
+        // so reset installs *bootrom* vectors and would park the core in the
+        // ROM WFI loop forever for bare-metal images that put a valid vector
+        // table at `flash_base` (no stage-2 boot2). Prefer flash-base vectors
+        // when they are valid; only then fall back to post-boot2 relocation.
         let flash_base = self.bus.flash.base_addr;
-        if !self.bus.vector_pair_valid(flash_base) {
+        if self.bus.vector_pair_valid(flash_base) {
+            let sp = self.bus.read_u32(flash_base)?;
+            let pc = self.bus.read_u32(flash_base + 4)? & !1;
+            // If address 0 does not already present the same SP (bootrom or
+            // empty), retarget VTOR so exceptions hit the app table too.
+            let sp0 = self.bus.read_u32(0).unwrap_or(0);
+            if flash_base != 0 && sp0 != sp {
+                let _ = self.bus.write_u32(0xE000_ED08, flash_base as u32);
+            }
+            self.cpu.set_sp(sp);
+            self.cpu.set_pc(pc);
+        } else {
+            // Stage-2 present (e.g. RP2040 boot2 at flash[0..0x100]): vectors
+            // at flash_base are garbage. Relocate to `reset_vector_offset`.
             let offset = self.bus.reset_vector_offset;
             let relocated = if offset != 0 {
                 let table = flash_base + offset;
                 if self.bus.vector_pair_valid(table) {
                     let sp = self.bus.read_u32(table)?;
                     let pc = self.bus.read_u32(table + 4)? & !1;
-                    // Point VTOR at the relocated table so early exceptions
-                    // (before firmware sets VTOR itself) vector correctly.
                     let _ = self.bus.write_u32(0xE000_ED08, table as u32);
                     self.cpu.set_sp(sp);
                     self.cpu.set_pc(pc);
@@ -1458,122 +2055,20 @@ impl<C: Cpu> Machine<C> {
         Ok(())
     }
 
+    /// Advances one primary-CPU boundary through the authoritative lifecycle.
+    ///
+    /// This compatibility adapter delegates to [`Machine::advance`]. Frontends
+    /// that need bounded runs or stop reports should call `advance` directly;
+    /// they must not reproduce the lifecycle with direct [`Cpu::step`] calls.
     pub fn step(&mut self) -> SimResult<()> {
-        self.total_cycles += 1;
-        // Mirror the cycle count into the bus before the CPU executes, so
-        // tick-time services can read "now": scheduler-driven peripheral sync
-        // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
-        // a single field write, not the per-peripheral walk this phase removed.
-        self.bus.current_cycle = self.total_cycles;
-        self.bus.bus_trace.set_cycle(self.total_cycles);
-        // The cycle boundary this instruction's effects become observable at —
-        // pad writes pushed through the logic tap stamp with it (single-step
-        // path: one instruction, no CPU-side clock bumps needed).
-        let logic_boundary = self.total_cycles;
-        if self.logic_capture.push_active() {
-            self.bus.logic_tap.set_clock(logic_boundary);
-        }
-        self.cpu
-            .step(&mut self.bus, &self.observers, &self.config)?;
-        self.step_profile.cpu_instructions += 1;
-        self.step_profile.cpu_batches += 1;
-        // Dual-core: step the secondary CPU one instruction per
-        // primary-CPU instruction (round-robin). Cycle counter only
-        // advances for the primary CPU — keeps observer/snapshot
-        // semantics stable. Errors on CPU 1 bubble up the same way.
-        if let Some(cpu1) = self.cpu_secondary.as_mut() {
-            // CPU 0 may have just called `ets_set_appcpu_boot_addr` to
-            // release APP_CPU from reset-hold. The thunk stashed the
-            // boot address in a thread-local; drain it here, apply to
-            // the secondary CPU's PC, and unhalt so the next round-robin
-            // tick starts executing from that address.
-            if let Some(boot_addr) =
-                crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
-                    .with(|s| s.take())
-            {
-                cpu1.set_pc(boot_addr);
-                cpu1.unhalt();
-            }
-            cpu1.step(&mut self.bus, &self.observers, &self.config)?;
-        }
-
-        if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
-            // Propagate peripherals
-            let (interrupts, costs) = self.bus.tick_peripherals_fully();
-            self.record_peripheral_tick_profile(costs.len());
-            for c in costs {
-                self.total_cycles += c.cycles as u64;
-                if let Some(p) = self.bus.peripherals.get(c.index) {
-                    for observer in &self.observers {
-                        observer.on_peripheral_tick(&p.name, c.cycles);
-                    }
-                }
-            }
-            for irq in interrupts {
-                self.cpu.set_exception_pending(irq);
-                tracing::debug!("Exception {} Pend", irq);
-            }
-        }
-
-        // Phase 2B.1 (issue #192): event-driven peripheral scheduler.
-        // With the `event-scheduler` flag OFF this block compiles out
-        // entirely and behaviour matches pre-2B `main`. With the flag ON
-        // and no peripheral opted in (`uses_scheduler() == false` for
-        // everyone) the drain is a no-op — the legacy `tick()` walk
-        // above still drives every peripheral until each migrates.
-        #[cfg(feature = "event-scheduler")]
-        self.drain_scheduler_events();
-
-        // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
-        // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
-        // and expects execution NOT to return from the store — on real
-        // silicon the CPU restarts at the reset vector. We drain the
-        // request between instructions so neither the CPU nor any
-        // peripheral observes a half-applied state. Reset vector for the
-        // ESP32 rev3 BROM `_ResetVector` is fixed at `0x4000_0400`; SP is
-        // re-seeded to the top of DRAM the BROM uses (`0x3FFE_0000`),
-        // matching the smoke-test cold-boot setup.
-        if self.drain_rtc_cntl_reset_request() {
-            self.cpu.set_pc(0x4000_0400);
-            self.cpu.set_sp(0x3FFE_0000);
-            tracing::debug!("RTC_CNTL SW_SYS_RST: CPU re-pointed at reset vector 0x40000400");
-        }
-
-        // Cortex-M SCB system reset (AIRCR.SYSRESETREQ with the VECTKEY).
-        // Firmware that asks for a reboot (e.g. a UDS ECUReset) writes
-        // AIRCR and does not expect the store to return; on real silicon the
-        // core restarts through the vector table. We drain the latch here, at
-        // the same clean instruction boundary as RTC_CNTL — after the
-        // AIRCR-writing store and any pending peripheral effects of this
-        // instruction have been applied — then reuse the power-on reset
-        // machinery so MSP/PC reload from vector[0]/vector[1] via the CPU
-        // reset path. No-op on non-Cortex-M targets (no SCB on the bus).
-        if self.drain_scb_reset_request() {
-            self.reset()?;
-            tracing::debug!("SCB SYSRESETREQ: CPU rebooted through vector table");
-        }
-
-        // H5 FLASH pending ops: sector erase fills flash with 0xFF; bank-swap
-        // swaps the two 1 MB banks in the flash buffer then re-runs reset so
-        // the CPU boots from the new bank-1 vector table. Also drained on the
-        // batch/CLI run path (`Machine::run`), which executes cycle-accurately
-        // when an H5 op-modeling FLASH is present so this fires per instruction.
-        self.apply_pending_flash_op()?;
-
-        // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
-        // watch set is installed. Observed after the instruction + peripheral
-        // effects of this cycle have landed, so pad levels are the committed
-        // state at `total_cycles`.
-        self.logic_observe(logic_boundary);
-
-        Ok(())
+        self.advance(AdvanceRequest::single()).map(|_| ())
     }
 
     /// Drain and apply the single pending H5 FLASH hardware operation, if any.
     ///
     /// The FLASH peripheral records at most one op per instruction (in a `Cell`);
     /// this helper must therefore run once per instruction so no op is lost. It
-    /// is called from both `step()` and the `Machine::run` batch loop body. The
+    /// is called from the authoritative `Machine::advance` batch loop. The
     /// run loop clamps its batch to 1 when `requires_cycle_accurate()` is true
     /// (which an H5 op-modeling FLASH forces), preserving the one-op-per-
     /// instruction invariant and the correct erase-before-program ordering.
@@ -1649,8 +2144,9 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Phase 2B.1/2B.3a (issue #192): advance the scheduler and fire every due
-    /// peripheral event. Called from both `step()` and the batch run loop so
-    /// neither path silently strands a scheduler-driven peripheral.
+    /// peripheral event. The authoritative [`Machine::advance`] lifecycle
+    /// calls this after each committed CPU batch so no scheduler-driven
+    /// peripheral is silently stranded.
     ///
     /// The scheduler runs in absolute CPU cycles (`total_cycles`) — the same
     /// quantum the legacy walk advances by (`tick_elapsed(interval)`) — so
@@ -1659,28 +2155,38 @@ impl<C: Cpu> Machine<C> {
     /// event lands at the first drain at or after its exact cycle; drains run
     /// at least once per CPU batch, so the observation error is bounded by one
     /// tick interval (and is zero at interval 1, where drains run per cycle).
-    /// Write-context schedule requests the bus buffered during this step's
-    /// MMIO writes (`pending_schedule`) are enqueued first: a peripheral can't
-    /// reach the scheduler from `write`, so the bus buffers an absolute
-    /// cycle deadline (see `collect_scheduled_events`) which is clamped to
-    /// `now` here — a deadline that expired mid-batch fires on this drain.
+    /// Write-context schedule requests the bus buffered during the committed
+    /// batch's MMIO writes (`pending_schedule`) are enqueued first: a
+    /// peripheral can't reach the scheduler from `write`, so the bus buffers
+    /// an absolute cycle deadline (see `collect_scheduled_events`) which is
+    /// clamped to `now` here — a deadline that expired mid-batch fires on this
+    /// drain.
     #[cfg(feature = "event-scheduler")]
     fn drain_scheduler_events(&mut self) {
         // One-time bootstrap: give every scheduler-driven peripheral a chance
         // to schedule events that arise from *setup* rather than an MMIO write
-        // (e.g. a UART with an RX stream attached before firmware runs). The
-        // returned delays are relative to the peripheral's un-synced state at
-        // cycle `total_cycles`, so the absolute deadline is `total_cycles +
-        // delay` (no +1: unlike the write path there is no "next drain" skew —
-        // this drain is the one converting them).
+        // (e.g. a UART with an RX stream attached before firmware advances, or
+        // a SYSTIMER whose alarm was configured before `Machine::advance`). The
+        // absolute deadline is `total_cycles + delay`, which is only exact if
+        // the returned delay is measured from `total_cycles` — but a peripheral
+        // is anchored at ATTACH (cycle 0) and the first drain can run after
+        // `Machine::advance` has committed its first batch and advanced
+        // `total_cycles`. Sync each
+        // peripheral up to `total_cycles` FIRST so its delay is genuinely
+        // relative to now; without this the first scheduled event lands one (or
+        // up to one tick-interval) cycle late versus the legacy per-cycle walk —
+        // the exact off-by-one the ESP32-S3 `intmatrix_alarm`/walk-differential
+        // gate caught on a pre-advance alarm config. `sync_to` is idempotent at
+        // cycle 0 (no-op) and the same call the write path already makes, so
+        // steady-state behaviour is unchanged.
         if !self.scheduler_bootstrapped {
             self.scheduler_bootstrapped = true;
+            let now = self.total_cycles;
             for idx in 0..self.bus.peripherals.len() {
                 if self.bus.peripherals[idx].dev.uses_scheduler() {
+                    self.bus.peripherals[idx].dev.sync_to(now);
                     for (delay, token) in self.bus.peripherals[idx].dev.take_scheduled_events() {
-                        self.bus
-                            .pending_schedule
-                            .push((idx, self.total_cycles + delay, token));
+                        self.bus.pending_schedule.push((idx, now + delay, token));
                     }
                 }
             }
@@ -1688,15 +2194,15 @@ impl<C: Cpu> Machine<C> {
         let interval = (self.config.peripheral_tick_interval as u64).max(1);
         self.sched.advance_to(self.total_cycles);
         let now = self.sched.now();
-        for (idx, deadline, token) in std::mem::take(&mut self.bus.pending_schedule) {
-            let gen = self
-                .bus
-                .peripherals
-                .get(idx)
-                .map(|p| p.generation)
-                .unwrap_or(0);
-            self.sched
-                .schedule(deadline.max(now), idx as u32, token, gen);
+        // Swap the buffered schedule out into retained scratch (instead of
+        // `mem::take`, which frees the buffer's capacity each drain) and drain
+        // it in place — same entries, same order, but the capacity is reused.
+        std::mem::swap(
+            &mut self.bus.pending_schedule,
+            &mut self.pending_schedule_scratch,
+        );
+        for (idx, deadline, token) in self.pending_schedule_scratch.drain(..) {
+            self.sched.schedule(deadline.max(now), idx as u32, token);
         }
         // HC-SR04: enqueue the ECHO rise/fall edges of any freshly-armed window
         // as events under the reserved subsystem idx, at their exact cycles
@@ -1711,23 +2217,24 @@ impl<C: Cpu> Machine<C> {
                 rise_cycle.max(now),
                 sched::SUBSYSTEM_PERIPHERAL_IDX,
                 sensor as u32,
-                0,
             );
             self.sched.schedule(
                 fall_cycle.max(now),
                 sched::SUBSYSTEM_PERIPHERAL_IDX,
                 sensor as u32,
-                0,
             );
         }
         // Nothing queued (steady state between an SPI frame / HC-SR04 pulse):
-        // skip the generation snapshot + heap drain entirely — no allocation.
+        // skip the heap drain entirely — no allocation.
         if self.sched.is_empty() {
             return;
         }
-        let generations = self.bus.peripheral_generations();
-        let due = self.sched.drain_due(&generations);
-        for ev in due {
+        // Fill the retained scratch (taken out so `on_event` below can borrow
+        // `&mut self.sched` / `&mut self.bus`) instead of allocating a fresh
+        // `Vec` per drain; restored at the end with its capacity intact.
+        let mut due = std::mem::take(&mut self.due_events_scratch);
+        self.sched.drain_due_into(&mut due);
+        for ev in due.drain(..) {
             // Bus-subsystem pseudo-peripheral (HC-SR04): no `peripherals[]`
             // entry — dispatch straight to the shared ECHO choke point.
             if ev.peripheral_idx == sched::SUBSYSTEM_PERIPHERAL_IDX {
@@ -1735,28 +2242,33 @@ impl<C: Cpu> Machine<C> {
                 continue;
             }
             let idx = ev.peripheral_idx as usize;
-            let Some(entry) = self.bus.peripherals.get_mut(idx) else {
+            if idx >= self.bus.peripherals.len() {
                 continue;
-            };
+            }
             // Swap the peripheral out so we can pass `&mut self.bus` into
             // `on_event` without holding two simultaneous mutable borrows.
-            // Same dance the bus uses for `tick_with_bus`.
-            let placeholder: Box<dyn Peripheral> =
-                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
-            let mut dev = std::mem::replace(&mut entry.dev, placeholder);
+            // Same dance the bus uses for `tick_with_bus`, but the stub stand-in
+            // is reused from `event_placeholder` instead of allocated per event.
+            let stub = self
+                .event_placeholder
+                .take()
+                .expect("event_placeholder present between events");
+            let mut dev = std::mem::replace(&mut self.bus.peripherals[idx].dev, stub);
             let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
-            self.bus.peripherals[idx].dev = dev;
+            // Put the real peripheral back and reclaim the stub for reuse.
+            let stub_back = std::mem::replace(&mut self.bus.peripherals[idx].dev, dev);
+            self.event_placeholder = Some(stub_back);
             // Phase 2B.3b: a level-triggered peripheral re-arms its own event
-            // (same token) while it has active work. We own the (idx,
-            // generation) the scheduler needs, so we do it here.
+            // (same token) while it has active work. We own the idx the
+            // scheduler needs, so we do it here.
             if let Some(delay) = result.reschedule_delay {
-                let gen = self.bus.peripherals[idx].generation;
                 let deadline = self.sched.now() + delay;
-                self.sched
-                    .schedule(deadline, idx as u32, ev.event_token, gen);
+                self.sched.schedule(deadline, idx as u32, ev.event_token);
             }
             self.apply_event_result(idx, result);
         }
+        // `drain(..)` above emptied it but kept its capacity; restore for reuse.
+        self.due_events_scratch = due;
     }
 
     /// Phase 2B.1 (issue #192): fan out the side-effects produced by a
@@ -1780,8 +2292,23 @@ impl<C: Cpu> Machine<C> {
                 self.bus.pend_irq_for_event(irq, &mut fallthrough);
             }
         }
-        for irq in &result.explicit_irqs {
-            self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+        // Scheduler-driven interrupt delivery — ONE per-fabric choke. A
+        // scheduler-driven peripheral (e.g. the SYSTIMER alarm) is skipped by
+        // the per-cycle walk, so the event path owns delivery of its
+        // LEVEL-sensitive source at the exact firing cycle. Every MCU family
+        // follows the same shape behind `deliver_scheduled_irq_levels`:
+        //   * ESP32-C3 (RISC-V matrix)  → re-derive `matrix_irq_sources` into
+        //     `riscv_irq_lines`;
+        //   * ESP32-S3 (Xtensa intmatrix) → re-derive into `pending_cpu_irqs` +
+        //     the intmatrix INTR_STATUS mirror.
+        // A matrix source ID must NEVER be pended as a Cortex-M NVIC exception
+        // (`pend_irq_for_event` would mis-route it), so the NVIC fallthrough is
+        // taken only when no matrix fabric claimed delivery (the Cortex-M /
+        // nRF SysTick + own-line path).
+        if !self.bus.deliver_scheduled_irq_levels() {
+            for irq in &result.explicit_irqs {
+                self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+            }
         }
         // Phase 2B.3b: route DMA signals exactly as the legacy tick path does.
         if !result.dma_signals.is_empty() {
@@ -1846,14 +2373,29 @@ impl<C: Cpu> Machine<C> {
             .unwrap_or(false)
     }
 
+    /// True while RTC_CNTL has a latched SW_SYS_RST (not yet drained).
+    fn rtc_cntl_reset_pending(&self) -> bool {
+        let Some(idx) = self.rtc_cntl_index else {
+            return false;
+        };
+        let Some(p) = self.bus.peripherals.get(idx) else {
+            return false;
+        };
+        p.dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
+            .map(|rtc| rtc.reset_request_pending())
+            .unwrap_or(false)
+    }
+
     /// Returns true (and clears the latch) if the registered SCB peripheral
-    /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY
-    /// and the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). Used by
-    /// `step()` to honor a firmware-requested system reset at a clean
-    /// instruction boundary. Uses the cached `scb_index` resolved at
-    /// construction — non-Cortex-M configs (no SCB on the bus) short-circuit
-    /// to `false` without touching the peripheral vector at all.
-    pub fn drain_scb_reset_request(&self) -> bool {
+    /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY and
+    /// the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). The
+    /// authoritative [`Machine::advance`] lifecycle drains this latch at a
+    /// clean committed instruction boundary. Uses the cached `scb_index`
+    /// resolved at construction — non-Cortex-M configs (no SCB on the bus)
+    /// short-circuit to `false` without touching the peripheral vector at all.
+    pub(crate) fn drain_scb_reset_request(&self) -> bool {
         let Some(idx) = self.scb_index else {
             return false;
         };
@@ -1959,7 +2501,31 @@ impl<C: Cpu> Machine<C> {
             .peripherals
             .iter()
             .filter(|entry| filter.is_none_or(|f| entry.name == f))
-            .map(|entry| entry.dev.inspect(entry.base, &entry.name, opts))
+            .map(|entry| {
+                let inspected = entry.dev.inspect(entry.base, &entry.name, opts);
+                // A peripheral that describes itself always wins — the schema is
+                // a fallback for NATIVE peripherals, which have none, and must
+                // never override a model's own account of its registers.
+                if !inspected.registers.is_empty() {
+                    return inspected;
+                }
+                match self.bus.debug_schemas.get(&entry.name) {
+                    Some(schema) => {
+                        let mut named = crate::inspect::inspect_with_schema(
+                            entry.dev.as_ref(),
+                            entry.base,
+                            &entry.name,
+                            schema,
+                        );
+                        // Preserve any artifacts (framebuffers, uart rings, pin
+                        // state) the peripheral produced; only its registers
+                        // were missing.
+                        named.artifacts = inspected.artifacts;
+                        named
+                    }
+                    None => inspected,
+                }
+            })
             .collect();
         crate::inspect::MachineInspect { peripherals }
     }
@@ -1994,187 +2560,13 @@ impl<C: Cpu> DebugControl for Machine<C> {
     }
 
     fn run(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
-        let mut steps = 0;
-
-        loop {
-            // Check breakpoints BEFORE batch
-            let pc = self.cpu.get_pc();
-            let pc_aligned = pc & !1;
-
-            if self.breakpoints.contains(&pc_aligned) && self.last_breakpoint != Some(pc_aligned) {
-                self.last_breakpoint = Some(pc_aligned);
-                return Ok(StopReason::Breakpoint(pc));
-            }
-
-            // We are executing, so clear the "last hit" sticky BP
-            self.last_breakpoint = None;
-
-            if let Some(limit) = max_steps {
-                if steps >= limit {
-                    return Ok(StopReason::MaxStepsReached);
-                }
-            }
-
-            let skipped = self.try_idle_fast_forward(max_steps, steps);
-            if skipped > 0 {
-                steps += skipped;
-                continue;
-            }
-
-            // Execute in batch until next peripheral tick or breakpoint/limit
-            let current_cycles = self.total_cycles;
-            // Mirror the cycle count before the batch so MMIO writes inside it
-            // (and tick-time services) can read "now". The batch is bounded by
-            // `peripheral_tick_interval`, so intra-batch staleness is < one tick.
-            self.bus.current_cycle = current_cycles;
-            self.bus.bus_trace.set_cycle(current_cycles);
-            let tick_interval = self.config.peripheral_tick_interval as u64;
-            let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
-
-            let mut current_batch = if let Some(limit) = max_steps {
-                remaining_until_tick.min(limit - steps)
-            } else {
-                remaining_until_tick
-            };
-
-            // Cycle-accurate buses (HC-SR04, IO-Link, H5 op-modeling FLASH) must
-            // execute one instruction per batch so per-instruction services —
-            // notably the H5 FLASH pending-op drain below — fire on every
-            // instruction. Without this clamp the FLASH op would be recorded in
-            // the peripheral cell but applied at most once per tick interval (or
-            // not at all), losing all but the last op and breaking erase-before-
-            // program ordering.
-            if self.bus.requires_cycle_accurate() {
-                current_batch = current_batch.min(1);
-            }
-
-            // Breakpoints are only checked at batch boundaries (top of loop). If
-            // any breakpoint is set, clamp the batch to one instruction so a
-            // breakpoint whose PC lies inside a batch is caught at exactly that
-            // PC instead of being executed past and noticed only at the next
-            // boundary (the GDB "continue never stops" bug). This per-instruction
-            // cost applies ONLY while breakpoints are set, i.e. under a debugger,
-            // so the no-breakpoint hot path is unaffected.
-            if !self.breakpoints.is_empty() {
-                current_batch = current_batch.min(1);
-            }
-
-            // Logic-analyzer POLL fallback: clamp the batch to one instruction
-            // so polled pad state is observed at EVERY cycle boundary — pads
-            // only change at instruction/tick boundaries, so this is a
-            // complete, alias-free capture. (An earlier fixed 16-cycle
-            // sampling grid aliased any signal toggling faster than ~32 cycles
-            // — bit-banged buses looked wrong before they looked dropped.)
-            // Cost is paid ONLY while at least one polled (non-push) channel
-            // is armed; push-instrumented channels report their own edges from
-            // the write sites and keep the full batch width (see
-            // `crate::logic_capture` and tests/logic_capture_bench.rs).
-            if self.logic_capture.poll_active() {
-                current_batch = current_batch.min(1);
-            }
-
-            // Event-scheduler: end the batch exactly at the next event-scheduled
-            // HC-SR04 ECHO transition, so the post-batch `drain_scheduler_events`
-            // applies it at its exact cycle and a busy-polling firmware observes
-            // it that instruction — never a batch late. This is what lets HC-SR04
-            // drop out of `requires_cycle_accurate` (which pins the batch to one
-            // instruction) while staying correct. No-op at tick interval 1 (batch
-            // is already one instruction and the drain runs every cycle) and when
-            // no echo edge is pending, so the common paths pay nothing.
-            #[cfg(feature = "event-scheduler")]
-            if current_batch > 1 {
-                if let Some(deadline_cycle) = self.bus.next_hcsr04_deadline_cycle() {
-                    let until = deadline_cycle.saturating_sub(self.total_cycles);
-                    // `until == 0` means an edge is due at this exact cycle; take
-                    // one instruction so the drain applies it before advancing.
-                    current_batch = current_batch.min(until.clamp(1, u32::MAX as u64) as u32);
-                }
-            }
-
-            // Push-mode capture: seed the tap clock at the batch start; the
-            // CPU advances it once per retired instruction so pad writes stamp
-            // with the boundary they become observable at.
-            if self.logic_capture.push_active() {
-                self.bus.logic_tap.set_clock(current_cycles);
-            }
-
-            let executed =
-                self.cpu
-                    .step_batch(&mut self.bus, &self.observers, &self.config, current_batch)?;
-
-            steps += executed;
-            self.total_cycles += executed as u64;
-            self.step_profile.cpu_instructions += executed as u64;
-            self.step_profile.cpu_batches += 1;
-            // The cycle boundary the batch ended at, BEFORE peripheral tick
-            // costs — logic pushes stamped at it are finalised to the
-            // post-cost "now" (see `logic_observe`).
-            let logic_boundary = self.total_cycles;
-
-            if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
-                // Propagate peripherals
-                let (interrupts, costs) = self.bus.tick_peripherals_fully();
-                self.record_peripheral_tick_profile(costs.len());
-                for c in costs {
-                    self.total_cycles += c.cycles as u64;
-                    if let Some(p) = self.bus.peripherals.get(c.index) {
-                        for observer in &self.observers {
-                            observer.on_peripheral_tick(&p.name, c.cycles);
-                        }
-                    }
-                }
-                for irq in interrupts {
-                    self.cpu.set_exception_pending(irq);
-                    tracing::debug!("Exception {} Pend", irq);
-                }
-            }
-
-            // Advance the bus's mirrored cycle to the batch-END cycle before the
-            // drain: scheduler event handlers that read `bus.current_cycle` (e.g.
-            // the HC-SR04 ECHO-edge handler recomputing its level from the window)
-            // must see "now", not the batch-start value seeded above — otherwise
-            // an edge due at the batch boundary is evaluated one batch stale (a
-            // fall would still read high and never transition).
-            #[cfg(feature = "event-scheduler")]
-            {
-                self.bus.current_cycle = self.total_cycles;
-            }
-
-            #[cfg(feature = "event-scheduler")]
-            self.drain_scheduler_events();
-
-            // Apply any pending H5 FLASH op recorded by the instructions just
-            // executed. On a cycle-accurate bus the batch is clamped to 1 above,
-            // so this runs per instruction (matching `step()`); this is the path
-            // the CLI test runner and `Machine::run` take, where the op would
-            // otherwise never be applied.
-            self.apply_pending_flash_op()?;
-
-            // Honor a firmware-requested system reset (AIRCR SYSRESETREQ with
-            // VECTKEY) latched by the instructions just executed. `step()` drains
-            // this on every instruction boundary; the batched `run` path must do
-            // the same on every batch return or the reboot never fires.
-            if self.drain_scb_reset_request() {
-                self.reset()?;
-            }
-
-            // Logic-analyzer edge capture at the batch boundary (no-op unless
-            // a watch set is installed): drain push events and, when a polled
-            // channel is armed, sample — the batch was clamped to 1 above in
-            // that case, so polling still fires at every cycle boundary.
-            self.logic_observe(logic_boundary);
-
-            // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
-            // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.
-            if executed == 0 && current_batch > 0 {
-                // If the CPU makes no progress but says Ok(0), we might need to investigate.
-                // For now, assume it's valid (e.g. waiting for something).
-                break;
-            }
-        }
-        Ok(StopReason::StepDone)
+        let report = self.advance(AdvanceRequest::run(max_steps.map(u64::from)))?;
+        Ok(match report.stop {
+            AdvanceStop::Breakpoint(pc) => StopReason::Breakpoint(pc),
+            AdvanceStop::FuelLimit => StopReason::MaxStepsReached,
+            AdvanceStop::CycleLimit | AdvanceStop::NoProgress => StopReason::StepDone,
+        })
     }
-
     fn step_single(&mut self) -> SimResult<StopReason> {
         self.step()?;
         Ok(StopReason::StepDone)
@@ -2202,6 +2594,21 @@ impl<C: Cpu> DebugControl for Machine<C> {
             self.bus.write_u8((addr as u64) + (i as u64), *byte)?;
         }
         Ok(())
+    }
+
+    // Both forward to the inherent methods of the same name. Exposing them on
+    // the trait is what lets a `Box<dyn DebugControl>` holder (the DAP server)
+    // reach the side-effect-free surface that MCP and the playground already use.
+    fn inspect(
+        &self,
+        name: Option<&str>,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::MachineInspect {
+        Machine::inspect(self, name, opts)
+    }
+
+    fn peek(&self, addr: u64, len: usize) -> crate::inspect::PeekResult {
+        Machine::peek(self, addr, len)
     }
 
     fn get_pc(&self) -> u32 {
@@ -2232,16 +2639,12 @@ impl<C: Cpu> DebugControl for Machine<C> {
         &self,
         name: &str,
     ) -> Option<labwired_config::PeripheralDescriptor> {
-        use crate::peripherals::declarative::GenericPeripheral;
         let entry = self.bus.peripherals.iter().find(|p| p.name == name)?;
-        let gen_p = entry.dev.as_any()?.downcast_ref::<GenericPeripheral>()?;
-        // We need a way to get the descriptor from GenericPeripheral.
-        // It's private currently. Let's make it public or add a getter.
-        Some(gen_p.get_descriptor().clone())
+        entry.dev.peripheral_descriptor()
     }
 
     fn reset(&mut self) -> SimResult<()> {
-        self.cpu.reset(&mut self.bus)
+        Machine::reset(self)
     }
 
     fn snapshot(&self) -> snapshot::MachineSnapshot {

@@ -1,0 +1,11 @@
+# LabWired - MAX31855 Thermocouple Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/max31855-thermocouple-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "MAX31855 Thermocouple Lab"
+  - uart_contains: "word=0x"
+  - expected_stop_reason: max_steps

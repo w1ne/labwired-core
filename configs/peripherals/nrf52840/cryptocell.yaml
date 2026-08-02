@@ -1,0 +1,18 @@
+peripheral: CRYPTOCELL
+version: 0.1.0
+registers:
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable the CRYPTOCELL subsystem
+  side_effects: null
+interrupts:
+  CRYPTOCELL: 42
+timing: null

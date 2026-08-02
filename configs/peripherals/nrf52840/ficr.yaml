@@ -1,0 +1,689 @@
+peripheral: FICR
+version: 0.1.0
+registers:
+- id: CODEPAGESIZE
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: CODEPAGESIZE
+    bit_range:
+    - 31
+    - 0
+    description: Code memory page size
+  side_effects: null
+- id: CODESIZE
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: CODESIZE
+    bit_range:
+    - 31
+    - 0
+    description: Code memory size in number of pages
+  side_effects: null
+- id: DEVICEID0
+  address_offset: 96
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEID
+    bit_range:
+    - 31
+    - 0
+    description: 64 bit unique device identifier
+  side_effects: null
+- id: DEVICEID1
+  address_offset: 100
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEID
+    bit_range:
+    - 31
+    - 0
+    description: 64 bit unique device identifier
+  side_effects: null
+- id: ER0
+  address_offset: 128
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption root, word n
+  side_effects: null
+- id: ER1
+  address_offset: 132
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption root, word n
+  side_effects: null
+- id: ER2
+  address_offset: 136
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption root, word n
+  side_effects: null
+- id: ER3
+  address_offset: 140
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ER
+    bit_range:
+    - 31
+    - 0
+    description: Encryption root, word n
+  side_effects: null
+- id: IR0
+  address_offset: 144
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: IR1
+  address_offset: 148
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: IR2
+  address_offset: 152
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: IR3
+  address_offset: 156
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: IR
+    bit_range:
+    - 31
+    - 0
+    description: Identity Root, word n
+  side_effects: null
+- id: DEVICEADDRTYPE
+  address_offset: 160
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEADDRTYPE
+    bit_range:
+    - 0
+    - 0
+    description: Device address type
+  side_effects: null
+- id: DEVICEADDR0
+  address_offset: 164
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEADDR
+    bit_range:
+    - 31
+    - 0
+    description: 48 bit device address
+  side_effects: null
+- id: DEVICEADDR1
+  address_offset: 168
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: DEVICEADDR
+    bit_range:
+    - 31
+    - 0
+    description: 48 bit device address
+  side_effects: null
+- id: INFO_PART
+  address_offset: 256
+  size: 32
+  access: READ_ONLY
+  reset_value: 337984
+  fields:
+  - name: PART
+    bit_range:
+    - 31
+    - 0
+    description: Part code
+  side_effects: null
+- id: INFO_VARIANT
+  address_offset: 260
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: VARIANT
+    bit_range:
+    - 31
+    - 0
+    description: Build code (hardware version and production configuration). Encoded as ASCII.
+  side_effects: null
+- id: INFO_PACKAGE
+  address_offset: 264
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: PACKAGE
+    bit_range:
+    - 31
+    - 0
+    description: Package option
+  side_effects: null
+- id: INFO_RAM
+  address_offset: 268
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: RAM
+    bit_range:
+    - 31
+    - 0
+    description: RAM variant
+  side_effects: null
+- id: INFO_FLASH
+  address_offset: 272
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: FLASH
+    bit_range:
+    - 31
+    - 0
+    description: Flash variant
+  side_effects: null
+- id: PRODTEST0
+  address_offset: 848
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: PRODTEST
+    bit_range:
+    - 31
+    - 0
+    description: Production test signature n
+  side_effects: null
+- id: PRODTEST1
+  address_offset: 852
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: PRODTEST
+    bit_range:
+    - 31
+    - 0
+    description: Production test signature n
+  side_effects: null
+- id: PRODTEST2
+  address_offset: 856
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: PRODTEST
+    bit_range:
+    - 31
+    - 0
+    description: Production test signature n
+  side_effects: null
+- id: TEMP_A0
+  address_offset: 1028
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: A
+    bit_range:
+    - 11
+    - 0
+    description: A (slope definition) register.
+  side_effects: null
+- id: TEMP_A1
+  address_offset: 1032
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: A
+    bit_range:
+    - 11
+    - 0
+    description: A (slope definition) register.
+  side_effects: null
+- id: TEMP_A2
+  address_offset: 1036
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: A
+    bit_range:
+    - 11
+    - 0
+    description: A (slope definition) register.
+  side_effects: null
+- id: TEMP_A3
+  address_offset: 1040
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: A
+    bit_range:
+    - 11
+    - 0
+    description: A (slope definition) register.
+  side_effects: null
+- id: TEMP_A4
+  address_offset: 1044
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: A
+    bit_range:
+    - 11
+    - 0
+    description: A (slope definition) register.
+  side_effects: null
+- id: TEMP_A5
+  address_offset: 1048
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: A
+    bit_range:
+    - 11
+    - 0
+    description: A (slope definition) register.
+  side_effects: null
+- id: TEMP_B0
+  address_offset: 1052
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: B
+    bit_range:
+    - 13
+    - 0
+    description: B (y-intercept)
+  side_effects: null
+- id: TEMP_B1
+  address_offset: 1056
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: B
+    bit_range:
+    - 13
+    - 0
+    description: B (y-intercept)
+  side_effects: null
+- id: TEMP_B2
+  address_offset: 1060
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: B
+    bit_range:
+    - 13
+    - 0
+    description: B (y-intercept)
+  side_effects: null
+- id: TEMP_B3
+  address_offset: 1064
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: B
+    bit_range:
+    - 13
+    - 0
+    description: B (y-intercept)
+  side_effects: null
+- id: TEMP_B4
+  address_offset: 1068
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: B
+    bit_range:
+    - 13
+    - 0
+    description: B (y-intercept)
+  side_effects: null
+- id: TEMP_B5
+  address_offset: 1072
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: B
+    bit_range:
+    - 13
+    - 0
+    description: B (y-intercept)
+  side_effects: null
+- id: TEMP_T0
+  address_offset: 1076
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: T
+    bit_range:
+    - 7
+    - 0
+    description: T (segment end) register
+  side_effects: null
+- id: TEMP_T1
+  address_offset: 1080
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: T
+    bit_range:
+    - 7
+    - 0
+    description: T (segment end) register
+  side_effects: null
+- id: TEMP_T2
+  address_offset: 1084
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: T
+    bit_range:
+    - 7
+    - 0
+    description: T (segment end) register
+  side_effects: null
+- id: TEMP_T3
+  address_offset: 1088
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: T
+    bit_range:
+    - 7
+    - 0
+    description: T (segment end) register
+  side_effects: null
+- id: TEMP_T4
+  address_offset: 1092
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: T
+    bit_range:
+    - 7
+    - 0
+    description: T (segment end) register
+  side_effects: null
+- id: NFC_TAGHEADER0
+  address_offset: 1104
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967135
+  fields:
+  - name: MFGID
+    bit_range:
+    - 7
+    - 0
+    description: 'Default Manufacturer ID: Nordic Semiconductor ASA has ICM 0x5F'
+  - name: UD1
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 1
+  - name: UD2
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 2
+  - name: UD3
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 3
+  side_effects: null
+- id: NFC_TAGHEADER1
+  address_offset: 1108
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: UD4
+    bit_range:
+    - 7
+    - 0
+    description: Unique identifier byte 4
+  - name: UD5
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 5
+  - name: UD6
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 6
+  - name: UD7
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 7
+  side_effects: null
+- id: NFC_TAGHEADER2
+  address_offset: 1112
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: UD8
+    bit_range:
+    - 7
+    - 0
+    description: Unique identifier byte 8
+  - name: UD9
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 9
+  - name: UD10
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 10
+  - name: UD11
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 11
+  side_effects: null
+- id: NFC_TAGHEADER3
+  address_offset: 1116
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: UD12
+    bit_range:
+    - 7
+    - 0
+    description: Unique identifier byte 12
+  - name: UD13
+    bit_range:
+    - 15
+    - 8
+    description: Unique identifier byte 13
+  - name: UD14
+    bit_range:
+    - 23
+    - 16
+    description: Unique identifier byte 14
+  - name: UD15
+    bit_range:
+    - 31
+    - 24
+    description: Unique identifier byte 15
+  side_effects: null
+- id: TRNG90B_BYTES
+  address_offset: 3072
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: BYTES
+    bit_range:
+    - 31
+    - 0
+    description: Amount of bytes for the required entropy bits
+  side_effects: null
+- id: TRNG90B_RCCUTOFF
+  address_offset: 3076
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: RCCUTOFF
+    bit_range:
+    - 31
+    - 0
+    description: Repetition counter cutoff
+  side_effects: null
+- id: TRNG90B_APCUTOFF
+  address_offset: 3080
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: APCUTOFF
+    bit_range:
+    - 31
+    - 0
+    description: Adaptive proportion cutoff
+  side_effects: null
+- id: TRNG90B_STARTUP
+  address_offset: 3084
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: STARTUP
+    bit_range:
+    - 31
+    - 0
+    description: Amount of bytes for the startup tests
+  side_effects: null
+- id: TRNG90B_ROSC1
+  address_offset: 3088
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ROSC1
+    bit_range:
+    - 31
+    - 0
+    description: Sample count for ring oscillator 1
+  side_effects: null
+- id: TRNG90B_ROSC2
+  address_offset: 3092
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ROSC2
+    bit_range:
+    - 31
+    - 0
+    description: Sample count for ring oscillator 2
+  side_effects: null
+- id: TRNG90B_ROSC3
+  address_offset: 3096
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ROSC3
+    bit_range:
+    - 31
+    - 0
+    description: Sample count for ring oscillator 3
+  side_effects: null
+- id: TRNG90B_ROSC4
+  address_offset: 3100
+  size: 32
+  access: READ_ONLY
+  reset_value: 4294967295
+  fields:
+  - name: ROSC4
+    bit_range:
+    - 31
+    - 0
+    description: Sample count for ring oscillator 4
+  side_effects: null
+interrupts: null
+timing: null

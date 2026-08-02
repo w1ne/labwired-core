@@ -461,6 +461,11 @@ impl Sha {
 }
 
 impl Peripheral for Sha {
+    // Inert walk: SHA ops run atomically at the command-register write (BUSY reads 0); tick() is an explicit no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

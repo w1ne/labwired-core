@@ -1,0 +1,558 @@
+peripheral: PWM2
+version: 0.1.0
+registers:
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Stops PWM pulse generation on all channels at the end of current PWM period, and stops sequence playback
+  side_effects: null
+- id: TASKS_SEQSTART0
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_SEQSTART
+    bit_range:
+    - 0
+    - 0
+    description: Loads the first PWM value on all enabled channels from sequence n, and starts playing that sequence at the rate defined in SEQ[n]REFRESH and/or DECODER.MODE. Causes PWM generation to start if not running.
+  side_effects: null
+- id: TASKS_SEQSTART1
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_SEQSTART
+    bit_range:
+    - 0
+    - 0
+    description: Loads the first PWM value on all enabled channels from sequence n, and starts playing that sequence at the rate defined in SEQ[n]REFRESH and/or DECODER.MODE. Causes PWM generation to start if not running.
+  side_effects: null
+- id: TASKS_NEXTSTEP
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_NEXTSTEP
+    bit_range:
+    - 0
+    - 0
+    description: Steps by one value in the current sequence on all enabled channels if DECODER.MODE=NextStep. Does not cause PWM generation to start if not running.
+  side_effects: null
+- id: EVENTS_STOPPED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_STOPPED
+    bit_range:
+    - 0
+    - 0
+    description: Response to STOP task, emitted when PWM pulses are no longer generated
+  side_effects: null
+- id: EVENTS_SEQSTARTED0
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_SEQSTARTED
+    bit_range:
+    - 0
+    - 0
+    description: First PWM period started on sequence n
+  side_effects: null
+- id: EVENTS_SEQSTARTED1
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_SEQSTARTED
+    bit_range:
+    - 0
+    - 0
+    description: First PWM period started on sequence n
+  side_effects: null
+- id: EVENTS_SEQEND0
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_SEQEND
+    bit_range:
+    - 0
+    - 0
+    description: Emitted at end of every sequence n, when last value from RAM has been applied to wave counter
+  side_effects: null
+- id: EVENTS_SEQEND1
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_SEQEND
+    bit_range:
+    - 0
+    - 0
+    description: Emitted at end of every sequence n, when last value from RAM has been applied to wave counter
+  side_effects: null
+- id: EVENTS_PWMPERIODEND
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_PWMPERIODEND
+    bit_range:
+    - 0
+    - 0
+    description: Emitted at the end of each PWM period
+  side_effects: null
+- id: EVENTS_LOOPSDONE
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_LOOPSDONE
+    bit_range:
+    - 0
+    - 0
+    description: Concatenated sequences have been played the amount of times defined in LOOP.CNT
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SEQEND0_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between event SEQEND[0] and task STOP
+  - name: SEQEND1_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between event SEQEND[1] and task STOP
+  - name: LOOPSDONE_SEQSTART0
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between event LOOPSDONE and task SEQSTART[0]
+  - name: LOOPSDONE_SEQSTART1
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between event LOOPSDONE and task SEQSTART[1]
+  - name: LOOPSDONE_STOP
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between event LOOPSDONE and task STOP
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for event STOPPED
+  - name: SEQSTARTED0
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for event SEQSTARTED[0]
+  - name: SEQSTARTED1
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for event SEQSTARTED[1]
+  - name: SEQEND0
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable interrupt for event SEQEND[0]
+  - name: SEQEND1
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for event SEQEND[1]
+  - name: PWMPERIODEND
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable interrupt for event PWMPERIODEND
+  - name: LOOPSDONE
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable interrupt for event LOOPSDONE
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to enable interrupt for event STOPPED
+  - name: SEQSTARTED0
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to enable interrupt for event SEQSTARTED[0]
+  - name: SEQSTARTED1
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to enable interrupt for event SEQSTARTED[1]
+  - name: SEQEND0
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to enable interrupt for event SEQEND[0]
+  - name: SEQEND1
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to enable interrupt for event SEQEND[1]
+  - name: PWMPERIODEND
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to enable interrupt for event PWMPERIODEND
+  - name: LOOPSDONE
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to enable interrupt for event LOOPSDONE
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPPED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to disable interrupt for event STOPPED
+  - name: SEQSTARTED0
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to disable interrupt for event SEQSTARTED[0]
+  - name: SEQSTARTED1
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to disable interrupt for event SEQSTARTED[1]
+  - name: SEQEND0
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to disable interrupt for event SEQEND[0]
+  - name: SEQEND1
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to disable interrupt for event SEQEND[1]
+  - name: PWMPERIODEND
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to disable interrupt for event PWMPERIODEND
+  - name: LOOPSDONE
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to disable interrupt for event LOOPSDONE
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable PWM module
+  side_effects: null
+- id: MODE
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UPDOWN
+    bit_range:
+    - 0
+    - 0
+    description: Selects up mode or up-and-down mode for the counter
+  side_effects: null
+- id: COUNTERTOP
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 1023
+  fields:
+  - name: COUNTERTOP
+    bit_range:
+    - 14
+    - 0
+    description: Value up to which the pulse generator counter counts. This register is ignored when DECODER.MODE=WaveForm and only values from RAM are used.
+  side_effects: null
+- id: PRESCALER
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRESCALER
+    bit_range:
+    - 2
+    - 0
+    description: Prescaler of PWM_CLK
+  side_effects: null
+- id: DECODER
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOAD
+    bit_range:
+    - 1
+    - 0
+    description: How a sequence is read from RAM and spread to the compare register
+  - name: MODE
+    bit_range:
+    - 8
+    - 8
+    description: Selects source for advancing the active sequence
+  side_effects: null
+- id: LOOP
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 15
+    - 0
+    description: Number of playbacks of pattern cycles
+  side_effects: null
+- id: SEQ0_PTR
+  address_offset: 1312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Beginning address in RAM of this sequence
+  side_effects: null
+- id: SEQ0_CNT
+  address_offset: 1316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 14
+    - 0
+    description: Number of values (duty cycles) in this sequence
+  side_effects: null
+- id: SEQ0_REFRESH
+  address_offset: 1320
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CNT
+    bit_range:
+    - 23
+    - 0
+    description: Number of additional PWM periods between samples loaded into compare register (load every REFRESH.CNT+1 PWM periods)
+  side_effects: null
+- id: SEQ0_ENDDELAY
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 23
+    - 0
+    description: Time added after the sequence in PWM periods
+  side_effects: null
+- id: SEQ1_PTR
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Beginning address in RAM of this sequence
+  side_effects: null
+- id: SEQ1_CNT
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 14
+    - 0
+    description: Number of values (duty cycles) in this sequence
+  side_effects: null
+- id: SEQ1_REFRESH
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: CNT
+    bit_range:
+    - 23
+    - 0
+    description: Number of additional PWM periods between samples loaded into compare register (load every REFRESH.CNT+1 PWM periods)
+  side_effects: null
+- id: SEQ1_ENDDELAY
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNT
+    bit_range:
+    - 23
+    - 0
+    description: Time added after the sequence in PWM periods
+  side_effects: null
+- id: PSEL_OUT0
+  address_offset: 1376
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_OUT1
+  address_offset: 1380
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_OUT2
+  address_offset: 1384
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+- id: PSEL_OUT3
+  address_offset: 1388
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: PIN
+    bit_range:
+    - 4
+    - 0
+    description: Pin number
+  - name: PORT
+    bit_range:
+    - 5
+    - 5
+    description: Port number
+  - name: CONNECT
+    bit_range:
+    - 31
+    - 31
+    description: Connection
+  side_effects: null
+interrupts:
+  PWM2: 34
+  PWM0: 28
+timing: null

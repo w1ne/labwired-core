@@ -1,0 +1,11 @@
+# LabWired - BME280 Weather Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/bme280-weather-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BME280 Weather Lab"
+  - uart_contains: "ChipID=0x"
+  - expected_stop_reason: max_steps

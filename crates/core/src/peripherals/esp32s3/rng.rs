@@ -58,6 +58,11 @@ impl Esp32s3Rng {
 }
 
 impl Peripheral for Esp32s3Rng {
+    // Inert walk: RNG word advances on read, never in the walk. tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         if offset & !3 == RND_OFFSET {
             let word = self.next();

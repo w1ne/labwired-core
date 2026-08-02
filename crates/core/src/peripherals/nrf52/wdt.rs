@@ -19,7 +19,7 @@
 //! configured) IRQ is pended. The model does **not** trigger a CPU reset
 //! — it surfaces the timeout signal so test firmware can observe it.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const OFF_TASKS_START: u64 = 0x000;
 const OFF_EVENTS_TIMEOUT: u64 = 0x100;
@@ -56,6 +56,9 @@ pub struct Nrf52Wdt {
     /// further countdown happens; firmware can clear EVENTS_TIMEOUT but
     /// a real chip would have reset by now — we just stop the dog.
     bitten: bool,
+    clock: Option<CycleClock>,
+    anchor: u64,
+    arm_seq: u32,
 }
 
 impl Default for Nrf52Wdt {
@@ -70,6 +73,9 @@ impl Default for Nrf52Wdt {
             config: 0,
             counter: 0,
             bitten: false,
+            clock: None,
+            anchor: 0,
+            arm_seq: 0,
         }
     }
 }
@@ -161,35 +167,114 @@ impl Peripheral for Nrf52Wdt {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        if !self.running() || self.bitten {
+        self.advance_cycles(1)
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        self.clock.is_none()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if self.clock.is_none() || now_cycle <= self.anchor {
+            return;
+        }
+        let delta = now_cycle - self.anchor;
+        self.anchor = now_cycle;
+        let _ = self.advance_cycles(delta);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.clock.is_none() || !self.running() || self.bitten {
+            return Vec::new();
+        }
+        // Fire when counter would hit 0: need `counter` ticks (or 1 if already 0).
+        let d = if self.counter == 0 {
+            1u64
+        } else {
+            self.counter as u64
+        };
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        vec![(d.saturating_sub(1), self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if self.clock.is_none() || event_token != self.arm_seq {
+            return crate::sched::EventResult::default();
+        }
+        let now = sched.now();
+        let res = if now > self.anchor {
+            let d = now - self.anchor;
+            self.anchor = now;
+            self.advance_cycles(d)
+        } else {
+            self.advance_cycles(1)
+        };
+        let next = if self.running() && !self.bitten {
+            Some(if self.counter == 0 {
+                1u64
+            } else {
+                self.counter as u64
+            })
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            raise_own_irq: res.irq,
+            fired_events: res.fired_events,
+            reschedule_delay: next.map(|d| d.saturating_sub(1)),
+            ..Default::default()
+        }
+    }
+}
+
+impl Nrf52Wdt {
+    fn advance_cycles(&mut self, cycles: u64) -> PeripheralTickResult {
+        if !self.running() || self.bitten || cycles == 0 {
             return PeripheralTickResult::default();
         }
-
-        if self.counter == 0 {
-            // Already at zero — fall through to timeout (handled below).
-        } else {
-            self.counter = self.counter.wrapping_sub(1);
+        let mut left = cycles;
+        let mut irq = false;
+        let mut fired = Vec::new();
+        while left > 0 && !self.bitten {
+            if self.counter == 0 {
+                // Already at zero — timeout.
+            } else if left >= self.counter as u64 {
+                left -= self.counter as u64;
+                self.counter = 0;
+            } else {
+                self.counter -= left as u32;
+                break;
+            }
+            if self.counter == 0 {
+                self.bitten = true;
+                let already = self.events_timeout != 0;
+                self.events_timeout = 1;
+                if self.inten & INTEN_TIMEOUT != 0 {
+                    irq = true;
+                }
+                if !already {
+                    fired.push(OFF_EVENTS_TIMEOUT as u32);
+                }
+                break;
+            }
         }
-
-        if self.counter == 0 {
-            self.bitten = true;
-            let already_set = self.events_timeout != 0;
-            self.events_timeout = 1;
-            let irq = self.inten & INTEN_TIMEOUT != 0;
-            return PeripheralTickResult {
-                irq,
-                cycles: 1,
-                fired_events: if already_set {
-                    Vec::new()
-                } else {
-                    vec![OFF_EVENTS_TIMEOUT as u32]
-                },
-                ..Default::default()
-            };
-        }
-
         PeripheralTickResult {
+            irq,
             cycles: 1,
+            fired_events: fired,
             ..Default::default()
         }
     }

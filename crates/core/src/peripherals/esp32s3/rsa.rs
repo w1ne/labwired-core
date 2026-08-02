@@ -78,7 +78,7 @@
 //! "emit source while int asserts" convention shared with SYSTIMER. The
 //! firmware clears it by writing `RSA_CLEAR_INTERRUPT` (W1C).
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// Bytes per operand memory block (512 B = 128 × 32-bit words = 4096-bit max).
 const BLOCK_SIZE: u64 = 0x200;
@@ -134,6 +134,9 @@ pub struct Esp32s3Rsa {
     /// Sticky done / idle flag. Set when an operation completes; read back via
     /// RSA_QUERY_INTERRUPT (0x818); cleared by RSA_CLEAR_INTERRUPT (0x81C).
     done: bool,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl std::fmt::Debug for Esp32s3Rsa {
@@ -164,6 +167,8 @@ impl Esp32s3Rsa {
             search_pos: 0,
             int_ena: false,
             done: false,
+
+            clock: None,
         }
     }
 
@@ -300,6 +305,27 @@ impl Peripheral for Esp32s3Rsa {
             }
         } else {
             PeripheralTickResult::default()
+        }
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.done && self.int_ena {
+            out.push(self.source_id);
         }
     }
 

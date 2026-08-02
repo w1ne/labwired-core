@@ -112,10 +112,16 @@ pub fn try_build(
                 if ext.connection != p_cfg.id {
                     continue;
                 }
-                match crate::peripherals::components::build_external_i2c_device(
-                    &ext.r#type,
-                    &ext.id,
-                    &ext.config,
+                // `build_i2c_tree` assembles a TCA9548A bus switch together
+                // with everything wired behind it, so what is pushed onto the
+                // TWIM is one unit. The topology was validated in
+                // `SystemBus::from_config` before this factory ran, so an Err
+                // here is a build failure, not a wiring mistake.
+                match crate::peripherals::components::build_i2c_tree(manifest, ext).unwrap_or_else(
+                    |e| {
+                        tracing::error!("twim i2c tree for '{}': {e}", ext.id);
+                        None
+                    },
                 ) {
                     Some(device) => {
                         tracing::info!(
@@ -153,11 +159,14 @@ pub fn try_build(
                     continue;
                 }
                 // Try I²C device first.
-                if let Some(device) = crate::peripherals::components::build_external_i2c_device(
-                    &ext.r#type,
-                    &ext.id,
-                    &ext.config,
-                ) {
+                // See the TWIM arm above: `build_i2c_tree` assembles a bus
+                // switch with its downstream devices into one unit.
+                if let Some(device) = crate::peripherals::components::build_i2c_tree(manifest, ext)
+                    .unwrap_or_else(|e| {
+                        tracing::error!("serial-instance i2c tree for '{}': {e}", ext.id);
+                        None
+                    })
+                {
                     tracing::info!(
                         "serial-instance i2c attach: '{}' (type={}) -> '{}'",
                         ext.id,
@@ -165,18 +174,6 @@ pub fn try_build(
                         p_cfg.id
                     );
                     inst.attach_i2c(crate::bus::bus_trace::wrap_i2c(
-                        &p_cfg.id, bus_trace, device,
-                    ));
-                } else if let Some(device) =
-                    crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config)
-                {
-                    tracing::info!(
-                        "serial-instance spi attach: '{}' (type={}) -> '{}'",
-                        ext.id,
-                        ext.r#type,
-                        p_cfg.id
-                    );
-                    inst.attach_spi(crate::bus::bus_trace::wrap_spi(
                         &p_cfg.id, bus_trace, device,
                     ));
                 } else {

@@ -1,5 +1,5 @@
 site_name: LabWired Core
-site_url: https://labwired.com/docs/
+site_url: https://docs.labwired.com/
 repo_url: https://github.com/w1ne/labwired-core
 repo_name: w1ne/labwired-core
 
@@ -57,7 +57,6 @@ nav:
   - Home: index.md
   - Architecture Overview: architecture.md
   - Hardware-Sim Parity: golden_reference.md
-  - Hardware Matrix: supported_devices.md
   - AI Agent Manual: agents.md
 
   - Tutorials:
@@ -75,6 +74,9 @@ nav:
     - GDB Integration: gdb_integration.md
     - Troubleshooting: troubleshooting.md
     - Debugging: debugging.md
+    - PlatformIO Integration: platformio_integration.md
+    - Co-simulation Plugins: cosimulation_plugins.md
+    - CI Integration Templates: integration-templates/README.md
 
   - Reference:
     - Configuration (YAML): configuration_reference.md
@@ -93,22 +95,29 @@ nav:
     - STM32F407: boards/stm32f407.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
     - STM32H563: boards/stm32h563.md
+    - STM32H735: boards/stm32h735.md
     - STM32WBA52: boards/stm32wba52.md
     - nRF52832: boards/nrf52832.md
     - nRF52840: boards/nrf52840.md
     - RP2040: boards/rp2040.md
     - ESP32-C3: boards/esp32c3.md
     - ESP32-S3: boards/esp32s3.md
+    - nRF5340: boards/nrf5340.md
+    - nRF54L15: boards/nrf54l15.md
+    - NUCLEO-L073RZ: boards/nucleo-l073rz.md
+    - XIAO nRF52840 Sense: boards/seeed-xiao-nrf52840-sense.md
 
   - Operations:
     - Release Strategy: release_strategy.md
     - Release Determinism: RELEASE_DETERMINISM.md
     - Verification Audit: labwired_audit_protocol.md
-    - Supported Devices: supported_devices.md
     - Coverage Scoreboard: coverage_scoreboard.md
     - Chip Conformance (live): coverage/chip-conformance.md
     - Tier-1 Matrix (live): coverage/tier1-scoreboard.md
-    - Safety & Guardrails: safety.md
+    - Arduino Scoreboard: coverage/arduino-scoreboard.md
+    - Zephyr Scoreboard: coverage/zephyr-scoreboard.md
+    - Test Harness: engineering/test_harness.md
+    - Run Limits: limits.md
     - Demos: demos.md
     - Case Study (STM32): case_study_stm32.md
 

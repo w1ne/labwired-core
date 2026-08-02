@@ -7,6 +7,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **ESP32-C3 drift gate was watching the wrong files.** The C3's tier is a
+  reset-state oracle asserted against the declarative descriptors in
+  `configs/peripherals/esp32c3/`, and none of the 29 the chip yaml wires were in
+  its `models` drift-watch list — nor was `peripherals/esp_uart.rs`, where the
+  real UART0/UART1 register map moved on 2026-07-28. Those files could change
+  without the board's "silicon-verified" row ever going stale. Same hole on
+  `esp32s3` (3 descriptors + `esp_uart.rs`), `rp2040` and `mkw41z4`; all filled.
+  `generate_validation_status.py` now audits the watch list under `--check` /
+  `--drift`: every `path:` a chip yaml wires must be covered by that board's
+  `models`, and every listed path must exist. No board's status changed — every
+  newly watched path predates the covering `drift_ack`.
+- `docs/boards/VALIDATION_STATUS.md` regenerated: `nrf52840` and
+  `seeed-xiao-nrf52840-sense` now correctly read `✖ DRIFT` (model 2026-07-30 >
+  capture 2026-06-17, past the 2026-07-27 ack) instead of claiming an ack that
+  no longer covers them.
+
+## [0.21.0] - 2026-07-27
+
+### Added
+- **Built-in chips**: the chip descriptors in `configs/chips/` are bundled with
+  the CLI and addressable by name, so a project no longer copies one into its
+  repository. `inputs.chip: "stm32f103"` is the whole configuration for firmware
+  with nothing wired to it — no manifest, no descriptor copy — and a manifest's
+  `chip:` field accepts the same bare names. Anything with a separator or a YAML
+  extension is still a path, so existing scripts are unaffected.
+- **`labwired chips`** lists the bundled chips.
+
+### Changed
+- Systems resolve once into a `ResolvedSystem` passed to the runners, replacing
+  five sites that each re-read and re-parsed the manifest. A built-in-chip run
+  reports `system: null` in its artifacts, because there is no system file.
+
+## [0.20.0] - 2026-07-27
+
+### Added
+- **Declarative UART RX injection**: test scripts (schema 1.2) accept
+  `uart_injections`, pushing bytes into a named UART's receive queue at
+  `at_start` or `after_cycles`. Firmware that blocks on a read — loopback
+  examples, command parsers, GPS/modem drivers — is now testable in CI without
+  physical wiring. Bytes injected before the firmware configures the UART are
+  buffered, not dropped; an unknown UART name is a hard error rather than a
+  silent pass.
+- **RP2040 peripherals** and an **ESP32 ROM-boot path** that runs images
+  without an ELF.
+- **SVD conformance gate** for register-map drift, and a Wi-Fi AP component
+  with a universal test.
+
+### Fixed
+- Tier-1 register-map corrections for STM32WB55, WBA52 (LPUART1 IRQ), and
+  G474.
+- EXTI forced-tick delivery under the scheduler, and ROM-boot step-ceiling
+  resume.
+
+v0.20.0 is the first release carrying `uart_injections`; the documented runner
+pins move to it in a follow-up once the release assets are published.
+
+## [0.19.2] - 2026-07-15
+
+### Fixed
+- **Release runner smoke**: Bind-mounted container runs now preserve the
+  caller's artifact ownership, so the published image and archive-backed
+  GitHub Action can write report bundles in the same workspace.
+
+### Changed
+- **Public runner default**: The GitHub Action, integration templates, and
+  documented release pins now use the verified v0.19.2 runner contract.
+
+## [0.19.1] - 2026-07-15
+
+### Fixed
+- **Environment completion**: `inputs.env` scripts can opt into the same
+  durable assertion-pass stop contract as single-machine runs, including the
+  settling window and minimum-step floor. Node runtime failures and configured
+  wall-time/cycle/UART limits retain precedence over completion.
+- **CI runner image**: The image now builds against the same Debian/glibc
+  baseline it runs on. The required Core CI check builds and executes the final
+  image before a release tag can be created.
+
+### Changed
+- **Public runner default**: The one-step GitHub Action now defaults to the
+  v0.19.1 immutable CLI release; release smoke exercises both that default and
+  an explicit release pin.
+
+## [0.19.0] - 2026-07-14
+
+### Added
+- **Released multi-node CI runner**: GitHub Actions and OCI release smoke tests
+  can run a complete inputs.env world from YAML and publish a self-contained
+  report bundle without rebuilding LabWired.
+- **Environment result contract**: Multi-node runs write an explicit
+  1.0-environment result schema with per-node provenance and fidelity gaps.
+
+### Fixed
+- **Environment CI safety and evidence**: Strict environment-manifest
+  validation, deterministic snapshot peripheral ordering, explicit CAN
+  peripheral selection, and correct safety-stop / assertion precedence make
+  multi-node evidence reproducible and fail-closed.
+
 ## [0.18.0] - 2026-07-09
 
 ### Added

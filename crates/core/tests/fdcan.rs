@@ -109,29 +109,48 @@ fn fdcan_can_fd_frames_preserve_fd_metadata_and_64_byte_payload() {
 }
 
 #[test]
-fn transmitter_echo_is_contained_to_the_bus_broadcast() {
-    // The current CanBus broadcasts to every node including the sender
-    // (documented deviation — a real CAN node does not receive its own
-    // frame). This test pins the present behavior so a future
-    // source-tagged network layer changes it deliberately.
+fn transmitter_does_not_receive_its_own_frame_but_other_endpoints_do() {
+    // A CAN bus is a shared medium, but a node must not feed its own TX frame
+    // into its RX FIFO. The observer never transmits; it proves delivery is
+    // addressed to each *other* endpoint rather than merely routed through a
+    // second active transmitter.
     let mut can_bus = CanBus::new();
     let (tx_a, rx_a) = can_bus.attach();
+    let (tx_b, rx_b) = can_bus.attach();
+    let (tx_observer, rx_observer) = can_bus.attach();
     let mut node_a = Fdcan::new_with_bus(tx_a, rx_a);
+    let mut node_b = Fdcan::new_with_bus(tx_b, rx_b);
+    let mut observer = Fdcan::new_with_bus(tx_observer, rx_observer);
 
     wr(&mut node_a, RAM + 0x278, 0x321 << 18);
     wr(&mut node_a, RAM + 0x27C, 1 << 16);
     start(&mut node_a);
+    start(&mut node_b);
+    start(&mut observer);
     wr(&mut node_a, REG_TXBAR, 0x1);
     assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 0, "no rx before node tick");
+
     // Tick node_a first so drain_pending_tx sends the frame to the bus
-    // channel; then bus propagates the broadcast; then node_a drains
-    // its own RX (the echo arrives on this second tick).
+    // channel; then the bus fans out to every other endpoint.
     node_a.tick();
     can_bus.tick().unwrap();
     node_a.tick();
-    assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 1, "broadcast echo");
-    wr(&mut node_a, 0x094, 0);
-    assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 0);
+    node_b.tick();
+    observer.tick();
+
+    assert_eq!(
+        rd(&node_a, REG_RXF0S) & 0x7F,
+        0,
+        "sender must not self-echo"
+    );
+    for (name, node) in [("receiver", &node_b), ("observer", &observer)] {
+        assert_eq!(rd(node, REG_RXF0S) & 0x7F, 1, "{name} gets the frame");
+        assert_eq!(
+            (rd(node, RAM + 0xB0) >> 18) & 0x7FF,
+            0x321,
+            "{name} gets the exact standard identifier"
+        );
+    }
 }
 
 /// Issue #336: TXBRP must stay asserted until tick() completes the

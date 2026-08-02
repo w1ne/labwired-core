@@ -5,6 +5,21 @@
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+const RCC_BASE: u32 = 0x4002_1000;
+const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
+const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
+
+/// Enable USART1 (APB2 bit 14) and I2C1 (APB1 bit 21). Required now that
+/// stm32f103.yaml clocks those peripherals — unclocked MMIO is dropped.
+fn enable_peripheral_clocks() {
+    unsafe {
+        let apb2 = core::ptr::read_volatile(RCC_APB2ENR);
+        core::ptr::write_volatile(RCC_APB2ENR, apb2 | (1 << 14)); // USART1EN
+        let apb1 = core::ptr::read_volatile(RCC_APB1ENR);
+        core::ptr::write_volatile(RCC_APB1ENR, apb1 | (1 << 21)); // I2C1EN
+    }
+}
+
 // USART1 on STM32F103: base 0x4001_3800 (uart1 in chip config) — talks to the modem.
 const UART1_BASE: u32 = 0x4001_3800;
 const UART1_SR: *const u32 = (UART1_BASE + 0x00) as *const u32;
@@ -78,6 +93,7 @@ fn send_at(line: &str) {
 
 #[entry]
 fn main() -> ! {
+    enable_peripheral_clocks();
     uart2_str("Quectel BG770A-GL modem lab\r\n");
     uart2_str("Driving the modem over UART1...\r\n\r\n");
 

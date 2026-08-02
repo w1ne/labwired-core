@@ -1,0 +1,165 @@
+# Vishay VCNL4010 proximity + ambient-light sensor — declarative I²C
+# register-pointer device.
+#
+# The master writes a 1-byte register pointer, then reads/writes the register.
+# The VCNL4010's pointers live at 0x80..0x8F (the full byte is decoded, so the
+# default `pointer_mask: 0xFF` is correct — this part does NOT alias like the
+# TMP102's two-bit pointer). Datasheet (VCNL4010, Vishay, rev 1.6) map:
+#
+#   0x80      COMMAND         measurement enable / data-ready flags
+#   0x81      PRODUCT_ID      product 0x2 : revision 0x1
+#   0x82      PROX_RATE       proximity measurement rate                (rw)
+#   0x83      IR_LED_CURRENT  IR LED drive, 10 mA per LSB               (rw)
+#   0x84      AMBI_PARAM      ambient averaging / auto-offset / rate    (rw)
+#   0x85,0x86 AMBI_DATA       ambient result, 16-bit BIG-endian         (r)
+#   0x87,0x88 PROX_DATA       proximity result, 16-bit BIG-endian       (r)
+#   0x89      INT_CONTROL     interrupt config                          (rw)
+#   0x8A,0x8B LOW_THRESHOLD   interrupt low threshold                   (rw)
+#   0x8C,0x8D HIGH_THRESHOLD  interrupt high threshold                  (rw)
+#   0x8E      INT_STATUS      interrupt flags, write-1-to-clear         (rw)
+#   0x8F      MOD_TIMING      proximity modulator timing adjustment     (rw)
+#
+# ── COMMAND: firmware-owned enables, model-owned data-ready bits ───────────
+#
+# Datasheet Table 1 — COMMAND REGISTER #0 (rev 1.6):
+#
+#     bit 7 config_lock   "Read only bit. Value = 1"
+#     bit 6 als_data_rdy  "Read only bit. Value = 1 when ambient light
+#                          measurement data is available in the result
+#                          registers. This bit will be reset when one of the
+#                          corresponding result registers (reg #5, reg #6) is
+#                          read."
+#     bit 5 prox_data_rdy same, for the proximity result (reg #7, reg #8)
+#     bit 4 als_od        R/W. Starts a single on-demand ambient measurement
+#     bit 3 prox_od       R/W. Starts a single on-demand proximity measurement
+#     bit 2 als_en        R/W. Enables periodic als measurement
+#     bit 1 prox_en       R/W. Enables periodic proximity measurement
+#     bit 0 selftimed_en  R/W. Enables the state machine and LP oscillator
+#
+# So the register is split down the middle: bits 4..0 are firmware's, bits 7..5
+# are silicon's. `write_mask: 0x1F` is exactly that split — a firmware write
+# lands in the low five bits and can never forge, or clear, a ready flag.
+#
+# `Adafruit_VCNL4010::readProximity()` sets the measure bit and then spins:
+#
+#     write8(COMMAND, 0x08);
+#     while (1) { if (read8(COMMAND) & 0x20) return read16(PROX_DATA); delay(1); }
+#
+# There is no timeout and no error path, so the ready bit has to be REAL: a
+# model that never sets it hangs the user's firmware inside vendor library
+# code, and a model that always sets it (which this part shipped with until the
+# `data_ready` primitive existed) passes firmware whose data-ready poll is
+# missing or too short — precisely the bug class the twin exists to catch.
+# The `data_ready:` rules below make the two flags conversion-timed instead.
+#
+# ── Conversion times ────────────────────────────────────────────────────────
+#
+# proximity — 570 µs. Vishay application note 84138 "Designing the VCNL4010
+#   Into an Application" (rev 29-May-2020, p. 5, "Timing") budgets an on-demand
+#   reading as: start measurement 300 µs, measurement being made 170 µs, wait
+#   time prior to first read 400 µs, read out of the proximity data 600 µs,
+#   total 1470 µs. The 300 µs and 600 µs entries are the I²C transactions
+#   themselves (an 8-bit write or read at 100 kHz, which the bus already
+#   models), so the part's own latency between the start write and a readable
+#   result is 170 + 400 = 570 µs. The datasheet quotes no separate t_conv.
+#
+# ambient — 100 000 µs. Datasheet §3.3: "In standard mode the ambient light
+#   measurement is done during a fixed time frame of 100 ms. The single
+#   measurement itself takes actually only appr. 300 µs", with the note
+#   "Independent of setting of averaging the result is available only after
+#   100 ms". Standard mode is the reset default (AMBI_PARAM bit 7 = 0). The
+#   continuous-conversion mode's shorter frame is NOT modelled — a firmware
+#   that sets bit 7 waits 100 ms here rather than 1.5 ms, which is the safe
+#   direction (it can only make a too-short poll fail, never pass).
+#
+# Both are gated on the honest simulated-µs source the bus master feeds in.
+# STM32-class, ESP32-classic and nRF52 have no such counter, so on those chips
+# the flags degrade to always-set — the exact behaviour this part had before,
+# and better than fabricating a clock from a pinned core frequency.
+#
+# `start_mask` covers the periodic enable as well as the on-demand bit
+# (prox_od | prox_en, als_od | als_en) and a conversion re-arms while those
+# bits stay set, so the self-timed idiom keeps producing readings instead of
+# stalling. Strictly, silicon needs selftimed_en too and the on-demand bits are
+# single-shot; the difference is deliberately in the permissive direction —
+# firmware that never polls still fails, firmware that polls never hangs.
+#
+# What is still out of scope: the data PATH. The value read is whatever the
+# `proximity` / `ambient` input channels hold, and optical distance response is
+# not modelled — this part exists to inject representative proximity-count
+# sequences deterministically.
+#
+# Both result registers are raw counts (0..65535) taken straight from their
+# input channel with no scaling, because the count IS the datasheet's unit —
+# the mapping from counts to millimetres depends on the reflector and is not
+# something a simulator can invent.
+#
+# Address 0x13 is FIXED on the VCNL4010 — there are no strap pins. Several of
+# them on one bus therefore require a TCA9548A bus switch, one per channel;
+# see `configs/devices` siblings and `peripherals/components/tca9548a.rs`.
+type: vcnl4010
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x13
+    registers:
+      # Command: bits 4..0 are firmware's (write_mask 0x1F), bits 7..5 are
+      # silicon's — config_lock reads 1 from reset, the two data-ready flags are
+      # driven by the `data_ready:` rules below.
+      - { name: COMMAND, addr: 0x80, width: 1, endian: be, access: rw, write_mask: 0x1F, reset: 0x80 }
+      # Product 0x2, revision 0x1. Adafruit's begin() rejects the part unless
+      # (id & 0xF0) == 0x20, so this value is load-bearing for enumeration.
+      - { name: PRODUCT_ID, addr: 0x81, width: 1, endian: be, access: r, reset: 0x21 }
+      # Configuration storage — echoed back exactly as firmware wrote it.
+      - { name: PROX_RATE, addr: 0x82, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: IR_LED_CURRENT, addr: 0x83, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: AMBI_PARAM, addr: 0x84, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Ambient result: raw count, big-endian, driven by the `ambient` channel.
+      - { name: AMBI_DATA, addr: 0x85, width: 2, endian: be, access: r, source: ambient }
+      # Proximity result: raw count, big-endian, driven by the `proximity`
+      # channel. This is the register Ryan-style bay-occupancy firmware polls.
+      - { name: PROX_DATA, addr: 0x87, width: 2, endian: be, access: r, source: proximity }
+      - { name: INT_CONTROL, addr: 0x89, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: LOW_THRESHOLD, addr: 0x8A, width: 2, endian: be, access: rw, reset: 0x0000 }
+      - { name: HIGH_THRESHOLD, addr: 0x8C, width: 2, endian: be, access: rw, reset: 0x0000 }
+      # Interrupt status: rw because the driver read-modify-writes it to clear.
+      - { name: INT_STATUS, addr: 0x8E, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Modulator timing: 0x81 = 390.625 kHz, delay 0, dead time 1.
+      - { name: MOD_TIMING, addr: 0x8F, width: 1, endian: be, access: rw, reset: 0x81 }
+
+    # Conversion timing. See the header for the datasheet sources.
+    data_ready:
+      - name: proximity
+        start_register: COMMAND
+        start_mask: 0x0A        # prox_od | prox_en
+        ready_register: COMMAND
+        ready_mask: 0x20        # prox_data_rdy
+        conversion_us: 570      # AN 84138 p.5: 170 µs measurement + 400 µs wait
+        clear_on_read: [PROX_DATA]
+      - name: ambient
+        start_register: COMMAND
+        start_mask: 0x14        # als_od | als_en
+        ready_register: COMMAND
+        ready_mask: 0x40        # als_data_rdy
+        conversion_us: 100000   # datasheet §3.3: fixed 100 ms frame, standard mode
+        clear_on_read: [AMBI_DATA]
+
+metadata:
+  label: "Vishay VCNL4010 Proximity"
+  summary: "Proximity + ambient-light sensor over I2C (fixed address 0x13)."
+  detail: "Vishay VCNL4010 at its fixed address 0x13, a register-pointer device with 16-bit big-endian result words. Reports raw proximity and ambient counts driven by the `proximity` and `ambient` input channels; counts-to-distance depends on the reflector and is deliberately not modelled. Conversion timing is real: writing a COMMAND start bit takes 570 us (proximity) or 100 ms (ambient) before the matching data-ready flag reads set, and reading the result clears it — so firmware whose ready-poll is missing or too short fails here as it would on silicon. On chips with no absolute-microsecond counter (STM32, ESP32-classic, nRF52) the flags degrade to always-ready. Because the address is fixed, several VCNL4010s on one bus need a TCA9548A switch — one sensor per channel."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the VCNL4010 fixed address 0x13."
+    - name: proximity
+      ty: float
+      doc: "Initial proximity count. Default 2000 (nothing in front of the sensor). Drive it at runtime with the `proximity` input channel."
+    - name: ambient
+      ty: float
+      doc: "Initial ambient-light count. Default 1000. Drive it at runtime with the `ambient` input channel."
+  inputs:
+    - { key: proximity, label: "Proximity", unit: counts, min: 0, max: 65535, default: 2000 }
+    - { key: ambient, label: "Ambient", unit: counts, min: 0, max: 65535, default: 1000 }

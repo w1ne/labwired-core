@@ -40,9 +40,9 @@ labwired test --script <YAML> [OVERRIDES]
 
 **Options:**
 - `-c, --script <PATH>`: Path to the test script (see [Test Runner](ci_test_runner.md)).
-- `-f, --firmware <PATH>`: Override the firmware path defined in the script.
-- `-s, --system <PATH>`: Override the system manifest defined in the script.
-- `--output-dir <PATH>`: Directory to write artifacts (`result.json`, `uart.log`).
+- `-f, --firmware <PATH>`: Override the firmware path in a single-machine script only; environment topology comes from `inputs.env`.
+- `-s, --system <PATH>`: Override the system manifest in a single-machine script only; environment topology comes from `inputs.env`.
+- `--output-dir <PATH>`: Directory for `result.json`, `snapshot.json`, `uart.log`, and `junit.xml`; requested trace, fault-evidence, coverage, and run-manifest artifacts are written there too.
 - `--junit <PATH>`: Path to write JUnit XML report.
 - `--max-steps <N>`: Override default step limit.
 - `--max-cycles <N>`: Override cycle limit.

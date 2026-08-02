@@ -1,0 +1,189 @@
+# Arduino sketch matrix — every LabWired-supported chip with an Arduino path.
+# chip: configs/chips/<name>.yaml stem
+# system: relative to this matrix dir
+# pio: PlatformIO platform / board / framework
+# max_steps: sim budget (document why in budget_reason — no silent inflation)
+# led_watch: optional "peripheral:pin" for L2 GPIO oracle (--watch-gpio)
+# led_min_edges: min logic transitions required when led_watch is set (default 2)
+# family: grouping only
+
+boards:
+  - id: esp32
+    chip: esp32
+    system: systems/esp32.yaml
+    pio: { platform: espressif32, board: esp32dev, framework: arduino }
+    max_steps: 50000000
+    budget_reason: "FreeRTOS dual-core boot ~3.2M L0; L3 Wire needs more headroom"
+    # L2 LED_BUILTIN often GPIO2 digitalWrite — watch classic gpio peripheral
+    led_watch: "gpio:2"
+    led_min_edges: 2
+    family: esp32
+    notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks)"
+
+  - id: esp32c3
+    chip: esp32c3
+    system: systems/esp32c3.yaml
+    pio: { platform: espressif32, board: esp32-c3-devkitm-1, framework: arduino }
+    max_steps: 50000000
+    budget_reason: "FreeRTOS C3 boot ~1.9M; L3 Wire headroom (CLI max_steps cap 50M)"
+    # LED_BUILTIN → rgbLedWrite → RMT TX_START (inspect + synthetic ch0 edges)
+    min_rmt_tx: 1
+    led_watch: "rmt:0"
+    led_min_edges: 2
+    family: esp32
+    notes: "Arduino-ESP32-C3 RISC-V"
+
+  - id: esp32s3
+    chip: esp32s3
+    system: systems/esp32s3.yaml
+    pio: { platform: espressif32, board: esp32-s3-devkitc-1, framework: arduino }
+    max_steps: 50000000
+    budget_reason: "Dual-core S3 boot ~1.1M; L3 Wire headroom"
+    min_rmt_tx: 1
+    family: esp32
+    notes: "Arduino-ESP32-S3"
+
+  - id: nrf52832
+    chip: nrf52832
+    system: systems/nrf52832.yaml
+    pio: { platform: nordicnrf52, board: nrf52_dk, framework: arduino }
+    max_steps: 3000000
+    budget_reason: "Arduino nRF boot ~0.7M; L2 ~0.26M after short delays"
+    # PIN_CNF.DIR sync + LED1 = P0.17 on nRF52 DK Arduino core
+    led_watch: "gpio0:17"
+    led_min_edges: 2
+    family: nrf
+
+  - id: nrf52840
+    chip: nrf52840
+    system: systems/nrf52840.yaml
+    pio: { platform: nordicnrf52, board: nrf52840_dk, framework: arduino }
+    max_steps: 3000000
+    budget_reason: "Same class as nRF52832 Arduino core"
+    led_watch: "gpio0:17"
+    led_min_edges: 2
+    family: nrf
+
+  - id: rp2040
+    chip: rp2040
+    system: systems/rp2040.yaml
+    pio: { platform: raspberrypi, board: pico, framework: arduino }
+    max_steps: 8000000
+    budget_reason: "mbed RTX SysTick delay; L0~1.7M L2~0.8M with short delays (was 20M for delay(20))"
+    # Pico LED = GPIO25 via SIO (not APB GPIO)
+    led_watch: "sio:25"
+    led_min_edges: 2
+    family: rp2040
+    notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
+
+  - id: stm32f103
+    chip: stm32f103
+    system: systems/stm32f103.yaml
+    pio: { platform: ststm32, board: bluepill_f103c8, framework: arduino }
+    max_steps: 15000000
+    budget_reason: "L0~0.7M L2~0.22M; L3 Wire I2C may need multi-M steps"
+    led_watch: "gpioc:13"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32f401
+    chip: stm32f401
+    system: systems/stm32f401.yaml
+    pio: { platform: ststm32, board: nucleo_f401re, framework: arduino }
+    max_steps: 3000000
+    budget_reason: "Nucleo L0~0.84M L2~0.26M; LD2=PA5"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32f407
+    chip: stm32f407
+    system: systems/stm32f407.yaml
+    pio: { platform: ststm32, board: disco_f407vg, framework: arduino }
+    max_steps: 8000000
+    budget_reason: "Disco L0~1.7M L2~0.5M; green LED PD12"
+    led_watch: "gpiod:12"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32g474re
+    chip: stm32g474re
+    system: systems/stm32g474re.yaml
+    pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "L0–L2 light; L3 Wire.begin runs i2c_computeTiming (~7M+ steps)"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32h563
+    chip: stm32h563
+    system: systems/stm32h563.yaml
+    pio: { platform: ststm32, board: nucleo_h563zi, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
+    led_watch: "gpiob:0"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32l073
+    chip: stm32l073
+    system: systems/stm32l073.yaml
+    pio: { platform: ststm32, board: nucleo_l073rz, framework: arduino }
+    max_steps: 15000000
+    budget_reason: "L0 light; L3 may run I2C timing compute under stm32duino"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32l476
+    chip: stm32l476
+    system: systems/stm32l476.yaml
+    pio: { platform: ststm32, board: nucleo_l476rg, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "L0~0.8M; L3 Wire.begin i2c_computeTiming ~7.3M steps measured"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32wb55
+    chip: stm32wb55
+    system: systems/stm32wb55.yaml
+    pio: { platform: ststm32, board: nucleo_wb55rg_p, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
+    led_watch: "gpiob:5"
+    led_min_edges: 2
+    family: stm32
+
+  - id: stm32wba52
+    chip: stm32wba52
+    system: systems/stm32wba52.yaml
+    # ststm32 has no upstream board JSON; matrix supplies pio-boards/nucleo_wba52cg.json
+    pio: { platform: ststm32, board: nucleo_wba52cg, framework: arduino }
+    max_steps: 20000000
+    budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
+    led_watch: "gpiob:4"
+    led_min_edges: 2
+    family: stm32
+
+sketches:
+  - id: L0_serial_boot
+    dir: sketches/L0_serial_boot
+    marker: "LW_L0_OK"
+    description: "setup() prints once — proves Arduino core boot + UART"
+
+  - id: L1_serial_loop
+    dir: sketches/L1_serial_loop
+    marker: "LW_L1_OK"
+    description: "loop() prints — proves millis/loop scheduling"
+
+  - id: L2_blink_serial
+    dir: sketches/L2_blink_serial
+    marker: "LW_L2_OK"
+    description: "LED_BUILTIN toggle + serial — UART + optional GPIO edges"
+
+  - id: L3_i2c_sensor
+    dir: sketches/L3_i2c_sensor
+    marker: "LW_L3_OK"
+    description: "Wire + INA219@0x40 (system external_devices) — peripheral kit path"

@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use labwired_core::coverage::{probe_peripheral, Access, ProbeReg, ProbeTarget, RegStatus};
+use labwired_core::Bus; // BusTarget probes via the single Bus-trait accessor
 use serde::{Deserialize, Serialize};
 use svd_parser::svd::{Peripheral, Register, RegisterCluster};
 
@@ -167,7 +168,7 @@ fn expand_probe_register(reg: &Register, parent_offset: u64, out: &mut Vec<Probe
 
 fn load_svd(path: &std::path::Path) -> anyhow::Result<Vec<SvdPeripheral>> {
     let xml = std::fs::read_to_string(path)?;
-    let device = svd_parser::parse(&xml)?;
+    let device = svd_ingestor::parse_svd(&xml).map_err(|e| anyhow::anyhow!(e))?;
     let mut out = Vec::new();
 
     for p in &device.peripherals {

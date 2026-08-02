@@ -16,7 +16,7 @@
 // attached-device list exist on both because both families genuinely have
 // them. The chip-yaml `profile` selects the variant.
 
-use crate::SimResult;
+use crate::{CycleClock, SimResult};
 use std::cell::{Cell, RefCell};
 use std::str::FromStr;
 
@@ -26,6 +26,57 @@ pub trait I2cDevice: Send {
     fn write(&mut self, data: u8);
     fn start(&mut self) {}
     fn stop(&mut self) {}
+
+    /// Does this device answer to `addr` on the wire *right now*?
+    ///
+    /// A plain slave owns exactly one address, so the default is the obvious
+    /// `self.address() == addr` — every existing model keeps its behaviour with
+    /// no edit. The hook exists for devices whose answered-address set is not a
+    /// singleton and is not static: an I²C **bus switch** (TCA9548A) answers to
+    /// its own control address *and*, while a channel is enabled, to every
+    /// address reachable behind that channel. That set changes whenever
+    /// firmware rewrites the switch's control register, so it cannot be
+    /// flattened into one `address()` at attach time.
+    ///
+    /// Controllers MUST resolve a slave with this, never by comparing
+    /// `address()` — a flat `position(|d| d.address() == addr)` is first-match
+    /// and makes four identical sensors behind a mux collapse into one.
+    fn claims_address(&self, addr: u8) -> bool {
+        self.address() == addr
+    }
+
+    /// Tell the device which address the master just selected, immediately
+    /// after [`claims_address`](Self::claims_address) returned `true` for it and
+    /// before any `start`/`write`/`read`/`stop` of that transaction.
+    ///
+    /// Default no-op: a single-address slave already knows who it is. A bus
+    /// switch uses it to decide whether this transaction targets its own
+    /// control register or is to be forwarded to the downstream device(s) that
+    /// claim `addr` on the currently enabled channel(s).
+    fn select_address(&mut self, addr: u8) {
+        let _ = addr;
+    }
+
+    /// Walk every [`SimInput`](crate::sim_input::SimInput) surface this device
+    /// exposes, including devices nested *behind* it. Returns `true` if `f`
+    /// asked to stop early.
+    ///
+    /// The default is exactly the old behaviour — a device offers at most its
+    /// own [`as_sim_input_mut`](Self::as_sim_input_mut). It is overridden by
+    /// containers (the TCA9548A mux) so their children stay reachable from the
+    /// ONE stimulus walk in [`crate::bus::SystemBus::for_each_sim_input`].
+    /// Without it, putting a sensor behind a mux would silently subtract it
+    /// from `list_inputs` / `set_input` — the same class of invisible-device
+    /// bug the controller-level seam was introduced to kill.
+    fn for_each_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        match self.as_sim_input_mut() {
+            Some(si) => f(si),
+            None => false,
+        }
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
@@ -39,6 +90,22 @@ pub trait I2cDevice: Send {
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         None
     }
+
+    /// Advance this device's free-running sample/measurement clock by `us`
+    /// microseconds of wall-clock time.
+    ///
+    /// Real sensors sample on their own oscillator, independent of when the CPU
+    /// gets around to reading them: a PPG FIFO keeps filling at its configured
+    /// rate whether or not firmware is draining it. A bus master that knows the
+    /// elapsed wall-clock calls this on a slave immediately before servicing it,
+    /// so a *late* poll observes exactly the samples that accrued while the CPU
+    /// was busy elsewhere — and a FIFO that was allowed to overrun reports the
+    /// overflow it really would have. Without this hook a model only advances on
+    /// the very transactions that would have prevented the overflow, which hides
+    /// precisely the CPU-starvation failures worth simulating.
+    ///
+    /// Default no-op: a purely register-mapped device has no clock to advance.
+    fn advance_time_us(&mut self, _us: u64) {}
 }
 
 /// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C
@@ -93,6 +160,14 @@ pub struct F1I2c {
     dr: u32,
     sr1: u32,
     sr2: u32,
+    /// NVIC vector for this instance's ERROR interrupt (e.g. I2C1_ER_IRQn = 32
+    /// on STM32F4), distinct from the EVENT vector carried by the peripheral's
+    /// `irq:` field. AF/BERR/ARLO/OVR are error conditions: silicon raises them
+    /// on the ER line under CR2.ITERREN, and the HAL's ERROR handler is what
+    /// clears AF and completes a NACKed transfer. Without this vector an
+    /// interrupt-mode driver (STM32duino 3.x uses HAL_I2C_Master_Transmit_IT)
+    /// never learns the address was NACKed and spins until its 100 ms timeout.
+    irq_error: Option<u32>,
     ccr: u32,
     trise: u32,
 
@@ -111,6 +186,27 @@ pub struct F1I2c {
     rxne_consumed: Cell<bool>,
     #[serde(skip)]
     read_dr_consumed: Cell<bool>,
+    /// ADDR (SR1 bit1) software-clear sequence: set after SR1 is read while
+    /// ADDR is set; consumed on the following SR2 read (RM0008 §26.6.6 —
+    /// "ADDR is cleared by reading SR1 then SR2"). Held in a Cell so the
+    /// clear can happen on a pure `&self` read path.
+    #[serde(skip)]
+    addr_sr1_seen: Cell<bool>,
+    #[serde(skip)]
+    addr_cleared: Cell<bool>,
+
+    /// Bus-published cycle clock (walk-free campaign). `Some` once the bus
+    /// registration choke attaches it; `None` keeps the model on the legacy
+    /// walk. Mirrors the Kinetis variant — see `F1I2c::scheduler_mode`.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Scheduler mode only: `true` while the per-cycle transaction-engine event
+    /// is live in the scheduler heap. Armed when the transaction becomes active
+    /// (a write starts a countdown, or a `&self` receive read latches a re-arm);
+    /// self-perpetuates at delay 1 while the transfer stays active, stops when it
+    /// returns fully idle. Same held-level self-pacing the Kinetis variant uses.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl Default for F1I2c {
@@ -123,6 +219,7 @@ impl Default for F1I2c {
             dr: 0,
             sr1: 0,
             sr2: 0,
+            irq_error: None,
             ccr: 0,
             // TRISE reset value is 0x0002 (RM0008 §26.6.9) — silicon-confirmed
             // on STM32F103 over SWD (reads 0x00000002 after RCC clock enable,
@@ -136,11 +233,93 @@ impl Default for F1I2c {
             stop_requested: false,
             rxne_consumed: Cell::new(false),
             read_dr_consumed: Cell::new(true),
+            addr_sr1_seen: Cell::new(false),
+            addr_cleared: Cell::new(false),
+            clock: None,
+            chain_live: false,
         }
     }
 }
 
 impl F1I2c {
+    /// True when the event scheduler owns this controller's transaction engine
+    /// (feature on AND bus clock attached).
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Cycles on which the legacy `tick()` does observable work: any in-flight
+    /// countdown (`state != Idle`), the master transfer window (SR2.BUSY), a
+    /// pending `&self`-read RXNE re-arm, or a deferred STOP. Outside this window
+    /// `tick()` is a proven no-op (the `rxne_consumed` drain and the countdown
+    /// are the only side effects, and both are gated by exactly these flags), so
+    /// the event chain may stop and let idle fast-forward engage — while any
+    /// extra idle cycle it does run is observationally inert. Over-covering is
+    /// therefore always safe; this predicate is deliberately generous so a
+    /// receive re-arm latched by a `&self` DR read is never missed.
+    #[inline]
+    fn active(&self) -> bool {
+        self.state != I2cState::Idle
+            || (self.sr2 & 0x0002) != 0 // BUSY: master transfer in flight
+            || self.rxne_consumed.get()
+            || self.stop_requested
+            // Level EV must keep walking while ITEVTEN/ITBUFEN flags are live.
+            || self.irq_level()
+    }
+
+    /// Set the ERROR-line NVIC vector for this instance.
+    pub fn set_error_irq(&mut self, irq: u32) {
+        self.irq_error = Some(irq);
+    }
+
+    /// Vectors to pend on the ERROR line this cycle.
+    ///
+    /// SR1 error bits (RM0090 §27.6.6): BERR 8, ARLO 9, AF 10, OVR 11,
+    /// PECERR 12, TIMEOUT 14, SMBALERT 15. Bit 13 is reserved. Gated on
+    /// CR2.ITERREN (bit 8), exactly as silicon gates the ER line.
+    fn error_irqs(&self) -> Option<Vec<u32>> {
+        const ERR_MASK: u32 =
+            (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 14) | (1 << 15);
+        if (self.cr2 & (1 << 8)) != 0 && (self.sr1 & ERR_MASK) != 0 {
+            self.irq_error.map(|n| vec![n])
+        } else {
+            None
+        }
+    }
+
+    /// SR1 with ADDR masked once the SR1→SR2 clear sequence has completed.
+    #[inline]
+    fn effective_sr1(&self) -> u32 {
+        let mut s = self.sr1;
+        if self.addr_cleared.get() {
+            s &= !0x0002;
+        }
+        s
+    }
+
+    /// Level-sensitive I2C event IRQ (RM0008 §26.5 / NVIC): the EV line stays
+    /// asserted while any enabled status flag is set. One-shot pulse-on-transition
+    /// is not silicon — HAL_I2C_EV_IRQHandler chains SB → ADDR → TXE → BTF across
+    /// re-entries, and each entry requires the line still high after the previous
+    /// flag is cleared.
+    ///
+    /// ITEVTEN (CR2.9): SB, ADDR, ADD10, STOPF, BTF.
+    /// ITBUFEN (CR2.10): TXE, RXNE (used with ITEVTEN by HAL Master_Transmit_IT).
+    #[inline]
+    fn irq_level(&self) -> bool {
+        let itevt = (self.cr2 & (1 << 9)) != 0;
+        let itbuf = (self.cr2 & (1 << 10)) != 0;
+        if !itevt && !itbuf {
+            return false;
+        }
+        let sr1 = self.effective_sr1();
+        // SB=0, ADDR=1, BTF=2, STOPF=4 (ADD10=3 rare — leave in 0x1F with EVT).
+        let evt_flags = sr1 & 0x001F;
+        let buf_flags = sr1 & 0x00C0; // TXE=7, RXNE=6
+        (itevt && evt_flags != 0) || (itbuf && buf_flags != 0)
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr1,
@@ -148,8 +327,21 @@ impl F1I2c {
             0x08 => self.oar1,
             0x0C => self.oar2,
             0x10 => self.dr,
-            0x14 => self.sr1,
-            0x18 => self.sr2,
+            0x14 => {
+                let s = self.effective_sr1();
+                // Start of ADDR-clear sequence (RM0008 §26.6.6).
+                if (s & 0x0002) != 0 {
+                    self.addr_sr1_seen.set(true);
+                }
+                s
+            }
+            0x18 => {
+                // Completing ADDR clear: SR1 was read with ADDR set, now SR2.
+                if self.addr_sr1_seen.replace(false) {
+                    self.addr_cleared.set(true);
+                }
+                self.sr2
+            }
             0x1C => self.ccr,
             0x20 => self.trise,
             _ => 0,
@@ -164,8 +356,13 @@ impl F1I2c {
                 // real silicon; that side effect is not modelled here.
                 self.cr1 = (value as u32) & 0xBFFB;
                 if (value & 0x0100) != 0 && self.state == I2cState::Idle {
+                    // Instant SB: Arduino/HAL Wire polls SR1.SB immediately
+                    // after CR1.START; a multi-instruction tick interval would
+                    // livelock the wait loop (matrix L3). One I2C bit time is
+                    // always << firmware poll period here.
                     self.state = I2cState::StartPending;
-                    self.cycles_remaining = 1;
+                    self.cycles_remaining = 0;
+                    let _ = self.tick();
                 }
                 if (value & 0x0200) != 0 {
                     // STOP requested. Defer if a data phase is in flight so
@@ -175,7 +372,18 @@ impl F1I2c {
                         self.stop_requested = true;
                     } else {
                         self.cr1 &= !0x0200;
-                        self.sr2 &= !0x0003;
+                        // STOP clears master/busy/TRA (RM0008 SR2).
+                        self.sr2 &= !0x0007;
+                        // Drop the transmitter/bus-event flags so the level EV
+                        // line deasserts — but NOT RXNE. A master-receive latches
+                        // RXNE with the byte in DR and clears it only on the DR
+                        // read (RM0090 §27.6.7); STOP releases the bus, it does
+                        // not discard an already-received byte. Clearing RXNE here
+                        // wiped the byte before a poll-mode 1-byte NACK read (set
+                        // ACK=0+STOP, then poll RXNE) could observe it → hang.
+                        self.sr1 &= !0x0087; // TXE|BTF|ADDR|SB (keep RXNE 0x40)
+                        self.addr_cleared.set(false);
+                        self.addr_sr1_seen.set(false);
                         if let Some(idx) = self.current_target {
                             self.attached_devices[idx].borrow_mut().stop();
                         }
@@ -192,21 +400,27 @@ impl F1I2c {
             0x10 => {
                 self.dr = (value & 0xFF) as u32;
                 if self.state == I2cState::Idle {
-                    if (self.sr1 & 0x01) != 0 {
+                    // SB uses effective SR1 (ADDR-clear overlay does not mask SB).
+                    if (self.effective_sr1() & 0x01) != 0 {
                         self.state = I2cState::AddressPending;
-                        self.cycles_remaining = 20;
+                        // Instant ADDR/TXE: one I2C bit-time ≪ ISR/poll interval.
+                        self.cycles_remaining = 0;
                         let addr = (self.dr >> 1) as u8;
                         self.is_reading = (self.dr & 1) != 0;
                         self.current_target = self
                             .attached_devices
                             .iter()
-                            .position(|d| d.borrow().address() == addr);
+                            .position(|d| d.borrow().claims_address(addr));
                         if let Some(idx) = self.current_target {
-                            self.attached_devices[idx].borrow_mut().start();
+                            let mut dev = self.attached_devices[idx].borrow_mut();
+                            dev.select_address(addr);
+                            dev.start();
                         }
-                    } else {
+                        let _ = self.tick();
+                    } else if (self.effective_sr1() & 0x80) != 0 || (self.sr2 & 0x0001) != 0 {
+                        // Data byte while master (TXE or MSL): shift out, clear TXE/BTF.
                         self.state = I2cState::DataPending;
-                        self.cycles_remaining = 20;
+                        self.cycles_remaining = 0;
                         self.sr1 &= !0x80;
                         self.sr1 &= !0x04;
                         if !self.is_reading {
@@ -214,11 +428,29 @@ impl F1I2c {
                                 self.attached_devices[idx].borrow_mut().write(self.dr as u8);
                             }
                         }
+                        let _ = self.tick();
                     }
                 }
             }
-            0x14 => self.sr1 = value as u32,
-            0x18 => self.sr2 = value as u32,
+            0x14 => {
+                // SR1 is NOT a plain register. The error bits (BERR 8, ARLO 9,
+                // AF 10, OVR 11, PECERR 12, TIMEOUT 14, SMBALERT 15) are rc_w0
+                // — writing 0 clears them — and every other bit is read-only,
+                // set by hardware alone (RM0090 §27.6.6).
+                //
+                // A raw `self.sr1 = value` was catastrophic with real firmware:
+                // the HAL clears a flag with `SR1 = ~FLAG` (e.g. 0xFFFFFBFF for
+                // AF), which under a raw assignment SET every other flag at
+                // once — SB, ADDR, BTF, TXE — and the driver's state machine
+                // then chased events that never happened.
+                const CLEARABLE: u32 =
+                    (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 14) | (1 << 15);
+                let cleared = CLEARABLE & !(value as u32);
+                self.sr1 &= !cleared;
+            }
+            // SR2 is entirely read-only (MSL/BUSY/TRA/GENCALL/DUALF and PEC).
+            // Writes are discarded by hardware.
+            0x18 => {}
             // CCR 0xCFFF (12-bit divider + DUTY + F/S), TRISE 0x3F (6-bit) —
             // silicon-confirmed on F103.
             0x1C => self.ccr = (value as u32) & 0xCFFF,
@@ -301,20 +533,38 @@ impl F1I2c {
                             self.sr1 |= 0x0400; // AF
                             self.sr2 |= 0x0001; // MSL
                             self.sr2 |= 0x0002; // BUSY
+                                                // TRA is NOT set on a NACKed address: TRA latches the
+                                                // transmitter/receiver direction only "at the end of
+                                                // the address phase" (RM0090 §27.6.7), which requires
+                                                // an ACK (ADDR event). When the address is NACKed
+                                                // (AF, no ADDR) the direction is never latched — real
+                                                // NUCLEO-F407 silicon reads SR2=0x03 (MSL|BUSY) here,
+                                                // not 0x07. Leave TRA at its reset/STOP-cleared 0.
                             self.state = I2cState::Idle;
                             if (self.cr2 & (1 << 8)) != 0 {
                                 irq = true; // ITERR
                             }
-                            return irq;
+                            return irq || self.irq_level();
                         }
 
                         self.sr1 |= 0x0002; // ADDR
                         self.sr2 |= 0x0001; // MSL
                         self.sr2 |= 0x0002; // BUSY
+                                            // SR2.TRA (bit2): set in master transmitter after address
+                                            // ACK with R/W=0. HAL_I2C_EV_IRQHandler gates the TXE/BTF
+                                            // path on TRA — without it the ISR never writes data.
+                        if self.is_reading {
+                            self.sr2 &= !0x0004;
+                        } else {
+                            self.sr2 |= 0x0004;
+                        }
+                        // Fresh ADDR — cancel any prior software clear.
+                        self.addr_cleared.set(false);
+                        self.addr_sr1_seen.set(false);
 
                         if self.is_reading {
                             self.state = I2cState::DataPending;
-                            self.cycles_remaining = 20;
+                            self.cycles_remaining = 0;
                         } else {
                             self.sr1 |= 0x0080; // TXE
                             self.state = I2cState::Idle;
@@ -336,7 +586,13 @@ impl F1I2c {
                         if self.stop_requested {
                             self.stop_requested = false;
                             self.cr1 &= !0x0200;
-                            self.sr2 &= !0x0003;
+                            self.sr2 &= !0x0007; // MSL|BUSY|TRA
+                                                 // Keep RXNE (0x40): a deferred STOP on a master
+                                                 // receive tears the bus down only after the byte has
+                                                 // latched into DR; the firmware still has to read it.
+                            self.sr1 &= !0x0087; // TXE|BTF|ADDR|SB
+                            self.addr_cleared.set(false);
+                            self.addr_sr1_seen.set(false);
                             if let Some(idx) = self.current_target {
                                 self.attached_devices[idx].borrow_mut().stop();
                             }
@@ -346,13 +602,14 @@ impl F1I2c {
                     I2cState::Idle => {}
                 }
 
-                if (self.cr2 & (1 << 9)) != 0 || (self.cr2 & (1 << 10)) != 0 {
-                    irq = true; // ITEVTEN or ITBUFEN
+                if self.irq_level() {
+                    irq = true;
                 }
             }
         }
 
-        irq
+        // Level re-assert every tick while enabled flags remain (see irq_level).
+        irq || self.irq_level()
     }
 }
 
@@ -374,6 +631,10 @@ pub struct L4I2c {
     // Minimal master transaction engine (mirrors F1I2c, modern-register flavour).
     state: I2cState,
     cycles_remaining: u32,
+    /// Latched CR2.NBYTES for the armed/in-flight transfer (0 = address-only).
+    nbytes: u8,
+    /// True once the first TXDR byte has been accepted for a multi-byte write.
+    first_tx_loaded: bool,
 
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
@@ -385,10 +646,19 @@ pub struct L4I2c {
     is_reading: bool,
     #[serde(skip)]
     autoend: bool,
-    /// CR2.START has latched a transfer; the address phase fires once the first
-    /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
+    /// A byte was written to TXDR before the address phase (the L0/L4/G4 HAL
+    /// preload ordering). TXDR is a real writable holding register: the byte
+    /// waits in `txdr` and is transmitted once the address phase ACKs. Cleared
+    /// when the START handler folds it into `first_tx_loaded` for the transfer.
     #[serde(skip)]
-    start_armed: bool,
+    tx_preloaded: bool,
+
+    /// Bus-published cycle clock (walk-free campaign) — see `L4I2c::scheduler_mode`.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Scheduler mode: `true` while the per-cycle engine event is live.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl Default for L4I2c {
@@ -407,16 +677,92 @@ impl Default for L4I2c {
             txdr: 0,
             state: I2cState::Idle,
             cycles_remaining: 0,
+            nbytes: 0,
+            first_tx_loaded: false,
             attached_devices: Vec::new(),
             current_target: None,
             is_reading: false,
             autoend: false,
-            start_armed: false,
+            tx_preloaded: false,
+            clock: None,
+            chain_live: false,
         }
     }
 }
 
 impl L4I2c {
+    /// True when the event scheduler owns this controller's engine.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Engine ticks the START + address + ACK phase occupies the bus before
+    /// CR2.START self-clears and the ACK/NACK verdict lands. Real silicon
+    /// (RM0351 §37.7.5): after software sets START the controller drives the
+    /// Start condition, the 7-bit address and the ACK slot — nine SCL bit-times
+    /// — and only THEN clears START. Firmware that reads CR2/ISR in the few
+    /// instructions after arming a transfer must still see START set and no
+    /// NACKF (silicon-pinned: CR2=0x000120A0, ISR=0x00008001 on NUCLEO-L476RG),
+    /// which a zero-time completion would violate.
+    ///
+    /// Derive the SCL bit-time from TIMINGR exactly as the hardware does —
+    /// (SCLL+1)+(SCLH+1) prescaled by (PRESC+1) I2CCLK periods (RM0351 §37.7.5) —
+    /// and take nine of them (START + 8 address bits + ACK).
+    ///
+    /// The countdown decrements once per engine tick, i.e. once per CORE cycle;
+    /// the I2C kernel clock runs SLOWER than the core on these parts (the L0/L4/
+    /// G4 boot raises the core via PLL but leaves I2C1SEL on its lower-rate reset
+    /// source, e.g. HSI16), so a kernel period spans several core cycles. The
+    /// live ratio is not visible on the walk path (no `CycleClock` attached), so
+    /// scale by `CORE_PER_KCLK`, the reset-default core-to-kernel multiple. Only
+    /// the magnitude matters and it is deterministic: it must exceed the handful
+    /// of instructions before firmware re-reads CR2/ISR (on the L476 survival
+    /// fixture that gap is a UART status print, ~21.5k core cycles, and the
+    /// silicon capture pins START still set + no NACKF there), while staying far
+    /// under the HAL transfer timeout so a real transfer still completes. The
+    /// walk and the scheduler both decrement one step per cycle, so the timing
+    /// is byte-identical in each. The floor keeps the pending window observable
+    /// when TIMINGR is left at reset (e.g. bare unit tests).
+    fn address_phase_cycles(&self) -> u32 {
+        let presc = ((self.timingr >> 28) & 0xF) + 1;
+        let scll = (self.timingr & 0xFF) + 1;
+        let sclh = ((self.timingr >> 8) & 0xFF) + 1;
+        let bit_time_kclk = (scll + sclh) * presc;
+        const CORE_PER_KCLK: u32 = 8;
+        (bit_time_kclk * 9 * CORE_PER_KCLK).max(64)
+    }
+
+    /// Cycles on which the legacy `tick()` does observable work: an in-flight
+    /// countdown, the BUSY master-transfer window, or a live enabled IRQ flag
+    /// (TXIS/TC/STOPF/NACKF) that Master_Transmit_IT still needs delivered.
+    #[inline]
+    fn active(&self) -> bool {
+        if self.state != I2cState::Idle || (self.isr & (1 << 15)) != 0 {
+            return true;
+        }
+        // Level IRQ bits that can still need a walk tick after the engine idles.
+        let pending = self.isr
+            & ((((self.cr1 & (1 << 1)) != 0) as u32 * (1 << 1)) // TXIE→TXIS
+                | (((self.cr1 & (1 << 2)) != 0) as u32 * (1 << 2)) // RXIE→RXNE
+                | (((self.cr1 & (1 << 4)) != 0) as u32 * (1 << 4)) // NACKIE
+                | (((self.cr1 & (1 << 5)) != 0) as u32 * (1 << 5)) // STOPIE
+                | (((self.cr1 & (1 << 6)) != 0) as u32 * (1 << 6))); // TCIE
+        pending != 0
+    }
+
+    /// Level-triggered EV IRQ: any enabled status flag still latched.
+    #[inline]
+    fn irq_level(&self) -> bool {
+        let cr1 = self.cr1;
+        let isr = self.isr;
+        ((cr1 & (1 << 1)) != 0 && (isr & (1 << 1)) != 0) // TXIE & TXIS
+            || ((cr1 & (1 << 2)) != 0 && (isr & (1 << 2)) != 0) // RXIE & RXNE
+            || ((cr1 & (1 << 4)) != 0 && (isr & (1 << 4)) != 0) // NACKIE & NACKF
+            || ((cr1 & (1 << 5)) != 0 && (isr & (1 << 5)) != 0) // STOPIE & STOPF
+            || ((cr1 & (1 << 6)) != 0 && (isr & (1 << 6)) != 0) // TCIE & TC
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr1,
@@ -438,49 +784,69 @@ impl L4I2c {
         match offset {
             0x00 => self.cr1 = value & 0x00FF_E1FF,
             0x04 => {
+                // START (bit13) / STOP (bit14) self-clear in silicon — but only
+                // once the corresponding condition is actually generated on the
+                // bus, NOT at the instant of the CR2 write. Firmware that polls
+                // CR2 immediately after arming a transfer reads START still set
+                // (real NUCLEO-L476RG: CR2=0x000120A0 with START high in the
+                // "start pending" window). So store CR2 verbatim here and clear
+                // each trigger only when it is consumed: START when the address
+                // phase runs, STOP in the STOP handler below. By then any Zephyr
+                // LL_I2C_SetTransferSize RMW happens with START already cleared,
+                // so the RMW cannot re-fire it.
                 self.cr2 = value;
                 if (value & (1 << 13)) != 0 {
-                    // START: latch BUSY and arm a master transfer. Capture the
-                    // addressed slave (SADD[7:1] in 7-bit mode), direction
-                    // (RD_WRN), NBYTES and AUTOEND. The address phase runs once
-                    // the first byte reaches TXDR (write) or immediately for a
-                    // read — mirrors the F1 START→DR handshake.
-                    self.isr |= 1 << 15; // BUSY
-                    let addr = ((value >> 1) & 0x7F) as u8;
-                    self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
-                    self.autoend = (value & (1 << 25)) != 0;
-                    self.current_target = self
-                        .attached_devices
-                        .iter()
-                        .position(|d| d.borrow().address() == addr);
-                    if let Some(idx) = self.current_target {
-                        self.attached_devices[idx].borrow_mut().start();
-                    }
-                    self.start_armed = true;
-                    if self.is_reading {
-                        // Read needs no TXDR write to begin; kick the engine now.
+                    // START: latch BUSY and run the addressed transfer. Capture
+                    // the addressed slave (SADD[7:1] in 7-bit mode), direction
+                    // (RD_WRN), NBYTES and AUTOEND.
+                    if (self.cr1 & 1) != 0 {
+                        self.isr |= 1 << 15; // BUSY
+                        let addr = ((value >> 1) & 0x7F) as u8;
+                        self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
+                        self.autoend = (value & (1 << 25)) != 0;
+                        self.nbytes = ((value >> 16) & 0xFF) as u8;
+                        // Carry a pre-START TXDR write (the L0/L4/G4 HAL preload
+                        // ordering) into this transfer as the first data byte;
+                        // the byte already sits in self.txdr.
+                        self.first_tx_loaded = self.tx_preloaded;
+                        self.tx_preloaded = false;
+                        self.current_target = self
+                            .attached_devices
+                            .iter()
+                            .position(|d| d.borrow().claims_address(addr));
+                        if let Some(idx) = self.current_target {
+                            let mut dev = self.attached_devices[idx].borrow_mut();
+                            dev.select_address(addr);
+                            dev.start();
+                        }
+                        // Real silicon begins the addressed transfer the instant
+                        // START is set — for reads AND writes — but the Start
+                        // condition + address + ACK take wire time before START
+                        // self-clears and the verdict lands. Enter AddressPending
+                        // with a TIMINGR-derived countdown; START stays readable
+                        // in CR2 and NACKF stays clear until tick() drains it (see
+                        // `address_phase_cycles`). When the countdown completes,
+                        // tick() clears START and resolves ACK→(preloaded byte
+                        // transmits / TXIS asserts + DataPending) or NACK→NACKF
+                        // (+STOPF with AUTOEND). START is NOT cleared here.
                         self.state = I2cState::AddressPending;
-                        self.cycles_remaining = 20;
-                        self.start_armed = false;
+                        self.cycles_remaining = self.address_phase_cycles();
                     }
-                    // For a write, TXIS is NOT asserted here: on real STM32 L4
-                    // silicon TXIS only sets once the address phase has been
-                    // clocked out and ACKed (hardware then requests the first
-                    // byte). Firmware reading ISR immediately after setting
-                    // CR2.START sees only BUSY|TXE (0x8001), not TXIS. The byte
-                    // request is modelled by the engine consuming TXDR after the
-                    // address ACK (see `tick`), so no premature TXIS is needed.
                 }
                 if (value & (1 << 14)) != 0 {
-                    // STOP: release the bus and tear down any armed/in-flight
-                    // transfer.
+                    // STOP (software, AUTOEND=0 path — Zephyr stm32 v2 poll):
+                    // silicon sets STOPF and clears BUSY when the stop is done.
+                    self.cr2 &= !(1 << 14); // STOP consumed
+                    self.isr |= 1 << 5; // STOPF
                     self.isr &= !(1 << 15); // clear BUSY
                     if let Some(idx) = self.current_target {
                         self.attached_devices[idx].borrow_mut().stop();
                     }
                     self.current_target = None;
                     self.state = I2cState::Idle;
-                    self.start_armed = false;
+                    self.nbytes = 0;
+                    self.first_tx_loaded = false;
+                    self.tx_preloaded = false;
                 }
             }
             0x08 => self.oar1 = value,
@@ -501,12 +867,44 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
-                                          // Loading the first byte while a write transfer is armed starts
-                                          // the address phase.
-                if self.start_armed && self.state == I2cState::Idle {
-                    self.state = I2cState::AddressPending;
-                    self.cycles_remaining = 20;
-                    self.start_armed = false;
+                if self.state == I2cState::DataPending {
+                    // Post-TXIS path: the address phase already ACKed and asserted
+                    // TXIS; firmware (HAL IT / poll) commits the data byte here.
+                    self.first_tx_loaded = true;
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx]
+                            .borrow_mut()
+                            .write(self.txdr as u8);
+                    }
+                    self.isr |= 1 << 0; // TXE
+                    self.isr |= 1 << 6; // TC
+                    if self.autoend {
+                        self.isr |= 1 << 5; // STOPF
+                        self.isr &= !(1 << 15); // BUSY
+                        if let Some(i) = self.current_target {
+                            self.attached_devices[i].borrow_mut().stop();
+                        }
+                        self.current_target = None;
+                    }
+                    self.state = I2cState::Idle;
+                    self.nbytes = 0;
+                    self.first_tx_loaded = false;
+                    // Completion IRQ for Master_Transmit_IT (TCIE/STOPIE): the
+                    // next tick() re-checks the level flags set above.
+                } else if self.state == I2cState::AddressPending {
+                    // TXDR committed while the address phase is still on the wire
+                    // (STM32Cube writes the first byte right after START, before
+                    // the ACK): hold it as this transfer's first data byte — it
+                    // transmits when the address ACKs (tick's first_tx_loaded
+                    // path). The value is already stored in self.txdr above.
+                    self.first_tx_loaded = true;
+                } else {
+                    // TXDR written before START (the L0/L4/G4 HAL preload
+                    // ordering): TXDR is a writable holding register; the byte
+                    // waits and is folded into the transfer as first_tx_loaded
+                    // when START arms (see the CR2 START handler). The value is
+                    // already stored in self.txdr above.
+                    self.tx_preloaded = true;
                 }
             }
             _ => {}
@@ -547,13 +945,17 @@ impl L4I2c {
     fn tick(&mut self) -> bool {
         let mut irq = false;
         if self.state == I2cState::Idle {
-            return irq;
+            // Still re-assert level IRQs while flags are latched (IT completion).
+            return self.irq_level();
         }
         self.cycles_remaining = self.cycles_remaining.saturating_sub(1);
         if self.cycles_remaining != 0 {
-            return irq;
+            return self.irq_level();
         }
         if self.state == I2cState::AddressPending {
+            // The Start condition + address + ACK have now been driven on the
+            // bus (the countdown elapsed) → hardware clears CR2.START.
+            self.cr2 &= !(1 << 13);
             match self.current_target {
                 None => {
                     // No slave ACKed the address → NACKF (matches L476 silicon:
@@ -568,36 +970,85 @@ impl L4I2c {
                     if (self.cr1 & (1 << 4)) != 0 {
                         irq = true; // NACKIE
                     }
+                    if (self.cr1 & (1 << 5)) != 0 && (self.isr & (1 << 5)) != 0 {
+                        irq = true; // STOPIE
+                    }
+                    self.state = I2cState::Idle;
+                    self.nbytes = 0;
+                    self.first_tx_loaded = false;
                 }
                 Some(idx) => {
-                    // Slave ACKed. Deliver the one armed byte (write) or fetch
-                    // one (read), then complete (TC) and auto-STOP if requested.
-                    if self.is_reading {
+                    // Slave ACKed.
+                    if self.is_reading && self.nbytes > 0 {
                         self.rxdr = self.attached_devices[idx].borrow_mut().read() as u32;
                         self.isr |= 1 << 2; // RXNE
-                    } else {
+                        self.isr |= 1 << 6; // TC
+                        if self.autoend {
+                            self.isr |= 1 << 5; // STOPF
+                            self.isr &= !(1 << 15);
+                            self.attached_devices[idx].borrow_mut().stop();
+                            self.current_target = None;
+                        }
+                        if (self.cr1 & (1 << 6)) != 0 {
+                            irq = true; // TCIE
+                        }
+                        if (self.cr1 & (1 << 2)) != 0 {
+                            irq = true; // RXIE
+                        }
+                        self.state = I2cState::Idle;
+                        self.nbytes = 0;
+                        self.first_tx_loaded = false;
+                    } else if !self.is_reading && self.nbytes > 0 && self.first_tx_loaded {
+                        // TXDR already loaded (legacy unit-test ordering).
                         self.attached_devices[idx]
                             .borrow_mut()
                             .write(self.txdr as u8);
                         self.isr |= 1 << 0; // TXE
-                    }
-                    self.isr |= 1 << 6; // TC (NBYTES transferred)
-                    if self.autoend {
-                        self.isr |= 1 << 5; // STOPF
-                        self.isr &= !(1 << 15); // BUSY released
-                        if let Some(i) = self.current_target {
-                            self.attached_devices[i].borrow_mut().stop();
+                        self.isr |= 1 << 6; // TC
+                        if self.autoend {
+                            self.isr |= 1 << 5; // STOPF
+                            self.isr &= !(1 << 15);
+                            self.attached_devices[idx].borrow_mut().stop();
+                            self.current_target = None;
                         }
-                        self.current_target = None;
-                    }
-                    if (self.cr1 & (1 << 6)) != 0 {
-                        irq = true; // TCIE
+                        if (self.cr1 & (1 << 6)) != 0 {
+                            irq = true; // TCIE
+                        }
+                        self.state = I2cState::Idle;
+                        self.nbytes = 0;
+                        self.first_tx_loaded = false;
+                    } else if !self.is_reading && self.nbytes > 0 {
+                        // Silicon order: address ACKed → TXIS requests first
+                        // data byte. Stay in DataPending until TXDR is written
+                        // (Arduino/Zephyr Master_Transmit_IT path).
+                        self.isr |= 1 << 1; // TXIS
+                        self.isr |= 1 << 0; // TXE
+                        self.state = I2cState::DataPending;
+                        if (self.cr1 & (1 << 1)) != 0 {
+                            irq = true; // TXIE
+                        }
+                        // Keep nbytes / current_target / BUSY for the data phase.
+                    } else {
+                        // Address-only (NBYTES=0): TC without data path.
+                        self.isr |= 1 << 0; // TXE
+                        self.isr |= 1 << 6; // TC
+                        if self.autoend {
+                            self.isr |= 1 << 5; // STOPF
+                            self.isr &= !(1 << 15);
+                            self.attached_devices[idx].borrow_mut().stop();
+                            self.current_target = None;
+                        }
+                        if (self.cr1 & (1 << 6)) != 0 {
+                            irq = true; // TCIE
+                        }
+                        self.state = I2cState::Idle;
+                        self.nbytes = 0;
+                        self.first_tx_loaded = false;
                     }
                 }
             }
-            self.state = I2cState::Idle;
         }
-        irq
+        irq || self.irq_level()
     }
 }
 
@@ -655,6 +1106,21 @@ pub struct KinetisI2c {
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
     current_target: Option<usize>,
+
+    /// Bus-published cycle clock (walk-free plan Part 1). `Some` once the bus
+    /// registration choke attaches it; `None` keeps the model on the legacy
+    /// walk. Only the Kinetis variant migrates (see the `I2c` `Peripheral`
+    /// impl): its `tick()` is a pure level-IRQ re-assertion, all byte/device
+    /// work being synchronous in read/write, so the timer/systimer held-level
+    /// re-pend event pattern reproduces it cycle-exactly.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Scheduler mode only: `true` while the level-check event is live in the
+    /// scheduler heap. Armed when IICIE becomes set; self-perpetuates at delay
+    /// 1 while IICIE stays set (so a `&self` `D`-read that latches IICIF is
+    /// caught the next cycle — exactly like the walk), stops when IICIE clears.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl Default for KinetisI2c {
@@ -678,11 +1144,26 @@ impl Default for KinetisI2c {
             is_reading: false,
             attached_devices: Vec::new(),
             current_target: None,
+            clock: None,
+            chain_live: false,
         }
     }
 }
 
 impl KinetisI2c {
+    /// True when the event scheduler owns this controller's level IRQ (feature
+    /// on AND bus clock attached).
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// The level the legacy `tick()` re-asserts every cycle: IICIF latched AND
+    /// IICIE enabled.
+    #[inline]
+    fn irq_level(&self) -> bool {
+        (self.s.get() & KI_S_IICIF) != 0 && (self.c1 & KI_C1_IICIE) != 0
+    }
     /// Mark a byte transfer complete: TCF + IICIF latch; RXAK mirrors the slave ack.
     fn byte_complete(&self, acked: bool) {
         let mut s = self.s.get() | KI_S_TCF | KI_S_IICIF;
@@ -784,9 +1265,13 @@ impl KinetisI2c {
                     self.current_target = self
                         .attached_devices
                         .iter()
-                        .position(|dev| dev.borrow().address() == addr);
+                        .position(|dev| dev.borrow().claims_address(addr));
                     if let Some(idx) = self.current_target {
-                        self.attached_devices[idx].borrow_mut().start();
+                        {
+                            let mut dev = self.attached_devices[idx].borrow_mut();
+                            dev.select_address(addr);
+                            dev.start();
+                        }
                         self.byte_complete(true);
                     } else {
                         self.byte_complete(false); // address NAK
@@ -849,6 +1334,15 @@ impl I2c {
         Self::default()
     }
 
+    /// Forward an ERROR-line NVIC vector to the variant that models one.
+    /// Only the STM32 legacy peripheral splits EV/ER this way; other families
+    /// carry a single vector and ignore this.
+    pub fn set_error_irq(&mut self, irq: u32) {
+        if let Self::Stm32F1(i) = self {
+            i.set_error_irq(irq);
+        }
+    }
+
     pub fn new_with_layout(layout: I2cRegisterLayout) -> Self {
         match layout {
             I2cRegisterLayout::Stm32F1 => Self::Stm32F1(F1I2c::default()),
@@ -892,6 +1386,38 @@ impl I2c {
             Self::Kinetis(i) => &i.attached_devices,
         }
     }
+
+    /// True when the event scheduler owns this instance's IRQ delivery. All
+    /// three variants migrate. Kinetis: its `tick()` is a pure level-IRQ
+    /// re-assertion. STM32 F1/L4: their `cycles_remaining` transaction engine is
+    /// self-paced by a delay-1 event chain that runs `tick()` every cycle while
+    /// the transfer is *active* (see `F1I2c::active`) — the SAME held-level
+    /// self-perpetuating pattern Kinetis uses. The `&self`-read side effects
+    /// (`rxne_consumed` / device byte pulls) mutate `Cell`/`RefCell` state that
+    /// the already-live chain's next `on_event` observes exactly as the walk's
+    /// next `tick()` would, so no event needs arming from the read path. Idle
+    /// fast-forward still engages: the chain stops the moment the transfer goes
+    /// fully idle (BUSY clear, no countdown), which on a real lab is between
+    /// transactions when the firmware is not busy-polling anyway.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        match self {
+            Self::Stm32F1(i) => i.scheduler_mode(),
+            Self::Stm32L4(i) => i.scheduler_mode(),
+            Self::Kinetis(i) => i.scheduler_mode(),
+        }
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy walk path. Used by the walk-on-vs-scheduler differential gates to
+    /// build the reference config from the same assembly.
+    pub fn force_legacy_walk(&mut self) {
+        match self {
+            Self::Stm32F1(i) => i.clock = None,
+            Self::Stm32L4(i) => i.clock = None,
+            Self::Kinetis(i) => i.clock = None,
+        }
+    }
 }
 
 impl crate::Peripheral for I2c {
@@ -912,16 +1438,211 @@ impl crate::Peripheral for I2c {
         Ok(())
     }
 
+    fn drives_central_i2c_time(&self) -> bool {
+        true
+    }
+
+    /// Advance every attached slave's data-ready clock. Slaves live behind
+    /// `RefCell` here (the transaction engine hands out interior-mutable borrows
+    /// mid-transfer), so borrow each cell in turn. On STM32/Kinetis the machine
+    /// only calls this when a `sim_time_us` source is present; those families
+    /// model no absolute-µs counter today, so in practice this stays inert until
+    /// one is added — the override is here so the fan-out is complete the moment
+    /// it is.
+    fn advance_attached_i2c_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for cell in self.attached_devices() {
+            cell.borrow_mut().advance_time_us(us);
+        }
+    }
+
+    /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
+    /// and AUTOEND together). Default Peripheral::write_u32 byte-slices and would
+    /// assert START before AUTOEND lands, breaking the NBYTES=0 probe path.
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        match self {
+            Self::Stm32F1(i) => {
+                i.write_reg(offset & !1, (value & 0xFFFF) as u16);
+            }
+            Self::Stm32L4(i) => {
+                i.write_reg(offset & !3, value);
+            }
+            Self::Kinetis(i) => {
+                i.write_reg(offset, (value & 0xFF) as u8);
+                i.write_reg(offset.wrapping_add(1), ((value >> 8) & 0xFF) as u8);
+                i.write_reg(offset.wrapping_add(2), ((value >> 16) & 0xFF) as u8);
+                i.write_reg(offset.wrapping_add(3), ((value >> 24) & 0xFF) as u8);
+            }
+        }
+        Ok(())
+    }
+
     fn tick(&mut self) -> crate::PeripheralTickResult {
+        // Scheduler-mode instances are walk-skipped (the guard keeps a stray
+        // direct call from double-advancing the engine the event chain owns).
+        if self.scheduler_mode() {
+            return crate::PeripheralTickResult::default();
+        }
         let irq = match self {
             Self::Stm32F1(i) => i.tick(),
             Self::Stm32L4(i) => i.tick(),
             Self::Kinetis(i) => i.tick(),
         };
+        // Errors ride the ER vector, not the EV vector the `irq` flag pends.
+        let explicit_irqs = match self {
+            Self::Stm32F1(i) => i.error_irqs(),
+            _ => None,
+        };
         crate::PeripheralTickResult {
             irq,
             cycles: 0,
+            explicit_irqs,
             ..Default::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        // Any variant with a bus clock attached (event-scheduler builds). See
+        // `I2c::scheduler_mode`.
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // Scheduler-mode: the transaction engine (F1/L4) or level re-assertion
+        // (Kinetis) is fully driven by the event chain, so the walk is
+        // unnecessary. Feature off / no clock: real per-cycle walk work → `true`.
+        !self.scheduler_mode()
+    }
+
+    fn sync_to(&mut self, _now_cycle: u64) {
+        // No lazily-accumulated state to reconcile: the F1/L4 transaction
+        // countdown is advanced cycle-by-cycle by the self-perpetuating event
+        // chain (drained up to the current cycle by `Machine::step` before any
+        // MMIO access observes it), and the Kinetis registers / device byte
+        // stream / IICIF all mutate synchronously in read/write. Explicit no-op
+        // for symmetry with the other scheduler-migrated models.
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        match self {
+            Self::Kinetis(i) => {
+                if !i.scheduler_mode() {
+                    return Vec::new();
+                }
+                // Arm the self-perpetuating level-check the moment interrupts are
+                // armed (IICIE set) and no chain is live. The chain then re-polls
+                // every cycle while IICIE stays set (delay-0 → deadline
+                // `current_cycle + 1`, the cycle the legacy walk's next tick would
+                // first check the level), so a `&self` `D`-read that latches IICIF
+                // is picked up the next cycle, exactly as the walk would. The
+                // `chain_live` guard prevents duplicate chains across the multiple
+                // C1/D/S writes of a transfer.
+                if (i.c1 & KI_C1_IICIE) != 0 && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
+            // STM32 F1/L4: arm the per-cycle transaction-engine chain the moment
+            // a write makes the transfer active (START/DR countdown, BUSY). The
+            // chain then self-perpetuates every cycle while the transfer stays
+            // active — including across the `&self` receive reads that cannot arm
+            // an event themselves (their re-arm is caught by the already-live
+            // chain's next `on_event`, exactly as the walk's next tick would).
+            // delay-0 → deadline `current_cycle + 1` = the walk's next tick.
+            Self::Stm32F1(i) => {
+                if i.scheduler_mode() && i.active() && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
+            Self::Stm32L4(i) => {
+                if i.scheduler_mode() && i.active() && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let _ = sched;
+        match self {
+            Self::Kinetis(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                // Pend the peripheral's own NVIC line while the level
+                // (IICIF & IICIE) is asserted — the event-path equivalent of the
+                // legacy `tick()` returning its level bool every cycle. Perpetuate
+                // at delay 1 while IICIE stays set so a byte completion latched by
+                // a `&self` read is caught the next cycle; stop when firmware
+                // disables IICIE.
+                let iicie = (i.c1 & KI_C1_IICIE) != 0;
+                i.chain_live = iicie;
+                crate::sched::EventResult {
+                    raise_own_irq: i.irq_level(),
+                    reschedule_delay: iicie.then_some(1),
+                    ..Default::default()
+                }
+            }
+            // STM32 F1: run one cycle of the transaction engine — byte-for-byte
+            // the same `F1I2c::tick()` the walk runs — and pend the NVIC line on
+            // its IRQ verdict. Re-check `active()` AFTER the tick (it may have
+            // just delivered the last byte and cleared BUSY) and perpetuate at
+            // delay 1 while still active; stop when fully idle so fast-forward can
+            // engage. An extra idle cycle would be inert, so the tight stop is
+            // safe. The `on_event` runs at the same per-cycle cadence as the walk,
+            // so the countdown timing and IRQ edges are identical.
+            Self::Stm32F1(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                let irq = i.tick();
+                let active = i.active();
+                i.chain_live = active;
+                crate::sched::EventResult {
+                    raise_own_irq: irq,
+                    reschedule_delay: active.then_some(1),
+                    ..Default::default()
+                }
+            }
+            Self::Stm32L4(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                let irq = i.tick();
+                let active = i.active();
+                i.chain_live = active;
+                crate::sched::EventResult {
+                    raise_own_irq: irq,
+                    reschedule_delay: active.then_some(1),
+                    ..Default::default()
+                }
+            }
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // All three variants opt into the scheduler once the bus attaches its
+        // clock (event-scheduler builds); featureless builds ignore it via
+        // `scheduler_mode`.
+        match self {
+            Self::Stm32F1(i) => i.clock = Some(clock),
+            Self::Stm32L4(i) => i.clock = Some(clock),
+            Self::Kinetis(i) => i.clock = Some(clock),
         }
     }
 
@@ -947,6 +1668,24 @@ impl crate::Peripheral for I2c {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    /// Slaves live behind `RefCell` here (the transaction engine hands out
+    /// interior-mutable borrows mid-transfer), so the walk borrows each cell in
+    /// turn rather than taking one long `&mut` over the vector.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for cell in self.attached_devices() {
+            // `for_each_sim_input`, not `as_sim_input_mut`: a container slave
+            // (TCA9548A mux) exposes the inputs of the devices behind it, which
+            // a single-surface accessor cannot represent.
+            if cell.borrow_mut().for_each_sim_input(f) {
+                return true;
+            }
+        }
+        false
     }
 
     /// Custom inspection: the generic register decode plus a `framebuffer`
@@ -1095,12 +1834,13 @@ mod tests {
     #[test]
     fn test_i2c_start_bit() {
         let mut i2c = I2c::new();
-        i2c.write(0x01, 0x01).unwrap(); // CR1 SB (bit 8)
-        assert_eq!(i2c.peek(0x14).unwrap() & 0x01, 0); // not immediate
-        for _ in 0..10 {
-            i2c.tick();
-        }
-        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB set after ticks
+        // Instant SB: Wire/HAL polls SR1.SB immediately after CR1.START.
+        i2c.write(0x01, 0x01).unwrap(); // CR1 START (bit 8) → SR1.SB
+        assert_ne!(
+            i2c.peek(0x14).unwrap() & 0x01,
+            0,
+            "SB latches on START write"
+        );
     }
 
     #[test]
@@ -1122,6 +1862,13 @@ mod tests {
         assert_eq!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB cleared
         assert_ne!(i2c.peek(0x14).unwrap() & 0x02, 0); // ADDR
         assert_ne!(i2c.peek(0x18).unwrap() & 0x01, 0); // MSL
+                                                       // TRA (SR2 bit2) must rise on write-address ACK — HAL EV IRQ gates
+                                                       // the TXE/BTF path on TRA (RM0008 §26.6.7).
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & 0x04,
+            0,
+            "TRA set after write-address ACK"
+        );
 
         i2c.write(0x10, 0x42).unwrap();
         for _ in 0..20 {
@@ -1135,10 +1882,45 @@ mod tests {
             i2c.tick();
         }
         assert_eq!(
-            i2c.peek(0x18).unwrap() & 0x03,
+            i2c.peek(0x18).unwrap() & 0x07,
             0,
-            "STOP must clear MSL+BUSY"
+            "STOP must clear MSL+BUSY+TRA"
         );
+    }
+
+    #[test]
+    fn f1_write_address_sets_tra_and_level_ev_stays_asserted() {
+        use crate::Peripheral;
+        struct Ack {
+            address: u8,
+        }
+        impl I2cDevice for Ack {
+            fn address(&self) -> u8 {
+                self.address
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _: u8) {}
+        }
+        let mut i2c = I2c::new_with_layout(super::I2cRegisterLayout::Stm32F1);
+        i2c.push_slave(Box::new(Ack { address: 0x40 }));
+        // Enable ITEVTEN|ITBUFEN like HAL_I2C_Master_Transmit_IT.
+        i2c.write_u32(0x04, (1 << 9) | (1 << 10)).unwrap();
+        i2c.write(0x01, 0x01).unwrap(); // START → SB
+        assert!(i2c.tick().irq, "SB with ITEVTEN asserts EV");
+        i2c.write(0x10, 0x80).unwrap(); // 0x40 write
+                                        // After address ACK: ADDR+TXE+TRA; level EV stays high across ticks.
+        assert_ne!(i2c.peek(0x18).unwrap() & 0x04, 0, "TRA");
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x80, 0, "TXE");
+        assert!(i2c.tick().irq, "level EV while TXE+ITBUFEN");
+        assert!(i2c.tick().irq, "level EV re-assert next tick");
+        // Clear ADDR via SR1 then SR2 (silicon sequence).
+        let _ = i2c.read_u32(0x14).unwrap();
+        let _ = i2c.read_u32(0x18).unwrap();
+        assert_eq!(i2c.peek(0x14).unwrap() & 0x02, 0, "ADDR cleared by SR1→SR2");
+        // TXE still live → EV still asserted for MasterTransmit_TXE.
+        assert!(i2c.tick().irq, "TXE keeps EV high after ADDR clear");
     }
 
     #[test]
@@ -1237,16 +2019,30 @@ mod tests {
 
     /// Configure CR2 for a 1-byte 7-bit master write to `addr` with AUTOEND,
     /// then load TXDR — the no-device case the tier-1 fixtures exercise.
+    /// CR2 is a single 32-bit store (matches STM32 HAL).
     fn l4_write_xfer(i2c: &mut I2c, addr: u8, byte: u8) {
         use crate::Peripheral;
         i2c.write(0x00, 1).unwrap(); // CR1.PE
-                                     // CR2 = SADD(addr<<1) | NBYTES=1<<16 | AUTOEND<<25 | START<<13
         let cr2: u32 = ((addr as u32) << 1) | (1 << 16) | (1 << 25) | (1 << 13);
-        for b in 0..4 {
-            i2c.write(0x04 + b, ((cr2 >> (b * 8)) & 0xFF) as u8)
-                .unwrap();
-        }
+        i2c.write_u32(0x04, cr2).unwrap();
         i2c.write(0x28, byte).unwrap(); // TXDR: first (only) byte
+    }
+
+    /// Address-only master write (NBYTES=0 + AUTOEND + START) — Wire probe.
+    fn l4_addr_probe(i2c: &mut I2c, addr: u8) {
+        use crate::Peripheral;
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+        let cr2: u32 = ((addr as u32) << 1) | (1 << 25) | (1 << 13); // NBYTES=0
+        i2c.write_u32(0x04, cr2).unwrap();
+    }
+
+    /// Tick the engine past the address-phase wire-time window so the ACK/NACK
+    /// verdict lands (TIMINGR left at reset → 144-cycle phase; 256 is safe margin).
+    fn l4_settle(i2c: &mut I2c) {
+        use crate::Peripheral;
+        for _ in 0..256 {
+            i2c.tick();
+        }
     }
 
     #[test]
@@ -1254,22 +2050,37 @@ mod tests {
         use super::I2cRegisterLayout;
         let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
 
-        // START latches BUSY (ISR bit15) up front.
+        // Pending window: right after arming START the address phase is still on
+        // the wire — START readable, BUSY set, NO NACKF yet (silicon fingerprint).
         l4_write_xfer(&mut i2c, 0x52, 0xAB);
-        // BUSY is ISR bit15 → byte offset 0x19, bit7.
-        assert_ne!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY after START");
+        assert_ne!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY set while pending"
+        ); // ISR.BUSY (bit15)
+        assert_ne!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START still readable"
+        );
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF while pending"
+        );
 
-        // No attached device → address phase NACKs after the engine ticks.
-        let mut nacked = false;
-        for _ in 0..40 {
-            i2c.tick();
-            if i2c.peek(0x18).unwrap() & (1 << 4) != 0 {
-                nacked = true;
-                break;
-            }
-        }
-        assert!(nacked, "ISR.NACKF must set when no slave acknowledges");
-        // AUTOEND released the bus: BUSY clear, STOPF set.
+        // After the wire-time window: NACK on the absent device (AUTOEND clears BUSY).
+        l4_settle(&mut i2c);
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "ISR.NACKF when no slave"
+        );
+        assert_eq!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START cleared after phase"
+        );
         assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "AUTOEND clears BUSY");
         assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "AUTOEND sets STOPF");
 
@@ -1280,6 +2091,41 @@ mod tests {
             0,
             "NACKF cleared by ICR"
         );
+    }
+
+    #[test]
+    fn test_l4_i2c_nbytes0_probe_acks_device() {
+        use super::I2cRegisterLayout;
+        struct AckOnly {
+            address: u8,
+        }
+        impl I2cDevice for AckOnly {
+            fn address(&self) -> u8 {
+                self.address
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _: u8) {}
+        }
+
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(Box::new(AckOnly { address: 0x40 }));
+
+        l4_addr_probe(&mut i2c, 0x40);
+        l4_settle(&mut i2c);
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF on present device"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 6),
+            0,
+            "TC after address-only"
+        );
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared");
     }
 
     #[test]
@@ -1311,9 +2157,7 @@ mod tests {
         }));
 
         l4_write_xfer(&mut i2c, 0x3C, 0x42);
-        for _ in 0..40 {
-            i2c.tick();
-        }
+        l4_settle(&mut i2c);
         // Attached device ACKs → no NACKF, the byte reaches the device, TC set.
         assert_eq!(
             i2c.peek(0x18).unwrap() & (1 << 4),
@@ -1326,6 +2170,169 @@ mod tests {
             "TC after byte transferred"
         );
         assert_eq!(writes.load(Ordering::SeqCst), 1);
+    }
+
+    /// Minimal ACK-and-count slave for the master-write ordering tests.
+    struct WriteSink {
+        address: u8,
+        writes: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl I2cDevice for WriteSink {
+        fn address(&self) -> u8 {
+            self.address
+        }
+        fn read(&mut self) -> u8 {
+            0
+        }
+        fn write(&mut self, _data: u8) {
+            self.writes.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// PRELOAD ordering (STM32Cube L0/L4/G4/WB `HAL_I2C_Master_Transmit_IT`):
+    /// firmware writes TXDR BEFORE arming CR2/START. TXDR is a real holding
+    /// register — the byte must be transmitted once the address phase ACKs, and
+    /// the 1-byte AUTOEND transfer completes (TC + STOPF) with no tick loop.
+    #[test]
+    fn test_l4_i2c_write_preload_before_start() {
+        use super::I2cRegisterLayout;
+        use std::sync::atomic::AtomicUsize;
+        let writes = Arc::new(AtomicUsize::new(0));
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(Box::new(WriteSink {
+            address: 0x40,
+            writes: writes.clone(),
+        }));
+
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+        i2c.write(0x28, 0x00).unwrap(); // TXDR preloaded FIRST
+        let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
+        i2c.write_u32(0x04, cr2).unwrap(); // CR2/START after the preload
+
+        // Address phase takes wire time: nothing sent, START still readable.
+        assert_eq!(
+            writes.load(Ordering::SeqCst),
+            0,
+            "no byte during address phase"
+        );
+        assert_ne!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START still readable"
+        );
+        l4_settle(&mut i2c);
+        assert_eq!(
+            writes.load(Ordering::SeqCst),
+            1,
+            "preloaded byte reaches slave"
+        );
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF (slave present)"
+        );
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 6), 0, "TC after transfer");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared");
+    }
+
+    /// IT ordering (STM32Cube H5 `HAL_I2C_Master_Transmit_IT`): CR2/START first;
+    /// hardware ACKs the address and asserts ISR.TXIS; only then does the ISR
+    /// write TXDR. The model must set TXIS on the address ACK (park in
+    /// DataPending), then complete the byte on the post-TXIS TXDR write.
+    #[test]
+    fn test_l4_i2c_write_txis_then_txdr() {
+        use super::I2cRegisterLayout;
+        use std::sync::atomic::AtomicUsize;
+        let writes = Arc::new(AtomicUsize::new(0));
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(Box::new(WriteSink {
+            address: 0x40,
+            writes: writes.clone(),
+        }));
+
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+        let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
+        i2c.write_u32(0x04, cr2).unwrap(); // START first — NO preloaded byte
+
+        // Address phase in flight: no TXIS yet, START still readable.
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 1),
+            0,
+            "no TXIS during address phase"
+        );
+        assert_ne!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START still readable"
+        );
+
+        // After the wire-time window the address ACKed → hardware requests the
+        // first byte via TXIS (bit 1), nothing sent yet.
+        l4_settle(&mut i2c);
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 1),
+            0,
+            "TXIS asserted after address ACK"
+        );
+        assert_eq!(
+            writes.load(Ordering::SeqCst),
+            0,
+            "no byte before TXDR write"
+        );
+
+        i2c.write(0x28, 0x00).unwrap(); // ISR writes TXDR after TXIS
+        assert_eq!(writes.load(Ordering::SeqCst), 1, "byte sent on TXDR write");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 6), 0, "TC after transfer");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
+    }
+
+    /// Address-NACK must set ISR.NACKF (+STOPF via AUTOEND) in BOTH the preload
+    /// and IT orderings, so the HAL returns error rather than hanging.
+    #[test]
+    fn test_l4_i2c_write_nack_both_orderings() {
+        use super::I2cRegisterLayout;
+
+        // Preload ordering: TXDR then START, absent slave.
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.write(0x00, 1).unwrap();
+        i2c.write(0x28, 0xAB).unwrap();
+        let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+        i2c.write_u32(0x04, cr2).unwrap();
+        l4_settle(&mut i2c);
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "NACKF (preload order)"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 5),
+            0,
+            "STOPF via AUTOEND (preload order)"
+        );
+        assert_eq!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY cleared (preload order)"
+        );
+
+        // IT ordering: START first, absent slave.
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.write(0x00, 1).unwrap();
+        let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+        i2c.write_u32(0x04, cr2).unwrap();
+        l4_settle(&mut i2c);
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "NACKF (IT order)");
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 5),
+            0,
+            "STOPF via AUTOEND (IT order)"
+        );
+        assert_eq!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY cleared (IT order)"
+        );
     }
 
     #[test]
@@ -1362,5 +2369,683 @@ mod tests {
         assert!(snap
             .iter()
             .any(|e| matches!(&e.payload, BusPayload::I2c { byte, .. } if *byte == 0xAF)));
+    }
+
+    // ── TCA9548A driven through the STM32L4 and Kinetis controllers ─────────
+    //
+    // `tests/i2c_mux_tca9548a.rs` proves the switch works through the STM32F1
+    // legacy peripheral. The L4 and Kinetis engines are separate state machines
+    // in this file with their own address-resolution sites, and both got the
+    // `claims_address` / `select_address` change without any switch ever being
+    // driven through them. These two modules close that.
+    mod mux_stm32l4 {
+        use super::super::{I2c, I2cRegisterLayout};
+        use crate::peripherals::components::mux_fixture::{
+            bytes_written_to, mux_with_tags, tag_for, MUX_ADDR, SENSOR_ADDR,
+        };
+        use crate::peripherals::components::tca9548a::Tca9548a;
+        use crate::Peripheral;
+
+        /// ICR.NACKCF (bit 4) + STOPCF (bit 5): clear the previous transfer's
+        /// verdict so this one's NACKF assertion is about this one.
+        fn clear_flags(i2c: &mut I2c) {
+            i2c.write(0x1C, (1 << 4) | (1 << 5)).unwrap();
+        }
+
+        /// Did the last address phase NACK? ISR.NACKF is bit 4.
+        fn nacked(i2c: &I2c) -> bool {
+            i2c.peek(0x18).unwrap() & (1 << 4) != 0
+        }
+
+        /// One-byte master write (NBYTES=1 + AUTOEND), settled.
+        fn write_one(i2c: &mut I2c, addr: u8, byte: u8) {
+            clear_flags(i2c);
+            super::l4_write_xfer(i2c, addr, byte);
+            super::l4_settle(i2c);
+        }
+
+        /// One-byte master read (RD_WRN + NBYTES=1 + AUTOEND), settled. The
+        /// byte lands in RXDR when the address phase ACKs.
+        fn read_one(i2c: &mut I2c, addr: u8) -> u8 {
+            clear_flags(i2c);
+            i2c.write(0x00, 1).unwrap(); // CR1.PE
+            let cr2: u32 = ((addr as u32) << 1)
+                | (1 << 10)  // RD_WRN
+                | (1 << 16)  // NBYTES = 1
+                | (1 << 25)  // AUTOEND
+                | (1 << 13); // START
+            i2c.write_u32(0x04, cr2).unwrap();
+            super::l4_settle(i2c);
+            i2c.read(0x24).unwrap() // RXDR
+        }
+
+        /// Address-only probe (NBYTES=0): ACK/NACK with no data phase.
+        fn probe_acked(i2c: &mut I2c, addr: u8) -> bool {
+            clear_flags(i2c);
+            super::l4_addr_probe(i2c, addr);
+            super::l4_settle(i2c);
+            !nacked(i2c)
+        }
+
+        fn bus() -> I2c {
+            let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+            let trace = crate::bus::bus_trace::new_log();
+            i2c.attach_traced("i2c1", &trace, Box::new(mux_with_tags(4)));
+            i2c
+        }
+
+        /// Borrow the switch back out of the controller.
+        fn with_mux<R>(i2c: &I2c, f: impl FnOnce(&Tca9548a) -> R) -> R {
+            let cell = &i2c.attached_devices()[0];
+            let traced = cell.borrow();
+            let mux = traced
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Tca9548a>())
+                .expect("slave 0 is the switch");
+            f(mux)
+        }
+
+        /// THE promise: four sensors that cannot be re-addressed, each reached
+        /// independently through the L4 engine's own address resolution.
+        #[test]
+        fn four_sensors_at_one_address_answer_independently() {
+            let mut i2c = bus();
+            for ch in 0..4u8 {
+                write_one(&mut i2c, MUX_ADDR, 1 << ch);
+                assert_eq!(
+                    read_one(&mut i2c, SENSOR_ADDR),
+                    tag_for(ch),
+                    "channel {ch} must be answered by the sensor wired to it"
+                );
+            }
+        }
+
+        /// Out-of-order selection: a controller that resolved the address once
+        /// and cached it would keep answering with the first channel's sensor.
+        #[test]
+        fn switching_channels_changes_which_sensor_answers() {
+            let mut i2c = bus();
+            for ch in [2u8, 0, 3, 1, 3, 0] {
+                write_one(&mut i2c, MUX_ADDR, 1 << ch);
+                assert_eq!(read_one(&mut i2c, SENSOR_ADDR), tag_for(ch), "channel {ch}");
+            }
+        }
+
+        #[test]
+        fn control_register_reads_back_over_the_bus() {
+            let mut i2c = bus();
+            write_one(&mut i2c, MUX_ADDR, 0b0000_1010);
+            assert!(
+                probe_acked(&mut i2c, MUX_ADDR),
+                "the switch must ACK its own address"
+            );
+            // No register pointer on the TCA9548A: a plain read returns the
+            // control register.
+            assert_eq!(read_one(&mut i2c, MUX_ADDR), 0b0000_1010);
+        }
+
+        #[test]
+        fn a_sensor_on_a_disabled_channel_does_not_answer() {
+            let mut i2c = bus();
+
+            // Reset state: every channel isolated.
+            assert!(
+                !probe_acked(&mut i2c, SENSOR_ADDR),
+                "with all channels disabled the sensor address must NACK, exactly \
+                 as an empty bus does"
+            );
+
+            // Enable channel 1 only — 0x13 answers, and with channel 1's tag.
+            write_one(&mut i2c, MUX_ADDR, 1 << 1);
+            assert!(probe_acked(&mut i2c, SENSOR_ADDR));
+            assert_eq!(read_one(&mut i2c, SENSOR_ADDR), tag_for(1));
+
+            // Isolate again: it stops answering.
+            write_one(&mut i2c, MUX_ADDR, 0x00);
+            assert!(
+                !probe_acked(&mut i2c, SENSOR_ADDR),
+                "re-isolating the switch must take the sensor off the bus again"
+            );
+        }
+
+        /// A data byte addressed to the sensor must reach the SELECTED
+        /// channel's device and no other.
+        #[test]
+        fn a_write_reaches_only_the_selected_channel() {
+            let mut i2c = bus();
+            write_one(&mut i2c, MUX_ADDR, 1 << 2);
+            write_one(&mut i2c, SENSOR_ADDR, 0x5A);
+
+            with_mux(&i2c, |mux| {
+                assert_eq!(bytes_written_to(mux, 2), vec![0x5A]);
+                for ch in [0u8, 1, 3] {
+                    assert!(
+                        bytes_written_to(mux, ch).is_empty(),
+                        "channel {ch} is isolated and must receive nothing"
+                    );
+                }
+            });
+        }
+    }
+
+    mod mux_kinetis {
+        use super::super::{I2c, I2cRegisterLayout, KI_C1_MST, KI_C1_TX, KI_S_RXAK};
+        use crate::peripherals::components::mux_fixture::{
+            bytes_written_to, mux_with_tags, tag_for, MUX_ADDR, SENSOR_ADDR,
+        };
+        use crate::peripherals::components::tca9548a::Tca9548a;
+        use crate::Peripheral;
+
+        const REG_C1: u64 = 0x02;
+        const REG_S: u64 = 0x03;
+        const REG_D: u64 = 0x04;
+
+        /// Did the slave ACK the most recent byte? S.RXAK is set on NAK.
+        fn acked(i2c: &I2c) -> bool {
+            i2c.peek(REG_S).unwrap() & KI_S_RXAK == 0
+        }
+
+        /// START + address(W) + one data byte + STOP, the fsl_i2c byte-at-a-time
+        /// master-transmit shape.
+        fn write_one(i2c: &mut I2c, addr: u8, byte: u8) {
+            i2c.write(REG_C1, KI_C1_MST | KI_C1_TX).unwrap(); // START
+            i2c.write(REG_D, addr << 1).unwrap(); // address + W
+            i2c.write(REG_D, byte).unwrap();
+            i2c.write(REG_C1, KI_C1_TX).unwrap(); // STOP (MST 1→0)
+        }
+
+        /// START + address(R), enter master-receive (the HAL's bus-release dummy
+        /// read), then clock one real byte out.
+        fn read_one(i2c: &mut I2c, addr: u8) -> u8 {
+            i2c.write(REG_C1, KI_C1_MST | KI_C1_TX).unwrap(); // START
+            i2c.write(REG_D, (addr << 1) | 1).unwrap(); // address + R
+            i2c.write(REG_C1, KI_C1_MST).unwrap(); // TX 1→0: enter RX
+            let _dummy = i2c.read(REG_D).unwrap(); // HAL bus-release read
+            let byte = i2c.read(REG_D).unwrap();
+            i2c.write(REG_C1, KI_C1_TX).unwrap(); // STOP
+            byte
+        }
+
+        /// START + address(W) only: did anything on the bus ACK?
+        fn probe_acked(i2c: &mut I2c, addr: u8) -> bool {
+            i2c.write(REG_C1, KI_C1_MST | KI_C1_TX).unwrap();
+            i2c.write(REG_D, addr << 1).unwrap();
+            let ack = acked(i2c);
+            i2c.write(REG_C1, KI_C1_TX).unwrap(); // STOP
+            ack
+        }
+
+        fn bus() -> I2c {
+            let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Kinetis);
+            let trace = crate::bus::bus_trace::new_log();
+            i2c.attach_traced("i2c0", &trace, Box::new(mux_with_tags(4)));
+            i2c
+        }
+
+        fn with_mux<R>(i2c: &I2c, f: impl FnOnce(&Tca9548a) -> R) -> R {
+            let cell = &i2c.attached_devices()[0];
+            let traced = cell.borrow();
+            let mux = traced
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Tca9548a>())
+                .expect("slave 0 is the switch");
+            f(mux)
+        }
+
+        #[test]
+        fn four_sensors_at_one_address_answer_independently() {
+            let mut i2c = bus();
+            for ch in 0..4u8 {
+                write_one(&mut i2c, MUX_ADDR, 1 << ch);
+                assert_eq!(
+                    read_one(&mut i2c, SENSOR_ADDR),
+                    tag_for(ch),
+                    "channel {ch} must be answered by the sensor wired to it"
+                );
+            }
+        }
+
+        #[test]
+        fn switching_channels_changes_which_sensor_answers() {
+            let mut i2c = bus();
+            for ch in [2u8, 0, 3, 1, 3, 0] {
+                write_one(&mut i2c, MUX_ADDR, 1 << ch);
+                assert_eq!(read_one(&mut i2c, SENSOR_ADDR), tag_for(ch), "channel {ch}");
+            }
+        }
+
+        #[test]
+        fn control_register_reads_back_over_the_bus() {
+            let mut i2c = bus();
+            write_one(&mut i2c, MUX_ADDR, 0b0000_1010);
+            assert!(
+                probe_acked(&mut i2c, MUX_ADDR),
+                "the switch must ACK its own address"
+            );
+            assert_eq!(read_one(&mut i2c, MUX_ADDR), 0b0000_1010);
+        }
+
+        #[test]
+        fn a_sensor_on_a_disabled_channel_does_not_answer() {
+            let mut i2c = bus();
+            assert!(
+                !probe_acked(&mut i2c, SENSOR_ADDR),
+                "with all channels disabled the sensor address must NAK (S.RXAK), \
+                 exactly as an empty bus does"
+            );
+
+            write_one(&mut i2c, MUX_ADDR, 1 << 1);
+            assert!(probe_acked(&mut i2c, SENSOR_ADDR));
+            assert_eq!(read_one(&mut i2c, SENSOR_ADDR), tag_for(1));
+
+            write_one(&mut i2c, MUX_ADDR, 0x00);
+            assert!(
+                !probe_acked(&mut i2c, SENSOR_ADDR),
+                "re-isolating the switch must take the sensor off the bus again"
+            );
+        }
+
+        #[test]
+        fn a_write_reaches_only_the_selected_channel() {
+            let mut i2c = bus();
+            write_one(&mut i2c, MUX_ADDR, 1 << 2);
+            write_one(&mut i2c, SENSOR_ADDR, 0x5A);
+
+            with_mux(&i2c, |mux| {
+                assert_eq!(bytes_written_to(mux, 2), vec![0x5A]);
+                for ch in [0u8, 1, 3] {
+                    assert!(
+                        bytes_written_to(mux, ch).is_empty(),
+                        "channel {ch} is isolated and must receive nothing"
+                    );
+                }
+            });
+        }
+    }
+}
+
+// ── Walk-free (batch B4) differential: Kinetis level-IRQ walk vs scheduler ────
+#[cfg(all(test, feature = "event-scheduler"))]
+mod kinetis_scheduler {
+    use super::*;
+    use crate::Peripheral;
+
+    /// A slave that returns an incrementing byte pattern on each read (so a
+    /// master-receive advances observably) and records writes.
+    struct RampDevice {
+        address: u8,
+        next: std::cell::Cell<u8>,
+    }
+    impl I2cDevice for RampDevice {
+        fn address(&self) -> u8 {
+            self.address
+        }
+        fn read(&mut self) -> u8 {
+            let v = self.next.get();
+            self.next.set(v.wrapping_add(1));
+            v
+        }
+        fn write(&mut self, _data: u8) {}
+    }
+
+    fn ramp_slave() -> Box<dyn I2cDevice> {
+        Box::new(RampDevice {
+            address: 0x1E,
+            next: std::cell::Cell::new(0x40),
+        })
+    }
+
+    fn kinetis(scheduler: bool) -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Kinetis);
+        i2c.push_slave(ramp_slave());
+        if scheduler {
+            i2c.attach_cycle_clock(CycleClock::default());
+        }
+        i2c
+    }
+
+    fn f1(scheduler: bool) -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32F1);
+        i2c.push_slave(ramp_slave());
+        if scheduler {
+            i2c.attach_cycle_clock(CycleClock::default());
+        }
+        i2c
+    }
+
+    fn l4(scheduler: bool) -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(ramp_slave());
+        if scheduler {
+            i2c.attach_cycle_clock(CycleClock::default());
+        }
+        i2c
+    }
+
+    /// Clone the bus clock a scheduler-mode instance latched (any variant).
+    fn clock_of(i2c: &I2c) -> CycleClock {
+        match i2c {
+            I2c::Stm32F1(i) => i.clock.clone(),
+            I2c::Stm32L4(i) => i.clock.clone(),
+            I2c::Kinetis(i) => i.clock.clone(),
+        }
+        .expect("scheduler-mode instance has a clock")
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Op {
+        Write(u64, u8),
+        Read(u64),
+    }
+
+    /// Drive a scheduler-mode Kinetis I2C exactly the way `Machine` +
+    /// `SystemBus` do at tick interval 1: publish the clock each cycle, arm
+    /// write-harvested events at `cycle + 1 + delay`, and drain due events
+    /// through `on_event` (rescheduling at `now + delay`), recording the cycles
+    /// the level chain pends the own-IRQ.
+    struct SchedHarness {
+        i2c: I2c,
+        clock: CycleClock,
+        bus: crate::bus::SystemBus,
+        events: Vec<(u64, u32)>,
+        now: u64,
+        pends: Vec<u64>,
+    }
+
+    impl SchedHarness {
+        fn new(build: &dyn Fn(bool) -> I2c) -> Self {
+            let i2c = build(true);
+            let clock = clock_of(&i2c);
+            Self {
+                i2c,
+                clock,
+                bus: crate::bus::SystemBus::new(),
+                events: Vec::new(),
+                now: 0,
+                pends: Vec::new(),
+            }
+        }
+
+        fn write(&mut self, off: u64, val: u8) {
+            self.i2c.sync_to(self.now);
+            self.i2c.write(off, val).unwrap();
+            for (delay, token) in self.i2c.take_scheduled_events() {
+                self.events.push((self.now + 1 + delay, token));
+            }
+        }
+
+        /// A `&self` register read — never arms an event (mirrors the bus read
+        /// path); a `D` read that latches IICIF is caught by the already-live
+        /// perpetual chain.
+        fn read(&mut self, off: u64) -> u8 {
+            self.i2c.read(off).unwrap()
+        }
+
+        fn step(&mut self) {
+            self.now += 1;
+            self.clock.publish(self.now);
+            let due: Vec<(u64, u32)> = self
+                .events
+                .iter()
+                .copied()
+                .filter(|(d, _)| *d <= self.now)
+                .collect();
+            self.events.retain(|(d, _)| *d > self.now);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(self.now);
+            for (_, token) in due {
+                let res = self.i2c.on_event(token, &mut sched, &mut self.bus);
+                if res.raise_own_irq {
+                    self.pends.push(self.now);
+                }
+                if let Some(delay) = res.reschedule_delay {
+                    self.events.push((self.now + delay, token));
+                }
+            }
+        }
+    }
+
+    /// Legacy per-tick oracle.
+    fn walk_tick(i2c: &mut I2c) -> bool {
+        i2c.tick().irq
+    }
+
+    /// The heart of the gate: replay the SAME op script against (a) the legacy
+    /// per-tick walk and (b) the event path, comparing the full register
+    /// snapshot AND every returned read byte at every cycle, plus the exact set
+    /// of NVIC-pend cycles. An `Op` scheduled at cycle `c` is applied before
+    /// that cycle's tick.
+    fn assert_walk_identical_with(
+        build: &dyn Fn(bool) -> I2c,
+        script: &[(u64, Op)],
+        cycles: u64,
+        what: &str,
+    ) {
+        let mut walk = build(false);
+        let mut sched = SchedHarness::new(build);
+        let mut walk_pends: Vec<u64> = Vec::new();
+
+        for c in 1..=cycles {
+            for (sc, op) in script {
+                if *sc == c {
+                    match *op {
+                        Op::Write(off, val) => {
+                            walk.write(off, val).unwrap();
+                            sched.now = c - 1;
+                            sched.write(off, val);
+                        }
+                        Op::Read(off) => {
+                            let w = walk.read(off).unwrap();
+                            sched.now = c - 1;
+                            let s = sched.read(off);
+                            assert_eq!(w, s, "{what}: read(0x{off:02x}) diverged at cycle {c}");
+                        }
+                    }
+                }
+            }
+            if walk_tick(&mut walk) {
+                walk_pends.push(c);
+            }
+            sched.now = c - 1;
+            sched.step();
+            assert_eq!(
+                walk.snapshot(),
+                sched.i2c.snapshot(),
+                "{what}: register state diverged at cycle {c}"
+            );
+        }
+        assert_eq!(walk_pends, sched.pends, "{what}: NVIC pend cycles diverged");
+    }
+
+    /// Kinetis-variant convenience wrapper.
+    fn assert_walk_identical(script: &[(u64, Op)], cycles: u64, what: &str) {
+        assert_walk_identical_with(&kinetis, script, cycles, what);
+    }
+
+    #[test]
+    fn clock_attach_flips_to_scheduler_and_walk_tick_is_inert() {
+        let mut i2c = kinetis(true);
+        assert!(i2c.uses_scheduler());
+        assert!(!i2c.needs_legacy_walk());
+        // Latch a level (address byte with IICIE) then confirm tick() is inert.
+        i2c.write(0x02, KI_C1_MST | KI_C1_TX | KI_C1_IICIE).unwrap();
+        i2c.write(0x04, 0x3C).unwrap(); // address → byte_complete sets IICIF
+        assert!(!i2c.tick().irq, "tick must be inert in scheduler mode");
+    }
+
+    #[test]
+    fn all_three_variants_flip_to_scheduler_and_walk_tick_is_inert() {
+        // With a clock attached (event-scheduler builds) every I2C variant now
+        // migrates: the F1/L4 transaction engine is self-paced by the same
+        // held-level event chain the Kinetis variant uses, so the per-cycle walk
+        // is no longer needed. The walk-guarded `tick()` is inert in that mode.
+        for build in [&f1 as &dyn Fn(bool) -> I2c, &l4, &kinetis] {
+            let mut i2c = build(true);
+            assert!(i2c.uses_scheduler());
+            assert!(!i2c.needs_legacy_walk());
+            assert!(
+                !i2c.tick().irq && i2c.tick().cycles == 0,
+                "walk tick must be inert in scheduler mode"
+            );
+            // Clock detached (differential reference / featureless): back to walk.
+            i2c.force_legacy_walk();
+            assert!(!i2c.uses_scheduler());
+            assert!(i2c.needs_legacy_walk());
+        }
+    }
+
+    // ── STM32 F1 transaction-engine walk-vs-scheduler byte identity ───────────
+
+    /// Master WRITE: START → address(W) → data byte → STOP, with ITEVTEN|ITBUFEN
+    /// enabled so the completion IRQs are pend-compared. Every register snapshot,
+    /// read byte and NVIC-pend cycle must be byte-identical between the per-cycle
+    /// walk and the event-scheduled engine.
+    #[test]
+    fn f1_master_write_walk_identity() {
+        let addr_w = 0x1E << 1; // 0x3C
+        let script = [
+            (1u64, Op::Write(0x05, 0x06)), // CR2 = ITEVTEN|ITBUFEN (bits 9,10)
+            (1, Op::Write(0x01, 0x01)),    // CR1.START (bit 8)
+            (4, Op::Read(0x14)),           // poll SR1 (SB)
+            (5, Op::Write(0x10, addr_w)),  // DR = address(W) → AddressPending
+            (28, Op::Read(0x14)),          // poll SR1 (ADDR/TXE)
+            (28, Op::Read(0x18)),          // poll SR2 (MSL/BUSY)
+            (30, Op::Write(0x10, 0xAF)),   // DR = data byte → DataPending
+            (54, Op::Read(0x14)),          // poll SR1 (TXE/BTF)
+            (56, Op::Write(0x01, 0x02)),   // CR1.STOP (bit 9)
+        ];
+        assert_walk_identical_with(&f1, &script, 64, "f1 master write");
+    }
+
+    /// Master READ: START → address(R) → multi-byte receive (the `&self` DR-read
+    /// path that the prior model claimed could not be event-scheduled) → STOP.
+    /// The receive bytes come straight from the device in `read()`; the engine
+    /// only paces the START/ADDR/first-byte countdowns. The already-live chain
+    /// keeps the register state identical across the read-gated stream.
+    #[test]
+    fn f1_master_read_multibyte_walk_identity() {
+        let addr_r = (0x1E << 1) | 1; // 0x3D
+        let script = [
+            (1u64, Op::Write(0x05, 0x06)), // CR2 = ITEVTEN|ITBUFEN
+            (1, Op::Write(0x01, 0x01)),    // START
+            (5, Op::Write(0x10, addr_r)),  // DR = address(R) → AddressPending(read)
+            (30, Op::Read(0x14)),          // poll SR1 (ADDR)
+            (54, Op::Read(0x14)),          // poll SR1 (RXNE after first byte)
+            (54, Op::Read(0x10)),          // read byte 0 (buffered dr)
+            (55, Op::Read(0x10)),          // read byte 1 (device pull)
+            (56, Op::Read(0x10)),          // read byte 2 (device pull)
+            (57, Op::Read(0x18)),          // SR2 still BUSY
+            (58, Op::Write(0x01, 0x02)),   // STOP
+        ];
+        assert_walk_identical_with(&f1, &script, 66, "f1 master read multibyte");
+    }
+
+    /// Address NACK (no slave at the addressed target) — the AF/MSL/BUSY latch
+    /// and the ITERREN-gated error IRQ must match. Uses a mismatched address so
+    /// `current_target` is `None`.
+    #[test]
+    fn f1_address_nack_walk_identity() {
+        let script = [
+            (1u64, Op::Write(0x05, 0x01)), // CR2 ITERREN (bit 8) → byte at offset 0x05
+            (1, Op::Write(0x01, 0x01)),    // START
+            (5, Op::Write(0x10, 0x40)),    // DR = address 0x20<<1 (no device) → NACK
+            (30, Op::Read(0x14)),          // poll SR1 (AF)
+            (30, Op::Read(0x18)),          // poll SR2 (MSL/BUSY held)
+            (32, Op::Write(0x01, 0x02)),   // STOP releases the bus
+        ];
+        assert_walk_identical_with(&f1, &script, 40, "f1 address NACK");
+    }
+
+    // ── STM32 L4 transaction-engine walk-vs-scheduler byte identity ───────────
+
+    /// L4 master WRITE via CR2 START/AUTOEND + TXDR, with TCIE|NACKIE enabled.
+    #[test]
+    fn l4_master_write_walk_identity() {
+        // CR1.PE (bit0) | TCIE (bit6) | NACKIE (bit4) = 0x51.
+        // CR2 = SADD(0x1E<<1) | NBYTES=1<<16 | AUTOEND<<25 | START<<13.
+        let cr2: u32 = ((0x1E << 1) as u32) | (1 << 16) | (1 << 25) | (1 << 13);
+        let script = [
+            (1u64, Op::Write(0x00, 0x51)), // CR1 = PE|TCIE|NACKIE
+            (2, Op::Write(0x04, (cr2 & 0xFF) as u8)),
+            (2, Op::Write(0x05, ((cr2 >> 8) & 0xFF) as u8)),
+            (2, Op::Write(0x06, ((cr2 >> 16) & 0xFF) as u8)),
+            (2, Op::Write(0x07, ((cr2 >> 24) & 0xFF) as u8)), // START latches BUSY
+            (3, Op::Read(0x19)),                              // ISR byte3 (BUSY bit15)
+            (4, Op::Write(0x28, 0xAF)),                       // TXDR → AddressPending
+            (28, Op::Read(0x18)),                             // ISR byte0 (TXE/TC)
+            (28, Op::Read(0x19)),                             // ISR byte3 (BUSY cleared by AUTOEND)
+        ];
+        assert_walk_identical_with(&l4, &script, 36, "l4 master write");
+    }
+
+    /// L4 address NACK (no device) — NACKF + AUTOEND STOPF, NACKIE IRQ.
+    #[test]
+    fn l4_address_nack_walk_identity() {
+        let cr2: u32 = ((0x20 << 1) as u32) | (1 << 16) | (1 << 25) | (1 << 13);
+        let script = [
+            (1u64, Op::Write(0x00, 0x51)), // CR1 = PE|TCIE|NACKIE
+            (2, Op::Write(0x04, (cr2 & 0xFF) as u8)),
+            (2, Op::Write(0x05, ((cr2 >> 8) & 0xFF) as u8)),
+            (2, Op::Write(0x06, ((cr2 >> 16) & 0xFF) as u8)),
+            (2, Op::Write(0x07, ((cr2 >> 24) & 0xFF) as u8)),
+            (4, Op::Write(0x28, 0xAF)), // TXDR → AddressPending → NACK
+            (28, Op::Read(0x18)),       // ISR (NACKF/STOPF)
+            (28, Op::Read(0x19)),       // ISR byte3 (BUSY)
+        ];
+        assert_walk_identical_with(&l4, &script, 36, "l4 address NACK");
+    }
+
+    #[test]
+    fn master_write_level_irq_walk_identity() {
+        // START, address (byte_complete latches IICIF), enable IICIE (level
+        // high), let it pend for a few cycles (ISR latency), clear IICIF + send
+        // a data byte (re-latch), clear again, then STOP.
+        let addr_w = 0x1E << 1; // write
+        let script = [
+            (1u64, Op::Write(0x02, KI_C1_MST | KI_C1_TX)), // START
+            (1, Op::Write(0x04, addr_w)),                  // address → IICIF
+            (2, Op::Write(0x02, KI_C1_MST | KI_C1_TX | KI_C1_IICIE)), // enable IICIE
+            (6, Op::Write(0x03, KI_S_IICIF)),              // ISR clears IICIF
+            (6, Op::Write(0x04, 0xAA)),                    // next byte → IICIF
+            (11, Op::Write(0x03, KI_S_IICIF)),             // clear
+            (11, Op::Write(0x04, 0xBB)),                   // byte → IICIF
+            (16, Op::Write(0x03, KI_S_IICIF)),             // clear
+            (17, Op::Write(0x02, 0)),                      // STOP (MST 1→0)
+        ];
+        assert_walk_identical(&script, 24, "kinetis master write level IRQ");
+    }
+
+    #[test]
+    fn master_read_dread_latches_irq_walk_identity() {
+        // The crux: a master-receive `D` read latches IICIF via a `&self` read
+        // (which cannot arm an event) — the already-live perpetual level chain
+        // must pend on the SAME cycle as the walk.
+        let addr_r = (0x1E << 1) | 1; // read
+        let script = [
+            (1u64, Op::Write(0x02, KI_C1_MST | KI_C1_TX | KI_C1_IICIE)), // START + IICIE
+            (1, Op::Write(0x04, addr_r)), // address(R) → IICIF, is_reading
+            (5, Op::Write(0x03, KI_S_IICIF)), // ISR clears IICIF
+            (5, Op::Write(0x02, KI_C1_MST | KI_C1_IICIE)), // TX=0 → enter RX (rx_dummy_pending)
+            (6, Op::Read(0x04)),          // dummy read → IICIF (bus release)
+            (10, Op::Write(0x03, KI_S_IICIF)), // clear
+            (11, Op::Read(0x04)),         // data read → device byte + IICIF
+            (15, Op::Write(0x03, KI_S_IICIF)), // clear
+            (16, Op::Read(0x04)),         // data read → IICIF
+            (20, Op::Write(0x03, KI_S_IICIF)), // clear
+            (21, Op::Write(0x02, 0)),     // STOP
+        ];
+        assert_walk_identical(&script, 28, "kinetis master read D-latch level IRQ");
+    }
+
+    #[test]
+    fn iicie_disabled_never_pends_walk_identity() {
+        // IICIF latched but IICIE never set: the level is low, no pend in either
+        // mode, and the chain must not even arm.
+        let script = [
+            (1u64, Op::Write(0x02, KI_C1_MST | KI_C1_TX)), // START, no IICIE
+            (1, Op::Write(0x04, 0x1E << 1)),               // address → IICIF (but IICIE off)
+            (5, Op::Write(0x04, 0x55)),                    // byte → IICIF
+        ];
+        assert_walk_identical(&script, 12, "kinetis IICIE-off no pend");
     }
 }

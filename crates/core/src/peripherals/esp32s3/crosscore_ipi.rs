@@ -29,7 +29,7 @@
 //! Source numbering (esp-idf `soc/esp32s3/interrupts.h`):
 //!   FROM_CPU_INTR0 = 79, FROM_CPU_INTR1 = 80, INTR2 = 81, INTR3 = 82.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// MMIO base: `SYSTEM_CPU_INTR_FROM_CPU_0_REG` (`DR_REG_SYSTEM_BASE + 0x30`).
 pub const BASE: u64 = 0x600C_0030;
@@ -43,6 +43,9 @@ const FROM_CPU_SOURCE_BASE: u32 = 79;
 pub struct Esp32s3CrossCoreIpi {
     /// Latched value of FROM_CPU_0..3. Non-zero = the source is asserting.
     from_cpu: [u32; 4],
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3CrossCoreIpi {
@@ -107,6 +110,29 @@ impl Peripheral for Esp32s3CrossCoreIpi {
         }
     }
 
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        for (n, &v) in self.from_cpu.iter().enumerate() {
+            if v != 0 {
+                out.push(FROM_CPU_SOURCE_BASE + n as u32);
+            }
+        }
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -149,5 +175,36 @@ mod tests {
         let mut ipi = Esp32s3CrossCoreIpi::new();
         ipi.write(0x00, 0x01).unwrap();
         assert_eq!(ipi.tick().explicit_irqs, Some(vec![79]));
+    }
+}
+
+#[cfg(test)]
+mod integration {
+    use crate::bus::SystemBus;
+    use crate::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+    use crate::Bus;
+
+    #[test]
+    fn from_cpu_tick_sets_pending_when_mapped() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        assert!(bus.esp32s3_irq_routing, "S3 irq routing should be on");
+        // Program intmatrix: source 79 -> cpu0 irq 1, source 80 -> cpu1 irq 1
+        // CORE0 map @ 0x600C2000 + 4*src
+        // CORE1 map @ 0x600C2000 + 0x800 + 4*src
+        bus.write_u32(0x600C_2000 + 79 * 4, 1).unwrap();
+        bus.write_u32(0x600C_2000 + 0x800 + 80 * 4, 1).unwrap();
+        // Ring doorbells
+        bus.write_u32(0x600C_0030, 1).unwrap();
+        bus.write_u32(0x600C_0034, 1).unwrap();
+        // Tick peripherals
+        let mut irqs = Vec::new();
+        let mut costs = Vec::new();
+        bus.tick_peripherals_fully_into(&mut irqs, &mut costs);
+        let p0 = bus.pending_cpu_irqs(0);
+        let p1 = bus.pending_cpu_irqs(1);
+        eprintln!("pending after tick: p0={p0:#010x} p1={p1:#010x} raw_irqs={irqs:?}");
+        assert_ne!(p0, 0, "core0 should see FROM_CPU_0 source 79");
+        assert_ne!(p1, 0, "core1 should see FROM_CPU_1 source 80");
     }
 }

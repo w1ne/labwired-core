@@ -106,6 +106,11 @@ impl Esp32s3Sha {
 }
 
 impl Peripheral for Esp32s3Sha {
+    // Inert walk: SHA ops run atomically at the command-register write. tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_u32(offset & !3)?;
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)

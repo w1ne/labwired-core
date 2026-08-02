@@ -141,7 +141,8 @@ peripherals:
     type: "declarative"
     base_address: 0x40066000
     size: "4KB"
-    irq: 10
+    # MKW41Z4 I2C0_IRQn = 8 (SVD); 10 is SPI0.
+    irq: 8
     config:
       path: "../peripherals/mkw41z4/i2c0.yaml"
   # I2C1 is BEHAVIOURAL (Kinetis classic I2C — peripherals/i2c.rs KinetisI2c).
@@ -164,7 +165,8 @@ peripherals:
     type: "spi"
     base_address: 0x4002C000
     size: "4KB"
-    irq: 11
+    # MKW41Z4 SPI0_IRQn = 10 (SVD); 11 is TSI0.
+    irq: 10
     config:
       profile: "kinetis"
   # --- Timers / RNG ---
@@ -186,6 +188,7 @@ peripherals:
     type: "declarative"
     base_address: 0x40029000
     size: "4KB"
-    irq: 6
+    # MKW41Z4 TRNG0_IRQn = 13 (SVD); 6 is LVD_LVW_DCDC.
+    irq: 13
     config:
       path: "../peripherals/mkw41z4/trng0.yaml"

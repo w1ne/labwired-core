@@ -162,6 +162,13 @@ impl RtcCntl {
         self.reset_requested.replace(false)
     }
 
+    /// Peek without clearing. Batch planning only forces quantum-1 while a
+    /// SW_SYS_RST is latched — unlike SCB, RTC presence alone must not kill
+    /// dual-core WAITI primary batching for the whole run.
+    pub fn reset_request_pending(&self) -> bool {
+        self.reset_requested.get()
+    }
+
     /// Base MMIO address (informational).
     pub fn base(&self) -> u32 {
         self.base

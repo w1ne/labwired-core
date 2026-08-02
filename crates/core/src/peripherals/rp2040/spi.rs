@@ -17,8 +17,19 @@
 //! observed busy and the TX FIFO always reads empty.
 //!
 //! Without loopback (and with no attached slave in the chip model) a written
-//! byte is still consumed by the TX path but produces no receive data — the
-//! realistic outcome for an open MISO line.
+//! byte still clocks a byte into the receive FIFO: SPI is full-duplex at the
+//! physical layer, so every SCLK edge that shifts a TX bit out also shifts an
+//! RX bit in from whatever MISO happens to be doing, wired or floating. The
+//! value is undefined with nothing driving the line (modelled as the idle
+//! level `0x00`, matching the STM32 PL022-family SPI model's precedent — see
+//! `crates/core/src/peripherals/spi.rs`), but the *event* — RNE going high,
+//! the RX FIFO gaining an entry — always happens. Pico-sdk's
+//! `spi_write_read_blocking` (which is what Arduino's `SPI.transfer()` rides)
+//! waits for `rx_remaining` to reach 0 one `spi_is_readable()` poll at a
+//! time; if the model never produced RX data for an unconnected bus, that
+//! wait never ends and any sketch calling `SPI.transfer()` hangs forever —
+//! not a halt, an infinite spin, which is worse: it never surfaces as an
+//! error at all.
 //!
 //! The receive FIFO is read-to-drain, so it lives behind a `RefCell`: the bus
 //! read path is `&self`, but reading `SSPDR` must pop an entry.
@@ -87,6 +98,13 @@ impl Rp2040Spi {
 }
 
 impl Peripheral for Rp2040Spi {
+    /// Pure write-driven transfer engine — `tick()` is the default no-op.
+    /// Dropping this model from the walk is byte-identical for every firmware
+    /// state (loopback completes inside `SSPDR` writes).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
             SSPCR1 => self.cr1,
@@ -100,13 +118,20 @@ impl Peripheral for Rp2040Spi {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             SSPCR1 => self.cr1 = value,
-            // Internal loopback: MOSI is wired to MISO, so the byte clocks
-            // straight into the receive FIFO. Non-loopback (or disabled) with no
-            // attached slave: byte consumed, no RX (falls through to `_`).
-            SSPDR if self.enabled() && self.loopback() => {
+            // Full duplex: every enabled write clocks a byte into the RX
+            // FIFO. Loopback wires MOSI straight to MISO, so the RX byte is
+            // the TX byte; without loopback (no attached slave in the chip
+            // model) the RX byte is the undefined/idle MISO level (`0x00`) —
+            // see the module doc comment for why this must still happen.
+            SSPDR if self.enabled() => {
+                let rx_byte = if self.loopback() {
+                    (value & 0xffff) as u16
+                } else {
+                    0
+                };
                 let mut rx = self.rx_fifo.borrow_mut();
                 if rx.len() < FIFO_DEPTH {
-                    rx.push_back((value & 0xffff) as u16);
+                    rx.push_back(rx_byte);
                 }
             }
             _ => {}
@@ -158,6 +183,24 @@ mod tests {
         assert_eq!(rx, 0xA5);
         // FIFO drained → RNE clear.
         assert_eq!(spi.read_u32(SSPSR).unwrap() & SR_RNE, 0);
+    }
+
+    #[test]
+    fn non_loopback_transfer_still_completes() {
+        // Full duplex: SPI.transfer()'s pico-sdk backend (spi_write_read_blocking)
+        // waits for an RX byte per TX byte regardless of whether a slave is
+        // wired. Without this, any real (non-loopback) SPI.transfer() sketch
+        // hangs forever polling `spi_is_readable()`.
+        let mut spi = Rp2040Spi::new();
+        spi.write_u32(SSPCR1, CR1_SSE).unwrap(); // enabled, no loopback
+        spi.write_u32(SSPDR, 0x5A).unwrap();
+        assert_ne!(
+            spi.read_u32(SSPSR).unwrap() & SR_RNE,
+            0,
+            "RNE must set on every enabled transfer, slave or no slave"
+        );
+        // The undefined/floating-MISO byte reads as the idle level.
+        assert_eq!(spi.read_u32(SSPDR).unwrap(), 0);
     }
 
     #[test]

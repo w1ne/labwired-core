@@ -58,11 +58,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tier1-fixture-common"
+version = "0.1.0"
+
+[[package]]
 name = "tier1-fixture-stm32wba52"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
  "panic-halt",
+ "tier1-fixture-common",
 ]
 
 [[package]]

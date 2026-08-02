@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Tier-1 chip × peripheral validation matrix (spec:
-//! labwired docs/superpowers/specs/2026-06-07-tier1-chip-matrix-design.md).
+//! Tier-1 chip × peripheral validation matrix.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -194,6 +193,10 @@ const CLASS_MARKERS: &[(&str, &str)] = &[
     ("iwdg", "wdt"),
     ("wwdg", "wdt"),
     ("wdt", "wdt"),
+    // RP2040 names its block `watchdog` outright, which contains none of the
+    // abbreviations above — without this marker the class read `na` even with a
+    // behavioural model wired up.
+    ("watchdog", "wdt"),
     // Deliberately "fdcan", not "can": bxCAN instances (stm32f103
     // `bxcan1`, stm32l476 `can1`) must not declare the class until
     // their fixtures actually check it.
@@ -385,6 +388,13 @@ pub const TIER1_TARGETS: &[Tier1Target] = &[
         "configs/chips/stm32f407.yaml",
         "tests/fixtures/tier1/stm32f407.elf",
     ),
+    // WeAct F411 Black Pill. Same silicon row as the F401 plus SPI5 (the `spi`
+    // check covers both instances); sim-derived, no bench part.
+    fast_boot(
+        "stm32f411",
+        "configs/chips/stm32f411ceu6.yaml",
+        "tests/fixtures/tier1/stm32f411.elf",
+    ),
     fast_boot(
         "stm32g474re",
         "configs/chips/stm32g474re.yaml",
@@ -396,6 +406,13 @@ pub const TIER1_TARGETS: &[Tier1Target] = &[
         "tests/fixtures/tier1/stm32h563.elf",
     )
     .with_extra_classes(&["can"]),
+    // First fully-modelled Cortex-M7 chip. H7-family (RM0468); sim-derived
+    // (no bench part). Exercises clock/gpio/timer/pwm/i2c/spi/wdt/irq + uart.
+    fast_boot(
+        "stm32h735",
+        "configs/chips/stm32h735.yaml",
+        "tests/fixtures/tier1/stm32h735.elf",
+    ),
     fast_boot(
         "stm32l073",
         "configs/chips/stm32l073.yaml",
@@ -879,6 +896,46 @@ peripherals:
             .flash_bin
             .unwrap()
             .ends_with("tests/fixtures/tier1/esp32s3-flash.bin"));
+    }
+
+    /// Cross-registry consistency (see also
+    /// crates/core/tests/board_registry_consistency.rs, which cannot import
+    /// TIER1_TARGETS across an integration-test binary boundary — and taking
+    /// labwired-core as a dev-dependency of labwired-cli would be a cycle, so
+    /// this half of the check lives here instead).
+    #[test]
+    fn every_tier1_target_is_a_known_manifest_board() {
+        let text = std::fs::read_to_string(workspace_root().join("validation/manifest.yaml"))
+            .expect("read validation/manifest.yaml");
+        let mut manifest = BTreeSet::new();
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("chip:") {
+                let stem = Path::new(rest.trim())
+                    .file_stem()
+                    .unwrap_or_else(|| panic!("malformed chip path in manifest: {rest}"))
+                    .to_string_lossy()
+                    .to_string();
+                manifest.insert(stem);
+            }
+        }
+        assert!(
+            !manifest.is_empty(),
+            "parsed no chip: entries from the manifest"
+        );
+
+        for target in TIER1_TARGETS {
+            let stem = Path::new(target.chip_yaml)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            assert!(
+                manifest.contains(&stem),
+                "TIER1_TARGETS builds the matrix for chip {stem:?} but no board in \
+                 validation/manifest.yaml declares it"
+            );
+        }
     }
 
     #[test]

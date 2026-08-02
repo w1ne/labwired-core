@@ -1,0 +1,29 @@
+peripheral: APPROTECT
+version: 0.1.0
+registers:
+- id: FORCEPROTECT
+  address_offset: 1360
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: FORCEPROTECT
+    bit_range:
+    - 7
+    - 0
+    description: Write 0x0 to force enable APPROTECT mechanism
+  side_effects: null
+- id: DISABLE
+  address_offset: 1368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DISABLE
+    bit_range:
+    - 7
+    - 0
+    description: Software disable APPROTECT mechanism
+  side_effects: null
+interrupts: null
+timing: null

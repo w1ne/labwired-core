@@ -299,10 +299,12 @@ fn main() -> ! {
     uart_puts(b"LED OFF\r\n");
 
     // B1 button state (active-low). Printed as a single hex digit so
-    // both 0 and 1 are deterministic in the survival test. The default
-    // GPIO IDR in the simulator reads 0 (= "pressed" in active-low
-    // semantics) — that's a separate fidelity gap from real silicon
-    // which pulls PC13 up to VDD via R34. The demo just reports
+    // both 0 and 1 are deterministic in the survival test. An untouched
+    // board prints BTN=0: real silicon pulls PC13 up to VDD via R34, and
+    // the simulator now models the board_io button as a device that
+    // drives the pin, so both agree. (It used to print BTN=1 in the
+    // simulator — a phantom press, because nothing drove PC13 and it sat
+    // at its reset-value 0. That gap is closed.) The demo just reports
     // whatever's in IDR rather than gating output on it.
     uart_puts(b"BTN=");
     let pressed = if button_pressed() { 1 } else { 0 };

@@ -281,6 +281,11 @@ impl std::fmt::Debug for Esp32s3Hmac {
 }
 
 impl Peripheral for Esp32s3Hmac {
+    // Inert walk: HMAC ops settle on MMIO writes; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         // The driver only uses word accesses; stray byte reads return 0.
         Ok(0)

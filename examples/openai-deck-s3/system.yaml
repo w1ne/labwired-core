@@ -1,0 +1,116 @@
+# LabWired - ESP32-S3 "OpenAI deck" lab.
+#
+# A 1.5" 128x128 SH1107 OLED over the command-list I2C0 controller (0x6001_3000)
+# on SDA=GPIO8 / SCL=GPIO9, plus 10 momentary key switches on GPIO inputs. The
+# firmware (examples/openai-deck-s3) inits I2C0, paints a title + 2x5 key grid,
+# and emits a `KEYn PRESS action=SLOTn` host-protocol line per key press.
+#
+# NOTE on the OLED address: the ESP32-S3 system builder (configure_xtensa_esp32s3)
+# unconditionally attaches an SSD1306 at 0x3C, and the Esp32s3I2c controller
+# dispatches each transaction to the FIRST slave matching the address. To attach
+# the SH1107 without touching the simulator core, it uses the SA0=high address
+# 0x3D (the kit's documented 0x3C/0x3D pair). The firmware addresses 0x3D to match.
+name: "openai-deck-s3"
+chip: "../../configs/chips/esp32s3.yaml"
+
+external_devices:
+  # SH1107 128x128 OLED on I2C0 at 0x3D (SA0=high). Wired from this manifest by
+  # attach_esp32_external_devices; the firmware's register-level driver drives it
+  # with genuine I2C transactions.
+  - id: "oled"
+    type: "oled-sh1107"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x3D
+
+  # Rotary knob → temperature. A potentiometer wiper on ADC1 channel 0 (GPIO1).
+  # attach_esp32_external_devices seeds the SAR-ADC channel from the position, so
+  # the firmware's analogRead() returns the wiper voltage.
+  - id: "knob"
+    type: "potentiometer"
+    connection: "sar_adc_s3"
+    config:
+      channel: 0
+
+  # Slide fader → max-tokens. A potentiometer wiper on ADC1 channel 1 (GPIO2).
+  - id: "fader"
+    type: "potentiometer"
+    connection: "sar_adc_s3"
+    config:
+      channel: 1
+
+board_io:
+  # Framebuffer readback binding. The S3 GPIO matrix routes I2C0 SDA/SCL to
+  # GPIO8/GPIO9; the behavioral controller responds at its register block
+  # regardless, so the pin is documentation here.
+  - id: "oled"
+    kind: "i2c_device"
+    peripheral: "i2c0"
+    pin: 8
+    signal: "input"
+    active_high: true
+    i2c_address: 0x3D
+    device_type: "oled-sh1107"
+
+  # 10 momentary keys, KEY1..KEY10, active-high on the S3 GPIO bank. Pin numbers
+  # match KEY_PINS in src/main.rs.
+  - id: "key1"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 4
+    signal: "input"
+    active_high: true
+  - id: "key2"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 5
+    signal: "input"
+    active_high: true
+  - id: "key3"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 6
+    signal: "input"
+    active_high: true
+  - id: "key4"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 7
+    signal: "input"
+    active_high: true
+  - id: "key5"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 10
+    signal: "input"
+    active_high: true
+  - id: "key6"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 11
+    signal: "input"
+    active_high: true
+  - id: "key7"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 12
+    signal: "input"
+    active_high: true
+  - id: "key8"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 13
+    signal: "input"
+    active_high: true
+  - id: "key9"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 14
+    signal: "input"
+    active_high: true
+  - id: "key10"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 15
+    signal: "input"
+    active_high: true

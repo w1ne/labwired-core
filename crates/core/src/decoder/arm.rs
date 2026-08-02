@@ -677,6 +677,33 @@ pub enum Instruction {
         sn: u8,
         sm: u8,
     },
+    /// VFMA.F32 Sd, Sn, Sm — fused multiply-accumulate: Sd = fused(Sn*Sm) + Sd.
+    VfmaF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
+    /// VFMS.F32 Sd, Sn, Sm — fused negated-multiply-accumulate:
+    /// Sd = fused(-Sn*Sm) + Sd.
+    VfmsF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
+    /// VFNMA.F32 Sd, Sn, Sm — fused multiply-subtract:
+    /// Sd = fused(Sn*Sm) - Sd.
+    VfnmaF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
+    /// VFNMS.F32 Sd, Sn, Sm — fused negated-multiply-subtract:
+    /// Sd = fused(-Sn*Sm) - Sd.
+    VfnmsF32 {
+        sd: u8,
+        sn: u8,
+        sm: u8,
+    },
     /// VMOV Sn, Rt — single-precision FPU register from GP register.
     VmovSnRt {
         sn: u8,
@@ -692,9 +719,139 @@ pub enum Instruction {
         sd: u8,
         sm: u8,
     },
+    /// VMOV.F32 Sd, #imm — VFP expanded 8-bit immediate (T2).
+    VmovF32Imm {
+        sd: u8,
+        imm_bits: u32, // already expanded to IEEE-754 single bits
+    },
+    /// VCVT.F32.S32 / VCVT.F32.U32 — integer bits in Sm → float in Sd.
+    /// `signed` selects S32 vs U32 source; `fbits` is the fixed-point
+    /// fractional bit count (0 = pure integer, 1..=32 from the `#fbits` form).
+    VcvtF32FromInt {
+        sd: u8,
+        sm: u8,
+        signed: bool,
+        fbits: u8,
+    },
+    /// VCVT.S32.F32 / VCVT.U32.F32 — float in Sm → integer bits in Sd
+    /// (to-zero / truncate, matching the default FPSCR.RMode after reset).
+    VcvtIntFromF32 {
+        sd: u8,
+        sm: u8,
+        signed: bool,
+        fbits: u8,
+    },
+
+    // -------- VFP load/store multiple + double-precision (Cortex-M7 FPv5-D16) --------
+    // The register file is `fpu_s: [u32; 32]` (S0..S31); a double Dn occupies the
+    // consecutive pair (fpu_s[2n], fpu_s[2n+1]), so both single and double transfers
+    // reduce to moving `count` consecutive 32-bit words starting at S-index `s_first`.
+    /// VSTM / VPUSH — store `count` 32-bit FP words. `add` = increment (IA) vs
+    /// decrement-before (DB); `wback` writes the updated base back to `rn`.
+    VfpStoreMultiple {
+        rn: u8,
+        s_first: u8,
+        count: u8,
+        add: bool,
+        wback: bool,
+    },
+    /// VLDM / VPOP — load `count` 32-bit FP words (see `VfpStoreMultiple`).
+    VfpLoadMultiple {
+        rn: u8,
+        s_first: u8,
+        count: u8,
+        add: bool,
+        wback: bool,
+    },
+    /// VLDR.F64 Dd, [Rn, #±imm8*4] — `dd` is the low S-index (2*Dd).
+    Vldr64 {
+        dd: u8,
+        rn: u8,
+        imm: u16,
+        add: bool,
+    },
+    /// VSTR.F64 Dd, [Rn, #±imm8*4].
+    Vstr64 {
+        dd: u8,
+        rn: u8,
+        imm: u16,
+        add: bool,
+    },
+    /// VMOV.F64 Dd, Dm — register-to-register double move (`dd`/`dm` low S-index).
+    VmovF64Reg {
+        dd: u8,
+        dm: u8,
+    },
+    /// VMOV Dm, Rt, Rt2 — pack two GP registers into a double.
+    VmovDRtRt2 {
+        dm: u8,
+        rt: u8,
+        rt2: u8,
+    },
+    /// VMOV Rt, Rt2, Dm — unpack a double into two GP registers.
+    VmovRtRt2D {
+        rt: u8,
+        rt2: u8,
+        dm: u8,
+    },
+    /// VADD.F64 Dd, Dn, Dm (S-indices of the low words).
+    VaddF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+    /// VSUB.F64 Dd, Dn, Dm.
+    VsubF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+    /// VMUL.F64 Dd, Dn, Dm.
+    VmulF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+    /// VDIV.F64 Dd, Dn, Dm.
+    VdivF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
 
     Unknown(u16),
     Unknown32(u16, u16),
+}
+
+/// Low S-register indices (2*Dreg) of the three operands of a double-precision
+/// VFP data-processing encoding: `1110 111o oDoo nnnn dddd 1011 NoMo mmmm`.
+fn vfp_dp_regs(h1: u16, h2: u16) -> (u8, u8, u8) {
+    let d = (h1 >> 6) & 1;
+    let n = (h2 >> 7) & 1;
+    let m = (h2 >> 5) & 1;
+    let vn = (h1 & 0xF) as u8;
+    let vd = ((h2 >> 12) & 0xF) as u8;
+    let vm = (h2 & 0xF) as u8;
+    let dd = (((d as u8) << 4) | vd) << 1;
+    let dn = (((n as u8) << 4) | vn) << 1;
+    let dm = (((m as u8) << 4) | vm) << 1;
+    (dd, dn, dm)
+}
+
+/// Expand a VFP modified-immediate 8-bit constant to IEEE-754 single bits.
+///
+/// ARM ARM (VFP "modified immediate"): bits `abcdefgh` of the imm8 form
+/// `a B bbbbb c defgh 000…0` where `B = !b` — i.e.
+/// `bits[31]=a`, `bits[30]=!b`, `bits[29:25]=bbbbb`, `bits[24:19]=cdefgh`.
+fn vfp_expand_imm8(imm8: u8) -> u32 {
+    let a = (imm8 >> 7) & 1;
+    let b = (imm8 >> 6) & 1;
+    let cdefgh = imm8 & 0x3F;
+    let b_inv = b ^ 1;
+    ((a as u32) << 31)
+        | ((b_inv as u32) << 30)
+        | (((b as u32) * 0x1F) << 25)
+        | ((cdefgh as u32) << 19)
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -1361,6 +1518,50 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         return Instruction::VdivF32 { sd, sn, sm };
     }
 
+    // VFMA.F32 / VFMS.F32 — fused multiply-accumulate (T2):
+    //   1110 1110 0D10 nnnn dddd 1010 N0M0 mmmm
+    // opc1[23:20] = 1D10 (D free); opc3 = h2[6] selects VFMA (0) / VFMS (1).
+    // These are FUSED: the product is not rounded before the addition —
+    // see execute() where `f32::mul_add` is used, not `a * b + c`.
+    if (h1 & 0xFFB0) == 0xEEA0 && (h2 & 0x0F10) == 0x0A00 {
+        let d = (h1 >> 6) & 1;
+        let n = (h2 >> 7) & 1;
+        let m = (h2 >> 5) & 1;
+        let opc3 = (h2 >> 6) & 1;
+        let vn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let sd = (vd << 1) | (d as u8);
+        let sn = (vn << 1) | (n as u8);
+        let sm = (vm << 1) | (m as u8);
+        return if opc3 == 0 {
+            Instruction::VfmaF32 { sd, sn, sm }
+        } else {
+            Instruction::VfmsF32 { sd, sn, sm }
+        };
+    }
+
+    // VFNMA.F32 / VFNMS.F32 — fused negated multiply-accumulate/subtract (T2):
+    //   1110 1110 0D01 nnnn dddd 1010 N0M0 mmmm
+    // opc1[23:20] = 1D01 (D free); opc3 = h2[6] selects VFNMA (0) / VFNMS (1).
+    if (h1 & 0xFFB0) == 0xEE90 && (h2 & 0x0F10) == 0x0A00 {
+        let d = (h1 >> 6) & 1;
+        let n = (h2 >> 7) & 1;
+        let m = (h2 >> 5) & 1;
+        let opc3 = (h2 >> 6) & 1;
+        let vn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let sd = (vd << 1) | (d as u8);
+        let sn = (vn << 1) | (n as u8);
+        let sm = (vm << 1) | (m as u8);
+        return if opc3 == 0 {
+            Instruction::VfnmaF32 { sd, sn, sm }
+        } else {
+            Instruction::VfnmsF32 { sd, sn, sm }
+        };
+    }
+
     // VMOV (single, GP register ↔ S register) — T1:
     //   1110 1110 000 op nnnn tttt 1010 N0010000
     //   h1 & 0xFFE0 == 0xEE00, op = h1[4] (0 = VMOV Sn,Rt; 1 = VMOV Rt,Sn).
@@ -1387,6 +1588,220 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let sd = (vd << 1) | (d as u8);
         let sm = (vm << 1) | (m as u8);
         return Instruction::VmovF32Reg { sd, sm };
+    }
+
+    // VFP unary group (VMOV imm / VCVT int↔float / VCVT fixed): h1 top matches
+    // 1110 1110 1D11 xxxx with h2[11:8]=1010. VMOV-reg handled above.
+    // Observed Arduino-M33 (H563) startup emissions:
+    //   eef7 5a00  vmov.f32 s11, #1.0
+    //   eeb8 7ae7  vcvt.f32.s32 s14, s15
+    //   eef8 7ae7  vcvt.f32.s32 s15, s15
+    //   eefc 7ac7  vcvt.u32.f32 s15, s14
+    //   eefa 6ae9  vcvt.f32.s32 s13, s13, #13
+    if (h1 & 0xFFB0) == 0xEEB0 && (h2 & 0x0F00) == 0x0A00 {
+        let d = (h1 >> 6) & 1;
+        let m = (h2 >> 5) & 1;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let sd = (vd << 1) | (d as u8);
+        let sm = (vm << 1) | (m as u8);
+        let lo = (h1 & 0xF) as u8;
+        let h2_mid = ((h2 >> 4) & 0xF) as u8; // bits 7:4
+
+        // VMOV.F32 Sd, #imm — h2[7:4]=0000 (imm4L in bits 3:0).
+        if h2_mid == 0x0 {
+            let imm8 = (lo << 4) | ((h2 & 0xF) as u8);
+            return Instruction::VmovF32Imm {
+                sd,
+                imm_bits: vfp_expand_imm8(imm8),
+            };
+        }
+
+        // Integer VCVT (no #fbits). opc2 in h1[2:0] with h1[3]=1; op = h2[7].
+        if (lo & 0x8) != 0 && lo != 0xA && lo != 0xB {
+            let opc2 = lo & 0x7;
+            let op = ((h2 >> 7) & 1) as u8;
+            match (opc2, op) {
+                (0b000, 1) => {
+                    return Instruction::VcvtF32FromInt {
+                        sd,
+                        sm,
+                        signed: true,
+                        fbits: 0,
+                    };
+                }
+                (0b000, 0) => {
+                    return Instruction::VcvtF32FromInt {
+                        sd,
+                        sm,
+                        signed: false,
+                        fbits: 0,
+                    };
+                }
+                (0b100, 1) => {
+                    return Instruction::VcvtIntFromF32 {
+                        sd,
+                        sm,
+                        signed: false,
+                        fbits: 0,
+                    };
+                }
+                (0b101, 1) => {
+                    return Instruction::VcvtIntFromF32 {
+                        sd,
+                        sm,
+                        signed: true,
+                        fbits: 0,
+                    };
+                }
+                (0b100, 0) | (0b101, 0) => {
+                    return Instruction::VcvtF32FromInt {
+                        sd,
+                        sm,
+                        signed: opc2 == 0b101,
+                        fbits: 0,
+                    };
+                }
+                _ => {}
+            }
+        }
+
+        // Fixed-point VCVT (to float).
+        if (lo == 0xA || lo == 0xB) && (h2 & 0x0010) == 0 {
+            let imm4 = (h2 & 0xF) as u8;
+            let odd = ((h2 >> 5) & 1) != 0;
+            let pair = 16u8.saturating_sub(imm4);
+            let fbits = if odd {
+                pair.saturating_mul(2).saturating_sub(1)
+            } else {
+                pair.saturating_mul(2)
+            };
+            return Instruction::VcvtF32FromInt {
+                sd,
+                sm: sd,
+                signed: lo == 0xA,
+                fbits: fbits.clamp(1, 32),
+            };
+        }
+    }
+
+    // -------- VFP double-precision + load/store multiple (Cortex-M7 FPv5-D16) --------
+    // Double-precision shares the encoding of the single-precision ops above but
+    // with h2[11:8] = 1011 (single is 1010). A double Dn maps to the S-register
+    // pair (2n, 2n+1), so `dd`/`dn`/`dm` below are the LOW S-index (2*Dreg).
+
+    // VLDR.F64 / VSTR.F64 (T1): 1110 1101 UD0L nnnn dddd 1011 imm8
+    if (h1 & 0xFF30) == 0xED10 && (h2 & 0x0F00) == 0x0B00 {
+        let u = (h1 >> 7) & 1;
+        let d = (h1 >> 6) & 1;
+        let rn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let dd = (((d as u8) << 4) | vd) << 1;
+        return Instruction::Vldr64 {
+            dd,
+            rn,
+            imm: (h2 & 0xFF) << 2,
+            add: u != 0,
+        };
+    }
+    if (h1 & 0xFF30) == 0xED00 && (h2 & 0x0F00) == 0x0B00 {
+        let u = (h1 >> 7) & 1;
+        let d = (h1 >> 6) & 1;
+        let rn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let dd = (((d as u8) << 4) | vd) << 1;
+        return Instruction::Vstr64 {
+            dd,
+            rn,
+            imm: (h2 & 0xFF) << 2,
+            add: u != 0,
+        };
+    }
+
+    // VLDM/VSTM/VPUSH/VPOP (register list), single (S=0) or double (S=1):
+    //   1110 110P UDWL nnnn dddd 101S imm8   (imm8 = number of 32-bit words)
+    // The P=1,W=0 offset form is VLDR/VSTR (single-register), matched above.
+    if (h1 & 0xFE00) == 0xEC00 && (h2 & 0x0E00) == 0x0A00 {
+        let p = (h1 >> 8) & 1;
+        let u = (h1 >> 7) & 1;
+        let d = (h1 >> 6) & 1;
+        let w = (h1 >> 5) & 1;
+        let l = (h1 >> 4) & 1;
+        let rn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let s = (h2 >> 8) & 1;
+        let imm8 = (h2 & 0xFF) as u8;
+        if !(p == 1 && w == 0) {
+            let s_first = if s == 0 {
+                (vd << 1) | (d as u8)
+            } else {
+                (((d as u8) << 4) | vd) << 1
+            };
+            let add = u != 0;
+            let wback = w != 0;
+            return if l == 1 {
+                Instruction::VfpLoadMultiple {
+                    rn,
+                    s_first,
+                    count: imm8,
+                    add,
+                    wback,
+                }
+            } else {
+                Instruction::VfpStoreMultiple {
+                    rn,
+                    s_first,
+                    count: imm8,
+                    add,
+                    wback,
+                }
+            };
+        }
+    }
+
+    // VMOV.F64 Dd, Dm: 1110 1110 1D11 0000 dddd 1011 01M0 mmmm
+    if (h1 & 0xFFB0) == 0xEEB0 && (h1 & 0x000F) == 0x0000 && (h2 & 0x0FD0) == 0x0B40 {
+        let d = (h1 >> 6) & 1;
+        let m = (h2 >> 5) & 1;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let dd = (((d as u8) << 4) | vd) << 1;
+        let dm = (((m as u8) << 4) | vm) << 1;
+        return Instruction::VmovF64Reg { dd, dm };
+    }
+
+    // VMOV Dm,Rt,Rt2 (L=0) / VMOV Rt,Rt2,Dm (L=1):
+    //   1110 1100 010L tttt tttt 1011 00M1 mmmm
+    if (h1 & 0xFFE0) == 0xEC40 && (h2 & 0x0FD0) == 0x0B10 {
+        let l = (h1 >> 4) & 1;
+        let rt2 = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let m = (h2 >> 5) & 1;
+        let vm = (h2 & 0xF) as u8;
+        let dm = (((m as u8) << 4) | vm) << 1;
+        return if l == 1 {
+            Instruction::VmovRtRt2D { rt, rt2, dm }
+        } else {
+            Instruction::VmovDRtRt2 { dm, rt, rt2 }
+        };
+    }
+
+    // VMUL.F64 / VADD.F64 / VSUB.F64 / VDIV.F64 — three-register double arithmetic.
+    if (h1 & 0xFFB0) == 0xEE20 && (h2 & 0x0F50) == 0x0B00 {
+        let (dd, dn, dm) = vfp_dp_regs(h1, h2);
+        return Instruction::VmulF64 { dd, dn, dm };
+    }
+    if (h1 & 0xFFB0) == 0xEE30 && (h2 & 0x0F10) == 0x0B00 {
+        let (dd, dn, dm) = vfp_dp_regs(h1, h2);
+        return if (h2 >> 6) & 1 == 0 {
+            Instruction::VaddF64 { dd, dn, dm }
+        } else {
+            Instruction::VsubF64 { dd, dn, dm }
+        };
+    }
+    if (h1 & 0xFFB0) == 0xEE80 && (h2 & 0x0F50) == 0x0B00 {
+        let (dd, dn, dm) = vfp_dp_regs(h1, h2);
+        return Instruction::VdivF64 { dd, dn, dm };
     }
 
     // ------------------------------------------------------------------

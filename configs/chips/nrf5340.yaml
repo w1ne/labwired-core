@@ -85,17 +85,26 @@ peripherals:
     size: "4KB"
     irq: 17
 
-  # GPIO P0/P1 — note the nRF5340 GPIO base is the unusual 0x_0842_500 offset,
-  # NOT 0x50000000 as on nRF52840.
+  # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2000, far from the rest
+  # of the peripheral window.
+  #
+  # The devicetree says gpio0@50842500 / gpio1@50842800, but a Nordic GPIO DT
+  # node points at the OUT register, which is peripheral_base + 0x500 — so the
+  # bases below are the DT addresses minus 0x500. The gpio model uses
+  # peripheral-relative offsets (OUT 0x504, OUTSET 0x508, DIRSET 0x518), so
+  # mapping the DT address directly would put every GPIO register 0x500 too
+  # high. That is a silent failure: UART still works and the boot still
+  # completes, only the pins never move. Found while onboarding the nRF54L15,
+  # which has the identical layout quirk.
   - id: "gpio0"
     type: "gpio"
-    base_address: 0x50842500
+    base_address: 0x50842000
     size: "4KB"
     config:
       profile: "nrf52"
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x50842800
+    base_address: 0x50842300
     size: "4KB"
     config:
       profile: "nrf52"
@@ -110,13 +119,20 @@ peripherals:
     type: "nrf5340_dcnf_stub"
     base_address: 0x50000000
     size: "4KB"
+  # FPU's event registers live INSIDE the DCNF page on silicon (both are based
+  # at 0x50000000), and the bus maps one peripheral per address range, so this
+  # inert stub gets a private window. 0x50002000 is reserved on silicon, which
+  # makes it the honest place to park an artifact — see ALLOWED in
+  # crates/core/tests/svd_conformance.rs.
   - id: "fpu"
     type: "nrf5340_fpu_stub"
-    base_address: 0x50001000
+    base_address: 0x50002000
     size: "4KB"
+  # CACHE is at 0x50001000 (SVD). It previously sat at 0x50002000 because the
+  # fpu stub had taken this address, so neither stub was where its silicon is.
   - id: "cache"
     type: "nrf5340_cache_stub"
-    base_address: 0x50002000
+    base_address: 0x50001000
     size: "4KB"
   - id: "spu"
     type: "nrf5340_spu_stub"

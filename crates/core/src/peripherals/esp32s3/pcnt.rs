@@ -76,7 +76,7 @@
 //! (level-sensitive — held until firmware writes INT_CLR), matching the
 //! systimer peripheral's IRQ-delivery model.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// PCNT interrupt-matrix source ID (`ETS_PCNT_INTR_SOURCE`, esp32s3-pac
 /// `Interrupt::PCNT = 41`). Single source shared by all four units.
@@ -183,6 +183,9 @@ pub struct Esp32s3Pcnt {
     /// Interrupt-matrix source id this peripheral pends (constructor arg,
     /// like `Uart`/`Systimer` take their wiring) — `PCNT_INTR_SOURCE` (41).
     source_id: u32,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl core::fmt::Debug for Esp32s3Pcnt {
@@ -213,6 +216,8 @@ impl Esp32s3Pcnt {
             int_ena: 0,
             ctrl: CTRL_RESET,
             source_id,
+
+            clock: None,
         }
     }
 
@@ -462,6 +467,27 @@ impl Peripheral for Esp32s3Pcnt {
         let byte_off = (offset & 3) * 8;
         let word = self.read_word(word_off);
         Some(((word >> byte_off) & 0xFF) as u8)
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_st_word() != 0 {
+            out.push(self.source_id);
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

@@ -15,6 +15,7 @@ use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
+use labwired_core::Bus;
 
 const SPI3_BASE: u64 = 0x3FF6_5000;
 const GPIO_BASE: u64 = 0x3FF4_4000;

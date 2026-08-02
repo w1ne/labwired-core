@@ -210,11 +210,10 @@ impl LabwiredAdapter {
         let mut resolved_board_io_bindings = Vec::new();
         let mut bus = if let Some(sys_path) = &system_path {
             let manifest = labwired_config::SystemManifest::from_file(sys_path)?;
-            let chip_path = sys_path
+            let chip_dir = sys_path
                 .parent()
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .join(&manifest.chip);
-            let chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
+                .unwrap_or_else(|| std::path::Path::new("."));
+            let chip = labwired_config::ChipDescriptor::resolve(&manifest.chip, chip_dir)?;
             resolved_board_io_bindings = resolve_board_io_bindings(&chip, &manifest);
             labwired_core::bus::SystemBus::from_config(&chip, &manifest)?
         } else {
@@ -492,65 +491,83 @@ impl LabwiredAdapter {
         Ok(last_reason)
     }
 
+    /// Decoded peripheral state for the extension's Peripherals tree.
+    ///
+    /// Delegates to [`labwired_core::Machine::inspect`] — the same walk MCP's
+    /// `labwired_inspect` and the playground use — rather than re-implementing
+    /// register decode here. Two things follow from that:
+    ///
+    /// * **It cannot perturb the run.** The previous implementation read every
+    ///   register through `read_memory`, i.e. the real bus read path, so merely
+    ///   expanding a peripheral in the tree fired read side effects and could
+    ///   clear a read-to-clear status register out from under the firmware.
+    ///   `inspect` peeks throughout.
+    /// * **The debugger and the agent surface can't disagree**, because there is
+    ///   only one decoder left.
+    ///
+    /// `kind` is passed through verbatim (`"native"` when a peripheral advertises
+    /// no register schema) so the UI can say so plainly instead of implying the
+    /// peripheral has no registers.
     pub fn get_peripherals_json(&self) -> serde_json::Value {
         use serde_json::json;
-        let mut peripherals = Vec::new();
-        let machine_guard = self.machine.lock().unwrap();
-        if let Some(machine) = machine_guard.as_ref() {
-            for (name, base, size) in machine.get_peripherals() {
-                let mut registers = Vec::new();
-                if let Some(desc) = machine.get_peripheral_descriptor(&name) {
-                    for reg in desc.registers {
-                        let mut val = 0u32;
-                        if let Ok(data) = machine
-                            .read_memory((base + reg.address_offset) as u32, reg.size as usize / 8)
-                        {
-                            for (i, byte) in data.iter().enumerate() {
-                                val |= (*byte as u32) << (i * 8);
-                            }
-                        }
 
-                        let fields = reg
+        let machine_guard = self.machine.lock().unwrap();
+        let Some(machine) = machine_guard.as_ref() else {
+            return json!({ "peripherals": [] });
+        };
+
+        // Sizes are not part of the inspect view; take them from the bus map.
+        let sizes: std::collections::HashMap<String, u64> = machine
+            .get_peripherals()
+            .into_iter()
+            .map(|(name, _base, size)| (name, size))
+            .collect();
+
+        let inspected = machine.inspect(None, &labwired_core::inspect::InspectOpts::default());
+
+        let peripherals = inspected
+            .peripherals
+            .into_iter()
+            .map(|p| {
+                let registers = p
+                    .registers
+                    .into_iter()
+                    .map(|r| {
+                        let fields = r
                             .fields
-                            .iter()
+                            .into_iter()
                             .map(|f| {
-                                let msb = f.bit_range[0];
-                                let lsb = f.bit_range[1];
-                                let bit_width = msb - lsb + 1;
-                                let mask = if bit_width >= 32 {
-                                    0xFFFFFFFFu32
-                                } else {
-                                    (1u32 << bit_width) - 1
-                                };
-                                let f_val = (val >> lsb) & mask;
+                                let (msb, lsb) = (f.bits[0], f.bits[1]);
                                 json!({
                                     "name": f.name,
                                     "bitOffset": lsb,
-                                    "bitWidth": bit_width,
-                                    "value": f_val,
-                                    "description": f.description
+                                    "bitWidth": msb.saturating_sub(lsb) + 1,
+                                    "value": f.value,
                                 })
                             })
                             .collect::<Vec<_>>();
 
-                        registers.push(json!({
-                            "name": reg.id,
-                            "offset": reg.address_offset,
-                            "size": reg.size,
-                            "value": val,
-                            "fields": fields
-                        }));
-                    }
-                }
+                        json!({
+                            "name": r.name,
+                            "offset": r.offset,
+                            "size": r.size,
+                            "value": r.value,
+                            "access": r.access,
+                            "fields": fields,
+                        })
+                    })
+                    .collect::<Vec<_>>();
 
-                peripherals.push(json!({
-                    "name": name,
-                    "base": base,
-                    "size": size,
-                    "registers": registers
-                }));
-            }
-        }
+                json!({
+                    "name": p.name,
+                    "base": p.base,
+                    "size": sizes.get(&p.name).copied().unwrap_or(0),
+                    "kind": p.kind,
+                    "registers": registers,
+                })
+            })
+            .collect::<Vec<_>>();
+
         json!({ "peripherals": peripherals })
     }
 
@@ -899,15 +916,43 @@ impl LabwiredAdapter {
         })
     }
 
-    pub fn read_memory(&self, addr: u64, len: usize) -> Result<Vec<u8>> {
+    /// Read memory for the debugger, side-effect-free.
+    ///
+    /// Every read the DAP performs is a read the *user did not ask the firmware
+    /// to do* — hovering a variable, scrolling the memory view, resolving a
+    /// symbol. Those must not fire bus read side effects, so this peeks rather
+    /// than going through the real read path. Unmapped bytes are reported
+    /// separately instead of being flattened into a convincing `0x00`.
+    pub fn peek_memory(&self, addr: u64, len: usize) -> Result<(Vec<u8>, usize)> {
+        use labwired_core::inspect::PeekByte;
+
         let machine_guard = self.machine.lock().unwrap();
-        if let Some(machine) = machine_guard.as_ref() {
-            machine
-                .read_memory(addr as u32, len)
-                .map_err(|e| anyhow!("Memory read failed: {:?}", e))
-        } else {
-            Err(anyhow!("Machine not initialized"))
-        }
+        let Some(machine) = machine_guard.as_ref() else {
+            return Err(anyhow!("Machine not initialized"));
+        };
+
+        let result = machine.peek(addr, len);
+        let unreadable = result
+            .bytes
+            .iter()
+            .filter(|b| matches!(b, PeekByte::Unmapped))
+            .count();
+        let bytes = result
+            .bytes
+            .iter()
+            .map(|b| match b {
+                PeekByte::Mapped(v) => *v,
+                PeekByte::Unmapped => 0,
+            })
+            .collect();
+
+        Ok((bytes, unreadable))
+    }
+
+    /// Convenience wrapper over [`Self::peek_memory`] for callers that only want
+    /// the bytes (symbol resolution, variable decode).
+    pub fn read_memory(&self, addr: u64, len: usize) -> Result<Vec<u8>> {
+        self.peek_memory(addr, len).map(|(bytes, _)| bytes)
     }
 
     pub fn write_memory(&self, addr: u64, data: &[u8]) -> Result<()> {
@@ -1138,6 +1183,7 @@ mod tests {
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: vec![labwired_config::BoardIoBinding {
                 id: "led".to_string(),
                 kind: labwired_config::BoardIoKind::Led,
@@ -1147,8 +1193,10 @@ mod tests {
                 active_high: true,
                 device_type: None,
                 i2c_address: None,
+                channel: None,
             }],
             debug_uart: None,
+            wifi_ap: None,
             peripherals: Vec::new(),
         };
 
@@ -1196,6 +1244,7 @@ mod tests {
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: vec![
                 labwired_config::BoardIoBinding {
                     id: "led".to_string(),
@@ -1206,6 +1255,7 @@ mod tests {
                     active_high: true,
                     device_type: None,
                     i2c_address: None,
+                    channel: None,
                 },
                 labwired_config::BoardIoBinding {
                     id: "button".to_string(),
@@ -1216,9 +1266,11 @@ mod tests {
                     active_high: true,
                     device_type: None,
                     i2c_address: None,
+                    channel: None,
                 },
             ],
             debug_uart: None,
+            wifi_ap: None,
             peripherals: Vec::new(),
         };
 
@@ -1267,6 +1319,7 @@ mod tests {
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: vec![labwired_config::BoardIoBinding {
                 id: "led".to_string(),
                 kind: labwired_config::BoardIoKind::Led,
@@ -1276,8 +1329,10 @@ mod tests {
                 active_high: true,
                 device_type: None,
                 i2c_address: None,
+                channel: None,
             }],
             debug_uart: None,
+            wifi_ap: None,
             peripherals: Vec::new(),
         };
 
@@ -1532,5 +1587,117 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Unsupported or unknown firmware architecture"));
+    }
+
+    /// Load the ESP32-C3 fixture with its system manifest.
+    ///
+    /// Deliberately a CHECKED-IN fixture rather than a build artifact: the older
+    /// tests above bail with `if !elf_path.exists() { return; }`, which passes
+    /// vacuously on any machine that has not built that firmware. This one always
+    /// runs. The C3 is the right chip for these tests because its peripherals are
+    /// declarative, so `inspect` genuinely decodes ~29 peripherals' registers —
+    /// a chip with no register schema would exercise nothing.
+    fn load_c3_fixture() -> LabwiredAdapter {
+        let elf = PathBuf::from("../../tests/fixtures/esp32c3-demo.elf");
+        let system = PathBuf::from("../../examples/esp32c3-blinky/system.yaml");
+        assert!(elf.exists(), "checked-in fixture missing: {:?}", elf);
+        assert!(system.exists(), "checked-in manifest missing: {:?}", system);
+
+        let adapter = LabwiredAdapter::new();
+        adapter
+            .load_firmware(elf, Some(system))
+            .expect("failed to load the ESP32-C3 fixture");
+        adapter
+    }
+
+    /// Looking at a peripheral must not change it.
+    ///
+    /// This is the regression test for a real defect: `get_peripherals_json` used
+    /// to read every register through `read_memory`, i.e. the live bus read path.
+    /// Expanding the Peripherals tree in VS Code therefore fired read side
+    /// effects, and a read-to-clear status register was cleared by the act of
+    /// displaying it — the firmware under test then missed the event, and the bug
+    /// only appeared when the debugger was open. Routing through `inspect`/`peek`
+    /// makes the view passive.
+    #[test]
+    fn inspecting_peripherals_does_not_perturb_the_machine() {
+        let adapter = load_c3_fixture();
+
+        // Get into a live state first; a machine that has never run has little
+        // state to disturb, which would make this pass for the wrong reason.
+        for _ in 0..2_000 {
+            if adapter.step().is_err() {
+                break;
+            }
+        }
+
+        let snapshot_of = |adapter: &LabwiredAdapter| -> String {
+            let guard = adapter.machine.lock().unwrap();
+            let machine = guard.as_ref().expect("machine attached");
+            serde_json::to_string(&machine.snapshot()).expect("snapshot serializes")
+        };
+
+        let before = snapshot_of(&adapter);
+
+        // Poll hard, the way a debugger does on every stop.
+        for _ in 0..50 {
+            let peripherals = adapter.get_peripherals_json();
+            assert!(
+                peripherals["peripherals"]
+                    .as_array()
+                    .is_some_and(|p| !p.is_empty()),
+                "fixture should enumerate peripherals; got {peripherals}"
+            );
+        }
+
+        let after = snapshot_of(&adapter);
+
+        assert_eq!(
+            before, after,
+            "reading the peripheral view changed machine state — the debugger is perturbing the run it is meant to observe"
+        );
+    }
+
+    /// The whole point of the schema work: peripherals decode NAMED registers.
+    ///
+    /// Guards the shape the VS Code Peripherals tree consumes (`name`/`offset`/
+    /// `value`/`fields`), which is not covered by any Rust type — the DAP hands
+    /// VS Code untyped JSON, so a renamed field would break the tree silently.
+    #[test]
+    fn peripheral_json_decodes_named_registers_with_fields() {
+        let adapter = load_c3_fixture();
+        let json = adapter.get_peripherals_json();
+        let peripherals = json["peripherals"].as_array().expect("peripherals array");
+
+        let decoding: Vec<_> = peripherals
+            .iter()
+            .filter(|p| p["registers"].as_array().is_some_and(|r| !r.is_empty()))
+            .collect();
+
+        assert!(
+            !decoding.is_empty(),
+            "no peripheral decoded any register — the Peripherals tree would read \
+             'No register descriptors available' for all {} entries",
+            peripherals.len()
+        );
+
+        let register = &decoding[0]["registers"][0];
+        assert!(
+            register["name"].as_str().is_some_and(|n| !n.is_empty()),
+            "register needs a name, got {register}"
+        );
+        assert!(register["offset"].is_number(), "register needs an offset");
+        assert!(register["value"].is_number(), "register needs a value");
+        assert!(
+            register["fields"].is_array(),
+            "register needs a fields array"
+        );
+
+        // `kind` is passed through from inspect so the UI can say "native" rather
+        // than implying a peripheral has no registers at all.
+        assert!(
+            decoding[0]["kind"].as_str().is_some(),
+            "peripheral should carry its inspect kind"
+        );
     }
 }

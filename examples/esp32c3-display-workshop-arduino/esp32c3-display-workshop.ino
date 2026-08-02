@@ -18,11 +18,11 @@ static constexpr uint8_t OLED_HEIGHT = WORKSHOP_OLED_HEIGHT;
 static constexpr uint8_t OLED_PAGES = OLED_HEIGHT / 8;
 static_assert(OLED_HEIGHT == 32 || OLED_HEIGHT == 64, "WORKSHOP_OLED_HEIGHT must be 32 or 64");
 static constexpr uint32_t DEMO_CLOCK_START_SECONDS = 19UL * 3600UL;
-static constexpr uint32_t DEMO_CYCLES_PER_CLOCK_SECOND = 500000UL;
+static constexpr uint32_t DEMO_CLOCK_INTERVAL_MS = 1000UL;
 
 static uint8_t oled[128 * OLED_PAGES];
 static uint32_t displayedSeconds = DEMO_CLOCK_START_SECONDS;
-static uint32_t lastClockCycle = 0;
+static uint32_t lastClockMillis = 0;
 
 static const uint8_t SEG_BITS[10][7] = {
   {1,1,1,1,1,1,0}, {0,1,1,0,0,0,0}, {1,1,0,1,1,0,1}, {1,1,1,1,0,0,1},
@@ -163,25 +163,19 @@ static void renderClockSeconds(uint32_t displaySeconds) {
   workshopSerialPrintln(line);
 }
 
-static uint32_t readCycleCount() {
-  uint32_t cycles;
-  asm volatile("rdcycle %0" : "=r"(cycles));
-  return cycles;
-}
-
 void setup() {
   workshopSerialBegin();
   workshopSerialPrintln("ESP32-C3 Display Workshop");
   oledInit();
   displayedSeconds = DEMO_CLOCK_START_SECONDS;
   renderClockSeconds(displayedSeconds);
-  lastClockCycle = readCycleCount();
+  lastClockMillis = millis();
 }
 
 void loop() {
-  uint32_t now = readCycleCount();
-  if (static_cast<uint32_t>(now - lastClockCycle) < DEMO_CYCLES_PER_CLOCK_SECOND) return;
-  lastClockCycle = now;
+  const uint32_t now = millis();
+  if (static_cast<uint32_t>(now - lastClockMillis) < DEMO_CLOCK_INTERVAL_MS) return;
+  lastClockMillis = now;
   displayedSeconds++;
   renderClockSeconds(displayedSeconds);
 }

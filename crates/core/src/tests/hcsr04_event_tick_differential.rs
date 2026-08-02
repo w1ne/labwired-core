@@ -28,7 +28,7 @@ mod hcsr04_event_tick_differential_tests {
     use crate::cpu::CortexM;
     use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
     use crate::peripherals::hc_sr04::HcSr04;
-    use crate::{DebugControl, Machine};
+    use crate::{Bus, DebugControl, Machine};
 
     const GPIO_BASE: u64 = 0x4800_0000; // stm32v2: IDR @0x10, ODR @0x14
     const IDR: u64 = 0x10;

@@ -11,6 +11,33 @@ use std::path::Path;
 use svd_parser::svd::{Access as SvdAccess, Device, Field, Peripheral, Register, RegisterCluster};
 use thiserror::Error;
 
+/// Parse a CMSIS-SVD document the way LabWired needs to read real vendor files.
+///
+/// `svd_parser::parse` is strict, and shipping vendor SVDs are not. Nordic's MDK
+/// files spell the access tokens `writeOnce` / `read-writeOnce` in lowercase,
+/// which the strict parser rejects outright — so importing a stock
+/// `nrf5340_application.svd` or `nrf54l15_application.svd` fails on a purely
+/// cosmetic schema deviation, with nothing wrong in the data anyone actually
+/// reads.
+///
+/// This is the ONE place that decision lives. Every consumer — the CLI importer,
+/// the coverage scan, the SVD conformance gate — goes through here, so a file
+/// that imports cannot be a file the gate skips, and adding a vendored SVD
+/// cannot break one caller while satisfying another.
+///
+/// Validation is disabled and `enumeratedValues` are skipped: LabWired reads
+/// peripherals, registers, offsets and interrupt numbers, none of which those
+/// checks protect.
+pub fn parse_svd(xml: &str) -> std::result::Result<Device, IngestError> {
+    // One replace covers both spellings: `read-writeonce` contains `writeonce`.
+    let normalized = xml.replace("writeonce", "writeOnce");
+    let config = svd_parser::Config::default()
+        .validate_level(svd_parser::svd::ValidateLevel::Disabled)
+        .ignore_enums(true);
+    svd_parser::parse_with_config(&normalized, &config)
+        .map_err(|e| IngestError::Svd(format!("{e:?}")))
+}
+
 /// Errors that can occur during SVD ingestion and conversion.
 #[derive(Error, Debug)]
 pub enum IngestError {

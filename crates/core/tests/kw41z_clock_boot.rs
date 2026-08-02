@@ -16,6 +16,7 @@
 
 use labwired_config::ChipDescriptor;
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 
 // Absolute MMIO addresses on the boot path.
 const RSIM_CONTROL: u64 = 0x4005_9000;
@@ -42,8 +43,10 @@ fn kw41z_bus() -> SystemBus {
         name: "kw41z-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

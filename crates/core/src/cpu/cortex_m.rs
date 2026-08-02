@@ -10,6 +10,21 @@ use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
+/// `LABWIRED_TRACE_INSN` / `LABWIRED_TRACE_EXC` are developer trace gates read
+/// once per process. They used to be `std::env::var` calls evaluated on EVERY
+/// retired instruction, which cost ~830 host instructions per simulated one
+/// (environ walk + strncmp). Hoisted into `OnceLock` so the hot path pays a
+/// single atomic load.
+fn trace_insn_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("LABWIRED_TRACE_INSN").is_ok())
+}
+
+fn trace_exc_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("LABWIRED_TRACE_EXC").is_ok())
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DecodeCacheEntry {
     pub tag: u32,
@@ -261,6 +276,23 @@ impl CortexM {
         let low = ((xpsr >> 25) & 0b11) as u8;
         let high = ((xpsr >> 10) & 0b11_1111) as u8;
         low | (high << 2)
+    }
+
+    /// Read a double-precision value from the S-register pair at low index `d_lo`
+    /// (= 2*Dn). Little-endian: the low S-register holds bits [31:0].
+    fn read_f64(&self, d_lo: u8) -> f64 {
+        let lo = self.fpu_s.get(d_lo as usize).copied().unwrap_or(0) as u64;
+        let hi = self.fpu_s.get(d_lo as usize + 1).copied().unwrap_or(0) as u64;
+        f64::from_bits((hi << 32) | lo)
+    }
+
+    /// Write a double-precision value to the S-register pair at low index `d_lo`.
+    fn write_f64(&mut self, d_lo: u8, v: f64) {
+        let bits = v.to_bits();
+        if (d_lo as usize + 1) < 32 {
+            self.fpu_s[d_lo as usize] = bits as u32;
+            self.fpu_s[d_lo as usize + 1] = (bits >> 32) as u32;
+        }
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -558,7 +590,7 @@ impl Cpu for CortexM {
         self.sync_sp_to_bank();
     }
     fn set_exception_pending(&mut self, exception_num: u32) {
-        if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
+        if trace_exc_enabled() {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
         if exception_num < 256 {
@@ -697,10 +729,20 @@ impl Cpu for CortexM {
 
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
-                // Break the batch only when a takeable exception is pending:
+                // End the batch early when a takeable exception is pending:
                 // its priority must be strictly higher (smaller number) than
                 // the currently-active one (or 256 = thread mode baseline).
-                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
+                // Only ONCE the batch has made progress (`executed > 0`) —
+                // at the batch top the pending exception must instead be
+                // DISPATCHED by the `step_internal` below (which takes it
+                // exactly like the single-step path). Breaking at zero made
+                // `Machine::run` return no-progress forever the moment a
+                // walk/scheduler-pended IRQ (e.g. SysTick) became takeable
+                // between batches, wedging every batched IRQ-driven Cortex-M
+                // firmware (walk-free campaign B1 surfaced this — batching is
+                // pointless if an armed SysTick freezes the run loop).
+                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask
+                {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -730,7 +772,11 @@ impl Cpu for CortexM {
             }
         } else {
             while executed < max_count {
-                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
+                // Same early-out rule as the SystemBus arm above: break only
+                // after progress; at the batch top a takeable pending
+                // exception is dispatched by `step_internal`, never spun on.
+                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask
+                {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -880,7 +926,7 @@ impl CortexM {
                     // Jump to ISR handler
                     let vtor = self.vtor.load(Ordering::SeqCst);
                     let vector_addr = vtor + (exception_num * 4);
-                    if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
+                    if trace_exc_enabled() {
                         eprintln!(
                             "EXC take num={} vtor=0x{:08X} vec=0x{:08X} fetch={:?}",
                             exception_num,
@@ -952,7 +998,7 @@ impl CortexM {
         // Per-instruction PC trace gated on LABWIRED_TRACE_INSN env var.
         // Use only for short runs — VERY chatty. Format suitable for grepping:
         //   INSN pc=0xPPPPPPPP op=0xOOOOOOOO
-        if std::env::var("LABWIRED_TRACE_INSN").is_ok() {
+        if trace_insn_enabled() {
             eprintln!("INSN pc=0x{:08X} op=0x{:08X}", self.pc, opcode);
         }
 
@@ -2924,6 +2970,31 @@ impl CortexM {
                     self.fpu_s[sd as usize] = (a / b).to_bits();
                     pc_increment = 4;
                 }
+                Instruction::VfmaF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    let c = f32::from_bits(self.fpu_s[sd as usize]);
+                    // Fused: single rounding of (a*b)+c, not a*b rounded then +c.
+                    self.fpu_s[sd as usize] = a.mul_add(b, c).to_bits();
+                }
+                Instruction::VfmsF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    let c = f32::from_bits(self.fpu_s[sd as usize]);
+                    self.fpu_s[sd as usize] = (-a).mul_add(b, c).to_bits();
+                }
+                Instruction::VfnmaF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    let c = f32::from_bits(self.fpu_s[sd as usize]);
+                    self.fpu_s[sd as usize] = a.mul_add(b, -c).to_bits();
+                }
+                Instruction::VfnmsF32 { sd, sn, sm } => {
+                    let a = f32::from_bits(self.fpu_s[sn as usize]);
+                    let b = f32::from_bits(self.fpu_s[sm as usize]);
+                    let c = f32::from_bits(self.fpu_s[sd as usize]);
+                    self.fpu_s[sd as usize] = (-a).mul_add(b, -c).to_bits();
+                }
                 Instruction::VmovSnRt { sn, rt } => {
                     self.fpu_s[sn as usize] = self.read_reg(rt);
                     pc_increment = 4;
@@ -2934,6 +3005,206 @@ impl CortexM {
                 }
                 Instruction::VmovF32Reg { sd, sm } => {
                     self.fpu_s[sd as usize] = self.fpu_s[sm as usize];
+                    pc_increment = 4;
+                }
+
+                Instruction::VmovF32Imm { sd, imm_bits } => {
+                    self.fpu_s[sd as usize] = imm_bits;
+                    pc_increment = 4;
+                }
+                Instruction::VcvtF32FromInt {
+                    sd,
+                    sm,
+                    signed,
+                    fbits,
+                } => {
+                    let raw = self.fpu_s[sm as usize];
+                    let int_val = if signed {
+                        raw as i32 as f64
+                    } else {
+                        raw as f64
+                    };
+                    let scaled = if fbits > 0 {
+                        int_val / ((1u64 << fbits.min(31)) as f64)
+                    } else {
+                        int_val
+                    };
+                    self.fpu_s[sd as usize] = (scaled as f32).to_bits();
+                    pc_increment = 4;
+                }
+                Instruction::VcvtIntFromF32 {
+                    sd,
+                    sm,
+                    signed,
+                    fbits,
+                } => {
+                    let f = f32::from_bits(self.fpu_s[sm as usize]) as f64;
+                    let scaled = if fbits > 0 {
+                        f * ((1u64 << fbits.min(31)) as f64)
+                    } else {
+                        f
+                    };
+                    let bits = if signed {
+                        (scaled as i32) as u32
+                    } else if scaled <= 0.0 {
+                        0
+                    } else if scaled >= f64::from(u32::MAX) {
+                        u32::MAX
+                    } else {
+                        scaled as u32
+                    };
+                    self.fpu_s[sd as usize] = bits;
+                    pc_increment = 4;
+                }
+
+                // -------- VFP load/store multiple + double-precision (FPv5-D16) --------
+                Instruction::VfpStoreMultiple {
+                    rn,
+                    s_first,
+                    count,
+                    add,
+                    wback,
+                } => {
+                    let base = self.read_reg(rn);
+                    let total = 4u32.wrapping_mul(count as u32);
+                    let start = if add { base } else { base.wrapping_sub(total) };
+                    for i in 0..count {
+                        let idx = s_first as usize + i as usize;
+                        let val = if idx < 32 { self.fpu_s[idx] } else { 0 };
+                        let addr = start.wrapping_add(4 * i as u32);
+                        if bus.write_u32(addr as u64, val).is_err() {
+                            tracing::error!("Bus Write Fault (VSTM) at {:#x}", addr);
+                        }
+                    }
+                    if wback {
+                        let nb = if add {
+                            base.wrapping_add(total)
+                        } else {
+                            base.wrapping_sub(total)
+                        };
+                        self.write_reg(rn, nb);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VfpLoadMultiple {
+                    rn,
+                    s_first,
+                    count,
+                    add,
+                    wback,
+                } => {
+                    let base = self.read_reg(rn);
+                    let total = 4u32.wrapping_mul(count as u32);
+                    let start = if add { base } else { base.wrapping_sub(total) };
+                    for i in 0..count {
+                        let idx = s_first as usize + i as usize;
+                        let addr = start.wrapping_add(4 * i as u32);
+                        match bus.read_u32(addr as u64) {
+                            Ok(v) => {
+                                if idx < 32 {
+                                    self.fpu_s[idx] = v;
+                                }
+                            }
+                            Err(_) => tracing::error!("Bus Read Fault (VLDM) at {:#x}", addr),
+                        }
+                    }
+                    if wback {
+                        let nb = if add {
+                            base.wrapping_add(total)
+                        } else {
+                            base.wrapping_sub(total)
+                        };
+                        self.write_reg(rn, nb);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Vldr64 { dd, rn, imm, add } => {
+                    let base = self.read_reg(rn);
+                    let base = if rn == 15 { base & !3 } else { base };
+                    let addr = if add {
+                        base.wrapping_add(imm as u32)
+                    } else {
+                        base.wrapping_sub(imm as u32)
+                    };
+                    for (w, off) in [(0usize, 0u32), (1, 4)] {
+                        match bus.read_u32(addr.wrapping_add(off) as u64) {
+                            Ok(v) => {
+                                if (dd as usize + w) < 32 {
+                                    self.fpu_s[dd as usize + w] = v;
+                                }
+                            }
+                            Err(_) => tracing::error!(
+                                "Bus Read Fault (VLDR.64) at {:#x}",
+                                addr.wrapping_add(off)
+                            ),
+                        }
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Vstr64 { dd, rn, imm, add } => {
+                    let base = self.read_reg(rn);
+                    let addr = if add {
+                        base.wrapping_add(imm as u32)
+                    } else {
+                        base.wrapping_sub(imm as u32)
+                    };
+                    for (w, off) in [(0usize, 0u32), (1, 4)] {
+                        let val = if (dd as usize + w) < 32 {
+                            self.fpu_s[dd as usize + w]
+                        } else {
+                            0
+                        };
+                        if bus.write_u32(addr.wrapping_add(off) as u64, val).is_err() {
+                            tracing::error!(
+                                "Bus Write Fault (VSTR.64) at {:#x}",
+                                addr.wrapping_add(off)
+                            );
+                        }
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmovF64Reg { dd, dm } => {
+                    if (dd as usize + 1) < 32 && (dm as usize + 1) < 32 {
+                        self.fpu_s[dd as usize] = self.fpu_s[dm as usize];
+                        self.fpu_s[dd as usize + 1] = self.fpu_s[dm as usize + 1];
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmovDRtRt2 { dm, rt, rt2 } => {
+                    if (dm as usize + 1) < 32 {
+                        self.fpu_s[dm as usize] = self.read_reg(rt);
+                        self.fpu_s[dm as usize + 1] = self.read_reg(rt2);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmovRtRt2D { rt, rt2, dm } => {
+                    let (lo, hi) = if (dm as usize + 1) < 32 {
+                        (self.fpu_s[dm as usize], self.fpu_s[dm as usize + 1])
+                    } else {
+                        (0, 0)
+                    };
+                    self.write_reg(rt, lo);
+                    self.write_reg(rt2, hi);
+                    pc_increment = 4;
+                }
+                Instruction::VaddF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) + self.read_f64(dm);
+                    self.write_f64(dd, r);
+                    pc_increment = 4;
+                }
+                Instruction::VsubF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) - self.read_f64(dm);
+                    self.write_f64(dd, r);
+                    pc_increment = 4;
+                }
+                Instruction::VmulF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) * self.read_f64(dm);
+                    self.write_f64(dd, r);
+                    pc_increment = 4;
+                }
+                Instruction::VdivF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) / self.read_f64(dm);
+                    self.write_f64(dd, r);
                     pc_increment = 4;
                 }
 
@@ -2962,11 +3233,16 @@ impl CortexM {
         // and this runs on every instruction. Gate it on having observers, the
         // same way on_step_start above is gated.
         if !_observers.is_empty() {
-            let mut registers = [0u32; 17];
+            let mut registers = [0u32; 19];
             for (i, reg) in registers.iter_mut().enumerate().take(16) {
                 *reg = self.get_register(i as u8);
             }
             registers[16] = self.xpsr;
+            // Standard trailer (see `SimulationObserver`): SP then PC. Both
+            // already live in the arch block (r13/r15); repeating them here is
+            // what lets an arch-agnostic consumer find them.
+            registers[17] = self.get_register(13);
+            registers[18] = self.pc;
 
             crate::emit_trace_event(
                 _observers,
@@ -3921,6 +4197,122 @@ mod tests {
             true,
         );
         assert_eq!(cpu.fpu_s[2], (12.0_f32).to_bits(), "VMUL: 6 * 2 = 12");
+    }
+
+    fn vfp_fma_encoding(h1_base: u16, sd: u8, sn: u8, sm: u8, opc3: u32) -> u32 {
+        // Build the 32-bit Thumb encoding for VFMA/VFMS/VFNMA/VFNMS.F32.
+        // h1_base is 0xEEA0 (VFMA/VFMS group) or 0xEE90 (VFNMA/VFNMS group)
+        // with D and Vn cleared; opc3 selects the h2[6] bit.
+        let vd = (sd >> 1) & 0xF;
+        let d = (sd & 1) as u32;
+        let vn = (sn >> 1) & 0xF;
+        let n = (sn & 1) as u32;
+        let vm = (sm >> 1) & 0xF;
+        let m = (sm & 1) as u32;
+        let h1 = h1_base | ((d as u16) << 6) | (vn as u16);
+        let h2 = ((vd as u16) << 12)
+            | 0x0A00
+            | ((n as u16) << 7)
+            | ((opc3 as u16) << 6)
+            | ((m as u16) << 5)
+            | (vm as u16);
+        ((h1 as u32) << 16) | (h2 as u32)
+    }
+
+    #[test]
+    fn test_thumb2_vfma_decodes_the_real_h563_opcode() {
+        // The exact bytes logged from stm32h563 firmware: 0xeee7 0x7a06.
+        // Register-number assembly is Sx = (Vx << 1) | bit, where the D/N/M
+        // bits live in different halfwords than the Vd/Vn/Vm fields — with
+        // D=1 (h1 bit6), Vn=7 (h1[3:0]), Vd=7 (h2[15:12]), N=0 (h2 bit7),
+        // M=0 (h2 bit5), Vm=6 (h2[3:0]) this decodes to
+        // VFMA.F32 S15, S14, S12 (not S7,S7,S6 — Vd/Vn/Vm are only half of
+        // each register number).
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.fpu_s[14] = (2.0_f32).to_bits();
+        cpu.fpu_s[12] = (3.0_f32).to_bits();
+        cpu.fpu_s[15] = (2.0_f32).to_bits();
+        run_test_instr(&mut cpu, &mut bus, 0xEEE7_7A06, true);
+        // S15 = fused(S14 * S12) + S15 = fused(2*3) + 2 = 8
+        assert_eq!(cpu.fpu_s[15], (8.0_f32).to_bits());
+    }
+
+    #[test]
+    fn test_thumb2_vfma_is_truly_fused_not_double_rounded() {
+        // Choose operands where round(a*b) then +c differs from the fused
+        // single-rounding result. This proves mul_add (fused) is used
+        // rather than `a * b + c` (which would round the product first).
+        let a: f32 = 1.134_364_2;
+        let b: f32 = 1.847_433_7;
+        let c: f32 = -2.095_662_8;
+        let unfused = (a * b) + c;
+        let fused = a.mul_add(b, c);
+        assert_ne!(
+            unfused.to_bits(),
+            fused.to_bits(),
+            "test operands must actually exercise the fused/unfused difference"
+        );
+
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.fpu_s[0] = a.to_bits();
+        cpu.fpu_s[1] = b.to_bits();
+        cpu.fpu_s[2] = c.to_bits();
+        // VFMA.F32 S2, S0, S1
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_fma_encoding(0xEEA0, 2, 0, 1, 0),
+            true,
+        );
+        assert_eq!(
+            cpu.fpu_s[2],
+            fused.to_bits(),
+            "VFMA must use fused multiply-add (single rounding), not a*b+c"
+        );
+    }
+
+    #[test]
+    fn test_thumb2_vfms_vfnma_vfnms_sign_handling() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.fpu_s[0] = (6.0_f32).to_bits(); // Sn
+        cpu.fpu_s[1] = (2.0_f32).to_bits(); // Sm
+        cpu.fpu_s[2] = (5.0_f32).to_bits(); // Sd (accumulator)
+
+        // VFMS.F32 S2, S0, S1 = fused(-6*2) + 5 = -12 + 5 = -7
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_fma_encoding(0xEEA0, 2, 0, 1, 1),
+            true,
+        );
+        assert_eq!(cpu.fpu_s[2], (-7.0_f32).to_bits(), "VFMS: -(6*2)+5 = -7");
+
+        cpu.fpu_s[0] = (6.0_f32).to_bits();
+        cpu.fpu_s[1] = (2.0_f32).to_bits();
+        cpu.fpu_s[2] = (5.0_f32).to_bits();
+        // VFNMA.F32 S2, S0, S1 = fused(6*2) - 5 = 12 - 5 = 7
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_fma_encoding(0xEE90, 2, 0, 1, 0),
+            true,
+        );
+        assert_eq!(cpu.fpu_s[2], (7.0_f32).to_bits(), "VFNMA: (6*2)-5 = 7");
+
+        cpu.fpu_s[0] = (6.0_f32).to_bits();
+        cpu.fpu_s[1] = (2.0_f32).to_bits();
+        cpu.fpu_s[2] = (5.0_f32).to_bits();
+        // VFNMS.F32 S2, S0, S1 = fused(-6*2) - 5 = -12 - 5 = -17
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_fma_encoding(0xEE90, 2, 0, 1, 1),
+            true,
+        );
+        assert_eq!(cpu.fpu_s[2], (-17.0_f32).to_bits(), "VFNMS: -(6*2)-5 = -17");
     }
 
     #[test]

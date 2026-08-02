@@ -564,6 +564,25 @@ impl Peripheral for BxCan {
         PeripheralTickResult::with_irq(false)
     }
 
+    fn needs_legacy_walk(&self) -> bool {
+        // The ONLY thing bxCAN's `tick()` does is drain the `CanBus` mpsc
+        // interconnect (`bus_rx`) into the receiver. With no interconnect
+        // attached (`bus_rx == None`) the tick is a proven no-op for every
+        // reachable firmware state, so the walk can be deleted byte-identically.
+        //
+        // Frame injection from a `can-player` external device does NOT flow
+        // through this tick: it is pushed by `SystemBus::service_can_log_players`
+        // (a per-cycle CAN orchestration service that runs whenever any player
+        // is present — `per_cycle_tick_is_trivial` keeps the tick alive for it —
+        // independent of walk deletion), so replay labs stay correct with the
+        // walk deleted. The mpsc `bus_rx` path is used only by a multi-node
+        // `CanBus` interconnect; when one is wired (`bus_rx == Some`) the walk
+        // must stay on to poll it, and this reports `true` at that instant. The
+        // interconnect is attached at construction (`new_with_bus`), before the
+        // bus derives walk-deletion, so the derivation always sees the truth.
+        self.bus_rx.is_some()
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }

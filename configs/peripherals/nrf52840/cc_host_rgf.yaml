@@ -1,0 +1,94 @@
+peripheral: CC_HOST_RGF
+version: 0.1.0
+registers:
+- id: HOST_CRYPTOKEY_SEL
+  address_offset: 6712
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HOST_CRYPTOKEY_SEL
+    bit_range:
+    - 1
+    - 0
+    description: Select the source of the HW key that is used by the AES engine
+  side_effects: null
+- id: HOST_IOT_KPRTL_LOCK
+  address_offset: 6732
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HOST_IOT_KPRTL_LOCK
+    bit_range:
+    - 0
+    - 0
+    description: This register is the K_PRTL lock register. When this register is set, K_PRTL cannot be used and a zeroed key will be used instead. The value of this register is saved in the CRYPTOCELL AO power domain.
+  side_effects: null
+- id: HOST_IOT_KDR0
+  address_offset: 6736
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HOST_IOT_KDR0
+    bit_range:
+    - 31
+    - 0
+    description: 'Write: K_DR bits 31:0. Read: 0x00000000 when 128-bit K_DR key value is not yet retained in the CRYPTOCELL AO power domain. Read: 0x00000001 when 128-bit K_DR key value is successfully retained in the CRYPTOCELL AO power domain.'
+  side_effects: null
+- id: HOST_IOT_KDR1
+  address_offset: 6740
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: HOST_IOT_KDR1
+    bit_range:
+    - 31
+    - 0
+    description: K_DR bits 63:32
+  side_effects: null
+- id: HOST_IOT_KDR2
+  address_offset: 6744
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: HOST_IOT_KDR2
+    bit_range:
+    - 31
+    - 0
+    description: K_DR bits 95:64
+  side_effects: null
+- id: HOST_IOT_KDR3
+  address_offset: 6748
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: HOST_IOT_KDR3
+    bit_range:
+    - 31
+    - 0
+    description: K_DR bits 127:96
+  side_effects: null
+- id: HOST_IOT_LCS
+  address_offset: 6752
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: LCS
+    bit_range:
+    - 2
+    - 0
+    description: Lifecycle state value. This field is write-once per reset.
+  - name: LCS_IS_VALID
+    bit_range:
+    - 8
+    - 8
+    description: Read-only field. Indicates if CRYPTOCELL LCS has been successfully configured since last reset.
+  side_effects: null
+interrupts: null
+timing: null

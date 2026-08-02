@@ -53,8 +53,8 @@
 //! The capture guarantee: any pad level that persists across at least one
 //! instruction boundary is captured — no aliasing, at any toggle rate. A pad
 //! toggling every cycle yields an edge every cycle (and fills the ring in
-//! [`LOGIC_RING_CAPACITY`] cycles if never drained; overflow drops the OLDEST
-//! edges and counts them, it never distorts the newest). Earlier versions
+//! [`LOGIC_RING_CAPACITY`] cycles if never acknowledged; overflow drops the
+//! OLDEST edges and counts them, it never distorts the newest). Earlier versions
 //! sampled on a fixed 16-cycle grid, which aliased anything toggling faster
 //! than ~32 cycles — bit-banged buses looked wrong before they looked dropped.
 //!
@@ -70,7 +70,8 @@ use std::sync::{Arc, Mutex};
 /// Maximum number of edges retained in the ring buffer. On overflow the oldest
 /// edge is dropped (and counted) so capture never grows without bound. 64k
 /// edges is ~10 s of a steadily toggling 100 kHz signal on a single channel
-/// before the UI must drain — far more than any interactive poll interval.
+/// before the UI must acknowledge a read — far more than any interactive poll
+/// interval.
 pub const LOGIC_RING_CAPACITY: usize = 64 * 1024;
 
 /// A single recorded logic transition.
@@ -225,16 +226,122 @@ impl LogicTap {
     }
 }
 
-/// Result of draining the edge ring from a caller cursor.
+/// Result of reading the edge ring from a caller cursor.
 pub struct LogicEdgeBatch {
-    /// Monotonic edge sequence number to pass back on the next read to receive
-    /// only newer edges.
+    /// Monotonic edge sequence number to pass back on the next read. Doing so
+    /// acknowledges all retained edges before it and receives only newer ones.
     pub cursor: u64,
-    /// Cumulative count of edges dropped to ring-buffer overflow since the watch
-    /// set was installed.
+    /// Cumulative count of edges dropped to ring-buffer overflow since the
+    /// watch set was installed. Acknowledging an edge never increments this.
     pub dropped: u64,
     /// New edges since the caller's cursor, oldest first.
     pub edges: Vec<LogicEdge>,
+}
+
+// ---------------------------------------------------------------------------
+// Serialized edge shape (shared with the TS `ChannelEdgeSeries`)
+// ---------------------------------------------------------------------------
+//
+// The hosted/CLI run path serializes captured edges into `result.json` as a
+// per-channel step series on the ENGINE-CYCLE axis — byte-shape-identical to
+// `packages/board-config`'s `ChannelEdgeSeries` (the ONE definition the browser
+// logic-analyzer export and the oracle also consume). `value` and `initial` are
+// emitted as 0/1 (never `true`/`false`) to match `EdgeLevel = 0 | 1`. The edges
+// themselves are drained from the SAME `LogicCapture::read_edges` the wasm
+// `read_logic_edges` accessor uses, so the two surfaces are edge-for-edge
+// identical (asserted by the native/wasm parity differential test).
+
+/// One recorded transition on the engine-cycle axis. `value` is 0/1 to match the
+/// TS `EdgeLevel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EdgeTransition {
+    pub cycle: u64,
+    pub value: u8,
+}
+
+/// One watched channel's captured transitions — the Rust mirror of the TS
+/// `ChannelEdgeSeries` (`packages/board-config`). `initial` is `Some(0|1)` or
+/// `null`; `gaps` lists engine cycles at which the capture ring overflowed
+/// (honest "edges lost here" markers — never interpolated over).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ChannelEdgeSeries {
+    /// Edge-record channel index (the pad's position in the armed watch set).
+    pub ch: u32,
+    /// Logic-analyzer channel id ("CH0"…).
+    pub channel: String,
+    pub peripheral: String,
+    pub pin: u8,
+    /// Pad level at arm time (0/1), or `null` when the engine can't resolve it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial: Option<u8>,
+    /// Transitions, oldest-first, each stamped with the engine cycle it occurred at.
+    pub transitions: Vec<EdgeTransition>,
+    /// Engine cycles at which the ring overflowed before this lane's next edge.
+    #[serde(default)]
+    pub gaps: Vec<u64>,
+}
+
+/// The whole logic-edge evidence block embedded in `result.json`. `dropped` is
+/// the cumulative ring-overflow count for the run — the oracle FAILS LOUD when
+/// it is non-zero (edges were lost, so any period/duty/edge assertion would be
+/// evaluated on an incomplete stream).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct LogicEdgesResult {
+    /// Cumulative edges lost to ring-buffer overflow across the whole run.
+    pub dropped: u64,
+    /// Engine cycle at the end of the run (extends flat traces to "now").
+    pub now_cycle: u64,
+    pub channels: Vec<ChannelEdgeSeries>,
+}
+
+/// Per-channel identity resolved at watch time, paired with the drained edge
+/// batch to build a [`LogicEdgesResult`]. `initial[i]`/`peripheral[i]`/`pin[i]`
+/// describe channel `i` (the watch-set position, i.e. the edge `ch`).
+#[derive(Debug, Clone)]
+pub struct LogicChannelMeta {
+    pub ch: u32,
+    pub peripheral: String,
+    pub pin: u8,
+    pub initial: Option<bool>,
+}
+
+/// Shape a drained [`LogicEdgeBatch`] into the shared per-channel series form.
+/// PURE: the edges are grouped by their `ch` onto the pre-resolved channel
+/// metadata. Every edge in `batch` lands on exactly one channel (edges whose
+/// `ch` has no metadata are impossible — `ch` is a watch-set index — but are
+/// dropped defensively rather than panicking). Preserves edge order and value,
+/// so flattening the result back to `(ch, cycle, value)` reproduces `batch.edges`
+/// exactly (the native/wasm parity property).
+pub fn build_logic_edges_result(
+    meta: &[LogicChannelMeta],
+    batch: &LogicEdgeBatch,
+    now_cycle: u64,
+) -> LogicEdgesResult {
+    let mut channels: Vec<ChannelEdgeSeries> = meta
+        .iter()
+        .map(|m| ChannelEdgeSeries {
+            ch: m.ch,
+            channel: format!("CH{}", m.ch),
+            peripheral: m.peripheral.clone(),
+            pin: m.pin,
+            initial: m.initial.map(u8::from),
+            transitions: Vec::new(),
+            gaps: Vec::new(),
+        })
+        .collect();
+    for edge in &batch.edges {
+        if let Some(lane) = channels.iter_mut().find(|c| c.ch == edge.ch) {
+            lane.transitions.push(EdgeTransition {
+                cycle: edge.cycle,
+                value: u8::from(edge.value),
+            });
+        }
+    }
+    LogicEdgesResult {
+        dropped: batch.dropped,
+        now_cycle,
+        channels,
+    }
 }
 
 /// In-engine logic-analyzer capture buffer. Owned by [`Machine`](crate::Machine).
@@ -395,13 +502,20 @@ impl LogicCapture {
         self.next_seq += 1;
     }
 
-    /// Drain edges newer than `cursor`. Pass `0` on the first read (right after
-    /// `watch`); pass back the returned `cursor` thereafter. Edges older than
-    /// the retained window (dropped to overflow) are silently skipped — the
-    /// `dropped` count reflects the loss.
-    pub fn read_edges(&self, cursor: u64) -> LogicEdgeBatch {
+    /// Read edges newer than `cursor`. Pass `0` on the first read (right after
+    /// `watch`); pass back the returned `cursor` thereafter to acknowledge all
+    /// retained edges before it and free their capacity. A stale cursor sees
+    /// only the still-retained window; a future cursor is clamped to the newest
+    /// recorded edge. Edges lost to capacity overflow are silently skipped —
+    /// `dropped` reflects that loss.
+    pub fn read_edges(&mut self, cursor: u64) -> LogicEdgeBatch {
+        let retained_base = self.next_seq - self.ring.len() as u64;
+        let acknowledge_to = cursor.max(retained_base).min(self.next_seq);
+        let acknowledged = (acknowledge_to - retained_base) as usize;
+        self.ring.drain(..acknowledged);
+
         let base = self.next_seq - self.ring.len() as u64;
-        let start = cursor.max(base);
+        let start = cursor.max(base).min(self.next_seq);
         let skip = (start - base) as usize;
         let edges = self.ring.iter().skip(skip).copied().collect();
         LogicEdgeBatch {

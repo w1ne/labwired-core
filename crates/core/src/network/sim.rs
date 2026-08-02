@@ -84,7 +84,7 @@ impl HttpResponse {
 
     /// Serialize to an HTTP/1.1 response with a `Content-Length` header and
     /// `Connection: close`.
-    fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Vec<u8> {
         let head = format!(
             "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             self.status,
@@ -126,7 +126,7 @@ impl HttpServer {
 
     /// Parse the request line (`METHOD SP path SP HTTP/x`) from the first
     /// line of `data`. Returns `(method, path)` upper-cased method.
-    fn parse_request_line(data: &[u8]) -> Option<(String, String)> {
+    pub fn parse_request_line(data: &[u8]) -> Option<(String, String)> {
         let text = std::str::from_utf8(data).ok()?;
         let first = text.lines().next()?;
         let mut parts = first.split_whitespace();

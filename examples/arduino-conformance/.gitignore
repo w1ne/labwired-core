@@ -1,0 +1,4 @@
+# arduino-cli writes its build cache here when the sketch is compiled in place.
+# Never commit it: it is multi-MB of per-core binaries and it conflicts on every
+# merge. The sweep script compiles to a temp dir instead.
+build/

@@ -1,0 +1,11 @@
+# LabWired - NEO-6M GPS Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/neo6m-gps-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NEO-6M GPS Lab"
+  - uart_contains: "[GPS] "
+  - expected_stop_reason: max_steps

@@ -296,6 +296,7 @@ impl PeripheralKit for Pcd8544Kit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Bus;
 
     /// Drive a realistic init + pixel-write sequence and assert the D/C line
     /// correctly steers command vs data, the addressing advances, and the
@@ -456,6 +457,8 @@ mod tests {
             id: "lcd".to_string(),
             r#type: "pcd8544".to_string(),
             connection: "spi0".to_string(),
+            channel: None,
+            route: Default::default(),
             config: cfg,
         };
 

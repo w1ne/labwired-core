@@ -59,7 +59,9 @@
 //!
 //! Any other offset accepts writes silently and reads 0.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+const DEFERRED_WAKE_TOKEN: u32 = 1;
 
 /// LCD_CAM MMIO base address.
 pub const LCD_CAM_BASE: u32 = 0x6004_1000;
@@ -172,6 +174,11 @@ pub struct Esp32s3LcdCam {
     cam_running: bool,
     /// One-tick latch mirroring `lcd_pending_done` for the camera path.
     cam_pending_vsync: bool,
+
+    /// Bus-published cycle clock (walk-free deferred work).
+    clock: Option<CycleClock>,
+    /// Event armed for one-tick deferred work.
+    scheduled: bool,
 }
 
 impl Esp32s3LcdCam {
@@ -199,6 +206,8 @@ impl Esp32s3LcdCam {
             lcd_pending_done: false,
             cam_running: false,
             cam_pending_vsync: false,
+            clock: None,
+            scheduled: false,
         }
     }
 }
@@ -340,6 +349,59 @@ impl Peripheral for Esp32s3LcdCam {
 
         PeripheralTickResult {
             explicit_irqs: explicit,
+            ..Default::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_raw & self.int_ena != 0 {
+            out.push(self.source_id);
+        }
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() {
+            return Vec::new();
+        }
+        if self.lcd_pending_done || self.cam_pending_vsync && !self.scheduled {
+            self.scheduled = true;
+            return vec![(1, DEFERRED_WAKE_TOKEN)];
+        }
+        Vec::new()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        // Same one-tick transition the legacy walk performed.
+        let _ = self.tick();
+        self.scheduled = false;
+        let mut explicit_irqs = Vec::new();
+        self.matrix_irq_sources_into(&mut explicit_irqs);
+        let reschedule = if self.lcd_pending_done || self.cam_pending_vsync {
+            self.scheduled = true;
+            Some(1)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            explicit_irqs,
+            reschedule_delay: reschedule,
             ..Default::default()
         }
     }

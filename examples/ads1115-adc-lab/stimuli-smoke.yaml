@@ -1,0 +1,16 @@
+# Drive ADS1115 a0; conversion counts must leave zero.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ads1115-adc-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "ADS1115 ADC Lab"
+  # 2.048 V at ±4.096 FSR → ~16384 raw (allow any non-zero path via substring)
+  - uart_contains: "A0_raw=163"
+  - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ads1115", channel: "a0" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 2.048

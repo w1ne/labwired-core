@@ -213,3 +213,72 @@ fn lab_example_dirs_exist_on_disk() {
         }
     }
 }
+
+/// Architectural boundary: **core is the simulation engine; commercial overlays
+/// live in the web app.**
+///
+/// A kit describes silicon — what bus it sits on, what registers it decodes,
+/// what config pins wire it up. It must NOT carry the product layer: vendor
+/// names, manufacturer part numbers, SKUs, prices, distributor/buy links. That
+/// data belongs to the overlay in the web app, keyed by `device_type`, where it
+/// can differ per vendor for the same silicon and change without touching the
+/// engine.
+///
+/// The pressure to inline "just the MPN" here is constant and each instance
+/// looks harmless, which is exactly why this is a test and not a convention:
+/// once commerce data is embedded in the engine, the same chip sold by two
+/// vendors needs two kits, and the overlay stops being a separable layer.
+///
+/// Widen the allow-list only for genuinely engine-level fields. If you are
+/// reaching for one of the banned terms, the value almost certainly belongs in
+/// the overlay instead.
+#[test]
+fn kit_metadata_carries_no_commercial_overlay_data() {
+    // Substrings that indicate product/commerce data rather than silicon.
+    const BANNED: &[&str] = &[
+        "mpn",
+        "sku",
+        "product_url",
+        "buy_url",
+        "purchase",
+        "distributor",
+        "price",
+        "vendor",
+        "manufacturer",
+        "aliexpress",
+        "digikey",
+        "mouser",
+    ];
+
+    for kit in registry::kits() {
+        let md = kit.metadata();
+        // Config keys are the machine-readable surface: a banned key name here
+        // would put commerce data into system.yaml itself.
+        for key in md.config_keys {
+            let name = key.name.to_ascii_lowercase();
+            for bad in BANNED {
+                assert!(
+                    !name.contains(bad),
+                    "kit '{}' declares config key '{}', which is overlay data, not \
+                     silicon. Vendor/SKU/commerce fields belong in the web app's \
+                     part overlay keyed by device_type — core stays the simulation \
+                     engine.",
+                    md.device_type,
+                    key.name
+                );
+            }
+        }
+        // Storefront links in prose are the other way this leaks in.
+        let prose = format!("{} {} {}", md.label, md.summary, md.detail).to_ascii_lowercase();
+        for bad in ["aliexpress", "digikey", "mouser", "buy_url", "product_url"] {
+            assert!(
+                !prose.contains(bad),
+                "kit '{}' mentions '{}' in its description. Storefront and vendor \
+                 links belong in the web app's part overlay, not in the engine's \
+                 kit metadata.",
+                md.device_type,
+                bad
+            );
+        }
+    }
+}

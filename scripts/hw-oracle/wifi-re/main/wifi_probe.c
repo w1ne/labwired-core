@@ -15,13 +15,63 @@
 
 static const char *TAG = "probe";
 
-// Virtual-AP / UDP-echo server the LabWired bridge hosts.
+// Virtual-AP / UDP-echo + HTTP server the LabWired bridge hosts.
 #define AP_IP_STR   "192.168.4.1"
 #define UDP_PORT    9999
+#define HTTP_PORT   80
+
+// After GOT IP, do a real HTTP/1.1 GET over a raw lwIP TCP socket: exercises the
+// full TCP handshake + data path against the bridge's virtual AP HTTP server
+// (docs/esp32c3_wifi_mac_bridge.md). This is the LBC3.1 device's core action —
+// fetch /v1/public-stats and log the JSON body.
+static void http_get_task(void *arg)
+{
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock < 0) { ESP_LOGI(TAG, "HTTP socket() failed"); vTaskDelete(NULL); return; }
+    struct sockaddr_in dst = { 0 };
+    dst.sin_family = AF_INET;
+    dst.sin_port = htons(HTTP_PORT);
+    dst.sin_addr.s_addr = inet_addr(AP_IP_STR);
+    struct timeval tv = { .tv_sec = 10, .tv_usec = 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    if (connect(sock, (struct sockaddr *)&dst, sizeof(dst)) != 0) {
+        ESP_LOGI(TAG, "HTTP connect() failed");
+        close(sock);
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI(TAG, "HTTP connected to %s:%d", AP_IP_STR, HTTP_PORT);
+
+    const char *req =
+        "GET /v1/public-stats HTTP/1.1\r\n"
+        "Host: 192.168.4.1\r\n"
+        "Connection: close\r\n\r\n";
+    send(sock, req, strlen(req), 0);
+    ESP_LOGI(TAG, "HTTP GET /v1/public-stats sent");
+
+    char buf[512];
+    int total = 0, n;
+    while (total < (int)sizeof(buf) - 1 &&
+           (n = recv(sock, buf + total, sizeof(buf) - 1 - total, 0)) > 0) {
+        total += n;
+    }
+    if (total > 0) {
+        buf[total] = 0;
+        char *body = strstr(buf, "\r\n\r\n");
+        ESP_LOGI(TAG, "HTTP RX %d bytes", total);
+        ESP_LOGI(TAG, "HTTP BODY: %s", body ? body + 4 : buf);
+    } else {
+        ESP_LOGI(TAG, "HTTP recv timeout/closed (%d)", total);
+    }
+    close(sock);
+    ESP_LOGI(TAG, "HTTP done");
+    vTaskDelete(NULL);
+}
 
 // After GOT IP, prove real bidirectional socket data over the simulated WiFi:
 // send a UDP datagram to the AP's echo port and wait for the echo back.
-static void udp_echo_task(void *arg)
+static void __attribute__((unused)) udp_echo_task(void *arg)
 {
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in dst = { 0 };
@@ -77,7 +127,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *evt = (ip_event_got_ip_t *)data;
         ESP_LOGI(TAG, "GOT IP " IPSTR, IP2STR(&evt->ip_info.ip));
+        // The LBC3.1 device's action: fetch stats over HTTP. udp_echo_task runs
+        // as a 500ms-cadence heartbeat so the FreeRTOS tick keeps advancing while
+        // http_get_task blocks on recv() (otherwise a fully-idle system stalls
+        // the systimer and the ready HTTP task never gets scheduled).
         xTaskCreate(udp_echo_task, "udp_echo", 4096, NULL, 5, NULL);
+        xTaskCreate(http_get_task, "http_get", 4096, NULL, 5, NULL);
     }
 }
 

@@ -1,0 +1,137 @@
+# Vishay VEML7700 ambient-light sensor — declarative I²C register-pointer device.
+#
+# The master writes a 1-byte register pointer, then reads/writes a 16-bit
+# LITTLE-ENDIAN word (low byte first). Datasheet (VEML7700, Vishay, rev 1.6)
+# register map:
+#   0x00 ALS_CONF  config: gain [12:11], integration time [9:6], power  (rw)
+#   0x01 ALS_WH    high threshold window                                (rw)
+#   0x02 ALS_WL    low threshold window                                 (rw)
+#   0x03 PSM       power-saving mode                                    (rw)
+#   0x04 ALS       ambient-light output count                           (r)
+#   0x05 WHITE     white-channel output count                           (r)
+#   0x06 ALS_INT   interrupt status                                     (r, reads 0)
+#
+# Illuminance → counts. The datasheet gives lux = count × resolution, and the
+# resolution (lux/count) scales with the programmed gain and integration time,
+# anchored at 0.0576 lux/count for the power-on default (gain ×1, IT 100 ms):
+#
+#     resolution = 0.0576 × (100 ms / IT) ÷ gain
+#     count      = illuminance / resolution
+#
+# Because BOTH the gain and the integration-time fields (two bit-fields of the
+# same ALS_CONF register) move the resolution, a single scale mapping cannot
+# express it — the ALS/WHITE registers use `resolution` mode with a LIST of
+# `scale_from` factors that multiply into the resolution divisor:
+#   * the IT field maps to the ratio (100 ms / IT) — 1.0, 0.5, 0.25, 0.125,
+#     2.0, 4.0 — each an exact power of two, so it reproduces `100.0 / IT`
+#     bit-for-bit;
+#   * the gain field maps to 1/gain — 1.0, 0.5, 8.0, 4.0 — again exact, so
+#     multiplying the resolution by it is byte-identical to dividing by gain.
+# Reserved IT encodings fall through to 1.0 (the datasheet 100 ms default).
+#
+# WHITE reads a slightly brighter value than the visible ALS channel; the model
+# uses the white-photodiode responsivity ratio 1.15 as a `source_scale` (a
+# distinct multiply on the illuminance, matching the reference model's
+# intermediate exactly).
+#
+# The illuminance is an externally driven input (channel `lux`); config only
+# seeds its initial value. Default address 0x10 (fixed on the VEML7700).
+type: veml7700
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x10
+    registers:
+      # Config: firmware writes it; its gain [12:11] and IT [9:6] fields drive
+      # the ALS/WHITE resolution via their scale_from references below.
+      - name: ALS_CONF
+        addr: 0x00
+        width: 2
+        endian: le
+        access: rw
+        reset: 0x0000
+      # Interrupt threshold windows — plain rw storage, echoed back on read.
+      - name: ALS_WH
+        addr: 0x01
+        width: 2
+        endian: le
+        access: rw
+        reset: 0x0000
+      - name: ALS_WL
+        addr: 0x02
+        width: 2
+        endian: le
+        access: rw
+        reset: 0x0000
+      # Power-saving mode — plain rw storage.
+      - name: PSM
+        addr: 0x03
+        width: 2
+        endian: le
+        access: rw
+        reset: 0x0000
+      # Ambient-light count = round(lux / resolution), little-endian.
+      - name: ALS
+        addr: 0x04
+        width: 2
+        endian: le
+        access: r
+        source: lux
+        resolution: 0.0576
+        scale_from:
+          # Integration-time field → (100 ms / IT) resolution ratio.
+          - register: ALS_CONF
+            mask: 0xF
+            shift: 6
+            map: { 0x0: 1.0, 0x1: 0.5, 0x2: 0.25, 0x3: 0.125, 0x8: 2.0, 0xC: 4.0 }
+          # Gain field → 1/gain resolution factor.
+          - register: ALS_CONF
+            mask: 0x3
+            shift: 11
+            map: { 0x0: 1.0, 0x1: 0.5, 0x2: 8.0, 0x3: 4.0 }
+      # White-channel count = round((lux × 1.15) / resolution), little-endian.
+      - name: WHITE
+        addr: 0x05
+        width: 2
+        endian: le
+        access: r
+        source: lux
+        source_scale: 1.15
+        resolution: 0.0576
+        scale_from:
+          - register: ALS_CONF
+            mask: 0xF
+            shift: 6
+            map: { 0x0: 1.0, 0x1: 0.5, 0x2: 0.25, 0x3: 0.125, 0x8: 2.0, 0xC: 4.0 }
+          - register: ALS_CONF
+            mask: 0x3
+            shift: 11
+            map: { 0x0: 1.0, 0x1: 0.5, 0x2: 8.0, 0x3: 4.0 }
+      # Interrupt status — reads 0 (the reference model never latches a flag).
+      - name: ALS_INT
+        addr: 0x06
+        width: 2
+        endian: le
+        access: r
+        reset: 0x0000
+
+metadata:
+  label: "Vishay VEML7700 Light"
+  summary: "Ambient-light sensor (lux) over I2C."
+  detail: "Vishay VEML7700 at fixed address 0x10, a register-pointer device with 16-bit little-endian words. Reports a raw ALS count the firmware scales to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). The illuminance is an externally driven input (channel lux); config only seeds its initial value."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the VEML7700 fixed address 0x10."
+    - name: lux
+      ty: float
+      doc: "Initial illuminance, lux. Default 450 (daylit room). Drive it at runtime with the `lux` input channel."
+  labs:
+    - board_id: esp32c3-leo-airquality
+      chip: esp32c3
+      example_dir: esp32c3-leo-airquality
+      demo_elf: demo-esp32c3-leo-airquality.elf
+  inputs:
+    - { key: lux, label: "Illuminance", unit: lx, min: 0, max: 120000, default: 450 }

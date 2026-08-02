@@ -20,7 +20,12 @@
 // platformio/esp32-wifi-fixture, or set `LABWIRED_WIFI_ELF`) and runs
 // up to a 200M-cycle budget. Run with:
 //
-//     cargo test -p labwired-core --test e2e_labwired_wifi -- --ignored --nocapture
+//     cargo test -p labwired-core --features wifi-thunks --test e2e_labwired_wifi -- --ignored --nocapture
+//
+// Gated on the off-by-default `wifi-thunks` feature (the module it exercises is
+// too): without it the whole file compiles to nothing, so the CI feature set
+// (`jit,event-scheduler`) never pulls the fake WiFi state into the build.
+#![cfg(feature = "wifi-thunks")]
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;

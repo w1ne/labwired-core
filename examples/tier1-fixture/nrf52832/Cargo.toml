@@ -10,6 +10,7 @@ description = "nRF52832 Tier-1 fixture firmware: raw-register peripheral self-te
 cortex-m     = "0.7"
 cortex-m-rt  = "0.7"
 panic-halt   = "0.2"
+tier1-fixture-common = { path = "../common" }
 
 [[bin]]
 name = "tier1-fixture-nrf52832"

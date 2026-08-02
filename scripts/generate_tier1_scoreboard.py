@@ -30,6 +30,7 @@ DISPLAY_NAMES = {
     "stm32f103": "STM32F103C8",
     "stm32f401": "STM32F401RE",
     "stm32f407": "STM32F407VG",
+    "stm32f411": "STM32F411CEU6 (Black Pill)",
     "stm32g474re": "STM32G474RE",
     "stm32h563": "STM32H563",
     "stm32l073": "STM32L073RZ",

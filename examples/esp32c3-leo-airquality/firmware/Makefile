@@ -28,10 +28,10 @@ SGP_DIR  := $(TP)/embedded-i2c-sgp41
 SPS_DIR  := $(TP)/embedded-i2c-sps30
 GAS_DIR  := $(TP)/gas-index-algorithm/sensirion_gas_index_algorithm
 
-CFLAGS  := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -ffreestanding -O2 -g \
+CFLAGS  := -march=rv32imc -mabi=ilp32 -ffreestanding -O2 -g \
            -Wall -Wextra -ffunction-sections -fdata-sections \
            -I. -I$(SCD_DIR) -I$(SGP_DIR) -I$(SPS_DIR) -I$(GAS_DIR)
-LDFLAGS := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -nostartfiles \
+LDFLAGS := -march=rv32imc -mabi=ilp32 -nostartfiles \
            -Wl,--gc-sections -T c3.ld -lm -lgcc
 
 # One copy of the shared Sensirion transport layer (identical across the three

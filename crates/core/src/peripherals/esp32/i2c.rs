@@ -110,16 +110,38 @@ pub struct Esp32I2c {
     int_ena: u32,
     fifo_conf: u32,
     cmds: [u32; NUM_CMDS],
-    tx_fifo: std::collections::VecDeque<u8>,
+    /// Shared with the AHB FIFO alias at `0x6001_301c` (esp-idf writes TX here).
+    tx_fifo: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>,
     /// TX-FIFO read pointer (bytes consumed by the current command-list run).
     /// Surfaced as FIFO_ST.TXFIFO_START_ADDR; 0 at cold reset.
     tx_pop_count: usize,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
+    /// Mid-transfer continuation across command-list bursts. The classic-ESP32
+    /// legacy IDF driver splits one logical transfer into several TRANS_START
+    /// bursts joined by the END opcode, which SUSPENDS the command sequence
+    /// (TRM §11) rather than terminating it: the selected slave and the
+    /// address-phase flag carry into the next burst so a follow-on WRITE
+    /// delivers data (not a fresh address) and a READ pulls from the same
+    /// slave. STOP or natural completion clears them back to the reset shape.
+    active_slave: Option<usize>,
+    expects_addr: bool,
     /// Interrupt-matrix source this instance asserts (49 for I2C0).
     intr_source_id: u32,
     /// Round-trip backing for timing / config registers the engine ignores.
     other: BTreeMap<u64, u32>,
+}
+
+/// AHB-bus TX FIFO alias (`I2C0` at `0x6001_301c`). esp-idf `i2c_ll_write_txfifo`
+/// writes here instead of the APB DATA register at `0x3FF5_301c`.
+pub struct Esp32I2cAhbFifo {
+    tx_fifo: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>,
+}
+
+impl std::fmt::Debug for Esp32I2cAhbFifo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Esp32I2cAhbFifo")
+    }
 }
 
 impl Esp32I2c {
@@ -132,10 +154,14 @@ impl Esp32I2c {
             int_ena: 0,
             fifo_conf: 0,
             cmds: [0; NUM_CMDS],
-            tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
+            tx_fifo: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
+            )),
             tx_pop_count: 0,
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
+            active_slave: None,
+            expects_addr: true,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             other: BTreeMap::new(),
         }
@@ -147,6 +173,13 @@ impl Esp32I2c {
         Self {
             intr_source_id,
             ..Self::new()
+        }
+    }
+
+    /// AHB FIFO window paired with this APB I2C (same TX FIFO).
+    pub fn ahb_tx_fifo_alias(&self) -> Esp32I2cAhbFifo {
+        Esp32I2cAhbFifo {
+            tx_fifo: std::sync::Arc::clone(&self.tx_fifo),
         }
     }
 
@@ -168,8 +201,35 @@ impl Esp32I2c {
     fn status_register(&self) -> u32 {
         // SR: bit 0 ACK_REC, RXFIFO_CNT at bits 13..8, TXFIFO_CNT at bits 23..18.
         let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
-        let tx = (self.tx_fifo.len() as u32) & 0x3F;
+        let tx = (self.tx_fifo.lock().unwrap().len() as u32) & 0x3F;
         (self.sr & SR_ACK_REC) | (rx << 8) | (tx << 18)
+    }
+
+    /// Resolve a slave from SLAVE_ADDR (7-bit or 8-bit shifted form). Used when
+    /// Arduino/ESP-IDF parks the target in SLAVE_ADDR and does not push the
+    /// address byte into the TX FIFO.
+    fn find_slave_from_slave_addr_register(&mut self) -> Option<usize> {
+        let raw = self.slave_addr & 0x7FFF;
+        if raw <= 0x7F {
+            if let Some(idx) = self.find_slave_by_address(raw as u8) {
+                return Some(idx);
+            }
+        }
+        let shifted = ((raw >> 1) & 0x7F) as u8;
+        self.find_slave_by_address(shifted)
+    }
+
+    /// Resolve the slave that answers to `address` and tell it which address
+    /// the master selected.
+    ///
+    /// Resolution goes through `claims_address`, not `address()`: a bus switch
+    /// (TCA9548A) answers for every device behind its enabled channels, and a
+    /// flat `address()` comparison is first-match — four identical sensors on
+    /// four channels would collapse onto one.
+    fn find_slave_by_address(&mut self, address: u8) -> Option<usize> {
+        let idx = self.slaves.iter().position(|s| s.claims_address(address))?;
+        self.slaves[idx].select_address(address);
+        Some(idx)
     }
 }
 
@@ -188,6 +248,25 @@ impl std::fmt::Debug for Esp32I2c {
             .field("int_ena", &self.int_ena)
             .field("slaves_count", &self.slaves.len())
             .finish()
+    }
+}
+
+impl Peripheral for Esp32I2cAhbFifo {
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
+    }
+    fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+        let mut tx = self.tx_fifo.lock().unwrap();
+        if tx.len() < FIFO_CAPACITY {
+            tx.push_back(value);
+        }
+        Ok(())
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write(offset, (value & 0xFF) as u8)
+    }
+    fn read_u32(&self, _offset: u64) -> SimResult<u32> {
+        Ok(0)
     }
 }
 
@@ -241,10 +320,12 @@ impl Peripheral for Esp32I2c {
                 }
             }
             REG_SLAVE_ADDR => self.slave_addr = value,
-            REG_DATA if self.tx_fifo.len() < FIFO_CAPACITY => {
-                self.tx_fifo.push_back((value & 0xFF) as u8);
+            REG_DATA => {
+                let mut tx = self.tx_fifo.lock().unwrap();
+                if tx.len() < FIFO_CAPACITY {
+                    tx.push_back((value & 0xFF) as u8);
+                }
             }
-            REG_DATA => {}
             REG_FIFO_CONF => {
                 self.fifo_conf = value;
                 // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
@@ -252,7 +333,7 @@ impl Peripheral for Esp32I2c {
                     self.rx_fifo.borrow_mut().clear();
                 }
                 if value & (1 << 13) != 0 {
-                    self.tx_fifo.clear();
+                    self.tx_fifo.lock().unwrap().clear();
                     self.tx_pop_count = 0;
                 }
                 self.fifo_conf &= !((1 << 12) | (1 << 13));
@@ -294,6 +375,34 @@ impl Peripheral for Esp32I2c {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn drives_central_i2c_time(&self) -> bool {
+        true
+    }
+
+    fn advance_attached_i2c_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for slave in self.slaves.iter_mut() {
+            slave.advance_time_us(us);
+        }
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for slave in self.slaves.iter_mut() {
+            // `for_each_sim_input`, not `as_sim_input_mut`: a container slave
+            // (TCA9548A mux) exposes the inputs of the devices behind it, which
+            // a single-surface accessor cannot represent.
+            if slave.for_each_sim_input(f) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl Esp32I2c {
@@ -302,6 +411,12 @@ impl Esp32I2c {
     /// the active slave by address bits [7:1]. Subsequent WRITE bytes are
     /// delivered via `I2cDevice::write`; READ pulls bytes from the active slave
     /// and pushes to the RX FIFO.
+    ///
+    /// The selected slave and address-phase state seed from `self.active_slave`
+    /// / `self.expects_addr`, which a prior END-terminated burst left behind, so
+    /// a transfer split across multiple TRANS_START bursts (the legacy IDF
+    /// driver's shape) resumes rather than re-decoding a data byte as an
+    /// address. RSTART begins a fresh address phase; STOP/completion clears it.
     fn run_command_list(&mut self) {
         // Classic-ESP32 opcodes (hal/esp32/include/hal/i2c_ll.h):
         //   0 = RSTART, 1 = WRITE, 2 = READ, 3 = STOP, 4 = END
@@ -311,8 +426,11 @@ impl Esp32I2c {
         const OP_STOP: u32 = 3;
         const OP_END: u32 = 4;
 
-        let mut active: Option<usize> = None;
-        let mut expects_addr = true;
+        // END pauses the command list (TRM §11): the selected slave and
+        // address-phase flag carry over from the previous burst so a follow-on
+        // WRITE/READ resumes the in-flight transfer instead of re-addressing.
+        let mut active = self.active_slave;
+        let mut expects_addr = self.expects_addr;
         let mut last_op_was_end = false;
 
         // Reset ACK_REC and the TX-FIFO read pointer at the start of a run.
@@ -333,14 +451,38 @@ impl Esp32I2c {
                     self.cmds[idx] |= CMD_DONE_BIT;
                 }
                 OP_WRITE => {
+                    // Empty WRITE (byte_num=0) after RSTART: Arduino Wire probe
+                    // often parks the 7-bit target in SLAVE_ADDR and issues a
+                    // zero-payload WRITE. Resolve the slave from SLAVE_ADDR so
+                    // matrix L3 ACK succeeds (mirrors ESP32-S3 engine).
+                    if expects_addr && byte_num == 0 {
+                        active = self.find_slave_from_slave_addr_register();
+                        if let Some(slave_idx) = active {
+                            self.slaves[slave_idx].start();
+                            self.sr |= SR_ACK_REC;
+                        } else {
+                            self.int_raw |= INT_NACK;
+                        }
+                        expects_addr = false;
+                    }
                     for i in 0..byte_num {
-                        let b = self.tx_fifo.pop_front().unwrap_or(0);
+                        let b = self.tx_fifo.lock().unwrap().pop_front().unwrap_or(0);
                         self.tx_pop_count += 1;
                         if expects_addr && i == 0 {
                             // First byte of a WRITE following RSTART is addr+R/W.
                             let addr = b >> 1;
-                            active = self.slaves.iter().position(|s| s.address() == addr);
+                            active = self.find_slave_by_address(addr);
                             if active.is_none() {
+                                // Fallback: address only in SLAVE_ADDR, payload in FIFO.
+                                active = self.find_slave_from_slave_addr_register();
+                                if let Some(slave_idx) = active {
+                                    self.slaves[slave_idx].start();
+                                    self.sr |= SR_ACK_REC;
+                                    // First FIFO byte is data when SLAVE_ADDR holds target.
+                                    self.slaves[slave_idx].write(b);
+                                    expects_addr = false;
+                                    continue;
+                                }
                                 self.int_raw |= INT_NACK;
                             } else {
                                 self.sr |= SR_ACK_REC;
@@ -388,11 +530,18 @@ impl Esp32I2c {
             }
         }
 
-        // END pauses execution and raises END_DETECT; STOP (or a list that runs
-        // out without an explicit END) completes and raises TRANS_COMPLETE.
+        // END pauses execution and raises END_DETECT; the selected slave and
+        // address-phase flag persist so the next TRANS_START burst resumes the
+        // suspended transfer. STOP (or a list that runs out without an explicit
+        // END) completes and raises TRANS_COMPLETE, clearing the continuation
+        // back to the reset shape.
         if last_op_was_end {
+            self.active_slave = active;
+            self.expects_addr = expects_addr;
             self.int_raw |= INT_END_DETECT;
         } else {
+            self.active_slave = None;
+            self.expects_addr = true;
             self.int_raw |= INT_TRANS_COMPLETE;
         }
     }
@@ -612,6 +761,318 @@ mod tests {
             p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
             INT_TRANS_COMPLETE
         );
+    }
+
+    /// Minimal I2cDevice that records the data bytes written to it, so a test
+    /// can prove a payload byte reached the slave (rather than being swallowed
+    /// as an address). `Arc<Mutex<..>>` keeps it `Send` per the trait bound.
+    struct RecordingSlave {
+        addr: u8,
+        writes: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    }
+
+    impl I2cDevice for RecordingSlave {
+        fn address(&self) -> u8 {
+            self.addr
+        }
+        fn read(&mut self) -> u8 {
+            0
+        }
+        fn write(&mut self, data: u8) {
+            self.writes.lock().unwrap().push(data);
+        }
+    }
+
+    // ── Legacy-IDF multi-burst shape: the classic-ESP32 arduino-esp32 2.x
+    //    driver splits `beginTransmission(0x40); write(0x00); endTransmission()`
+    //    into three TRANS_START bursts joined by END. Burst 2 carries only the
+    //    data byte and NO RSTART, so the controller must resume the transfer
+    //    addressed in burst 1 rather than decode 0x00 as a fresh address.
+    #[test]
+    fn legacy_multiburst_write_continues_across_end() {
+        let mut p = Esp32I2c::new();
+        let writes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        p.push_slave(Box::new(RecordingSlave {
+            addr: 0x40,
+            writes: std::sync::Arc::clone(&writes),
+        }));
+
+        // Burst 1: RSTART + WRITE(addr, 1) + END. Address 0x40<<1 = 0x80.
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_DATA, 0x80).unwrap(); // addr+W for 0x40
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        let ir1 = p.read_u32(REG_INT_RAW).unwrap();
+        assert_eq!(
+            ir1 & INT_NACK,
+            0,
+            "address 0x40 must ACK — no NACK in burst 1"
+        );
+        assert_eq!(
+            ir1 & INT_END_DETECT,
+            INT_END_DETECT,
+            "END must suspend the transfer and raise END_DETECT"
+        );
+        p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
+
+        // Burst 2: WRITE(data, 1) + END — NO RSTART. The 0xAB byte is payload
+        // for the slave addressed in burst 1, not a new address phase.
+        p.write_u32(REG_CMD0, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_DATA, 0xAB).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        let ir2 = p.read_u32(REG_INT_RAW).unwrap();
+        assert_eq!(
+            ir2 & INT_NACK,
+            0,
+            "a resumed WRITE byte must NOT be mis-decoded as a fresh (unmatched) address"
+        );
+        assert_eq!(ir2 & INT_END_DETECT, INT_END_DETECT);
+        p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
+
+        // Burst 3: STOP completes the transaction.
+        p.write_u32(REG_CMD0, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE,
+            "STOP completes the transfer and raises TRANS_COMPLETE"
+        );
+
+        // The slave received exactly the data byte — not the address byte.
+        assert_eq!(
+            &*writes.lock().unwrap(),
+            &[0xAB],
+            "slave must receive the data byte delivered across the END boundary"
+        );
+    }
+
+    #[test]
+    fn legacy_multiburst_write_nacks_when_burst1_addr_unmatched() {
+        let mut p = Esp32I2c::new();
+        p.push_slave(Box::new(RecordingSlave {
+            addr: 0x40,
+            writes: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }));
+
+        // Burst 1 addresses 0x50 (0xA0>>1) — no slave there → NACK, and no
+        // continuation is armed for any follow-on burst.
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_DATA, 0xA0).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
+            INT_NACK,
+            "an unmatched address in burst 1 must still NACK"
+        );
+    }
+
+    // ── TCA9548A driven through the classic-ESP32 command-list engine ───────
+    //
+    // The switch's own unit tests and `tests/i2c_mux_tca9548a.rs` prove it
+    // against the STM32F1 legacy peripheral. This engine is a completely
+    // different address-resolution site — including a `SLAVE_ADDR` fallback the
+    // STM32 has no equivalent of — and it got the `claims_address` /
+    // `select_address` change with no switch ever driven through it.
+    mod mux {
+        use super::*;
+        use crate::peripherals::components::mux_fixture::{
+            bytes_written_to, mux_with_tags, tag_for, MUX_ADDR, SENSOR_ADDR,
+        };
+        use crate::peripherals::components::tca9548a::Tca9548a;
+
+        fn controller() -> Esp32I2c {
+            let mut p = Esp32I2c::new();
+            p.push_slave(Box::new(mux_with_tags(4)));
+            p
+        }
+
+        fn with_mux<R>(p: &Esp32I2c, f: impl FnOnce(&Tca9548a) -> R) -> R {
+            let mux = p.slaves[0]
+                .as_any()
+                .and_then(|a| a.downcast_ref::<Tca9548a>())
+                .expect("slave 0 is the switch");
+            f(mux)
+        }
+
+        /// Clear the previous run's latched interrupts so this run's NACK
+        /// verdict is about this run.
+        fn clear_ints(p: &mut Esp32I2c) {
+            p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
+        }
+
+        fn program(p: &mut Esp32I2c, list: &[(u8, u8)], tx: &[u8]) {
+            clear_ints(p);
+            // Flush both FIFOs without disturbing the watermark fields.
+            let conf = p.read_u32(REG_FIFO_CONF).unwrap();
+            p.write_u32(REG_FIFO_CONF, conf | (1 << 12) | (1 << 13))
+                .unwrap();
+            for (i, (op, n)) in list.iter().enumerate() {
+                p.write_u32(REG_CMD0 + 4 * i as u64, cmd(*op, *n)).unwrap();
+            }
+            for b in tx {
+                p.write_u32(REG_DATA, *b as u32).unwrap();
+            }
+            p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        }
+
+        /// `RSTART; WRITE n(addr+W, payload…); STOP` — the address byte rides in
+        /// the TX FIFO, which is the shape esp-hal emits.
+        fn write_bytes(p: &mut Esp32I2c, addr: u8, payload: &[u8]) {
+            let mut tx = vec![addr << 1];
+            tx.extend_from_slice(payload);
+            p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
+            program(
+                p,
+                &[(CMD_RSTART, 0), (CMD_WRITE, tx.len() as u8), (CMD_STOP, 0)],
+                &tx,
+            );
+        }
+
+        /// `RSTART; WRITE 1(addr+R); READ 1; STOP`, returning the received byte.
+        fn read_byte(p: &mut Esp32I2c, addr: u8) -> u8 {
+            p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
+            program(
+                p,
+                &[
+                    (CMD_RSTART, 0),
+                    (CMD_WRITE, 1),
+                    (CMD_READ, 1),
+                    (CMD_STOP, 0),
+                ],
+                &[(addr << 1) | 1],
+            );
+            p.read_u32(REG_DATA).unwrap() as u8
+        }
+
+        fn nacked(p: &Esp32I2c) -> bool {
+            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK != 0
+        }
+
+        /// Address-only probe: `RSTART; WRITE 1(addr+W); STOP`.
+        fn probe_acked(p: &mut Esp32I2c, addr: u8) -> bool {
+            p.write_u32(REG_SLAVE_ADDR, addr as u32).unwrap();
+            program(
+                p,
+                &[(CMD_RSTART, 0), (CMD_WRITE, 1), (CMD_STOP, 0)],
+                &[addr << 1],
+            );
+            !nacked(p)
+        }
+
+        #[test]
+        fn four_sensors_at_one_address_answer_independently() {
+            let mut p = controller();
+            for ch in 0..4u8 {
+                write_bytes(&mut p, MUX_ADDR, &[1 << ch]);
+                assert_eq!(
+                    read_byte(&mut p, SENSOR_ADDR),
+                    tag_for(ch),
+                    "channel {ch} must be answered by the sensor wired to it"
+                );
+            }
+        }
+
+        #[test]
+        fn switching_channels_changes_which_sensor_answers() {
+            let mut p = controller();
+            for ch in [2u8, 0, 3, 1, 3, 0] {
+                write_bytes(&mut p, MUX_ADDR, &[1 << ch]);
+                assert_eq!(read_byte(&mut p, SENSOR_ADDR), tag_for(ch), "channel {ch}");
+            }
+        }
+
+        #[test]
+        fn control_register_reads_back_over_the_bus() {
+            let mut p = controller();
+            write_bytes(&mut p, MUX_ADDR, &[0b0000_1010]);
+            assert!(
+                probe_acked(&mut p, MUX_ADDR),
+                "the switch ACKs its own address"
+            );
+            assert_eq!(read_byte(&mut p, MUX_ADDR), 0b0000_1010);
+        }
+
+        #[test]
+        fn a_sensor_on_a_disabled_channel_does_not_answer() {
+            let mut p = controller();
+            assert!(
+                !probe_acked(&mut p, SENSOR_ADDR),
+                "with all channels disabled the sensor address must raise INT_NACK, \
+                 exactly as an unpopulated bus does"
+            );
+
+            write_bytes(&mut p, MUX_ADDR, &[1 << 1]);
+            assert!(probe_acked(&mut p, SENSOR_ADDR));
+            assert_eq!(read_byte(&mut p, SENSOR_ADDR), tag_for(1));
+
+            write_bytes(&mut p, MUX_ADDR, &[0x00]);
+            assert!(
+                !probe_acked(&mut p, SENSOR_ADDR),
+                "re-isolating the switch takes the sensor off the bus again"
+            );
+        }
+
+        /// The OTHER address-resolution site on this engine: a zero-payload
+        /// WRITE resolves the target from the `SLAVE_ADDR` register instead of
+        /// the FIFO. It must consult the switch exactly the same way — and must
+        /// NOT resolve a device the switch has isolated.
+        #[test]
+        fn the_slave_addr_register_path_also_routes_through_the_switch() {
+            let mut p = controller();
+
+            // Isolated: the parked address must not resolve.
+            p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
+            program(
+                &mut p,
+                &[(CMD_RSTART, 0), (CMD_WRITE, 0), (CMD_STOP, 0)],
+                &[],
+            );
+            assert!(
+                nacked(&p),
+                "a SLAVE_ADDR-parked probe must NACK while every channel is isolated"
+            );
+
+            // Enable channel 3, then probe + read through the same path.
+            write_bytes(&mut p, MUX_ADDR, &[1 << 3]);
+            p.write_u32(REG_SLAVE_ADDR, SENSOR_ADDR as u32).unwrap();
+            program(
+                &mut p,
+                &[
+                    (CMD_RSTART, 0),
+                    (CMD_WRITE, 0),
+                    (CMD_READ, 1),
+                    (CMD_STOP, 0),
+                ],
+                &[],
+            );
+            assert!(!nacked(&p), "channel 3 is enabled; 0x13 must ACK");
+            assert_eq!(
+                p.read_u32(REG_DATA).unwrap() as u8,
+                tag_for(3),
+                "the SLAVE_ADDR path must reach the sensor on the SELECTED channel"
+            );
+        }
+
+        #[test]
+        fn a_write_reaches_only_the_selected_channel() {
+            let mut p = controller();
+            write_bytes(&mut p, MUX_ADDR, &[1 << 2]);
+            write_bytes(&mut p, SENSOR_ADDR, &[0x5A]);
+
+            with_mux(&p, |mux| {
+                assert_eq!(bytes_written_to(mux, 2), vec![0x5A]);
+                for ch in [0u8, 1, 3] {
+                    assert!(
+                        bytes_written_to(mux, ch).is_empty(),
+                        "channel {ch} is isolated and must receive nothing"
+                    );
+                }
+            });
+        }
     }
 
     #[test]

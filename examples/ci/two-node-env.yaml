@@ -1,0 +1,11 @@
+# Two real fixture nodes make the release smoke cover the inputs.env world
+# runner without compiling Core during the smoke job.
+schema_version: "1.0"
+name: "release-two-node-smoke"
+nodes:
+  - id: alpha
+    system: "../../configs/systems/ci-fixture-uart1.yaml"
+    firmware: "../../tests/fixtures/uart-ok-thumbv7m.elf"
+  - id: beta
+    system: "../../configs/systems/ci-fixture-uart1.yaml"
+    firmware: "../../tests/fixtures/uart-ok-thumbv7m.elf"

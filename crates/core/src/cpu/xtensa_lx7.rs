@@ -108,6 +108,9 @@ fn round_half_even(v: f32) -> f32 {
     }
 }
 
+/// Per-TCB parked hybrid CALL preserve panes (shadow-window mode).
+type TaskPreserveMap = std::collections::HashMap<u32, Vec<Vec<(u8, [u32; 4])>>>;
+
 pub struct XtensaLx7 {
     pub regs: ArFile,
     pub ps: Ps,
@@ -124,9 +127,8 @@ pub struct XtensaLx7 {
     /// rfr/wfr and lsi/ssi. The Xtensa LX7 FPU is single-precision only.
     pub fp: [u32; 16],
     /// Boolean registers b0..b15 (Boolean Option), packed one per bit. FP
-    /// compares (oeq.s/olt.s/…) write a result bit here; movf.s/movt.s read it.
-    /// Modeled minimally: only the FP compare/move instructions touch it (the
-    /// integer BR-consuming branches aren't in the decoded set yet).
+    /// compares (oeq.s/olt.s/…) write a result bit here; movf.s/movt.s and the
+    /// BT/BF branches read it.
     pub br: u16,
     pub pc: u32,
     /// Set by the branch helper when a conditional branch's predicate
@@ -140,6 +142,11 @@ pub struct XtensaLx7 {
     /// app-cpu boot address (mirrors real silicon's reset-hold). Default
     /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
     pub halted: bool,
+    /// Set when the last retired instruction was `WAITI` (PC does not
+    /// advance). Subsequent steps take a cheap CCOUNT/IRQ path until a
+    /// wake-capable interrupt arrives — important for dual-core APP_CPU
+    /// FreeRTOS idle (`vApplicationIdleHook` / idle task Waiti loop).
+    waiti_parked: bool,
     /// Faithful windowed-register mode. When true, the CPU uses the REAL
     /// Xtensa window machinery — per-access window-overflow checks that vector
     /// to the firmware's OF{4,8,12} handlers (which spill to the stack save
@@ -156,6 +163,30 @@ pub struct XtensaLx7 {
     /// core_id 0, and it corrupts PRO_CPU's per-core FreeRTOS state.
     /// (SMP core identity itself is derived from PRID via `core_id()`.)
     pub app_cpu: bool,
+    /// Authoritative per-CALL preserve snapshots (slot, a0..a3). RETW restores
+    /// these exactly so outer a4..a7 survive deep wrap; per-slot LIFO remains
+    /// for displace/WS only (classic early-boot behavior). NOT mixed into the
+    /// per-slot shadow LIFO — that mixing caused steal of outer CALL8 a5 after
+    /// the 16-slot window wraps (`esp_intr_alloc` fault).
+    pub(crate) call_preserve_stack: Vec<Vec<(u8, [u32; 4])>>,
+    /// Windowed register state saved across interrupt entry (dispatch_irq)
+    /// and restored on RFE/RFI. Real silicon does not auto-save WB/ARs, but
+    /// FreeRTOS Xtensa ports assume balanced windowed CALL/RETW in ISRs; any
+    /// imbalance (or our shadow/call_preserve divergence) otherwise returns
+    /// to the interrupted frame with the wrong WindowBase (seen: ExitCritical
+    /// WB=13 → after timer ISR WB≠13 → NotifyTake a6=&xKernelLock becomes 1).
+    irq_window_stack: Vec<IrqWindowFrame>,
+    /// Per-TCB hybrid preserve parked when a task is switched out (shadow mode).
+    /// Keyed by FreeRTOS TCB address from `pxCurrentTCBs[core]`. Restored on
+    /// RFE when that TCB is current again so CALL8 a4..a7 survive NotifyTake
+    /// block/wake (ipc_task a5/a6 → flash IPC).
+    task_preserve_by_tcb: TaskPreserveMap,
+    /// After a windowed ROM thunk returns (CALL+no ENTRY), the caller still
+    /// needs to RETW. If we deliver an IRQ in that gap (e.g. ExitCritical
+    /// just restored INTLEVEL via `_xtos_set_intlevel`), the ISR can leave
+    /// WindowBase wrong. Defer IRQs until the next RETW closes the windowed
+    /// call. Cleared on RETW / reset.
+    defer_irq_until_retw: bool,
     /// IRAM/flash instruction-fetch slice cache (#119 Phase 1.2).
     fetch_cache: Option<(u64, u64, usize)>,
     /// Decode cache (#124 follow-on): direct-mapped PC → (tag, len, decoded
@@ -179,6 +210,25 @@ pub struct XtensaLx7 {
     pub jit_enabled: bool,
 }
 
+/// Window control saved at interrupt entry (see `irq_window_stack`).
+#[derive(Clone, Debug)]
+struct IrqWindowFrame {
+    /// Full preserve stack of the interrupted task (pre-spill snapshot).
+    /// ISR CALL/RETW can pop live preserve; on same-task RFE we restore this
+    /// so RETW can use hybrid preserve for a4..a7 without relying solely on UF.
+    call_preserve_stack: Vec<Vec<(u8, [u32; 4])>>,
+    /// Logical a1 (SP) at interrupt entry. FreeRTOS may switch tasks inside
+    /// the ISR (`_frxt_dispatch`); on RFE the SP then belongs to a different
+    /// task and restoring this frame's preserve would graft the old task's
+    /// window chain onto the new one (seen: ipc1 running on IDLE1's stack).
+    sp_at_entry: u32,
+    /// WindowStart before IRQ-entry spill. Spill sets WS=1<<WB so a later
+    /// task-switch RETW underflows into the *new* stack; same-task RFE must
+    /// put the original WS back or CALL8 a4..a7 (e.g. ipc_task's a5/a6
+    /// pointer locals) are lost after NotifyTake returns.
+    windowstart_at_entry: u16,
+}
+
 impl XtensaLx7 {
     pub fn new() -> Self {
         Self {
@@ -193,8 +243,13 @@ impl XtensaLx7 {
             pc: 0x4000_0400,
             branched: false,
             halted: false,
+            waiti_parked: false,
             faithful_windows: false,
             app_cpu: false,
+            call_preserve_stack: Vec::new(),
+            irq_window_stack: Vec::new(),
+            task_preserve_by_tcb: std::collections::HashMap::new(),
+            defer_irq_until_retw: false,
             fetch_cache: None,
             decode_cache: vec![None; DECODE_CACHE_SIZE],
             decode_gen: vec![0; DECODE_CACHE_SIZE],
@@ -263,6 +318,38 @@ impl XtensaLx7 {
         // app_cpu is what reset() reads to restore that PRID across a reset.
         cpu.app_cpu = true;
         cpu
+    }
+
+    /// Raw instruction encoding at `pc`, for trace observers only.
+    ///
+    /// Xtensa instructions are 2, 3 or 4 bytes and the decode cache means a
+    /// hot step may never touch the bytes at all, so the trace has to go get
+    /// them. Widths mirror the fetch path exactly (u16 for narrow, u32
+    /// otherwise) so observing a run cannot change which addresses it reads.
+    /// A read that fails yields 0 rather than an error: losing one trace word
+    /// must never turn into a simulation fault.
+    fn raw_word_for_trace(&self, bus: &mut dyn Bus, pc: u32, len: u32) -> u32 {
+        let addr = pc as u64;
+        if let Some((start, end, ptr_addr)) = self.fetch_cache {
+            if addr >= start && addr + 4 <= end {
+                let off = (addr - start) as usize;
+                // SAFETY: identical invariant to the fetch fast path in
+                // `step` — the pointer comes from `Bus::fetch_slice` into a
+                // fixed-size RAM backing buffer, the cache is invalidated on
+                // any write into the cached range, and `addr + 4 <= end` is
+                // bounds-checked above.
+                unsafe {
+                    let p = (ptr_addr as *const u8).add(off);
+                    let w = u32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]);
+                    return if len == 2 { w & 0xFFFF } else { w };
+                }
+            }
+        }
+        if len == 2 {
+            bus.read_u16(addr).map(u32::from).unwrap_or(0)
+        } else {
+            bus.read_u32(addr).unwrap_or(0)
+        }
     }
 
     /// Phase 3.2 pilot (issue #124): attempt to dispatch the current PC to
@@ -560,34 +647,432 @@ impl XtensaLx7 {
     /// it back in RETW. WS bits remain consistent: the displaced frame's
     /// WS bit stays set (its data is just temporarily shadowed); on RETW
     /// from the callee we restore those four ARs.
+    ///
+    /// Note: leaving WS set while physical ARs are shadowed means a firmware
+    /// `xthal_window_spill` walk can see a clobbered a1 and store to
+    /// `0xfffffff0`. Fast-boot paths install `xthal_window_spill_thunk` to
+    /// spill from the shadow; a future WS clear/restore must not break RETW
+    /// underflow checks (see FIDELITY.md Batch D).
     fn spill_shadow_on_call(&mut self, callinc: u8) {
         // Faithful mode uses the real OF/UF handlers (stack save chain), not
         // the sim shadow stack.
         if self.faithful_windows {
             return;
         }
+        if callinc == 0 {
+            return;
+        }
         let wb_old = self.regs.windowbase();
         let wb_new = wb_old.wrapping_add(callinc) & 0x0F;
-        // Caller's preserved area: slots wb_old..wb_old+n-1. Xtensa C ABI
-        // says caller's a0..a{n*4 - 1} survive the call. These are saved
-        // UNCONDITIONALLY so the matching RETW can restore them after the
-        // deeper chain potentially wraps back into this range.
+
+        // Authoritative preserve for caller's a0..a{callinc*4-1}. Kept ONLY on
+        // call_preserve_stack — never on the per-slot LIFO — so a later RETW's
+        // displace sweep cannot steal an outer CALL8's a4..a7 after wrap.
+        let mut preserve = Vec::with_capacity(callinc as usize);
         for k in 0..callinc {
             let slot = wb_old.wrapping_add(k) & 0x0F;
-            self.regs.push_shadow(slot);
+            let base = (slot as usize) * 4;
+            let regs = [
+                self.regs.physical(base),
+                self.regs.physical(base + 1),
+                self.regs.physical(base + 2),
+                self.regs.physical(base + 3),
+            ];
+            preserve.push((slot, regs));
         }
-        // Displaced-frame protection: slots wb_new..wb_new+3 (the callee's
-        // window range). If WS[slot] is set, another live frame's a0..a3
-        // live here — CALL{n}+ENTRY+body will clobber them, so save first.
-        // Conditional on WS bit so we don't push stale data and don't
-        // clobber the return value (caller's a{n*4 + 2} = slot wb_new's a2)
-        // on RETW when no actual displacement occurred.
+        self.call_preserve_stack.push(preserve);
+
+        // Displaced live slots — classic per-slot LIFO for WS re-set on RETW.
         for k in 0..4u8 {
             let slot = wb_new.wrapping_add(k) & 0x0F;
             if self.regs.windowstart_bit(slot) {
                 self.regs.push_shadow(slot);
             }
         }
+    }
+
+    /// Pop one CALL's preserve snapshot and write it into the physical AR file.
+    /// Used by RETW and ROM thunks that skip RETW.
+    pub(crate) fn restore_call_preserve(&mut self) {
+        if let Some(preserve) = self.call_preserve_stack.pop() {
+            // Place panes relative to the *current* WindowBase (caller's window
+            // after RETW), not the absolute slot numbers captured at CALL time.
+            // After FreeRTOS task switch WB may not match the original layout,
+            // so absolute slots write a0..a7 into the wrong logical registers
+            // (seen: ipc_task a5/a6 landed in a9/a10 under WB=7).
+            let wb = self.regs.windowbase();
+            for (i, (_slot, regs)) in preserve.iter().enumerate() {
+                let slot = wb.wrapping_add(i as u8) & 0x0F;
+                let base = (slot as usize) * 4;
+                self.regs.set_physical(base, regs[0]);
+                self.regs.set_physical(base + 1, regs[1]);
+                self.regs.set_physical(base + 2, regs[2]);
+                self.regs.set_physical(base + 3, regs[3]);
+            }
+        }
+    }
+
+    /// Spill sim-only `call_preserve_stack` frames to the task stack using the
+    /// Xtensa OF/UF save layout, then set `WINDOWSTART = 1<<WB`.
+    ///
+    /// Real silicon has already written these save areas via WindowOverflow as
+    /// the call chain grew. Shadow mode keeps outer frames only in
+    /// `call_preserve_stack`, so FreeRTOS interrupt-path task switches (no
+    /// `xthal_window_spill`) would lose them — and RFE would re-apply the old
+    /// task's preserve onto the new task. Spilling here makes the stack the
+    /// authority (ROM-accurate) before any switch can happen.
+    ///
+    /// Does **not** modify PC (caller handles RET for the spill thunk).
+    pub(crate) fn spill_call_preserve_to_stack(&mut self, bus: &mut dyn Bus) {
+        // Hybrid CALL preserve → stack OF save areas for IRQ / xthal spill.
+        //
+        // WindowOverflow4/8 (window_vectors.S):
+        //   a0..a3 @ callee_sp - 16
+        //   a4..a7 @ parent_sp - 32  (parent = call[j-1].a1)
+        //
+        // NVS PageManager::load free-list clobber (diag FREE-LIST SLOT CLOBBER):
+        // a preserve/WS pane had a1=0x3ffc4484 (= load_sp+36, a data pointer from
+        // `addi a5, a1, 36`, not a real SP). Spilling a0..a3 at a1-16 wrote
+        // through [load_sp+20, +36) and replaced the free-list ptr at sp+24.
+        // Real windowed SPs are always 16-byte aligned (ENTRY imm12 multiple of
+        // 8 and ABI keeps a1 16B-aligned). Reject any base that is not.
+        //
+        // a0..a3 always go to callee OF (spill_sp-16). a4..a7 for CALL8 go to
+        // parent_sp-32 **only** when parent_sp is a real, stackish SP strictly
+        // above this frame (WindowOverflow8 layout). We still park preserve
+        // under the FreeRTOS TCB for same-IRQ RFE, but FreeRTOS task-switch
+        // restores windows from the **stack** — without a4..a7 OF, xQueueReceive
+        // loses a5 (= mux = queue+84) after GiveFromISR yield and re-enters
+        // EnterCritical with garbage (S3 L2 RGB/RMT fault @ 0x20406a).
+        //
+        // Classic ESP32 DRAM is 0x3FF8_0000..0x4000_0000; ESP32-S3 internal
+        // SRAM is 0x3FC8_8000..0x3FD0_0000 (chip yaml 512 KiB / model 480 KiB).
+        let dram_sp = |sp: u32| {
+            (0x3FF8_0000..0x4000_0000).contains(&sp) // classic ESP32
+                || (0x3FC8_8000..0x3FD0_0000).contains(&sp) // ESP32-S3 SRAM
+        };
+        // Windowed ABI: a1 is always 16-byte aligned after ENTRY.
+        let valid_sp = |sp: u32| dram_sp(sp) && (sp & 0xF) == 0;
+        let current_a1 = self.regs.read_logical(1);
+        let stackish = |sp: u32, ref_sp: u32| {
+            if !valid_sp(sp) || !dram_sp(ref_sp) {
+                return false;
+            }
+            let above = sp.wrapping_sub(ref_sp);
+            let below = ref_sp.wrapping_sub(sp);
+            (sp >= ref_sp && above < 0x1000) || (sp < ref_sp && below < 0x100)
+        };
+        let write4 =
+            |bus: &mut dyn Bus, base_sp: u32, off: u32, r0: u32, r1: u32, r2: u32, r3: u32| {
+                if !valid_sp(base_sp) || !stackish(base_sp, current_a1) {
+                    return;
+                }
+                if (base_sp as u64) < (off as u64) + 16 {
+                    return;
+                }
+                let b = base_sp.wrapping_sub(off);
+                // a0..a3 OF is strictly below base_sp (ENTRY locals live at/above).
+                if b >= base_sp {
+                    return;
+                }
+                let _ = bus.write_u32(b as u64, r0);
+                let _ = bus.write_u32(b as u64 + 4, r1);
+                let _ = bus.write_u32(b as u64 + 8, r2);
+                let _ = bus.write_u32(b as u64 + 12, r3);
+            };
+
+        let frames: Vec<Vec<u32>> = self
+            .call_preserve_stack
+            .iter()
+            .filter(|p| !p.is_empty())
+            .map(|p| {
+                let mut regs = Vec::with_capacity(p.len() * 4);
+                for &(_slot, r) in p.iter() {
+                    regs.extend_from_slice(&r);
+                }
+                regs
+            })
+            .collect();
+        let mut frame_sps: Vec<u32> = frames
+            .iter()
+            .filter(|r| r.len() >= 2)
+            .map(|r| r[1])
+            .filter(|&s| valid_sp(s))
+            .collect();
+        if valid_sp(current_a1) {
+            frame_sps.push(current_a1);
+        }
+        frame_sps.sort_unstable();
+        frame_sps.dedup();
+
+        self.call_preserve_stack.clear();
+        for i in 0..frames.len() {
+            let regs = &frames[i];
+            if regs.len() < 4 {
+                continue;
+            }
+            let frame_a1 = regs[1];
+            if !valid_sp(frame_a1) {
+                continue; // data pointer in a1 — not a real frame
+            }
+            let callee_sp = if i + 1 < frames.len() {
+                frames[i + 1][1]
+            } else {
+                current_a1
+            };
+            let spill_sp = if valid_sp(callee_sp)
+                && callee_sp <= frame_a1.wrapping_add(8)
+                && (stackish(callee_sp, current_a1) || stackish(callee_sp, frame_a1))
+            {
+                callee_sp
+            } else if stackish(frame_a1, current_a1) {
+                frame_a1
+            } else {
+                0
+            };
+            if spill_sp != 0 {
+                write4(bus, spill_sp, 16, regs[0], regs[1], regs[2], regs[3]);
+            }
+            // CALL8/CALL12: a4..a7 live in the parent OF (parent_sp - 32).
+            // Parent SP is the previous preserve frame's a1 (strictly higher).
+            if regs.len() >= 8 && i > 0 {
+                let parent_a1 = frames[i - 1][1];
+                if valid_sp(parent_a1)
+                    && parent_a1 > frame_a1
+                    && stackish(parent_a1, current_a1)
+                    && parent_a1.wrapping_sub(frame_a1) < 0x1000
+                {
+                    write4(bus, parent_a1, 32, regs[4], regs[5], regs[6], regs[7]);
+                }
+            }
+        }
+
+        // Leftover WS panes: CALL4 a0..a3 only for 16B-aligned known frame SPs.
+        let ws = self.regs.windowstart();
+        let wb = self.regs.windowbase();
+
+        // Gather the panes first: the OF base for a pane is its *callee's* SP,
+        // which we can only pick once every frame SP in this window is known.
+        let mut panes: Vec<(u32, u32, u32, u32)> = Vec::new();
+        for slot in 0..16u8 {
+            if (ws >> slot) & 1 == 0 {
+                continue;
+            }
+            let dist = slot.wrapping_sub(wb) & 0x0F;
+            if dist < 4 {
+                continue;
+            }
+            let base = (slot as usize) * 4;
+            let (a0, a1, a2, a3) = if let Some(snap) = self.regs.shadow_top_regs(slot) {
+                (snap[0], snap[1], snap[2], snap[3])
+            } else {
+                (
+                    self.regs.physical(base),
+                    self.regs.physical(base + 1),
+                    self.regs.physical(base + 2),
+                    self.regs.physical(base + 3),
+                )
+            };
+            if !valid_sp(a1) {
+                continue;
+            }
+            panes.push((a0, a1, a2, a3));
+        }
+
+        // Every SP we know about in this call chain, ascending. The stack grows
+        // down, so a frame's callee is the next SP *below* it.
+        let mut all_sps = frame_sps.clone();
+        all_sps.extend(panes.iter().map(|&(_, a1, _, _)| a1));
+        all_sps.sort_unstable();
+        all_sps.dedup();
+
+        for &(a0, a1, a2, a3) in &panes {
+            let a1_ok = frame_sps.contains(&a1)
+                || frame_sps
+                    .iter()
+                    .any(|&f| a1 < f && f.wrapping_sub(a1) < 0x80);
+            if !a1_ok || !stackish(a1, current_a1) {
+                continue;
+            }
+            // WindowOverflow4 (window_vectors.S) saves a0..a3 at `call[j+1]`'s
+            // stack frame — the CALLEE's sp − 16, never the frame's own sp.
+            // Using the frame's own sp lands the record in the callee's save
+            // area and destroys what the callee legitimately stored there:
+            // graphicstest_featherwing overwrote a correct a1=0x3ffb2240 at
+            // 0x3ffb2214 with 0x3ffb2220, so the firmware's WindowUnderflow
+            // restored a bogus frame and RETW'd to pc=0. There is no safe
+            // fallback: with no known callee we cannot place the record, and
+            // guessing is what corrupted the stack, so skip the pane instead.
+            let Some(&callee_sp) = all_sps.iter().rev().find(|&&s| s < a1) else {
+                continue;
+            };
+            write4(bus, callee_sp, 16, a0, a1, a2, a3);
+        }
+
+        self.regs.set_windowstart(1u16 << (wb & 0x0F));
+        self.regs.set_shadow_stacks(Default::default());
+    }
+
+    fn push_irq_window_frame(&mut self, bus: &dyn Bus) {
+        let preserve = self.call_preserve_stack.clone();
+        // Park preserve under the current FreeRTOS TCB so a later resume of
+        // this task can restore CALL8 a4..a7 after a task switch.
+        if let Some(tcb) = self.px_current_tcb(bus) {
+            if tcb != 0 {
+                self.task_preserve_by_tcb.insert(tcb, preserve.clone());
+            }
+        }
+        self.irq_window_stack.push(IrqWindowFrame {
+            call_preserve_stack: preserve,
+            sp_at_entry: self.regs.read_logical(1),
+            windowstart_at_entry: self.regs.windowstart(),
+        });
+    }
+
+    fn pop_irq_window_frame(&mut self, bus: &dyn Bus) {
+        let frame = self.irq_window_stack.pop();
+        let cur_sp = self.regs.read_logical(1);
+        if let Some(frame) = frame {
+            if cur_sp == frame.sp_at_entry {
+                // Same task — restore pre-spill preserve + WS.
+                self.call_preserve_stack = frame.call_preserve_stack;
+                self.regs.set_windowstart(frame.windowstart_at_entry);
+                if let Some(tcb) = self.px_current_tcb(bus) {
+                    self.task_preserve_by_tcb.remove(&tcb);
+                }
+                return;
+            }
+        }
+        // Task switch: restore the resumed task's parked preserve if any.
+        if let Some(tcb) = self.px_current_tcb(bus) {
+            if let Some(preserve) = self.task_preserve_by_tcb.remove(&tcb) {
+                // Re-apply outer preserve panes into physical ARs (skip the
+                // live window — context_restore just wrote a0..a15 there).
+                // Set WS bits for those panes so RETW takes the live path;
+                // restore_call_preserve then places a0..a7 relative to WB.
+                let wb = self.regs.windowbase();
+                let mut ws = 1u16 << (wb & 0x0F);
+                for entry in preserve.iter() {
+                    for &(slot, regs) in entry.iter() {
+                        let slot = slot & 0x0F;
+                        let dist = slot.wrapping_sub(wb) & 0x0F;
+                        if dist < 4 {
+                            continue; // live window
+                        }
+                        let base = (slot as usize) * 4;
+                        self.regs.set_physical(base, regs[0]);
+                        self.regs.set_physical(base + 1, regs[1]);
+                        self.regs.set_physical(base + 2, regs[2]);
+                        self.regs.set_physical(base + 3, regs[3]);
+                        ws |= 1u16 << slot;
+                    }
+                }
+                self.regs.set_windowstart(ws);
+                self.call_preserve_stack = preserve;
+                return;
+            }
+        }
+        self.call_preserve_stack.clear();
+        self.regs.set_shadow_stacks(Default::default());
+    }
+
+    /// Re-apply hybrid CALL preserve parked under the current FreeRTOS TCB
+    /// when `call_preserve_stack` is empty. Needed because FreeRTOS may resume
+    /// a task via `_xt_context_restore` (stack) without going through our IRQ
+    /// RFE path that normally restores `task_preserve_by_tcb`. Without this,
+    /// CALL8 a4..a7 (e.g. xQueueReceive's a5 = mux) are lost after
+    /// `GiveFromISR` + yield (ESP32-S3 RMT / RGB L2).
+    fn maybe_restore_task_preserve(&mut self, bus: &dyn Bus) {
+        if self.faithful_windows || !self.call_preserve_stack.is_empty() {
+            return;
+        }
+        let Some(tcb) = self.px_current_tcb(bus) else {
+            return;
+        };
+        if tcb == 0 {
+            return;
+        }
+        // Keep the entry so subsequent RETWs still see it; only remove on
+        // same-task RFE (pop_irq_window_frame) when the live stack is again
+        // the authority.
+        let Some(preserve) = self.task_preserve_by_tcb.get(&tcb).cloned() else {
+            return;
+        };
+        if preserve.is_empty() {
+            return;
+        }
+        let wb = self.regs.windowbase();
+        let mut ws = self.regs.windowstart();
+        // Ensure live window bit stays set.
+        ws |= 1u16 << (wb & 0x0F);
+        for entry in preserve.iter() {
+            for &(slot, regs) in entry.iter() {
+                let slot = slot & 0x0F;
+                let dist = slot.wrapping_sub(wb) & 0x0F;
+                if dist < 4 {
+                    continue;
+                }
+                let base = (slot as usize) * 4;
+                self.regs.set_physical(base, regs[0]);
+                self.regs.set_physical(base + 1, regs[1]);
+                self.regs.set_physical(base + 2, regs[2]);
+                self.regs.set_physical(base + 3, regs[3]);
+                ws |= 1u16 << slot;
+            }
+        }
+        self.regs.set_windowstart(ws);
+        self.call_preserve_stack = preserve;
+    }
+
+    /// Read `pxCurrentTCBs[core_id]` for the running ESP32 dual-core firmware.
+    ///
+    /// Address is firmware-specific (`.dram0.bss`). Classic Arduino-ESP32 L0
+    /// places the dual-core array at `0x3FFC_27C8`; ESP32-S3 at `0x3FC9_B2B4`.
+    /// Hardcoding only classic made S3 hybrid preserve never park under the
+    /// real TCB → after `vTaskDelay` task-switch RFE, CALL8 a4..a7 / WS were
+    /// lost → APP hung in `_WindowUnderflow8` re-executing RETW forever.
+    ///
+    /// Prefer the ELF-resolved base in [`rom_thunks::PX_CURRENT_TCB_ADDR`]
+    /// (CLI / diag set this from `pxCurrentTCBs`); otherwise auto-discover by
+    /// probing known BSS locations for a live DRAM TCB pointer.
+    fn px_current_tcb(&self, bus: &dyn Bus) -> Option<u32> {
+        use crate::peripherals::esp_xtensa_common::rom_thunks::PX_CURRENT_TCB_ADDR;
+        let core = self.core_id() as u32;
+        let read_at =
+            |base: u32| -> Option<u32> { bus.read_u32((base.wrapping_add(core * 4)) as u64).ok() };
+        let looks_like_tcb = |p: u32| {
+            p != 0
+                && ((0x3FF8_0000..0x4000_0000).contains(&p) // classic internal DRAM
+                    || (0x3FC8_8000..0x3FD0_0000).contains(&p)) // ESP32-S3 SRAM
+        };
+
+        if let Some(base) = PX_CURRENT_TCB_ADDR.with(|s| s.get()) {
+            return read_at(base);
+        }
+
+        // Known Arduino-ESP32 L0 layouts (nm `pxCurrentTCBs`).
+        const CANDIDATES: [u32; 2] = [
+            0x3FFC_27C8, // classic ESP32
+            0x3FC9_B2B4, // ESP32-S3
+        ];
+        for &base in &CANDIDATES {
+            if let Some(tcb) = read_at(base) {
+                if looks_like_tcb(tcb) {
+                    return Some(tcb);
+                }
+            }
+        }
+        None
+    }
+
+    /// Drop IRQ window snapshots (context-switch / spill). See `irq_window_stack`.
+    pub(crate) fn clear_irq_window_stack(&mut self) {
+        self.irq_window_stack.clear();
+    }
+
+    /// See `defer_irq_until_retw`.
+    pub(crate) fn set_defer_irq_until_retw(&mut self, v: bool) {
+        self.defer_irq_until_retw = v;
     }
 
     fn execute(&mut self, ins: xtensa::Instruction, bus: &mut dyn Bus, len: u32) -> SimResult<()> {
@@ -777,7 +1262,10 @@ impl XtensaLx7 {
                 // the CPU stays at this instruction (PC doesn't advance),
                 // so a caller poll-loop sees the same PC each step and
                 // can detect "halted" without us tracking extra state.
+                // `waiti_parked` lets later steps skip fetch/decode until a
+                // wake-capable IRQ arrives (dual-core APP idle win).
                 self.ps.set_intlevel(level);
+                self.waiti_parked = true;
             }
             // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
             // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
@@ -1314,6 +1802,40 @@ impl XtensaLx7 {
                 let wb_cur = self.regs.windowbase();
                 let wb_dest = wb_cur.wrapping_sub(n) & 0x0F;
 
+                // Shadow mode owns window save/restore only while it still
+                // HOLDS the frames — i.e. while `call_preserve_stack` is
+                // non-empty. Once `spill_call_preserve_to_stack` has run, the
+                // frames live in the on-stack OF save areas and WINDOWSTART has
+                // collapsed to `1<<WB`; from then on the firmware's underflow
+                // handler is the correct reader and this shortcut must not fire.
+                //
+                // Dropping the `is_empty` condition (an earlier attempt at the
+                // `graphicstest` fault below) is measurably wrong: with
+                // LABWIRED_DIAG_RETW instrumentation, all 14 force-live events
+                // in that run had `preserve_depth=0` and a prior spill, so the
+                // shortcut skipped the only path that could still reload the
+                // frame. `testFillScreen`'s RETW then returned a1=0x20 to
+                // `setup()` and `Print::printNumber` faulted on the garbage SP.
+                //
+                // The remaining defect is NOT here. Adafruit's stock
+                // `graphicstest` still faults (real silicon, an ESP32-D0WDQ6,
+                // completes all twelve benchmarks) because the underflow
+                // handler reads a save area the spill never populated:
+                // `spill_call_preserve_to_stack` skips frames whose a1 fails
+                // `valid_sp`/`stackish`, leaving holes. Fixing the holes is the
+                // open work — see the graphicstest task.
+                if !self.faithful_windows
+                    && !self.regs.windowstart_bit(wb_dest)
+                    && n > 0
+                    && !self.call_preserve_stack.is_empty()
+                {
+                    self.regs.set_windowstart_bit(wb_dest, true);
+                    for k in 1..n {
+                        let s = wb_dest.wrapping_add(k) & 0x0F;
+                        self.regs.set_windowstart_bit(s, true);
+                    }
+                }
+
                 // F4: Window underflow check — destination frame must be live.
                 if !self.regs.windowstart_bit(wb_dest) {
                     // Window underflow path — symmetric to ENTRY's overflow:
@@ -1321,13 +1843,6 @@ impl XtensaLx7 {
                     // a0[31:30]) so the handler runs in the window the
                     // caller-of-caller occupies. Save WB → PS.OWB so RFWU
                     // can restore it. Set EXCM, EPC1, jump to UF vector.
-                    //
-                    // The standard xtensa-lx-rt `_WindowUnderflow4` handler
-                    // (`l32e a0, a5, -16; ...; rfwu`) is the mirror of OF4: it
-                    // reloads the previously-spilled regs from memory at
-                    // [a5 - 16..a5 - 4] back into a0..a3. With WB rotated to
-                    // wb_dest, `a0..a3` map to wb_dest's logical regs and `a5`
-                    // to the SP of the next frame (whose save area we read).
                     //
                     // Window underflow vector offsets (Xtensa LX ISA RM §5.6):
                     const UF4_VECOFS: u32 = 0x040;
@@ -1344,6 +1859,8 @@ impl XtensaLx7 {
                     self.regs.set_windowbase(wb_dest);
                     self.ps.set_excm(true);
                     self.pc = vecbase.wrapping_add(vec_ofs);
+                    // Still consumed a RETW attempt — clear thunk IRQ deferral.
+                    self.defer_irq_until_retw = false;
                     return Ok(());
                 }
 
@@ -1354,34 +1871,30 @@ impl XtensaLx7 {
                 self.pc = target_pc;
                 // The callee just placed its return value in its a2 =
                 // AR[wb_cur*4 + 2] = caller's a{n*4 + 2} after rotation.
-                // Save it before the pops below — pop_shadow(wb_cur) would
-                // restore stale data into AR[wb_cur*4 + 2] and clobber the
-                // return value otherwise.
+                // Save it before the pops below — displace pop would restore
+                // stale data into that physical and clobber the return value.
                 let return_value = if n > 0 {
                     Some(self.regs.read_logical(n * 4 + 2))
                 } else {
                     None
                 };
-                // Restore mirror of `spill_shadow_on_call`, in reverse order:
-                // 1) callee's window range (slots wb_cur..wb_cur+3) —
-                //    pop_shadow is a no-op when no push happened, so this
-                //    only fires for WS-conditional pushes. If popped, set
-                //    WS bit (displaced frame is now back).
-                // 2) caller's preserved area (slots wb_dest..wb_dest+n-1) —
-                //    pop and restore caller's a0..a{n*4-1}.
+                // Hybrid restore:
+                //  1. Classic LIFO for displace (callee window) + WS re-set —
+                //     same as early-boot path; LIFO holds ONLY displaces now.
+                //  2. Authoritative preserve from call_preserve_stack so outer
+                //     a4..a7 cannot be stolen by a wrap-around displace sweep.
                 for k in 0..4u8 {
                     let slot = wb_cur.wrapping_add(k) & 0x0F;
                     if self.regs.pop_shadow(slot) {
                         self.regs.set_windowstart_bit(slot, true);
                     }
                 }
-                for k in 0..n {
-                    let slot = wb_dest.wrapping_add(k) & 0x0F;
-                    self.regs.pop_shadow(slot);
-                }
+                self.restore_call_preserve();
                 if let Some(rv) = return_value {
                     self.regs.write_logical(n * 4 + 2, rv);
                 }
+                // Close the windowed-thunk IRQ deferral window (if any).
+                self.defer_irq_until_retw = false;
             }
 
             // BANY: taken if (as_ & at) != 0
@@ -1455,6 +1968,16 @@ impl XtensaLx7 {
             // BGEZ: taken if (as_ as i32) >= 0
             Bgez { as_, offset } => {
                 let cond = (self.regs.read_logical(as_) as i32) >= 0;
+                self.branch(offset, len, cond);
+            }
+            // BT bs: taken if boolean register BR[bs] == 1 (Boolean Option).
+            Bt { bs, offset } => {
+                let cond = (self.br >> (bs & 0xF)) & 1 == 1;
+                self.branch(offset, len, cond);
+            }
+            // BF bs: taken if boolean register BR[bs] == 0 (Boolean Option).
+            Bf { bs, offset } => {
+                let cond = (self.br >> (bs & 0xF)) & 1 == 0;
                 self.branch(offset, len, cond);
             }
             // BEQI: taken if as_ == imm  (decoder resolved B4CONST[r] into imm: i32)
@@ -1797,21 +2320,17 @@ impl XtensaLx7 {
                 let next_idx = wb.wrapping_add(1) & 0x0F;
 
                 if self.regs.windowstart_bit(next_idx) {
-                    // Adjacent frame is live — the window must be spilled.
+                    // Adjacent frame is live — silicon raises AllocaCause and the
+                    // firmware handler spills one window to the stack save area.
                     if self.faithful_windows {
-                        // Faithful (rom-boot) mode: the firmware installed an
-                        // AllocaCause (EXCCAUSE=5) handler that spills one frame and
-                        // RFEs back. Vector to it, exactly like real silicon.
                         return self.vector_exception(5);
                     }
-                    // Fast-boot mode jumps mid-execution with no handler installed,
-                    // so surface AllocaCause as a hard exception instead of vectoring
-                    // into an unprimed handler. Gating keeps this faithful change out
-                    // of the non-rom-boot path (mirrors the F5 overflow gating).
-                    return self.raise_general_exception(5);
+                    // Shadow / fast-boot mode: just perform the register move.
+                    // Live frames are already on the shadow stacks for RETW.
+                    // Raising AllocaCause hard-faults heap_caps_init's VLA path.
                 }
 
-                // Safe path: adjacent frame is free, simple register move.
+                // Safe path: simple register move (stack-pointer adjust).
                 let v = self.regs.read_logical(as_);
                 self.regs.write_logical(at, v);
                 self.pc = self.pc.wrapping_add(len);
@@ -1865,6 +2384,9 @@ impl XtensaLx7 {
             Rfe => {
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
+                if !self.faithful_windows {
+                    self.pop_irq_window_frame(bus);
+                }
             }
 
             // RFDE — Return From Debug Exception. Handled same as RFE for Plan 1:
@@ -1873,6 +2395,9 @@ impl XtensaLx7 {
             Rfde => {
                 self.ps.set_excm(false);
                 self.pc = self.sr.read(EPC1);
+                if !self.faithful_windows {
+                    self.pop_irq_window_frame(bus);
+                }
             }
 
             // RFI n — Return From Interrupt at level n (n = 2..7 on LX7).
@@ -1907,6 +2432,9 @@ impl XtensaLx7 {
                 let new_pc = self.sr.read(epc_id);
                 self.ps = Ps::from_raw(new_ps);
                 self.pc = new_pc;
+                if !self.faithful_windows {
+                    self.pop_irq_window_frame(bus);
+                }
             }
 
             // RFWO — Return From Window Overflow handler.
@@ -2350,6 +2878,11 @@ impl XtensaLx7 {
     /// The level is the maximum over all set bits in the masked-pending word,
     /// using `IRQ_LEVELS` indexed by bit position.
     fn pending_irq_level(&self, bus: &dyn Bus) -> Option<u8> {
+        // Hold IRQs across the CALL→RETW gap of a windowed ROM thunk return
+        // (see `defer_irq_until_retw`).
+        if self.defer_irq_until_retw {
+            return None;
+        }
         // Plan 3: aggregate pending IRQs from two sources:
         //   1. SR-file INTERRUPT register (firmware can software-trigger via WSR).
         //   2. Bus's pending_cpu_irqs (peripheral source IDs routed through
@@ -2397,6 +2930,15 @@ impl XtensaLx7 {
         // through the bus (and re-populates the cache for the new
         // region). #119 Phase 1.2.
         self.invalidate_fetch_cache();
+        // Shadow mode: outer CALL frames live only in call_preserve until
+        // spilled. FreeRTOS may task-switch inside the ISR without calling
+        // xthal_window_spill — snapshot preserve+WS, spill to the task stack
+        // (OF/UF save areas for a possible switch), then keep the snapshot for
+        // same-task RFE restore (so NotifyTake→ipc_task a5/a6 survive).
+        if !self.faithful_windows {
+            self.push_irq_window_frame(bus); // snapshot preserve + park under TCB
+            self.spill_call_preserve_to_stack(bus);
+        }
         let entry_pc = self.pc;
         let vecbase = self.sr.read(VECBASE);
         let vector_offset = IRQ_VECTOR_OFFSETS[level.min(7) as usize];
@@ -2522,6 +3064,10 @@ impl Cpu for XtensaLx7 {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         let was_halted = self.halted;
         self.regs = ArFile::new();
+        self.call_preserve_stack.clear();
+        self.irq_window_stack.clear();
+        self.task_preserve_by_tcb.clear();
+        self.defer_irq_until_retw = false;
         // HW-verified: PS reset = 0x1F (EXCM=1, INTLEVEL=0xF — all ints masked).
         // Confirmed via OpenOCD `reset halt` on real S3-Zero: ps = 0x0000001f.
         self.ps = Ps::from_raw(0x1F);
@@ -2538,11 +3084,13 @@ impl Cpu for XtensaLx7 {
         // Machine::load_firmware reset, otherwise it'd race PRO_CPU
         // through the firmware entry point.
         self.halted = was_halted;
+        self.waiti_parked = false;
         Ok(())
     }
 
     fn halt(&mut self) {
         self.halted = true;
+        self.waiti_parked = false;
     }
     fn unhalt(&mut self) {
         self.halted = false;
@@ -2551,12 +3099,64 @@ impl Cpu for XtensaLx7 {
         self.ps.intlevel()
     }
 
+    fn is_parked_idle(&self) -> bool {
+        // Not halted: reset-hold still needs lockstep so PRO can release APP.
+        self.waiti_parked && !self.halted
+    }
+
+    fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
+        // Architectural WAITI park (FreeRTOS idle / vTaskDelay sleep). Only
+        // offer a budget while no wake-capable interrupt is already visible.
+        if !self.waiti_parked || self.halted {
+            return None;
+        }
+        if !self.ps.excm() {
+            if let Some(irq_level) = self.pending_irq_level(bus) {
+                if irq_level > self.ps.intlevel() {
+                    return None;
+                }
+            }
+        }
+        Some(u64::MAX)
+    }
+
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        // Keep CCOUNT coherent with machine total_cycles so CCOMPARE0 edges
+        // still fire after an idle skip (FreeRTOS tick source on classic ESP).
+        if cycles == 0 {
+            return;
+        }
+        use crate::cpu::xtensa_sr::{CCOMPARE0, CCOUNT};
+        let before = self.sr.read(CCOUNT);
+        let after = before.wrapping_add(cycles as u32);
+        self.sr.write(CCOUNT, after);
+        let ccompare0 = self.sr.read(CCOMPARE0);
+        if ccompare0 != 0 {
+            // Raise timer-0 if the skipped window crossed CCOMPARE0.
+            let crossed = if after >= before {
+                ccompare0 > before && ccompare0 <= after
+            } else {
+                // wrap
+                ccompare0 > before || ccompare0 <= after
+            };
+            if crossed {
+                self.sr.raise_interrupt_bits(1 << 6);
+            }
+        }
+    }
+
     fn step(
         &mut self,
         bus: &mut dyn Bus,
-        _observers: &[Arc<dyn SimulationObserver>],
+        observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
+        // Instruction tracing is the same contract every other core honours
+        // (`on_step_start` / `InstructionRetired` / `on_step_end`); see
+        // `tests/cpu_trace_conformance.rs`, which fails if a core stops
+        // emitting it. Building the register view costs real time, so every
+        // trace-only path below is gated on somebody actually observing.
+        let observed = !observers.is_empty();
         // Dual-core: a halted CPU contributes nothing — skip the entire
         // step (no CCOUNT advance, no fetch, no IRQ dispatch). Real
         // silicon's APP_CPU sits in reset until PRO_CPU releases it; we
@@ -2564,6 +3164,12 @@ impl Cpu for XtensaLx7 {
         // captures the entry point and unhalts the secondary CPU.
         if self.halted {
             return Ok(());
+        }
+        // FreeRTOS may have switched tasks via stack context restore without
+        // our RFE; re-bind CALL8 preserve for the current TCB if needed.
+        // Skip when WAITI-parked: idle task is not mid-context-switch.
+        if !self.waiti_parked {
+            self.maybe_restore_task_preserve(bus);
         }
         // ── Pre-fetch interrupt check ─────────────────────────────────────────
         // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
@@ -2597,9 +3203,18 @@ impl Cpu for XtensaLx7 {
         if !self.ps.excm() {
             if let Some(irq_level) = self.pending_irq_level(bus) {
                 if irq_level > self.ps.intlevel() {
+                    self.waiti_parked = false;
                     return self.dispatch_irq(irq_level, bus);
                 }
             }
+        }
+
+        // WAITI park: stay at the same PC without re-fetching/decoding.
+        // Dual-core APP_CPU spends most cycles here after FreeRTOS idle starts;
+        // skipping fetch/decode is the highest-ROI dual-core idle win that
+        // still advances CCOUNT (and therefore CCOMPARE0 tick edges).
+        if self.waiti_parked {
+            return Ok(());
         }
 
         // ── Phase 3.2 JIT fast-path (issue #124) ──────────────────────────────
@@ -2609,7 +3224,11 @@ impl Cpu for XtensaLx7 {
         // an exit code that says where to continue.
         #[cfg(feature = "jit")]
         {
-            if self.jit_enabled {
+            // A compiled block retires many instructions without passing
+            // through the fetch/decode path, so it cannot emit the per-step
+            // trace. Fall back to the interpreter whenever anyone is
+            // observing — an empty trace is worse than a slow one.
+            if self.jit_enabled && !observed {
                 if let Some(_n) = self.try_jit_step(bus)? {
                     return Ok(());
                 }
@@ -2712,6 +3331,20 @@ impl Cpu for XtensaLx7 {
             self.decode_gen[dc_idx] = self.cur_decode_gen;
             (len, ins)
         };
+        // Raw encoding for the trace. Read at the same widths the fetch path
+        // uses so an observed run touches exactly the bytes an unobserved one
+        // does — a trace that perturbs the run it is measuring is useless.
+        let raw = if observed {
+            self.raw_word_for_trace(bus, pc, len)
+        } else {
+            0
+        };
+        if observed {
+            for obs in observers {
+                obs.on_step_start(pc, raw);
+            }
+        }
+
         self.branched = false;
         let fall_through_pc = pc.wrapping_add(len);
         self.execute(ins, bus, len)?;
@@ -2731,6 +3364,28 @@ impl Cpu for XtensaLx7 {
         if lcount > 0 && self.pc == lend && fall_through_pc == lend && !self.branched {
             self.sr.write(LCOUNT, lcount - 1);
             self.pc = self.sr.read(LBEG);
+        }
+
+        if observed {
+            // a0..a15 as the window currently sees them, then PC. The window
+            // view is the one that matters on Xtensa: a raw physical-file dump
+            // would not line up with the disassembly a reader is holding.
+            let mut registers = [0u32; 18];
+            for (i, slot) in registers[..16].iter_mut().enumerate() {
+                *slot = self.regs.read_logical(i as u8);
+            }
+            // Standard trailer (see `SimulationObserver`): SP then PC. On
+            // Xtensa the stack pointer is a1 in the current window.
+            registers[16] = self.regs.read_logical(1);
+            registers[17] = self.pc;
+
+            crate::emit_trace_event(
+                observers,
+                labwired_hw_trace::TraceEvent::InstructionRetired { pc, opcode: raw },
+            );
+            for obs in observers {
+                obs.on_step_end(1, &registers);
+            }
         }
         Ok(())
     }
@@ -2872,6 +3527,7 @@ impl Cpu for XtensaLx7 {
             arr
         };
         self.regs.set_shadow_stacks(shadow);
+        self.call_preserve_stack.clear();
         let mut sr = [0u32; 256];
         sr.copy_from_slice(&snap.sr);
         self.sr.set_raw_storage(sr);
@@ -3100,5 +3756,177 @@ mod fp_tests {
         // lsx f4, a1, a3 → 0x084130 (fr=4) : f4 = mem32[0x210]
         run(&mut cpu, &mut bus, 0x084130);
         assert_eq!(cpu.fget(4), 42.0);
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    //! Windowed CALL8/RETW must preserve the caller's a0..a7 across the
+    //! callee (shadow-spill path). Regression for the ESP32 dual-core boot
+    //! fault where `esp_intr_alloc_intrstatus_bind` lost a5 across
+    //! `heap_caps_malloc` and then dereferenced a flash string as a pointer.
+    use super::*;
+    use crate::decoder::xtensa::Instruction::{Call8, Entry, Retw};
+    use crate::{Bus, DmaRequest, SimResult, SimulationConfig};
+
+    struct RamBus {
+        mem: Vec<u8>,
+        config: SimulationConfig,
+    }
+    impl RamBus {
+        fn new() -> Self {
+            Self {
+                mem: vec![0u8; 0x1_0000],
+                config: SimulationConfig::default(),
+            }
+        }
+    }
+    impl Bus for RamBus {
+        fn read_u8(&self, addr: u64) -> SimResult<u8> {
+            Ok(self.mem.get(addr as usize).copied().unwrap_or(0))
+        }
+        fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+            if let Some(s) = self.mem.get_mut(addr as usize) {
+                *s = value;
+            }
+            Ok(())
+        }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _requests: &[DmaRequest]) -> SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &SimulationConfig {
+            &self.config
+        }
+    }
+
+    fn exec(cpu: &mut XtensaLx7, bus: &mut RamBus, ins: crate::decoder::xtensa::Instruction) {
+        cpu.execute(ins, bus, 3).expect("exec");
+    }
+
+    #[test]
+    fn call8_retw_preserves_caller_a4_through_a7() {
+        let mut cpu = XtensaLx7::new();
+        let mut bus = RamBus::new();
+        // WOE=1 so windowed ops are meaningful (shadow path still used).
+        let mut ps = cpu.ps.as_raw();
+        ps |= 1 << 18;
+        cpu.ps = Ps::from_raw(ps);
+
+        cpu.regs.write_logical(1, 0x2000);
+        cpu.regs.write_logical(4, 0xA4A4_A4A4);
+        cpu.regs.write_logical(5, 0x0000_0000); // statusreg=0 pattern from bind
+        cpu.regs.write_logical(6, 0xA6A6_A6A6);
+        cpu.regs.write_logical(7, 0xA7A7_A7A7);
+        cpu.pc = 0x1000;
+
+        exec(&mut cpu, &mut bus, Call8 { offset: 0x40 });
+        exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 4 }); // 32-byte frame
+                                                            // Callee trashes a1..a7 but MUST leave a0 (return addr + call-type bits) alone.
+        for i in 1..8u8 {
+            cpu.regs.write_logical(i, 0x1111_0000 | i as u32);
+        }
+        cpu.regs.write_logical(2, 0x3FFB_C8FC); // return value → caller's a10
+        exec(&mut cpu, &mut bus, Retw);
+
+        assert_eq!(
+            cpu.regs.read_logical(4),
+            0xA4A4_A4A4,
+            "a4 must survive CALL8/RETW"
+        );
+        assert_eq!(
+            cpu.regs.read_logical(5),
+            0x0000_0000,
+            "a5 must survive CALL8/RETW (bind statusreg)"
+        );
+        assert_eq!(cpu.regs.read_logical(6), 0xA6A6_A6A6, "a6 must survive");
+        assert_eq!(cpu.regs.read_logical(7), 0xA7A7_A7A7, "a7 must survive");
+        assert_eq!(
+            cpu.regs.read_logical(10),
+            0x3FFB_C8FC,
+            "return value in a10"
+        );
+    }
+
+    #[test]
+    fn nested_call8_preserves_outer_a5() {
+        let mut cpu = XtensaLx7::new();
+        let mut bus = RamBus::new();
+        let mut ps = cpu.ps.as_raw();
+        ps |= 1 << 18;
+        cpu.ps = Ps::from_raw(ps);
+
+        cpu.regs.write_logical(1, 0x3000);
+        cpu.regs.write_logical(5, 0x0000_0000);
+        cpu.pc = 0x2000;
+
+        // Outer CALL8
+        exec(&mut cpu, &mut bus, Call8 { offset: 0x40 });
+        exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 8 }); // 64-byte
+                                                            // Inner CALL8 (like malloc → deeper)
+        exec(&mut cpu, &mut bus, Call8 { offset: 0x40 });
+        exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 4 });
+        for i in 1..8u8 {
+            cpu.regs.write_logical(i, 0x2222_0000 | i as u32);
+        }
+        cpu.regs.write_logical(2, 0xAAAA);
+        exec(&mut cpu, &mut bus, Retw); // back to outer callee
+                                        // Outer callee also clobbers (keep a0)
+        for i in 1..8u8 {
+            cpu.regs.write_logical(i, 0x3333_0000 | i as u32);
+        }
+        cpu.regs.write_logical(2, 0xBBBB);
+        exec(&mut cpu, &mut bus, Retw); // back to original
+
+        assert_eq!(
+            cpu.regs.read_logical(5),
+            0x0000_0000,
+            "outer a5 must survive nested CALL8"
+        );
+        assert_eq!(cpu.regs.read_logical(10), 0xBBBB);
+    }
+
+    /// Deep CALL8 chain that wraps the 16-slot window file — this is what
+    /// `heap_caps_malloc` does in practice and is where a5 was observed
+    /// corrupted on the ESP32 Arduino boot path.
+    #[test]
+    fn deep_call8_wrap_preserves_outer_a5() {
+        let mut cpu = XtensaLx7::new();
+        let mut bus = RamBus::new();
+        let mut ps = cpu.ps.as_raw();
+        ps |= 1 << 18;
+        cpu.ps = Ps::from_raw(ps);
+
+        cpu.regs.write_logical(1, 0x7000);
+        cpu.regs.write_logical(4, 0xA4A4_A4A4);
+        cpu.regs.write_logical(5, 0x0000_0000);
+        cpu.regs.write_logical(6, 0xA6A6_A6A6);
+        cpu.regs.write_logical(7, 0xA7A7_A7A7);
+        cpu.pc = 0x4000;
+
+        const DEPTH: usize = 12; // 12 * CALLINC2 = 24 > 16 → wraps
+        for _ in 0..DEPTH {
+            exec(&mut cpu, &mut bus, Call8 { offset: 0x20 });
+            exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 4 });
+            for i in 1..8u8 {
+                let v = cpu.regs.read_logical(i).wrapping_add(1);
+                cpu.regs.write_logical(i, v);
+            }
+        }
+        for d in (0..DEPTH).rev() {
+            cpu.regs.write_logical(2, 0x1000 + d as u32);
+            exec(&mut cpu, &mut bus, Retw);
+        }
+
+        assert_eq!(cpu.regs.read_logical(4), 0xA4A4_A4A4, "a4 after deep wrap");
+        assert_eq!(
+            cpu.regs.read_logical(5),
+            0x0000_0000,
+            "a5 after deep wrap (statusreg=0)"
+        );
+        assert_eq!(cpu.regs.read_logical(6), 0xA6A6_A6A6, "a6 after deep wrap");
+        assert_eq!(cpu.regs.read_logical(7), 0xA7A7_A7A7, "a7 after deep wrap");
     }
 }

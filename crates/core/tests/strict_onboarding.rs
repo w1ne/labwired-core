@@ -245,7 +245,12 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
         .map(|p| p.to_string_lossy().to_string())
         .collect();
     let Some(target_idx) = parts.iter().position(|p| p == "target") else {
-        return Ok(false);
+        // Firmware isn't a cargo `target/` build artifact — it's a committed,
+        // pre-built fixture (e.g. tests/fixtures/*.elf produced by an external
+        // toolchain like arm-none-eabi-gcc for the nRF54L15 examples). There is
+        // nothing for the generic cargo runner to build; just require it to be
+        // present on disk.
+        return Ok(firmware_path.exists());
     };
 
     if parts.len() <= target_idx + 3 {

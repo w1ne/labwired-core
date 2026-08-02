@@ -1,5 +1,8 @@
 name: "nokia5110-invaders-lab"
 chip: "../../configs/chips/stm32l476.yaml"
+# STM32L476 reset clock: MSI range 6, 4 MHz. Peripheral calibration clocks
+# below are independent device settings and must not affect MCU pacing.
+cpu_hz: 4_000_000
 # Walk-deletion (event-scheduler builds): the firmware drives only SPI1
 # (event-migrated) + GPIO (no-op tick); the HC-SR04 echo is serviced outside
 # the walk; every other peripheral is inert here. Verified byte-identical

@@ -1,0 +1,23 @@
+[workspace]
+members = []
+
+[package]
+name = "stm32h735-hal-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+stm32h7xx-hal = { version = "0.16", features = ["stm32h735", "rt"] }
+
+[[bin]]
+name = "stm32h735-hal-demo"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+debug = true
+opt-level = "s"

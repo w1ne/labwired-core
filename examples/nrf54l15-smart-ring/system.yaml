@@ -1,0 +1,64 @@
+# LabWired - Open smart-ring (nRF54L15) Example System Configuration
+#
+# Local mirror of configs/systems/smart-ring.yaml so the strict-onboarding gate
+# (crates/core/tests/strict_onboarding.rs) can associate this example directory
+# with the nrf54l15 chip via its `system.yaml`. The four I²C parts hang off
+# TWIM21 — the realistic single-bus ring topology the probe firmware walks.
+name: "smart-ring-example"
+chip: "../../configs/chips/nrf54l15.yaml"
+
+external_devices:
+  # IMU — motion + hardware step counting.
+  - id: "imu"
+    type: "bmi270"
+    connection: "twi21"
+    config:
+      i2c_address: 0x68
+
+  # PPG heart-rate front-end. transaction_advance OFF: the nRF54L TWIM already
+  # advances this slave by real wall-clock, so leaving it on would double-count.
+  - id: "ppg"
+    type: "max30102"
+    connection: "twi21"
+    config:
+      i2c_address: 0x57
+      transaction_advance: false
+
+  # Skin temperature — dedicated on-body sensor (replaces the on-die TEMP).
+  - id: "temp"
+    type: "tmp117"
+    connection: "twi21"
+    config:
+      i2c_address: 0x48
+
+  # Haptic driver for the vibrator motor.
+  - id: "haptic"
+    type: "drv2605"
+    connection: "twi21"
+    config:
+      i2c_address: 0x5A
+
+board_io:
+  # Single-channel capacitive-touch user button (one GPIO, not an I²C device).
+  - id: "touch"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 13
+    signal: "input"
+    active_high: true
+
+  # Motor enable line, alongside the DRV2605's I²C control path.
+  - id: "motor_enable"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 11
+    signal: "output"
+    active_high: true
+
+  # Charger-attached detect.
+  - id: "charger_detect"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 12
+    signal: "input"
+    active_high: true

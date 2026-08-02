@@ -106,7 +106,9 @@
 
 use std::collections::HashMap;
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+const DEFERRED_WAKE_TOKEN: u32 = 1;
 
 // ── Register offsets ──
 // The full DesignWare-MSHC register map is documented here for fidelity;
@@ -235,6 +237,11 @@ pub struct Esp32s3Sdmmc {
     /// CMD_DONE/DATA_OVER has not yet been latched. Drained on the next
     /// `tick()`, giving the one-cycle command-done latency the brief specifies.
     pending_cmd: Option<PendingCmd>,
+
+    /// Bus-published cycle clock (walk-free deferred work).
+    clock: Option<CycleClock>,
+    /// Event armed for one-tick deferred work.
+    scheduled: bool,
 }
 
 /// A command accepted on a `start_cmd` write, awaiting completion on `tick`.
@@ -273,6 +280,9 @@ impl Esp32s3Sdmmc {
             rint_sts: 0,
             resp: [0; 4],
             pending_cmd: None,
+
+            clock: None,
+            scheduled: false,
         }
     }
 
@@ -412,6 +422,60 @@ impl Peripheral for Esp32s3Sdmmc {
         PeripheralTickResult {
             explicit_irqs,
             ..PeripheralTickResult::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        let int_enabled = self.reg(CTRL) & CTRL_INT_ENABLE != 0;
+        if int_enabled && self.mint_sts() != 0 {
+            out.push(self.source_id);
+        }
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() {
+            return Vec::new();
+        }
+        if self.pending_cmd.is_some() && !self.scheduled {
+            self.scheduled = true;
+            return vec![(1, DEFERRED_WAKE_TOKEN)];
+        }
+        Vec::new()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        // Same one-tick transition the legacy walk performed.
+        let _ = self.tick();
+        self.scheduled = false;
+        let mut explicit_irqs = Vec::new();
+        self.matrix_irq_sources_into(&mut explicit_irqs);
+        let reschedule = if self.pending_cmd.is_some() {
+            self.scheduled = true;
+            Some(1)
+        } else {
+            None
+        };
+        crate::sched::EventResult {
+            explicit_irqs,
+            reschedule_delay: reschedule,
+            ..Default::default()
         }
     }
 

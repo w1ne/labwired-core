@@ -60,6 +60,7 @@ fn faithful_rom_boot_never_jumps_to_null() {
             stack_top_fallback: 0x3FCD_FFF0,
             icache_backing: Some(wiring.icache_backing),
             dcache_backing: Some(wiring.dcache_backing),
+            factory_flash_base: None,
         },
     )
     .expect("fast_boot");

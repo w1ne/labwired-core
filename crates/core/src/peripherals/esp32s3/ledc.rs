@@ -46,7 +46,7 @@
 //!
 //! All other offsets accept writes silently and read 0.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const LEDC_BASE: u32 = 0x6001_9000;
 pub const LEDC_SIZE: u64 = 0x1000;
@@ -138,6 +138,9 @@ pub struct Esp32s3Ledc {
     conf: u32,
     /// DATE version register (0xFC) — reads its SVD reset until written.
     date: u32,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3Ledc {
@@ -164,6 +167,8 @@ impl Esp32s3Ledc {
             int_ena: 0,
             conf: 0,
             date: DATE_RESET,
+
+            clock: None,
         }
     }
 
@@ -318,6 +323,27 @@ impl Peripheral for Esp32s3Ledc {
                 None
             },
             ..Default::default()
+        }
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if (self.int_raw & self.int_ena & INT_MODELED_MASK) != 0 {
+            out.push(self.intr_source_id);
         }
     }
 

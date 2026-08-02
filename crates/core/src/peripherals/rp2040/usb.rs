@@ -73,7 +73,8 @@ const SIE_STATUS_CONNECTED: u32 = 1 << 16;
 const SIE_STATUS_SETUP_REC: u32 = 1 << 17;
 const SIE_STATUS_TRANS_COMPLETE: u32 = 1 << 18;
 const SIE_STATUS_BUS_RESET: u32 = 1 << 19;
-// Write-1-to-clear mask: every latched event/error bit the driver acknowledges.
+// Write-1-to-clear mask for direct stores (ArduinoCore-mbed USBPhyHw).
+// pico-sdk uses the CLR alias instead; see write_u32 dual-path handling.
 const SIE_STATUS_W1C: u32 = 0xFF00_0000 // [31:24] ACK/STALL/NAK-rec + errors
     | SIE_STATUS_TRANS_COMPLETE
     | SIE_STATUS_SETUP_REC
@@ -226,6 +227,8 @@ pub struct Rp2040Usb {
 
     /// CDC bulk-IN bytes captured from the device, mirrored to the UART sink.
     sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// True while a delay-1 host/IRQ event chain is live (event-scheduler).
+    chain_live: bool,
 }
 
 impl Default for Rp2040Usb {
@@ -246,7 +249,45 @@ impl Rp2040Usb {
             out_data_sent: false,
             awaiting_idle: false,
             sink: None,
+            chain_live: false,
         }
+    }
+
+    /// True while the host state machine or a held IRQ level still needs ticks.
+    fn needs_event_chain(&self) -> bool {
+        if self.ints() != 0 {
+            return true;
+        }
+        match self.host {
+            HostState::Detached => {
+                // Attach debounce countdown after pull-up.
+                self.reg(MAIN_CTRL) & MAIN_CTRL_CONTROLLER_EN != 0
+                    && self.reg(SIE_CTRL) & SIE_CTRL_PULLUP_EN != 0
+            }
+            HostState::ResetIssued | HostState::Transfer => true,
+            HostState::Configured => self.service_needed(),
+        }
+    }
+
+    /// Cheap check: any bulk/control buffer the host should service this cycle.
+    fn service_needed(&self) -> bool {
+        if self.awaiting_idle {
+            return true;
+        }
+        // EP0 armed?
+        if self.dpram_u32(ep_in_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
+            || self.dpram_u32(ep_out_buf_ctrl(0)) & BUF_CTRL_AVAIL != 0
+        {
+            return true;
+        }
+        // Any bulk-IN armed?
+        for ep in 1..16usize {
+            let bc = self.dpram_u32(ep_in_buf_ctrl(ep));
+            if bc & BUF_CTRL_AVAIL != 0 && bc & BUF_CTRL_FULL != 0 {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>) {
@@ -508,14 +549,29 @@ impl Peripheral for Rp2040Usb {
         }
         let local = offset - REG_BASE;
         match local {
-            SIE_STATUS => {
-                // Write-1-to-clear the latched event/error bits.
-                let cur = self.reg(SIE_STATUS);
-                self.set_reg(SIE_STATUS, cur & !(value & SIE_STATUS_W1C));
-            }
-            BUFF_STATUS => {
-                let cur = self.reg(BUFF_STATUS);
-                self.set_reg(BUFF_STATUS, cur & !value);
+            // SIE_STATUS / BUFF_STATUS are write-clear on silicon.
+            // Two software styles hit this model:
+            // 1) pico-sdk `hw_clear` → CLR alias (+0x3000): the bus applies
+            //    `cur & !mask` and re-enters write_u32 with the *final* image
+            //    under `is_clr_alias_write()` → absolute store.
+            // 2) ArduinoCore-mbed `USBPhyHw::process` → *direct* store of a
+            //    clear-mask to the base address (disassembled: `str <mask>,
+            //    [usb_hw + 0x50]`). Classic W1C: `cur & !(value & W1C_MASK)`.
+            // Using only (1) left mbed stuck with BUS_RESET latched forever
+            // (IRQ storm, empty Serial). Using only (2) double-clears on the
+            // CLR path. Dual-path below.
+            SIE_STATUS | BUFF_STATUS => {
+                if crate::bus::is_clr_alias_write() {
+                    self.set_reg(local, value);
+                } else {
+                    let cur = self.reg(local);
+                    let w1c = if local == SIE_STATUS {
+                        SIE_STATUS_W1C
+                    } else {
+                        u32::MAX // BUFF_STATUS: every bit is WC
+                    };
+                    self.set_reg(local, cur & !(value & w1c));
+                }
             }
             INTR | INTS => {} // read-only
             l if l < 0x100 => self.set_reg(l, value),
@@ -529,6 +585,8 @@ impl Peripheral for Rp2040Usb {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Feature-off / direct-call path. Scheduler mode also uses this body
+        // from `on_event` (one tick's worth of host work + level IRQ).
         self.host_poll();
         let mut res = PeripheralTickResult::default();
         if self.ints() != 0 {
@@ -537,6 +595,42 @@ impl Peripheral for Rp2040Usb {
             res.explicit_irqs = Some(vec![USBCTRL_IRQ]);
         }
         res
+    }
+
+    /// Always event-driven under `event-scheduler` builds so USB does not pin
+    /// the walk. Attach debounce, enumeration, and held IRQ levels ride a
+    /// delay-1 self-perpetuating chain re-armed from MMIO writes.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.needs_event_chain() && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, 0)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let res = self.tick();
+        let active = self.needs_event_chain();
+        self.chain_live = active;
+        crate::sched::EventResult {
+            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
+            reschedule_delay: active.then_some(1),
+            ..Default::default()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -595,9 +689,10 @@ mod tests {
         // With BUS_RESET unmasked in INTE, the tick pends USBCTRL_IRQ.
         wr(&mut u, INTE, INTR_BUS_RESET);
         assert_eq!(u.tick().explicit_irqs, Some(vec![USBCTRL_IRQ]));
-        // Device acknowledges the reset (write-1-clear); the interrupt clears
-        // with its source.
-        wr(&mut u, SIE_STATUS, SIE_STATUS_BUS_RESET);
+        // pico-sdk path: CLR alias already applied `cur & !mask`; bus marks
+        // the recursive write so we absolute-store the final image.
+        let cleared = rd(&u, SIE_STATUS) & !SIE_STATUS_BUS_RESET;
+        crate::bus::with_clr_alias_write(|| wr(&mut u, SIE_STATUS, cleared));
         assert_eq!(rd(&u, INTR) & INTR_BUS_RESET, 0);
     }
 
@@ -605,7 +700,8 @@ mod tests {
     fn first_setup_sent_once_device_acks_reset() {
         let mut u = Rp2040Usb::new();
         attach(&mut u);
-        // Device clears the bus reset, as its ISR does.
+        // Device clears the bus reset as mbed USBPhyHw does: direct W1C
+        // store of the BUS_RESET mask to the base address.
         wr(&mut u, SIE_STATUS, SIE_STATUS_BUS_RESET);
         u.tick();
         // The host has delivered the first SETUP: the 8-byte packet lands in the
@@ -623,8 +719,20 @@ mod tests {
         u.signal_buff(0, true); // EP0 IN
         u.signal_buff(2, false); // EP2 OUT
         assert_eq!(rd(&u, BUFF_STATUS), 0b1 | (1 << 5));
-        wr(&mut u, BUFF_STATUS, 0b1); // ack EP0 IN only
+        // ack EP0 IN only — direct W1C mask write (mbed style).
+        wr(&mut u, BUFF_STATUS, 0b1);
         assert_eq!(rd(&u, BUFF_STATUS), 1 << 5);
+    }
+
+    #[test]
+    fn sie_status_direct_w1c_clears_bus_reset_mbed_style() {
+        let mut u = Rp2040Usb::new();
+        attach(&mut u);
+        assert_ne!(rd(&u, SIE_STATUS) & SIE_STATUS_BUS_RESET, 0);
+        // ArduinoCore-mbed USBPhyHw: `str BUS_RESET, [usb_hw + 0x50]` — not CLR alias.
+        wr(&mut u, SIE_STATUS, SIE_STATUS_BUS_RESET);
+        assert_eq!(rd(&u, SIE_STATUS) & SIE_STATUS_BUS_RESET, 0);
+        assert_eq!(rd(&u, INTR) & INTR_BUS_RESET, 0);
     }
 
     #[test]

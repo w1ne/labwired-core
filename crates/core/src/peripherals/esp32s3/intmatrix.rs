@@ -24,7 +24,8 @@
 //! The register stores the cpu IRQ slot (0..31) the source delivers to.
 //! Slot 0 is reserved for software interrupts; we treat any value 0..31
 //! as a valid binding and only return None when the peripheral has never
-//! been written.
+//! been written. (TRM "0 = disconnect" is encoded by not writing / writing
+//! then clearing the Option — see write path; live bindings keep 0..31.)
 //!
 //! ## Status registers (PRO_INTR_STATUS_REG_0..3)
 //!
@@ -109,6 +110,13 @@ impl Default for Esp32s3IntMatrix {
 }
 
 impl Peripheral for Esp32s3IntMatrix {
+    // Inert walk: interrupt-matrix MAP/STATUS register bank; routing is
+    // applied by the bus from asserted source bitmaps, never from this
+    // model's tick (trait-default no-op).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         // Layout (each core's half is 0x800 apart on the shared base):
         //   CORE0: 0x000..0x18C — per-source map registers (route slot).

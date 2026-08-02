@@ -1,0 +1,133 @@
+name: Core Perf (simulator throughput)
+
+# Holds per-board simulator throughput still.
+#
+# The gate measures host instructions retired per simulated CPU step, per
+# board, under callgrind — see scripts/perf/board_perf.py for why that metric
+# and not wall clock. It is NOT a merge-blocking gate on PRs by default: it
+# runs on push to main and nightly, and opens/updates an issue when a board
+# regresses, so a slowdown is noticed the day it lands rather than months later
+# when someone reports "the blinky looks frozen".
+#
+# Run it on a PR by hand with workflow_dispatch when touching the CPU step
+# path, the machine-advance loop, or the peripheral tick walk.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "crates/core/**"
+      - "crates/cli/**"
+      - "crates/config/**"
+      - "configs/chips/**"
+      - "crates/firmware-perf-spin/**"
+      - "scripts/perf/**"
+      - ".github/workflows/core-perf.yml"
+  schedule:
+    # Nightly, after core-ci's 02:30 slot.
+    - cron: "45 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: core-perf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  board-throughput:
+    name: board-throughput
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv6m-none-eabi
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-perf
+          workspaces: |
+            . -> target
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+
+      # The browser ships labwired-core with `event-scheduler` (see
+      # crates/wasm/Cargo.toml). Measuring without it would gate a build
+      # configuration no user ever runs.
+      - name: Build simulator CLI (browser feature set)
+        run: cargo build --release -p labwired-cli --features event-scheduler
+
+      - name: Build perf fixture firmware
+        run: cargo build -p firmware-perf-spin --release --target thumbv6m-none-eabi
+
+      - name: Measure per-board throughput
+        id: perf
+        run: |
+          set -o pipefail
+          python3 scripts/perf/board_perf.py 2>&1 | tee perf-report.txt
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-throughput-report
+          path: perf-report.txt
+
+      # A regression is a real product defect (every extra host instruction per
+      # simulated step slows the browser twin by the same proportion), so it
+      # gets a tracked issue rather than a red X someone scrolls past.
+      - name: Open/refresh regression issue
+        if: failure() && github.event_name != 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('perf-report.txt', 'utf8');
+            const title = 'Simulator throughput regression (per-board perf gate)';
+            const body = [
+              `Commit: ${context.sha}`,
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              '```',
+              report.slice(-8000),
+              '```',
+              '',
+              'Re-baseline with `python3 scripts/perf/board_perf.py --update` if the cost is intentional.',
+            ].join('\n');
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'perf-regression',
+            });
+            const hit = existing.data.find((i) => i.title === title);
+            if (hit) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: hit.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['perf-regression'],
+              });
+            }

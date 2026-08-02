@@ -28,6 +28,20 @@
 #define I2C_FIFO_CONF I2C_REG(0x18u)
 #define I2C_CMD0      0x58u
 
+/* The physical circuit declared in every C3 thermal system manifest: I²C0
+ * SDA=GPIO4, SCL=GPIO5. The C3 has no fixed I²C pads; firmware must program
+ * both directions of the GPIO matrix before a real slave can see the bus. */
+#define GPIO_BASE 0x60004000u
+#define GPIO_REG(o) (*(volatile uint32_t *)(GPIO_BASE + (o)))
+#define GPIO_ENABLE_W1TS GPIO_REG(0x24u)
+#define GPIO_FUNC_IN_SEL 0x154u
+#define GPIO_FUNC_OUT_SEL 0x554u
+#define GPIO_MATRIX_INPUT_SELECT (1u << 6)
+#define I2C0_SCL_SIGNAL 53u
+#define I2C0_SDA_SIGNAL 54u
+#define I2C0_SDA_PIN 4u
+#define I2C0_SCL_PIN 5u
+
 #define CTR_TRANS_START (1u << 5)
 
 #define INT_END_DETECT     (1u << 3)
@@ -53,6 +67,16 @@ static inline void cmd_slot(uint32_t idx, uint32_t word) {
 
 static void i2c_reset_fifos(void) {
     I2C_FIFO_CONF = FIFO_RX_RST | FIFO_TX_RST; /* self-clearing in the model */
+}
+
+static void i2c0_gpio_matrix_init(void) {
+    GPIO_ENABLE_W1TS = (1u << I2C0_SDA_PIN) | (1u << I2C0_SCL_PIN);
+    GPIO_REG(GPIO_FUNC_OUT_SEL + I2C0_SDA_PIN * 4u) = I2C0_SDA_SIGNAL;
+    GPIO_REG(GPIO_FUNC_OUT_SEL + I2C0_SCL_PIN * 4u) = I2C0_SCL_SIGNAL;
+    GPIO_REG(GPIO_FUNC_IN_SEL + I2C0_SDA_SIGNAL * 4u) =
+        GPIO_MATRIX_INPUT_SELECT | I2C0_SDA_PIN;
+    GPIO_REG(GPIO_FUNC_IN_SEL + I2C0_SCL_SIGNAL * 4u) =
+        GPIO_MATRIX_INPUT_SELECT | I2C0_SCL_PIN;
 }
 
 /* Kick the command list and wait for completion (END / TRANS_COMPLETE). The
@@ -111,8 +135,7 @@ static int read_chunk(uint8_t slaveAddr, uint16_t addr, uint16_t nwords, uint16_
 /* ── Melexis I²C driver hooks ─────────────────────────────────────────────── */
 
 void MLX90640_I2CInit(void) {
-    /* The simulated controller boots ready; nothing to configure for the model.
-     * (Real firmware would set SCL timing here.) */
+    i2c0_gpio_matrix_init();
     i2c_reset_fifos();
 }
 

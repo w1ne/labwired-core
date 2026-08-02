@@ -120,9 +120,10 @@ pub struct Nrf52Uarte {
     // Overflow bucket for any unmodelled register
     extra: BTreeMap<u64, u32>,
     // ── Dynamic EasyDMA TX state (not part of the register surface) ──────
-    /// Set by a STARTTX task write; consumed by the next `tick_with_bus`,
-    /// which DMA-reads the TXD buffer from RAM and emits it. The transfer is
-    /// deferred to the bus-aware tick because `write_u32` has no bus handle.
+    /// Set by a STARTTX task write; consumed by the EasyDMA engine
+    /// (`do_easydma_tx`) via either `tick_with_bus` (bare-bus unit tests /
+    /// bus_tick_indices) or `on_event` (Machine + event-scheduler, delay-0).
+    /// Deferred because `write_u32` has no bus handle for the RAM read.
     tx_pending: bool,
     /// Captured TX bytes for `test`-mode assertions (`uart_contains`).
     sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -182,6 +183,25 @@ impl Nrf52Uarte {
 }
 
 impl Peripheral for Nrf52Uarte {
+    /// Dual-path EasyDMA: scheduler delay-0 (`on_event`) under Machine +
+    /// walk-free + batched `peripheral_tick_interval`, and `tick_with_bus`
+    /// (`bus_tick_indices`) for bare-bus unit tests / feature-off. No
+    /// time-driven `tick()` / `tick_elapsed()`, so the legacy walk is not
+    /// required. Under `rec_tick=512` the scheduler path completes STARTTX on
+    /// the next cycle (not at the 512-cycle bus-tick quantum).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    /// Not in the per-cycle walk: no time-driven `tick()` / `tick_elapsed()`.
+    /// EasyDMA completion rides the dual-path scheduler + bus_tick engines.
+    ///
+    /// Safe against the "sleeps and never wakes" trap: the bus calls
+    /// `refresh_legacy_tick_index()` on every MMIO write, so if this model ever
+    /// gains a tick and a state-dependent condition, a firmware write re-arms it.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -237,10 +257,11 @@ impl Peripheral for Nrf52Uarte {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             // STARTTX arms an EasyDMA TX; the actual buffer read + emit happens
-            // in `tick_with_bus` (write_u32 has no bus handle). A 1-byte
-            // poll_out and a multi-byte buffered write both land here. Only the
-            // UARTE personality uses EasyDMA — in legacy UART mode STARTTX just
-            // enables the transmitter and bytes flow through the TXD register.
+            // in `do_easydma_tx` via tick_with_bus / on_event (write_u32 has no
+            // bus handle). A 1-byte poll_out and a multi-byte buffered write
+            // both land here. Only the UARTE personality uses EasyDMA — in
+            // legacy UART mode STARTTX just enables the transmitter and bytes
+            // flow through the TXD register.
             OFF_TASKS_STARTTX if self.enable != ENABLE_UART_LEGACY => self.tx_pending = true,
             OFF_TASKS_STARTTX => {}
             // STOPTX completes immediately in this model: raise TXSTOPPED so a
@@ -308,14 +329,54 @@ impl Peripheral for Nrf52Uarte {
         Ok(())
     }
 
-    /// EasyDMA needs to read the firmware-owned TX buffer out of RAM, which is
-    /// only reachable with a bus handle — so the transfer is performed here,
-    /// in the bus-aware pre-tick pass, rather than in `write_u32`.
+    /// Dual path: bus_tick for bare-bus tests; on_event for scheduler.
     fn needs_bus_tick(&self) -> bool {
         self.tx_pending
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.tx_pending {
+            self.do_easydma_tx(bus);
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.tx_pending {
+            vec![(0, 1)] // STARTTX EasyDMA drain (delay-0 → next cycle)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == 1 && self.tx_pending {
+            self.do_easydma_tx(bus);
+        }
+        crate::sched::EventResult::default()
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+}
+
+impl Nrf52Uarte {
+    /// EasyDMA TX engine shared by `tick_with_bus` and `on_event` so the two
+    /// paths cannot drift. Instantaneous whole-buffer completion (modelled).
+    fn do_easydma_tx(&mut self, bus: &mut dyn Bus) {
         if !self.tx_pending {
             return;
         }
@@ -334,7 +395,7 @@ impl Peripheral for Nrf52Uarte {
         self.txd_amount = len as u32;
 
         // Raise the TX-path events a polling driver waits on. The transfer is
-        // modelled as instantaneous (whole buffer in one tick), so all of the
+        // modelled as instantaneous (whole buffer in one shot), so all of the
         // begin→drain→stop events fire together: TXSTARTED, then TXDRDY/ENDTX,
         // then TXSTOPPED. nrfx's poll_out enables the ENDTX_STOPTX short and
         // waits on TXSTOPPED, so that one must be set or it spins forever.
@@ -342,14 +403,6 @@ impl Peripheral for Nrf52Uarte {
         self.events_txdrdy = 1;
         self.events_endtx = 1;
         self.events_txstopped = 1;
-    }
-
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
-    }
-
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
     }
 }
 
@@ -431,6 +484,48 @@ mod tests {
         u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
         u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
         assert!(u.needs_bus_tick(), "UARTE mode STARTTX arms EasyDMA");
+    }
+
+    #[test]
+    fn starttx_schedules_delay0_event() {
+        let mut u = Nrf52Uarte::new();
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        assert!(u.uses_scheduler());
+        assert!(u.take_scheduled_events().is_empty());
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+        assert_eq!(u.take_scheduled_events(), vec![(0, 1)]);
+    }
+
+    #[test]
+    fn on_event_completes_easydma_tx() {
+        use crate::bus::SystemBus;
+        use crate::memory::LinearMemory;
+        use crate::sched::EventScheduler;
+        use crate::Bus;
+
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+        bus.write_u8(0x2000_0010, b'O').unwrap();
+        bus.write_u8(0x2000_0011, b'K').unwrap();
+
+        let mut u = Nrf52Uarte::new();
+        let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        u.set_sink(Some(sink.clone()), false);
+
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        u.write_u32(OFF_TXD_PTR, 0x2000_0010).unwrap();
+        u.write_u32(OFF_TXD_MAXCNT, 2).unwrap();
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+
+        let mut sched = EventScheduler::new();
+        let res = u.on_event(1, &mut sched, &mut bus);
+        let _ = res;
+
+        assert_eq!(&*sink.lock().unwrap(), b"OK");
+        assert_eq!(u.read_u32(OFF_EVENTS_ENDTX).unwrap(), 1);
+        assert_eq!(u.read_u32(OFF_EVENTS_TXSTOPPED).unwrap(), 1);
+        assert!(!u.tx_pending, "on_event consumes pending");
+        assert!(u.take_scheduled_events().is_empty());
     }
 
     #[test]

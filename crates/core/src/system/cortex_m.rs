@@ -9,6 +9,7 @@ use crate::cpu::CortexM;
 use crate::peripherals::dwt::Dwt;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::{Scb, SharedScbState};
+use crate::Peripheral;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
@@ -29,13 +30,18 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     bus.nvic = Some(nvic_state.clone());
 
     // Ensure SCB exists (VTOR relocation, ICSR.VECTACTIVE mirror, SHPR1/2/3).
-    let scb = Scb::with_shared(SharedScbState {
+    let mut scb = Scb::with_shared(SharedScbState {
         vtor,
         vectactive,
         shpr1,
         shpr2,
         shpr3,
     });
+    // Walk-free plan batch B1: this install path replaces the placeholder dev
+    // (or pushes directly) and so bypasses the `add_peripheral`/`push_peripheral`
+    // attach chokes — attach the bus cycle clock here explicitly, flipping the
+    // SCB's ICSR pend-drain onto the event scheduler (event-scheduler builds).
+    crate::Peripheral::attach_cycle_clock(&mut scb, bus.cycle_clock.clone());
     if let Some(p) = bus
         .peripherals
         .iter_mut()
@@ -59,7 +65,6 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             irq: None,
             dev: Box::new(scb),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
     }
@@ -84,7 +89,6 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             irq: None,
             dev: Box::new(nvic),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
     }
@@ -92,7 +96,14 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // Ensure DWT exists. Size 0x1000 covers the full CoreSight DWT register space,
     // including the CYCCNT enable bit at offset 0 and CYCCNT at offset 4, as well as
     // extended offsets accessed by some HAL dwt_init routines (e.g. offset 0xfc).
-    let dwt = Dwt::new();
+    // Attach the bus cycle clock so CYCCNT can be derived lazily (walk-free
+    // plan Part 1). DWT is registered by directly manipulating `bus.peripherals`
+    // (not `add_peripheral`), so the attach choke is replicated here — without
+    // it the model stays on the legacy walk. The clone happens before the
+    // `iter_mut` borrow below.
+    let dwt_clock = bus.cycle_clock.clone();
+    let mut dwt = Dwt::new();
+    dwt.attach_cycle_clock(dwt_clock);
     if let Some(p) = bus
         .peripherals
         .iter_mut()
@@ -111,7 +122,6 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             irq: None,
             dev: Box::new(dwt),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
     }

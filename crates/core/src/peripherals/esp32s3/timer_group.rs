@@ -77,7 +77,7 @@
 //! T0 source); T1 and WDT follow at +1 / +2, exactly as `uart.rs` takes a
 //! `source_id`.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 /// APB clock that feeds the timer-group prescaler (80 MHz).
 const APB_CLOCK_HZ: u64 = 80_000_000;
@@ -86,6 +86,9 @@ const APB_CLOCK_HZ: u64 = 80_000_000;
 const SRC_T0_OFFSET: u32 = 0;
 const SRC_T1_OFFSET: u32 = 1;
 const SRC_WDT_OFFSET: u32 = 2;
+
+/// Scheduler wake token for alarm evaluation.
+const TIMG_WAKE_TOKEN: u32 = 1;
 
 // ── TxCONFIG bit layout ──
 const CONFIG_EN_BIT: u32 = 1 << 31;
@@ -253,6 +256,11 @@ pub struct Esp32s3TimerGroup {
 
     /// Interrupt-matrix source id for T0. T1 = +1, WDT = +2.
     base_source_id: u32,
+
+    /// Bus-published cycle clock (walk-free / scheduler path).
+    clock: Option<CycleClock>,
+    /// Last CPU cycle synced (scheduler path).
+    last_tick: u64,
 }
 
 impl Esp32s3TimerGroup {
@@ -283,6 +291,8 @@ impl Esp32s3TimerGroup {
             rtccalicfg2: RTCCALICFG2_RESET,
             regclk: 0,
             base_source_id,
+            clock: None,
+            last_tick: 0,
         }
     }
 
@@ -500,6 +510,63 @@ impl Esp32s3TimerGroup {
             }
         }
     }
+
+    fn collect_matrix_sources(&self, out: &mut Vec<u32>) {
+        if self.t0.pending && (self.int_ena & INT_T0_BIT != 0) {
+            out.push(self.base_source_id + SRC_T0_OFFSET);
+        }
+        if self.t1.pending && (self.int_ena & INT_T1_BIT != 0) {
+            out.push(self.base_source_id + SRC_T1_OFFSET);
+        }
+        if self.wdt_pending && (self.int_ena & INT_WDT_BIT != 0) {
+            out.push(self.base_source_id + SRC_WDT_OFFSET);
+        }
+    }
+
+    /// CPU cycles until the next alarm edge for one timer, if armed.
+    fn timer_alarm_delay(timer: &TimerState, cpu_per_apb: u64) -> Option<u64> {
+        if !timer.enabled() || !timer.alarm_en() || timer.edge_latched {
+            return None;
+        }
+        let cpu_per_count = timer.divider().saturating_mul(cpu_per_apb).max(1);
+        let counts_needed = if timer.increasing() {
+            // Already at/past target without edge latch — saturating_sub → 0 (fire ASAP).
+            timer.alarm.saturating_sub(timer.counter)
+        } else {
+            timer.counter.saturating_sub(timer.alarm)
+        };
+        if counts_needed == 0 {
+            return Some(0);
+        }
+        // Remaining sim ticks in the current divider bucket + full counts after.
+        let remaining_in_bucket = cpu_per_count.saturating_sub(timer.accum);
+        let extra = counts_needed
+            .saturating_sub(1)
+            .saturating_mul(cpu_per_count);
+        Some(remaining_in_bucket.saturating_add(extra).max(1))
+    }
+
+    fn next_alarm_delay_cycles(&self) -> Option<u64> {
+        let cpu_per_apb = self.cpu_per_apb();
+        let d0 = Self::timer_alarm_delay(&self.t0, cpu_per_apb);
+        let d1 = Self::timer_alarm_delay(&self.t1, cpu_per_apb);
+        match (d0, d1) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) | (None, Some(a)) => Some(a),
+            (None, None) => None,
+        }
+    }
+
+    fn advance_to(&mut self, now: u64) {
+        if now <= self.last_tick {
+            return;
+        }
+        let delta = now - self.last_tick;
+        let cpu_per_apb = self.cpu_per_apb();
+        Self::advance_timer(&mut self.t0, delta, cpu_per_apb);
+        Self::advance_timer(&mut self.t1, delta, cpu_per_apb);
+        self.last_tick = now;
+    }
 }
 
 /// Compose the low 32 bits of a 64-bit register field.
@@ -568,6 +635,54 @@ impl Peripheral for Esp32s3TimerGroup {
                 Some(explicit_irqs)
             },
             ..PeripheralTickResult::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.last_tick = clock.now();
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if self.uses_scheduler() {
+            self.advance_to(now_cycle);
+        }
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        self.collect_matrix_sources(out);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.uses_scheduler() {
+            return Vec::new();
+        }
+        self.next_alarm_delay_cycles()
+            .map(|d| vec![(d, TIMG_WAKE_TOKEN)])
+            .unwrap_or_default()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        self.advance_to(sched.now());
+        let mut explicit_irqs = Vec::new();
+        self.collect_matrix_sources(&mut explicit_irqs);
+        crate::sched::EventResult {
+            explicit_irqs,
+            reschedule_delay: self.next_alarm_delay_cycles(),
+            ..Default::default()
         }
     }
 

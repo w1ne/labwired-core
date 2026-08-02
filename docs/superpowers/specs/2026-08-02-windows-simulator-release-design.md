@@ -2,7 +2,12 @@
 
 ## Outcome
 
-LabWired Core releases will publish a native `windows-x86_64` `labwired.exe` archive alongside the existing macOS and Linux CLI archives. The archive is built from the same tagged source and contains only the release CLI. It gives the LabWired Agent and desktop sidecar a real owned simulator input on Windows instead of a fake test adapter or a user-installed fallback.
+LabWired Core releases will publish a native `windows-x86_64` ZIP containing
+`labwired.exe` and `labwired-dap.exe` alongside the existing macOS and Linux
+CLI/debug-adapter archives. The archive is built from the same tagged source.
+It gives the LabWired Agent and desktop sidecar a real owned simulator input on
+Windows instead of a fake test adapter or a user-installed fallback, while
+keeping F5 debugging available from the same versioned release.
 
 ## Scope and boundary
 
@@ -21,13 +26,18 @@ Each tag build retains the current archives:
 
 and adds:
 
-- `labwired-vX.Y.Z-windows-x86_64.zip`, containing one `labwired.exe`.
+- `labwired-vX.Y.Z-windows-x86_64.zip`, containing root-level
+  `labwired.exe` and `labwired-dap.exe`.
 
 After collecting every platform artifact, the release job writes and uploads a `SHA256SUMS` file generated from the exact archive bytes. Future agent and desktop sidecar code pins an asset URL and its digest from this release; it never resolves `latest` at customer runtime.
 
 ## Verification model
 
-Pull requests gain a native Windows CLI job. It builds the release CLI, runs `labwired.exe --version`, packages a ZIP in a temporary directory, extracts it, and runs the extracted executable again. That makes the release archive shape testable before a tag.
+Pull requests gain a native Windows CLI job. It builds the release CLI and
+debug adapter, runs `labwired.exe --version`, packages a ZIP in a temporary
+directory, extracts it, verifies both root-level executables, and runs the
+extracted CLI again. That makes the release archive shape testable before a
+tag.
 
 The tag release workflow independently builds the same target, names the asset deterministically, publishes it with the other archives, and publishes checksums. GitHub Actions is the authoritative Windows execution environment for this task; macOS cannot validate the Windows binary locally.
 

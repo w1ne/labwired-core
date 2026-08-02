@@ -4,10 +4,14 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::CycleClock;
 use crate::Peripheral;
 use crate::PeripheralTickResult;
 use crate::SimResult;
 use anyhow::Result;
+
+/// Event-token for the self-perpetuating SM step chain under `event-scheduler`.
+const EVT_SM_STEP: u32 = 1;
 
 #[derive(Debug, Default, Clone)]
 pub struct StateMachine {
@@ -57,6 +61,13 @@ pub struct Pio {
     write_acc: u32,
     write_acc_mask: u8, // bitmask of which bytes have been written (0b1111 = complete)
     write_acc_offset: u64, // register offset being accumulated
+    /// True while a delay-1 SM step event is live (event-scheduler).
+    chain_live: bool,
+    /// Bus cycle clock, handed over at `add_peripheral`/`push_peripheral` time.
+    /// Its presence is the model's proof that it is attached to a bus whose
+    /// owning `Machine` actually drains the event scheduler — see
+    /// [`Pio::scheduler_mode`].
+    clock: Option<CycleClock>,
 }
 
 impl Default for Pio {
@@ -87,7 +98,31 @@ impl Pio {
             write_acc: 0,
             write_acc_mask: 0,
             write_acc_offset: 0xFFFF_FFFF,
+            chain_live: false,
+            clock: None,
         }
+    }
+
+    /// Scheduler mode: the `event-scheduler` feature is on AND the bus handed
+    /// this instance its shared [`CycleClock`] at attach time.
+    ///
+    /// The clock is the only evidence a peripheral has that it went through
+    /// `SystemBus::add_peripheral`/`push_peripheral` — and therefore that it
+    /// sits on a bus whose `Machine` drains the event scheduler. PIO's
+    /// scheduler path is a self-perpetuating delay-1 `EVT_SM_STEP` chain
+    /// (`take_scheduled_events` + `on_event`): with no drain there is nothing
+    /// to step the state machines and every SM freezes at PC 0 forever.
+    /// Hand-built buses (tests, embedders that push `PeripheralEntry` directly
+    /// and settle with `tick_peripherals*`) therefore stay on the legacy walk
+    /// with exact historical semantics — the contract documented on
+    /// [`Peripheral::attach_cycle_clock`]. Mirrors `timer`/`dma`/`i2c`/`exti`.
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// True while any state machine is enabled (needs per-cycle SM steps).
+    fn any_sm_enabled(&self) -> bool {
+        self.sm.iter().any(|s| s.enabled)
     }
 
     pub fn load_program_asm(&mut self, asm: &str) -> Result<()> {
@@ -511,6 +546,54 @@ impl Peripheral for Pio {
         PeripheralTickResult {
             irq: false,
             cycles: 0,
+            ..Default::default()
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    /// Event-driven on a bus-attached `event-scheduler` build so PIO does not
+    /// pin the walk. Feature-off — or a hand-built bus that never handed over a
+    /// cycle clock, and so has no scheduler drain — still runs `tick()` via the
+    /// legacy walk. See [`Pio::scheduler_mode`].
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // `tick()` steps every enabled state machine, so the walk is real work
+        // whenever the event chain is not the one driving it.
+        !self.scheduler_mode()
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() {
+            return Vec::new();
+        }
+        if self.any_sm_enabled() && !self.chain_live {
+            self.chain_live = true;
+            vec![(0, EVT_SM_STEP)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != EVT_SM_STEP {
+            return crate::sched::EventResult::default();
+        }
+        let _ = self.tick();
+        let active = self.any_sm_enabled();
+        self.chain_live = active;
+        crate::sched::EventResult {
+            reschedule_delay: active.then_some(1),
             ..Default::default()
         }
     }

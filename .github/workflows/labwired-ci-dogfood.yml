@@ -1,0 +1,38 @@
+name: LabWired CI ingest dogfood
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - ".github/workflows/labwired-ci-dogfood.yml"
+      - "examples/ci/dummy-max-steps.yaml"
+      - "tests/fixtures/uart-ok-thumbv7m.elf"
+      - "configs/systems/ci-fixture-uart1.yaml"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  dogfood:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run LabWired
+        id: labwired
+        uses: labwired/firmware-test@v1
+        with:
+          script: examples/ci/dummy-max-steps.yaml
+          version: v0.19.2
+
+      - name: Assert the run was actually ingested
+        run: |
+          set -euo pipefail
+          echo "status=${{ steps.labwired.outputs.status }}"
+          echo "report_url=${{ steps.labwired.outputs.report_url }}"
+          if [ -z "${{ steps.labwired.outputs.report_url }}" ]; then
+            echo "::error::report_url output is empty — the upload to LabWired did not land."
+            exit 1
+          fi

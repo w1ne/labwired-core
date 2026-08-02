@@ -239,6 +239,97 @@ pub fn default_inspect<P: Peripheral + ?Sized>(
     }
 }
 
+/// Translate an on-disk [`labwired_config::PeripheralDescriptor`] into the
+/// inspect vocabulary.
+///
+/// One conversion, two callers: declarative peripherals describe themselves
+/// with it ([`crate::peripherals::declarative::GenericPeripheral::describe_registers`]),
+/// and native peripherals borrow it via a chip's `debug_schema` (see
+/// [`inspect_with_schema`]). Keeping it here stops the two from drifting into
+/// two slightly different ideas of what a register looks like.
+pub fn schema_from_descriptor(
+    descriptor: &labwired_config::PeripheralDescriptor,
+) -> Vec<RegisterSchema> {
+    descriptor
+        .registers
+        .iter()
+        .map(|reg| RegisterSchema {
+            name: reg.id.clone(),
+            offset: reg.address_offset,
+            size: reg.size,
+            access: match reg.access {
+                labwired_config::Access::ReadWrite => "rw",
+                labwired_config::Access::ReadOnly => "ro",
+                labwired_config::Access::WriteOnly => "wo",
+            },
+            fields: reg
+                .fields
+                .iter()
+                .map(|f| FieldSchema {
+                    name: f.name.clone(),
+                    bits: f.bit_range,
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+/// Decode a peripheral's live state against an EXTERNALLY supplied schema.
+///
+/// This exists for **native** peripherals — the ones that model behaviour in
+/// hand-written Rust and so advertise no [`Peripheral::describe_registers`] of
+/// their own. Before this, every such peripheral inspected as
+/// `kind: "native", registers: []`, which in a debugger reads as "this
+/// peripheral has no registers" when the truth is "nobody told the debugger
+/// their names". On nRF52840 that was all 52 of them.
+///
+/// **This adds no fidelity, and must never be counted as any.** The schema
+/// contributes names, offsets and bit slices — nothing else. Every VALUE still
+/// comes from the peripheral's own model, read through side-effect-free `peek`,
+/// exactly as `default_inspect` would. A register the model does not implement
+/// reads back whatever the model returns for that offset; naming it does not
+/// make it modeled.
+///
+/// `kind` stays `"native"` for that reason: the caller can still tell a
+/// hand-written peripheral from a declarative one.
+pub fn inspect_with_schema<P: Peripheral + ?Sized>(
+    p: &P,
+    base: u64,
+    name: &str,
+    schema: &[RegisterSchema],
+) -> PeripheralInspect {
+    let registers = schema
+        .iter()
+        .map(|reg| {
+            let value = peek_word(p, reg.offset, reg.size);
+            RegisterView {
+                name: reg.name.clone(),
+                offset: reg.offset,
+                size: reg.size,
+                value,
+                fields: reg
+                    .fields
+                    .iter()
+                    .map(|f| FieldView {
+                        name: f.name.clone(),
+                        bits: f.bits,
+                        value: extract_field(value, f.bits),
+                    })
+                    .collect(),
+                access: reg.access.to_string(),
+            }
+        })
+        .collect();
+
+    PeripheralInspect {
+        name: name.to_string(),
+        kind: "native".to_string(),
+        base,
+        registers,
+        artifacts: Vec::new(),
+    }
+}
+
 /// FNV-1a hash of a byte buffer, used as a cheap `meta.generation` so callers
 /// can detect an unchanged artifact without re-pulling its bytes.
 pub fn artifact_generation(bytes: &[u8]) -> u64 {

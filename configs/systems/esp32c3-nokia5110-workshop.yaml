@@ -1,5 +1,6 @@
 name: "esp32c3-nokia5110-workshop"
 chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "lcd"

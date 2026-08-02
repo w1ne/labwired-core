@@ -45,7 +45,7 @@
 //! interrupt matrix.
 
 use crate::peripherals::spi::SpiDevice;
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const SPI2_BASE: u32 = 0x6002_4000;
 pub const SPI2_SIZE: u64 = 0x1000;
@@ -143,6 +143,17 @@ pub struct Esp32c3Spi {
     /// Devices on this controller's bus: MOSI bytes broadcast to every device,
     /// first non-zero MISO byte wins (single-device labs in practice).
     pub(crate) attached_devices: Vec<Box<dyn SpiDevice>>,
+    /// Bus-published cycle clock (walk-free plan). `Some` once
+    /// `SystemBus::push_peripheral`/`add_peripheral` attaches it. Its presence
+    /// (under the `event-scheduler` feature) flips the model onto the event
+    /// scheduler: the per-cycle walk skips this peripheral and the bus derives
+    /// its level-sensitive matrix IRQ from [`Self::matrix_irq_sources`] instead
+    /// of the walk's `explicit_irqs`. This controller has NO free-running
+    /// counter — `int_raw` is write-armed by the transaction launch — so there
+    /// are no scheduled events: the migration is level-export only. `None`
+    /// (feature off, a hand-built bus, or the differential's `force_legacy_walk`)
+    /// keeps the legacy per-cycle walk. Not serialized — re-attached by the bus.
+    clock: Option<CycleClock>,
 }
 
 impl std::fmt::Debug for Esp32c3Spi {
@@ -175,7 +186,16 @@ impl Esp32c3Spi {
             regs,
             int_raw: 0,
             attached_devices: Vec::new(),
+            clock: None,
         }
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gate to build the reference config from
+    /// the same bus assembly (mirrors `Esp32c3I2c::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 
     /// Raw device push — does NOT wrap for tracing. The only production caller
@@ -187,6 +207,12 @@ impl Esp32c3Spi {
 
     pub fn attached_devices(&self) -> &[Box<dyn SpiDevice>] {
         &self.attached_devices
+    }
+
+    /// Mutable counterpart of [`Self::attached_devices`] — see
+    /// `Esp32c3I2c::attached_slaves_mut` for why this exists.
+    pub fn attached_devices_mut(&mut self) -> &mut [Box<dyn SpiDevice>] {
+        &mut self.attached_devices
     }
 
     fn reg(&self, off: u64) -> u32 {
@@ -342,6 +368,11 @@ impl Peripheral for Esp32c3Spi {
         Ok(())
     }
 
+    /// LEGACY per-cycle walk path: re-assert the level interrupt source while
+    /// any enabled INT bit is set. In scheduler mode ([`Self::uses_scheduler`]
+    /// true) the walk skips this peripheral entirely and the bus re-derives the
+    /// level from [`Self::matrix_irq_sources`] instead; this reporter is a pure
+    /// no-op on state, so a stray call is harmless.
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult {
             explicit_irqs: if self.int_st() != 0 {
@@ -361,12 +392,55 @@ impl Peripheral for Esp32c3Spi {
         true
     }
 
+    /// Walk-free plan: driven by the event scheduler once the bus has attached
+    /// its cycle clock (production `push_peripheral`/`add_peripheral` always do,
+    /// under the `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral; its `int_raw` is write-armed by the transaction launch (no
+    /// free-running counter), so there is nothing to advance and no event to
+    /// schedule — only the level export via `matrix_irq_sources` is needed.
+    /// Without a clock (feature off, a hand-built bus, or `force_legacy_walk`)
+    /// it stays on the legacy walk so those callers keep the old exact
+    /// semantics.
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the GP-SPI2 source while any enabled INT bit
+    /// is set — the exact condition `tick` pushes on the legacy walk. In
+    /// scheduler mode the walk no longer re-emits it, so the bus re-derives the
+    /// level from here (`refresh_esp32c3_sched_sources`, polled on the event
+    /// path and the walk-tick aggregation) so the level-sensitive IRQ stays
+    /// routed and de-asserts the tick after firmware writes INT_CLR.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.int_st() != 0 {
+            out.push(self.source_id);
+        }
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for dev in self.attached_devices.iter_mut() {
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 

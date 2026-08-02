@@ -1,0 +1,23 @@
+# LabWired - STM32F411CEU6 Black Pill Example System Configuration
+#
+# Referenced by io-smoke.yaml, which runs the committed tier-1 fixture ELF and
+# asserts its TIER1 self-test transcript over USART2.
+#
+# UNVERIFIED BOARD PINOUT: LED PC13 / button PA0 are carried over from the F401
+# Black Pill. See VALIDATION.md.
+name: "stm32f411ceu6-blackpill-example"
+chip: "../../configs/chips/stm32f411ceu6.yaml"
+external_devices: []
+board_io:
+  - id: "led_pc13"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "output"
+    active_high: false
+  - id: "button_user_pa0"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: true

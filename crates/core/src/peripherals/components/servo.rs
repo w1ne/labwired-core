@@ -129,6 +129,9 @@ struct ServoState {
 /// A hobby PWM servo digital twin. See module docs.
 #[derive(Debug)]
 pub struct Servo {
+    /// Canvas / board_io part id — used by `get_actuator_states` so the UI can
+    /// map shaft angle back onto the diagram part.
+    id: String,
     cal: ServoCal,
     /// GPIO pin this servo's control wire is connected to (for the
     /// observer path). Edges on other pins are ignored.
@@ -138,9 +141,16 @@ pub struct Servo {
 
 impl Servo {
     /// Create a servo with the given calibration, listening on `pin` for
-    /// the GPIO-edge drive path.
+    /// the GPIO-edge drive path. Prefer [`Self::with_id`] when the angle must
+    /// be exported to the UI under a known part id.
     pub fn new(cal: ServoCal, pin: u8) -> Self {
+        Self::with_id(String::new(), cal, pin)
+    }
+
+    /// Create a servo bound to a diagram part id for UI readback.
+    pub fn with_id(id: impl Into<String>, cal: ServoCal, pin: u8) -> Self {
         Self {
+            id: id.into(),
             cal,
             pin,
             state: Mutex::new(ServoState::default()),
@@ -155,6 +165,11 @@ impl Servo {
     /// Convenience: an SG90 micro servo on `pin`.
     pub fn sg90(pin: u8) -> Self {
         Self::new(ServoCal::sg90(), pin)
+    }
+
+    /// Diagram / board_io part id (empty when constructed without one).
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     /// The GPIO pin this servo is wired to.

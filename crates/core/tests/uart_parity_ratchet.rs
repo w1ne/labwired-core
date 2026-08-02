@@ -33,10 +33,12 @@ fn dummy_manifest(path: &str) -> SystemManifest {
         name: "uart-parity".into(),
         chip: path.into(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         peripherals: vec![],
         memory_overrides: Default::default(),
         debug_uart: None,
+        wifi_ap: None,
     }
 }
 

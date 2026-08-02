@@ -1,0 +1,2531 @@
+peripheral: USBD
+version: 0.1.0
+registers:
+- id: TASKS_STARTEPIN0
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN1
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN2
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN3
+  address_offset: 16
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN4
+  address_offset: 20
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN5
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN6
+  address_offset: 28
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPIN7
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPIN[n].PTR and EPIN[n].MAXCNT registers values, and enables endpoint IN n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTISOIN
+  address_offset: 36
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTISOIN
+    bit_range:
+    - 0
+    - 0
+    description: Captures the ISOIN.PTR and ISOIN.MAXCNT registers values, and enables sending data on ISO endpoint
+  side_effects: null
+- id: TASKS_STARTEPOUT0
+  address_offset: 40
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT1
+  address_offset: 44
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT2
+  address_offset: 48
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT3
+  address_offset: 52
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT4
+  address_offset: 56
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT5
+  address_offset: 60
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT6
+  address_offset: 64
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTEPOUT7
+  address_offset: 68
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the EPOUT[n].PTR and EPOUT[n].MAXCNT registers values, and enables endpoint n to respond to traffic from host
+  side_effects: null
+- id: TASKS_STARTISOOUT
+  address_offset: 72
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTISOOUT
+    bit_range:
+    - 0
+    - 0
+    description: Captures the ISOOUT.PTR and ISOOUT.MAXCNT registers values, and enables receiving of data on ISO endpoint
+  side_effects: null
+- id: TASKS_EP0RCVOUT
+  address_offset: 76
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_EP0RCVOUT
+    bit_range:
+    - 0
+    - 0
+    description: Allows OUT data stage on control endpoint 0
+  side_effects: null
+- id: TASKS_EP0STATUS
+  address_offset: 80
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_EP0STATUS
+    bit_range:
+    - 0
+    - 0
+    description: Allows status stage on control endpoint 0
+  side_effects: null
+- id: TASKS_EP0STALL
+  address_offset: 84
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_EP0STALL
+    bit_range:
+    - 0
+    - 0
+    description: Stalls data and status stage on control endpoint 0
+  side_effects: null
+- id: TASKS_DPDMDRIVE
+  address_offset: 88
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_DPDMDRIVE
+    bit_range:
+    - 0
+    - 0
+    description: Forces D+ and D- lines into the state defined in the DPDMVALUE register
+  side_effects: null
+- id: TASKS_DPDMNODRIVE
+  address_offset: 92
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_DPDMNODRIVE
+    bit_range:
+    - 0
+    - 0
+    description: Stops forcing D+ and D- lines into any state (USB engine takes control)
+  side_effects: null
+- id: EVENTS_USBRESET
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_USBRESET
+    bit_range:
+    - 0
+    - 0
+    description: Signals that a USB reset condition has been detected on USB lines
+  side_effects: null
+- id: EVENTS_STARTED
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_STARTED
+    bit_range:
+    - 0
+    - 0
+    description: Confirms that the EPIN[n].PTR and EPIN[n].MAXCNT, or EPOUT[n].PTR and EPOUT[n].MAXCNT registers have been captured on all endpoints reported in the EPSTATUS register
+  side_effects: null
+- id: EVENTS_ENDEPIN0
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN1
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN2
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN3
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN4
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN5
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN6
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPIN7
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPIN[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_EP0DATADONE
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_EP0DATADONE
+    bit_range:
+    - 0
+    - 0
+    description: An acknowledged data transfer has taken place on the control endpoint
+  side_effects: null
+- id: EVENTS_ENDISOIN
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDISOIN
+    bit_range:
+    - 0
+    - 0
+    description: The whole ISOIN buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT0
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT1
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT2
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT3
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT4
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT5
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT6
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDEPOUT7
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDEPOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole EPOUT[n] buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_ENDISOOUT
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDISOOUT
+    bit_range:
+    - 0
+    - 0
+    description: The whole ISOOUT buffer has been consumed. The buffer can be accessed safely by software.
+  side_effects: null
+- id: EVENTS_SOF
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_SOF
+    bit_range:
+    - 0
+    - 0
+    description: Signals that a SOF (start of frame) condition has been detected on USB lines
+  side_effects: null
+- id: EVENTS_USBEVENT
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_USBEVENT
+    bit_range:
+    - 0
+    - 0
+    description: An event or an error not covered by specific events has occurred. Check EVENTCAUSE register to find the cause.
+  side_effects: null
+- id: EVENTS_EP0SETUP
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_EP0SETUP
+    bit_range:
+    - 0
+    - 0
+    description: A valid SETUP token has been received (and acknowledged) on the control endpoint
+  side_effects: null
+- id: EVENTS_EPDATA
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_EPDATA
+    bit_range:
+    - 0
+    - 0
+    description: A data transfer has occurred on a data endpoint, indicated by the EPDATASTATUS register
+  side_effects: null
+- id: SHORTS
+  address_offset: 512
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EP0DATADONE_STARTEPIN0
+    bit_range:
+    - 0
+    - 0
+    description: Shortcut between event EP0DATADONE and task STARTEPIN[0]
+  - name: EP0DATADONE_STARTEPOUT0
+    bit_range:
+    - 1
+    - 1
+    description: Shortcut between event EP0DATADONE and task STARTEPOUT[0]
+  - name: EP0DATADONE_EP0STATUS
+    bit_range:
+    - 2
+    - 2
+    description: Shortcut between event EP0DATADONE and task EP0STATUS
+  - name: ENDEPOUT0_EP0STATUS
+    bit_range:
+    - 3
+    - 3
+    description: Shortcut between event ENDEPOUT[0] and task EP0STATUS
+  - name: ENDEPOUT0_EP0RCVOUT
+    bit_range:
+    - 4
+    - 4
+    description: Shortcut between event ENDEPOUT[0] and task EP0RCVOUT
+  side_effects: null
+- id: INTEN
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USBRESET
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable interrupt for event USBRESET
+  - name: STARTED
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable interrupt for event STARTED
+  - name: ENDEPIN0
+    bit_range:
+    - 2
+    - 2
+    description: Enable or disable interrupt for event ENDEPIN[0]
+  - name: ENDEPIN1
+    bit_range:
+    - 3
+    - 3
+    description: Enable or disable interrupt for event ENDEPIN[1]
+  - name: ENDEPIN2
+    bit_range:
+    - 4
+    - 4
+    description: Enable or disable interrupt for event ENDEPIN[2]
+  - name: ENDEPIN3
+    bit_range:
+    - 5
+    - 5
+    description: Enable or disable interrupt for event ENDEPIN[3]
+  - name: ENDEPIN4
+    bit_range:
+    - 6
+    - 6
+    description: Enable or disable interrupt for event ENDEPIN[4]
+  - name: ENDEPIN5
+    bit_range:
+    - 7
+    - 7
+    description: Enable or disable interrupt for event ENDEPIN[5]
+  - name: ENDEPIN6
+    bit_range:
+    - 8
+    - 8
+    description: Enable or disable interrupt for event ENDEPIN[6]
+  - name: ENDEPIN7
+    bit_range:
+    - 9
+    - 9
+    description: Enable or disable interrupt for event ENDEPIN[7]
+  - name: EP0DATADONE
+    bit_range:
+    - 10
+    - 10
+    description: Enable or disable interrupt for event EP0DATADONE
+  - name: ENDISOIN
+    bit_range:
+    - 11
+    - 11
+    description: Enable or disable interrupt for event ENDISOIN
+  - name: ENDEPOUT0
+    bit_range:
+    - 12
+    - 12
+    description: Enable or disable interrupt for event ENDEPOUT[0]
+  - name: ENDEPOUT1
+    bit_range:
+    - 13
+    - 13
+    description: Enable or disable interrupt for event ENDEPOUT[1]
+  - name: ENDEPOUT2
+    bit_range:
+    - 14
+    - 14
+    description: Enable or disable interrupt for event ENDEPOUT[2]
+  - name: ENDEPOUT3
+    bit_range:
+    - 15
+    - 15
+    description: Enable or disable interrupt for event ENDEPOUT[3]
+  - name: ENDEPOUT4
+    bit_range:
+    - 16
+    - 16
+    description: Enable or disable interrupt for event ENDEPOUT[4]
+  - name: ENDEPOUT5
+    bit_range:
+    - 17
+    - 17
+    description: Enable or disable interrupt for event ENDEPOUT[5]
+  - name: ENDEPOUT6
+    bit_range:
+    - 18
+    - 18
+    description: Enable or disable interrupt for event ENDEPOUT[6]
+  - name: ENDEPOUT7
+    bit_range:
+    - 19
+    - 19
+    description: Enable or disable interrupt for event ENDEPOUT[7]
+  - name: ENDISOOUT
+    bit_range:
+    - 20
+    - 20
+    description: Enable or disable interrupt for event ENDISOOUT
+  - name: SOF
+    bit_range:
+    - 21
+    - 21
+    description: Enable or disable interrupt for event SOF
+  - name: USBEVENT
+    bit_range:
+    - 22
+    - 22
+    description: Enable or disable interrupt for event USBEVENT
+  - name: EP0SETUP
+    bit_range:
+    - 23
+    - 23
+    description: Enable or disable interrupt for event EP0SETUP
+  - name: EPDATA
+    bit_range:
+    - 24
+    - 24
+    description: Enable or disable interrupt for event EPDATA
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USBRESET
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable interrupt for event USBRESET
+  - name: STARTED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to enable interrupt for event STARTED
+  - name: ENDEPIN0
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to enable interrupt for event ENDEPIN[0]
+  - name: ENDEPIN1
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to enable interrupt for event ENDEPIN[1]
+  - name: ENDEPIN2
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to enable interrupt for event ENDEPIN[2]
+  - name: ENDEPIN3
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to enable interrupt for event ENDEPIN[3]
+  - name: ENDEPIN4
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to enable interrupt for event ENDEPIN[4]
+  - name: ENDEPIN5
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to enable interrupt for event ENDEPIN[5]
+  - name: ENDEPIN6
+    bit_range:
+    - 8
+    - 8
+    description: Write '1' to enable interrupt for event ENDEPIN[6]
+  - name: ENDEPIN7
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to enable interrupt for event ENDEPIN[7]
+  - name: EP0DATADONE
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to enable interrupt for event EP0DATADONE
+  - name: ENDISOIN
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to enable interrupt for event ENDISOIN
+  - name: ENDEPOUT0
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to enable interrupt for event ENDEPOUT[0]
+  - name: ENDEPOUT1
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to enable interrupt for event ENDEPOUT[1]
+  - name: ENDEPOUT2
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to enable interrupt for event ENDEPOUT[2]
+  - name: ENDEPOUT3
+    bit_range:
+    - 15
+    - 15
+    description: Write '1' to enable interrupt for event ENDEPOUT[3]
+  - name: ENDEPOUT4
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to enable interrupt for event ENDEPOUT[4]
+  - name: ENDEPOUT5
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to enable interrupt for event ENDEPOUT[5]
+  - name: ENDEPOUT6
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to enable interrupt for event ENDEPOUT[6]
+  - name: ENDEPOUT7
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to enable interrupt for event ENDEPOUT[7]
+  - name: ENDISOOUT
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to enable interrupt for event ENDISOOUT
+  - name: SOF
+    bit_range:
+    - 21
+    - 21
+    description: Write '1' to enable interrupt for event SOF
+  - name: USBEVENT
+    bit_range:
+    - 22
+    - 22
+    description: Write '1' to enable interrupt for event USBEVENT
+  - name: EP0SETUP
+    bit_range:
+    - 23
+    - 23
+    description: Write '1' to enable interrupt for event EP0SETUP
+  - name: EPDATA
+    bit_range:
+    - 24
+    - 24
+    description: Write '1' to enable interrupt for event EPDATA
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: USBRESET
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable interrupt for event USBRESET
+  - name: STARTED
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to disable interrupt for event STARTED
+  - name: ENDEPIN0
+    bit_range:
+    - 2
+    - 2
+    description: Write '1' to disable interrupt for event ENDEPIN[0]
+  - name: ENDEPIN1
+    bit_range:
+    - 3
+    - 3
+    description: Write '1' to disable interrupt for event ENDEPIN[1]
+  - name: ENDEPIN2
+    bit_range:
+    - 4
+    - 4
+    description: Write '1' to disable interrupt for event ENDEPIN[2]
+  - name: ENDEPIN3
+    bit_range:
+    - 5
+    - 5
+    description: Write '1' to disable interrupt for event ENDEPIN[3]
+  - name: ENDEPIN4
+    bit_range:
+    - 6
+    - 6
+    description: Write '1' to disable interrupt for event ENDEPIN[4]
+  - name: ENDEPIN5
+    bit_range:
+    - 7
+    - 7
+    description: Write '1' to disable interrupt for event ENDEPIN[5]
+  - name: ENDEPIN6
+    bit_range:
+    - 8
+    - 8
+    description: Write '1' to disable interrupt for event ENDEPIN[6]
+  - name: ENDEPIN7
+    bit_range:
+    - 9
+    - 9
+    description: Write '1' to disable interrupt for event ENDEPIN[7]
+  - name: EP0DATADONE
+    bit_range:
+    - 10
+    - 10
+    description: Write '1' to disable interrupt for event EP0DATADONE
+  - name: ENDISOIN
+    bit_range:
+    - 11
+    - 11
+    description: Write '1' to disable interrupt for event ENDISOIN
+  - name: ENDEPOUT0
+    bit_range:
+    - 12
+    - 12
+    description: Write '1' to disable interrupt for event ENDEPOUT[0]
+  - name: ENDEPOUT1
+    bit_range:
+    - 13
+    - 13
+    description: Write '1' to disable interrupt for event ENDEPOUT[1]
+  - name: ENDEPOUT2
+    bit_range:
+    - 14
+    - 14
+    description: Write '1' to disable interrupt for event ENDEPOUT[2]
+  - name: ENDEPOUT3
+    bit_range:
+    - 15
+    - 15
+    description: Write '1' to disable interrupt for event ENDEPOUT[3]
+  - name: ENDEPOUT4
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to disable interrupt for event ENDEPOUT[4]
+  - name: ENDEPOUT5
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to disable interrupt for event ENDEPOUT[5]
+  - name: ENDEPOUT6
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to disable interrupt for event ENDEPOUT[6]
+  - name: ENDEPOUT7
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to disable interrupt for event ENDEPOUT[7]
+  - name: ENDISOOUT
+    bit_range:
+    - 20
+    - 20
+    description: Write '1' to disable interrupt for event ENDISOOUT
+  - name: SOF
+    bit_range:
+    - 21
+    - 21
+    description: Write '1' to disable interrupt for event SOF
+  - name: USBEVENT
+    bit_range:
+    - 22
+    - 22
+    description: Write '1' to disable interrupt for event USBEVENT
+  - name: EP0SETUP
+    bit_range:
+    - 23
+    - 23
+    description: Write '1' to disable interrupt for event EP0SETUP
+  - name: EPDATA
+    bit_range:
+    - 24
+    - 24
+    description: Write '1' to disable interrupt for event EPDATA
+  side_effects: null
+- id: EVENTCAUSE
+  address_offset: 1024
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ISOOUTCRC
+    bit_range:
+    - 0
+    - 0
+    description: CRC error was detected on isochronous OUT endpoint 8. Write '1' to clear.
+  - name: SUSPEND
+    bit_range:
+    - 8
+    - 8
+    description: Signals that USB lines have been idle long enough for the device to enter suspend. Write '1' to clear.
+  - name: RESUME
+    bit_range:
+    - 9
+    - 9
+    description: Signals that a RESUME condition (K state or activity restart) has been detected on USB lines. Write '1' to clear.
+  - name: USBWUALLOWED
+    bit_range:
+    - 10
+    - 10
+    description: USB MAC has been woken up and operational. Write '1' to clear.
+  - name: READY
+    bit_range:
+    - 11
+    - 11
+    description: USB device is ready for normal operation. Write '1' to clear.
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: HALTED_EPIN0
+  address_offset: 1056
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN1
+  address_offset: 1060
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN2
+  address_offset: 1064
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN3
+  address_offset: 1068
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN4
+  address_offset: 1072
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN5
+  address_offset: 1076
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN6
+  address_offset: 1080
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPIN7
+  address_offset: 1084
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: IN endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT0
+  address_offset: 1092
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT1
+  address_offset: 1096
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT2
+  address_offset: 1100
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT3
+  address_offset: 1104
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT4
+  address_offset: 1108
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT5
+  address_offset: 1112
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT6
+  address_offset: 1116
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: HALTED_EPOUT7
+  address_offset: 1120
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GETSTATUS
+    bit_range:
+    - 15
+    - 0
+    description: OUT endpoint halted status. Can be used as is as response to a GetStatus() request to endpoint.
+  side_effects: null
+- id: EPSTATUS
+  address_offset: 1128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPIN0
+    bit_range:
+    - 0
+    - 0
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN1
+    bit_range:
+    - 1
+    - 1
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN2
+    bit_range:
+    - 2
+    - 2
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN3
+    bit_range:
+    - 3
+    - 3
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN4
+    bit_range:
+    - 4
+    - 4
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN5
+    bit_range:
+    - 5
+    - 5
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN6
+    bit_range:
+    - 6
+    - 6
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN7
+    bit_range:
+    - 7
+    - 7
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPIN8
+    bit_range:
+    - 8
+    - 8
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT0
+    bit_range:
+    - 16
+    - 16
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT1
+    bit_range:
+    - 17
+    - 17
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT2
+    bit_range:
+    - 18
+    - 18
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT3
+    bit_range:
+    - 19
+    - 19
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT4
+    bit_range:
+    - 20
+    - 20
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT5
+    bit_range:
+    - 21
+    - 21
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT6
+    bit_range:
+    - 22
+    - 22
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT7
+    bit_range:
+    - 23
+    - 23
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  - name: EPOUT8
+    bit_range:
+    - 24
+    - 24
+    description: Captured state of endpoint's EasyDMA registers. Write '1' to clear.
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: EPDATASTATUS
+  address_offset: 1132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EPIN1
+    bit_range:
+    - 1
+    - 1
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPIN2
+    bit_range:
+    - 2
+    - 2
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPIN3
+    bit_range:
+    - 3
+    - 3
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPIN4
+    bit_range:
+    - 4
+    - 4
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPIN5
+    bit_range:
+    - 5
+    - 5
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPIN6
+    bit_range:
+    - 6
+    - 6
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPIN7
+    bit_range:
+    - 7
+    - 7
+    description: Acknowledged data transfer on this IN endpoint. Write '1' to clear.
+  - name: EPOUT1
+    bit_range:
+    - 17
+    - 17
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  - name: EPOUT2
+    bit_range:
+    - 18
+    - 18
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  - name: EPOUT3
+    bit_range:
+    - 19
+    - 19
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  - name: EPOUT4
+    bit_range:
+    - 20
+    - 20
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  - name: EPOUT5
+    bit_range:
+    - 21
+    - 21
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  - name: EPOUT6
+    bit_range:
+    - 22
+    - 22
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  - name: EPOUT7
+    bit_range:
+    - 23
+    - 23
+    description: Acknowledged data transfer on this OUT endpoint. Write '1' to clear.
+  side_effects:
+    read_action: null
+    write_action: write_one_to_clear
+    on_read: null
+    on_write: null
+- id: USBADDR
+  address_offset: 1136
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 6
+    - 0
+    description: Device USB address
+  side_effects: null
+- id: BMREQUESTTYPE
+  address_offset: 1152
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RECIPIENT
+    bit_range:
+    - 4
+    - 0
+    description: Data transfer type
+  - name: TYPE
+    bit_range:
+    - 6
+    - 5
+    description: Data transfer type
+  - name: DIRECTION
+    bit_range:
+    - 7
+    - 7
+    description: Data transfer direction
+  side_effects: null
+- id: BREQUEST
+  address_offset: 1156
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: BREQUEST
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 1, bRequest. Values provided for standard requests only, user must implement class and vendor values.
+  side_effects: null
+- id: WVALUEL
+  address_offset: 1160
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WVALUEL
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 2, LSB of wValue
+  side_effects: null
+- id: WVALUEH
+  address_offset: 1164
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WVALUEH
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 3, MSB of wValue
+  side_effects: null
+- id: WINDEXL
+  address_offset: 1168
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WINDEXL
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 4, LSB of wIndex
+  side_effects: null
+- id: WINDEXH
+  address_offset: 1172
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WINDEXH
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 5, MSB of wIndex
+  side_effects: null
+- id: WLENGTHL
+  address_offset: 1176
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WLENGTHL
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 6, LSB of wLength
+  side_effects: null
+- id: WLENGTHH
+  address_offset: 1180
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WLENGTHH
+    bit_range:
+    - 7
+    - 0
+    description: SETUP data, byte 7, MSB of wLength
+  side_effects: null
+- id: SIZE_EPOUT0
+  address_offset: 1184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT1
+  address_offset: 1188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT2
+  address_offset: 1192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT3
+  address_offset: 1196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT4
+  address_offset: 1200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT5
+  address_offset: 1204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT6
+  address_offset: 1208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_EPOUT7
+  address_offset: 1212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SIZE
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes received last in the data stage of this OUT endpoint
+  side_effects: null
+- id: SIZE_ISOOUT
+  address_offset: 1216
+  size: 32
+  access: READ_ONLY
+  reset_value: 65536
+  fields:
+  - name: SIZE
+    bit_range:
+    - 9
+    - 0
+    description: Number of bytes received last on this ISO OUT data endpoint
+  - name: ZERO
+    bit_range:
+    - 16
+    - 16
+    description: Zero-length data packet received
+  side_effects: null
+- id: ENABLE
+  address_offset: 1280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enable USB
+  side_effects: null
+- id: USBPULLUP
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CONNECT
+    bit_range:
+    - 0
+    - 0
+    description: Control of the USB pull-up on the D+ line
+  side_effects: null
+- id: DPDMVALUE
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STATE
+    bit_range:
+    - 4
+    - 0
+    description: State D+ and D- lines will be forced into by the DPDMDRIVE task
+  side_effects: null
+- id: DTOGGLE
+  address_offset: 1292
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: EP
+    bit_range:
+    - 2
+    - 0
+    description: Select bulk endpoint number
+  - name: IO
+    bit_range:
+    - 7
+    - 7
+    description: Selects IN or OUT endpoint
+  - name: VALUE
+    bit_range:
+    - 9
+    - 8
+    description: Data toggle value
+  side_effects: null
+- id: EPINEN
+  address_offset: 1296
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: IN0
+    bit_range:
+    - 0
+    - 0
+    description: Enable IN endpoint 0
+  - name: IN1
+    bit_range:
+    - 1
+    - 1
+    description: Enable IN endpoint 1
+  - name: IN2
+    bit_range:
+    - 2
+    - 2
+    description: Enable IN endpoint 2
+  - name: IN3
+    bit_range:
+    - 3
+    - 3
+    description: Enable IN endpoint 3
+  - name: IN4
+    bit_range:
+    - 4
+    - 4
+    description: Enable IN endpoint 4
+  - name: IN5
+    bit_range:
+    - 5
+    - 5
+    description: Enable IN endpoint 5
+  - name: IN6
+    bit_range:
+    - 6
+    - 6
+    description: Enable IN endpoint 6
+  - name: IN7
+    bit_range:
+    - 7
+    - 7
+    description: Enable IN endpoint 7
+  - name: ISOIN
+    bit_range:
+    - 8
+    - 8
+    description: Enable ISO IN endpoint
+  side_effects: null
+- id: EPOUTEN
+  address_offset: 1300
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: OUT0
+    bit_range:
+    - 0
+    - 0
+    description: Enable OUT endpoint 0
+  - name: OUT1
+    bit_range:
+    - 1
+    - 1
+    description: Enable OUT endpoint 1
+  - name: OUT2
+    bit_range:
+    - 2
+    - 2
+    description: Enable OUT endpoint 2
+  - name: OUT3
+    bit_range:
+    - 3
+    - 3
+    description: Enable OUT endpoint 3
+  - name: OUT4
+    bit_range:
+    - 4
+    - 4
+    description: Enable OUT endpoint 4
+  - name: OUT5
+    bit_range:
+    - 5
+    - 5
+    description: Enable OUT endpoint 5
+  - name: OUT6
+    bit_range:
+    - 6
+    - 6
+    description: Enable OUT endpoint 6
+  - name: OUT7
+    bit_range:
+    - 7
+    - 7
+    description: Enable OUT endpoint 7
+  - name: ISOOUT
+    bit_range:
+    - 8
+    - 8
+    description: Enable ISO OUT endpoint 8
+  side_effects: null
+- id: EPSTALL
+  address_offset: 1304
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: EP
+    bit_range:
+    - 2
+    - 0
+    description: Select endpoint number
+  - name: IO
+    bit_range:
+    - 7
+    - 7
+    description: Selects IN or OUT endpoint
+  - name: STALL
+    bit_range:
+    - 8
+    - 8
+    description: Stall selected endpoint
+  side_effects: null
+- id: ISOSPLIT
+  address_offset: 1308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPLIT
+    bit_range:
+    - 15
+    - 0
+    description: Controls the split of ISO buffers
+  side_effects: null
+- id: FRAMECNTR
+  address_offset: 1312
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: FRAMECNTR
+    bit_range:
+    - 10
+    - 0
+    description: Returns the current value of the start of frame counter
+  side_effects: null
+- id: LOWPOWER
+  address_offset: 1324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOWPOWER
+    bit_range:
+    - 0
+    - 0
+    description: Controls USBD peripheral low-power mode during USB suspend
+  side_effects: null
+- id: ISOINCONFIG
+  address_offset: 1328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RESPONSE
+    bit_range:
+    - 0
+    - 0
+    description: Controls the response of the ISO IN endpoint to an IN token when no data is ready to be sent
+  side_effects: null
+- id: EPIN0_PTR
+  address_offset: 1536
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN0_MAXCNT
+  address_offset: 1540
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN0_AMOUNT
+  address_offset: 1544
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN1_PTR
+  address_offset: 1556
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN1_MAXCNT
+  address_offset: 1560
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN1_AMOUNT
+  address_offset: 1564
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN2_PTR
+  address_offset: 1576
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN2_MAXCNT
+  address_offset: 1580
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN2_AMOUNT
+  address_offset: 1584
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN3_PTR
+  address_offset: 1596
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN3_MAXCNT
+  address_offset: 1600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN3_AMOUNT
+  address_offset: 1604
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN4_PTR
+  address_offset: 1616
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN4_MAXCNT
+  address_offset: 1620
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN4_AMOUNT
+  address_offset: 1624
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN5_PTR
+  address_offset: 1636
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN5_MAXCNT
+  address_offset: 1640
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN5_AMOUNT
+  address_offset: 1644
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN6_PTR
+  address_offset: 1656
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN6_MAXCNT
+  address_offset: 1660
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN6_AMOUNT
+  address_offset: 1664
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPIN7_PTR
+  address_offset: 1676
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPIN7_MAXCNT
+  address_offset: 1680
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPIN7_AMOUNT
+  address_offset: 1684
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: ISOIN_PTR
+  address_offset: 1696
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: ISOIN_MAXCNT
+  address_offset: 1700
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 9
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: ISOIN_AMOUNT
+  address_offset: 1704
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 9
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT0_PTR
+  address_offset: 1792
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT0_MAXCNT
+  address_offset: 1796
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT0_AMOUNT
+  address_offset: 1800
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT1_PTR
+  address_offset: 1812
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT1_MAXCNT
+  address_offset: 1816
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT1_AMOUNT
+  address_offset: 1820
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT2_PTR
+  address_offset: 1832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT2_MAXCNT
+  address_offset: 1836
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT2_AMOUNT
+  address_offset: 1840
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT3_PTR
+  address_offset: 1852
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT3_MAXCNT
+  address_offset: 1856
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT3_AMOUNT
+  address_offset: 1860
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT4_PTR
+  address_offset: 1872
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT4_MAXCNT
+  address_offset: 1876
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT4_AMOUNT
+  address_offset: 1880
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT5_PTR
+  address_offset: 1892
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT5_MAXCNT
+  address_offset: 1896
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT5_AMOUNT
+  address_offset: 1900
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT6_PTR
+  address_offset: 1912
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT6_MAXCNT
+  address_offset: 1916
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT6_AMOUNT
+  address_offset: 1920
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: EPOUT7_PTR
+  address_offset: 1932
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: EPOUT7_MAXCNT
+  address_offset: 1936
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 6
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: EPOUT7_AMOUNT
+  address_offset: 1940
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 6
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+- id: ISOOUT_PTR
+  address_offset: 1952
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PTR
+    bit_range:
+    - 31
+    - 0
+    description: Data pointer
+  side_effects: null
+- id: ISOOUT_MAXCNT
+  address_offset: 1956
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MAXCNT
+    bit_range:
+    - 9
+    - 0
+    description: Maximum number of bytes to transfer
+  side_effects: null
+- id: ISOOUT_AMOUNT
+  address_offset: 1960
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AMOUNT
+    bit_range:
+    - 9
+    - 0
+    description: Number of bytes transferred in the last transaction
+  side_effects: null
+interrupts:
+  USBD: 39
+timing: null

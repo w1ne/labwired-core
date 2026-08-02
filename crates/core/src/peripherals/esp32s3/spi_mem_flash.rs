@@ -107,6 +107,11 @@ impl SpiMemFlash {
         }
     }
 
+    /// Shared SPI NOR backing (same buffer SPIMEM0/1 and FlashXip use).
+    pub fn flash_backing(&self) -> Arc<Mutex<Vec<u8>>> {
+        self.flash.clone()
+    }
+
     fn reg(&self, off: u64) -> u32 {
         self.regs.get(&off).copied().unwrap_or(0)
     }
@@ -259,6 +264,11 @@ impl SpiMemFlash {
 }
 
 impl Peripheral for SpiMemFlash {
+    // Inert walk: flash commands execute atomically at the launching CMD write (trigger bits auto-clear there); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.reg(offset & !3);
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)

@@ -1,5 +1,18 @@
 # ESP32-C3 WiFi MAC ↔ SimNet bridge (design + RE notes)
 
+> **Update (TCP/HTTP landed).** The virtual AP (`peripherals/esp32c3/virtual_wifi.rs`)
+> now terminates **TCP** to an HTTP port in addition to DHCP/ARP/UDP: a station's
+> SYN gets a SYN-ACK, its HTTP request is reassembled and handed to the shared L4
+> [`HttpServer`] (`network/sim.rs`, reusing its router + HTTP/1.1 encoder — one
+> source of truth), and the response is segmented back followed by a FIN. It
+> serves the `/v1/public-stats` snapshot (the LBC3.1 device's target). This closes
+> the "subsequent TCP payloads relay to the existing L4 SimNet servers" item
+> below. Covered by unit tests (`tcp_http_get_roundtrip`, `tcp_http_unknown_path_404`)
+> that drive the exact segment exchange lwIP performs, with checksum verification.
+> Still owed: end-to-end validation against a real booted C3 running
+> `esp_http_client` (needs a connecting-app firmware fixture; the current probe
+> idles / only does UDP).
+
 Status: **bidirectional + associated.** An unmodified C3 IDF binary boots, brings
 WiFi up, and **associates with a virtual AP over the real MAC** (no
 `wifi_thunks`): `init → auth → assoc → run → STA CONNECTED`. The bridge injects

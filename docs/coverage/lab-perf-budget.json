@@ -1,0 +1,55 @@
+{
+  "_README": [
+    "Committed per-lab PERFORMANCE budget for the SHIPPED firmware users actually",
+    "boot. Enforced by crates/core/tests/esp32c3_shipped_lab_batch_gate.rs.",
+    "",
+    "Each row is one shipped lab (see packages/playground/src/bundled-configs.ts).",
+    "The metric is MEAN BATCH WIDTH = cpu_instructions / cpu_batches, a pure",
+    "function of the model — bit-deterministic and machine-independent, NOT",
+    "wall-clock MIPS (which would flake on a loaded CI box). A collapsing batch",
+    "width IS the shipped-regression class this gate exists to catch (a per-cycle",
+    "scheduler wakeup pinning every batch to width ~1, dragging the browser far",
+    "below real time).",
+    "",
+    "Fields per lab:",
+    "  boot            - boot machinery required to run the binary. Only",
+    "                    'esp32c3-rom' rows are executed by the current gate; other",
+    "                    kinds SKIP cleanly with a note until their boot path is",
+    "                    wired (see the test module docs).",
+    "  chip_yaml       - configs/chips/<chip>.yaml",
+    "  system_yaml     - configs/systems/<system>.yaml",
+    "  flash_basename  - shipped flash image under",
+    "                    packages/playground/public/wasm/ (NOT vendored into core).",
+    "  min_mean_batch  - floor for mean batch width. Set well below the healthy",
+    "                    measured value and well above the collapse floor (1.0).",
+    "  min_lit_px      - floor for lit OLED pixels: a fast engine that renders",
+    "                    nothing is not a pass.",
+    "  min_idle_ff_ratio - floor for idle_fast_forward_cycles_skipped / total_cycles;",
+    "                    the browser fast-start policy must keep skipping idle time.",
+    "",
+    "Raising a floor tightens the gate (good). Lowering one is a deliberate act:",
+    "re-measure, explain, and move it in the same PR that changes the firmware."
+  ],
+  "labs": [
+    {
+      "lab": "esp32c3-oled-lab",
+      "boot": "esp32c3-rom",
+      "chip_yaml": "configs/chips/esp32c3.yaml",
+      "system_yaml": "configs/systems/esp32c3-oled-demo.yaml",
+      "flash_basename": "demo-esp32c3-display-workshop-flash.bin",
+      "min_mean_batch": 8.0,
+      "min_lit_px": 400,
+      "min_idle_ff_ratio": 0.5
+    },
+    {
+      "lab": "esp32c3-oled-128x32-lab",
+      "boot": "esp32c3-rom",
+      "chip_yaml": "configs/chips/esp32c3.yaml",
+      "system_yaml": "configs/systems/esp32c3-oled-128x32-workshop.yaml",
+      "flash_basename": "demo-esp32c3-display-workshop-128x32-flash.bin",
+      "min_mean_batch": 8.0,
+      "min_lit_px": 150,
+      "min_idle_ff_ratio": 0.5
+    }
+  ]
+}

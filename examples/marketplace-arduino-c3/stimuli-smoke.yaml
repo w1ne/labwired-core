@@ -1,0 +1,32 @@
+# Arduino C3 marketplace sensors — requires --rom-boot + LABWIRED_ESP32C3_* env.
+# Default max_steps is a cold-boot budget; raise if setup() has not printed yet.
+schema_version: "1.2"
+inputs:
+  system: "./system.yaml"
+  firmware: "../../platformio/marketplace-arduino-c3/.pio/build/marketplace/firmware.elf"
+limits:
+  max_steps: 200000000
+assertions:
+  - uart_contains: "MARKETPLACE ARDUINO C3"
+  - uart_contains: "SENSORS READY"
+  - uart_contains: "INA219 Vbus_mV="
+  - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ina219", channel: "current" }
+    trigger: !after_cycles { cycles: 170000000 }
+    value: 1.5
+  - target: { component: "ina219", channel: "bus_voltage" }
+    trigger: !after_cycles { cycles: 170000000 }
+    value: 12.0
+  - target: { component: "ads1115", channel: "a0" }
+    trigger: !after_cycles { cycles: 170000000 }
+    value: 2.048
+  - target: { component: "as5600", channel: "angle" }
+    trigger: !after_cycles { cycles: 170000000 }
+    value: 90.0
+  - target: { component: "bno055", channel: "heading" }
+    trigger: !after_cycles { cycles: 170000000 }
+    value: 45.0
+  - target: { component: "vl53l0x", channel: "distance" }
+    trigger: !after_cycles { cycles: 170000000 }
+    value: 777.0

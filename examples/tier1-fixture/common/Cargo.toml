@@ -1,0 +1,11 @@
+[package]
+name = "tier1-fixture-common"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[features]
+# Enables the ARMv7-M-only STM32F4 check module.
+f4 = []
+
+[dependencies]

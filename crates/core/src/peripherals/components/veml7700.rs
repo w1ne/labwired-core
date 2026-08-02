@@ -4,6 +4,14 @@
 
 //! Vishay **VEML7700** ambient-light sensor as an [`I2cDevice`].
 //!
+//! **Status: byte-parity oracle only.** The shipping VEML7700 is now the
+//! declarative descriptor `configs/devices/veml7700.yaml`, driven by
+//! [`super::declarative_i2c::GenericI2cDevice`] and registered as
+//! [`super::declarative_i2c::VEML7700_KIT`]. This hand-written model is retained
+//! solely as the reference the parity test (`super::veml7700_parity`) proves the
+//! declarative device byte-identical against — hence the whole module is
+//! `#[cfg(test)]`. It is no longer a registry kit.
+//!
 //! Unlike the Sensirion parts on this board, the VEML7700 is a classic
 //! command-register device: the master writes a 1-byte register pointer, then
 //! reads/writes a **16-bit little-endian** word (low byte first).
@@ -19,12 +27,15 @@
 //! Lux = `raw_counts × resolution`. Resolution scales inversely with the
 //! programmed gain and integration time, anchored at `0.0576 lux/count` for the
 //! power-on default (gain ×1, integration time 100 ms — ALS_CONF reset value
-//! 0x0000). The model honours ALS_CONF gain/IT bits when converting its lux
-//! [`Ramp`] to raw counts, so firmware that reprograms gain/IT sees the same
-//! count scaling a real part would. The default scenario *dims* (450 → 90 lux)
-//! as the room settles for the evening, complementing the rising CO₂ story.
+//! 0x0000). The model honours ALS_CONF gain/IT bits when converting lux to raw
+//! counts, so firmware that reprograms gain/IT sees the same count scaling a
+//! real part would.
+//!
+//! The illuminance is an externally driven variable: it changes only when
+//! something drives it through the ONE stimulus contract,
+//! [`crate::sim_input::SimInput`] (channel `lux`). Config seeds its initial
+//! value.
 
-use crate::peripherals::components::air_scene::Ramp;
 use crate::peripherals::i2c::I2cDevice;
 
 pub const VEML7700_ADDR: u8 = 0x10;
@@ -39,7 +50,8 @@ const REG_WHITE: u8 = 0x05;
 /// VEML7700 model.
 pub struct Veml7700 {
     address: u8,
-    lux: Ramp,
+    /// Illuminance the part reports, lux. Externally driven (see `SimInput`).
+    lux: f64,
     /// Config registers the firmware writes (ALS_CONF etc.), echoed back on read.
     conf: [u16; 4],
     /// Selected register pointer for the current transaction.
@@ -49,29 +61,31 @@ pub struct Veml7700 {
     /// Latched 16-bit read word (LE) for the current read, and which byte is next.
     read_word: u16,
     read_byte_idx: usize,
-    /// Whether the current read has latched its word yet (advance exactly once).
+    /// Whether the current read has latched its word yet.
     latched: bool,
+    /// system.yaml `external_devices` id, stamped at attach.
+    component_id: Option<String>,
 }
 
 impl Veml7700 {
-    /// `lux_start`/`lux_target` in lux; `alpha` per-read ramp rate (light dims
-    /// when `target < start`).
-    pub fn new(address: u8, lux_start: f64, lux_target: f64, alpha: f64) -> Self {
+    /// `lux` is the initial illuminance the part reports.
+    pub fn new(address: u8, lux: f64) -> Self {
         let address = if address == 0 { VEML7700_ADDR } else { address };
         Self {
             address,
-            lux: Ramp::new(lux_start, lux_target, alpha),
+            lux,
             conf: [0; 4],
             pointer: 0,
             write_buf: Vec::with_capacity(4),
             read_word: 0,
             read_byte_idx: 0,
             latched: false,
+            component_id: None,
         }
     }
 
     pub fn new_default(address: u8) -> Self {
-        Self::new(address, 450.0, 90.0, 0.08)
+        Self::new(address, 450.0)
     }
 
     /// Effective lux/count from the programmed ALS_CONF gain + integration time.
@@ -103,19 +117,12 @@ impl Veml7700 {
         (lux / self.resolution()).round().clamp(0.0, 65535.0) as u16
     }
 
-    /// Latch the word a read of the current pointer returns. Advances the light
-    /// ramp exactly once per read transaction (only for the ALS channel).
+    /// Latch the word a read of the current pointer returns.
     fn latch_read_word(&mut self) {
         self.read_word = match self.pointer {
-            REG_ALS => {
-                let lux = self.lux.advance();
-                self.lux_to_counts(lux)
-            }
-            // White channel runs a bit brighter than ALS; don't advance again.
-            REG_WHITE => {
-                let lux = self.lux.value() * 1.15;
-                self.lux_to_counts(lux)
-            }
+            REG_ALS => self.lux_to_counts(self.lux),
+            // White channel runs a bit brighter than the visible ALS channel.
+            REG_WHITE => self.lux_to_counts(self.lux * 1.15),
             r if (r as usize) < self.conf.len() => self.conf[r as usize],
             _ => 0,
         };
@@ -130,8 +137,8 @@ impl I2cDevice for Veml7700 {
 
     fn start(&mut self) {
         // (Re)START frames either a write phase (pointer set) or the read phase.
-        // Rewind the read cursor and clear the latch so the next read advances
-        // the ramp once; keep the pointer set by the preceding write.
+        // Rewind the read cursor and clear the latch so the next read re-latches
+        // the current value; keep the pointer set by the preceding write.
         self.write_buf.clear();
         self.read_byte_idx = 0;
         self.latched = false;
@@ -179,72 +186,48 @@ impl I2cDevice for Veml7700 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
-}
 
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
-};
-
-pub struct Veml7700Kit;
-pub static VEML7700_KIT: Veml7700Kit = Veml7700Kit;
-
-static VEML7700_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "veml7700",
-    label: "Vishay VEML7700 Light",
-    summary: "Ambient-light sensor (lux) over I2C.",
-    detail: "Vishay VEML7700 at fixed address 0x10, a register-pointer device with \
-             16-bit little-endian words. Reports a raw ALS count the firmware scales \
-             to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). \
-             Light follows a configurable ramp (dims toward evening by default).",
-    transport: Transport::I2c,
-    category: Category::I2c,
-    config_keys: &[
-        ConfigKey {
-            name: "i2c_address",
-            ty: ConfigType::Int,
-            doc: "7-bit slave address. Defaults to the VEML7700 fixed address 0x10.",
-        },
-        ConfigKey {
-            name: "lux_start",
-            ty: ConfigType::Float,
-            doc: "Ambient light at the first reading, lux (daylit room). Default 450.",
-        },
-        ConfigKey {
-            name: "lux_target",
-            ty: ConfigType::Float,
-            doc: "Lux the ramp approaches (dims when below start). Default 90.",
-        },
-        ConfigKey {
-            name: "ramp_alpha",
-            ty: ConfigType::Float,
-            doc: "Per-read approach rate 0..1 (0 = flat scene). Default 0.08.",
-        },
-    ],
-    labs: &[LabRef {
-        board_id: "esp32c3-leo-airquality",
-        chip: "esp32c3",
-        example_dir: "esp32c3-leo-airquality",
-        demo_elf: "demo-esp32c3-leo-airquality.elf",
-    }],
-};
-
-impl PeripheralKit for Veml7700Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &VEML7700_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let address = ctx.i2c_address_or(VEML7700_ADDR)?;
-        let lux_start = ctx.config_f64("lux_start").unwrap_or(450.0);
-        let lux_target = ctx.config_f64("lux_target").unwrap_or(90.0);
-        let alpha = ctx.config_f64("ramp_alpha").unwrap_or(0.08);
-        ctx.attach_i2c_device(Box::new(Veml7700::new(
-            address, lux_start, lux_target, alpha,
-        )))
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
     }
 }
+
+/// Drivable illuminance, in lux. 120 000 lx is the VEML7700's maximum
+/// detectable range (gain ×1/8, IT 25 ms). ONE table backs BOTH the `SimInput`
+/// impl and the kit metadata.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[crate::sim_input::InputChannel {
+    key: "lux",
+    label: "Illuminance",
+    unit: "lx",
+    min: 0.0,
+    max: 120000.0,
+}];
+
+impl crate::sim_input::SimInput for Veml7700 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        self.lux = value;
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
+}
+
+// The `PeripheralKit` registration that once lived here now lives in the
+// declarative descriptor `configs/devices/veml7700.yaml` +
+// `super::declarative_i2c::VEML7700_KIT`. All of that metadata (label, summary,
+// detail, config_keys, the Leo lab, and the lux input) moved verbatim into the
+// YAML `metadata:` block, so the offline peripherals manifest is unchanged.
 
 #[cfg(test)]
 mod tests {
@@ -277,20 +260,24 @@ mod tests {
     }
 
     #[test]
-    fn light_dims_over_reads() {
+    fn light_holds_until_driven() {
+        use crate::sim_input::SimInput;
         let mut d = Veml7700::new_default(VEML7700_ADDR);
-        let mut first = 0.0;
-        let mut last = 0.0;
-        for i in 0..60 {
-            let counts = read_reg(&mut d, REG_ALS);
-            let lux = counts as f64 * RESOLUTION_LUX_PER_COUNT;
-            if i == 0 {
-                first = lux;
-            }
-            last = lux;
+        for _ in 0..20 {
+            let lux = read_reg(&mut d, REG_ALS) as f64 * RESOLUTION_LUX_PER_COUNT;
+            assert!((lux - 450.0).abs() < 0.1, "no self-running scene: {lux:.1}");
         }
-        assert!(last < first, "room dims: {first:.0} -> {last:.0} lux");
-        assert!(last < 150.0, "settles toward 90 lux: {last:.0}");
+        d.set_input("lux", 90.0).unwrap();
+        let lux = read_reg(&mut d, REG_ALS) as f64 * RESOLUTION_LUX_PER_COUNT;
+        assert!((lux - 90.0).abs() < 0.1, "driven to 90 lux: {lux:.1}");
+    }
+
+    #[test]
+    fn out_of_range_input_is_rejected() {
+        use crate::sim_input::SimInput;
+        let mut d = Veml7700::new_default(VEML7700_ADDR);
+        assert!(d.set_input("lux", -1.0).is_err());
+        assert!(d.set_input("brightness", 10.0).is_err());
     }
 
     #[test]
@@ -307,8 +294,8 @@ mod tests {
 
     #[test]
     fn gain_and_integration_time_scale_resolution() {
-        // Flat 100 lux scene so the ALS count depends only on resolution.
-        let mut d = Veml7700::new(VEML7700_ADDR, 100.0, 100.0, 0.0);
+        // A steady 100 lux so the ALS count depends only on resolution.
+        let mut d = Veml7700::new(VEML7700_ADDR, 100.0);
         let default_counts = read_reg(&mut d, REG_ALS); // gain ×1 / IT 100 ms
                                                         // Program ALS_CONF = 0x08C0: gain ×2 (bits[12:11]=01) + IT 800 ms
                                                         // (bits[9:6]=0011) → resolution 0.0036 lux/count → ~16× the counts.

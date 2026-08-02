@@ -1,0 +1,17 @@
+name: "ds3231-rtc-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "ds3231"
+    type: "ds3231"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x68
+board_io:
+  - id: "ds3231"
+    kind: "i2c_device"
+    peripheral: "i2c1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    i2c_address: 0x68
+    device_type: "ds3231"

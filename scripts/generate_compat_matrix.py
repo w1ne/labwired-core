@@ -20,16 +20,39 @@ except ImportError:
     yaml = None  # type: ignore[assignment]
 
 
-def parse_yaml_simple(path: Path) -> dict:
-    """Minimal YAML parser for chip configs (avoids PyYAML dependency in CI)."""
-    if yaml:
-        return yaml.safe_load(path.read_text()) or {}
+def _strip_inline_comment(value: str) -> str:
+    """Drop a trailing ` # …` comment, but not a `#` inside a quoted scalar."""
+    quote = ""
+    for i, ch in enumerate(value):
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or value[i - 1] in " \t"):
+            return value[:i]
+    return value
 
-    # Bare-bones parser: handles flat keys and peripheral lists
+
+def _scalar(raw: str) -> str:
+    return _strip_inline_comment(raw).strip().strip('"').strip("'")
+
+
+def parse_yaml_fallback(text: str) -> dict:
+    """
+    Zero-dependency parser for the handful of chip-config fields this script
+    reads: top-level scalars, and each peripheral's `id` and `type`.
+
+    It deliberately parses NOTHING else. The previous version also read
+    `base_address` and `irq` — neither of which reaches the output — and the
+    `irq` branch did a bare int() on the rest of the line, so the day someone
+    wrote `irq: 39  # FDCAN1_IT0 …` in stm32h563.yaml this crashed. Parsing a
+    field you do not use is all risk and no benefit.
+    """
     result: dict = {"peripherals": []}
-    current_peripheral: dict = {}
+    current: dict = {}
     in_peripherals = False
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("#") or not stripped:
             continue
@@ -39,23 +62,57 @@ def parse_yaml_simple(path: Path) -> dict:
         if not in_peripherals:
             if ":" in stripped and not stripped.startswith("-"):
                 key, _, val = stripped.partition(":")
-                val = val.strip().strip('"').strip("'")
+                val = _scalar(val)
                 if val:
                     result[key.strip()] = val
-        else:
-            if stripped.startswith("- id:"):
-                if current_peripheral:
-                    result["peripherals"].append(current_peripheral)
-                current_peripheral = {"id": stripped.split(":", 1)[1].strip().strip('"')}
-            elif stripped.startswith("type:") and current_peripheral:
-                current_peripheral["type"] = stripped.split(":", 1)[1].strip().strip('"')
-            elif stripped.startswith("base_address:") and current_peripheral:
-                current_peripheral["base_address"] = stripped.split(":", 1)[1].strip()
-            elif stripped.startswith("irq:") and current_peripheral:
-                current_peripheral["irq"] = int(stripped.split(":", 1)[1].strip())
-    if current_peripheral:
-        result["peripherals"].append(current_peripheral)
+        elif stripped.startswith("- id:"):
+            if current:
+                result["peripherals"].append(current)
+            current = {"id": _scalar(stripped.split(":", 1)[1])}
+        elif stripped.startswith("type:") and current:
+            current["type"] = _scalar(stripped.split(":", 1)[1])
+    if current:
+        result["peripherals"].append(current)
     return result
+
+
+def _consumed(config: dict) -> tuple:
+    """The projection this script actually reads. Equivalence is judged on it."""
+    return (
+        config.get("name"),
+        config.get("arch"),
+        tuple(p.get("type") for p in config.get("peripherals", []) or []),
+    )
+
+
+def parse_yaml_simple(path: Path) -> dict:
+    """
+    Parse a chip config, preferring PyYAML.
+
+    The fallback above is load-bearing: the runner that generates this matrix
+    has no pip step, so PyYAML is genuinely absent there. That makes it a
+    second parser with its own bugs, which is how a stray inline comment took
+    CI down while every developer machine — PyYAML installed — stayed green.
+
+    So when PyYAML IS present, run both and fail loudly on disagreement. The
+    fork then cannot drift silently: it is checked on every developer machine
+    and in every CI job that does have PyYAML.
+    """
+    text = path.read_text()
+    fallback = parse_yaml_fallback(text)
+    if yaml is None:
+        return fallback
+
+    real = yaml.safe_load(text) or {}
+    if _consumed(real) != _consumed(fallback):
+        raise SystemExit(
+            f"{path.name}: the zero-dependency parser disagrees with PyYAML.\n"
+            f"  PyYAML:   {_consumed(real)}\n"
+            f"  fallback: {_consumed(fallback)}\n"
+            "Fix parse_yaml_fallback — CI runs it without PyYAML and would "
+            "otherwise emit a wrong matrix, or crash, with no local warning."
+        )
+    return real
 
 
 def find_smoke_tests(examples_dir: Path) -> dict[str, list[str]]:

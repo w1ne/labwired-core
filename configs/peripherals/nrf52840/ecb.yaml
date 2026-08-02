@@ -1,0 +1,100 @@
+peripheral: ECB
+version: 0.1.0
+registers:
+- id: TASKS_STARTECB
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STARTECB
+    bit_range:
+    - 0
+    - 0
+    description: Start ECB block encrypt
+  side_effects: null
+- id: TASKS_STOPECB
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STOPECB
+    bit_range:
+    - 0
+    - 0
+    description: Abort a possible executing ECB operation
+  side_effects: null
+- id: EVENTS_ENDECB
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ENDECB
+    bit_range:
+    - 0
+    - 0
+    description: ECB block encrypt complete
+  side_effects: null
+- id: EVENTS_ERRORECB
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_ERRORECB
+    bit_range:
+    - 0
+    - 0
+    description: ECB block encrypt aborted because of a STOPECB task or due to an error
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDECB
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable interrupt for event ENDECB
+  - name: ERRORECB
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to enable interrupt for event ERRORECB
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENDECB
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable interrupt for event ENDECB
+  - name: ERRORECB
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to disable interrupt for event ERRORECB
+  side_effects: null
+- id: ECBDATAPTR
+  address_offset: 1284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ECBDATAPTR
+    bit_range:
+    - 31
+    - 0
+    description: Pointer to the ECB data structure (see Table 1 ECB data structure overview)
+  side_effects: null
+interrupts:
+  ECB: 14
+timing: null

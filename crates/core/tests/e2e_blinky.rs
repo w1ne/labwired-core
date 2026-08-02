@@ -88,6 +88,7 @@ fn blinky_toggles_gpio2_at_500ms() {
             stack_top_fallback: 0x3FCD_FFF0,
             icache_backing: Some(icache_backing),
             dcache_backing: Some(dcache_backing),
+            factory_flash_base: None,
         },
     )
     .expect("fast_boot");

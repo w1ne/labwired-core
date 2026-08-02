@@ -1,0 +1,10 @@
+# LabWired - STM32F401CDU6 Black Pill IO smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7em-none-eabi/release/firmware-f401cdu6-blackpill-demo"
+  system: "../system.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

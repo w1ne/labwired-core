@@ -21,12 +21,10 @@
 //! The `uart` class is implicit: receiving `TIER1 done` over the UART is
 //! itself the proof of a working UART path, so no `uart` line is printed.
 //!
-//! `dma` and `irq` are NOT reported: the F401 yaml declares no DMA/NVIC-class
-//! peripheral id. The F4 DMA is a stream controller, but the only modelled DMA
-//! IP is the F1/L4 channel layout (`Dma1`), so DMA is left `na` rather than
-//! claimed with a mismatched register map. `wdt` (IWDG) and `rtc` are reported
-//! but carry no clock gate: IWDG runs off LSI and RTC off the backup domain
-//! (RCC_BDCR.RTCEN), neither of which is an APB/AHB peripheral-enable bit.
+//! `wdt` (IWDG) and `rtc` are reported but carry no clock gate: IWDG runs off
+//! LSI and RTC off the backup domain (RCC_BDCR.RTCEN), neither of which is an
+//! APB/AHB peripheral-enable bit. Every other class is gate-proved: the check
+//! reads the peripheral dead while its RCC bit is off before enabling it.
 //!
 //! Every poll is bounded by a fixed iteration count (the simulator is
 //! deterministic — no wall-clock timeouts). Register offsets follow the
@@ -37,78 +35,35 @@
 #![no_std]
 #![no_main]
 
-use core::ptr::{read_volatile, write_volatile};
+use core::ptr::write_volatile;
 use cortex_m_rt::entry;
 use panic_halt as _;
+use tier1_fixture_common::{f4, rd32, spin, wr32, Console};
 
 // ── Wired peripherals (configs/chips/stm32f401.yaml) ──────────────────────
 const RCC_BASE: u32 = 0x4002_3800; // type rcc, profile stm32f4
+const RCC_AHB1ENR: u32 = RCC_BASE + 0x30; // F4 AHB1ENR (DMA1EN bit 21, DMA2EN bit 22)
 const RCC_APB1ENR: u32 = RCC_BASE + 0x40; // F4 APB1ENR (TIM2EN bit0, I2C1EN bit21)
-const RCC_APB2ENR: u32 = RCC_BASE + 0x44; // F4 APB2ENR (ADC1EN bit8, SPI1EN bit12)
+const RCC_APB2ENR: u32 = RCC_BASE + 0x44; // F4 APB2ENR (ADC1EN bit8, SPI1EN bit12, TIM1EN bit0)
 const GPIOA_BASE: u32 = 0x4002_0000; // type gpio, stm32f1 layout (default)
 const USART2_BASE: u32 = 0x4000_4400; // type uart, stm32f1 layout (default)
 const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
+const TIM1_BASE: u32 = 0x4001_0000; // type timer, advanced; gate APB2ENR.TIM1EN (bit 0)
 const TIM2_BASE: u32 = 0x4000_0000; // type timer, 32-bit; gate APB1ENR.TIM2EN
 const SPI1_BASE: u32 = 0x4001_3000; // type spi, classic (cr1_mask 0xEFFF); gate APB2ENR.SPI1EN
 const ADC1_BASE: u32 = 0x4001_2000; // type adc, stm32f1 layout; gate APB2ENR.ADC1EN
 const IWDG_BASE: u32 = 0x4000_3000; // type iwdg (LSI-clocked, ungated)
 const RTC_BASE: u32 = 0x4000_2800; // type rtc, L4-style calendar (ungated)
+const DMA2_BASE: u32 = 0x4002_6400; // type stm32f4_dma, is_dma2; gate AHB1ENR.DMA2EN
+const EXTI_BASE: u32 = 0x4001_3C00; // type exti, 23 lines
+const EXTI0_IRQ: u32 = 6; // NVIC position of EXTI0 (RM0368 §11.1.3)
 
 // USART2, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
 // load compiles to LDRSB reg-offset, which the simulator's 16-bit
 // Thumb decoder does not implement (decoder/arm.rs only matches
 // even-op 0101-family encodings).
-const UART_STATUS: *const u32 = USART2_BASE as *const u32;
-const UART_TX: *mut u8 = (USART2_BASE + 0x04) as *mut u8;
-const TXE_BIT: u32 = 1 << 7;
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-#[inline(always)]
-fn rd32(addr: u32) -> u32 {
-    unsafe { read_volatile(addr as *const u32) }
-}
-
-#[inline(always)]
-fn wr32(addr: u32, value: u32) {
-    unsafe { write_volatile(addr as *mut u32, value) }
-}
-
-/// Fixed-iteration busy spin — deterministic in the simulator.
-fn spin(iters: u32) {
-    for i in 0..iters {
-        core::hint::black_box(i);
-    }
-}
-
-fn putc(byte: u8) {
-    for _ in 0..10_000 {
-        if unsafe { read_volatile(UART_STATUS) } & TXE_BIT != 0 {
-            break;
-        }
-    }
-    unsafe { write_volatile(UART_TX, byte) };
-}
-
-fn puts(s: &[u8]) {
-    for &b in s {
-        putc(b);
-    }
-}
-
-fn report(class: &[u8], result: Result<(), &'static [u8]>) {
-    puts(b"TIER1 ");
-    puts(class);
-    match result {
-        Ok(()) => puts(b" PASS\n"),
-        Err(code) => {
-            puts(b" FAIL code=");
-            puts(code);
-            puts(b"\n");
-        }
-    }
-}
+const CONSOLE: Console = Console::new(USART2_BASE, USART2_BASE + 0x04, 1 << 7);
 
 // ── Checks ──────────────────────────────────────────────────────────────────
 
@@ -335,15 +290,22 @@ fn check_rtc() -> Result<(), &'static [u8]> {
 
 #[entry]
 fn main() -> ! {
-    report(b"clock", check_clock());
-    report(b"gpio", check_gpio());
-    report(b"timer", check_timer());
-    report(b"i2c", check_i2c());
-    report(b"spi", check_spi());
-    report(b"adc", check_adc());
-    report(b"wdt", check_wdt());
-    report(b"rtc", check_rtc());
-    puts(b"TIER1 done\n");
+    CONSOLE.report(b"clock", check_clock());
+    CONSOLE.report(b"gpio", check_gpio());
+    CONSOLE.report(b"timer", check_timer());
+    CONSOLE.report(b"i2c", check_i2c());
+    CONSOLE.report(b"spi", check_spi());
+    CONSOLE.report(b"adc", check_adc());
+    CONSOLE.report(b"wdt", check_wdt());
+    CONSOLE.report(b"rtc", check_rtc());
+    let (dma_src, dma_dst) = f4::dma_buffers();
+    CONSOLE.report(
+        b"dma",
+        f4::check_dma(RCC_AHB1ENR, DMA2_BASE, dma_src, dma_dst),
+    );
+    CONSOLE.report(b"irq", f4::check_irq(EXTI_BASE, EXTI0_IRQ));
+    CONSOLE.report(b"pwm", f4::check_pwm(RCC_APB2ENR, TIM1_BASE, 0));
+    CONSOLE.puts(b"TIER1 done\n");
 
     loop {
         spin(1_000_000);

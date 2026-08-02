@@ -22,6 +22,7 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+use labwired_core::Bus;
 
 /// Silicon-read reset values (live S3, reset halt). Each must equal the sim's
 /// modeled reset value. Curated to static config registers the coded S3 model

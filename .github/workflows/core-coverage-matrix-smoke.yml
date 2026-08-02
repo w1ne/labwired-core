@@ -1,6 +1,9 @@
 name: Core Coverage Matrix Smoke
 
 on:
+  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  schedule:
+    - cron: "0 2 * * *"
   push:
     branches:
       - main
@@ -8,15 +11,8 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-coverage-matrix-smoke.yml"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
+      - "crates/core/**"
+      - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
@@ -29,7 +25,7 @@ jobs:
   coverage-matrix-smoke:
     name: coverage-matrix-${{ matrix.id }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -69,13 +65,8 @@ jobs:
             profile_dir: release
             script: examples/stm32f401cdu6/uart-smoke.yaml
             system: configs/systems/stm32f401cdu6.yaml
-          - id: stm32f103-bluepill
-            target: thumbv7m-none-eabi
-            crate: demo-blinky
-            profile: release
-            profile_dir: release
-            script: examples/demo-blinky/io-smoke.yaml
-            system: examples/demo-blinky/system.yaml
+          # Note: demo-blinky-stm32f103 already covers F103 bluepill + same ELF;
+          # a second identical cell was removed (CI roast 2026-07-23).
           - id: canmod-gps-sim
             make: examples/canmod-gps-sim/firmware
             script: examples/canmod-gps-sim/canmod-smoke.yaml
@@ -100,8 +91,8 @@ jobs:
           workspaces: |
             . -> target
 
-      - name: Build CLI
-        run: cargo build -p labwired-cli
+      - name: Build CLI (release — matches local matrix / fidelity path)
+        run: cargo build -p labwired-cli --release
 
       - name: Install C cross toolchain
         if: matrix.make != ''
@@ -125,7 +116,7 @@ jobs:
       - name: Run matrix smoke
         run: |
           mkdir -p "out/coverage-matrix/${{ matrix.id }}"
-          cargo run -q -p labwired-cli -- test \
+          ./target/release/labwired test \
             --script "${{ matrix.script }}" \
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
@@ -197,31 +188,33 @@ jobs:
             --matrix-root out/coverage-matrix \
             --markdown-out out/coverage-matrix/scoreboard.md \
             --json-out out/coverage-matrix/scoreboard.json \
-            --required-target stm32f103-bluepill \
             --required-target stm32h563-nucleo \
             --required-target stm32f401cdu6 \
             --required-target riscv-ci-fixture \
             --required-target demo-blinky-stm32f103 \
             --required-target f103-j1939-monitor \
-            --min-required-pass-rate 0.80
+            --required-target canmod-gps-sim \
+            --required-target ci-fixture-armv6m \
+            --min-required-pass-rate 1.0
 
       - name: Publish scoreboard summary
         run: |
           cat out/coverage-matrix/scoreboard.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Enforce Top-5 deterministic pass gate
+      - name: Enforce required targets (100% pass — no soft loophole)
         run: |
           python3 scripts/generate_coverage_matrix_scoreboard.py \
             --matrix-root out/coverage-matrix \
             --markdown-out /tmp/coverage-matrix-gate.md \
             --json-out /tmp/coverage-matrix-gate.json \
-            --required-target stm32f103-bluepill \
             --required-target stm32h563-nucleo \
             --required-target stm32f401cdu6 \
             --required-target riscv-ci-fixture \
             --required-target demo-blinky-stm32f103 \
             --required-target f103-j1939-monitor \
-            --min-required-pass-rate 0.80
+            --required-target canmod-gps-sim \
+            --required-target ci-fixture-armv6m \
+            --min-required-pass-rate 1.0
 
       - name: Upload scoreboard artifacts
         if: always()

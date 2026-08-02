@@ -1,0 +1,384 @@
+peripheral: RTC1
+version: 0.1.0
+registers:
+- id: TASKS_START
+  address_offset: 0
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_START
+    bit_range:
+    - 0
+    - 0
+    description: Start RTC COUNTER
+  side_effects: null
+- id: TASKS_STOP
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Stop RTC COUNTER
+  side_effects: null
+- id: TASKS_CLEAR
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_CLEAR
+    bit_range:
+    - 0
+    - 0
+    description: Clear RTC COUNTER
+  side_effects: null
+- id: TASKS_TRIGOVRFLW
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TASKS_TRIGOVRFLW
+    bit_range:
+    - 0
+    - 0
+    description: Set COUNTER to 0xFFFFF0
+  side_effects: null
+- id: EVENTS_TICK
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_TICK
+    bit_range:
+    - 0
+    - 0
+    description: Event on COUNTER increment
+  side_effects: null
+- id: EVENTS_OVRFLW
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_OVRFLW
+    bit_range:
+    - 0
+    - 0
+    description: Event on COUNTER overflow
+  side_effects: null
+- id: EVENTS_COMPARE0
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_COMPARE
+    bit_range:
+    - 0
+    - 0
+    description: Compare event on CC[n] match
+  side_effects: null
+- id: EVENTS_COMPARE1
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_COMPARE
+    bit_range:
+    - 0
+    - 0
+    description: Compare event on CC[n] match
+  side_effects: null
+- id: EVENTS_COMPARE2
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_COMPARE
+    bit_range:
+    - 0
+    - 0
+    description: Compare event on CC[n] match
+  side_effects: null
+- id: EVENTS_COMPARE3
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EVENTS_COMPARE
+    bit_range:
+    - 0
+    - 0
+    description: Compare event on CC[n] match
+  side_effects: null
+- id: INTENSET
+  address_offset: 772
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TICK
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable interrupt for event TICK
+  - name: OVRFLW
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to enable interrupt for event OVRFLW
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to enable interrupt for event COMPARE[0]
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to enable interrupt for event COMPARE[1]
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to enable interrupt for event COMPARE[2]
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to enable interrupt for event COMPARE[3]
+  side_effects: null
+- id: INTENCLR
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TICK
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable interrupt for event TICK
+  - name: OVRFLW
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to disable interrupt for event OVRFLW
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to disable interrupt for event COMPARE[0]
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to disable interrupt for event COMPARE[1]
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to disable interrupt for event COMPARE[2]
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to disable interrupt for event COMPARE[3]
+  side_effects: null
+- id: EVTEN
+  address_offset: 832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TICK
+    bit_range:
+    - 0
+    - 0
+    description: Enable or disable event routing for event TICK
+  - name: OVRFLW
+    bit_range:
+    - 1
+    - 1
+    description: Enable or disable event routing for event OVRFLW
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Enable or disable event routing for event COMPARE[0]
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Enable or disable event routing for event COMPARE[1]
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Enable or disable event routing for event COMPARE[2]
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Enable or disable event routing for event COMPARE[3]
+  side_effects: null
+- id: EVTENSET
+  address_offset: 836
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TICK
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to enable event routing for event TICK
+  - name: OVRFLW
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to enable event routing for event OVRFLW
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to enable event routing for event COMPARE[0]
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to enable event routing for event COMPARE[1]
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to enable event routing for event COMPARE[2]
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to enable event routing for event COMPARE[3]
+  side_effects: null
+- id: EVTENCLR
+  address_offset: 840
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TICK
+    bit_range:
+    - 0
+    - 0
+    description: Write '1' to disable event routing for event TICK
+  - name: OVRFLW
+    bit_range:
+    - 1
+    - 1
+    description: Write '1' to disable event routing for event OVRFLW
+  - name: COMPARE0
+    bit_range:
+    - 16
+    - 16
+    description: Write '1' to disable event routing for event COMPARE[0]
+  - name: COMPARE1
+    bit_range:
+    - 17
+    - 17
+    description: Write '1' to disable event routing for event COMPARE[1]
+  - name: COMPARE2
+    bit_range:
+    - 18
+    - 18
+    description: Write '1' to disable event routing for event COMPARE[2]
+  - name: COMPARE3
+    bit_range:
+    - 19
+    - 19
+    description: Write '1' to disable event routing for event COMPARE[3]
+  side_effects: null
+- id: COUNTER
+  address_offset: 1284
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: COUNTER
+    bit_range:
+    - 23
+    - 0
+    description: Counter value
+  side_effects: null
+- id: PRESCALER
+  address_offset: 1288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRESCALER
+    bit_range:
+    - 11
+    - 0
+    description: Prescaler value
+  side_effects: null
+- id: CC0
+  address_offset: 1344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE
+    bit_range:
+    - 23
+    - 0
+    description: Compare value
+  side_effects: null
+- id: CC1
+  address_offset: 1348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE
+    bit_range:
+    - 23
+    - 0
+    description: Compare value
+  side_effects: null
+- id: CC2
+  address_offset: 1352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE
+    bit_range:
+    - 23
+    - 0
+    description: Compare value
+  side_effects: null
+- id: CC3
+  address_offset: 1356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMPARE
+    bit_range:
+    - 23
+    - 0
+    description: Compare value
+  side_effects: null
+interrupts:
+  RTC1: 17
+  RTC0: 11
+timing: null

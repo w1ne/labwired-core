@@ -1,0 +1,324 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# STM32F411CEU6 Chip Descriptor (WeAct "Black Pill")
+#
+# NOT bench-verified. Every value below is sourced from ST's own CMSIS device
+# header (STMicroelectronics/cmsis_device_f4, Include/stm32f411xe.h) and the
+# modm-io F411 SVD, both read directly rather than recalled:
+#   - FLASH 512 KiB: part number F411C**E**U6 (ST convention: E = 512 KiB).
+#     The family header says "up to 1 MB" generically and is NOT part-specific.
+#   - SRAM 128 KiB: header comment `SRAM1(128 KB)`.
+#   - GPIO ports A,B,C,D,E,H exactly — matches the RCC_AHB1ENR enable-bit set
+#     (0,1,2,3,4,7; the gap at 5/6 is real, there is no GPIOF/GPIOG on F411).
+#   - RCC offsets (AHB1ENR 0x30, APB1ENR 0x40, APB2ENR 0x44) verified against
+#     the F411 SVD and byte-identical to the shipped `stm32f4` RCC profile, so
+#     no new RCC layout is needed.
+#
+# Delta vs the F401CDU6 sibling: 512 KiB flash (was 384), 128 KiB SRAM (was 96),
+# and the extra SPI5 instance. Everything else — peripheral bases, IRQ numbers,
+# reset values — is the same silicon row and was re-checked against the F411
+# NVIC table in stm32f411xe.h, not assumed.
+#
+# NOT MODELLED / NOT KNOWN:
+#   - DBGMCU IDCODE. Not in the SVD, not in the header; it needs a real part
+#     over SWD. `dbg` is therefore a stub and NO IDCODE is invented here. Do not
+#     copy F401CDU6's 0x10016433 — that value is F401's.
+#   - Max SYSCLK is 100 MHz on F411 vs 84 MHz on F401. The `stm32f4` RCC model
+#     stores CR/CFGR/PLLCFGR as gated bit-fields and derives no frequency, so
+#     this is documentation only and has no functional effect today.
+#   - DMA1/DMA2 are stream controllers; only the F1/L4 channel layout is
+#     modelled, so they stay stubs rather than claim a mismatched register map.
+#   - Clock gating is declared only for TIM2, ADC1, SPI1 and SPI5 — the four
+#     peripherals the tier-1 fixture actually proves gated (an ungated `clock:`
+#     entry would be an unexercised claim). Every other block is reachable
+#     without enabling its RCC bit, which is NOT silicon behaviour; it is the
+#     same modelling gap the F401 descriptors carry. Verified enable bits for
+#     the rest, for whoever closes the gap: AHB1ENR GPIOA..E=0..4, GPIOH=7;
+#     APB1ENR SPI2=14, SPI3=15, USART2=17, I2C1=21, I2C2=22, I2C3=23;
+#     APB2ENR USART1=4, USART6=5, SPI4=13.
+
+name: "stm32f411ceu6"
+arch: "arm"
+core: "cortex-m4"
+registers_count: 150
+flash:
+  base: 0x08000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "128KB"
+peripherals:
+  # TIM2/TIM5 are the two 32-bit general-purpose timers on F4 (RM0383 §13).
+  # TIM2 is clock-gated on RCC_APB1ENR.TIM2EN (bit 0) — the same bit already
+  # pinned for this family in configs/chips/stm32f401.yaml.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      width: 32
+    clock: { reg: "apb1enr", bit: 0 }
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+    config:
+      width: 32
+  # RTC — calendar real-time clock (RM0383 §16; same IP as the L4 `rtc` model).
+  # Lives in the backup domain, clock-enabled via RCC_BDCR.RTCEN — outside the
+  # APB/AHB peripheral-enable gate this model expresses, so it is left ungated.
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+  - id: "wwdg"
+    type: "stub"
+    base_address: 0x40002C00
+    size: "1KB"
+  # IWDG — independent watchdog (RM0383 §14). Clocked from the dedicated LSI
+  # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
+  # gate. The KR key (0x5555) protects PR/RLR writes instead.
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  - id: "i2s2ext"
+    type: "stub"
+    base_address: 0x40003400
+    size: "1KB"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+  - id: "i2s3ext"
+    type: "stub"
+    base_address: 0x40004000
+    size: "1KB"
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      # F4 PWR (RM0383 §5.4): only PWR_CR/PWR_CSR exist, both reset 0. The
+      # default L4 model surfaces CR1=0x200 / CR3=0x8000 and phantom PUCRx regs.
+      profile: "stm32f4"
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+  # ADC1 — 12-bit SAR (RM0383 §11). On APB2, clock-gated by RCC_APB2ENR.ADC1EN
+  # (bit 8); unclocked out of reset. Same bit as configs/chips/stm32f401.yaml.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+    clock: { reg: "apb2enr", bit: 8 }
+  - id: "sdio"
+    type: "stub"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 49
+  # SPI1 — classic STM32 SPI (RM0383 §20). On APB2, clock-gated by
+  # RCC_APB2ENR.SPI1EN (bit 12), from the CMSIS header and matching the bit
+  # already pinned for this family in configs/chips/stm32f401.yaml.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+    clock: { reg: "apb2enr", bit: 12 }
+  - id: "spi4"
+    type: "spi"
+    base_address: 0x40013400
+    size: "1KB"
+    irq: 84
+  - id: "syscfg"
+    type: "stub"
+    base_address: 0x40013800
+    size: "1KB"
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40013C00
+    size: "1KB"
+  - id: "tim9"
+    type: "timer"
+    base_address: 0x40014000
+    size: "1KB"
+  - id: "tim10"
+    type: "timer"
+    base_address: 0x40014400
+    size: "1KB"
+  - id: "tim11"
+    type: "timer"
+    base_address: 0x40014800
+    size: "1KB"
+  # SPI5 is the one peripheral instance the F401 does not have.
+  #   base 0x40015000 — SVD and header agree (APB2PERIPH_BASE + 0x5000)
+  #   IRQ 85         — SVD and header agree (`SPI5_IRQn = 85`)
+  #   gate APB2ENR bit 20 — HEADER ONLY (`RCC_APB2ENR_SPI5EN_Pos`). The vendored
+  #     modm SVD declares no SPI5EN field anywhere in RCC (verified: the string
+  #     does not occur in the file), and neither does the cmsis-svd one, so this
+  #     single bit position is cross-checkable against nothing. The tier-1
+  #     fixture's spi check exercises it so it is at least executable evidence.
+  # Same SPI IP as SPI1-SPI4, so it reuses the existing `spi` model.
+  - id: "spi5"
+    type: "spi"
+    base_address: 0x40015000
+    size: "1KB"
+    irq: 85
+    config:
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+    clock: { reg: "apb2enr", bit: 20 }
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  - id: "crc"
+    type: "stub"
+    base_address: 0x40023000
+    size: "1KB"
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      # F4 embedded-flash interface (RM0383 §3): ACR reset 0 (no F1-style
+      # prefetch default), CR LOCK at bit 31, OPTCR present. The F1 profile's
+      # 0x30 ACR default and bit-7 LOCK are silicon-wrong for F411.
+      profile: "stm32f4"
+  - id: "dma1"
+    type: "stub"
+    base_address: 0x40026000
+    size: "1KB"
+  - id: "dma2"
+    type: "stub"
+    base_address: 0x40026400
+    size: "1KB"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # SWD/JTAG defaults (RM0383 §8.4 / STM32F411 SVD): PA13/14/15 in AF mode.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # JTAG defaults (RM0383 §8.4 / STM32F411 SVD): PB3 (JTDO/SWO), PB4 (NJTRST).
+      reset_moder: 0x00000280
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x40021C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+  - id: "otg_fs_global"
+    type: "stub"
+    base_address: 0x50000000
+    size: "1KB"
+  - id: "otg_fs_host"
+    type: "stub"
+    base_address: 0x50000400
+    size: "1KB"
+  - id: "otg_fs_device"
+    type: "stub"
+    base_address: 0x50000800
+    size: "1KB"
+  - id: "otg_fs_pwrclk"
+    type: "stub"
+    base_address: 0x50000E00
+    size: "512B"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # DBGMCU. Deliberately a stub with NO IDCODE: the F411 DEV_ID/REV_ID has not
+  # been read off a real part, and inventing one would make a probe-identify
+  # path silently wrong.
+  - id: "dbg"
+    type: "stub"
+    base_address: 0xE0042000
+    size: "1KB"

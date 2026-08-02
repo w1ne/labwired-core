@@ -9,6 +9,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::Bus;
 use labwired_core::{Cpu, Machine};
 use labwired_loader::load_elf;
 use std::collections::HashMap;
@@ -32,8 +33,10 @@ fn probe_foreign_firmware() {
         name: "foreign-probe".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

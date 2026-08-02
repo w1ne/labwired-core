@@ -85,7 +85,7 @@
 
 use std::cell::Cell;
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 // ── MODE (0x00) bits ──
 const MODE_RESET: u32 = 1 << 0;
@@ -165,6 +165,9 @@ pub struct Esp32s3Twai {
     /// Latched interrupt bits (INTERRUPT, 0x0C). Read-and-clear via interior
     /// mutability since `Peripheral::read` is `&self`.
     int_latch: Cell<u32>,
+
+    /// Bus-published cycle clock (walk-free level export).
+    clock: Option<CycleClock>,
 }
 
 impl Esp32s3Twai {
@@ -187,6 +190,8 @@ impl Esp32s3Twai {
             status: STATUS_TX_BUF | STATUS_TX_COMPLETE,
             rx_msg_count: 0,
             int_latch: Cell::new(0),
+
+            clock: None,
         }
     }
 
@@ -342,6 +347,28 @@ impl Peripheral for Esp32s3Twai {
         PeripheralTickResult {
             explicit_irqs,
             ..PeripheralTickResult::default()
+        }
+    }
+
+    /// Walk-free: once the bus attaches a cycle clock under `event-scheduler`,
+    /// level IRQs export via [`Self::matrix_irq_sources_into`] and the per-cycle
+    /// walk is unnecessary (work settles on MMIO writes / `tick_with_bus`).
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.uses_scheduler()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        let pending = self.int_latch.get() & self.int_enable & INT_MASK;
+        if pending != 0 {
+            out.push(self.source_id);
         }
     }
 

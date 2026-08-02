@@ -1,0 +1,52 @@
+# Test-only fixture for the declarative I²C device primitive (register shape).
+#
+# A fictional light + temperature sensor. It is NOT a real part and is NOT
+# registered in `KITS` / `embedded_device_yaml`, so it never enters the
+# peripherals manifest — it exists solely to exercise GenericI2cDevice from
+# `declarative_i2c.rs` tests. It demonstrates every register-mode schema field:
+# little- and big-endian words, an rw config register, a sourced+encoded
+# measurement, and a bit-field-keyed `scale_from`.
+type: test_i2c_fixture
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x40
+    registers:
+      # rw config register. Firmware writes it; its low 2 bits select the LIGHT
+      # gain via LIGHT's scale_from.
+      - name: CONFIG
+        addr: 0x00
+        width: 2
+        endian: le
+        access: rw
+        reset: 0x0000
+      # Ambient-light counts. Sources the `lux` slot; the gain field of CONFIG
+      # multiplies the counts (×1 / ×2 / ×4). Little-endian on the wire.
+      - name: LIGHT
+        addr: 0x01
+        width: 2
+        endian: le
+        access: r
+        source: lux
+        scale_from:
+          register: CONFIG
+          mask: 0x3
+          shift: 0
+          map: { 0: 1.0, 1: 2.0, 2: 4.0 }
+      # Temperature in centi-degrees (°C × 100), big-endian on the wire.
+      - name: TEMP
+        addr: 0x02
+        width: 2
+        endian: be
+        access: r
+        source: temperature
+        encode: { scale: 100.0 }
+
+metadata:
+  label: "Declarative I²C fixture"
+  summary: "Test-only light + temperature sensor (register-pointer)."
+  category: i2c
+  inputs:
+    - { key: lux, label: "Illuminance", unit: lx, min: 0, max: 120000, default: 450 }
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 125, default: 22 }

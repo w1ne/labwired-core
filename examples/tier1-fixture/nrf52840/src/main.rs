@@ -25,6 +25,7 @@
 
 use cortex_m_rt::entry;
 use panic_halt as _;
+use tier1_fixture_common::{rd32 as reg_read, wr32 as reg_write};
 
 // ── UART0 = UARTE with EasyDMA (nRF52840 PS §6.33, base 0x40002000) ────────
 //
@@ -158,16 +159,6 @@ const PWM0_SEQ0_CNT: u32 = PWM0_BASE + 0x524;
 const PWM0_SEQ0_REFRESH: u32 = PWM0_BASE + 0x528;
 const PWM0_SEQ0_ENDDELAY: u32 = PWM0_BASE + 0x52C;
 const PWM0_PSEL_OUT0: u32 = PWM0_BASE + 0x560;
-
-#[inline(always)]
-fn reg_read(addr: u32) -> u32 {
-    unsafe { core::ptr::read_volatile(addr as *const u32) }
-}
-
-#[inline(always)]
-fn reg_write(addr: u32, value: u32) {
-    unsafe { core::ptr::write_volatile(addr as *mut u32, value) }
-}
 
 // ── UART0 output via EasyDMA ──────────────────────────────────────────────
 //

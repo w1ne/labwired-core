@@ -1,0 +1,68 @@
+# LabWired - nRF54L15-DK System Configuration
+#
+# Maps to Zephyr board target `nrf54l15dk/nrf54l15/cpuapp` (application core).
+#
+# Pin assignments are from the Zephyr board devicetree
+# `boards/nordic/nrf54l15dk/nrf54l15dk_common.dtsi` — the same sourcing rule as
+# the chip profile. Note the LEDs are split across TWO ports (P1 and P2), which
+# is why the chip profile has to get each port's `ngpios` right: P0=7, P1=17,
+# P2=11.
+#
+# UARTE20 is the DK console, routed to the on-board interface MCU's virtual COM
+# port. That is why the smoke firmware and the boot test both expect the banner
+# on uart20 rather than uart30.
+name: "nrf54l15dk"
+chip: "../chips/nrf54l15.yaml"
+external_devices: []
+board_io:
+  # LEDs — all active-high on this board (DT: GPIO_ACTIVE_HIGH).
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio2"
+    pin: 9
+    signal: "output"
+    active_high: true
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 10
+    signal: "output"
+    active_high: true
+  - id: "led2"
+    kind: "led"
+    peripheral: "gpio2"
+    pin: 7
+    signal: "output"
+    active_high: true
+  - id: "led3"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 14
+    signal: "output"
+    active_high: true
+
+  # Buttons — active-low with pull-ups (DT: GPIO_PULL_UP | GPIO_ACTIVE_LOW).
+  - id: "button0"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 13
+    signal: "input"
+    active_high: false
+  - id: "button1"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 9
+    signal: "input"
+    active_high: false
+  - id: "button2"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 8
+    signal: "input"
+    active_high: false
+  - id: "button3"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 4
+    signal: "input"
+    active_high: false

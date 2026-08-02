@@ -4,7 +4,14 @@
     "excluded": 190,
     "level": 2,
     "name": "esp32c3",
-    "reg_match": 364
+    "reg_match": 380
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "nrf54l15",
+    "reg_match": 0
   },
   {
     "behavior": false,
@@ -38,6 +45,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "stm32f411ceu6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "nrf52832",
     "reg_match": 0
   },
@@ -46,6 +60,13 @@
     "excluded": 0,
     "level": 1,
     "name": "nrf52840",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "nrf5340",
     "reg_match": 0
   },
   {
@@ -88,6 +109,13 @@
     "excluded": 0,
     "level": 1,
     "name": "stm32h563",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "stm32h735",
     "reg_match": 0
   },
   {

@@ -1,0 +1,10 @@
+# LabWired - Seeed XIAO nRF52840 Sense UART/GPIO/SPI smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo"
+  system: "../../../configs/systems/seeed-xiao-nrf52840-sense.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NRF52840_SMOKE_OK"
+  - expected_stop_reason: max_steps

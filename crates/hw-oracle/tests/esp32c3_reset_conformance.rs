@@ -51,6 +51,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 /// Curated silicon-corroborated reset values (descriptor == live C3), drawn
@@ -189,8 +190,10 @@ fn build_sim_bus() -> SystemBus {
         name: "esp32c3-reset-conformance".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
+        wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

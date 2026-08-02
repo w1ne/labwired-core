@@ -25,7 +25,7 @@ pub(crate) fn run_ingest_svd(args: IngestSvdArgs) -> ExitCode {
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-    let device = match svd_parser::parse(&xml) {
+    let device = match svd_ingestor::parse_svd(&xml) {
         Ok(d) => d,
         Err(e) => {
             error!("Failed to parse SVD XML: {}", e);
@@ -123,7 +123,7 @@ pub(crate) fn run_import_svd(args: ImportSvdArgs) -> ExitCode {
         }
     };
 
-    let svd = match svd_parser::parse(&xml) {
+    let svd = match svd_ingestor::parse_svd(&xml) {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to parse SVD XML: {}", e);
