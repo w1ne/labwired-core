@@ -568,7 +568,7 @@ static void refresh() {
 void setup() {
   Serial.begin(115200);
   delay(100);
-  Serial.println("E-Paper Weather Station boot (GxEPD2_290_C90c / UC8151D twin)");
+  Serial.println("E-Paper Weather Station boot (GxEPD2_290_C90c / ssd1680_tricolor_290 twin)");
 
   // ESP32-C3: bind SPI to the diagram pins before GxEPD2 init.
   SPI.begin(PIN_SCK, /*MISO*/ -1, PIN_MOSI, PIN_CS);

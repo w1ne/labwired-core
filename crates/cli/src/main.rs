@@ -27,7 +27,9 @@ mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
 
-use artifacts::{AssertionResult, NamedU64, Snapshot, StopReasonDetails, TestConfig, TestResult};
+use artifacts::{
+    AssertionResult, NamedU64, Snapshot, StimulusOutcome, StopReasonDetails, TestConfig, TestResult,
+};
 use labwired_config::{
     load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
 };
@@ -308,6 +310,17 @@ pub struct SnapshotCaptureArgs {
     /// Print a progress line every N steps. 0 = silent.
     #[arg(long, default_value = "5000000")]
     pub progress_every: u64,
+
+    /// Write a JSON instruction trace here. Records the LAST `--trace-last`
+    /// retired instructions, which is the window that matters when a run
+    /// faults. Attaching a trace forces the interpreter (compiled blocks can't
+    /// emit per-step events), so the capture runs slower.
+    #[arg(long = "trace-out", value_name = "PATH")]
+    pub trace_out: Option<PathBuf>,
+
+    /// How many retired instructions to keep in the trace ring.
+    #[arg(long = "trace-last", value_name = "N", default_value = "4096")]
+    pub trace_last: usize,
 }
 
 #[derive(Parser, Debug)]
@@ -1332,6 +1345,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &[],
         None,
         None,
+        // Load/reset failed before the run loop, so no stimulus was attempted.
+        Vec::new(),
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1622,23 +1637,49 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // wiring. `at_start` fires now; `after_cycles` fires the first loop
     // iteration at or past its cycle threshold. The closure takes `machine` as
     // an argument (captures nothing) so it can be called both here and mid-loop.
+    //
+    // The closure RETURNS the outcome rather than swallowing it. This used to
+    // only `error!` a rejection into the log and carry on, so a run whose input
+    // never reached the device still reported `status: "pass"` — a surface that
+    // claims success having proved nothing. Every outcome is now recorded in
+    // `stimulus_outcomes`, surfaced in `result.json`'s `stimuli` block, and a
+    // rejection fails the run (see the verdict below).
+    let mut stimulus_outcomes: Vec<StimulusOutcome> = Vec::new();
     let apply_stimulus = |machine: &mut labwired_core::Machine<C>,
                           s: &labwired_config::StimulusSpec| {
         let result = match s.target.component.as_deref() {
             Some(component) => machine.set_input_on(component, &s.target.channel, s.value),
             None => machine.set_input(&s.target.channel, s.value),
         };
-        match result {
-            Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
-            Err(e) => error!(
-                "stimulus '{}' = {} could not be applied: {:?}",
-                s.target.channel, s.value, e
-            ),
+        let (outcome, error) = match result {
+            Ok(()) => {
+                info!("stimulus: {} = {} applied", s.target.channel, s.value);
+                (artifacts::STIMULUS_APPLIED, None)
+            }
+            // `SimInputError`'s Display is the author-facing sentence ("no
+            // attached input device exposes channel 'pressed'"); the old `{:?}`
+            // Debug form leaked Rust variant names into the log.
+            Err(e) => {
+                error!(
+                    "stimulus '{}' = {} could not be applied: {e}",
+                    s.target.channel, s.value
+                );
+                (artifacts::STIMULUS_REJECTED, Some(e.to_string()))
+            }
+        };
+        StimulusOutcome {
+            channel: s.target.channel.clone(),
+            component: s.target.component.clone(),
+            value: s.value,
+            trigger: s.trigger.clone(),
+            outcome: outcome.to_string(),
+            at_cycle: machine.total_cycles,
+            error,
         }
     };
     for s in stimuli {
         if matches!(s.trigger, labwired_config::FaultTrigger::AtStart) {
-            apply_stimulus(machine, s);
+            stimulus_outcomes.push(apply_stimulus(machine, s));
         }
     }
     // Time-triggered stimuli, each tagged with whether it has fired yet.
@@ -1801,7 +1842,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 if let labwired_config::FaultTrigger::AfterCycles { cycles: threshold } = s.trigger
                 {
                     if cycles >= threshold {
-                        apply_stimulus(machine, s);
+                        stimulus_outcomes.push(apply_stimulus(machine, s));
                         *fired = true;
                     }
                 }
@@ -2090,7 +2131,62 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         StopReason::WallTime | StopReason::MaxUartBytes | StopReason::NoProgress
     );
 
-    let status = if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
+    // Any `after_cycles` stimulus whose threshold the run never reached also
+    // proved nothing about that input, so it is recorded rather than dropped.
+    // Unlike a rejection this is NOT fatal: a run can legitimately stop early
+    // (`stop_when_assertions_pass`) with a later rung of a stimulus ladder
+    // unfired, and failing those would flip existing green runs red on a pacing
+    // judgement call. It is reported so the reader can see it.
+    {
+        let end_cycle = metrics.get_cycles();
+        for (s, fired) in &pending_stimuli {
+            if *fired {
+                continue;
+            }
+            let threshold = match s.trigger {
+                labwired_config::FaultTrigger::AfterCycles { cycles } => cycles,
+                _ => continue,
+            };
+            error!(
+                "stimulus '{}' = {} never fired: the run ended at cycle {end_cycle}, before its \
+                 after_cycles threshold {threshold}",
+                s.target.channel, s.value
+            );
+            stimulus_outcomes.push(StimulusOutcome {
+                channel: s.target.channel.clone(),
+                component: s.target.component.clone(),
+                value: s.value,
+                trigger: s.trigger.clone(),
+                outcome: artifacts::STIMULUS_NOT_REACHED.to_string(),
+                at_cycle: end_cycle,
+                error: Some(format!(
+                    "never fired: the run ended at cycle {end_cycle}, before the after_cycles \
+                     threshold {threshold}"
+                )),
+            });
+        }
+    }
+
+    // A stimulus the engine REFUSED never reached the device, so nothing the
+    // run observed can be attributed to it — a "pass" here would be a run that
+    // proved nothing, which is the single most expensive failure mode in this
+    // codebase. It is therefore an invalid run, not a firmware verdict:
+    // `status: "error"` + `EXIT_CONFIG_ERROR`, exactly like the `uart_injection`
+    // peripheral-not-found gate above, which is the same class of failure
+    // (declared input never delivered) and already hard-fails.
+    let stimuli_rejected = stimulus_outcomes.iter().filter(|o| o.is_rejected()).count();
+    if stimuli_rejected > 0 {
+        error!(
+            "{stimuli_rejected} stimulus/stimuli could not be applied; the run is invalid \
+             (nothing it observed can be attributed to them)"
+        );
+    }
+
+    // `rejected` dominates the other verdicts on purpose: a "fail" produced by a
+    // run whose inputs were never delivered is not a trustworthy fail either.
+    let status = if stimuli_rejected > 0 {
+        "error"
+    } else if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
         "fail"
     } else if sim_error_happened && !expected_stop_reason_matched {
         "error"
@@ -2171,9 +2267,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         &fault_evidence,
         Some(inspect_block),
         logic_edges,
+        stimulus_outcomes,
     );
 
-    if !all_passed
+    if stimuli_rejected > 0 {
+        ExitCode::from(EXIT_CONFIG_ERROR)
+    } else if !all_passed
         || fault_gate_failed
         || (stop_requires_assertion && !expected_stop_reason_matched)
     {
@@ -2206,6 +2305,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    stimuli: Vec<StimulusOutcome>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -2218,6 +2318,24 @@ fn write_outputs<C: labwired_core::Cpu>(
     // is the sole call site on the run path.
     let fidelity = labwired_core::fidelity::take().to_gaps();
 
+    // Derive the top-level `message` from the stimulus block rather than taking
+    // it as a second parameter, so the human sentence and the structured
+    // evidence cannot drift apart — one source of truth. A rejected stimulus is
+    // fatal, so a reader who only ever looks at `status` + `message` still
+    // cannot miss it.
+    let rejected: Vec<String> = stimuli
+        .iter()
+        .filter(|o| o.is_rejected())
+        .map(|o| o.describe())
+        .collect();
+    let message = (!rejected.is_empty()).then(|| {
+        format!(
+            "{} stimulus/stimuli could not be applied, so the run proved nothing about them: {}",
+            rejected.len(),
+            rejected.join("; ")
+        )
+    });
+
     let assertions_for_junit = assertions.clone();
     let result = TestResult {
         result_schema_version: RESULT_SCHEMA_VERSION.to_string(),
@@ -2228,7 +2346,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         stop_reason,
         stop_reason_details: stop_reason_details.clone(),
         limits: limits.clone(),
-        message: None,
+        message,
         assertions,
         cpu_state: Some(cpu.snapshot()),
         firmware_hash,
@@ -2240,6 +2358,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         inspect,
         fidelity,
         logic_edges,
+        stimuli,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2564,6 +2683,9 @@ pub(crate) fn write_config_error_outputs(
         fidelity: Vec::new(),
         // Nor any logic-analyzer edges — capture never armed.
         logic_edges: None,
+        // Nor any stimulus outcomes: the run was rejected before a machine
+        // existed, so no stimulus was ever attempted.
+        stimuli: Vec::new(),
     };
 
     if let Some(output_dir) = &args.output_dir {

@@ -28,6 +28,22 @@
 //!
 //! The old model's 0x1C/0x1D range alias is not carried over. Its own comment
 //! called it a guess ("some continuous reads"), not a datasheet register.
+//!
+//! ── A second deliberate change: the interrupt-status VALUE ─────────────────
+//!
+//! RESULT_INTERRUPT_STATUS used to read 0x07 (all three low bits) when a range
+//! completed. Bits 2:0 are not three independent flags — they report WHICH
+//! source asserted, and the source every polling driver configures through
+//! SYSTEM_INTERRUPT_CONFIG_GPIO (0x0A) is 0x04, "new sample ready".
+//! `VL53L0X_GetMeasurementDataReady` compares the masked status for EQUALITY
+//! with that configured functionality, so 0x07 read as "not ready" forever and
+//! every vendor measurement timed out. The tests below therefore expect 0x04.
+//! Drivers that only test `status & 0x07 != 0` — the datasheet one-shot idiom,
+//! including the shipped C3 example — are unaffected either way.
+//!
+//! The vendor-initialisation surface that grew out of this (register banks, the
+//! factory NVM port, the reference-SPAD map) is locked in
+//! `vl53l0x_vendor_init.rs`; this file stays the migration record.
 
 use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
 use labwired_core::peripherals::i2c::I2cDevice;
@@ -145,8 +161,8 @@ fn a_range_is_not_ready_until_the_timing_budget_elapses() {
     dev.advance_time_us(33_000); // ST's default timing budget
     assert_eq!(
         read_block(&mut dev, 0x13, 1),
-        vec![0x07],
-        "bits 2:0 must read set once the range is done"
+        vec![0x04],
+        "bits 2:0 must report the asserted source once the range is done"
     );
 }
 
@@ -163,7 +179,7 @@ fn reading_the_range_does_not_acknowledge_the_interrupt() {
     let _ = read_block(&mut dev, 0x1E, 2);
     assert_eq!(
         read_block(&mut dev, 0x13, 1),
-        vec![0x07],
+        vec![0x04],
         "reading the range must NOT clear the interrupt"
     );
 
@@ -189,7 +205,7 @@ fn a_second_range_can_be_started_after_acknowledging() {
             "round {round}: flag must start clear"
         );
         dev.advance_time_us(33_000);
-        assert_eq!(read_block(&mut dev, 0x13, 1), vec![0x07], "round {round}");
+        assert_eq!(read_block(&mut dev, 0x13, 1), vec![0x04], "round {round}");
         assert_eq!(read_block(&mut dev, 0x1E, 2), vec![0x01, 0x5E]);
         write_reg(&mut dev, 0x0B, 0x01);
     }

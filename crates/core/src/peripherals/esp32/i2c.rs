@@ -57,6 +57,13 @@ use std::collections::BTreeMap;
 use crate::peripherals::i2c::I2cDevice;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
+/// Read once per process — this sits on the I2C command path. See
+/// `fidelity::strict` for why a per-call `env::var` is a real cost.
+fn i2c_trace_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("LABWIRED_I2C_TRACE").is_ok())
+}
+
 pub const I2C0_BASE: u32 = 0x3FF5_3000;
 pub const I2C0_SIZE: u64 = 0x1000;
 
@@ -294,7 +301,7 @@ impl Peripheral for Esp32I2c {
             }
             other => self.other.get(&other).copied().unwrap_or(0),
         };
-        if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
+        if i2c_trace_enabled() {
             eprintln!("ESP32 I2C R [0x{offset:02x}] = 0x{v:08x}");
         }
         Ok(v)
@@ -307,7 +314,7 @@ impl Peripheral for Esp32I2c {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
+        if i2c_trace_enabled() {
             eprintln!("ESP32 I2C W [0x{offset:02x}] = 0x{value:08x}");
         }
         match offset {

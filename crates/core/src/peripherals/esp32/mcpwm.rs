@@ -31,7 +31,6 @@
 //! frequency/duty a controller actually commands.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Notified when an operator commits a new compare-A (duty) value, i.e. on
@@ -67,7 +66,7 @@ const PWM_CLK_HZ: u64 = 160_000_000;
 pub struct Mcpwm {
     base: u32,
     /// Word-aligned register backing store; round-trips every write.
-    regs: HashMap<u64, u32>,
+    regs: crate::FastMap<u64, u32>,
     /// Actuators driven by this controller, notified on each duty commit.
     duty_observers: Vec<Arc<dyn McpwmDutyObserver>>,
 }
@@ -80,7 +79,7 @@ impl Mcpwm {
     pub fn new(base: u32) -> Self {
         Self {
             base,
-            regs: HashMap::new(),
+            regs: crate::FastMap::default(),
             duty_observers: Vec::new(),
         }
     }

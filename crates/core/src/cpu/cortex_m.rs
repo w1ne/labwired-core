@@ -3233,11 +3233,16 @@ impl CortexM {
         // and this runs on every instruction. Gate it on having observers, the
         // same way on_step_start above is gated.
         if !_observers.is_empty() {
-            let mut registers = [0u32; 17];
+            let mut registers = [0u32; 19];
             for (i, reg) in registers.iter_mut().enumerate().take(16) {
                 *reg = self.get_register(i as u8);
             }
             registers[16] = self.xpsr;
+            // Standard trailer (see `SimulationObserver`): SP then PC. Both
+            // already live in the arch block (r13/r15); repeating them here is
+            // what lets an arch-agnostic consumer find them.
+            registers[17] = self.get_register(13);
+            registers[18] = self.pc;
 
             crate::emit_trace_event(
                 _observers,

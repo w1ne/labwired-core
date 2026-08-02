@@ -1441,3 +1441,131 @@ assertions:
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Write a two-node world where one node's firmware is NOT an ELF.
+///
+/// A flash image is exactly how an Arduino ESP32 sketch reaches a world node:
+/// core classifies firmware by magic bytes, so the file itself selects the
+/// mask-ROM boot path. The bytes here need not be a valid image — the budget
+/// check runs before the world is built, which is precisely what these tests
+/// isolate.
+fn write_flash_image_environment(dir: &Path) -> PathBuf {
+    let root = workspace_root();
+    let elf = std::fs::canonicalize(root.join("tests/fixtures/uart-ok-thumbv7m.elf"))
+        .expect("fixture firmware");
+    let system = std::fs::canonicalize(root.join("configs/systems/ci-fixture-uart1.yaml"))
+        .expect("fixture system manifest");
+    let flash = dir.join("app.bin");
+    std::fs::write(&flash, b"\xe9\x00\x00\x00not an elf").expect("write flash image");
+
+    let environment = dir.join("flash-world.yaml");
+    std::fs::write(
+        &environment,
+        format!(
+            r#"schema_version: "1.0"
+name: flash-world
+nodes:
+  - id: alpha
+    system: "{system}"
+    firmware: "{elf}"
+  - id: beta
+    system: "{system}"
+    firmware: "{flash}"
+"#,
+            system = system.display(),
+            elf = elf.display(),
+            flash = flash.display(),
+        ),
+    )
+    .expect("write environment manifest");
+    environment
+}
+
+fn budget_error_message(dir: &Path) -> String {
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts").join("result.json"))
+            .expect("read result.json"),
+    )
+    .expect("parse result.json");
+    result["message"].as_str().unwrap_or_default().to_string()
+}
+
+#[test]
+fn all_elf_world_keeps_the_fast_boot_step_ceiling() {
+    let dir = unique_dir("budget-elf");
+    write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 60000000
+assertions: []
+"#,
+        &[],
+    );
+    assert!(
+        !output.status.success(),
+        "60M steps must exceed the fast-boot ceiling"
+    );
+    let message = budget_error_message(&dir);
+    assert!(
+        message.contains("between 1 and 50000000"),
+        "expected the fast-boot ceiling, got: {message}"
+    );
+}
+
+#[test]
+fn a_flash_image_node_gets_the_rom_boot_step_ceiling() {
+    // The whole point of the exception: a node that replays the genuine mask ROM
+    // spends ~150M steps there before its app runs one instruction, so a flat
+    // 50M ceiling would stop every ESP32 world mid-boot and report it as a step
+    // limit rather than as the misconfiguration it is not.
+    let dir = unique_dir("budget-flash");
+    write_flash_image_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "flash-world.yaml"
+limits:
+  max_steps: 60000000
+assertions: []
+"#,
+        &[],
+    );
+    // This world still fails — the fixture chip is Cortex-M and cannot boot a
+    // flash image — but it must fail on THAT, never on the step budget.
+    let message = budget_error_message(&dir);
+    assert!(
+        !message.contains("max_steps must be between"),
+        "a flash-image world was refused on its step budget: {message}"
+    );
+    assert!(
+        !output.status.success(),
+        "the fixture world cannot actually boot; it must not report success"
+    );
+}
+
+#[test]
+fn the_rom_boot_ceiling_is_still_a_ceiling() {
+    let dir = unique_dir("budget-flash-over");
+    write_flash_image_environment(&dir);
+    run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "flash-world.yaml"
+limits:
+  max_steps: 600000000
+assertions: []
+"#,
+        &[],
+    );
+    let message = budget_error_message(&dir);
+    assert!(
+        message.contains("between 1 and 500000000"),
+        "expected the rom-boot ceiling to still bound the run, got: {message}"
+    );
+}

@@ -27,7 +27,6 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::bus::SystemBus;
     use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
     use labwired_core::peripherals::esp32::spi::Esp32Spi;
-    use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
     use labwired_core::system::xtensa::configure_xtensa_esp32;
     use labwired_core::{Machine, SimulationError};
     use labwired_loader::{extract_arduino_esp32_thunks, load_elf_bytes};
@@ -129,524 +128,88 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
 
     // Resolve every Arduino-ESP32 symbol we know how to patch / thunk.
     // Empty for the reference firmware (stripped) — those fall back to hardcoded PCs.
+    // The Arduino-ESP32 profile now lives in ONE place
+    // (core/system/xtensa/arduino_esp32_profile.rs) so `labwired test` boots
+    // these firmwares identically. It used to live only here, which is why the
+    // declarative runner — the one that owns stimuli and assertions — could not
+    // run a classic-ESP32 Arduino sketch at all.
     let symbol_addrs = extract_arduino_esp32_thunks(&elf_bytes);
-    let resolve_data =
-        |sym: &str, fallback: u32| -> u32 { symbol_addrs.get(sym).copied().unwrap_or(fallback) };
-    // APP_CPU initial stack — read once, used on cpu1 unhalt.
-    // ESP-IDF puts the boot stack at `port_IntStackTop`; if the symbol
-    // is missing (stripped ELF), fall back to a safe high-DRAM addr.
-    let appcpu_initial_sp: u32 = symbol_addrs
-        .get("port_IntStackTop")
-        .copied()
-        .unwrap_or(0x3FFB_F3A0);
-
-    // loopTask xCoreID repin: Arduino-ESP32's app_main calls
-    // xTaskCreateUniversal(loopTask, ..., xCoreID=1), pinning loopTask to
-    // APP_CPU. We model only PRO_CPU, so rewrite the xCoreID immediate to 0.
-    // Handles both legacy and IDF-5.x app_main layouts. See
-    // rom_thunks::repin_loop_task.
-    if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
-        if let Some((addr, shape)) = rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr) {
-            eprintln!(
-                "labwired-cli snapshot: repinned loopTask xCoreID at 0x{addr:08x} (1→0, {shape}; runs on PRO_CPU)"
-            );
-        }
-    }
-
-    // Arduino-ESP32 bootstrap — keep in sync with
-    // `wasm/src/lib.rs::install_arduino_esp32_quirks` and the e2e test.
-    machine.cpu.set_sp(0x3FFE_0000);
-    // Handshake-byte pre-paint: resolve s_resume_cores / s_cpu_up /
-    // s_cpu_inited / s_system_inited / s_other_cpu_startup_done from the ELF
-    // symbol table and write 0x01 to both bytes of each.
-    // Dual-core handshake pre-seed + 10k-cycle keep-alive — now only a FALLBACK
-    // for when APP_CPU is halted (`LABWIRED_NO_DUALCORE=1`). By default we run
-    // the real second core, which executes the firmware's own `call_start_cpu1`
-    // and sets `s_cpu_up`/etc itself — no faking. The pre-seed was a workaround
-    // for the previously-halted cpu1: `call_start_cpu0` unstalls APP_CPU then
-    // spin-waits on `s_cpu_up[0..1]`, so with cpu1 halted PRO_CPU would spin
-    // forever. With the real second core the firmware renders byte-identical to
-    // silicon (spi3=19033, ink=1429) WITHOUT the pre-seed. Enable explicitly with
-    // `LABWIRED_PRESEED_HANDSHAKE=1`.
-    let preseed_handshake = std::env::var("LABWIRED_NO_DUALCORE").is_ok()
-        || std::env::var("LABWIRED_PRESEED_HANDSHAKE").is_ok();
-    let s_resume_cores = resolve_data("s_resume_cores", 0);
-    let s_cpu_up = resolve_data("s_cpu_up", 0);
-    let s_cpu_inited = resolve_data("s_cpu_inited", 0);
-    let s_system_inited = resolve_data("s_system_inited", 0);
-    let s_other_cpu_startup_done = resolve_data("s_other_cpu_startup_done", 0);
-    if preseed_handshake {
-        if s_resume_cores != 0 {
-            let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
-        }
-        if s_cpu_up != 0 {
-            let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
-            let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
-        }
-        if s_cpu_inited != 0 {
-            let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
-            let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
-        }
-        if s_system_inited != 0 {
-            let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
-            let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
-        }
-        if s_other_cpu_startup_done != 0 {
-            let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
-        }
-        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
-        // newer arduino-esp32 cores (whose `start_other_core` spin-waits
-        // with a tight timeout) see APP_CPU "up" without depending on the
-        // coarse 10k-cycle keep-alive below. Models APP_CPU bring-up; see
-        // rom_thunks::ets_set_appcpu_boot_addr.
-        let mut appcpu_up_flags: Vec<u32> = Vec::new();
-        for (base, two_byte) in [
-            (s_cpu_up, true),
-            (s_cpu_inited, true),
-            (s_system_inited, true),
-            (s_resume_cores, false),
-            (s_other_cpu_startup_done, false),
-        ] {
-            if base != 0 {
-                appcpu_up_flags.push(base);
-                if two_byte {
-                    appcpu_up_flags.push(base + 1);
-                }
-            }
-        }
-        rom_thunks::set_appcpu_up_flags(appcpu_up_flags);
-    }
-    // RTC XTAL-freq probe = 40 MHz.
-    let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
-
-    // Build the thunk address list. Each entry maps a flash PC to a
-    // sim-side rom_thunks function. For unstripped ELFs we use the
-    // already-parsed symbol map above; the reference firmware's fully stripped ELF
-    // falls back to the hand-curated address list.
-    let resolve =
-        |sym: &str, fallback: u32| -> u32 { symbol_addrs.get(sym).copied().unwrap_or(fallback) };
-    // heap_caps_* are NO LONGER thunked. The firmware's real ESP-IDF multi_heap
-    // (TLSF) allocator runs on the emulated DRAM — same as the wasm boot path and
-    // the e-reader e2e (crates/core/tests/e2e_labwired_ereader.rs, which paints
-    // identically with the real heap: refresh_gen=1, 1429 ink bytes). The old
-    // bump-allocator thunks were debt; the "real heap walls" symptom was an
-    // APP_CPU dual-core bring-up bug (fixed by the real second core), not an
-    // allocator bug.
-    let mut thunks: Vec<(u32, rom_thunks::RomThunkFn)> = vec![
-        (
-            resolve("esp_timer_init", 0x4012_9034),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve(
-                "spi_flash_disable_interrupts_caches_and_other_cpu",
-                0x4008_17dc,
-            ),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve(
-                "spi_flash_enable_interrupts_caches_and_other_cpu",
-                0x4008_188c,
-            ),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("__retarget_lock_init_recursive", 0x4008_3384),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("__retarget_lock_close_recursive", 0x4008_339c),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("__retarget_lock_acquire_recursive", 0x4008_33b0),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("__retarget_lock_release_recursive", 0x4008_33cc),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("_esp_error_check_failed", 0x4008_bbd0),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("setCpuFrequencyMhz", 0x400e_99dc),
-            rom_thunks::nop_return_zero,
-        ),
-        (
-            resolve("esp_ota_get_running_partition", 0x400e_ae18),
-            rom_thunks::nop_return_fake_ptr,
-        ),
-        (resolve("delay", 0x400e_5c28), rom_thunks::nop_return_zero),
-    ];
-    // The Arduino serial nops that used to be installed here are gone, along
-    // with the empty loop that survived them. They dodged an Xtensa
-    // divide-by-zero in _get_effective_baudrate whose real cause was an
-    // apb_ctrl read-as-ones stub shadowing SYSCON at the same base — see
-    // system/xtensa/esp32.rs. Serial now works on this path, which is what
-    // makes the `<output>.uart.log` written below carry a sketch's own output.
-    // Real-silicon noreturn functions — abort_halt prints diagnostics and
-    // halts the CPU instead of returning. Without this, stubbing them as
-    // nop_return_zero creates tight `assert → return → re-check → assert`
-    // loops in xQueueGenericSend's parameter-validation path.
-    for sym in &[
-        "panic_abort",
-        "__assert_func",
-        "abort",
-        "__assert",
-        "__cxa_pure_virtual",
-        "__cxa_throw",
-    ] {
-        if let Some(&pc) = symbol_addrs.get(*sym) {
-            thunks.push((pc, rom_thunks::abort_halt));
-        }
-    }
-    // ESP-IDF clock/efuse/cache/dport bring-up — the sim has no silicon
-    // behind these so we stub them to return-0. Only installed when the
-    // symbol is present in the ELF (Arduino-ESP32 profile).
-    for sym in &[
-        // newlib stdio init — sketch doesn't use stdio on render path
-        "__sinit",
-        "__sfp",
-        "__sfp_lock_acquire",
-        "__sfp_lock_release",
-        "__sflags",
-        "__swsetup_r",
-        "__srefill_r",
-        "__sread",
-        "__swrite",
-        "__seek",
-        "__sclose",
-        "esp_reent_init",
-        "_fflush_r",
-        "_fclose_r",
-        "_fwrite_r",
-        "esp_panic_handler",
-        "esp_panic_handler_reconfigure_wdts",
-        // xTaskGetCurrentTaskHandle gets a proper thunk below — returning
-        // 0 breaks vTaskDelete(NULL) by passing NULL into prvDeleteTLS.
-        "pthread_key_create",
-        "pthread_setspecific",
-        "pthread_getspecific",
-        "pthread_mutex_init",
-        "pthread_mutex_lock",
-        "pthread_mutex_unlock",
-        // Dual-core sim: with cpu_secondary actually running, FreeRTOS
-        // primitives can use their real implementations — stubbing them
-        // would defeat the purpose. Only esp_pthread_init stays stubbed
-        // (it depends on per-task TLS we don't model).
-        "esp_pthread_init",
-        "esp_task_wdt_reset",
-        "esp_task_wdt_init",
-        "esp_task_wdt_add",
-        "esp_task_wdt_delete",
-        "esp_clk_init",
-        "esp_perip_clk_init",
-        "core_intr_matrix_clear",
-        "esp_efuse_check_errors",
-        "esp_dport_access_stall_other_cpu_start",
-        "esp_dport_access_stall_other_cpu_end",
-        "esp_cpu_unstall",
-        "bootloader_flash_update_id",
-        "bootloader_init_mem",
-        "esp_mspi_pin_init",
-        "spi_flash_init_chip_state",
-        "esp_log_timestamp",
-        // SPI-flash HAL — see loader::extract_arduino_esp32_thunks for why.
-        "spi_flash_hal_configure_host_io_mode",
-        "spi_flash_chip_generic_config_host_io_mode",
-        "spi_flash_chip_generic_get_io_mode",
-        "spi_flash_chip_generic_set_io_mode",
-        "spi_flash_chip_generic_probe",
-        "spi_flash_chip_generic_detect_size",
-        "spi_flash_chip_generic_read",
-        "spi_flash_chip_generic_yield",
-        "spi_flash_chip_gd_probe",
-        "spi_flash_chip_gd_detect_size",
-        "spi_flash_chip_gd_get_io_mode",
-        "spi_flash_chip_gd_set_io_mode",
-        "spi_flash_init",
-        "spi_flash_hal_init",
-        "spi_flash_hal_supports_direct_write",
-        "spi_flash_hal_supports_direct_read",
-        "esp_flash_app_enable_os_functions",
-        "esp_flash_app_disable_os_functions",
-        "esp_flash_app_init",
-        "esp_flash_init_main",
-        "esp_flash_init_default_chip",
-        "esp_flash_init",
-        "esp_random",
-        "esp_fill_random",
-        "esp_log_early_timestamp",
-        "esp_log_writev",
-        "esp_log_write",
-        "esp_log_buffer_hex_internal",
-        "esp_log_buffer_char_internal",
-        "esp_log_buffer_hexdump_internal",
-        // log mutex (esp_log_impl_lock/unlock) — sim doesn't model the log
-        // mutex queue, and the real impl calls xQueueGenericSend on an
-        // uninitialized queue, tripping a NULL-pcHead assertion.
-        "esp_log_impl_lock",
-        "esp_log_impl_lock_timeout",
-        "esp_log_impl_unlock",
-        // esp_ipc_init/isr_init create the IPC task per core. Its
-        // semaphore-wait turns into a tight loop in the sim (xQueueSemaphoreTake
-        // is stubbed to pdTRUE), starving loopTask. Stub the init so the
-        // task is never created — cross-core IPC isn't used on the
-        // single-CPU render path.
-        "esp_ipc_init",
-        "esp_ipc_isr_init",
-        // The HardwareSerial / uartWrite nops are GONE. A previous attempt
-        // recorded here that unstubbing them "still emitted 0 UART bytes in 8M
-        // steps, so something further down swallows the write" — that run was
-        // made while apb_ctrl shadowed the SYSCON model, so SYSCLK_CONF read
-        // 0xFFFFFFFF, getApbFrequency() returned 78125 Hz and
-        // _get_effective_baudrate divided by zero. The clock tree was broken,
-        // not the write path. With the syscon window fixed (see
-        // system/xtensa/esp32.rs) the real Arduino serial path runs and
-        // demo-labwired-ereader.elf emits its own markers.
-        "_Z14serialEventRunv",
-        // FreeRTOS recursive mutexes used by newlib stdio locks — same
-        // null-queue assertion problem. Stub since sim is effectively
-        // single-threaded on the panel-render path. xQueueCreateMutexStatic
-        // gets a separate echo_arg0 thunk below (callers assert the returned
-        // handle equals the static buffer they passed in). xQueueCreateMutex is
-        // NOT stubbed — the SPI bus mutex is a real FreeRTOS object (see the
-        // spiStartBus note below); faking its create returned an uninitialised
-        // handle that forced faking every lock op on top of it and dropped the
-        // SPI payload to the panel.
-        "xQueueGiveMutexRecursive",
-        "xQueueTakeMutexRecursive",
-        "__sfvwrite_r",
-        "__swsetup_r",
-        "__sflush_r",
-        "_printf_r",
-        "_fprintf_r",
-        "_vfprintf_r",
-        "_vprintf_r",
-        "printf",
-        "fprintf",
-        "vfprintf",
-        "vprintf",
-        "puts",
-        "fputs",
-        "fputc",
-        "putchar",
-        "_puts_r",
-        "_fputs_r",
-        "_putchar_r",
-        "_write_r",
-        "write",
-    ] {
-        if let Some(&pc) = symbol_addrs.get(*sym) {
-            thunks.push((pc, rom_thunks::nop_return_zero));
-        }
-    }
-    // esp_chip_info needs more than nop — has to fill the output struct
-    // with a plausible revision so the firmware's chip_revision >= min
-    // assert passes.
-    if let Some(&pc) = symbol_addrs.get("esp_chip_info") {
-        thunks.push((pc, rom_thunks::esp_chip_info_stub));
-    }
-    // __getreent must return a non-NULL pointer to a zeroed reent struct.
-    // Real silicon's per-task reent is set up by FreeRTOS task local
-    // storage which we don't model — return a fixed pointer into DRAM
-    // (always zeroed by RamPeripheral::new). ESP32-classic-specific
-    // address; an `esp32s3` profile (if/when added) would need its own
-    // version of this thunk pointing at S3's DRAM range.
-    if let Some(&pc) = symbol_addrs.get("__getreent") {
-        thunks.push((pc, rom_thunks::getreent_dram_fake_ptr));
-    }
-    // esp_timer_impl_get_counter_reg must return a monotonically increasing
-    // value, otherwise polling-loop callers (esp-idf flash HAL, FreeRTOS
-    // timeout helpers) spin forever.
-    if let Some(&pc) = symbol_addrs.get("esp_timer_impl_get_counter_reg") {
-        thunks.push((pc, rom_thunks::monotonic_counter_32));
-    }
-    // esp_clk_cpu_freq() — FreeRTOS divides CPU freq by tick rate to set
-    // _xt_tick_divisor; without a meaningful value, divisor is 0 and the
-    // timer ISR re-fires every CCOUNT cycle, pinning CPU 0 in the tick hook.
-    if let Some(&pc) = symbol_addrs.get("esp_clk_cpu_freq") {
-        thunks.push((pc, rom_thunks::esp_clk_cpu_freq_240mhz));
-    }
-    // Xtensa HAL register-window-file spill. The HAL impl walks WS bits
-    // and spills each live slot's a0..a3 to its stack save area — but
-    // our sim's transparent shadow-spill on CALL{n} leaves WS=1 on
-    // displaced slots while the AR file has the callee's data, so the
-    // HAL walk reads garbage (callee's a1 is often 0 → store to
-    // 0xfffffff0 traps). The custom thunk emulates the spill using
-    // shadow-stack snapshots when available.
-    //
-    // Only the `_nw` leaf (the spill loop that would trap) is thunked;
-    // the `xthal_window_spill` wrapper is a thin CALL{n}-entered
-    // PS-save shell that must run natively (its real ENTRY/RETW manage
-    // the window). Thunking the wrapper returns via a0 = the caller's
-    // return address, corrupting the first-task dispatch.
-    if let Some(&pc) = symbol_addrs.get("xthal_window_spill_nw") {
-        thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
-    }
-    // xQueueCreateMutexStatic returns the caller's static buffer as the
-    // handle. Callers (esp_newlib_locks_init in particular) assert that the
-    // returned handle equals the buffer they passed in — a nop_return_zero
-    // stub fails that check.
-    if let Some(&pc) = symbol_addrs.get("xQueueCreateMutexStatic") {
-        thunks.push((pc, rom_thunks::x_queue_create_mutex_static_echo));
-    }
-    // pxCurrentTCB symbol → feed into the rom_thunks side so the
-    // xTaskGetCurrentTaskHandle thunk can read it. Arduino-ESP32's
-    // main_task self-deletes after app_main returns via vTaskDelete(NULL),
-    // which depends on this getter.
-    if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
-        rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(addr)));
-    }
-    if let Some(&pc) = symbol_addrs.get("xTaskGetCurrentTaskHandle") {
-        thunks.push((pc, rom_thunks::x_task_get_current_task_handle));
-    }
-    // NO SPI-bus lock shims and NO SPI init fakes. GxEPD2_EPD::init() calls
-    // SPI.begin() → the real compiled spiStartBus runs: it creates a real
-    // recursive bus mutex via xQueueCreateMutex (real, backed by the real heap),
-    // enables the SPI3 peripheral clock through DPORT, and configures USER/FIFO.
-    // SPIClass::beginTransaction then takes that real mutex. So spi_start_bus_fake,
-    // spi_class_begin_transaction, and the xQueueSemaphoreTake / xQueueGenericSend /
-    // ulTaskGenericNotifyTake "force pdTRUE" lock shims are all GONE — the bus
-    // mutex is a genuine FreeRTOS object and the SPI critical sections run for
-    // real, so the byte stream actually reaches the panel (the fakes matched the
-    // transaction count but dropped the payload → blank render). Mirrors the
-    // proven e2e path in crates/core/tests/e2e_labwired_ereader.rs.
-    // xQueueCreateMutexStatic is still echoed above (idle-task static mutex); the
-    // SPI bus uses the dynamic xQueueCreateMutex, which is real.
-    // No GxEPD2 _writeCommand / _writeData bypass. The real compiled
-    // GxEPD2_EPD::_writeCommand/_writeData run: digitalWrite(DC=GPIO17) →
-    // SPI.transfer(byte) → spiTransferByteNL writes the SPI3 FIFO/MOSI_DLEN/
-    // CMD.USR registers, and the Esp32Spi peripheral drains the byte to the
-    // panel framed by the latched DC GPIO. Verified end-to-end against the real
-    // PlatformIO firmware.elf (431 real SPI3 transactions → panel refresh) by
-    // tests/e2e_labwired_ereader.rs. The arduino-esp32 panel attach above sets
-    // the panel's DC source to GPIO17 so the framing is real.
-    // Optional debug: install vListInsert short-circuit thunk that dumps
-    // list state for first 20 calls. Used to diagnose SMP race issues in
-    // the FreeRTOS scheduler. Enable with `LABWIRED_DEBUG_VLIST=1`.
-    if std::env::var("LABWIRED_DEBUG_VLIST").is_ok() {
-        if let Some(&pc) = symbol_addrs.get("vListInsert") {
-            thunks.push((pc, rom_thunks::vlist_insert_debug));
-        }
-    }
-    eprintln!(
-        "labwired-cli snapshot: installing {} thunks ({} resolved from ELF symbols)",
-        thunks.len(),
-        symbol_addrs.len(),
-    );
-    for &(pc, f) in &thunks {
-        if let Err(e) = machine.bus.install_flash_thunk(pc, f) {
-            eprintln!("error: install_flash_thunk @ {:#x}: {e}", pc);
+    let profile = match labwired_core::system::xtensa::install_arduino_esp32_profile(
+        &mut machine,
+        symbol_addrs,
+        program_image.entry_point as u32,
+    ) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: {e}");
             return ExitCode::from(EXIT_RUNTIME_ERROR);
         }
-    }
-
-    // Fake esp_image_header_t (24 bytes) at 0x3F40_0000, entry = ELF entry.
-    let entry: u32 = program_image.entry_point as u32;
-    let header: [u8; 24] = [
-        0xE9,
-        0x01,
-        0x00,
-        0x00,
-        (entry & 0xFF) as u8,
-        ((entry >> 8) & 0xFF) as u8,
-        ((entry >> 16) & 0xFF) as u8,
-        ((entry >> 24) & 0xFF) as u8,
-        0xEE,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ];
-    for (i, &b) in header.iter().enumerate() {
-        let _ = machine.bus.write_u8(0x3F40_0000 + i as u64, b);
-    }
-
-    // IPI bridge state — DPORT FROM_CPU intmatrix mapping observed each
-    // cycle, raised on the CPU as an internal interrupt edge.
-    let mut from_cpu_bit0: Option<u8> = None;
-    let mut from_cpu_bit1: Option<u8> = None;
-    let mut last_from_cpu0_val: u32 = 0;
-    let mut last_from_cpu1_val: u32 = 0;
+    };
+    let symbol_addrs = profile.symbols.clone();
+    eprintln!(
+        "labwired-cli snapshot: installing {} thunks ({} resolved from ELF symbols)",
+        profile.thunks_installed,
+        symbol_addrs.len(),
+    );
 
     eprintln!(
         "labwired-cli snapshot: stepping firmware to cycle {}",
         args.steps
     );
-    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
-    let config = labwired_core::SimulationConfig::default();
+    // Instruction trace. Off unless asked for: attaching an observer forces
+    // the interpreter path (a compiled block cannot emit per-step events), so
+    // an always-on trace would silently tax every capture.
+    let ring = args
+        .trace_out
+        .as_ref()
+        .map(|_| std::sync::Arc::new(labwired_core::trace::RetiredRing::new(args.trace_last)));
+    // The authoritative path owns its observers, so hand the trace ring to the
+    // Machine instead of passing a list into every cpu.step call.
+    if let Some(r) = &ring {
+        machine.observers.push(r.clone());
+    }
+    if let Some(path) = &args.trace_out {
+        eprintln!(
+            "labwired-cli snapshot: tracing the last {} retired instructions to {}",
+            args.trace_last,
+            path.display()
+        );
+    }
+    // Written on EVERY exit path, faults included — a trace that only survives
+    // a clean run is useless for the case it exists to explain.
+    let dump_trace = |ring: &Option<std::sync::Arc<labwired_core::trace::RetiredRing>>| {
+        let (Some(ring), Some(path)) = (ring, args.trace_out.as_ref()) else {
+            return;
+        };
+        let entries = ring.entries();
+        let total = ring.total_retired();
+        let payload = serde_json::json!({
+            "total_retired": total,
+            "kept": entries.len(),
+            "dropped": total.saturating_sub(entries.len() as u64),
+            "instructions": entries,
+        });
+        match std::fs::File::create(path) {
+            Ok(f) => {
+                if let Err(e) = serde_json::to_writer_pretty(f, &payload) {
+                    eprintln!("error: failed to write {}: {e}", path.display());
+                } else {
+                    eprintln!(
+                        "labwired-cli snapshot: wrote {} of {} retired instructions to {}",
+                        entries.len(),
+                        total,
+                        path.display()
+                    );
+                }
+            }
+            Err(e) => eprintln!("error: failed to create {}: {e}", path.display()),
+        }
+    };
+
     let mut i: u64 = 0;
     let progress = args.progress_every;
     while i < args.steps {
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_0164) {
-            let bit = (v & 0x1F) as u8;
-            if v != 0 && bit < 32 {
-                from_cpu_bit0 = Some(bit);
-            }
-        }
-        if let Ok(v) = machine.bus.read_u32(0x3FF0_0168) {
-            let bit = (v & 0x1F) as u8;
-            if v != 0 && bit < 32 {
-                from_cpu_bit1 = Some(bit);
-            }
-        }
-        if let Ok(v0) = machine.bus.read_u32(0x3FF0_00DC) {
-            if v0 != 0 && v0 != last_from_cpu0_val {
-                if let Some(bit) = from_cpu_bit0 {
-                    machine.cpu.raise_interrupt_bits(1u32 << bit);
-                }
-                let _ = machine.bus.write_u32(0x3FF0_00DC, 0);
-            }
-            last_from_cpu0_val = 0;
-        }
-        if let Ok(v1) = machine.bus.read_u32(0x3FF0_00E0) {
-            if v1 != 0 && v1 != last_from_cpu1_val {
-                if let Some(bit) = from_cpu_bit1 {
-                    machine.cpu.raise_interrupt_bits(1u32 << bit);
-                }
-                let _ = machine.bus.write_u32(0x3FF0_00E0, 0);
-            }
-            last_from_cpu1_val = 0;
-        }
-        // Re-stamp the dual-core handshake bytes every 10k cycles so
-        // start_other_core / do_other_cpu_settings keep seeing them as
-        // "up." Write to each resolved symbol's [0]+[1] slots.
-        if preseed_handshake && i.is_multiple_of(10_000) {
-            if s_resume_cores != 0 {
-                let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
-            }
-            if s_cpu_up != 0 {
-                let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
-                let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
-            }
-            if s_cpu_inited != 0 {
-                let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
-                let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
-            }
-            if s_system_inited != 0 {
-                let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
-                let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
-            }
-            if s_other_cpu_startup_done != 0 {
-                let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
-            }
-        }
-        match machine.cpu.step(&mut machine.bus, &observers, &config) {
+        match machine.step() {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(_)) => {}
             Err(e) => {
@@ -654,45 +217,13 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                     "error: sim step at cycle {i} pc=0x{:08x}: {e}",
                     machine.cpu.get_pc()
                 );
+                dump_trace(&ring);
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
-        // Dual-core: snapshot capture bypasses Machine::step, so the
-        // appcpu-release + cpu1.step loop has to live here too. Plain
-        // round-robin per-instruction interleaving — matches the chip's
-        // true parallelism within the granularity of one instruction.
-        // S32C1I is atomic within step() so spinlocks work correctly.
-        if let Some(cpu1) = machine.cpu_secondary.as_mut() {
-            if let Some(boot_addr) =
-                labwired_core::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
-                    .with(|s| s.take())
-            {
-                cpu1.set_pc(boot_addr);
-                cpu1.set_sp(appcpu_initial_sp);
-                // Run APP_CPU for real by default: it executes the firmware's
-                // own `call_start_cpu1`, sets s_cpu_up/etc itself, and runs the
-                // FreeRTOS SMP scheduler on core 1 — so we DON'T pre-seed the
-                // handshake flags (that was a workaround for keeping cpu1
-                // halted). Proven byte-identical to silicon with the real second
-                // core (spi3=19033, ink=1429). LABWIRED_NO_DUALCORE=1 halts it
-                // (falls back to the pre-seed path) for debugging SMP races.
-                if std::env::var("LABWIRED_NO_DUALCORE").is_err() {
-                    cpu1.unhalt();
-                }
-            }
-            match cpu1.step(&mut machine.bus, &observers, &config) {
-                Ok(()) => {}
-                Err(SimulationError::BreakpointHit(_)) => {}
-                Err(e) => {
-                    eprintln!(
-                        "error: sim step cpu1 at cycle {i} pc=0x{:08x}: {e}",
-                        cpu1.get_pc()
-                    );
-                    return ExitCode::from(EXIT_RUNTIME_ERROR);
-                }
-            }
-        }
-        machine.bus.tick_peripherals_with_costs();
+        // Secondary-CPU release, secondary stepping and peripheral ticking
+        // all happen inside Machine::step. Doing them here as well is how
+        // this loop drifted from every other runner in the first place.
         i += 1;
         if progress > 0 && i.is_multiple_of(progress) {
             let cpu1_state = match machine.cpu_secondary.as_ref() {
@@ -826,6 +357,54 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                                 non_ff,
                                 bp.len(),
                             );
+                        } else if let Some(panel) = panel_any
+                            .downcast_ref::<labwired_core::peripherals::components::Ili9341>(
+                        ) {
+                            // An RGB565 TFT has no e-paper "refresh" — the
+                            // frame memory IS the screen — so the evidence is
+                            // DISPON plus how much of the framebuffer the
+                            // firmware actually wrote. Without this line the
+                            // panel produced no run evidence at all: a `display`
+                            // oracle clause could not resolve, and a lab could
+                            // only assert that `tft.begin()` returned, which is
+                            // a host-side value the driver tracks itself and
+                            // would read the same with no panel on the bus.
+                            //
+                            // `refresh_generation` is reported as 1 once the
+                            // display is on and pixels exist, so one oracle
+                            // shape covers both panel families.
+                            let fb = panel.framebuffer();
+                            let painted = fb.iter().filter(|&&b| b != 0x00).count();
+                            let generation = u32::from(panel.display_on() && painted > 0);
+                            let (w, h) = panel.dimensions();
+                            // The most common non-black pixel, so the line says
+                            // WHAT was drawn and not merely that something was.
+                            // "10176 bytes changed" cannot be checked against a
+                            // photo of the real panel; "top colour 0x07E0"
+                            // (RGB565 green) can.
+                            let mut counts: std::collections::HashMap<u16, usize> =
+                                std::collections::HashMap::new();
+                            for px in fb.chunks_exact(2) {
+                                let v = u16::from_be_bytes([px[0], px[1]]);
+                                if v != 0 {
+                                    *counts.entry(v).or_default() += 1;
+                                }
+                            }
+                            let top = counts
+                                .iter()
+                                .max_by_key(|&(_, n)| *n)
+                                .map(|(v, n)| format!("0x{v:04X} x{n}"))
+                                .unwrap_or_else(|| "none".to_string());
+                            eprintln!(
+                                "labwired-cli snapshot: panel (ili9341) state — refresh_generation={}, display_on={}, painted bytes={}/{}, {}x{}, top colour {}",
+                                generation,
+                                panel.display_on(),
+                                painted,
+                                fb.len(),
+                                w,
+                                h,
+                                top,
+                            );
                         } else if let Some(panel) = panel_any.downcast_ref::<Uc8151dTricolor290>() {
                             let bp = panel.black_plane();
                             let non_ff = bp.iter().filter(|&&b| b != 0xFF).count();
@@ -876,6 +455,8 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
             }
         }
     }
+
+    dump_trace(&ring);
 
     let snap = machine.take_runtime_snapshot();
     let bytes = snap.to_bytes();

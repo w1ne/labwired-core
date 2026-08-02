@@ -550,11 +550,20 @@ pub fn set_appcpu_up_flags(addrs: Vec<u32>) {
 ///
 ///  * Legacy: the 4-byte sequence `E9 01 0C 0D` → `0C 0D D9 01`.
 ///  * IDF 5.x: `xCoreID` is `xTaskCreateUniversal`'s 7th (stack) arg —
-///    `movi.n aT, 1` whose value is stored via `s32i.n aT, a1, 0`. Recover
-///    `T` from the store (`[0x09|(T<<4), 0x01]`) and zero the `movi.n aT, 1`
-///    immediate (`[0x0C, 0x10|T]` → `[0x0C, T]`).
+///    a `movi` of 1 whose value is stored via `s32i.n aT, a1, 0`. Recover `T`
+///    from the store (`[0x09|(T<<4), 0x01]`), then zero whichever `movi` form
+///    the compiler picked:
+///      - narrow `movi.n aT, 1` = `[0x0C, 0x10|T]` → `[0x0C, T]`
+///      - wide   `movi aT, 1`   = `[(T<<4)|0x02, 0xA0, 0x01]` → `…, 0x00`
 ///
-/// Returns `(patched_addr, which_shape)`, or `None` if neither matches
+/// Both forms must be handled. A build that used the WIDE encoding matched
+/// neither shape and silently returned `None`, leaving `loopTask` pinned to
+/// APP_CPU. That does not fail cleanly: the sketch runs on the wrong core and
+/// deadlocks the first time it contends a FreeRTOS portMUX with PRO_CPU,
+/// parking forever in `spinlock_acquire` — which reads as a firmware hang, not
+/// as an unrecognised layout. Callers should treat `None` as loud.
+///
+/// Returns `(patched_addr, which_shape)`, or `None` if none matches
 /// (firmware already targets core 0, or an unrecognized layout).
 pub fn repin_loop_task(bus: &mut dyn Bus, app_main_addr: u32) -> Option<(u32, &'static str)> {
     const SCAN: u32 = 96;
@@ -575,18 +584,34 @@ pub fn repin_loop_task(bus: &mut dyn Bus, app_main_addr: u32) -> Option<(u32, &'
         }
         return Some((addr, "legacy"));
     }
-    // IDF 5.x: locate `s32i.n aT, a1, 0`, recover T, zero its movi.n source.
+    // IDF 5.x: locate `s32i.n aT, a1, 0`, recover T, zero whichever `movi`
+    // form loaded it. The compiler picks narrow or wide freely, so BOTH must
+    // be recognised — see the note above on why missing one is not a benign
+    // no-op but a cross-core deadlock.
     for k in 0..w.len().saturating_sub(1) {
-        if (w[k] & 0x0F) == 0x09 && w[k + 1] == 0x01 {
-            let t = w[k] >> 4;
-            let movi_hi = 0x10 | t;
-            if let Some(mi) =
-                (0..w.len().saturating_sub(1)).find(|&m| w[m] == 0x0C && w[m + 1] == movi_hi)
-            {
-                let addr = app_main_addr + mi as u32 + 1;
-                let _ = bus.write_u8(addr as u64, t); // movi.n aT, 0
-                return Some((addr, "idf5"));
-            }
+        if (w[k] & 0x0F) != 0x09 || w[k + 1] != 0x01 {
+            continue;
+        }
+        let t = w[k] >> 4;
+        // Narrow: `movi.n aT, 1` = [0x0C, 0x10|T]. Zero the immediate nibble.
+        let movi_n_hi = 0x10 | t;
+        if let Some(mi) =
+            (0..w.len().saturating_sub(1)).find(|&m| w[m] == 0x0C && w[m + 1] == movi_n_hi)
+        {
+            let addr = app_main_addr + mi as u32 + 1;
+            let _ = bus.write_u8(addr as u64, t); // movi.n aT, 0
+            return Some((addr, "idf5"));
+        }
+        // Wide: `movi aT, 1` = [(T<<4)|0x02, 0xA0, 0x01] (imm12 = 1, so the
+        // high nibble of the immediate is 0 and the whole value lives in the
+        // third byte). Zero that byte.
+        let movi_lo = (t << 4) | 0x02;
+        if let Some(mi) = (0..w.len().saturating_sub(2))
+            .find(|&m| w[m] == movi_lo && w[m + 1] == 0xA0 && w[m + 2] == 0x01)
+        {
+            let addr = app_main_addr + mi as u32 + 2;
+            let _ = bus.write_u8(addr as u64, 0x00); // movi aT, 0
+            return Some((addr, "idf5-wide"));
         }
     }
     None
@@ -2117,6 +2142,94 @@ mod tests {
     use crate::bus::SystemBus;
     use crate::cpu::xtensa_lx7::XtensaLx7;
     use crate::Cpu;
+
+    /// A bus with writable RAM at `APP_MAIN`, holding `code`.
+    fn bus_with_app_main(code: &[u8]) -> SystemBus {
+        use crate::system::xtensa::RamPeripheral;
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "ram",
+            APP_MAIN as u64,
+            0x1000,
+            None,
+            Box::new(RamPeripheral::new(0x1000)),
+        );
+        for (i, b) in code.iter().enumerate() {
+            bus.write_u8(APP_MAIN as u64 + i as u64, *b).unwrap();
+        }
+        bus
+    }
+
+    const APP_MAIN: u32 = 0x400D_0000;
+
+    // `xTaskCreateUniversal`'s xCoreID arg is loaded with a `movi` the compiler
+    // picks in either width. Recognising only the narrow one is not a benign
+    // miss: loopTask stays pinned to APP_CPU and the sketch deadlocks partway
+    // through setup() in `spinlock_acquire`, which looks like a firmware hang.
+    // A real customer build used the WIDE form and stalled mid-setup().
+    #[test]
+    fn repin_loop_task_handles_the_wide_movi_form() {
+        // movi a14, 1        = E2 A0 01
+        // s32i.n a14, a1, 0  = E9 01
+        let code = [0x36, 0x61, 0x00, 0xE2, 0xA0, 0x01, 0xE9, 0x01, 0x1D, 0xF0];
+        let mut bus = bus_with_app_main(&code);
+        let (addr, shape) =
+            repin_loop_task(&mut bus, APP_MAIN).expect("wide movi must be repinned");
+        assert_eq!(shape, "idf5-wide");
+        assert_eq!(addr, APP_MAIN + 5, "patches the immediate byte");
+        assert_eq!(
+            bus.read_u8(addr as u64).unwrap(),
+            0x00,
+            "xCoreID immediate must become 0 (PRO_CPU)"
+        );
+        // The opcode and register selector must be untouched.
+        assert_eq!(bus.read_u8(APP_MAIN as u64 + 3).unwrap(), 0xE2);
+        assert_eq!(bus.read_u8(APP_MAIN as u64 + 4).unwrap(), 0xA0);
+    }
+
+    #[test]
+    fn repin_loop_task_handles_the_narrow_movi_form() {
+        // movi.n a14, 1      = 0C 1E
+        // s32i.n a14, a1, 0  = E9 01
+        let code = [0x36, 0x61, 0x00, 0x0C, 0x1E, 0xE9, 0x01, 0x1D, 0xF0];
+        let mut bus = bus_with_app_main(&code);
+        let (addr, shape) = repin_loop_task(&mut bus, APP_MAIN).expect("narrow movi repinned");
+        assert_eq!(shape, "idf5");
+        assert_eq!(
+            bus.read_u8(addr as u64).unwrap(),
+            0x0E,
+            "movi.n a14, 0 keeps the register and zeroes the immediate"
+        );
+    }
+
+    #[test]
+    fn repin_loop_task_handles_the_legacy_form() {
+        let code = [0x36, 0x61, 0x00, 0xE9, 0x01, 0x0C, 0x0D, 0x1D, 0xF0];
+        let mut bus = bus_with_app_main(&code);
+        let (addr, shape) = repin_loop_task(&mut bus, APP_MAIN).expect("legacy repinned");
+        assert_eq!(shape, "legacy");
+        let mut got = [0u8; 4];
+        for (i, b) in got.iter_mut().enumerate() {
+            *b = bus.read_u8(addr as u64 + i as u64).unwrap();
+        }
+        assert_eq!(got, [0x0C, 0x0D, 0xD9, 0x01]);
+    }
+
+    // Firmware already targeting core 0 has nothing to patch, and must not be
+    // corrupted by a loose pattern match.
+    #[test]
+    fn repin_loop_task_leaves_an_unrecognised_layout_alone() {
+        let code = [0x36, 0x61, 0x00, 0x1D, 0xF0, 0x00, 0x00, 0x00];
+        let mut bus = bus_with_app_main(&code);
+        assert!(repin_loop_task(&mut bus, APP_MAIN).is_none());
+        for (i, b) in code.iter().enumerate() {
+            assert_eq!(
+                bus.read_u8(APP_MAIN as u64 + i as u64).unwrap(),
+                *b,
+                "byte {i} must be untouched"
+            );
+        }
+    }
 
     #[test]
     fn registered_thunk_address_holds_break_bytes() {

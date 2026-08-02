@@ -161,8 +161,20 @@ thread_local! {
 }
 
 /// True when strict mode is on: the first gap panics instead of accumulating.
+///
+/// Read ONCE per process. This used to call `env::var_os` on every
+/// `record_*` — and those sit on per-tick paths, so a profile of a classic
+/// ESP32 run had `getenv`/`__findenv_locked` as the TOP frame in the whole
+/// simulator, above the peripheral tick and the CPU interpreter: 1046 of the
+/// 1290 samples inside `Esp32Uart::tick` were this lookup. `getenv` also takes
+/// a process-wide read lock, so it does not even scale.
+///
+/// Same fix and same reason as `cortex_m::trace_insn_enabled` — see the note
+/// there. The environment cannot change mid-run, so caching is
+/// behaviour-preserving.
 fn strict() -> bool {
-    std::env::var_os("LABWIRED_STRICT_FIDELITY").is_some()
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("LABWIRED_STRICT_FIDELITY").is_some())
 }
 
 /// Record an undecoded/unhandled instruction. In strict mode this panics with

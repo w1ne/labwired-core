@@ -320,6 +320,38 @@ impl XtensaLx7 {
         cpu
     }
 
+    /// Raw instruction encoding at `pc`, for trace observers only.
+    ///
+    /// Xtensa instructions are 2, 3 or 4 bytes and the decode cache means a
+    /// hot step may never touch the bytes at all, so the trace has to go get
+    /// them. Widths mirror the fetch path exactly (u16 for narrow, u32
+    /// otherwise) so observing a run cannot change which addresses it reads.
+    /// A read that fails yields 0 rather than an error: losing one trace word
+    /// must never turn into a simulation fault.
+    fn raw_word_for_trace(&self, bus: &mut dyn Bus, pc: u32, len: u32) -> u32 {
+        let addr = pc as u64;
+        if let Some((start, end, ptr_addr)) = self.fetch_cache {
+            if addr >= start && addr + 4 <= end {
+                let off = (addr - start) as usize;
+                // SAFETY: identical invariant to the fetch fast path in
+                // `step` — the pointer comes from `Bus::fetch_slice` into a
+                // fixed-size RAM backing buffer, the cache is invalidated on
+                // any write into the cached range, and `addr + 4 <= end` is
+                // bounds-checked above.
+                unsafe {
+                    let p = (ptr_addr as *const u8).add(off);
+                    let w = u32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]);
+                    return if len == 2 { w & 0xFFFF } else { w };
+                }
+            }
+        }
+        if len == 2 {
+            bus.read_u16(addr).map(u32::from).unwrap_or(0)
+        } else {
+            bus.read_u32(addr).unwrap_or(0)
+        }
+    }
+
     /// Phase 3.2 pilot (issue #124): attempt to dispatch the current PC to
     /// a JIT-compiled block. Returns `Ok(Some(instr_count))` if the JIT
     /// handled the step (with PC, registers, and CCOUNT already updated),
@@ -818,6 +850,10 @@ impl XtensaLx7 {
         // Leftover WS panes: CALL4 a0..a3 only for 16B-aligned known frame SPs.
         let ws = self.regs.windowstart();
         let wb = self.regs.windowbase();
+
+        // Gather the panes first: the OF base for a pane is its *callee's* SP,
+        // which we can only pick once every frame SP in this window is known.
+        let mut panes: Vec<(u32, u32, u32, u32)> = Vec::new();
         for slot in 0..16u8 {
             if (ws >> slot) & 1 == 0 {
                 continue;
@@ -840,13 +876,37 @@ impl XtensaLx7 {
             if !valid_sp(a1) {
                 continue;
             }
+            panes.push((a0, a1, a2, a3));
+        }
+
+        // Every SP we know about in this call chain, ascending. The stack grows
+        // down, so a frame's callee is the next SP *below* it.
+        let mut all_sps = frame_sps.clone();
+        all_sps.extend(panes.iter().map(|&(_, a1, _, _)| a1));
+        all_sps.sort_unstable();
+        all_sps.dedup();
+
+        for &(a0, a1, a2, a3) in &panes {
             let a1_ok = frame_sps.contains(&a1)
                 || frame_sps
                     .iter()
                     .any(|&f| a1 < f && f.wrapping_sub(a1) < 0x80);
-            if a1_ok && stackish(a1, current_a1) {
-                write4(bus, a1, 16, a0, a1, a2, a3);
+            if !a1_ok || !stackish(a1, current_a1) {
+                continue;
             }
+            // WindowOverflow4 (window_vectors.S) saves a0..a3 at `call[j+1]`'s
+            // stack frame — the CALLEE's sp − 16, never the frame's own sp.
+            // Using the frame's own sp lands the record in the callee's save
+            // area and destroys what the callee legitimately stored there:
+            // graphicstest_featherwing overwrote a correct a1=0x3ffb2240 at
+            // 0x3ffb2214 with 0x3ffb2220, so the firmware's WindowUnderflow
+            // restored a bogus frame and RETW'd to pc=0. There is no safe
+            // fallback: with no known callee we cannot place the record, and
+            // guessing is what corrupted the stack, so skip the pane instead.
+            let Some(&callee_sp) = all_sps.iter().rev().find(|&&s| s < a1) else {
+                continue;
+            };
+            write4(bus, callee_sp, 16, a0, a1, a2, a3);
         }
 
         self.regs.set_windowstart(1u16 << (wb & 0x0F));
@@ -1742,14 +1802,32 @@ impl XtensaLx7 {
                 let wb_cur = self.regs.windowbase();
                 let wb_dest = wb_cur.wrapping_sub(n) & 0x0F;
 
-                // Shadow hybrid: if we still have a preserve entry for this RETW,
-                // force the dest frame live and skip UF — restore_call_preserve
-                // below reloads a0..a7 (including ipc_task a5/a6). Stack UF is
-                // unreliable after FreeRTOS task switch (save areas get reused).
+                // Shadow mode owns window save/restore only while it still
+                // HOLDS the frames — i.e. while `call_preserve_stack` is
+                // non-empty. Once `spill_call_preserve_to_stack` has run, the
+                // frames live in the on-stack OF save areas and WINDOWSTART has
+                // collapsed to `1<<WB`; from then on the firmware's underflow
+                // handler is the correct reader and this shortcut must not fire.
+                //
+                // Dropping the `is_empty` condition (an earlier attempt at the
+                // `graphicstest` fault below) is measurably wrong: with
+                // LABWIRED_DIAG_RETW instrumentation, all 14 force-live events
+                // in that run had `preserve_depth=0` and a prior spill, so the
+                // shortcut skipped the only path that could still reload the
+                // frame. `testFillScreen`'s RETW then returned a1=0x20 to
+                // `setup()` and `Print::printNumber` faulted on the garbage SP.
+                //
+                // The remaining defect is NOT here. Adafruit's stock
+                // `graphicstest` still faults (real silicon, an ESP32-D0WDQ6,
+                // completes all twelve benchmarks) because the underflow
+                // handler reads a save area the spill never populated:
+                // `spill_call_preserve_to_stack` skips frames whose a1 fails
+                // `valid_sp`/`stackish`, leaving holes. Fixing the holes is the
+                // open work — see the graphicstest task.
                 if !self.faithful_windows
-                    && !self.call_preserve_stack.is_empty()
                     && !self.regs.windowstart_bit(wb_dest)
                     && n > 0
+                    && !self.call_preserve_stack.is_empty()
                 {
                     self.regs.set_windowstart_bit(wb_dest, true);
                     for k in 1..n {
@@ -3070,9 +3148,15 @@ impl Cpu for XtensaLx7 {
     fn step(
         &mut self,
         bus: &mut dyn Bus,
-        _observers: &[Arc<dyn SimulationObserver>],
+        observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
+        // Instruction tracing is the same contract every other core honours
+        // (`on_step_start` / `InstructionRetired` / `on_step_end`); see
+        // `tests/cpu_trace_conformance.rs`, which fails if a core stops
+        // emitting it. Building the register view costs real time, so every
+        // trace-only path below is gated on somebody actually observing.
+        let observed = !observers.is_empty();
         // Dual-core: a halted CPU contributes nothing — skip the entire
         // step (no CCOUNT advance, no fetch, no IRQ dispatch). Real
         // silicon's APP_CPU sits in reset until PRO_CPU releases it; we
@@ -3140,7 +3224,11 @@ impl Cpu for XtensaLx7 {
         // an exit code that says where to continue.
         #[cfg(feature = "jit")]
         {
-            if self.jit_enabled {
+            // A compiled block retires many instructions without passing
+            // through the fetch/decode path, so it cannot emit the per-step
+            // trace. Fall back to the interpreter whenever anyone is
+            // observing — an empty trace is worse than a slow one.
+            if self.jit_enabled && !observed {
                 if let Some(_n) = self.try_jit_step(bus)? {
                     return Ok(());
                 }
@@ -3243,6 +3331,20 @@ impl Cpu for XtensaLx7 {
             self.decode_gen[dc_idx] = self.cur_decode_gen;
             (len, ins)
         };
+        // Raw encoding for the trace. Read at the same widths the fetch path
+        // uses so an observed run touches exactly the bytes an unobserved one
+        // does — a trace that perturbs the run it is measuring is useless.
+        let raw = if observed {
+            self.raw_word_for_trace(bus, pc, len)
+        } else {
+            0
+        };
+        if observed {
+            for obs in observers {
+                obs.on_step_start(pc, raw);
+            }
+        }
+
         self.branched = false;
         let fall_through_pc = pc.wrapping_add(len);
         self.execute(ins, bus, len)?;
@@ -3262,6 +3364,28 @@ impl Cpu for XtensaLx7 {
         if lcount > 0 && self.pc == lend && fall_through_pc == lend && !self.branched {
             self.sr.write(LCOUNT, lcount - 1);
             self.pc = self.sr.read(LBEG);
+        }
+
+        if observed {
+            // a0..a15 as the window currently sees them, then PC. The window
+            // view is the one that matters on Xtensa: a raw physical-file dump
+            // would not line up with the disassembly a reader is holding.
+            let mut registers = [0u32; 18];
+            for (i, slot) in registers[..16].iter_mut().enumerate() {
+                *slot = self.regs.read_logical(i as u8);
+            }
+            // Standard trailer (see `SimulationObserver`): SP then PC. On
+            // Xtensa the stack pointer is a1 in the current window.
+            registers[16] = self.regs.read_logical(1);
+            registers[17] = self.pc;
+
+            crate::emit_trace_event(
+                observers,
+                labwired_hw_trace::TraceEvent::InstructionRetired { pc, opcode: raw },
+            );
+            for obs in observers {
+                obs.on_step_end(1, &registers);
+            }
         }
         Ok(())
     }

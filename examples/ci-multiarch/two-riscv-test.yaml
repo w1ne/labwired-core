@@ -1,0 +1,18 @@
+schema_version: "1.0"
+inputs:
+  env: "two-riscv-env.yaml"
+limits:
+  max_steps: 2000
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x80020000
+      expected_value: 0
+      size: 8
+      mask: 0x00
+  - memory_value:
+      node: beta
+      address: 0x80020000
+      expected_value: 0
+      size: 8
+      mask: 0x00

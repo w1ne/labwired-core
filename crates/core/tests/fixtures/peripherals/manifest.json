@@ -775,6 +775,11 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin (e.g. \"GPIO33\"). Strongly recommended: with it, command/data framing is read from the wire like real silicon. Without it the model must infer framing from byte values, which a real driver's init sequence desynchronises."
         }
       ],
       "labs": [
@@ -1742,7 +1747,7 @@
       "device_type": "vl53l0x",
       "label": "VL53L0X ToF",
       "summary": "Laser time-of-flight distance sensor over I²C (ST VL53L0X).",
-      "detail": "STMicroelectronics VL53L0X at 0x29. Identification and range-result registers for common Arduino drivers, with byte-wise pointer auto-increment so ST's own 12-byte block read from RESULT_RANGE_STATUS reaches the range bytes. A one-shot range takes ST's default 33 ms timing budget, after which RESULT_INTERRUPT_STATUS reads set until firmware writes SYSTEM_INTERRUPT_CLEAR. Host sets distance in mm via SimInput; the ranging algorithm itself is not simulated.",
+      "detail": "STMicroelectronics VL53L0X at 0x29. Models the datasheet one-shot range AND the register surface ST's own API 1.0.2 initialisation walks, so the stock Adafruit_VL53L0X library completes begin() and ranges: banked registers behind the 0xFF page select, the factory NVM readout port, the reference-SPAD enable map with a reference return rate that scales with the SPADs enabled, and a momentary SYSRANGE_START bit. A one-shot range takes ST's default 33 ms timing budget, after which RESULT_INTERRUPT_STATUS reports 0x04 (new sample ready) until firmware writes SYSTEM_INTERRUPT_CLEAR. Host sets distance in mm via SimInput; the ranging algorithm itself is not simulated.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [

@@ -89,15 +89,31 @@ jobs:
       - name: Check Formatting
         run: cargo fmt --all -- --check
 
-      # Clippy + lib tests for the merge surface only (core + CLI). Full
-      # workspace + feature lanes run in nightly integrity-full.
-      - name: Clippy (core + CLI)
-        run: >
-          cargo clippy -p labwired-core -p labwired-cli
-          --all-targets -- -D warnings
+      # Clippy + lib tests over the workspace's default-members — cli, core,
+      # dap, loader, labwired-fuzz. Feature lanes and the firmware/matrix
+      # crates stay in nightly integrity-full.
+      #
+      # These two steps used to narrow to `-p labwired-core -p labwired-cli`,
+      # which left `dap`, `loader` and `labwired-fuzz` compiled by NO pre-merge
+      # gate at all: `core-integrity` lints them (its bare `cargo clippy
+      # --all-targets` resolves to default-members) but it runs only on push to
+      # main, so the first thing to notice a break was main itself, after the
+      # merge. `channel: Option<String>` on `BoardIoBinding` reached main
+      # exactly that way — it stranded four `BoardIoBinding` literals in the
+      # DAP adapter's tests, and because those literals are `#[cfg(test)]` the
+      # break was invisible to anything short of `--all-targets`. pr-gate was
+      # green, main went red on the merge.
+      #
+      # `pull_request` CI builds the merge commit, not the branch tip, so
+      # linting the default-members here catches that class of semantic
+      # conflict against the tree the merge will actually produce — before it
+      # lands rather than after. Keep this scope in step with the `Run Clippy`
+      # step in core-integrity; if they drift apart the hole reopens.
+      - name: Clippy (default-members)
+        run: cargo clippy --all-targets -- -D warnings
 
-      - name: Unit tests (core + CLI lib)
-        run: cargo test -p labwired-core -p labwired-cli --lib
+      - name: Unit tests (default-members lib)
+        run: cargo test --lib
 
   # ── Main-branch integrity (push to main) — fuller than PR, still no matrices ─
   integrity:

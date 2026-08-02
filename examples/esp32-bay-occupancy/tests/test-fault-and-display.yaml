@@ -1,0 +1,46 @@
+# Ryan's tests 9, 10 and 11 together, because they are one physical situation:
+# a sensor that is not there.
+#
+#   9  — simulate a missing sensor / I2C failure
+#  11  — show a clear FAULT state for any sensor that cannot be read
+#  10  — display the correct state for all four channels on the TFT
+#         (asserted from the panel framebuffer by run-all.sh, because the CLI
+#          test script has no `display` clause — that one is MCP-only)
+#
+# The system manifest for this run declares only THREE VCNL4010s. Bay 3's
+# channel on the switch answers nothing, exactly like an unplugged sensor.
+#
+# The firmware must therefore: enumerate bays 0-2, report bay 3 ABSENT, hold
+# bay 3 in FAULT rather than reporting it as a confident EMPTY (which is the
+# dangerous failure — an unmonitored bay that looks free), and still paint the
+# panel for all four.
+#
+# Panel paint is checked by the runner from result.json's `inspect` block —
+# real painted bytes read back from the panel model, not "the driver was
+# initialised".
+schema_version: "1.2"
+inputs:
+  profile: "arduino-esp32"
+  system: "../system-sensor-missing.yaml"
+  firmware: "../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf"
+limits:
+  max_steps: 3000000000
+assertions:
+  - uart_contains: "bay-occupancy ready"
+  # Test 9: the missing sensor is detected at enumeration, not guessed at.
+  - uart_contains: "BAY 3 ABSENT"
+  # ...and the present ones still come up.
+  - uart_contains: "BAY 0 ready"
+  - uart_contains: "BAY 2 ready"
+  # Test 11: bay 3 publishes F (FAULT), never E (EMPTY). The three live bays
+  # report a real occupancy state alongside it, so the line also shows the
+  # fault is isolated to the bay that has no sensor.
+  # Test 11: bay 3 publishes F (FAULT) with no reading, never a confident
+  # EMPTY — an unmonitored bay that looks free is the dangerous failure. The
+  # three live bays report real states on the same line, so the fault is
+  # visibly isolated to the bay that has no sensor.
+  - uart_contains: "STATE P3000 E2000 E2000 F0"
+stimuli:
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000

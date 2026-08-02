@@ -443,6 +443,13 @@ impl IolinkMaster {
 }
 
 impl UartStreamDevice for IolinkMaster {
+    /// The C/Q line carries binary IO-Link M-sequences, not console text. This
+    /// used to be asserted by a downcast inside `attach_uart_tx_sink`; stating
+    /// it here lets every UART model apply the same rule.
+    fn carries_protocol_octets(&self) -> bool {
+        true
+    }
+
     fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
         if let Some(byte) = self.tx_queue.pop_front() {
             return Some(byte);

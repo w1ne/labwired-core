@@ -1266,9 +1266,12 @@ impl Cpu for RiscV {
         // Building the register snapshot is pure waste when nothing observes it,
         // and this runs on every instruction. Gate it on having observers.
         if !observers.is_empty() {
-            let mut registers = [0u32; 33];
+            let mut registers = [0u32; 34];
             registers[..32].copy_from_slice(&self.x);
-            registers[32] = self.pc;
+            // Standard trailer (see `SimulationObserver`): SP then PC. On
+            // RISC-V the stack pointer is x2 by ABI convention.
+            registers[32] = self.x[2];
+            registers[33] = self.pc;
 
             crate::emit_trace_event(
                 observers,

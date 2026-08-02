@@ -175,6 +175,21 @@ impl Peripheral for FlashSpiMemStub {
 /// values esp-hal just wrote (e.g. clock-mux selectors, voltage rails,
 /// GPIO mux). Unwritten offsets read as zero, except for status bits
 /// that boot code busy-waits for (e.g. PLL_LOCK) which are seeded.
+///
+/// ⚠ **This stub is NOT the ESP32-classic RTC_CNTL.** Classic ESP32 builds
+/// `esp32::rtc_cntl::RtcCntl` (see `peripherals/esp32/factory.rs`); the only
+/// consumer of this type is the **ESP32-S3** (`system/xtensa/esp32s3.rs`).
+/// So a seed added here for classic ESP32 is inert where it was aimed and
+/// lands on the S3 instead — and the two do not share a register map:
+///
+/// | offset | ESP32 | ESP32-S3 |
+/// |--------|-------|----------|
+/// | 0xB4   | STORE5 (= RTC_APB_FREQ_REG) | **SWD_CONF** (super watchdog) |
+/// | 0xC4   | —     | STORE5 |
+///
+/// A seed written here at 0xB4 for the classic part would have put
+/// 0x4C4B4C4B into the S3's super-watchdog configuration. Check the offset
+/// in `tests/fixtures/svd/esp32s3.svd` before adding anything to `new()`.
 #[derive(Debug)]
 pub struct RtcCntlStub {
     words: HashMap<u64, u32>,

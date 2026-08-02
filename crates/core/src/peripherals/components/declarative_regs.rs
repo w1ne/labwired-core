@@ -149,6 +149,21 @@ pub(crate) fn register_read_bytes(
         }
         return pack(word, reg.width, reg.endian);
     }
+    // A rate proportional to how many elements are enabled, not to any external
+    // stimulus (see `PopcountSource`): count the set bits of the named registers
+    // and scale. Saturates at the register width rather than wrapping, because
+    // the quantity is a physical rate, not a bit pattern.
+    if let Some(pc) = &reg.popcount {
+        let bits: u32 = pc
+            .registers
+            .iter()
+            .map(|n| reg_values.get(n).copied().unwrap_or(0).count_ones())
+            .sum();
+        let raw = bits
+            .saturating_mul(pc.per_bit)
+            .min(width_max(reg.width) as u32);
+        return pack(raw, reg.width, reg.endian);
+    }
     let raw = if let Some(src) = &reg.source {
         let value = slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
         match reg.resolution {
@@ -226,6 +241,9 @@ mod tests {
             resolution: None,
             signed: false,
             fields: vec![],
+            page: None,
+            self_clearing: None,
+            popcount: None,
         }
     }
 
@@ -253,6 +271,9 @@ mod tests {
             resolution: None,
             signed: true,
             fields: vec![],
+            page: None,
+            self_clearing: None,
+            popcount: None,
         };
         let mut slots = HashMap::new();
         slots.insert("ax".to_string(), -1.0); // -1 g × 256 = -256 = 0xFF00 two's-complement, LE
@@ -333,6 +354,9 @@ mod tests {
                     }),
                 },
             ],
+            page: None,
+            self_clearing: None,
+            popcount: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), 100.0); // 100°C → 400 = 0x190 in bits[31:18]
@@ -372,6 +396,9 @@ mod tests {
                     clamp_max: None,
                 }),
             }],
+            page: None,
+            self_clearing: None,
+            popcount: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), -25.0); // -25°C → -100 → 14-bit two's-comp = 0x3F9C, <<18

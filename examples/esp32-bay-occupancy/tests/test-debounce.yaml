@@ -1,0 +1,35 @@
+# Ryan's test 6: filtering / debouncing on noisy readings near the threshold.
+#
+# The firmware requires DEBOUNCE_SAMPLES (3) CONSECUTIVE polls agreeing before
+# it publishes a state change. This test proves that by driving a bay across
+# the entry threshold and then immediately back, faster than the filter can
+# confirm — the classic single noisy spike.
+#
+# Why this is a real test and not a tautology: bay0 is spiked to 3000 (well
+# above entry=2200) and returned to 500 before three polls elapse, while bay1
+# is driven to the SAME 3000 and LEFT there. If the filter did nothing, both
+# would read PRESENT. The assertion demands bay0 EMPTY and bay1 PRESENT in one
+# line, so a build with debouncing removed cannot produce it.
+schema_version: "1.2"
+inputs:
+  profile: "arduino-esp32"
+  system: "../system.yaml"
+  firmware: "../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf"
+limits:
+  max_steps: 3000000000
+assertions:
+  - uart_contains: "bay-occupancy ready"
+  # The spike happened and was rejected; the sustained signal was accepted.
+  - uart_contains: "STATE E500 P3000"
+stimuli:
+  # Both bays jump above the entry threshold together.
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  - target: { component: "bay1", channel: "proximity" }
+    trigger: !after_cycles { cycles: 200000000 }
+    value: 3000
+  # bay0 drops straight back — a spike. bay1 is left high.
+  - target: { component: "bay0", channel: "proximity" }
+    trigger: !after_cycles { cycles: 205000000 }
+    value: 500

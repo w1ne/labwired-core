@@ -17,6 +17,72 @@ macro_rules! error {
     };
 }
 
+/// Per-stimulus outcome string for [`StimulusOutcome::outcome`]. These are the
+/// three — and only three — fates a declarative stimulus can meet, and the
+/// consumer MUST be able to tell them apart: "the input was never delivered" and
+/// "the input was delivered and the firmware ignored it" are completely
+/// different bugs, and before this block existed they looked identical (both a
+/// green `status: "pass"` with the failure only ever reaching stderr).
+pub(crate) const STIMULUS_APPLIED: &str = "applied";
+/// The engine refused the stimulus (`set_input`/`set_input_on` returned `Err`):
+/// unknown channel, unknown component, out of range, or ambiguous. The input
+/// NEVER reached the device, so the run proved nothing about it. Fatal — see
+/// `execute_test_loop`.
+pub(crate) const STIMULUS_REJECTED: &str = "rejected";
+/// The run ended before an `after_cycles` trigger's threshold was reached, so
+/// the stimulus never fired. Also proves nothing about that input, but NOT
+/// fatal: unlike a rejection this is a pacing question (a run may legitimately
+/// stop early on `stop_when_assertions_pass`), and turning it fatal would flip
+/// existing green runs red on a judgement call. It is reported instead.
+pub(crate) const STIMULUS_NOT_REACHED: &str = "not_reached";
+
+/// What actually became of one declarative input stimulus.
+///
+/// Emitted for EVERY stimulus a script declared, in `TestResult::stimuli`. This
+/// exists because the runner used to only `error!` a failed stimulus into the
+/// log and then carry on to report `status: "pass"` — the most expensive bug
+/// class here, a surface that reports success having proved nothing.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct StimulusOutcome {
+    /// The `sim_input` channel key the script asked to drive.
+    pub(crate) channel: String,
+    /// The disambiguating component the script named, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) component: Option<String>,
+    /// The requested value, in the channel's engineering unit.
+    pub(crate) value: f64,
+    /// The declared trigger, echoed verbatim so the reader can see the pacing
+    /// that produced a `not_reached`.
+    pub(crate) trigger: labwired_config::FaultTrigger,
+    /// One of [`STIMULUS_APPLIED`], [`STIMULUS_REJECTED`], [`STIMULUS_NOT_REACHED`].
+    pub(crate) outcome: String,
+    /// Engine cycle at which the stimulus was applied (or at which the run
+    /// ended, for a `not_reached`).
+    pub(crate) at_cycle: u64,
+    /// The engine's rejection reason, present iff `outcome` is
+    /// [`STIMULUS_REJECTED`] or [`STIMULUS_NOT_REACHED`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) error: Option<String>,
+}
+
+impl StimulusOutcome {
+    pub(crate) fn is_rejected(&self) -> bool {
+        self.outcome == STIMULUS_REJECTED
+    }
+
+    /// One-line human rendering used in the run-level `message` and the log.
+    pub(crate) fn describe(&self) -> String {
+        let target = match &self.component {
+            Some(c) => format!("{}.{}", c, self.channel),
+            None => self.channel.clone(),
+        };
+        match &self.error {
+            Some(e) => format!("{} = {}: {}", target, self.value, e),
+            None => format!("{} = {}", target, self.value),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct TestResult {
     pub(crate) result_schema_version: String,
@@ -55,6 +121,20 @@ pub(crate) struct TestResult {
     /// prove-blink `gpio_edges`/`gpio_period`/`gpio_duty` clauses.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
+    /// What became of every declarative input stimulus the script declared —
+    /// applied, rejected by the engine, or never reached. Absent (and omitted)
+    /// when the script declared none, so runs that never used the feature keep
+    /// a byte-identical `result.json` (the release-contract golden reference
+    /// and `tests/determinism.rs` both depend on that).
+    ///
+    /// A `rejected` entry means the input NEVER reached the device, which makes
+    /// the run's verdict meaningless for that input; the runner therefore fails
+    /// the run (`status: "error"`, exit `EXIT_CONFIG_ERROR`) and repeats the
+    /// reason in the top-level `message`. Ordering is stable: `at_start`
+    /// stimuli in script order, then time-triggered ones in firing order, then
+    /// the ones that never fired.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) stimuli: Vec<StimulusOutcome>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -69,7 +69,6 @@
 //! waveform UI actually consume.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Notified when a channel commits a new duty via the `CONF1.DUTY_START`
@@ -162,7 +161,7 @@ pub struct Ledc {
     base: u32,
     /// Word-aligned register backing store. Every offset round-trips
     /// here; side-effecting offsets are intercepted before storing.
-    regs: HashMap<u64, u32>,
+    regs: crate::FastMap<u64, u32>,
     /// Actuators driven by this controller's PWM output, notified on each
     /// duty latch. Runtime wiring — not part of the register snapshot.
     duty_observers: Vec<Arc<dyn LedcDutyObserver>>,
@@ -181,7 +180,7 @@ impl Ledc {
     /// Construct a freshly-powered LEDC block. Seeds only LEDC_DATE with
     /// its silicon constant; every other register resets to zero.
     pub fn new(base: u32) -> Self {
-        let mut regs = HashMap::new();
+        let mut regs: crate::FastMap<u64, u32> = crate::FastMap::default();
         regs.insert(DATE, DATE_RESET);
         Self {
             base,

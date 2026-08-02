@@ -35,7 +35,7 @@
 //! routes it through the per-core interrupt matrix.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
@@ -89,7 +89,7 @@ const CONFIG_REGS: &[(u64, u32, u32)] = &[
 #[derive(Default)]
 struct UartCore {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
-    regs: HashMap<u64, u32>,
+    regs: crate::FastMap<u64, u32>,
     tx_fifo: VecDeque<u8>,
     rx_fifo: VecDeque<u8>,
     int_raw_sticky: u32,
@@ -135,7 +135,7 @@ impl Esp32Uart {
     /// console (use for UART0, the typical `Serial`); false keeps it
     /// capture-only. `source_id` is the intr-matrix source (34/35/36).
     pub fn new(echo_stdout: bool, source_id: u32) -> Self {
-        let mut regs = HashMap::new();
+        let mut regs = crate::FastMap::default();
         for &(off, reset, _mask) in CONFIG_REGS {
             regs.insert(off, reset);
         }

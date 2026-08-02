@@ -1,0 +1,7 @@
+# The C3 is riscv32imc. This target ships with stock rustup, so the example
+# builds with no Espressif toolchain and no ESP-IDF checkout.
+[build]
+target = "riscv32imc-unknown-none-elf"
+
+[target.riscv32imc-unknown-none-elf]
+rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=--build-id=none"]

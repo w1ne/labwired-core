@@ -71,7 +71,6 @@
 //! probes from firmware still see their own writes.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
-use std::collections::HashMap;
 
 // Per-timer register offsets (T0 block starts at 0x00, T1 block at 0x24).
 // Some entries (`*_ALARM*`, `WDT_CONFIG0`, `INT_ENA`, `INT_ST`) aren't
@@ -101,6 +100,40 @@ const T1_ALARMHI: u64 = 0x38;
 const T1_LOADLO: u64 = 0x3C;
 const T1_LOADHI: u64 = 0x40;
 const T1_LOAD: u64 = 0x44;
+
+// LACT — the "legacy"/local accurate clock timer (TRM §16.3). This is the
+// time source `esp_timer` runs on for ESP32-classic
+// (esp_timer_impl_lac.c), so it is what `esp_timer_get_time()`, and
+// therefore Arduino's `micros()` and `millis()`, ultimately read.
+//
+// `esp_timer_impl_get_counter_reg` strobes LACT_UPDATE, waits for LACT_LO
+// to change, then reads the LO/HI pair; `esp_timer_get_time` returns that
+// 64-bit value >> 1, so LACT ticks at 2 MHz for a 1 µs result — which is
+// APB (80 MHz) / 40, the divider IDF programs.
+const LACT_CONFIG: u64 = 0x70;
+#[allow(dead_code)]
+const LACT_RTC: u64 = 0x74;
+const LACT_LO: u64 = 0x78;
+const LACT_HI: u64 = 0x7C;
+const LACT_UPDATE: u64 = 0x80;
+#[allow(dead_code)]
+const LACT_ALARMLO: u64 = 0x84;
+#[allow(dead_code)]
+const LACT_ALARMHI: u64 = 0x88;
+const LACT_LOADLO: u64 = 0x8C;
+const LACT_LOADHI: u64 = 0x90;
+const LACT_LOAD: u64 = 0x94;
+
+/// LACT_CONFIG.LACT_EN.
+const LACT_EN_BIT: u32 = 1 << 31;
+/// LACT_CONFIG.LACT_DIVIDER occupies bits [28:13] — the field
+/// `esp_timer_impl_get_counter_reg` itself recovers with
+/// `extui a8, a8, 13, 16`.
+const LACT_DIVIDER_SHIFT: u32 = 13;
+const LACT_DIVIDER_BITS: u32 = 16;
+/// APB clock in MHz. `tick()` runs once per simulated microsecond, so this
+/// is exactly how many APB cycles elapse per tick.
+const APB_MHZ: u32 = 80;
 
 // Watchdog
 #[allow(dead_code)]
@@ -158,7 +191,7 @@ pub struct Timg {
     base: u32,
     /// Word-aligned register backing store. Any offset not explicitly
     /// computed in `read()` falls through to this map (or zero).
-    regs: HashMap<u64, u32>,
+    regs: crate::FastMap<u64, u32>,
     /// Live 64-bit value for timer 0. Advances on every `tick()` while
     /// `T0CONFIG.EN` is set. Latched into `T0_LO`/`T0_HI` on a write to
     /// `T0_UPDATE` (and on read of LO/HI as a safety net so firmware that
@@ -166,6 +199,23 @@ pub struct Timg {
     counter_t0: u64,
     /// Live 64-bit value for timer 1. Same semantics as `counter_t0`.
     counter_t1: u64,
+    /// Live 64-bit LACT counter — the `esp_timer` time base. Advances by
+    /// `APB_MHZ / divider` per tick while `LACT_CONFIG.EN` is set, with the
+    /// remainder carried in `lact_rem` so a divider that does not divide 80
+    /// still averages out to the right rate instead of truncating to zero.
+    counter_lact: u64,
+    /// Undivided APB cycles not yet converted into LACT ticks.
+    lact_rem: u32,
+    /// Is this a TIMG that HAS a LACT timer? Only ESP32-classic does.
+    ///
+    /// The ESP32-C3 reuses this model (see generic_factory.rs) but dropped
+    /// LACT in favour of SYSTIMER, and put entirely different registers in
+    /// the same offsets: 0x78/0x7C are INT_ST_TIMERS/INT_CLR_TIMERS and 0x80
+    /// is RTCCALICFG2. Answering those offsets as LACT there would have a
+    /// write to RTCCALICFG2 latch the counter over the C3's interrupt status
+    /// and clear registers. So LACT is opt-in, and only the ESP32-classic
+    /// factory opts in.
+    lact_enabled: bool,
     /// Phase 2B.2 (issue #192): peripheral-tick index of the last `sync_to`.
     /// In scheduler mode the counters no longer advance one-per-`tick()`;
     /// instead `sync_to(now)` lazily adds `(now - anchor_tick)` to each
@@ -186,9 +236,12 @@ impl Timg {
     pub fn new(base: u32) -> Self {
         Self {
             base,
-            regs: HashMap::new(),
+            regs: crate::FastMap::default(),
             counter_t0: 0,
             counter_t1: 0,
+            counter_lact: 0,
+            lact_rem: 0,
+            lact_enabled: false,
             anchor_tick: 0,
             rtc_cal: None,
         }
@@ -200,6 +253,16 @@ impl Timg {
     /// frequencies, so `rtc_clk_cal` recovers exactly `profile.slow_hz`.
     pub fn with_rtc_cal(mut self, profile: RtcCalProfile) -> Self {
         self.rtc_cal = Some(profile);
+        self
+    }
+
+    /// Declare that this TIMG has a LACT timer (ESP32-classic only).
+    ///
+    /// Without this, every LACT offset falls through to the generic
+    /// round-trip map, which is exactly the behaviour a chip that has no LACT
+    /// needs — see the note on `lact_enabled`.
+    pub fn with_lact(mut self) -> Self {
+        self.lact_enabled = true;
         self
     }
 
@@ -228,6 +291,62 @@ impl Timg {
 
     fn is_t1_enabled(&self) -> bool {
         self.word(T1_CONFIG) & T_CONFIG_EN_BIT != 0
+    }
+
+    /// Live LACT counter (debug helper / test introspection).
+    pub fn counter_lact(&self) -> u64 {
+        self.counter_lact
+    }
+
+    /// Programmed LACT prescaler, or `None` when LACT is disabled or the
+    /// divider is still zero. Silicon divides by 65536 when the field reads
+    /// zero; we treat it as "not yet programmed" and hold the counter still,
+    /// because a firmware that has not configured LACT has no business
+    /// seeing it advance and a stopped clock is easier to diagnose than one
+    /// running 65536× slow.
+    fn lact_divider(&self) -> Option<u32> {
+        if !self.lact_enabled {
+            return None;
+        }
+        let cfg = self.word(LACT_CONFIG);
+        if cfg & LACT_EN_BIT == 0 {
+            return None;
+        }
+        let mask = (1u32 << LACT_DIVIDER_BITS) - 1;
+        match (cfg >> LACT_DIVIDER_SHIFT) & mask {
+            0 => None,
+            d => Some(d),
+        }
+    }
+
+    /// Advance LACT by one simulated microsecond's worth of APB cycles.
+    fn advance_lact(&mut self, ticks: u64) {
+        let Some(div) = self.lact_divider() else {
+            return;
+        };
+        // Accumulate undivided APB cycles, then convert whole quotients.
+        // Saturating rather than wrapping: a run long enough to overflow
+        // this has bigger problems than a timer glitch.
+        let cycles = (ticks.saturating_mul(APB_MHZ as u64)).saturating_add(self.lact_rem as u64);
+        self.counter_lact = self.counter_lact.wrapping_add(cycles / div as u64);
+        self.lact_rem = (cycles % div as u64) as u32;
+    }
+
+    /// Latch the live LACT counter into LACT_LO/LACT_HI. Real silicon
+    /// requires the LACT_UPDATE strobe before the pair is coherent, and
+    /// `esp_timer_impl_get_counter_reg` spins until LO *changes* after that
+    /// strobe — so the latch must genuinely move once the counter has.
+    fn latch_lact(&mut self) {
+        self.regs.insert(LACT_LO, self.counter_lact as u32);
+        self.regs.insert(LACT_HI, (self.counter_lact >> 32) as u32);
+    }
+
+    fn preload_lact(&mut self) {
+        let lo = self.word(LACT_LOADLO) as u64;
+        let hi = self.word(LACT_LOADHI) as u64;
+        self.counter_lact = (hi << 32) | lo;
+        self.lact_rem = 0;
+        self.latch_lact();
     }
 
     /// Latch the live `counter_t0` into the T0_LO/T0_HI register pair so
@@ -270,6 +389,8 @@ impl Timg {
             T1_UPDATE => self.latch_t1(),
             T0_LOAD => self.preload_t0(),
             T1_LOAD => self.preload_t1(),
+            LACT_UPDATE if self.lact_enabled => self.latch_lact(),
+            LACT_LOAD if self.lact_enabled => self.preload_lact(),
             WDT_FEED | WDT_WPROTECT => {
                 // Watchdog feed / write-protect: round-trip the value.
                 // WDT timing/reset behavior isn't modeled.
@@ -356,6 +477,16 @@ impl Peripheral for Timg {
                 .get(&T1_HI)
                 .copied()
                 .unwrap_or((self.counter_t1 >> 32) as u32),
+            LACT_LO if self.lact_enabled => self
+                .regs
+                .get(&LACT_LO)
+                .copied()
+                .unwrap_or(self.counter_lact as u32),
+            LACT_HI if self.lact_enabled => self
+                .regs
+                .get(&LACT_HI)
+                .copied()
+                .unwrap_or((self.counter_lact >> 32) as u32),
             _ => self.word(word_off),
         };
         Ok(((word >> byte_off) & 0xFF) as u8)
@@ -400,6 +531,16 @@ impl Peripheral for Timg {
                 .get(&T1_HI)
                 .copied()
                 .unwrap_or((self.counter_t1 >> 32) as u32),
+            LACT_LO if self.lact_enabled => self
+                .regs
+                .get(&LACT_LO)
+                .copied()
+                .unwrap_or(self.counter_lact as u32),
+            LACT_HI if self.lact_enabled => self
+                .regs
+                .get(&LACT_HI)
+                .copied()
+                .unwrap_or((self.counter_lact >> 32) as u32),
             _ => self.word(word_off),
         };
         Ok(word)
@@ -423,6 +564,7 @@ impl Peripheral for Timg {
         if self.is_t1_enabled() {
             self.counter_t1 = self.counter_t1.wrapping_add(1);
         }
+        self.advance_lact(1);
         // No interrupt firing this round — see module docs. Routing is
         // a separate task.
         PeripheralTickResult::default()
@@ -457,6 +599,7 @@ impl Peripheral for Timg {
         if self.is_t1_enabled() {
             self.counter_t1 = self.counter_t1.wrapping_add(delta);
         }
+        self.advance_lact(delta);
         self.anchor_tick = tick_now;
     }
 
@@ -675,5 +818,60 @@ mod tests {
         let mut t = Timg::new(0x3FF5_F000);
         write_u32(&mut t, 0x70, 0xCAFE_BABE);
         assert_eq!(read_u32(&t, 0x70), 0xCAFE_BABE);
+    }
+
+    /// LACT must be INERT on a TIMG that was not told it has one.
+    ///
+    /// The ESP32-C3 reuses this model with entirely different registers in
+    /// the LACT window: 0x78/0x7C are INT_ST_TIMERS/INT_CLR_TIMERS and 0x80
+    /// is RTCCALICFG2. Before `with_lact()` existed, a C3 firmware writing
+    /// RTCCALICFG2 would latch the counter straight over its own interrupt
+    /// status and clear registers, and a read of INT_ST_TIMERS would return
+    /// a timer count. Both are silent corruption, so this pins the default.
+    #[test]
+    fn lact_offsets_are_plain_storage_without_with_lact() {
+        let mut t = Timg::new(0x6001_F000); // C3 TIMG0 base — no with_lact()
+                                            // Enable-looking bits in what the C3 calls INT_ENA_TIMERS.
+        write_u32(&mut t, 0x70, 0xFFFF_FFFF);
+        // What the C3 calls INT_ST_TIMERS / INT_CLR_TIMERS.
+        write_u32(&mut t, 0x78, 0x1111_1111);
+        write_u32(&mut t, 0x7C, 0x2222_2222);
+        for _ in 0..1000 {
+            t.tick();
+        }
+        // A write to RTCCALICFG2 must NOT latch a counter over 0x78/0x7C.
+        write_u32(&mut t, 0x80, 1);
+        assert_eq!(
+            read_u32(&t, 0x78),
+            0x1111_1111,
+            "INT_ST_TIMERS was clobbered by a LACT latch"
+        );
+        assert_eq!(
+            read_u32(&t, 0x7C),
+            0x2222_2222,
+            "INT_CLR_TIMERS was clobbered by a LACT latch"
+        );
+        assert_eq!(
+            t.counter_lact(),
+            0,
+            "LACT advanced on a chip that has no LACT"
+        );
+    }
+
+    /// ...and LIVE when it is declared, so the guard above is not vacuous.
+    #[test]
+    fn lact_counts_and_latches_when_declared() {
+        let mut t = Timg::new(0x3FF5_F000).with_lact();
+        // LACT_EN | divider 40 at bits [28:13] — what esp_timer programs for
+        // the 2 MHz tick esp_timer_get_time() halves into microseconds.
+        write_u32(&mut t, 0x70, (1 << 31) | (40 << 13));
+        for _ in 0..1000 {
+            t.tick();
+        }
+        // 1000 us at APB 80 MHz / 40 = 2 ticks per us.
+        assert_eq!(t.counter_lact(), 2000);
+        write_u32(&mut t, 0x80, 1); // LACT_UPDATE latches LO/HI
+        assert_eq!(read_u32(&t, 0x78), 2000);
+        assert_eq!(read_u32(&t, 0x7C), 0);
     }
 }

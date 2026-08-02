@@ -49,7 +49,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Context, Result};
 use labwired_config::{
     AddWrap, AutoIncrement, Crc8Spec, DataReady, DeviceDescriptor, Endian, I2cAccess, I2cCommand,
-    I2cRegister, I2cSpec, ObservableSpec, ReadComplete, ResponseWord, UpdateRule,
+    I2cRegister, I2cSpec, IndexedTable, ObservableSpec, ReadComplete, ResponseWord, UpdateRule,
 };
 
 use super::declarative_regs::{encode_raw, observe, pack, register_read_bytes, unpack};
@@ -134,6 +134,17 @@ pub struct GenericI2cDevice {
     /// so devices that declare none are untouched.
     data_ready: Vec<DataReady>,
     dr_state: Vec<DataReadyState>,
+
+    /// Currently selected register bank, and the pointer whose write selects it.
+    /// `page_register: None` ⇒ a flat map and `page` stays 0 forever, so every
+    /// device written before banks existed decodes exactly as it did.
+    page: u8,
+    page_register: Option<u8>,
+
+    /// Indexed readout ports and their per-port fetch state (parallel Vecs).
+    /// Empty ⇒ every indexed-table code path short-circuits.
+    indexed_tables: Vec<IndexedTable>,
+    it_state: Vec<DataReadyState>,
 
     /// Register-pointer-mode pointer mask (applied to the pointer byte). 0xFF ⇒
     /// no masking (the default; TMP102 uses 0x03).
@@ -241,6 +252,10 @@ impl GenericI2cDevice {
             time_source_seen: false,
             dr_state: vec![DataReadyState::Idle; spec.data_ready.len()],
             data_ready: spec.data_ready.clone(),
+            page: 0,
+            page_register: spec.page_register,
+            it_state: vec![DataReadyState::Idle; spec.indexed_tables.len()],
+            indexed_tables: spec.indexed_tables.clone(),
             reg_pointer_mask: spec.pointer_mask.unwrap_or(0xFF),
             updates: spec.updates.clone(),
             reg_auto_increment: spec.auto_increment,
@@ -341,7 +356,8 @@ impl GenericI2cDevice {
         !self.time_source_seen || self.dr_state[i] == DataReadyState::Ready
     }
 
-    /// The bits every declared rule contributes to a read of `register`.
+    /// The bits every declared rule contributes to a read of `register` — both
+    /// `data_ready` conversion flags and `indexed_tables` fetch strobes.
     fn ready_overlay(&self, register: &str) -> u32 {
         let mut overlay = 0;
         for (i, rule) in self.data_ready.iter().enumerate() {
@@ -349,7 +365,55 @@ impl GenericI2cDevice {
                 overlay |= rule.ready_mask;
             }
         }
+        for (i, table) in self.indexed_tables.iter().enumerate() {
+            if table.strobe_register == register && self.it_state[i] == DataReadyState::Ready {
+                overlay |= table.strobe_mask;
+            }
+        }
         overlay
+    }
+
+    // ─── indexed_table primitive ───────────────────────────────────────────
+    //
+    // Write an index, arm the strobe, poll the strobe, read the latched word.
+    // Every method returns immediately when no port is declared.
+
+    /// Promote every fetch whose access time the simulated clock has reached.
+    /// Called from the same places `tick_data_ready` is: just before a read is
+    /// observable.
+    fn tick_indexed_tables(&mut self) {
+        for state in &mut self.it_state {
+            if let DataReadyState::Converting(deadline) = *state {
+                if self.elapsed_us >= deadline {
+                    *state = DataReadyState::Ready;
+                }
+            }
+        }
+    }
+
+    /// A write of `strobe_arm_value` to a port's strobe register arms a fetch:
+    /// the strobe bits drop, the word at the current index is latched into the
+    /// data register, and the strobe re-raises once `access_us` has elapsed.
+    /// `written` is the RAW value the master put on the wire (not the
+    /// `write_mask`-filtered store), because "the master wrote 0x00" is the
+    /// event silicon reacts to.
+    fn arm_indexed_tables(&mut self, register: &str, written: u32) {
+        for i in 0..self.indexed_tables.len() {
+            let table = &self.indexed_tables[i];
+            if table.strobe_register != register || written != table.strobe_arm_value {
+                continue;
+            }
+            let index = self
+                .reg_values
+                .get(&table.index_register)
+                .copied()
+                .unwrap_or(0) as u8;
+            let word = table.entries.get(&index).copied().unwrap_or(0);
+            let data_register = table.data_register.clone();
+            let deadline = self.elapsed_us.saturating_add(table.access_us);
+            self.reg_values.insert(data_register, word);
+            self.it_state[i] = DataReadyState::Converting(deadline);
+        }
     }
 
     /// Start every conversion whose start bits the master just left set in
@@ -392,6 +456,67 @@ impl GenericI2cDevice {
         }
     }
 
+    /// Write one byte at `addr` on the byte-wise auto-increment path: merge it
+    /// into the byte of the covering register it lands on, then — once the
+    /// register's LAST byte has arrived — run the post-write side effects
+    /// exactly once (bank select, acknowledge, conversion start, indexed-table
+    /// arm, self-clearing "go" bits).
+    fn write_byte_at(&mut self, addr: u8, data: u8) {
+        // The bank select is answered before any register decode: it is what
+        // decides which register the NEXT pointer means.
+        if self.page_register == Some(addr) {
+            self.page = data;
+        }
+        let Some(reg) = self.register_covering(addr) else {
+            return;
+        };
+        if reg.access != I2cAccess::Rw {
+            return;
+        }
+        let (name, endian, width, write_mask, self_clearing) = (
+            reg.name.clone(),
+            reg.endian,
+            reg.width,
+            reg.write_mask,
+            reg.self_clearing,
+        );
+        let idx = usize::from(addr - reg.addr);
+        let prev = self.reg_values.get(&name).copied().unwrap_or(0);
+        // Place the byte at its position in the word, honouring the declared
+        // byte order, so a byte-wise burst reassembles the same word a
+        // width-sized write would have stored.
+        let shift = 8 * match endian {
+            Endian::Be => u32::from(width) - 1 - idx as u32,
+            Endian::Le => idx as u32,
+        };
+        let written = (prev & !(0xFFu32 << shift)) | (u32::from(data) << shift);
+        // `write_mask` protects the bits silicon owns; see the non-incrementing
+        // path above.
+        let stored = match write_mask {
+            Some(mask) => (prev & !mask) | (written & mask),
+            None => written,
+        };
+        self.reg_values.insert(name.clone(), stored);
+        if idx + 1 != usize::from(width) {
+            return; // mid-word: side effects fire once, on the last byte
+        }
+        if !self.data_ready.is_empty() {
+            // Acknowledge first, then start — see the non-incrementing path.
+            self.clear_on_write(&name);
+            self.start_conversions(&name, stored);
+        }
+        if !self.indexed_tables.is_empty() {
+            self.arm_indexed_tables(&name, written);
+        }
+        // A momentary "go" bit is gone by the time firmware can read it back:
+        // the device has already acted on it (see `RegisterSpec::self_clearing`).
+        if let Some(mask) = self_clearing {
+            if stored & mask != 0 {
+                self.reg_values.insert(name, stored & !mask);
+            }
+        }
+    }
+
     /// Convenience for tests / standalone use: parse a descriptor YAML and leak
     /// its channel table. (The kit path shares one leaked table across attaches;
     /// this leaks per call, which is fine for the few devices a test builds.)
@@ -411,17 +536,35 @@ impl GenericI2cDevice {
         }
     }
 
+    /// The register at `addr` in the current bank. A bank-specific register wins
+    /// over a bank-agnostic one at the same pointer, so a part can carry a flat
+    /// core map plus a handful of aliased addresses.
     fn find_register(&self, addr: u8) -> Option<&I2cRegister> {
-        self.registers.iter().find(|r| r.addr == addr)
+        self.registers
+            .iter()
+            .find(|r| r.addr == addr && r.page == Some(self.page))
+            .or_else(|| {
+                self.registers
+                    .iter()
+                    .find(|r| r.addr == addr && r.page.is_none())
+            })
     }
 
     /// The register whose byte span COVERS `addr`, not just the one that starts
     /// there. Only auto-increment needs this: without it, walking into the
     /// second byte of a 2-byte register would look unmapped.
     fn register_covering(&self, addr: u8) -> Option<&I2cRegister> {
+        let covers = |r: &&I2cRegister| {
+            addr >= r.addr && u16::from(addr) < u16::from(r.addr) + u16::from(r.width)
+        };
         self.registers
             .iter()
-            .find(|r| addr >= r.addr && u16::from(addr) < u16::from(r.addr) + u16::from(r.width))
+            .find(|r| covers(r) && r.page == Some(self.page))
+            .or_else(|| {
+                self.registers
+                    .iter()
+                    .find(|r| covers(r) && r.page.is_none())
+            })
     }
 
     /// One byte of the address space, as auto-increment reads it: the byte the
@@ -583,6 +726,17 @@ impl I2cDevice for GenericI2cDevice {
             return;
         }
         let Some(ptr) = self.pointer else { return };
+        // Byte-wise auto-increment applies to WRITES as well as reads: the
+        // pointer IS the cursor, so a block write streams consecutive registers
+        // in one transaction. ST's VL53L0X API writes the 6-byte reference-SPAD
+        // enable map that way (`VL53L0X_WriteMulti` at 0xB0) and then reads it
+        // back and compares, so a model that only accepted a write whose length
+        // exactly matched one register's width would fail that comparison.
+        if self.reg_auto_increment {
+            self.pointer = Some(ptr.wrapping_add(1));
+            self.write_byte_at(ptr, data);
+            return;
+        }
         let Some(reg) = self.find_register(ptr) else {
             return;
         };
@@ -641,6 +795,9 @@ impl I2cDevice for GenericI2cDevice {
             if !self.data_ready.is_empty() {
                 self.tick_data_ready();
             }
+            if !self.indexed_tables.is_empty() {
+                self.tick_indexed_tables();
+            }
             let addr = self.pointer.unwrap_or(0);
             let (byte, hit) = self.byte_at(addr);
             self.pointer = Some(addr.wrapping_add(1));
@@ -665,6 +822,9 @@ impl I2cDevice for GenericI2cDevice {
             // the only point at which the status bit is observable.
             if !self.data_ready.is_empty() {
                 self.tick_data_ready();
+            }
+            if !self.indexed_tables.is_empty() {
+                self.tick_indexed_tables();
             }
             let (bytes, name) = match self.pointer.and_then(|p| self.find_register(p)) {
                 Some(reg) => {
@@ -870,6 +1030,74 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
                 dr.name,
                 dr.ready_mask,
                 dr.ready_register
+            );
+        }
+    }
+    // A bank-carrying register on a device with no bank select could never
+    // decode; a bank select with no banked register is dead configuration.
+    // Either way the descriptor means something it does not do, so reject it.
+    if spec.page_register.is_none() && spec.registers.iter().any(|r| r.page.is_some()) {
+        bail!("a register declares a `page` but the device declares no `page_register`");
+    }
+    if spec.page_register.is_some() && !spec.registers.iter().any(|r| r.page.is_some()) {
+        bail!("`page_register` is declared but no register names a `page`");
+    }
+    for pc in spec.registers.iter().filter_map(|r| r.popcount.as_ref()) {
+        for name in &pc.registers {
+            if !spec.registers.iter().any(|r| &r.name == name) {
+                bail!("popcount source '{name}' is not a declared register");
+            }
+        }
+    }
+    for t in &spec.indexed_tables {
+        for (role, name) in [
+            ("index_register", &t.index_register),
+            ("strobe_register", &t.strobe_register),
+            ("data_register", &t.data_register),
+        ] {
+            if !spec.registers.iter().any(|r| &r.name == name) {
+                bail!(
+                    "indexed_table '{}' {role} '{name}' is not a declared register",
+                    t.name
+                );
+            }
+        }
+        if t.strobe_mask == 0 {
+            bail!(
+                "indexed_table '{}' has an empty strobe_mask (the fetch could never be observed)",
+                t.name
+            );
+        }
+        // The strobe is the device's answer, not firmware's: if firmware could
+        // write those bits it could forge a completed fetch, and a driver that
+        // never really waited would appear to work.
+        let strobe = spec
+            .registers
+            .iter()
+            .find(|r| r.name == t.strobe_register)
+            .expect("checked above");
+        let writable = match (strobe.access, strobe.write_mask) {
+            (labwired_config::RegisterAccess::R, _) => 0,
+            (labwired_config::RegisterAccess::Rw, Some(mask)) => mask,
+            (labwired_config::RegisterAccess::Rw, None) => u32::MAX,
+        };
+        if t.strobe_mask & writable != 0 {
+            bail!(
+                "indexed_table '{}' strobe_mask {:#x} overlaps bits firmware may write in '{}' — \
+                 the strobe must be model-owned (narrow its write_mask)",
+                t.name,
+                t.strobe_mask,
+                t.strobe_register
+            );
+        }
+        // The master arms the fetch by writing the strobe, so it must be
+        // writable at all.
+        if strobe.access != labwired_config::RegisterAccess::Rw {
+            bail!(
+                "indexed_table '{}' strobe_register '{}' is read-only — firmware could never \
+                 arm a fetch",
+                t.name,
+                t.strobe_register
             );
         }
     }

@@ -750,7 +750,30 @@ boards:
     # coverage bit-clocks a real transaction through this controller and covers the
     # `SLAVE_ADDR` fallback specifically; passes unchanged. No live USB-JTAG
     # re-capture this session.
-    drift_ack: 2026-07-31
+    # 2026-08-01: shared-path changes only, none of them a C3 peripheral.
+    # (a) The classic-ESP32 boot ROM's UART console routines are now loaded as
+    # real ROM code instead of nop thunks, and (b) `repin_loop_task` learned the
+    # wide `movi` encoding. Both live on the Xtensa side; the C3 is RISC-V and
+    # ROM-boots its own image. (c) The ILI9341 SPI panel now frames on its D/C
+    # line — an external device model on the far side of the wire, not a chip
+    # peripheral. No C3 register layout, base address or reset value moved, so
+    # the 2026-06-17 reset-state oracle (1123/1123 static registers) cannot
+    # move. Evidence: full `cargo test -p labwired-core --lib` green, 2509
+    # tests. No live USB-JTAG re-capture this session.
+    # 2026-08-02: the shared `esp32/timg.rs` gained LACT (the ESP32-classic
+    # esp_timer time base). It is OPT-IN and the C3 does not opt in — the C3's
+    # TIMGs are built in generic_factory.rs WITHOUT `with_lact()`, so every
+    # LACT offset still falls through to the generic round-trip map exactly as
+    # before. This matters: the C3 puts INT_ENA/INT_ST/INT_CLR_TIMERS and
+    # RTCCALICFG2 at 0x70/0x78/0x7C/0x80, which is precisely where LACT lives
+    # on classic ESP32, so an ungated version WOULD have latched a counter over
+    # the C3's interrupt status. Two tests pin the split:
+    # `lact_offsets_are_plain_storage_without_with_lact` writes C3-shaped values
+    # and asserts they survive a latch attempt, and
+    # `lact_counts_and_latches_when_declared` keeps that guard from passing
+    # vacuously. No C3 register layout, base address or reset value moved, so
+    # the 2026-06-17 reset-state oracle cannot move. No live re-capture.
+    drift_ack: 2026-08-02
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -1479,7 +1502,30 @@ boards:
     # bus the resolution is byte-identical to the code it replaces. Register map,
     # reset values and the 9-reg reset-state anchor are untouched; esp32s3 reset
     # conformance passes. No S3 board attached; no live re-capture.
-    drift_ack: 2026-07-31
+    # 2026-08-01: two shared-path changes, neither an S3 peripheral.
+    # `crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs` gained the
+    # wide-`movi` shape in `repin_loop_task` (a classic-ESP32 firmware-image
+    # patch that rewrites an xCoreID immediate; the S3 path never calls it) and
+    # lost its ROM console thunks in favour of the classic-ESP32 boot ROM's real
+    # code, installed only by `configure_xtensa_esp32`. The S3's own
+    # `ets_printf` registration at 0x4000_05d0 is untouched. Separately the
+    # ILI9341 SPI panel now frames on its D/C line — an external device, not a
+    # chip peripheral. Register map, reset values and the 9-reg reset-state
+    # anchor are untouched; esp32s3 reset conformance passes. No S3 board
+    # attached; no live re-capture.
+    # 2026-08-02: two Xtensa-side changes, neither an S3 peripheral.
+    # (a) The register-window spill now writes a leftover WINDOWSTART pane's
+    # a0..a3 at its CALLEE's sp-16 rather than its own — the WindowOverflow4
+    # layout — which is a CPU-core correction shared by every Xtensa target and
+    # fixes a stack clobber, not a register map. (b) TIMG0 gained an opt-in LACT
+    # timer for ESP32-classic; the S3 builds its timers from its own
+    # descriptors and never opts in. A seed writing RTC_CNTL +0xB4 was
+    # considered and REMOVED before landing precisely because that offset is
+    # SWD_CONF on the S3 (STORE5 is at 0xC4 here, not 0xB4) — this gate is what
+    # prompted checking. Register map, reset values and the 9-reg reset-state
+    # anchor untouched; esp32s3 reset conformance passes. No S3 board attached;
+    # no live re-capture.
+    drift_ack: 2026-08-02
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

@@ -193,6 +193,17 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         "s_cpu_inited",
         "s_system_inited",
         "s_other_cpu_startup_done",
+        // ── CPU-frequency globals the ROM bootloader normally sets. ──────────
+        // `ets_update_cpu_frequency()` writes both; the ROM calls it before
+        // handing off to the app image, and we start at the app entry, so
+        // nothing writes them and they stay 0. `esp_clk_apb_freq()` is
+        // `MIN(g_ticks_per_us_pro, 80) * MHZ` on ESP32-classic, so zero here
+        // reports a 0 Hz APB bus and `esp_timer_impl_update_apb_freq` aborts
+        // boot on `apb_ticks_per_us >= 3`. The cli seeds these — see
+        // snapshot.rs. Note these resolve as ABSOLUTE (nm type `A`) symbols,
+        // not .bss, because the ROM linker script fixes their addresses.
+        "g_ticks_per_us_pro",
+        "g_ticks_per_us_app",
         // ── Optional markers. ────────────────────────────────────────────────
         "app_main",
         "loopTask",

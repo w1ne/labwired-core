@@ -1115,6 +1115,94 @@ pub struct I2cSpec {
     /// read. Applies to the `registers:` (wide) mode. See [`DataReady`].
     #[serde(default)]
     pub data_ready: Vec<DataReady>,
+    /// **Register bank (page) select**: the pointer address whose written value
+    /// selects which bank the rest of the map is decoded in. Absent ⇒ the device
+    /// has one flat map (every device written before this existed).
+    ///
+    /// This is the datasheet shape for parts whose register space is larger than
+    /// the 8-bit pointer: ST's VL53L0X API bank-switches through 0xFF, and the
+    /// SAME pointer means different registers per bank — 0xB6 is
+    /// `GLOBAL_CONFIG_REF_EN_START_SELECT` in bank 0 and
+    /// `RESULT_PEAK_SIGNAL_RATE_REF` in bank 1, 0x84 is `GPIO_HV_MUX_ACTIVE_HIGH`
+    /// in bank 0 and the oscillator-frequency word in bank 1. Modelling them as
+    /// one register would make a vendor driver read back its own configuration
+    /// where silicon hands it a measurement.
+    ///
+    /// A register carrying [`RegisterSpec::page`] decodes only in that bank; a
+    /// register without one decodes in every bank (the flat, bank-agnostic core
+    /// map), so only the addresses that genuinely alias need to say so.
+    #[serde(default)]
+    pub page_register: Option<u8>,
+    /// **Indexed readout ports**: an index register + a strobe handshake + a
+    /// data register, standing in for storage that is not directly pointer-
+    /// addressable (a factory NVM / OTP array). See [`IndexedTable`].
+    #[serde(default)]
+    pub indexed_tables: Vec<IndexedTable>,
+}
+
+/// One **indexed readout port**: the datasheet shape for reading storage that
+/// the register map does not expose directly — write an index, hand the device a
+/// strobe, wait for the strobe to read back done, then read the latched word out
+/// of a data register.
+///
+/// The VL53L0X factory NVM is read exactly this way by ST's own API
+/// (`VL53L0X_get_info_from_device` / `VL53L0X_device_read_strobe`, API 1.0.2):
+/// `WrByte(0x94, index)` → `WrByte(0x83, 0x00)` → poll `RdByte(0x83)` until it
+/// reads non-zero → `RdDWord(0x90)`. Both `VL53L0X_GetDeviceInfo` and
+/// `VL53L0X_StaticInit` go through it, and both give up with
+/// `VL53L0X_ERROR_TIME_OUT` after `VL53L0X_DEFAULT_MAX_LOOP` (200) polls if the
+/// strobe never comes back — which is what a device that does not model this
+/// port looks like from the driver's side.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IndexedTable {
+    /// Diagnostic name for this port (e.g. `nvm`). Not addressable.
+    pub name: String,
+    /// Register the master writes the entry index to.
+    pub index_register: String,
+    /// Register the master strobes and then polls. A write of
+    /// `strobe_arm_value` arms a fetch; `strobe_mask` reads set once the fetch
+    /// has latched into `data_register`. Those bits are model-owned, so the
+    /// register's `write_mask` must exclude them.
+    pub strobe_register: String,
+    /// Value the master writes to `strobe_register` to arm a fetch (VL53L0X:
+    /// `0x00` — the driver clears the strobe and waits for the device to raise
+    /// it).
+    #[serde(default)]
+    pub strobe_arm_value: u32,
+    /// Bit(s) of `strobe_register` the model raises when the fetch has landed.
+    pub strobe_mask: u32,
+    /// Register the fetched word is latched into (read normally afterwards).
+    pub data_register: String,
+    /// Access time in microseconds. `0` ⇒ the fetch lands before the master can
+    /// issue the next I²C frame, which is the honest answer for an on-die NVM
+    /// array (sub-microsecond) polled over an I²C bus (tens to hundreds of µs
+    /// per read frame): silicon has always already finished by the first poll.
+    #[serde(default)]
+    pub access_us: u64,
+    /// The stored words, keyed by index. An index with no entry latches 0 —
+    /// the same "unprogrammed" answer an erased NVM cell gives.
+    #[serde(default)]
+    pub entries: BTreeMap<u8, u32>,
+}
+
+/// A read value derived from **how many bits are set** in other registers,
+/// scaled by a per-bit constant.
+///
+/// This is the honest shape for a measurement whose magnitude is proportional to
+/// the number of enabled elements rather than to any external stimulus. The
+/// VL53L0X reference-signal rate is the case that motivated it: it is the return
+/// rate of the internal reference path, so it grows with the number of enabled
+/// reference SPADs, and ST's `VL53L0X_perform_ref_spad_management` closes its
+/// loop on exactly that relation — it enables one more good SPAD at a time and
+/// re-measures until the rate reaches the target. A constant would either stall
+/// that loop (rate never reaches the target) or short-circuit it into a branch
+/// silicon does not take.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PopcountSource {
+    /// Registers whose set bits are counted (in order; the count is their sum).
+    pub registers: Vec<String>,
+    /// Value contributed by each set bit.
+    pub per_bit: u32,
 }
 
 /// One **data-ready** rule: a write-triggered, time-gated status bit.
@@ -1546,6 +1634,27 @@ pub struct RegisterSpec {
     /// MAX31855 whose 32-bit frame packs temperature + status sub-fields.
     #[serde(default)]
     pub fields: Vec<FieldSpec>,
+    /// Register bank this register decodes in, for a device that declares
+    /// [`I2cSpec::page_register`]. Absent ⇒ the register decodes in EVERY bank
+    /// (the flat core map). Present ⇒ it decodes only while the bank select
+    /// holds this value, so the same pointer can carry a different register per
+    /// bank exactly as silicon does.
+    #[serde(default)]
+    pub page: Option<u8>,
+    /// Bits the DEVICE clears itself the moment it has acted on the write —
+    /// a momentary "go" bit, not a latch firmware owns.
+    ///
+    /// The VL53L0X `SYSRANGE_START` bit 0 is one: ST's `VL53L0X_StartMeasurement`
+    /// writes it and then polls the register with the comment *"Wait until start
+    /// bit has been cleared"*, giving up with `VL53L0X_ERROR_TIME_OUT` after
+    /// `VL53L0X_DEFAULT_MAX_LOOP` polls. A plain `rw` register echoes the bit
+    /// back forever, so that poll could never succeed.
+    #[serde(default)]
+    pub self_clearing: Option<u32>,
+    /// Read value derived from the number of set bits in other registers rather
+    /// than from storage or a measurement channel. See [`PopcountSource`].
+    #[serde(default)]
+    pub popcount: Option<PopcountSource>,
 }
 
 /// One sourced bit-field within a composite register word (see
@@ -1985,6 +2094,22 @@ pub struct TestInputs {
     /// manifest whose entire content would be a chip pointer and two empty
     /// lists. Anything with a device attached needs `system`.
     pub chip: Option<String>,
+    /// Optional boot profile. Omitted (the default) means the faithful path:
+    /// the skipped-BROM DRAM seed and a real dual-core release, with no
+    /// firmware flash-thunks.
+    ///
+    /// `arduino-esp32` selects the FAST BOOT instead — the same profile
+    /// `labwired snapshot capture` uses, which redirects a set of ROM/IDF
+    /// entry points so an Arduino-ESP32 sketch reaches `setup()` quickly.
+    /// Classic-ESP32 Arduino firmware does not boot on the faithful path yet,
+    /// so without this a sketch like Ryan's bay-occupancy rig produced ~47
+    /// bytes of UART and stopped — which meant the runner that owns `stimuli:`
+    /// could not exercise the firmware at all.
+    ///
+    /// It is opt-in and named in the script on purpose: a run that took the
+    /// fast boot should say so, rather than leaving a reader to infer which
+    /// of two boot paths produced the result.
+    pub profile: Option<String>,
 }
 
 /// A system, resolved once: the manifest plus the directory that relative
@@ -3057,9 +3182,17 @@ impl EnvTestScript {
             anyhow::bail!("Environment test scripts do not support 'uart_injections'");
         }
 
-        if self.assertions.is_empty() {
-            anyhow::bail!("Environment test scripts require at least one assertion");
-        }
+        // An environment script MAY assert nothing. Such a run is
+        // observational: it reports what each node printed and whether anything
+        // faulted, and its `status` is decided by the safety stop alone (an
+        // empty assertion list is vacuously satisfied). That is the same
+        // contract a single-machine script has always had, and it is what a
+        // hosted verify needs — "compile every chip and run the world without
+        // faulting" is a claim about faults, not about an author's oracle.
+        //
+        // A script that DOES carry assertions is still held to all of the rules
+        // below, so a gate cannot quietly weaken itself: it either states what
+        // it checks, or it visibly checks nothing.
 
         for (index, assertion) in self.assertions.iter().enumerate() {
             let TestAssertion::MemoryValue(memory) = assertion else {
@@ -4453,8 +4586,11 @@ assertions:
 schema_version: "1.0"
 inputs: { env: "twonode-env.yaml" }
 limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+  - uart_contains: "PASS"
 "#,
-                "at least one assertion",
+                "memory_value",
             ),
             (
                 "missing-node",
@@ -4494,6 +4630,30 @@ assertions:
             let err = load_test_script(&script_path).unwrap_err().to_string();
             assert!(err.contains(diagnostic), "unexpected error: {err}");
         }
+    }
+
+    #[test]
+    fn env_script_may_assert_nothing_and_still_load() {
+        // An observational world run: it reports what each node printed and
+        // whether anything faulted, with no author oracle. `status` then rests
+        // on the safety stop alone, which is exactly the claim a hosted verify
+        // makes ("every chip compiled and the world ran without faulting").
+        // A script that DOES carry assertions is still held to every rule
+        // above, so a gate cannot quietly weaken itself into a green.
+        let script_path = write_temp_file(
+            "observational-env",
+            r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions: []
+"#,
+        );
+        let script = load_test_script(&script_path).expect("observational env script must load");
+        let LoadedTestScript::Env(env) = script else {
+            panic!("expected an environment script");
+        };
+        assert!(env.assertions.is_empty());
     }
 
     #[test]
@@ -4829,6 +4989,9 @@ metadata:
             resolution: None,
             signed: false,
             fields: vec![],
+            page: None,
+            self_clearing: None,
+            popcount: None,
         };
     }
 }
