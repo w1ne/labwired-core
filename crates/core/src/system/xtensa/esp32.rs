@@ -90,11 +90,11 @@ pub fn attach_esp32_external_devices(
             continue;
         }
 
-        tracing::warn!(
-            "ESP32 external_devices: unsupported type '{}' on '{}'; skipping",
+        return Err(anyhow::anyhow!(
+            "ESP32 external_devices: unsupported type '{}' on '{}'",
             ext.r#type,
             ext.id
-        );
+        ));
     }
     Ok(())
 }

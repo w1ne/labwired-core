@@ -775,6 +775,11 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin (e.g. \"GPIO33\"). Strongly recommended: with it, command/data framing is read from the wire like real silicon. Without it the model must infer framing from byte values, which a real driver's init sequence desynchronises."
         }
       ],
       "labs": [
