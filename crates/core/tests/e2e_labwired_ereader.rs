@@ -5,17 +5,22 @@
 // End-to-end smoke test for the `labwired-ereader` Arduino-ESP32 sketch.
 //
 // Goal: load the ereader's stock ELF (built with PlatformIO) into our
-// ESP32-classic sim, mirror the wasm playground's
-// `install_arduino_esp32_quirks` install path **minimally** by resolving
-// every thunk address from the ELF's symbol table (so the test isn't
-// pinned to one firmware build), and step long enough to either see the
-// UC8151D panel get a `refresh()` or stall.
+// ESP32-classic sim and step long enough to either see the SSD1680 panel get a
+// `refresh()` or stall.
 //
-// This is the native-Rust counterpart to the wasm playground path —
-// same panel attach, same SP seed, same handshake bytes, same ROM
-// thunks, same step budget. The cross-core FROM_CPU yield IPI is
-// modeled in the core (DPORT interrupt matrix), not bridged here. If
-// this test paints, the firmware paints in the playground too.
+// Bring-up is NOT hand-rolled here. It used to be — ~250 lines that rebuilt the
+// bus, the CPU pair, the stack seeds and the whole thunk list by hand, in
+// parallel with the same sequence in the wasm playground and in
+// `install_arduino_esp32_profile`. A copy that misses a step does not fail
+// loudly; it boots a machine that is subtly wrong and the symptom surfaces
+// somewhere else entirely. So the boot goes through
+// `boot::esp32_arduino::build_arduino_elf_machine`, the one home for this
+// chip's Arduino-ELF path, and this file is left saying only what is specific
+// to the e-reader: which board, which panel pins, and what counts as painted.
+//
+// The cross-core FROM_CPU yield IPI is modeled in the core (DPORT interrupt
+// matrix), not bridged here. If this test paints, the firmware paints in the
+// playground too.
 //
 // Heavy and slow (~200M cycles in the worst case), so `#[ignore]`d by
 // default. Run with:
@@ -28,15 +33,11 @@
 // `/tmp/labwired-ereader/build/labwired-ereader.ino.elf`, or wherever
 // `LABWIRED_EREADER_ELF` points.
 
-use labwired_core::bus::SystemBus;
-use labwired_core::cpu::xtensa_lx7::XtensaLx7;
+use labwired_core::boot::esp32_arduino::{build_arduino_elf_machine, ArduinoElfBootOpts};
 use labwired_core::peripherals::components::Ssd1680Tricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
-use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
-use labwired_core::system::xtensa::configure_xtensa_esp32;
-use labwired_core::{Cpu, Machine};
+use labwired_core::Cpu;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 const DEFAULT_ELF: &str = "/tmp/labwired-ereader/build/labwired-ereader.ino.elf";
 
@@ -72,8 +73,8 @@ fn labwired_ereader_runs_to_panel_paint() {
     let elf_bytes = std::fs::read(&elf_path).expect("read ELF");
     let image = labwired_loader::load_elf(&elf_path).expect("parse ELF");
 
-    // ── 1. Bring up an ESP32-classic and attach the panel from the board
-    //       manifest via the generic attach_esp32_external_devices factory —
+    // ── 1. The board. The panel is attached from this manifest by the generic
+    //       attach_esp32_external_devices factory (inside the builder below) —
     //       the SAME path cli/wasm use. No peripheral is hardcoded here. The
     //       GxEPD2_290_C90c panel is an SSD1680 controller (see the GxEPD2 driver
     //       header); the factory maps the gxepd2_290_c90c alias to the SSD1680
@@ -85,19 +86,12 @@ fn labwired_ereader_runs_to_panel_paint() {
     //       0x22+0x20 update). A uc8151d_tricolor_290 panel decodes those as
     //       PWR/LUT/DRF, never drives BUSY low, and the firmware hangs in
     //       _waitWhileBusy: refresh_gen=0, zero ink bytes, blank panel.
-    let mut bus = SystemBus::new();
-    // Capture the sketch's own progress markers ("calling display.init(...)",
-    // "display.init() returned", "calling drawPage()"). Without them a blank
-    // panel is indistinguishable from a panel that was never driven, and the
-    // final PC only ever shows the FreeRTOS idle task.
-    let uart_sink = Arc::new(Mutex::new(Vec::new()));
-    let cpu = configure_xtensa_esp32(&mut bus);
-    // AFTER configure_xtensa_esp32, not before: attach_uart_tx_sink walks the
-    // peripherals already on the bus, so calling it first attached the sink to
-    // an empty list and captured nothing. The "firmware never reached
-    // Serial.println" line below was reporting that, not the firmware.
-    bus.attach_uart_tx_sink(uart_sink.clone(), false);
-
+    //
+    //       The manifest stays INLINE rather than reading
+    //       `configs/systems/esp32-wroom-epaper.yaml`: it carries
+    //       `busy_pin: GPIO4`, which that file does not, and the BUSY wire is
+    //       what stops GxEPD2's `_waitWhileBusy` from blocking to its
+    //       multi-second timeout.
     let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
         r#"
 name: esp32-epaper-ereader
@@ -113,15 +107,48 @@ external_devices:
 "#,
     )
     .expect("parse inline ereader board manifest");
-    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
-        .expect("attach e-paper panel from manifest");
-    bus.refresh_peripheral_index();
+
+    // ── 2. Boot it. `build_arduino_elf_machine` owns the whole sequence: bus,
+    //       dual-core CPU pair, UART sink attached AFTER the peripherals exist,
+    //       external devices from the manifest, both stack seeds, and the
+    //       symbol-driven thunk install via `install_arduino_esp32_profile`.
+    //
+    //       What used to be here instead was ~250 lines re-deriving all of it,
+    //       including a second copy of the thunk list. That copy had drifted:
+    //       it still thunked `esp_timer_impl_get_counter_reg` to a 32-bit fake,
+    //       the exact stub the profile deleted because it left the high word
+    //       undefined and silently broke every `millis()` deadline. A test
+    //       running a boot path nobody ships is not a test of the thing we ship.
+    let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
+    eprintln!(
+        "[ereader-sim] resolved {} Arduino-ESP32 thunk symbols from ELF",
+        symbol_addrs.len()
+    );
+    let mut booted = build_arduino_elf_machine(
+        &image,
+        symbol_addrs,
+        &manifest,
+        // Real dual-core: a second LX6 as APP_CPU (PRID 0xABAB →
+        // xPortGetCoreID()==1, halted until PRO_CPU releases it via
+        // ets_set_appcpu_boot_addr). arduino-esp32 pins loopTask to
+        // CONFIG_ARDUINO_RUNNING_CORE=1, and with a real second core the
+        // firmware drives the whole SMP rendezvous itself — no forged
+        // handshake bytes, hence the empty `appcpu_up_flag_addrs`.
+        &ArduinoElfBootOpts::default(),
+    )
+    .expect("build classic-ESP32 Arduino machine");
+    eprintln!(
+        "[ereader-sim] installed {} flash thunks",
+        booted.profile.thunks_installed
+    );
 
     // Capture the raw MOSI stream. "9 SPI transactions then nothing" says the
     // firmware stopped, but not WHICH byte it stopped after — and the GxEPD2
     // init sequence is identifiable byte-for-byte (0x12, 0x01 27 01 00, ...).
-    if let Some(idx) = bus.find_peripheral_index_by_name("spi3") {
-        if let Some(spi) = bus.peripherals[idx]
+    // Reached through the booted machine's bus: the panel is attached by the
+    // builder, so there is no pre-boot bus to configure.
+    if let Some(idx) = booted.machine.bus.find_peripheral_index_by_name("spi3") {
+        if let Some(spi) = booted.machine.bus.peripherals[idx]
             .dev
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<Esp32Spi>())
@@ -130,276 +157,16 @@ external_devices:
         }
     }
 
-    // Real dual-core: attach a second LX6 as APP_CPU (PRID 0xABAB →
-    // xPortGetCoreID()==1, starts halted until PRO_CPU releases it via
-    // ets_set_appcpu_boot_addr). Step 1 of the dual-core bring-up.
-    let mut machine = Machine::new(cpu, bus).with_secondary_cpu(XtensaLx7::new_app_cpu());
-    machine.load_firmware(&image).expect("load firmware");
-    machine.cpu.set_pc(image.entry_point as u32);
+    let uart_sink = booted.uart_sink.clone();
+    let machine = &mut booted.machine;
 
-    // ── 2. SP seed — real silicon's BROM places SP near the top of
-    //       DRAM before jumping to call_start_cpu0; we skip BROM in the
-    //       sim so seed it ourselves. Same for APP_CPU: the ROM sets its
-    //       SP before releasing it to call_start_cpu1 (whose first insn is
-    //       `entry a1,32`), so seed the secondary's SP in a separate DRAM
-    //       region (above .bss @0x3ffc5ce8, below PRO_CPU's stack).
-    machine.cpu.set_sp(0x3FFE_0000);
-    if let Some(cpu1) = machine.cpu_secondary.as_mut() {
-        cpu1.set_sp(0x3FFD_8000);
-    }
-
-    // ── 3. Symbol-driven thunk install. Resolves addresses from the
-    //       ereader ELF and installs only the thunks for symbols
-    //       actually present — silently skips missing ones. Identical
-    //       in spirit to the wasm playground's install_arduino_esp32_quirks.
-    let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
-    eprintln!(
-        "[ereader-sim] resolved {} Arduino-ESP32 thunk symbols from ELF",
-        symbol_addrs.len()
-    );
-
-    // No dual-core startup-handshake forges. With APP_CPU running for real,
-    // the firmware drives the whole rendezvous itself: PRO_CPU releases
-    // APP_CPU (ets_set_appcpu_boot_addr), APP_CPU runs call_start_cpu1 and
-    // marks s_cpu_up[1]/s_cpu_inited[1]/s_system_inited[1], PRO_CPU sets
-    // s_resume_cores, and APP_CPU's IDLE idle-hook sets s_other_cpu_startup_done
-    // — all with no help from the harness. (Verified: forging these vs not
-    // makes no difference to the paint; both ELFs reach refresh.) The
-    // cross-core yield IPI that quiesces APP_CPU to IDLE is delivered by the
-    // core's DPORT (Dport::cross_core_pending → bus.pending_cpu_irqs(core_id)),
-    // not bridged here.
-    //
-    // set_appcpu_up_flags stays available for SINGLE-CORE frontends (wasm/cli)
-    // where no APP_CPU exists to mark the flags; this dual-core test passes an
-    // empty list so the ets_set_appcpu_boot_addr re-assert is a no-op.
-    rom_thunks::set_appcpu_up_flags(Vec::new());
-
-    // loopTask now runs on the REAL APP_CPU (core 1) — no repin. arduino-esp32
-    // pins loopTask to CONFIG_ARDUINO_RUNNING_CORE=1, which is genuinely
-    // modeled now. (Step 5 of dual-core bring-up: repin_loop_task deleted.)
-
-    // pxCurrentTCB pointer seed for xTaskGetCurrentTaskHandle thunk.
-    if let Some(&addr) = symbol_addrs.get("pxCurrentTCB") {
-        rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(addr)));
-        eprintln!("[ereader-sim] pxCurrentTCB @0x{addr:08x}");
-    }
-
-    // Build the thunk list — by-symbol lookups; missing symbols are
-    // silently skipped (the sketch doesn't pull in that path).
-    let mut thunks: Vec<(u32, rom_thunks::RomThunkFn)> = Vec::new();
-    let push_named =
-        |list: &mut Vec<(u32, rom_thunks::RomThunkFn)>, sym: &str, f: rom_thunks::RomThunkFn| {
-            if let Some(&pc) = symbol_addrs.get(sym) {
-                list.push((pc, f));
-            }
-        };
-
-    // Heap: the firmware's REAL ESP-IDF multi_heap (TLSF) allocator runs on
-    // the emulated DRAM — no bump-allocator thunks. The long-standing "real
-    // heap walls" symptom (diagnosed 2026-06-04 against the WiFi fixture:
-    // heap_caps_malloc hands out a pointer whose first word is the rodata bytes
-    // "lock" = 0x6b636f6c, and APP_CPU faults dereferencing vector_desc->next
-    // in esp_intr_alloc while PRO_CPU spins on s_other_cpu_startup_done) was
-    // NOT an allocator bug. It was APP_CPU dual-core bring-up: with a real
-    // second core (XtensaLx7::new_app_cpu) and the DPORT delivering the
-    // cross-core IPI through Machine::step, APP_CPU initialises correctly and
-    // the real heap registers + allocates cleanly. This test paints identically
-    // with the real heap (refresh_gen=1, 1429 ink bytes), proving it.
-
-    // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
-    for sym in &[
-        "esp_timer_init",
-        "spi_flash_disable_interrupts_caches_and_other_cpu",
-        "spi_flash_enable_interrupts_caches_and_other_cpu",
-        "__retarget_lock_init_recursive",
-        "__retarget_lock_close_recursive",
-        "__retarget_lock_acquire_recursive",
-        "__retarget_lock_release_recursive",
-        "_esp_error_check_failed",
-        "setCpuFrequencyMhz",
-        "delay",
-        "xQueueGiveMutexRecursive",
-        "xQueueTakeMutexRecursive",
-        "esp_ipc_init",
-        "esp_ipc_isr_init",
-        "esp_log_impl_lock",
-        "esp_log_impl_lock_timeout",
-        "esp_log_impl_unlock",
-        "esp_panic_handler",
-        "esp_panic_handler_reconfigure_wdts",
-        "pthread_key_create",
-        "pthread_setspecific",
-        "pthread_getspecific",
-        "pthread_mutex_init",
-        "pthread_mutex_lock",
-        "pthread_mutex_unlock",
-        "_lock_acquire",
-        "_lock_acquire_recursive",
-        "_lock_release",
-        "_lock_release_recursive",
-        "_lock_init",
-        "_lock_init_recursive",
-        "_lock_close",
-        "_lock_close_recursive",
-        "_lock_try_acquire",
-        "_lock_try_acquire_recursive",
-        "esp_pthread_init",
-        "esp_task_wdt_reset",
-        "esp_task_wdt_init",
-        "esp_task_wdt_add",
-        "esp_task_wdt_delete",
-        "esp_clk_init",
-        "esp_perip_clk_init",
-        "core_intr_matrix_clear",
-        "esp_flash_init",
-        "esp_flash_init_default_chip",
-        "esp_flash_init_main",
-        "esp_flash_app_init",
-        "esp_flash_app_enable_os_functions",
-        "esp_flash_app_disable_protect",
-        "esp_flash_app_disable_os_functions",
-        "esp_flash_read_chip_id",
-        "esp_flash_chip_driver_initialized",
-        "do_core_init",
-        "do_secondary_init",
-        // NOTE: `esp_startup_start_app` is INTENTIONALLY NOT STUBBED.
-        // The real impl calls `vTaskStartScheduler()` which never returns
-        // — control goes off to the first task. Stubbing it makes start_cpu0
-        // fall into the `j .` safety-net loop at the bottom of start_cpu0.
-        "esp_partition_main_flash_region_safe",
-        "spi_flash_init",
-        "spi_flash_init_chip_state",
-        "esp_efuse_check_errors",
-        "esp_dport_access_stall_other_cpu_start",
-        "esp_dport_access_stall_other_cpu_end",
-        "esp_cpu_unstall",
-        "bootloader_flash_update_id",
-        "bootloader_init_mem",
-        "esp_mspi_pin_init",
-        "esp_log_timestamp",
-        "esp_log_early_timestamp",
-        "esp_log_writev",
-        "esp_random",
-        "esp_fill_random",
-        // serialEventRun stays nop'd: it is the Arduino loop() hook for
-        // user-defined serialEvent() callbacks, unrelated to UART output.
-        // The HardwareSerial nops this comment used to justify are gone —
-        // that rationale (divide-by-zero in _get_effective_baudrate) named a
-        // real mechanism but the wrong cause, and reading as settled fact is
-        // what kept anyone from looking at apb_ctrl for a year.
-        "_Z14serialEventRunv",
-    ] {
-        push_named(&mut thunks, sym, rom_thunks::nop_return_zero);
-    }
-
-    // Real FreeRTOS: queue/mutex/event-group create + vListInsert are NOT
-    // thunked — the firmware's own FreeRTOS runs on the emulated registers +
-    // heap. (The old fakes — nop'd vListInsert + fake-handle creates + always-
-    // succeed ops — were pure debt: faking the create functions left their
-    // list structures uninitialised, which forced faking everything built on
-    // them. Removing all of it still paints refresh_gen=2.)
-
-    // SPI-flash lock stubs (real impl asserts on uninitialised mutex).
-    for sym in &[
-        "spi_flash_init_lock",
-        "spi_flash_op_lock",
-        "spi_flash_op_unlock",
-    ] {
-        push_named(&mut thunks, sym, rom_thunks::nop_return_zero);
-    }
-
-    // esp_ota_get_running_partition → fake non-NULL ptr so assertions pass.
-    push_named(
-        &mut thunks,
-        "esp_ota_get_running_partition",
-        rom_thunks::nop_return_fake_ptr,
-    );
-
-    // Custom-return thunks.
-    push_named(&mut thunks, "esp_chip_info", rom_thunks::esp_chip_info_stub);
-    push_named(
-        &mut thunks,
-        "__getreent",
-        rom_thunks::getreent_dram_fake_ptr,
-    );
-    push_named(
-        &mut thunks,
-        "esp_timer_impl_get_counter_reg",
-        rom_thunks::monotonic_counter_32,
-    );
-    push_named(
-        &mut thunks,
-        "esp_clk_cpu_freq",
-        rom_thunks::esp_clk_cpu_freq_240mhz,
-    );
-    push_named(
-        &mut thunks,
-        "xQueueCreateMutexStatic",
-        rom_thunks::x_queue_create_mutex_static_echo,
-    );
-    push_named(
-        &mut thunks,
-        "xTaskGetCurrentTaskHandle",
-        rom_thunks::x_task_get_current_task_handle,
-    );
-    // NO SPI init shims. GxEPD2_EPD::init() calls SPI.begin() → the real
-    // compiled spiStartBus runs: it creates a real recursive bus mutex via
-    // xQueueCreateMutex (real, IRAM-resident, backed by the real heap),
-    // enables the SPI3 peripheral clock through DPORT, sets USER.USR_MOSI/
-    // USR_MISO, and zeroes the FIFO. SPIClass::beginTransaction then takes that
-    // real mutex. So spi_start_bus_fake, spi_class_begin_transaction, and the
-    // xQueueSemaphoreTake/Send "force pdTRUE" lock shims are all GONE — the bus
-    // mutex is a genuine FreeRTOS object and the SPI critical sections run for
-    // real. xQueueCreateMutexStatic is still echoed (idle-task static mutex);
-    // the SPI bus uses the dynamic xQueueCreateMutex, which is real.
-
-    // NO gxepd cmd/data bypass. GxEPD2_EPD::_writeCommand / _writeData run for
-    // real: digitalWrite(DC) → SPI.transfer(byte) → spiTransferByteNL writes the
-    // SPI3 FIFO/MOSI_DLEN/CMD.USR registers, and our Esp32Spi peripheral drains
-    // the byte to the panel framed by the latched DC GPIO. Bytes reach the panel
-    // through real register machinery, not a Rust-side panel injection.
-
-    // xthal_window_spill_nw — semantic spill via shadow stack. Only the
-    // `_nw` leaf (the actual spill loop that would trap on the displaced
-    // frames) is thunked; the `xthal_window_spill` wrapper is a thin
-    // PS-save/restore shell that is CALL{n}-entered and must run its real
-    // `entry / call0 _nw / retw` natively — thunking it returns via a0,
-    // which is the *caller's* return address (the wrapper's ENTRY, which
-    // would set up a0, is clobbered by the thunk's BREAK), corrupting the
-    // return and faulting in xPortStartScheduler's first-task dispatch.
-    push_named(
-        &mut thunks,
-        "xthal_window_spill_nw",
-        rom_thunks::xthal_window_spill_thunk,
-    );
-
-    // Real-silicon noreturn — halt the CPU rather than letting assert →
-    // return turn into a tight loop.
-    for sym in &[
-        "panic_abort",
-        "__assert_func",
-        "abort",
-        "__assert",
-        "__cxa_pure_virtual",
-        "__cxa_throw",
-    ] {
-        push_named(&mut thunks, sym, rom_thunks::abort_halt);
-    }
-
-    let installed = thunks.len();
-    for (pc, f) in thunks {
-        machine
-            .bus
-            .install_flash_thunk(pc, f)
-            .unwrap_or_else(|e| panic!("install thunk @{pc:#x}: {e}"));
-    }
-    eprintln!("[ereader-sim] installed {installed} flash thunks");
-
-    // ── 4. Step loop. Mirrors step_with_esp32_aids: handshake keep-alive
-    //       every 10k cycles. The cross-core FROM_CPU yield IPI that quiesces
-    //       APP_CPU to IDLE is now modeled inside the core (DPORT
+    // ── 3. Step loop. Single-stepping on purpose — `machine.run()` would be
+    //       faster but this loop is also the PC trace: the same-PC streak and
+    //       the 64-deep distinct-PC ring below are what turn "it stalled" into
+    //       "it stalled HERE". The cross-core FROM_CPU yield IPI that quiesces
+    //       APP_CPU to IDLE is modeled inside the core (DPORT
     //       `cross_core_pending` → per-core `bus.pending_cpu_irqs`), so this
-    //       harness no longer bridges it — `machine.step()` delivers it.
+    //       harness does not bridge it — `machine.step()` delivers it.
     // Overridable so a diagnostic run can stop early: the interesting failure
     // (firmware stops mid-_InitDisplay) happens within the first few million
     // cycles, and paying 200M for it makes every iteration a 6-minute round trip.
@@ -487,7 +254,7 @@ external_devices:
         }
     }
 
-    // ── 5. Report.
+    // ── 4. Report.
     let final_pc = machine.cpu.get_pc();
 
     // Pull the panel back out and read its state.
@@ -530,7 +297,7 @@ external_devices:
         eprintln!("    step {s:>10}: pc=0x{p:08x}");
     }
 
-    // ── 6. Verdict. Painting = at least one refresh AND a non-blank framebuffer.
+    // ── 5. Verdict. Painting = at least one refresh AND a non-blank framebuffer.
     // A refresh with an all-white black plane is a false positive (the DC line
     // was mis-latched and the 0x24 RAM stream was dropped); the real firmware
     // renders text, so the black plane must carry ink.
@@ -578,5 +345,58 @@ external_devices:
         "labwired-ereader refreshed but rendered a BLANK black plane \
          ({black_ink} non-0xFF bytes) — the 0x24 framebuffer stream was dropped \
          (DC mis-latched?). The real firmware draws text, so this must be > 0."
+    );
+
+    // ── 6. The partition table has to be READABLE, not just present.
+    //
+    // These strings are not ours. They are ESP-IDF's and arduino-esp32's own
+    // error text (`esp_partition.c`, `esp_core_dump_flash.c`,
+    // `esp32-hal-misc.c:264`), which is what makes them worth asserting on: the
+    // firmware decides whether to print them, from state we seeded, and nothing
+    // in this repo can make the check pass by agreeing with itself.
+    //
+    // All three fired on every classic-ESP32 boot — visible live in the browser
+    // on app.labwired.com — for two independent reasons:
+    //
+    //   * flash 0x8000 was erased, so there was no partition table at all
+    //     (`boot::esp_partition_table` now supplies one);
+    //   * `g_rom_flashchip.chip_size` was 0, so `spi_flash_mmap` rejected the
+    //     read of that table with ESP_ERR_INVALID_ARG regardless
+    //     (`install_arduino_esp32_profile` now seeds the descriptor).
+    //
+    // Either one alone leaves the twin lying about silicon, so both are asserted
+    // here rather than trusted.
+    assert!(
+        !uart_text.contains("load_partitions returned"),
+        "ESP-IDF could not read the partition table at flash 0x8000. 0x102 is \
+         ESP_ERR_INVALID_ARG out of spi_flash_mmap — usually g_rom_flashchip \
+         left unseeded (chip_size 0). Serial:\n{uart_text}"
+    );
+    assert!(
+        !uart_text.contains("No core dump partition found"),
+        "esp_core_dump_flash found no coredump partition — the partition table at \
+         flash 0x8000 is missing or failed its ROM-MD5 verification. Serial:\n{uart_text}"
+    );
+    // And `nvs_flash_init()` must SUCCEED, not merely find its partition.
+    // `initArduino()` prints this line for any non-zero return, so the absence
+    // of it is the firmware's own verdict that NVS came up. Two error codes have
+    // been seen here and each one was a different missing piece:
+    //
+    //   261    = 0x105 ESP_ERR_NOT_FOUND          — no NVS partition (table)
+    //   24579  = 0x6003 ESP_ERR_FLASH_UNSUPPORTED_CHIP
+    //                                             — no flash chip driver, which
+    //                                               is what nopping the
+    //                                               `spi_flash_chip_*` probes
+    //                                               did (see NOP_STUBS)
+    //
+    // With the table, the `g_rom_flashchip` seed and the un-nopped driver, the
+    // line is gone entirely and a `Preferences`-using sketch has real NVS
+    // underneath it.
+    assert!(
+        !uart_text.contains("Failed to initialize NVS"),
+        "initArduino() could not bring up NVS. 261 (0x105) means no NVS partition — \
+         check seed_esp32_flash_image writes boot::esp_partition_table. 24579 (0x6003) \
+         means no esp_flash chip driver — check the spi_flash_chip_* probes are not \
+         being nop'd by the profile. Serial:\n{uart_text}"
     );
 }
