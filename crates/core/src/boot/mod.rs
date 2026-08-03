@@ -12,6 +12,7 @@
 pub mod esp32c3_rom;
 pub mod esp32s3;
 pub mod esp32s3_rom;
+pub mod esp_partition_table;
 
 use thiserror::Error;
 

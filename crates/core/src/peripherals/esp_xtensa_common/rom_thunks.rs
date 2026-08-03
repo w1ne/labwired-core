@@ -1574,6 +1574,49 @@ fn md5_step(w: &mut [u32; 4], in_block: &[u32; 16]) {
     w[3] = w[3].wrapping_add(d);
 }
 
+/// MD5 of a host-side byte slice, using the SAME compression function the ROM
+/// `esp_rom_md5_*` thunks below run for the firmware.
+///
+/// Sharing `md5_step` is the point. The twin has to produce a partition-table
+/// digest (`boot::esp_partition_table`) that the firmware will then recompute
+/// through those ROM entry points and compare. Two independent MD5s that agree
+/// today can drift; one compression function cannot disagree with itself.
+pub(crate) fn md5_digest(data: &[u8]) -> [u8; 16] {
+    let mut state: [u32; 4] = [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476];
+    let mut block = [0u32; 16];
+    let mut load = |chunk: &[u8], block: &mut [u32; 16]| {
+        for (i, slot) in block.iter_mut().enumerate() {
+            *slot = u32::from_le_bytes(chunk[i * 4..i * 4 + 4].try_into().unwrap());
+        }
+    };
+
+    let mut chunks = data.chunks_exact(64);
+    for chunk in &mut chunks {
+        load(chunk, &mut block);
+        md5_step(&mut state, &block);
+    }
+
+    // Standard MD5 padding: 0x80, zeroes, then the message length in BITS as a
+    // little-endian u64.
+    let rest = chunks.remainder();
+    let mut tail = [0u8; 128];
+    tail[..rest.len()].copy_from_slice(rest);
+    tail[rest.len()] = 0x80;
+    let tail_len = if rest.len() < 56 { 64 } else { 128 };
+    let bits = (data.len() as u64).wrapping_mul(8);
+    tail[tail_len - 8..tail_len].copy_from_slice(&bits.to_le_bytes());
+    for chunk in tail[..tail_len].chunks_exact(64) {
+        load(chunk, &mut block);
+        md5_step(&mut state, &block);
+    }
+
+    let mut out = [0u8; 16];
+    for (i, word) in state.iter().enumerate() {
+        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+    }
+    out
+}
+
 fn md5_read_ctx_buf(bus: &dyn Bus, ctx: u32) -> [u32; 4] {
     let mut buf = [0u32; 4];
     for (i, slot) in buf.iter_mut().enumerate() {

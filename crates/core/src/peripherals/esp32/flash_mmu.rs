@@ -307,6 +307,16 @@ impl Peripheral for ClassicFlashWindow {
 
 /// Seed partition table at flash `0x8000`, pre-map app XIP MMU for
 /// `cache2phys`, and attach the same flash image to SPI0/SPI1.
+///
+/// `partitions = None` does **not** mean "leave flash erased" — it means "no
+/// firmware-specific table, use the built-in default". Erased flash at `0x8000`
+/// is never a correct answer: ESP-IDF reads it as "this chip has no NVS and no
+/// coredump partition", so `nvs_flash_init()` returns `ESP_ERR_NOT_FOUND` and
+/// every `Preferences`-using sketch fails on the twin while working on silicon.
+/// See `boot::esp_partition_table`.
+///
+/// A real `partitions.bin` (the CLI resolves one next to the ELF) always wins;
+/// it describes that image's actual flash layout.
 pub fn seed_esp32_flash_image(
     bus: &mut crate::bus::SystemBus,
     partitions: Option<&[u8]>,
@@ -325,9 +335,19 @@ pub fn seed_esp32_flash_image(
         regs.shared().clone()
     };
 
-    if let Some(pt) = partitions {
-        Esp32FlashShared::write_flash(&shared, 0x8000, pt);
-    }
+    let default_pt;
+    let pt: &[u8] = match partitions {
+        Some(pt) => pt,
+        None => {
+            default_pt = crate::boot::esp_partition_table::default_partition_table();
+            &default_pt
+        }
+    };
+    Esp32FlashShared::write_flash(
+        &shared,
+        crate::boot::esp_partition_table::PARTITION_TABLE_OFFSET as usize,
+        pt,
+    );
     // App image identity for cache2phys: map ~1 MiB of IROM/DROM → flash 0x10000+.
     Esp32FlashShared::seed_app_xip_mmu(&shared, 0x1_0000, 16);
 
