@@ -18,12 +18,15 @@ pub mod integration;
 pub mod logic_capture;
 #[cfg(test)]
 pub mod logic_capture_differential;
+
 #[cfg(test)]
 pub mod machine_advance;
 #[cfg(test)]
 pub mod nrf52;
 #[cfg(test)]
 pub mod peripheral_reachability;
+#[cfg(test)]
+pub mod pre_merge_lane_covers_browser;
 #[cfg(test)]
 pub mod rp2040;
 #[cfg(test)]
