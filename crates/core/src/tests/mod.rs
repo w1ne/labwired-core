@@ -1,6 +1,8 @@
 #[cfg(test)]
 pub mod builtin_chip_self_contained;
 #[cfg(test)]
+pub mod bus_trace_one_home;
+#[cfg(test)]
 pub mod device_identity_one_home;
 #[cfg(test)]
 pub mod esp32;
@@ -18,7 +20,6 @@ pub mod integration;
 pub mod logic_capture;
 #[cfg(test)]
 pub mod logic_capture_differential;
-#[cfg(test)]
 pub mod machine_advance;
 #[cfg(test)]
 pub mod nrf52;

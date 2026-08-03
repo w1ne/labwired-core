@@ -240,6 +240,12 @@ const READONLY_REGS: &[(u64, u32)] = &[
 pub struct EspUart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     echo_stdout: bool,
+    /// The machine's ONE bus trace and this instance's name in it. Handed over
+    /// at registration by `Peripheral::attach_bus_trace`; private until then so
+    /// a bare `EspUart::new` still records somewhere. See
+    /// [`crate::bus::bus_trace`].
+    trace: crate::bus::bus_trace::BusTrace,
+    trace_name: String,
     /// Interrupt-matrix source ID (UART0=27, UART1=28, UART2=29).
     source_id: u32,
     /// Config register storage: keyed by word offset, stores masked value.
@@ -313,6 +319,8 @@ impl EspUart {
         Self {
             sink: None,
             attached_streams: Vec::new(),
+            trace: crate::bus::bus_trace::BusTrace::new(),
+            trace_name: String::new(),
             echo_stdout,
             source_id,
             regs,
@@ -358,6 +366,13 @@ impl EspUart {
             match src.pop_front() {
                 Some(b) => {
                     rx.push_back(b);
+                    self.trace.push(
+                        &self.trace_name,
+                        crate::bus::bus_trace::BusPayload::Uart {
+                            direction: crate::bus::bus_trace::BusDir::Rx,
+                            byte: b,
+                        },
+                    );
                     moved += 1;
                 }
                 None => break,
@@ -418,6 +433,17 @@ impl EspUart {
         let mut rx = self.rx_fifo.borrow_mut();
         if rx.len() < FIFO_LEN {
             rx.push_back(byte);
+            // Only a byte that actually landed is traced. A byte dropped into a
+            // full FIFO never existed as far as the firmware is concerned, and
+            // tracing it would make the analyzer disagree with the model about
+            // what arrived.
+            self.trace.push(
+                &self.trace_name,
+                crate::bus::bus_trace::BusPayload::Uart {
+                    direction: crate::bus::bus_trace::BusDir::Rx,
+                    byte,
+                },
+            );
             self.int_raw_sticky |= INT_RXFIFO_TOUT;
         } else {
             self.int_raw_sticky |= INT_RXFIFO_OVF;
@@ -554,6 +580,15 @@ impl EspUart {
         while self.drain_accum >= per_byte && !self.tx_fifo.is_empty() {
             self.drain_accum -= per_byte;
             if let Some(byte) = self.tx_fifo.pop_front() {
+                // Same choke point as the sink, for the same reason: a byte
+                // leaves the shift register exactly once.
+                self.trace.push(
+                    &self.trace_name,
+                    crate::bus::bus_trace::BusPayload::Uart {
+                        direction: crate::bus::bus_trace::BusDir::Tx,
+                        byte,
+                    },
+                );
                 if let Some(sink) = &self.sink {
                     if let Ok(mut g) = sink.lock() {
                         g.push(byte);
@@ -620,6 +655,20 @@ impl crate::peripherals::uart::UartStreamHost for EspUart {
 }
 
 impl Peripheral for EspUart {
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        Some(self.trace.clone())
+    }
+
+    /// Join the machine's one bus trace. Before this existed, an ESP32-C3 or
+    /// ESP32 UART recorded nothing anywhere: the browser found UARTs by
+    /// `downcast_ref::<Uart>()`, which this model is not, so the logic
+    /// analyzer's UART panel was permanently empty on every ESP lab — with no
+    /// error to say so.
+    fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
+        self.trace = trace.clone();
+        self.trace_name = name.to_string();
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         self.ingest_rx_source();
         if offset & !3 == OFF_FIFO {

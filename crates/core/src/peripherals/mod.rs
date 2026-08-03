@@ -64,3 +64,124 @@ pub mod tsc;
 pub mod uart;
 pub mod usb_otg;
 pub mod wwdg;
+
+/// Record one CAN/CAN-FD frame into the machine's ONE bus trace.
+///
+/// Shared by [`fdcan::Fdcan`] (H5) and [`bxcan::BxCan`] (F1/F4) so the two
+/// controller families cannot drift in how a frame is represented. They used to
+/// hold a `VecDeque<FdcanTraceFrame>` each, with a hand-copied 200-entry
+/// eviction rule and a private `trace_seq` — two homes for one concept, which
+/// is exactly what this module's trace unification exists to end.
+pub fn push_can_trace(
+    trace: &crate::bus::bus_trace::BusTrace,
+    bus: &str,
+    direction: &'static str,
+    frame: &crate::network::CanFrame,
+) {
+    use crate::bus::bus_trace::{BusDir, BusPayload};
+    let direction = match direction {
+        "tx" => BusDir::Tx,
+        "rx" => BusDir::Rx,
+        other => unreachable!("CAN trace direction is tx or rx, got {other:?}"),
+    };
+    trace.push(
+        bus,
+        BusPayload::Can {
+            direction,
+            id: frame.id,
+            data: frame.data.clone(),
+            extended: frame.extended,
+            fd: frame.fd,
+            bitrate_switch: frame.bitrate_switch,
+            remote: frame.remote,
+        },
+    );
+}
+
+/// The frames one CAN controller recorded, projected back into the
+/// [`fdcan::FdcanTraceFrame`] shape the UDS/CAN decoders already consume.
+///
+/// `bus` selects this controller's rows in the shared ring; `peripheral` is the
+/// name stamped onto the returned rows (the caller's display id). They are
+/// separate arguments because a bare controller built in a unit test has no bus
+/// name yet, and must still see its own frames.
+pub fn can_trace_snapshot(
+    trace: &crate::bus::bus_trace::BusTrace,
+    bus: &str,
+    peripheral: &str,
+) -> Vec<fdcan::FdcanTraceFrame> {
+    use crate::bus::bus_trace::{BusDir, BusPayload};
+    trace
+        .snapshot()
+        .into_iter()
+        .filter(|e| e.bus == bus)
+        .filter_map(|e| match e.payload {
+            BusPayload::Can {
+                direction,
+                id,
+                data,
+                extended,
+                fd,
+                bitrate_switch,
+                remote,
+            } => Some(fdcan::FdcanTraceFrame {
+                seq: e.seq,
+                peripheral: peripheral.to_string(),
+                direction: match direction {
+                    BusDir::Tx => "tx",
+                    BusDir::Rx => "rx",
+                }
+                .to_string(),
+                id,
+                data,
+                extended,
+                fd,
+                bitrate_switch,
+                remote,
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Every CAN frame in a bus-trace snapshot, from every controller, in one flat
+/// list — the shape the CAN/UDS instruments consume.
+///
+/// The browser used to build this by walking peripherals and downcasting to
+/// each concrete controller type in turn, so a new CAN family was invisible
+/// until someone remembered to add an arm. Reading the shared ring makes
+/// membership a consequence of recording.
+pub fn can_trace_snapshot_all(
+    events: &[crate::bus::bus_trace::BusTraceEvent],
+) -> Vec<fdcan::FdcanTraceFrame> {
+    use crate::bus::bus_trace::{BusDir, BusPayload};
+    events
+        .iter()
+        .filter_map(|e| match &e.payload {
+            BusPayload::Can {
+                direction,
+                id,
+                data,
+                extended,
+                fd,
+                bitrate_switch,
+                remote,
+            } => Some(fdcan::FdcanTraceFrame {
+                seq: e.seq,
+                peripheral: e.bus.clone(),
+                direction: match direction {
+                    BusDir::Tx => "tx",
+                    BusDir::Rx => "rx",
+                }
+                .to_string(),
+                id: *id,
+                data: data.clone(),
+                extended: *extended,
+                fd: *fd,
+                bitrate_switch: *bitrate_switch,
+                remote: *remote,
+            }),
+            _ => None,
+        })
+        .collect()
+}

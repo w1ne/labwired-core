@@ -35,24 +35,51 @@ impl WasmSimulator {
     }
 
     /// Non-consuming UART trace snapshot for instruments such as the logic analyzer.
+    ///
+    /// Reads the machine's ONE bus trace and groups by bus name. It does NOT
+    /// walk peripherals looking for a concrete type, and that is the whole
+    /// point: this used to be `downcast_ref::<Uart>()`, which silently found
+    /// only the generic STM32-family model. `EspUart` (ESP32-C3 / ESP32-S3),
+    /// `Esp32Uart`, `Nrf52Uarte` and `Nrf54lUarte` are all UARTs and none of
+    /// them is a `Uart`, so on every ESP and nRF lab this returned `[]` — the
+    /// analyzer's UART panel sat empty forever with nothing to indicate an
+    /// error. Asking the trace what it recorded, rather than asking the type
+    /// system what a UART is, is what makes the answer complete.
     #[wasm_bindgen]
     pub fn uart_trace_snapshot(&self) -> JsValue {
+        use labwired_core::bus::bus_trace::{BusDir, BusPayload};
+
         let Some(machine) = self.machine.as_ref() else {
             return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
                 .unwrap_or(JsValue::NULL);
         };
 
-        let snapshots = machine
-            .bus
-            .peripherals
-            .iter()
-            .filter_map(|p| {
-                let any = p.dev.as_any()?;
-                let uart = any.downcast_ref::<labwired_core::peripherals::uart::Uart>()?;
-                Some(serde_json::json!({
-                    "peripheral": p.name,
-                    "events": uart.trace_snapshot(),
-                }))
+        // Bus name → its UART events, in first-seen order so the panel's
+        // instrument list is stable across polls.
+        let mut order: Vec<String> = Vec::new();
+        let mut by_bus: std::collections::HashMap<String, Vec<serde_json::Value>> =
+            std::collections::HashMap::new();
+        for e in machine.bus.bus_trace_snapshot() {
+            let BusPayload::Uart { direction, byte } = e.payload else {
+                continue;
+            };
+            let events = by_bus.entry(e.bus.clone()).or_insert_with(|| {
+                order.push(e.bus.clone());
+                Vec::new()
+            });
+            events.push(serde_json::json!({
+                "seq": e.seq,
+                "cycle": e.cycle,
+                "direction": match direction { BusDir::Tx => "tx", BusDir::Rx => "rx" },
+                "byte": byte,
+            }));
+        }
+
+        let snapshots = order
+            .into_iter()
+            .map(|bus| {
+                let events = by_bus.remove(&bus).unwrap_or_default();
+                serde_json::json!({ "peripheral": bus, "events": events })
             })
             .collect::<Vec<_>>();
 
@@ -97,27 +124,11 @@ impl WasmSimulator {
                 .unwrap_or(JsValue::NULL);
         };
 
-        let snapshots = machine
-            .bus
-            .peripherals
-            .iter()
-            .flat_map(|p| {
-                let Some(any) = p.dev.as_any() else {
-                    return Vec::new();
-                };
-                // FDCAN (H5) and bxCAN (F1/F4) both feed the same CAN/UDS
-                // trace so the logic analyzer works across controllers.
-                if let Some(fdcan) = any.downcast_ref::<labwired_core::peripherals::fdcan::Fdcan>()
-                {
-                    return fdcan.trace_snapshot(&p.name);
-                }
-                if let Some(bxcan) = any.downcast_ref::<labwired_core::peripherals::bxcan::BxCan>()
-                {
-                    return bxcan.trace_snapshot(&p.name);
-                }
-                Vec::new()
-            })
-            .collect::<Vec<_>>();
+        // One ring, one read. FDCAN (H5) and bxCAN (F1/F4) both record into it,
+        // so a third CAN controller family joins by recording — not by adding a
+        // downcast arm here that someone has to remember to write.
+        let snapshots =
+            labwired_core::peripherals::can_trace_snapshot_all(&machine.bus.bus_trace_snapshot());
 
         serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
     }

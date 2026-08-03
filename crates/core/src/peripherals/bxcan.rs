@@ -132,12 +132,13 @@ pub struct BxCan {
     /// Frames transmitted with loopback off and no bus attached. Bounded.
     #[serde(skip)]
     pub tx_frames: VecDeque<CanFrame>,
-    /// Frame-level CAN trace for the logic analyzer (tx + loopback rx), shared
-    /// `FdcanTraceFrame` shape so the existing UDS/CAN decoder consumes it.
+    /// The machine's ONE bus trace, and this controller's name in it. Private
+    /// until `attach_bus_trace` hands over the shared handle at registration,
+    /// so a bare `BxCan::new()` in a unit test still records somewhere.
     #[serde(skip)]
-    trace_seq: u64,
+    trace: crate::bus::bus_trace::BusTrace,
     #[serde(skip)]
-    trace: VecDeque<FdcanTraceFrame>,
+    trace_name: String,
     /// `CanBus` interconnect endpoints (`new_with_bus`). Transmitted frames go
     /// out on `bus_tx`; frames arriving on `bus_rx` are delivered (subject to
     /// the acceptance filter) on each tick while the controller is running.
@@ -170,8 +171,8 @@ impl BxCan {
             extra: HashMap::new(),
             rx_fifo0: VecDeque::new(),
             tx_frames: VecDeque::new(),
-            trace_seq: 0,
-            trace: VecDeque::new(),
+            trace: crate::bus::bus_trace::BusTrace::new(),
+            trace_name: String::new(),
             bus_tx: None,
             bus_rx: None,
         }
@@ -190,32 +191,11 @@ impl BxCan {
     /// Frame-level trace for the logic analyzer; mirrors the FDCAN shape so the
     /// shared CAN/UDS decoder works for both controllers.
     pub fn trace_snapshot(&self, peripheral: &str) -> Vec<FdcanTraceFrame> {
-        self.trace
-            .iter()
-            .cloned()
-            .map(|mut frame| {
-                frame.peripheral = peripheral.to_string();
-                frame
-            })
-            .collect()
+        crate::peripherals::can_trace_snapshot(&self.trace, &self.trace_name, peripheral)
     }
 
     fn push_trace(&mut self, direction: &'static str, frame: &CanFrame) {
-        self.trace_seq = self.trace_seq.wrapping_add(1);
-        if self.trace.len() >= 200 {
-            self.trace.pop_front();
-        }
-        self.trace.push_back(FdcanTraceFrame {
-            seq: self.trace_seq,
-            peripheral: String::new(),
-            direction: direction.to_string(),
-            id: frame.id,
-            data: frame.data.clone(),
-            extended: frame.extended,
-            fd: frame.fd,
-            bitrate_switch: frame.bitrate_switch,
-            remote: frame.remote,
-        });
+        crate::peripherals::push_can_trace(&self.trace, &self.trace_name, direction, frame);
     }
 
     fn running(&self) -> bool {
@@ -528,6 +508,16 @@ impl Default for BxCan {
 }
 
 impl Peripheral for BxCan {
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        Some(self.trace.clone())
+    }
+
+    /// Join the machine's one bus trace; see [`crate::bus::bus_trace`].
+    fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
+        self.trace = trace.clone();
+        self.trace_name = name.to_string();
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = Peripheral::read_u32(self, offset & !3)?;
         Ok(((word >> ((offset % 4) * 8)) & 0xFF) as u8)

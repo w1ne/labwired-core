@@ -15,8 +15,18 @@ use std::sync::{Arc, Mutex};
 /// token — it has only one kind of wakeup ("do one tick of work"), so the
 /// value is arbitrary and never disambiguated in `on_event`.
 const UART_WAKE_TOKEN: u32 = 0;
-const UART_TRACE_LIMIT: usize = 512;
 
+/// A projection of this UART's rows in the machine's ONE bus trace — NOT a
+/// second home.
+///
+/// It holds no state: [`Uart::trace_snapshot`] computes it on demand by
+/// filtering the shared ring (see [`crate::bus::bus_trace`]). It survives the
+/// move off the old per-instance `VecDeque` only because the tests written
+/// against it are what prove that move changed no observable behaviour.
+///
+/// `seq` is therefore the GLOBAL sequence number, not a per-UART counter. That
+/// is the point: one counter across every wired bus is what makes "did this
+/// UART byte precede that I²C address phase?" answerable at all.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct UartTraceEvent {
     pub seq: u64,
@@ -701,10 +711,18 @@ pub struct Uart {
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
     pub attached_streams: Vec<Box<dyn UartStreamDevice>>,
+    /// The machine's ONE bus trace, and the name to stamp events with.
+    ///
+    /// Born as a private handle so a hand-built `Uart::new()` (unit tests,
+    /// fixtures) still records into something; `attach_bus_trace` REPLACES it
+    /// with the bus's shared handle at registration. A model that never got
+    /// registered keeps the orphan — which is what
+    /// `crate::tests::bus_trace_one_home` asserts cannot happen on a real
+    /// machine, by `Arc` identity rather than by contents.
     #[serde(skip)]
-    trace: VecDeque<UartTraceEvent>,
+    trace: crate::bus::bus_trace::BusTrace,
     #[serde(skip)]
-    trace_seq: u64,
+    trace_name: String,
     /// Microseconds accumulated since last stream tick.
     elapsed_us: u32,
     /// Phase 2B.3b (issue #192): whether a self-perpetuating scheduler WAKE
@@ -784,8 +802,8 @@ impl Uart {
             cr3_mask,
             dma_tx_pending: false,
             attached_streams: Vec::new(),
-            trace: VecDeque::new(),
-            trace_seq: 0,
+            trace: crate::bus::bus_trace::BusTrace::new(),
+            trace_name: String::new(),
             elapsed_us: 0,
             scheduled: false,
             // Conservative until the bus says otherwise (see `attach_irq_line`).
@@ -1045,19 +1063,36 @@ impl Uart {
     }
 
     fn record_trace(&mut self, direction: &'static str, byte: u8) {
-        self.trace_seq = self.trace_seq.wrapping_add(1);
-        if self.trace.len() >= UART_TRACE_LIMIT {
-            self.trace.pop_front();
-        }
-        self.trace.push_back(UartTraceEvent {
-            seq: self.trace_seq,
-            direction,
-            byte,
-        });
+        use crate::bus::bus_trace::{BusDir, BusPayload};
+        let direction = match direction {
+            "tx" => BusDir::Tx,
+            "rx" => BusDir::Rx,
+            other => unreachable!("UART trace direction is tx or rx, got {other:?}"),
+        };
+        self.trace
+            .push(&self.trace_name, BusPayload::Uart { direction, byte });
     }
 
+    /// This UART's rows in the shared trace, oldest first. Derived per call —
+    /// see [`UartTraceEvent`] for why this is a view and not a second home.
     pub fn trace_snapshot(&self) -> Vec<UartTraceEvent> {
-        self.trace.iter().cloned().collect()
+        use crate::bus::bus_trace::{BusDir, BusPayload};
+        self.trace
+            .snapshot()
+            .into_iter()
+            .filter(|e| e.bus == self.trace_name)
+            .filter_map(|e| match e.payload {
+                BusPayload::Uart { direction, byte } => Some(UartTraceEvent {
+                    seq: e.seq,
+                    direction: match direction {
+                        BusDir::Tx => "tx",
+                        BusDir::Rx => "rx",
+                    },
+                    byte,
+                }),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Set a prefix emitted before each echoed stdout line, to label this UART's
@@ -1084,6 +1119,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        Some(self.trace.clone())
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let status = self.status_offset();
         if offset >= status && offset < status + self.layout.regmap().status_width {
@@ -1191,6 +1230,13 @@ impl crate::Peripheral for Uart {
     /// will drop on the floor. See the field docs on `irq_wired`.
     fn attach_irq_line(&mut self, irq: Option<u32>) {
         self.irq_wired = irq.is_some();
+    }
+
+    /// Join the machine's one bus trace, replacing the private handle this
+    /// model was born with. See the `trace` field docs.
+    fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
+        self.trace = trace.clone();
+        self.trace_name = name.to_string();
     }
 
     /// Hand the bus a single self-perpetuating WAKE event when the UART has

@@ -23,7 +23,18 @@ use std::sync::{Arc, Mutex};
 use crate::peripherals::i2c::I2cDevice;
 use crate::peripherals::spi::SpiDevice;
 
-const BUS_TRACE_LIMIT: usize = 1024;
+/// How many events the one shared ring holds before the oldest is evicted.
+///
+/// Raised from 1024 when UART and CAN moved in here. Before, each bus had its
+/// own budget — 1024 shared by I²C+SPI, 512 per UART instance, 200 per CAN
+/// controller — so a chatty UART could not evict an I²C address phase. With one
+/// ring it can, and eviction is silent: an instrument that reconstructs
+/// transactions from address phases just sees fewer transactions, not an error.
+/// The budget therefore has to cover the busiest plausible lab (a display SPI
+/// burst concurrent with sensor polling and console output), not one bus in
+/// isolation. 4096 events is ≈330 KB worst case with 64-byte CAN-FD payloads,
+/// which is affordable in wasm.
+const BUS_TRACE_LIMIT: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -33,11 +44,52 @@ pub enum I2cSym {
     Data,
 }
 
+/// Which way a byte or frame moved, from the MCU peripheral's point of view.
+///
+/// Serializes to `"tx"` / `"rx"` — byte-identical to the `&'static str` and
+/// `String` direction fields this replaced on the per-peripheral UART and CAN
+/// traces, so the browser sees no change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BusDir {
+    Tx,
+    Rx,
+}
+
+/// What transacted. The ENVELOPE ([`BusTraceEvent`]) is universal — one seq,
+/// one cycle stamp, one bus name — while the payload stays honest about the
+/// protocol: an I²C symbol is genuinely not a CAN frame, and flattening them
+/// into a common struct would model neither well.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "protocol", rename_all = "lowercase")]
 pub enum BusPayload {
-    I2c { kind: I2cSym, byte: u8, ack: bool },
-    Spi { mosi: u8, miso: u8 },
+    I2c {
+        kind: I2cSym,
+        byte: u8,
+        ack: bool,
+    },
+    Spi {
+        mosi: u8,
+        miso: u8,
+    },
+    /// One octet on a UART's TX or RX line, recorded by the UART model itself
+    /// (there is no attachable "slave" to wrap, unlike I²C/SPI).
+    Uart {
+        direction: BusDir,
+        byte: u8,
+    },
+    /// One CAN / CAN-FD frame, from either the FDCAN (H5) or bxCAN (F1/F4)
+    /// controller — both feed this one variant so instruments work across
+    /// controller families.
+    Can {
+        direction: BusDir,
+        id: u32,
+        data: Vec<u8>,
+        extended: bool,
+        fd: bool,
+        bitrate_switch: bool,
+        remote: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -91,6 +143,22 @@ impl Default for BusTrace {
     }
 }
 
+/// Deliberately does NOT lock the ring.
+///
+/// Peripherals that hold a handle derive `Debug`, and those `Debug` impls are
+/// reached from panic paths and from `inspect`. Taking the trace mutex there
+/// would let a formatter deadlock against a peripheral that is mid-`push` —
+/// turning a diagnostic into a hang. The identity of the ring is what is
+/// diagnostically interesting anyway; the contents are available via
+/// `snapshot()`.
+impl std::fmt::Debug for BusTrace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BusTrace")
+            .field("ring", &Arc::as_ptr(&self.ring))
+            .finish_non_exhaustive()
+    }
+}
+
 impl BusTrace {
     pub fn new() -> Self {
         Self {
@@ -114,6 +182,18 @@ impl BusTrace {
 
     pub fn snapshot(&self) -> Vec<BusTraceEvent> {
         self.ring.lock().unwrap().snapshot()
+    }
+
+    /// Whether two handles name the SAME ring — identity, not equal contents.
+    ///
+    /// This is what makes the one-home property checkable. A peripheral that
+    /// was never handed the bus's handle keeps the orphan ring it was born
+    /// with: it records happily, nobody reads it, and the instrument shows an
+    /// empty panel with no error — the silent failure this module exists to
+    /// prevent. Comparing snapshots could not tell that apart (two empty rings
+    /// are equal); comparing `Arc` identity can.
+    pub fn same_ring(&self, other: &BusTrace) -> bool {
+        Arc::ptr_eq(&self.ring, &other.ring)
     }
 }
 
