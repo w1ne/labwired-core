@@ -320,7 +320,7 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
     if let Some(&app_main_addr) = symbol_addrs.get("app_main") {
         match rom_thunks::repin_loop_task(&mut machine.bus, app_main_addr) {
             Some((addr, shape)) => eprintln!(
-                "labwired-cli snapshot: repinned loopTask xCoreID at 0x{addr:08x} (1→0, {shape}; runs on PRO_CPU)"
+                "arduino-esp32 profile: repinned loopTask xCoreID at 0x{addr:08x} (1→0, {shape}; runs on PRO_CPU)"
             ),
             // Not benign. An unrecognised layout leaves loopTask pinned to
             // APP_CPU, where the sketch deadlocks the first time it contends a
@@ -329,7 +329,7 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
             // plainly that it was us. A silently-skipped repin cost a real
             // customer rig a mid-setup() stall that looked like their bug.
             None => eprintln!(
-                "labwired-cli snapshot: warn: app_main at 0x{app_main_addr:08x} matched no known \
+                "arduino-esp32 profile: warn: app_main at 0x{app_main_addr:08x} matched no known \
                  xCoreID layout — loopTask stays on APP_CPU and setup() may deadlock in \
                  spinlock_acquire. This is a simulator gap, not a firmware fault."
             ),
@@ -351,7 +351,16 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
     // forever. With the real second core the firmware renders byte-identical to
     // silicon (spi3=19033, ink=1429) WITHOUT the pre-seed. Enable explicitly with
     // `LABWIRED_PRESEED_HANDSHAKE=1`.
-    let preseed_handshake = std::env::var("LABWIRED_NO_DUALCORE").is_ok()
+    //
+    // The condition is a FACT ABOUT THE MACHINE, not a flag: pre-seed exactly
+    // when there is no second core to set the bytes for real. The browser used
+    // to decide this itself with `machine.cpu_secondary.is_some()` while this
+    // module read env vars — two homes, two rules, and env vars do not exist in
+    // wasm anyway, so the browser's single-core fallback could never have been
+    // reached from here. One rule now serves both; the env vars remain as an
+    // explicit override for bisecting a dual-core bring-up bug.
+    let preseed_handshake = machine.cpu_secondary.is_none()
+        || std::env::var("LABWIRED_NO_DUALCORE").is_ok()
         || std::env::var("LABWIRED_PRESEED_HANDSHAKE").is_ok();
     // `g_ticks_per_us_pro` / `_app` — CPU MHz, written by
     // `ets_update_cpu_frequency()`. On silicon the ROM bootloader calls that
