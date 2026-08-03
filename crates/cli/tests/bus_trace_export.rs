@@ -121,7 +121,8 @@ fn vcd_carries_uart_octets_and_omits_frame_oriented_can() {
     // The JSON export is lossless, so nothing is actually lost by the omission.
     let mut json = Vec::new();
     labwired_cli::bus_vcd::write_bus_trace_json(&events, &mut json).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&String::from_utf8(json).unwrap()).unwrap();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&String::from_utf8(json).unwrap()).unwrap();
     assert_eq!(parsed[0]["payload"]["protocol"], "uart");
     assert_eq!(parsed[0]["payload"]["direction"], "tx");
     assert_eq!(parsed[1]["payload"]["protocol"], "can");
