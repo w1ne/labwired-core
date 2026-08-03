@@ -355,7 +355,7 @@ impl I2cDevice for Lcd1602 {
             kind: "text_display".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
-                "format": "hd44780_ddram",
+                "format": crate::inspect::artifact_format::HD44780_DDRAM,
                 "generation": crate::inspect::artifact_generation(&ddram),
                 "text": text,
                 "printable_chars": text.chars().filter(|c| !c.is_whitespace()).count(),

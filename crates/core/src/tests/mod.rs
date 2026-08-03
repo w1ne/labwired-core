@@ -1,6 +1,8 @@
 #[cfg(test)]
 pub mod builtin_chip_self_contained;
 #[cfg(test)]
+pub mod bus_proof_matrix;
+#[cfg(test)]
 pub mod bus_trace_one_home;
 #[cfg(test)]
 pub mod device_identity_one_home;
@@ -29,6 +31,8 @@ pub mod peripheral_reachability;
 #[cfg(test)]
 pub mod rp2040;
 #[cfg(test)]
+pub mod rp2040_spi_carries_a_byte;
+#[cfg(test)]
 pub mod scb_reset;
 #[cfg(test)]
 pub mod stm32_spi_waveform;
@@ -36,3 +40,5 @@ pub mod stm32_spi_waveform;
 pub mod test_cycles;
 #[cfg(test)]
 pub mod walk_starvation_contract;
+#[cfg(test)]
+pub mod yaml_owned_base_contract;

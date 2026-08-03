@@ -16,12 +16,16 @@ use labwired_config::{PeripheralConfig, SystemManifest};
 /// Build an nRF52 peripheral model for `canonical_type`, or `None` if this
 /// family does not own that type (so `from_config` falls through to the
 /// generic match). `manifest` is consulted for external I²C devices attached to
-/// a TWIM controller.
+/// a TWIM controller. `chip_map` is the resolved peripheral memory map, for the
+/// models that must address a *sibling* peripheral (GPIOTE → the GPIO ports)
+/// and so would otherwise keep a second, unenforced copy of the chip YAML's
+/// base addresses in Rust.
 pub fn try_build(
     canonical_type: &str,
     p_cfg: &PeripheralConfig,
     manifest: &SystemManifest,
     bus_trace: &crate::bus::bus_trace::BusTrace,
+    chip_map: crate::peripherals::chip_map::ChipMap<'_>,
 ) -> Option<Box<dyn Peripheral>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "nrf52840_uart" => Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new()),
@@ -44,7 +48,14 @@ pub fn try_build(
         "nrf52840_ppi" | "nrf52_ppi" => Box::new(crate::peripherals::nrf52::ppi::Nrf52Ppi::new()),
         "nrf52840_pdm" | "nrf52_pdm" => Box::new(crate::peripherals::nrf52::pdm::Nrf52Pdm::new()),
         "nrf52_gpiote" | "nrf52840_gpiotasksevents" => {
-            Box::new(crate::peripherals::nrf52::gpiote::Nrf52Gpiote::new())
+            // GPIOTE drives pads that live in the GPIO ports' MMIO windows, so
+            // it needs its siblings' base addresses. They come from the chip
+            // descriptor via `chip_map`, never from a constant in this crate:
+            // the nRF52840 YAML remaps `gpio1` off its raw-silicon base and a
+            // hardcoded copy silently wrote into gpio0's window instead.
+            Box::new(crate::peripherals::nrf52::gpiote::Nrf52Gpiote::new(
+                chip_map,
+            ))
         }
         "nrf52840_ecb" | "nrf52_ecb" => Box::new(crate::peripherals::nrf52::ecb::Nrf52Ecb::new()),
         "nrf52_clock" => Box::new(crate::peripherals::nrf52::clock::Nrf52Clock::new()),

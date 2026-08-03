@@ -324,7 +324,7 @@ impl SpiDevice for Uc8151dTricolor290 {
             meta: serde_json::json!({
                 "w": w,
                 "h": h,
-                "format": "epaper_tricolor_1bpp_planes",
+                "format": crate::inspect::artifact_format::EPAPER_TRICOLOR_PLANES,
                 "generation": crate::inspect::artifact_generation(&both),
                 "plane_bytes": black.len(),
                 "black_ink_bytes": ink(black),

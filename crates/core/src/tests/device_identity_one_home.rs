@@ -214,8 +214,17 @@ fn every_device_type_the_browser_keys_on_is_known_to_the_registry() {
 
     // Anti-vacuity. If the scan stops finding literals the gate proves nothing,
     // and a silent zero is exactly how a green suite covers broken behaviour.
+    //
+    // The floor was 12 when every display accessor keyed on a `board_io`
+    // device_type string. The one-door change deleted those: a display's
+    // identity now comes from the model's own artifact, so there is no spelling
+    // for the browser to get wrong on that path. Six literals remain, all in
+    // sensor accessors (ntc-thermistor, max31855, neo6m-gps) that still resolve
+    // by type — they are what this gate now guards. Lowering the floor to match
+    // a REMOVED fork is correct; lowering it to silence a scan that broke is
+    // not, which is why the number moves in the same commit that removed them.
     assert!(
-        all.len() >= 12,
+        all.len() >= 6,
         "the device-type scan found only {} literals across {:?}; it is broken or \
          the browser layer moved. A vacuous gate is worse than none.",
         all.len(),
@@ -257,7 +266,10 @@ fn the_browser_does_not_re_implement_the_device_type_alias_table() {
     );
     let per_file = wasm_identity_literals();
     assert!(
-        per_file.values().flatten().count() >= 12,
+        // Same floor move as the sibling, same reason: the one-door change
+        // removed the display device_type literals rather than the scan losing
+        // them. Keep the two numbers in step.
+        per_file.values().flatten().count() >= 6,
         "the device-type scan went vacuous; see the sibling test."
     );
 

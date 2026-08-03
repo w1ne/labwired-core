@@ -9,6 +9,7 @@ pub mod afio;
 pub mod ble_air;
 pub mod bxcan;
 pub mod can;
+pub mod chip_map;
 pub mod comp;
 pub mod components;
 pub mod crc;

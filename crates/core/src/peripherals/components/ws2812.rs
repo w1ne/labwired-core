@@ -228,7 +228,7 @@ impl crate::inspect::DeviceEvidence for Ws2812 {
             meta: serde_json::json!({
                 "w": self.num_pixels(),
                 "h": 1,
-                "format": "ws2812_grb",
+                "format": crate::inspect::artifact_format::WS2812_GRB,
                 "generation": crate::inspect::artifact_generation(&flat),
                 "pixels_decoded": pixels.len(),
                 "lit_pixels": pixels.iter().filter(|p| p.iter().any(|&c| c != 0)).count(),

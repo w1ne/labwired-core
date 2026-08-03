@@ -351,6 +351,7 @@ impl SystemBus {
                             p_cfg,
                             manifest,
                             &bus.bus_trace,
+                            crate::peripherals::chip_map::ChipMap::new(&merged_peripherals),
                         )
                     })
                     .or_else(|| {

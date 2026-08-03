@@ -7,8 +7,223 @@
 //! A second #[wasm_bindgen] impl block, split out of lib.rs.
 
 use crate::*;
-use labwired_core::peripherals::kit::registry::canonical_device_type;
+use labwired_core::inspect::artifact_format as F;
 use wasm_bindgen::prelude::*;
+
+/// Both tri-color e-paper models emit this format. They are interchangeable to
+/// a reader on purpose — see [`WasmSimulator::panel_artifact`] and
+/// [`labwired_core::bus::SystemBus::device_artifact_at`].
+const EPAPER_TRICOLOR: &[&str] = &[F::EPAPER_TRICOLOR_PLANES];
+
+/// Rewrite integers that JavaScript cannot hold exactly as decimal STRINGS.
+///
+/// `serde_wasm_bindgen` does not truncate a `u64` past 2^53 — it fails the whole
+/// serialization, and `to_value(..).unwrap_or(JsValue::NULL)` then hands the UI
+/// a silent `null`. `meta.generation` is a 64-bit FNV hash, so it trips this
+/// essentially always: `WasmSimulator::inspect` returns `null` for every machine
+/// that has a device with an artifact, which is every machine with a panel.
+///
+/// A string keeps the value exact and keeps it comparable (`!==` is all a
+/// change-detector needs), where an `f64` would silently alias two different
+/// buffers to one generation and a `BigInt` would make `JSON.stringify` throw.
+fn js_safe_meta(meta: &serde_json::Value) -> serde_json::Value {
+    const MAX_EXACT: u64 = 1 << 53;
+    match meta {
+        serde_json::Value::Number(n) => match n.as_u64() {
+            Some(v) if v >= MAX_EXACT => serde_json::Value::String(v.to_string()),
+            _ => meta.clone(),
+        },
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(js_safe_meta).collect())
+        }
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), js_safe_meta(v)))
+                .collect(),
+        ),
+        _ => meta.clone(),
+    }
+}
+
+/// How this crate reads a display: through the ONE device-evidence seam
+/// `inspect` walks, never through a downcast chain of its own.
+///
+/// # What this replaces
+///
+/// Every `get_*_framebuffer` below used to re-enumerate, by hand, each I²C or
+/// SPI controller its panel might hang off — `I2c`, `Esp32c3I2c`, `Esp32s3I2c`
+/// for the OLEDs; `Spi`, `Esp32Spi`, `Esp32c3Spi` for the SPI panels — and then
+/// downcast every attached device to one concrete model type. That is an N×M
+/// matrix maintained by hand in a file far from any model, and the lists did not
+/// even agree with each other: the ILI9341 accessor knew about the ESP32-C3 but
+/// not the classic ESP32, the SSD1306 accessor knew about neither ESP32 SPI nor
+/// the nRF52, and nothing knew about the ESP32-S3's GPSPI. A controller missing
+/// from one of those lists did not fail loudly — it rendered a working,
+/// actively-painted panel blank, which is exactly how the SH1107 painted a full
+/// console in the browser while `inspect` reported no artifact at all.
+///
+/// [`labwired_core::bus::SystemBus::device_artifact_at`] is the same walk
+/// `inspect` uses, so controller coverage stops being a list here and becomes a
+/// property of the walk: adding a controller makes every panel readable through
+/// it at once, and no panel can be visible to one surface and blind to the
+/// other.
+///
+/// # Two identity models, reconciled deliberately
+///
+/// The UI addresses a panel by its `board_io` id; the seam addresses a device by
+/// where it was FOUND, joining a manifest name on afterwards. Those two need not
+/// agree, so only the parts of the binding that are facts about the WIRE are
+/// used:
+///
+/// * `peripheral` and `i2c_address` — the placement — are matched against the
+///   placement the walk reports. (The board_io id and the `external_devices:`
+///   id are written from one placement by the compiler and are in practice the
+///   same string, but nothing here depends on that: the id is only carried
+///   through to stamp the artifact it addresses.)
+/// * `device_type:` is deliberately NOT consulted. It is the field already
+///   known to lie — a binding can say `ssd1680_tricolor_290` for a panel the
+///   ESP32 builder attaches as a `Uc8151dTricolor290`, which is why
+///   `get_uc8151d_framebuffer` already ignored it. What the device IS comes from
+///   `meta.format`, which the model writes next to the buffer it describes.
+impl WasmSimulator {
+    /// THE door: whatever the display called `device_id` is showing.
+    ///
+    /// One resolution, tried in the order the two id registries are authoritative:
+    ///
+    /// 1. **The manifest name.** [`labwired_core::bus::SystemBus::display_artifact`]
+    ///    joins the walk to `external_devices:`, so this reaches a display
+    ///    however it was bound — I²C slave, SPI panel, a slave behind a bus
+    ///    switch, or a bit-banged module that has no controller at all. This is
+    ///    the step that was missing: every accessor this replaces started from
+    ///    `board_io`, so a display declared only under `external_devices:` had
+    ///    no placement to query and painted nothing on every chip, for every
+    ///    model.
+    /// 2. **The `board_io` placement**, when and only when the manifest join did
+    ///    not produce this id — a model attached programmatically rather than
+    ///    from a declaration (the ESP32 quirks path) has a synthesized id, and
+    ///    the binding still states the wire it is on. Not a parallel system: it
+    ///    is a second key into the SAME walk and the SAME
+    ///    [`labwired_core::inspect::DeviceEvidence::artifacts`] call.
+    fn display_artifact(
+        &self,
+        device_id: &str,
+        include_bytes: bool,
+    ) -> Option<labwired_core::inspect::Artifact> {
+        let machine = self.machine.as_ref()?;
+        let opts = labwired_core::inspect::InspectOpts {
+            include_bytes,
+            peripheral: None,
+        };
+        if let Some(found) = machine.bus.display_artifact(device_id, &opts) {
+            return Some(found);
+        }
+        let binding = self.board_io.iter().find(|b| b.id == device_id)?;
+        machine.bus.device_artifact_at_any(
+            &binding.peripheral,
+            binding.i2c_address,
+            device_id,
+            &opts,
+        )
+    }
+
+    /// The artifact of the display bound to `device_id`, read through the seam.
+    ///
+    /// Kept for the per-model shims, which pass a `formats` filter so that two
+    /// panels on one controller cannot be handed to each other. The door above
+    /// needs no such filter: it is keyed by the id the author gave the device.
+    fn panel_artifact(
+        &self,
+        device_id: &str,
+        formats: &[&str],
+        default_address: Option<u8>,
+        include_bytes: bool,
+        what: &str,
+    ) -> Result<labwired_core::inspect::Artifact, JsValue> {
+        // The one door first, so a per-model accessor inherits every route the
+        // door can resolve — including the `external_devices:`-only rigs that
+        // have no binding at all.
+        if let Some(found) = self.display_artifact(device_id, include_bytes) {
+            if found
+                .meta
+                .get("format")
+                .and_then(|f| f.as_str())
+                .is_some_and(|f| formats.contains(&f))
+            {
+                return Ok(found);
+            }
+        }
+        let machine = self.machine.as_ref().unwrap();
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id)
+            .ok_or_else(|| JsValue::from_str(&format!("No board_io binding '{device_id}'")))?;
+        // `Some(default)` is an I²C caller saying "this transport is addressed,
+        // and here is the address the model defaults to when the manifest left
+        // it out". `None` is an SPI caller: chip-selects were never compared.
+        let address = default_address.map(|d| binding.i2c_address.unwrap_or(d));
+        let opts = labwired_core::inspect::InspectOpts {
+            include_bytes,
+            peripheral: None,
+        };
+        machine
+            .bus
+            .device_artifact_at(&binding.peripheral, address, formats, device_id, &opts)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "{what} device not found on '{}'",
+                    binding.peripheral
+                ))
+            })
+    }
+
+    /// The payload half of [`Self::panel_artifact`], for accessors that return
+    /// raw pixels.
+    fn panel_bytes(
+        &self,
+        device_id: &str,
+        formats: &[&str],
+        default_address: Option<u8>,
+        what: &str,
+    ) -> Result<Box<[u8]>, JsValue> {
+        let artifact = self.panel_artifact(device_id, formats, default_address, true, what)?;
+        artifact
+            .bytes
+            .map(Vec::into_boxed_slice)
+            .ok_or_else(|| JsValue::from_str(&format!("{what} '{device_id}' reported no payload")))
+    }
+
+    /// One `meta` value of the panel's artifact, for accessors that return a
+    /// decoded scalar or string rather than pixels. `include_bytes` stays off:
+    /// nothing on this path needs the payload.
+    fn panel_meta(
+        &self,
+        device_id: &str,
+        formats: &[&str],
+        default_address: Option<u8>,
+        what: &str,
+        key: &str,
+    ) -> Result<serde_json::Value, JsValue> {
+        let artifact = self.panel_artifact(device_id, formats, default_address, false, what)?;
+        artifact
+            .meta
+            .get(key)
+            .cloned()
+            .ok_or_else(|| JsValue::from_str(&format!("{what} '{device_id}' reports no '{key}'")))
+    }
+
+    /// The e-paper refresh counter the UI polls before re-fetching 9472 bytes.
+    /// Both tri-color panels report it under the same `meta` key, so there is
+    /// one implementation rather than two that must be kept in step.
+    fn refresh_generation(&self, device_id: &str, what: &str) -> Result<u32, JsValue> {
+        let value =
+            self.panel_meta(device_id, EPAPER_TRICOLOR, None, what, "refresh_generation")?;
+        value
+            .as_u64()
+            .and_then(|v| u32::try_from(v).ok())
+            .ok_or_else(|| JsValue::from_str("refresh_generation is not a u32"))
+    }
+}
 
 #[wasm_bindgen]
 impl WasmSimulator {
@@ -398,418 +613,123 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
+    /// **THE door.** Whatever the display called `device_id` is showing — any
+    /// model, any transport, any chip, however it was bound.
+    ///
+    /// Returns `null` when there is no such display, otherwise:
+    ///
+    /// ```text
+    /// { id, kind, format, width, height, bytes, text, meta }
+    /// ```
+    ///
+    /// * `kind` — `"framebuffer"` (packed pixels) or `"text_display"` (decoded
+    ///   characters). Between them, every way this engine has of saying "a human
+    ///   can see this".
+    /// * `format` — how `bytes` are packed (`"rgb565_be"`, `"ssd1306_page"`,
+    ///   `"epaper_tricolor_1bpp_planes"`, …).
+    /// * `width` / `height` — the panel's own geometry, in pixels (or in
+    ///   characters, for a text display), `null` when the model reports none.
+    /// * `bytes` — the payload, present only when `include_bytes`.
+    /// * `text` — the decoded string, for a `text_display`.
+    /// * `meta` — everything else the model chose to report (ink counts, power
+    ///   state, `generation`, `refresh_generation`), so a caller can poll for
+    ///   change without pulling pixels.
+    ///
+    /// **Geometry and packing are DATA, deliberately.** The accessors this
+    /// replaces carried them as prose in a doc comment — "153,600 bytes =
+    /// 240×320×2, big-endian RGB565" — which is lore that lives in the reader.
+    /// A model that arrives tomorrow cannot put anything into last year's doc
+    /// comment, so every new panel needed a new accessor AND a new renderer
+    /// branch before it could show a single pixel. Here a caller can paint a
+    /// display it has never heard of, and a new model is renderable the day its
+    /// own `artifacts()` lands.
+    ///
+    /// `generation` is stringified: it is a 64-bit FNV hash, and a `u64` past
+    /// 2^53 makes `serde_wasm_bindgen` refuse the WHOLE payload. That is not
+    /// hypothetical — it is why [`Self::inspect`] currently returns `null` for
+    /// every machine that has a device with an artifact.
+    #[wasm_bindgen]
+    pub fn get_display(&self, device_id: &str, include_bytes: bool) -> JsValue {
+        let Some(artifact) = self.display_artifact(device_id, include_bytes) else {
+            return JsValue::NULL;
+        };
+        let meta = js_safe_meta(&artifact.meta);
+        let out = serde_json::json!({
+            "id": artifact.id,
+            "kind": artifact.kind,
+            "format": meta.get("format").cloned().unwrap_or(serde_json::Value::Null),
+            "width": meta.get("w").cloned().unwrap_or(serde_json::Value::Null),
+            "height": meta.get("h").cloned().unwrap_or(serde_json::Value::Null),
+            "text": meta.get("text").cloned().unwrap_or(serde_json::Value::Null),
+            "bytes": artifact.bytes,
+            "meta": meta,
+        });
+        serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
+    }
+
     /// Return the SSD1306 GDDRAM framebuffer for the device identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type: "oled-ssd1306"`.
-    /// Returns a 1024-byte `Uint8Array` (128 columns × 8 pages, page-major).
+    /// Returns a 1024-byte `Uint8Array` (128 columns × 8 pages, page-major) for
+    /// the 128×64 panel. Both SSD1306 form factors surface through this one
+    /// accessor: the framebuffer length (1024 vs 512 bytes) is what tells the
+    /// renderer the panel height, so one readback path serves both.
     /// Returns a JS error if the device is not found.
     #[wasm_bindgen]
     pub fn get_ssd1306_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        // Find the board_io binding for this device. Both SSD1306 form factors
-        // (128×64 and the 0.91″ 128×32) surface through the same accessor — the
-        // framebuffer length (1024 vs 512 bytes) tells the renderer the panel
-        // height, so one readback path serves both.
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| {
-                b.id == device_id
-                    && matches!(
-                        b.device_type.as_deref(),
-                        Some("oled-ssd1306") | Some("oled-ssd1306-128x32")
-                    )
-            })
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No oled-ssd1306 board_io binding '{}'", device_id))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "I2C peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        let address = binding.i2c_address.unwrap_or(0x3C);
-
-        // The framebuffer readback has to understand every I²C controller a
-        // supported board can attach an SSD1306 to. STM32 boards use the generic
-        // `I2c`; the ESP32-C3 (leo air-quality lab) uses the command-list
-        // `Esp32c3I2c`; the ESP32-S3 uses its own command-list `Esp32s3I2c`.
-        // All attach the OLED via the bus I²C choke point, so all must be
-        // enumerable here — otherwise `get_ssd1306_framebuffer` returns "not an
-        // I2C controller" and the OLED renders blank in the playground/embed even
-        // though the device is present and being drawn to.
-        if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() {
-            for device in i2c.attached_devices() {
-                let device = device.borrow();
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(oled) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>()
-                }) {
-                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else if let Some(c3) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c>()
-        {
-            for device in c3.attached_slaves() {
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(oled) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>()
-                }) {
-                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else if let Some(s3) =
-            any.downcast_ref::<labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c>()
-        {
-            for device in s3.attached_slaves() {
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(oled) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>()
-                }) {
-                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an I2C controller",
-                binding.peripheral
-            )));
-        }
-
-        Err(JsValue::from_str(&format!(
-            "SSD1306 device at address 0x{:02x} not found on '{}'",
-            address, binding.peripheral
-        )))
+        self.panel_bytes(device_id, &[F::SSD1306_PAGE], Some(0x3C), "SSD1306")
     }
 
     /// Return the visible text of the LCD1602 identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type: "lcd1602"`.
     /// Returns exactly 32 characters — row 0 then row 1, no separator — so the
     /// caller slices `[0..16]` and `[16..32]`. A display the firmware has not
     /// switched on reads as all spaces, matching the dark panel.
     /// Returns a JS error if the device is not found.
+    ///
+    /// The panel's evidence carries this text in `meta.text`, so this reads the
+    /// same string the CLI and `inspect` print rather than a second decode.
+    /// The default address matches the kit's own: 0x27, the PCF8574T backpack.
     #[wasm_bindgen]
     pub fn get_lcd1602_text(&self, device_id: &str) -> Result<String, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("lcd1602"))
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No lcd1602 board_io binding '{}'", device_id))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "I2C peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        // Default matches the kit's own default: 0x27, the PCF8574T backpack.
-        let address = binding.i2c_address.unwrap_or(0x27);
-
-        // Same controller coverage as `get_ssd1306_framebuffer`: STM32 boards use
-        // the generic `I2c`, the ESP32-C3 and ESP32-S3 use their own command-list
-        // controllers. All attach character LCDs through the bus I²C choke point,
-        // so all three must be enumerable here — otherwise the panel renders blank
-        // in the playground even though the device is present and being written to.
-        if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() {
-            for device in i2c.attached_devices() {
-                let device = device.borrow();
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(lcd) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Lcd1602>()
-                }) {
-                    return Ok(lcd.text());
-                }
-            }
-        } else if let Some(c3) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c>()
-        {
-            for device in c3.attached_slaves() {
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(lcd) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Lcd1602>()
-                }) {
-                    return Ok(lcd.text());
-                }
-            }
-        } else if let Some(s3) =
-            any.downcast_ref::<labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c>()
-        {
-            for device in s3.attached_slaves() {
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(lcd) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Lcd1602>()
-                }) {
-                    return Ok(lcd.text());
-                }
-            }
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an I2C controller",
-                binding.peripheral
-            )));
-        }
-
-        Err(JsValue::from_str(&format!(
-            "LCD1602 device at address 0x{:02x} not found on '{}'",
-            address, binding.peripheral
-        )))
+        let text = self.panel_meta(
+            device_id,
+            &[F::HD44780_DDRAM],
+            Some(0x27),
+            "LCD1602",
+            "text",
+        )?;
+        text.as_str()
+            .map(str::to_string)
+            .ok_or_else(|| JsValue::from_str("LCD1602 text is not a string"))
     }
 
     /// Return the SH1107 GDDRAM framebuffer for the device identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type: "oled-sh1107"`.
     /// Returns a 2048-byte `Uint8Array` (128 columns × 16 pages, page-major) — the
     /// same bit layout as the SSD1306, just twice as tall (128 rows).
     /// Returns a JS error if the device is not found.
     #[wasm_bindgen]
     pub fn get_sh1107_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("oled-sh1107"))
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No oled-sh1107 board_io binding '{}'", device_id))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "I2C peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        let address = binding.i2c_address.unwrap_or(0x3C);
-
-        // Same multi-controller enumeration as the SSD1306 accessor: the SH1107
-        // can sit on the generic STM32 `I2c` or either ESP32 command-list bus, so
-        // all three must be walked or the panel renders blank in the playground.
-        if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() {
-            for device in i2c.attached_devices() {
-                let device = device.borrow();
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(oled) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Sh1107>()
-                }) {
-                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else if let Some(c3) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c>()
-        {
-            for device in c3.attached_slaves() {
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(oled) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Sh1107>()
-                }) {
-                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else if let Some(s3) =
-            any.downcast_ref::<labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c>()
-        {
-            for device in s3.attached_slaves() {
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(oled) = device.as_any().and_then(|any| {
-                    any.downcast_ref::<labwired_core::peripherals::components::Sh1107>()
-                }) {
-                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an I2C controller",
-                binding.peripheral
-            )));
-        }
-
-        Err(JsValue::from_str(&format!(
-            "SH1107 device at address 0x{:02x} not found on '{}'",
-            address, binding.peripheral
-        )))
+        self.panel_bytes(device_id, &[F::SH1107_PAGE], Some(0x3C), "SH1107")
     }
 
     /// Return the ILI9341 RGB565 framebuffer for the device identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type: "ili9341"`.
     /// Returns a 153,600-byte `Uint8Array` (240×320 pixels × 2 bytes, row-major, big-endian RGB565).
     /// Returns a JS error if the device is not found.
     #[wasm_bindgen]
     pub fn get_ili9341_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("ili9341"))
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No ili9341 board_io binding '{}'", device_id))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-            for device in &spi.attached_devices {
-                if let Some(tft) = device.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ili9341>()
-                }) {
-                    let fb = tft.framebuffer().to_vec().into_boxed_slice();
-                    return Ok(fb);
-                }
-            }
-        } else if let Some(spi) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::spi::Esp32c3Spi>()
-        {
-            for device in spi.attached_devices() {
-                if let Some(tft) = device.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ili9341>()
-                }) {
-                    let fb = tft.framebuffer().to_vec().into_boxed_slice();
-                    return Ok(fb);
-                }
-            }
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an SPI controller",
-                binding.peripheral
-            )));
-        }
-
-        Err(JsValue::from_str(&format!(
-            "ILI9341 device not found on SPI peripheral '{}'",
-            binding.peripheral
-        )))
+        self.panel_bytes(device_id, &[F::RGB565_BE], None, "ILI9341")
     }
 
     /// Return the PCD8544 (Nokia 5110) framebuffer for the device identified
     /// by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type:
-    /// "pcd8544"`. Returns 504 bytes: 84 columns × 6 banks, bank-major. Pixel
-    /// (x, y) is bit `(y % 8)` of byte `[(y / 8) * 84 + x]` (1 = on/dark).
+    /// Returns 504 bytes: 84 columns × 6 banks, bank-major. Pixel (x, y) is
+    /// bit `(y % 8)` of byte `[(y / 8) * 84 + x]` (1 = on/dark).
     #[wasm_bindgen]
     pub fn get_pcd8544_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("pcd8544"))
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No pcd8544 board_io binding '{}'", device_id))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-            for device in &spi.attached_devices {
-                if let Some(lcd) = device.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Pcd8544>()
-                }) {
-                    return Ok(lcd.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else if let Some(spi) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::spi::Esp32c3Spi>()
-        {
-            for device in spi.attached_devices() {
-                if let Some(lcd) = device.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Pcd8544>()
-                }) {
-                    return Ok(lcd.framebuffer().to_vec().into_boxed_slice());
-                }
-            }
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an SPI controller",
-                binding.peripheral
-            )));
-        }
-
-        Err(JsValue::from_str(&format!(
-            "PCD8544 device not found on SPI peripheral '{}'",
-            binding.peripheral
-        )))
+        self.panel_bytes(device_id, &[F::PCD8544_BANK], None, "PCD8544")
     }
 
     /// Return the decoded four-character text currently latched into a TM1637
@@ -839,8 +759,7 @@ impl WasmSimulator {
     /// Return the character shown on the direct-drive 7-segment digit
     /// identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type:
-    /// "seven-segment"`. Returns the single decoded character, with `'.'`
+    /// Returns the single decoded character, with `'.'`
     /// appended when the decimal point is lit — so a blank digit is `" "`,
     /// a lit `0` is `"0"`, and `0` with the dp is `"0."`. An unrecognised
     /// segment pattern decodes to `"?"` rather than silently blanking.
@@ -871,7 +790,6 @@ impl WasmSimulator {
 
     /// Return the SSD1680 tri-color e-paper framebuffer for the device identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type: "ssd1680_tricolor_290"`.
     /// Returns a 9472-byte `Uint8Array`: first 4736 bytes are the black plane
     /// (1 = white / 0 = black), next 4736 bytes are the red plane on the wire
     /// (1 = no-red / 0 = red — see GxEPD2 inversion in writeImage). Row-major,
@@ -879,294 +797,40 @@ impl WasmSimulator {
     /// Returns a JS error if the device is not found.
     #[wasm_bindgen]
     pub fn get_ssd1680_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| {
-                // Alias resolution has ONE home: registry::TYPE_ALIASES,
-                // reached through canonical_device_type(). Matching the legacy
-                // spelling here by hand is what dropped `gxepd2_290_c90c` and
-                // rendered a real, driven panel dark.
-                b.id == device_id
-                    && b.device_type
-                        .as_deref()
-                        .is_some_and(|t| canonical_device_type(t) == "ssd1680_tricolor_290")
-            })
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "No ssd1680_tricolor_290 board_io binding '{}'",
-                    device_id
-                ))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        // The SSD1680 panel attaches to either the generic STM32-shape Spi
-        // peripheral or the Esp32Spi controller (same SpiDevice trait,
-        // different controller models). Try both downcasts.
-        let panel_bytes =
-            if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-                spi.attached_devices.iter().find_map(|dev| {
-                    dev.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-                }).map(|panel| (panel.black_plane().to_vec(), panel.red_plane().to_vec()))
-                })
-            } else if let Some(spi) =
-                any.downcast_ref::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
-            {
-                spi.attached_devices.iter().find_map(|dev| {
-                    dev.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-                }).map(|panel| (panel.black_plane().to_vec(), panel.red_plane().to_vec()))
-                })
-            } else if let Some(spi) =
-                any.downcast_ref::<labwired_core::peripherals::esp32c3::spi::Esp32c3Spi>()
-            {
-                spi.attached_devices().iter().find_map(|dev| {
-                    dev.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-                }).map(|panel| (panel.black_plane().to_vec(), panel.red_plane().to_vec()))
-                })
-            } else {
-                return Err(JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an SPI controller",
-                    binding.peripheral
-                )));
-            };
-
-        let (black, red) = panel_bytes.ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "SSD1680 device not found on SPI peripheral '{}'",
-                binding.peripheral
-            ))
-        })?;
-        let mut combined = Vec::with_capacity(black.len() + red.len());
-        combined.extend_from_slice(&black);
-        combined.extend_from_slice(&red);
-        Ok(combined.into_boxed_slice())
+        self.panel_bytes(device_id, EPAPER_TRICOLOR, None, "SSD1680")
     }
 
     /// Cheap accessor returning just the SSD1680 refresh-generation counter.
     /// UI uses this to decide whether to re-fetch the (larger) framebuffer.
     #[wasm_bindgen]
     pub fn get_ssd1680_refresh_generation(&self, device_id: &str) -> Result<u32, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| {
-                // Alias resolution has ONE home: registry::TYPE_ALIASES,
-                // reached through canonical_device_type(). Matching the legacy
-                // spelling here by hand is what dropped `gxepd2_290_c90c` and
-                // rendered a real, driven panel dark.
-                b.id == device_id
-                    && b.device_type
-                        .as_deref()
-                        .is_some_and(|t| canonical_device_type(t) == "ssd1680_tricolor_290")
-            })
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "No ssd1680_tricolor_290 board_io binding '{}'",
-                    device_id
-                ))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        let gen = if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-            spi.attached_devices.iter().find_map(|dev| {
-                dev.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-                }).map(|panel| panel.refresh_generation())
-            })
-        } else if let Some(spi) =
-            any.downcast_ref::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
-        {
-            spi.attached_devices.iter().find_map(|dev| {
-                dev.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-                }).map(|panel| panel.refresh_generation())
-            })
-        } else if let Some(spi) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::spi::Esp32c3Spi>()
-        {
-            spi.attached_devices().iter().find_map(|dev| {
-                dev.as_any().and_then(|a| {
-                    a.downcast_ref::<labwired_core::peripherals::components::Ssd1680Tricolor290>()
-                }).map(|panel| panel.refresh_generation())
-            })
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an SPI controller",
-                binding.peripheral
-            )));
-        };
-        gen.ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "SSD1680 device not found on SPI peripheral '{}'",
-                binding.peripheral
-            ))
-        })
+        self.refresh_generation(device_id, "SSD1680")
     }
 
-    /// Same shape as [`get_ssd1680_framebuffer`] but for the UC8151D-family
-    /// tri-color panel attached by [`install_arduino_esp32_quirks`]. The
-    /// board_io binding type may say `ssd1680_tricolor_290` (since system
-    /// YAMLs were authored before the UC8151D split); we ignore that and
-    /// just find a `Uc8151dTricolor290` on the named SPI peripheral.
+    /// Same shape as [`Self::get_ssd1680_framebuffer`], kept as a separate name
+    /// because the UI selects an accessor by the diagram part's type.
+    ///
+    /// It resolves to the SAME query: a tri-color e-paper on the bound
+    /// controller, whichever of the two controller models the builder attached.
+    /// That is not a shortcut — it is the honest reading of a `board_io`
+    /// `device_type:` that says `ssd1680_tricolor_290` for a panel the ESP32
+    /// builder attaches as a `Uc8151dTricolor290`. This accessor already ignored
+    /// the declared type for exactly that reason; now its twin does too, so a
+    /// lab can no longer render blank purely because the UI picked the accessor
+    /// named after the type string rather than the one named after the model.
     #[wasm_bindgen]
     pub fn get_uc8151d_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        use labwired_core::peripherals::components::Uc8151dTricolor290;
-        use labwired_core::peripherals::esp32::spi::Esp32Spi;
-        use labwired_core::peripherals::esp32c3::spi::Esp32c3Spi;
-        let machine = self.machine.as_ref().unwrap();
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id)
-            .ok_or_else(|| JsValue::from_str(&format!("No board_io binding '{}'", device_id)))?;
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-        // Same controller set as get_ssd1680_*: STM32 Spi, classic Esp32Spi,
-        // and Esp32c3Spi. Missing the C3 arm made stats-display attach the
-        // panel (kit registry) but never surface planes to the UI.
-        let panel_bytes =
-            if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-                spi.attached_devices.iter().find_map(|dev| {
-                    dev.as_any()
-                        .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
-                        .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
-                })
-            } else if let Some(spi) = any.downcast_ref::<Esp32Spi>() {
-                spi.attached_devices.iter().find_map(|dev| {
-                    dev.as_any()
-                        .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
-                        .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
-                })
-            } else if let Some(spi) = any.downcast_ref::<Esp32c3Spi>() {
-                spi.attached_devices().iter().find_map(|dev| {
-                    dev.as_any()
-                        .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
-                        .map(|p| (p.black_plane().to_vec(), p.red_plane().to_vec()))
-                })
-            } else {
-                return Err(JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an SPI controller",
-                    binding.peripheral
-                )));
-            };
-        let (black, red) = panel_bytes.ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "UC8151D device not found on SPI peripheral '{}'",
-                binding.peripheral
-            ))
-        })?;
-        let mut combined = Vec::with_capacity(black.len() + red.len());
-        combined.extend_from_slice(&black);
-        combined.extend_from_slice(&red);
-        Ok(combined.into_boxed_slice())
+        self.panel_bytes(device_id, EPAPER_TRICOLOR, None, "UC8151D")
     }
 
     /// Cheap accessor returning just the UC8151D refresh-generation counter.
     #[wasm_bindgen]
     pub fn get_uc8151d_refresh_generation(&self, device_id: &str) -> Result<u32, JsValue> {
-        use labwired_core::peripherals::components::Uc8151dTricolor290;
-        use labwired_core::peripherals::esp32::spi::Esp32Spi;
-        use labwired_core::peripherals::esp32c3::spi::Esp32c3Spi;
-        let machine = self.machine.as_ref().unwrap();
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id)
-            .ok_or_else(|| JsValue::from_str(&format!("No board_io binding '{}'", device_id)))?;
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-        let gen = if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-            spi.attached_devices.iter().find_map(|dev| {
-                dev.as_any()
-                    .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
-                    .map(|p| p.refresh_generation())
-            })
-        } else if let Some(spi) = any.downcast_ref::<Esp32Spi>() {
-            spi.attached_devices.iter().find_map(|dev| {
-                dev.as_any()
-                    .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
-                    .map(|p| p.refresh_generation())
-            })
-        } else if let Some(spi) = any.downcast_ref::<Esp32c3Spi>() {
-            spi.attached_devices().iter().find_map(|dev| {
-                dev.as_any()
-                    .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
-                    .map(|p| p.refresh_generation())
-            })
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an SPI controller",
-                binding.peripheral
-            )));
-        };
-        gen.ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "UC8151D device not found on SPI peripheral '{}'",
-                binding.peripheral
-            ))
-        })
+        self.refresh_generation(device_id, "UC8151D")
     }
 
     /// Return the MAX7219 LED-matrix framebuffer for the device identified by `device_id`.
     ///
-    /// `device_id` must match a `board_io` binding with `device_type: "led-matrix"`.
     /// Returns an 8-byte `Uint8Array`: one byte per matrix row, row 0 first,
     /// bit 7 = the leftmost column (`SEG A` on the driver). The bytes already
     /// account for shutdown (all zero) and display test (all `0xFF`), so the
@@ -1174,78 +838,7 @@ impl WasmSimulator {
     /// Returns a JS error if the device is not found.
     #[wasm_bindgen]
     pub fn get_led_matrix_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
-
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("led-matrix"))
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No led-matrix board_io binding '{}'", device_id))
-            })?;
-
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any()
-            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
-
-        // Cover every SPI controller a supported board can hang a MAX7219 off:
-        // the generic STM32-shape `Spi`, the ESP32 `Esp32Spi` and the ESP32-C3
-        // `Esp32c3Spi` — the same set the SSD1680 readback enumerates. Missing
-        // one here renders the matrix blank even though the device is present
-        // and being driven.
-        let rows = if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
-            spi.attached_devices.iter().find_map(|dev| {
-                dev.as_any()
-                    .and_then(|a| {
-                        a.downcast_ref::<labwired_core::peripherals::components::Max7219>()
-                    })
-                    .map(|m| m.framebuffer())
-            })
-        } else if let Some(spi) =
-            any.downcast_ref::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
-        {
-            spi.attached_devices.iter().find_map(|dev| {
-                dev.as_any()
-                    .and_then(|a| {
-                        a.downcast_ref::<labwired_core::peripherals::components::Max7219>()
-                    })
-                    .map(|m| m.framebuffer())
-            })
-        } else if let Some(spi) =
-            any.downcast_ref::<labwired_core::peripherals::esp32c3::spi::Esp32c3Spi>()
-        {
-            spi.attached_devices().iter().find_map(|dev| {
-                dev.as_any()
-                    .and_then(|a| {
-                        a.downcast_ref::<labwired_core::peripherals::components::Max7219>()
-                    })
-                    .map(|m| m.framebuffer())
-            })
-        } else {
-            return Err(JsValue::from_str(&format!(
-                "Peripheral '{}' is not an SPI controller",
-                binding.peripheral
-            )));
-        };
-
-        let rows = rows.ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "MAX7219 device not found on SPI peripheral '{}'",
-                binding.peripheral
-            ))
-        })?;
-        Ok(rows.to_vec().into_boxed_slice())
+        self.panel_bytes(device_id, &[F::MAX7219_ROWS], None, "MAX7219")
     }
 
     /// Read back the current state of each SPI sensor declared in `board_io`.
@@ -1391,7 +984,17 @@ impl WasmSimulator {
             peripheral: None,
         };
         let mi = machine.inspect(name.as_deref(), &opts);
-        serde_wasm_bindgen::to_value(&mi).unwrap_or(JsValue::NULL)
+        // Round-trip through `serde_json` so `js_safe_meta` can reach the
+        // artifact `generation` values. Without it this returned `null` — not
+        // for a filtered peripheral, but for the WHOLE payload, on every
+        // machine that has a panel: a 64-bit FNV hash is past 2^53 and
+        // `serde_wasm_bindgen` refuses the entire document rather than the
+        // field. Every inspect surface in the browser has been blind to
+        // exactly the machines it exists to describe.
+        let Ok(value) = serde_json::to_value(&mi) else {
+            return JsValue::NULL;
+        };
+        serde_wasm_bindgen::to_value(&js_safe_meta(&value)).unwrap_or(JsValue::NULL)
     }
 
     /// Raw escape hatch: read `len` bytes at absolute `addr`, side-effect-free.

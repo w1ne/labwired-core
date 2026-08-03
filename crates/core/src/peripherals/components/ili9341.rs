@@ -510,7 +510,7 @@ impl SpiDevice for Ili9341 {
             meta: serde_json::json!({
                 "w": w,
                 "h": h,
-                "format": "rgb565_be",
+                "format": crate::inspect::artifact_format::RGB565_BE,
                 "generation": crate::inspect::artifact_generation(fb),
                 "display_on": self.display_on(),
                 "painted_bytes": painted,
