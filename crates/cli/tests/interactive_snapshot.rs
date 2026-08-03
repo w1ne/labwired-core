@@ -5,18 +5,15 @@
 // See the LICENSE file in the project root for full license information.
 
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn test_cli_interactive_writes_snapshot() {
     let firmware = std::fs::canonicalize("../../tests/fixtures/uart-ok-thumbv7m.elf").unwrap();
 
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let snapshot_path =
-        std::env::temp_dir().join(format!("labwired-interactive-snapshot-{}.json", nonce));
+    let snapshot_path = std::env::temp_dir().join(format!(
+        "{}.json",
+        labwired_cli::test_support::unique_name("labwired-interactive-snapshot")
+    ));
     let _ = std::fs::remove_file(&snapshot_path);
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))

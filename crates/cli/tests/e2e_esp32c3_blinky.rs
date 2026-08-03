@@ -18,7 +18,6 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -30,11 +29,7 @@ fn repo_root() -> PathBuf {
 #[test]
 fn esp32c3_blinky_blinks_gpio8_and_narrates_over_uart() {
     let root = repo_root();
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let out_dir = std::env::temp_dir().join(format!("labwired-c3-blinky-{nonce}"));
+    let out_dir = labwired_cli::test_support::unique_temp_dir("labwired-c3-blinky");
     std::fs::create_dir_all(&out_dir).expect("create out dir");
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))

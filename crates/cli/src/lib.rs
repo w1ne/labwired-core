@@ -9,4 +9,5 @@ pub mod coverage;
 pub mod faults;
 pub mod manifest;
 pub mod pc_coverage_report;
+pub mod test_support;
 pub mod tier1;

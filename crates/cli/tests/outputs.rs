@@ -6,18 +6,16 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn write_temp_file(prefix: &str, contents: &str) -> PathBuf {
     let mut dir = std::env::temp_dir();
     dir.push("labwired-tests");
     let _ = std::fs::create_dir_all(&dir);
 
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let path = dir.join(format!("{}-{}.yaml", prefix, nonce));
+    let path = dir.join(format!(
+        "{}.yaml",
+        labwired_cli::test_support::unique_name(prefix)
+    ));
     std::fs::write(&path, contents).expect("Failed to write temp file");
     path
 }
@@ -123,11 +121,7 @@ bad_field: 123
 "#,
     );
 
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let output_dir = std::env::temp_dir().join(format!("labwired-tests-config-error-{}", nonce));
+    let output_dir = labwired_cli::test_support::unique_temp_dir("labwired-tests-config-error");
     let _ = std::fs::remove_dir_all(&output_dir);
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
@@ -195,12 +189,7 @@ assertions:
 "#,
     );
 
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let output_dir =
-        std::env::temp_dir().join(format!("labwired-tests-env-config-error-{}", nonce));
+    let output_dir = labwired_cli::test_support::unique_temp_dir("labwired-tests-env-config-error");
     let _ = std::fs::remove_dir_all(&output_dir);
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
