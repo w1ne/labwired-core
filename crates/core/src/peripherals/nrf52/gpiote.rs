@@ -301,9 +301,8 @@ impl Peripheral for Nrf52Gpiote {
         true
     }
 
-    fn needs_legacy_walk(&self) -> bool {
-        false
-    }
+    // `needs_legacy_walk()` is deliberately NOT overridden: `uses_scheduler()`
+    // above already carries walk deletion. See the module docs (`super`).
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if self.has_pending() && !self.chain_live {

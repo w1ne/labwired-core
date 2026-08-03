@@ -112,9 +112,8 @@ impl Peripheral for Nrf52Egu {
         true
     }
 
-    fn needs_legacy_walk(&self) -> bool {
-        false
-    }
+    // `needs_legacy_walk()` is deliberately NOT overridden: `uses_scheduler()`
+    // above already carries walk deletion. See the module docs (`super`).
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if self.pending_triggers != 0 && !self.chain_live {

@@ -212,9 +212,8 @@ impl Peripheral for Nrf52SerialInstance {
         true
     }
 
-    fn needs_legacy_walk(&self) -> bool {
-        false
-    }
+    // `needs_legacy_walk()` is deliberately NOT overridden: `uses_scheduler()`
+    // above already carries walk deletion. See the module docs (`super`).
 
     fn sync_to(&mut self, tick_now: u64) {
         match self.active() {

@@ -82,10 +82,34 @@ use std::path::{Path, PathBuf};
 /// Rule A exemptions: models that declare `needs_legacy_walk() == false` while
 /// their `tick()` still does work.
 ///
-/// EVERY entry is a live instance of the same defect class as the two fixed in
-/// this PR, found by this gate on its first run. They are recorded rather than
-/// fixed because each needs its own delivery-path design (an event chain, or a
-/// per-fabric IRQ route) and its own behavioural proof — a blanket
+/// # An entry here is a contract violation, NOT necessarily a live starvation
+///
+/// The rule-A shape (`needs_legacy_walk() -> false` + a working `tick()`) has
+/// two very different causes, and this list's first revision conflated them:
+///
+/// * **Live starvation** — the model has NO other delivery path. Its `false`
+///   really does delete the walk out from under the only `tick()` that pends
+///   its IRQ. ESP32-C3 RMT and RP2040 I2C0 were this, and both hung real
+///   firmware.
+/// * **Dead override** — the model ALSO declares an unconditional
+///   `uses_scheduler() -> true` with a real event chain. `derive_walk_deletable`
+///   is `all(uses_scheduler || !needs_legacy_walk)`, so `uses_scheduler`
+///   short-circuits the OR and the `false` changes nothing; the walk skip keys
+///   on `uses_scheduler` alone too. Delivery works. The override is merely a
+///   false statement about `tick()` — worth deleting, because the next reader
+///   who trusts it will conclude delivery rides the walk.
+///
+/// The seven nRF52 entries this list opened with were all the second kind. They
+/// were removed by deleting the dead override, with per-model NVIC delivery
+/// probes added in `crates/core/tests/nrf52_walk_starvation_delivery.rs` to
+/// pin that the removal changed nothing — those probes pass on the pre-removal
+/// tree and go `STARVED:` the moment `uses_scheduler()` is taken away, which is
+/// what tells the two causes apart.
+///
+/// So: before writing an entry here, check whether the impl declares
+/// `uses_scheduler()`. If it does, this is very likely a dead override to
+/// delete, not a starvation to design around. If it does not, it is the real
+/// thing and needs its own delivery path plus a behavioural proof — a blanket
 /// `needs_legacy_walk() -> true` would trade the starvation for a whole-bus
 /// throughput regression, which is the trade this codebase keeps making by
 /// accident.
@@ -97,41 +121,6 @@ const RULE_A_ALLOWLIST: &[(&str, &str, &str)] = &[
         "Rp2040Usb",
         "tick() runs host_poll() and emits USBCTRL_IRQ. Needs the same delay-1 \
          event chain as Rp2040I2c, plus a decision about host_poll cadence.",
-    ),
-    (
-        "peripherals/nrf52/clock.rs",
-        "Nrf52Clock",
-        "tick() re-pends a held HFCLKSTARTED/LFCLKSTARTED level (irq: true).",
-    ),
-    (
-        "peripherals/nrf52/ecb.rs",
-        "Nrf52Ecb",
-        "tick() latches ENDECB and pends the AES ECB line.",
-    ),
-    (
-        "peripherals/nrf52/egu.rs",
-        "Nrf52Egu",
-        "tick() drains software-triggered EGU events into IRQs.",
-    ),
-    (
-        "peripherals/nrf52/gpiote.rs",
-        "Nrf52Gpiote",
-        "tick() drains pending PORT/IN events into IRQs.",
-    ),
-    (
-        "peripherals/nrf52/radio.rs",
-        "Nrf52Radio",
-        "tick() advances the TX/RX cycle countdown and fires ADDRESS/END.",
-    ),
-    (
-        "peripherals/nrf52/serial_instance.rs",
-        "Nrf52SerialInstance",
-        "tick() delegates to the active TWIM/SPIM sub-model, both of which tick.",
-    ),
-    (
-        "peripherals/nrf52/twim.rs",
-        "Nrf52Twim",
-        "tick() converts latched TWIM events into the instance IRQ.",
     ),
     (
         "peripherals/esp32s3/gpio.rs",

@@ -259,13 +259,8 @@ impl Peripheral for Nrf52Clock {
         true
     }
 
-    fn needs_legacy_walk(&self) -> bool {
-        // Scheduler path covers every effect of the walk (events are write-
-        // synchronous; IRQ re-assert is event-scheduled). Feature-off still
-        // walks via the bus's feature gate, so the conservative default of
-        // `uses_scheduler()==true` alone is what unlocks walk-deletion.
-        false
-    }
+    // `needs_legacy_walk()` is deliberately NOT overridden: `uses_scheduler()`
+    // above already carries walk deletion. See the module docs (`super`).
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if self.irq_level_held() && !self.chain_live {
