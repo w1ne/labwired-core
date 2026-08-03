@@ -31,8 +31,6 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -73,16 +71,7 @@ fn run_script(script_body: &str) -> Run {
     // on every parallel run, a different subset each time, while
     // `--test-threads=1` always passed. The counter makes the name unique
     // regardless of what the clock resolves to.
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let nonce = format!(
-        "{}-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        SEQ.fetch_add(1, Ordering::Relaxed)
-    );
-    let dir = std::env::temp_dir().join(format!("labwired-stimulus-report-{nonce}"));
+    let dir = labwired_cli::test_support::unique_temp_dir("labwired-stimulus-report");
     std::fs::create_dir_all(&dir).expect("create temp dir");
     let script = dir.join("script.yaml");
     std::fs::write(&script, script_body).expect("write script");
