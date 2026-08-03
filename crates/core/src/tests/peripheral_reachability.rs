@@ -35,6 +35,7 @@
 //! layered over a broad catch-all). Being *entirely* covered is the defect.
 
 use crate::bus::SystemBus;
+use crate::Bus;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use std::path::PathBuf;
 
@@ -372,4 +373,163 @@ fn equal_base_tiebreak_is_last_registered_and_order_independent() {
         Some("narrow"),
         "equal starts must resolve to the LAST registered entry"
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Register-level regressions: two shipped chip maps whose windows collided.
+//
+// The gate above asks "does the router dispatch to this peripheral ANYWHERE in
+// its window". That is necessary but not sufficient: a window can own an
+// address that holds no register while every address that DOES hold one is
+// served by its neighbour. nRF5340 `gpio0` passed the gate that way — it owned
+// its own base (0x5084_2000, dead space under the -0x500 remap) while all 0x280
+// bytes of its actual registers were served by `gpio1`.
+//
+// So these two tests address the peripherals the way SILICON does, at addresses
+// taken from the vendor descriptor rather than from the chip YAML, and check
+// that two instances are TELLABLE APART. A shadowed peripheral is silent by
+// definition; only a differential read/write shows the shadow is gone.
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn bus_for_chip(rel: &str) -> SystemBus {
+    let path = repo_root(rel);
+    let chip = ChipDescriptor::from_file(&path).unwrap_or_else(|e| panic!("load {rel}: {e}"));
+    let abs = path.to_string_lossy().to_string();
+    SystemBus::from_config(&chip, &dummy_manifest(&abs))
+        .unwrap_or_else(|e| panic!("assemble {rel}: {e}"))
+}
+
+/// nRF5340: P0 and P1 must each answer at their own silicon addresses.
+///
+/// Register facts from the vendored Nordic descriptor
+/// `tests/fixtures/real_world/nrf5340.svd` (nrfx v3.12.0 `mdk/nrf5340_application.svd`):
+/// `P0_S` @ 0x5084_2500, `P1_S` @ 0x5084_2800, `addressBlock` size 0x300, with
+/// `OUT` at offset +0x004 and `DIR` at +0x014. The Zephyr `nrf5340dk/nrf5340/cpuapp`
+/// devicetree agrees: `gpio0@50842500` / `gpio1@50842800`, `reg` length 0x300.
+///
+/// Before the fix, both ports were remapped 0x500 low (0x5084_2000 / 0x5084_2300)
+/// and declared 4 KB wide, so gpio1's window covered EVERY gpio0 register.
+/// Under the router's greatest-start-wins rule, P0.OUT (0x5084_2504) was served
+/// by gpio1 at its offset 0x204 — not a register in the nRF GPIO map, so the
+/// write vanished and the read returned 0. P0 is where the nRF5340-DK's LEDs
+/// and buttons live; every one of them was dead and nothing said so.
+#[test]
+fn nrf5340_gpio_ports_answer_at_their_own_silicon_addresses() {
+    const P0: u64 = 0x5084_2500;
+    const P1: u64 = 0x5084_2800;
+    const OUT: u64 = 0x004;
+
+    let mut bus = bus_for_chip("configs/chips/nrf5340.yaml");
+
+    assert_eq!(bus.read_u32(P0 + OUT).unwrap(), 0, "P0.OUT resets to 0");
+    assert_eq!(bus.read_u32(P1 + OUT).unwrap(), 0, "P1.OUT resets to 0");
+
+    // Write P0 only. It must land in P0 and be invisible from P1.
+    bus.write_u32(P0 + OUT, 0x0F0F_0F0F).unwrap();
+    assert_eq!(
+        bus.read_u32(P0 + OUT).unwrap(),
+        0x0F0F_0F0F,
+        "P0.OUT (0x{:08X}) must read back what was written to it — if this is 0, \
+         P0 is shadowed by P1 and every P0 pin on the board is dead",
+        P0 + OUT
+    );
+    assert_eq!(
+        bus.read_u32(P1 + OUT).unwrap(),
+        0,
+        "writing P0.OUT must not disturb P1.OUT — the two ports are separate silicon"
+    );
+
+    // Now write P1 only. P1 has 16 pins (P1.0–P1.15), so stay in range.
+    bus.write_u32(P1 + OUT, 0x0000_1234).unwrap();
+    assert_eq!(
+        bus.read_u32(P1 + OUT).unwrap(),
+        0x0000_1234,
+        "P1.OUT must read back its own value"
+    );
+    assert_eq!(
+        bus.read_u32(P0 + OUT).unwrap(),
+        0x0F0F_0F0F,
+        "writing P1.OUT must not disturb P0.OUT"
+    );
+}
+
+/// ATSAMD21J17D: the three SERCOM USART instances must be separately addressable.
+///
+/// Addresses from the Microchip-published `ATSAMD21J17D.svd` (cmsis-svd-data,
+/// `data/Atmel/ATSAMD21J17D.svd`): SERCOM0 @ 0x4200_0800, SERCOM1 @ 0x4200_0C00,
+/// SERCOM3 @ 0x4200_1400, 0x400 apart on APB-C. Which SERCOM each `usartN` id
+/// means comes from the upstream descriptor this chip YAML was imported from,
+/// `renode/renode` `platforms/cpus/atsamd21j17d-aft.repl`, which maps
+/// usart0→0x4200_0800, usart1→0x4200_0C00, usart2→0x4200_1400 (and whose NVIC
+/// lines 9/10/12 are SERCOM0/1/3, confirming the third is SERCOM3, not SERCOM2).
+/// SERCOM USART `DATA` is at +0x28.
+///
+/// Before the fix all five of tc4/tc6/usart0/usart1/usart2 sat at 0x4200 —
+/// the top 16 bits of their real addresses, because the importer truncated
+/// Renode's underscore-separated hex literals at the underscore. Four of the
+/// five were unreachable; the router handed every access to the last registered.
+#[test]
+fn atsamd21_sercom_usarts_are_separately_addressable() {
+    use std::sync::{Arc, Mutex};
+
+    const SERCOM0: u64 = 0x4200_0800;
+    const SERCOM1: u64 = 0x4200_0C00;
+    const SERCOM3: u64 = 0x4200_1400;
+    const DATA: u64 = 0x28;
+
+    let mut bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
+
+    // Tap usart1's transmitter. Only bytes that reach THAT model may appear.
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    assert!(
+        bus.attach_uart_tx_sink_named("usart1", sink.clone(), false),
+        "usart1 must exist as a UART model"
+    );
+
+    bus.write_u8(SERCOM0 + DATA, b'0').unwrap();
+    assert!(
+        sink.lock().unwrap().is_empty(),
+        "a byte written to SERCOM0 must not come out of usart1 (=SERCOM1)"
+    );
+
+    bus.write_u8(SERCOM1 + DATA, b'1').unwrap();
+    assert_eq!(
+        &*sink.lock().unwrap(),
+        b"1",
+        "a byte written to SERCOM1's DATA must come out of usart1 — if the sink \
+         is empty, usart1 is shadowed and unreachable at its own address"
+    );
+
+    bus.write_u8(SERCOM3 + DATA, b'2').unwrap();
+    assert_eq!(
+        &*sink.lock().unwrap(),
+        b"1",
+        "a byte written to SERCOM3 must not come out of usart1"
+    );
+}
+
+/// ATSAMD21J17D PORT: GROUP0 (PA) and GROUP1 (PB) are 0x80 apart, not identical.
+///
+/// `ATSAMD21J17D.svd` gives PORT @ 0x4100_4400 with a 0x200 `addressBlock` and a
+/// two-element register cluster at 0x80 increments; the upstream Renode
+/// descriptor spells the same thing out as gpio_a @ 0x4100_4400,
+/// gpio_b @ 0x4100_4480. Both were imported as 0x4100.
+///
+/// `samd21_gpio` has no model in this engine (it builds a stub), so the two
+/// ports cannot be told apart by a read/write — a stub answers 0 either way.
+/// What CAN be checked, and is the whole content of the defect, is that the
+/// router dispatches each port's own address to that port.
+#[test]
+fn atsamd21_port_groups_route_to_their_own_instances() {
+    let bus = bus_for_chip("configs/chips/onboarding/atsamd21j17d-aft.yaml");
+    for (id, addr) in [("gpio_a", 0x4100_4400u64), ("gpio_b", 0x4100_4480u64)] {
+        let owner = bus
+            .find_peripheral_index(addr)
+            .map(|i| bus.peripherals[i].name.clone());
+        assert_eq!(
+            owner.as_deref(),
+            Some(id),
+            "{addr:#010x} must be served by `{id}`, not by {owner:?}"
+        );
+    }
 }

@@ -577,6 +577,17 @@ impl SystemBus {
                     // silently defaulted onto STM32F1 (which would move the ODR
                     // offset and blank a display's D/C line — the KW41Z "cow" bug).
                     let layout: GpioRegisterLayout = Self::gpio_layout_for(p_cfg)?;
+                    // Optional `reg_offset`: the window's offset inside the
+                    // family register map (the SVD `addressBlock.offset`).
+                    // nRF53/nRF54 GPIO ports declare 0x500, because Nordic
+                    // bases those at OUT rather than at the block start and
+                    // two ports are only 0x300 apart — see
+                    // `GpioPort::window_offset`.
+                    let window_offset: u64 = p_cfg
+                        .config
+                        .get("reg_offset")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                     // For nRF52 ports, an optional `num_pins` config key caps the
                     // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
                     // Writes outside that range are discarded; reads return 0.
@@ -587,7 +598,10 @@ impl SystemBus {
                             .and_then(|v| v.as_u64())
                             .map(|n| n as u32)
                             .unwrap_or(32);
-                        Box::new(crate::peripherals::gpio::GpioPort::new_nrf52(num_pins))
+                        Box::new(
+                            crate::peripherals::gpio::GpioPort::new_nrf52(num_pins)
+                                .with_window_offset(window_offset),
+                        )
                     } else if layout == GpioRegisterLayout::Stm32V2
                         && p_cfg.config.contains_key("reset_moder")
                     {
@@ -601,13 +615,19 @@ impl SystemBus {
                                 .map(|n| n as u32)
                                 .unwrap_or(0)
                         };
-                        Box::new(crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
-                            cfg_u32("reset_moder"),
-                            cfg_u32("reset_ospeedr"),
-                            cfg_u32("reset_pupdr"),
-                        ))
+                        Box::new(
+                            crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
+                                cfg_u32("reset_moder"),
+                                cfg_u32("reset_ospeedr"),
+                                cfg_u32("reset_pupdr"),
+                            )
+                            .with_window_offset(window_offset),
+                        )
                     } else {
-                        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
+                        Box::new(
+                            crate::peripherals::gpio::GpioPort::new_with_layout(layout)
+                                .with_window_offset(window_offset),
+                        )
                     }
                 }
                 // ESP32-C3 behavioral GP-SPI2 controller (CPU/W-buffer

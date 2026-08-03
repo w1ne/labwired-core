@@ -335,17 +335,6 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          0x3FF4_9000 for 0x400 bytes.",
     ),
     (
-        "nrf5340.yaml",
-        "gpio0",
-        "gpio1",
-        "HIGHEST RISK ENTRY. `gpio1` sits at 0x5084_2300, i.e. 0x300 INSIDE \
-         gpio0's declared 4 KB window — the exact collision nrf52840.yaml \
-         documents avoiding by remapping P1 to 0x5000_1000. nRF5340 never got \
-         that remap, so P1 accesses are decided by registration order. This is \
-         the nRF52 GPIOTE defect waiting on a second chip; recorded here so it \
-         cannot be rediscovered as novel.",
-    ),
-    (
         "nrf54l15.yaml",
         "gpio1",
         "temp",
@@ -373,81 +362,6 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
         "comp",
         "exti",
         "Same STM32 0x4001_0000 SYSCFG/COMP/EXTI block.",
-    ),
-    // ── imported descriptor with genuinely identical bases ──────────────────
-    // `configs/chips/onboarding/atsamd21j17d-aft.yaml` collapses seven
-    // peripherals onto two addresses: gpio_a/gpio_b both at 0x4100, and
-    // tc4/tc6/usart0/usart1/usart2 ALL at 0x4200. This is the apb_ctrl-vs-SYSCON
-    // shape exactly — four of those five are unreachable, and which one answers
-    // is decided by registration order. Found by this gate on its first run.
-    // Not fixed here because the real base addresses have to come from the SAMD21
-    // datasheet, which is a datasheet task, not a refactor.
-    (
-        "atsamd21j17d-aft.yaml",
-        "gpio_a",
-        "gpio_b",
-        "IDENTICAL BASE 0x4100. Imported descriptor never got real per-instance \
-         addresses; needs SAMD21 datasheet values.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc4",
-        "tc6",
-        "IDENTICAL BASE 0x4200, part of the five-way tc4/tc6/usart0-2 tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc4",
-        "usart0",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc4",
-        "usart1",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc4",
-        "usart2",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc6",
-        "usart0",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc6",
-        "usart1",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "tc6",
-        "usart2",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "usart0",
-        "usart1",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "usart0",
-        "usart2",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
-    ),
-    (
-        "atsamd21j17d-aft.yaml",
-        "usart1",
-        "usart2",
-        "IDENTICAL BASE 0x4200, part of the five-way tie.",
     ),
 ];
 
