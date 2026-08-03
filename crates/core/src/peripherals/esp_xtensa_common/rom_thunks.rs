@@ -1584,7 +1584,7 @@ fn md5_step(w: &mut [u32; 4], in_block: &[u32; 16]) {
 pub(crate) fn md5_digest(data: &[u8]) -> [u8; 16] {
     let mut state: [u32; 4] = [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476];
     let mut block = [0u32; 16];
-    let mut load = |chunk: &[u8], block: &mut [u32; 16]| {
+    let load = |chunk: &[u8], block: &mut [u32; 16]| {
         for (i, slot) in block.iter_mut().enumerate() {
             *slot = u32::from_le_bytes(chunk[i * 4..i * 4 + 4].try_into().unwrap());
         }

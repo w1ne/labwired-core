@@ -153,29 +153,36 @@ const NOP_STUBS: &[&str] = &[
     "bootloader_init_mem",
     "esp_mspi_pin_init",
     "spi_flash_init_chip_state",
-    // SPI-flash HAL — see loader::extract_arduino_esp32_thunks for why.
-    "spi_flash_hal_configure_host_io_mode",
-    "spi_flash_chip_generic_config_host_io_mode",
-    "spi_flash_chip_generic_get_io_mode",
-    "spi_flash_chip_generic_set_io_mode",
-    "spi_flash_chip_generic_probe",
-    "spi_flash_chip_generic_detect_size",
-    "spi_flash_chip_generic_read",
-    "spi_flash_chip_generic_yield",
-    "spi_flash_chip_gd_probe",
-    "spi_flash_chip_gd_detect_size",
-    "spi_flash_chip_gd_get_io_mode",
-    "spi_flash_chip_gd_set_io_mode",
+    // Legacy `spi_flash_*` API shim and the OS-functions swap. Still stubbed:
+    // they hook the flash driver up to FreeRTOS scheduling primitives the sim
+    // does not need, and they are not on the read/erase/write path.
     "spi_flash_init",
-    "spi_flash_hal_init",
-    "spi_flash_hal_supports_direct_write",
-    "spi_flash_hal_supports_direct_read",
     "esp_flash_app_enable_os_functions",
     "esp_flash_app_disable_os_functions",
-    "esp_flash_app_init",
-    "esp_flash_init_main",
-    "esp_flash_init_default_chip",
-    "esp_flash_init",
+    //
+    // ── DELETED, not moved: the esp_flash chip driver. ──────────────────────
+    //
+    // `esp_flash_init` / `_init_main` / `_init_default_chip` / `esp_flash_app_init`
+    // and the whole `spi_flash_chip_{generic,gd}_*` + `spi_flash_hal_*` probe
+    // surface used to be nop'd here — 18 symbols. That looked cheap because
+    // nothing on the panel-render path calls flash. It was not cheap.
+    //
+    // Nopping the probes means `esp_flash_default_chip->chip_drv` is never
+    // assigned, so every `esp_partition_read` / `_write` / `_erase_range` fails
+    // with 0x6003 ESP_ERR_FLASH_UNSUPPORTED_CHIP. Downstream of that,
+    // `nvs_flash_init()` cannot format or read NVS, so `Preferences` — WiFi
+    // credentials, calibration constants, boot counters, one of the most-used
+    // Arduino-ESP32 APIs — fails on the twin and works on silicon. Every
+    // classic-ESP32 boot also printed an `[E]` line about it, which teaches
+    // users to ignore error output right before the errors that matter.
+    //
+    // None of that was necessary. `peripherals::esp32::spi::Esp32Spi` already
+    // models the SPI NOR command set the driver probes with — RDID (answering
+    // the same Winbond W25Q32 id `seed_rom_flashchip` writes into
+    // `g_rom_flashchip`), RDSR, WREN, page program, sector/block erase, read —
+    // so the firmware's own driver runs against modelled registers and
+    // initialises. Unstubbing them takes the profile from 71 installed thunks
+    // to 53 and makes the e-reader lab boot with a clean log.
     "esp_random",
     "esp_fill_random",
     // log mutex (esp_log_impl_lock/unlock) — sim doesn't model the log
@@ -373,6 +380,34 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
         if addr != 0 {
             let _ = machine.bus.write_u32(addr as u64, 240);
         }
+    }
+
+    // `g_rom_flashchip` — the `esp_rom_spiflash_chip_t` the BROM fills in when
+    // it attaches the SPI flash. Same class of skipped boot state as
+    // `g_ticks_per_us` above: a fact about where boot ended, readable back out
+    // of memory, not a redirected call.
+    //
+    // Leaving it zeroed is not harmless. `spi_flash_mmap` starts with
+    // `if (src_addr + size > g_rom_flashchip.chip_size) return
+    // ESP_ERR_INVALID_ARG;` — with `chip_size == 0` EVERY mmap fails, including
+    // the one `load_partitions()` uses to read the partition table. That is the
+    //
+    //     E (0) partition: load_partitions returned 0x102
+    //     E (0) esp_core_dump_flash: No core dump partition found!
+    //     [E][esp32-hal-misc.c:264] initArduino(): Failed to initialize NVS! Error: 261
+    //
+    // on every classic-ESP32 boot in the browser: 0x102 is ESP_ERR_INVALID_ARG
+    // and 261 is 0x105 ESP_ERR_NOT_FOUND downstream of it. Writing a table at
+    // flash 0x8000 without this seed changes nothing, because the firmware
+    // never gets to look at it.
+    //
+    // This seed used to live in `cli::commands::esp32_boot_state`, so ONLY
+    // `labwired test` had it — `labwired snapshot capture` and the whole
+    // browser path did not. It is now in `boot::esp_partition_table`, which both
+    // call.
+    let flashchip = resolve_data("g_rom_flashchip", 0);
+    if flashchip != 0 {
+        crate::boot::esp_partition_table::seed_rom_flashchip(&mut machine.bus, flashchip);
     }
 
     let s_resume_cores = resolve_data("s_resume_cores", 0);
@@ -596,7 +631,11 @@ mod thunk_debt {
     ///  * firmware you genuinely cannot run yet: that is real debt. Raising the
     ///    ceiling is then a deliberate act, and the comment next to the stub has
     ///    to say what is missing.
-    const CEILING: usize = 75;
+    /// 75 → 56 when the `esp_flash` chip driver stopped being nop'd. See the
+    /// note in `NOP_STUBS` where those 18 symbols used to be: the sim already
+    /// modelled the SPI NOR command set they probe with, so the debt was
+    /// buying nothing and costing `nvs_flash_init()`.
+    const CEILING: usize = 56;
 
     #[test]
     fn thunk_debt_only_falls() {

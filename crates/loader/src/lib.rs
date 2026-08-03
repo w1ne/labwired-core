@@ -204,6 +204,15 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // not .bss, because the ROM linker script fixes their addresses.
         "g_ticks_per_us_pro",
         "g_ticks_per_us_app",
+        // ── ROM flash-chip descriptor (`esp_rom_spiflash_chip_t`). ───────────
+        // The BROM fills this in when it attaches the SPI flash. We start at
+        // the app entry, so it stays zeroed — and `spi_flash_mmap` rejects
+        // every request with `src_addr + size > g_rom_flashchip.chip_size`,
+        // i.e. ESP_ERR_INVALID_ARG (0x102). That is what
+        // `load_partitions returned 0x102` on every classic-ESP32 boot was:
+        // not a bad partition table, a flash chip the firmware thinks is
+        // 0 bytes long. Seeded in `install_arduino_esp32_profile`.
+        "g_rom_flashchip",
         // ── Optional markers. ────────────────────────────────────────────────
         "app_main",
         "loopTask",

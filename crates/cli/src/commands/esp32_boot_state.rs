@@ -187,15 +187,12 @@ pub fn install_esp32c3_fast_boot(bus: &mut SystemBus, firmware_path: &Path) {
 
 /// Seed `g_rom_flashchip` + `g_ticks_per_us_*` from ELF symbols.
 pub fn seed_esp32_post_brom_dram(bus: &mut SystemBus, elf_bytes: &[u8]) {
-    // esp_rom_spiflash_chip_t — Winbond W25Q32-class (4 MiB).
+    // esp_rom_spiflash_chip_t. The layout and the values live in
+    // `labwired_core::boot::esp_partition_table::seed_rom_flashchip` — the same
+    // one the Arduino-ESP32 profile uses, so the CLI's non-profile path and the
+    // browser cannot end up describing different flash chips.
     if let Some(addr) = labwired_loader::resolve_symbol_in_elf(elf_bytes, "g_rom_flashchip") {
-        let base = addr as u64;
-        let _ = bus.write_u32(base, 0x0016_40EF); // device_id
-        let _ = bus.write_u32(base + 4, 4 * 1024 * 1024); // chip_size
-        let _ = bus.write_u32(base + 8, 64 * 1024); // block_size
-        let _ = bus.write_u32(base + 12, 4 * 1024); // sector_size
-        let _ = bus.write_u32(base + 16, 256); // page_size
-        let _ = bus.write_u32(base + 20, 0xFFFF); // status_mask
+        labwired_core::boot::esp_partition_table::seed_rom_flashchip(bus, addr);
         eprintln!(
             "labwired-cli test: seeded g_rom_flashchip @0x{addr:08x} (post-BROM flash attach state)"
         );

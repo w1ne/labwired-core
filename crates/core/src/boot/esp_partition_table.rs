@@ -64,6 +64,7 @@
 //! is worse off than with no table at all.
 
 use crate::peripherals::esp_xtensa_common::rom_thunks::md5_digest;
+use crate::Bus;
 
 /// Bytes an ESP-IDF partition table occupies in flash (`ESP_PARTITION_TABLE_MAX_LEN`).
 pub const MAX_PARTITION_TABLE_LEN: usize = 0xC00;
@@ -208,6 +209,43 @@ pub fn build_partition_table(entries: &[PartitionEntry]) -> Vec<u8> {
 /// The table used when the caller has no firmware-specific `partitions.bin`.
 pub fn default_partition_table() -> Vec<u8> {
     build_partition_table(DEFAULT_ARDUINO_4MB)
+}
+
+/// Flash size the twin's classic-ESP32 model backs the bus with, and therefore
+/// the size [`DEFAULT_ARDUINO_4MB`] is laid out for.
+pub const MODELLED_FLASH_SIZE: u32 = 4 * 1024 * 1024;
+
+/// Seed `g_rom_flashchip` at `addr` — the `esp_rom_spiflash_chip_t` the boot ROM
+/// fills in when it attaches the SPI flash.
+///
+/// **A table at `0x8000` is useless without this.** `spi_flash_mmap` opens with
+/// `if (src_addr + size > g_rom_flashchip.chip_size) return
+/// ESP_ERR_INVALID_ARG;`, so a zeroed descriptor makes every mmap fail —
+/// including the one `load_partitions()` uses to read the table. That is what
+/// `E (0) partition: load_partitions returned 0x102` was on every classic-ESP32
+/// boot: not a bad table, a flash chip the firmware believes is 0 bytes long.
+///
+/// This is boot state, not a thunk: it is a fact about where boot ended and you
+/// can read it back out of memory. Values describe the Winbond W25Q32-class
+/// 4 MiB part the SPI model answers `RDID` for, so the descriptor and the model
+/// cannot disagree.
+///
+/// One home, because there were two: `install_arduino_esp32_profile` covers the
+/// browser, `labwired snapshot capture` and `labwired test`'s arduino profile;
+/// `cli::commands::esp32_boot_state::seed_esp32_post_brom_dram` covers the
+/// CLI's non-profile ESP32 path. Both call this.
+pub fn seed_rom_flashchip(bus: &mut dyn Bus, addr: u32) {
+    let base = addr as u64;
+    for (off, val) in [
+        (0u64, 0x0016_40EFu32),  // device_id — Winbond W25Q32
+        (4, MODELLED_FLASH_SIZE), // chip_size
+        (8, 64 * 1024),           // block_size
+        (12, 4 * 1024),           // sector_size
+        (16, 256),                // page_size
+        (20, 0xFFFF),             // status_mask
+    ] {
+        let _ = bus.write_u32(base + off, val);
+    }
 }
 
 #[cfg(test)]
