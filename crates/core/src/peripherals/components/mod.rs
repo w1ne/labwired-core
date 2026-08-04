@@ -16,6 +16,7 @@ pub mod bmp280;
 pub mod bno055;
 pub mod button;
 pub mod cap1188;
+pub mod declarative_analog;
 pub mod declarative_i2c;
 pub mod declarative_regs;
 pub mod declarative_spi;

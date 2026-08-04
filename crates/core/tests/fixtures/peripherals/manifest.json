@@ -1249,6 +1249,31 @@
       ]
     },
     {
+      "device_type": "gp2y0a21",
+      "label": "Sharp GP2Y0A21 IR Distance Sensor",
+      "summary": "Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC).",
+      "detail": "Triangulation IR ranger: Vo falls with distance over the specified 10–80 cm band, following the datasheet typical-output curve (3.1 V at 10 cm down to 0.5 V at 80 cm). Drive the `distance` channel (mm) at runtime and the ADC channel follows. Beyond 80 cm the output holds a ~0.4 V floor (far is NOT zero); below 10 cm the real part's output falls again (mirror region) and this model clamps to the 10 cm value instead.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "unit": "mm",
+          "min": 0.0,
+          "max": 800.0
+        }
+      ]
+    },
+    {
       "device_type": "soil-moisture",
       "label": "Soil Moisture Sensor",
       "summary": "Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage).",
