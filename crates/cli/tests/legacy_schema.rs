@@ -6,7 +6,6 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,11 +19,10 @@ fn write_temp_file(prefix: &str, contents: &str) -> PathBuf {
     dir.push("labwired-tests");
     let _ = std::fs::create_dir_all(&dir);
 
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let path = dir.join(format!("{}-{}.yaml", prefix, nonce));
+    let path = dir.join(format!(
+        "{}.yaml",
+        labwired_cli::test_support::unique_name(prefix)
+    ));
     std::fs::write(&path, contents).expect("Failed to write temp file");
     path
 }

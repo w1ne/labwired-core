@@ -272,7 +272,7 @@ impl crate::inspect::DeviceEvidence for SevenSegment {
             kind: "text_display".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
-                "format": "seven_segment_mask",
+                "format": crate::inspect::artifact_format::SEVEN_SEGMENT_MASK,
                 "generation": crate::inspect::artifact_generation(&[segments]),
                 "text": self.ch().to_string(),
                 "segments": segments,

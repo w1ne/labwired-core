@@ -37,7 +37,17 @@ jobs:
     name: pr-gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Was 5. The browser-layer steps below (crates/wasm clippy + lib tests) are
+    # a real ~1.5 min of additional compile — crates/wasm is a cdylib outside
+    # default-members, so nothing earlier in this job has already built it.
+    # Measured runs sat at 3.0-4.6 min before; the first run WITH those steps
+    # hit 5m15s and was killed by this timeout mid-`labwired_wasm` test, which
+    # reads as a test failure and is not one.
+    #
+    # 10 buys headroom on a shared runner without hiding a real slowdown: if
+    # this job starts approaching 10 it has genuinely grown and the browser
+    # steps should move to their own job, the way pr-scheduler-observable did.
+    timeout-minutes: 10
     steps:
       # Full history required: generate_validation_status.py uses
       # `git log -1 --format=%cI -- <model>` for drift. Shallow checkout
@@ -115,12 +125,40 @@ jobs:
       - name: Unit tests (default-members lib)
         run: cargo test --lib
 
+      # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
+      # (see `default-members` in the root Cargo.toml), so every step above
+      # resolves to a set that excludes it: `cargo clippy --all-targets` does not
+      # lint it and `cargo test --lib` does not build it. Before this step, NO
+      # pre-merge lane in this repo compiled the code the browser actually runs.
+      #
+      # That is not a theoretical hole, it is where this class of bug lives. The
+      # browser is the only consumer that goes through the wasm bindings, so a
+      # fork that exists ONLY there — an inlined device-type alias table, a
+      # per-model framebuffer accessor that drifted from the engine's registry —
+      # is invisible to every gate that stops at the workspace default set. A
+      # `gxepd2_290_c90c` panel attached, was driven, and rendered dark for
+      # exactly this reason, behind a fully green board.
+      #
+      # Host target on purpose: wasm-bindgen compiles for the host, and the
+      # failures worth catching pre-merge (type errors, a dropped match arm, a
+      # signature that no longer lines up with core) all surface here without
+      # needing the wasm32 toolchain on the runner. A wasm32 link is a heavier,
+      # separate concern and stays in the deploy path.
+      - name: Clippy + build the browser layer (crates/wasm)
+        run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
+
+      - name: Unit tests (browser layer)
+        run: cargo test -p labwired-wasm --lib
+
       # Walk-deletion honesty, on EVERY PR. The structural arm of this test
       # needs no firmware, no `event-scheduler` recompile and no fixtures — it
       # only asserts that a chip's `legacy_walk_disabled` is what the
       # conservative derivation proves rather than a hand-written claim, and
-      # that check compiles under default features. Its observable twin (which
-      # does need `event-scheduler`) stays in `core-integrity`.
+      # that check compiles under default features. Under DEFAULT features the
+      # file's observable twin is `#[cfg]`-ed out entirely, so this command
+      # runs exactly ONE test; its twin needs an `event-scheduler` build and
+      # lives in the `pr-scheduler-observable` job below (which runs in
+      # PARALLEL with this job, so it costs this lane nothing).
       #
       # It is here because the bug it covers shipped precisely BECAUSE the only
       # lanes that could see it were nightly: a classic-ESP32 lab was 12/12 on
@@ -129,6 +167,78 @@ jobs:
       # class walks back through.
       - name: Walk-deletion derivation (PR-fast structural arm)
         run: cargo test -p labwired-core --test esp32_classic_walk_differential
+
+  # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
+  #
+  # THE LANE THAT DID NOT EXIST PRE-MERGE.
+  #
+  # `esp32_classic_walk_differential` has two arms. `pr-gate` carries the
+  # STRUCTURAL one, which is cheap because it compiles under default features.
+  # The OBSERVABLE one — the arm that boots the committed classic-ESP32 ELF
+  # under the browser's own scheduling policy and asserts that serial bytes
+  # actually reach the UART sink — is `#[cfg(feature = "event-scheduler")]`,
+  # because with the feature off `legacy_walk_disabled` is never read and the
+  # defect is unobservable by construction. Until this job existed that arm ran
+  # ONLY in `core-integrity` (push to main), i.e. AFTER the merge — which is
+  # exactly how the defect it covers shipped: a classic-ESP32 lab was 12/12
+  # green on the CLI and livelocked in the browser, and main was the first
+  # thing to notice.
+  #
+  # WHY A SEPARATE JOB RATHER THAN A STEP IN `pr-gate` (measured, not guessed):
+  #   * the feature-variant recompile of `labwired-core` costs ~45s on a warm
+  #     cache (measured: the `Feature gate — scheduler IRQ delivery` step in
+  #     `core-integrity`, run 30838517438, `Finished ... in 44.79s`; this job
+  #     builds it COLD in 46.32s, so ~45-50s either way);
+  #   * a PASSING observable arm exits on the first 500k-step batch, but a
+  #     FAILING one burns the whole 20M-step budget — locally 15s pass vs 129s
+  #     fail, ~8x. `pr-gate` has `timeout-minutes: 5` and already runs 3.0-4.5
+  #     min, so a failing arm inside it would hit the job timeout and kill the
+  #     lane WITHOUT printing the CLKDIV / TXFIFO_CNT / sink_bytes diagnostic
+  #     that makes this gate worth having.
+  # As its own job it runs concurrently with `pr-gate`, so the PR's critical
+  # path is unchanged, and it can afford a timeout sized for the failing case.
+  #
+  # `--features event-scheduler` WITHOUT `jit`: that is what `crates/wasm/
+  # Cargo.toml` pins, so this is the browser's exact feature set.
+  # `core-integrity` runs the same test with `jit,event-scheduler`, which the
+  # browser never builds — this lane is the faithful one. It does not replace
+  # the integrity run; both stay.
+  pr-scheduler-observable:
+    name: pr-scheduler-observable
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Shallow checkout is fine here: unlike `pr-gate` this job runs no
+      # git-history-dependent gate. The fixture it needs
+      # (`tests/fixtures/tier1/esp32.elf`) is a plain committed binary, not LFS.
+      - uses: actions/checkout@v4
+
+      # No rustfmt/clippy components: this job lints nothing.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      # NO CACHE STEP, ON PURPOSE — measured, not assumed. The first cut of this
+      # job used `Swatinem/rust-cache@v2` with `shared-key: core-ci` +
+      # `save-if: false`, on the theory that it would restore `core-integrity`'s
+      # warm target dir. Run 30842338316 reported `... Restoring cache ... No
+      # cache found.`: rust-cache's key folds in the installed toolchain
+      # components, and `core-integrity` installs rustfmt + clippy, so the two
+      # jobs never share a key. The cold build cost 46.32s and the whole job 71s
+      # — while `core-integrity`'s WARM feature-variant compile of the same
+      # crate is 44.79s. The cache was buying ~0s and would have cost an ~18s
+      # restore plus repo cache storage, so it is gone. Keep it that way unless
+      # a measurement says otherwise.
+
+      # `--nocapture` on purpose: on PASS the arm prints
+      # `uart0: CLKDIV=... TXFIFO_CNT=... sink_bytes=N`, which is the evidence
+      # that the lane actually observed bytes rather than merely existing in
+      # the YAML. A gate whose log cannot distinguish "ran and saw bytes" from
+      # "was skipped" is the failure mode this job was added to remove.
+      - name: Observable arm — classic-ESP32 serial reaches the sink (browser policy)
+        run: >
+          cargo test -p labwired-core --features event-scheduler
+          --test esp32_classic_walk_differential -- --nocapture
 
   # ── Main-branch integrity (push to main) — fuller than PR, still no matrices ─
   integrity:
@@ -228,13 +338,21 @@ jobs:
           cargo test --release -p labwired-core --features event-scheduler
           --lib --test event_scheduler --test release_only_cfg_ratchet
 
-      # `esp32_classic_walk_differential` is here and NOT in `pr-gate` for the
-      # same structural reason the rest of this step is: the defect it covers is
-      # only reachable in an `event-scheduler` build, and the CLI (which every
-      # PR-fast lane exercises) deliberately compiles that feature OFF. A
-      # classic-ESP32 lab was 12/12 green on the CLI while livelocked in the
-      # browser because NO lane ran classic ESP32 under the browser's own
-      # feature set. This step is that lane.
+      # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
+      # covered pre-merge as well — do not read this step as their only lane.
+      # `pr-gate` runs the structural arm under default features, and
+      # `pr-scheduler-observable` runs the observable arm under
+      # `event-scheduler` on every PR. This step keeps the push-to-main copy
+      # (with `jit` on, which no PR lane exercises).
+      #
+      # The original note here said the test was "NOT in pr-gate" because the
+      # defect is only reachable in an `event-scheduler` build and the CLI
+      # deliberately compiles that feature OFF. The premise is still true; the
+      # conclusion no longer is. A classic-ESP32 lab was 12/12 green on the CLI
+      # while livelocked in the browser because no lane ran classic ESP32 under
+      # the browser's own feature set BEFORE THE MERGE — a push-to-main lane
+      # reports that after the fact. See the comment on
+      # `pr-scheduler-observable`.
       - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
         run: >
           cargo test -p labwired-core --features jit,event-scheduler

@@ -22,7 +22,6 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -42,11 +41,7 @@ struct CowRun {
 /// `labwired test` CLI and collect its result + UART log.
 fn run_cow(script_rel: &str) -> CowRun {
     let root = repo_root();
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let out_dir = std::env::temp_dir().join(format!("labwired-cow-{nonce}"));
+    let out_dir = labwired_cli::test_support::unique_temp_dir("labwired-cow");
     std::fs::create_dir_all(&out_dir).expect("create out dir");
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))

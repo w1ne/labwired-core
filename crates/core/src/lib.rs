@@ -1012,6 +1012,38 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
 
+    /// Hand the peripheral the machine's ONE universal bus trace, plus the name
+    /// it should stamp events with. Called from the same registration choke
+    /// points as [`Peripheral::attach_cycle_clock`] and
+    /// [`Peripheral::attach_irq_line`] (`add_peripheral`,
+    /// `replace_or_add_peripheral`, `push_peripheral`), so a model reaches it by
+    /// being registered at all rather than by a per-family call site.
+    ///
+    /// I²C and SPI do NOT use this: their traffic is recorded by wrapping the
+    /// attached slave (`bus_trace::wrap_i2c` / `wrap_spi`), which is structurally
+    /// unbypassable. It exists for the buses with nothing to wrap — a UART or a
+    /// CAN controller transacts against a wire, not against an attachable
+    /// device, so the model itself has to record.
+    ///
+    /// Default no-op: the vast majority of peripherals carry no bus traffic.
+    /// A model that DOES carry traffic and ignores this is exactly the fork
+    /// `crate::tests::bus_trace_one_home` fails on.
+    fn attach_bus_trace(&mut self, _name: &str, _trace: &crate::bus::bus_trace::BusTrace) {}
+
+    /// The trace handle this model records into, if it records at all — `None`
+    /// for the vast majority, which carry no bus traffic.
+    ///
+    /// Exists so the one-home gate can prove by `Arc` identity that a model
+    /// which DOES record is recording into the machine's ring rather than into
+    /// the private handle it was born with. That distinction is invisible from
+    /// the outside: an orphaned ring accepts every write and simply is never
+    /// read, so the instrument shows an empty panel and no error. Comparing
+    /// snapshots cannot detect it (two empty rings are equal); comparing
+    /// identity can.
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        None
+    }
+
     /// Classify an MMIO access at `offset` for host idle/coalesce policy.
     /// Default [`MmioAccessClass::SideEffecting`] — only models that are
     /// proven poll-safe (or proven side-effect-free) override this.

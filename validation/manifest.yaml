@@ -854,7 +854,33 @@ boards:
     # loop() iterations per node and five different successive counter values read by
     # the peer's application, both ways, with NO firmware assertion in the serial.
     # No live re-capture.
-    drift_ack: 2026-08-03
+    #
+    # 2026-08-04: an attempt to model RWBLECNTL bit 25 (the advertising-event
+    # abort) was merged and then REVERTED the same day, because the two-node run
+    # that would have justified it came back negative. Recorded so the next
+    # attempt does not repeat it:
+    #
+    #   baseline (no bit25 model): node A takes the host role, ball sweeps
+    #     x=4..122, score reaches 3:2 — one reception gets through and the
+    #     host-side game runs.
+    #   with the abort modelled:   no node ever takes the host role, the ball
+    #     never moves, and only ~50 loop iterations happen where the baseline
+    #     manages ~157. Strictly worse, same firmware image.
+    #
+    # Three scopings were tried and ALL regressed: abort any in-flight event;
+    # abort only Running events; abort only Running legacy-ADVERTISING events
+    # (CS_FORMAT gated). So the defect is not simply "the abort is missing" —
+    # ending the event early through the ordinary ET_STATUS_END + sch_prog_end
+    # path is not what the core does, or not all of it. The ROM evidence for the
+    # bit stands (r_lld_adv_stop 0x4001898A sets it only when state byte [137]
+    # == 1, then waits in state 2); what the CORE does in response is unknown.
+    #
+    # The bug it was chasing is real and still OPEN: at a 20 ms re-publication
+    # cadence a node goes quiet after its first publish, while two real C3s
+    # flashed with the identical image play correctly (live air capture
+    # 2026-08-04: roles negotiated, ball bytes advancing, ~200 frames per node
+    # per 20 s). Twin-only defect.
+    drift_ack: 2026-08-04
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md

@@ -320,7 +320,7 @@ impl crate::inspect::DeviceEvidence for Tm1637 {
             kind: "text_display".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
-                "format": "tm1637_grid",
+                "format": crate::inspect::artifact_format::TM1637_GRID,
                 "generation": crate::inspect::artifact_generation(&grids),
                 "text": text,
                 "lit_segments": grids.iter().map(|g| g.count_ones() as usize).sum::<usize>(),

@@ -6,7 +6,6 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -16,11 +15,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn temp_artifacts_dir(prefix: &str) -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let dir = std::env::temp_dir().join(format!("labwired-golden-{}-{}", prefix, nonce));
+    let dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-golden-{prefix}"));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }

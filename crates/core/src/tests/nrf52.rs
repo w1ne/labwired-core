@@ -988,3 +988,83 @@ fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
         "RXD.AMOUNT should be 0 when RXD.MAXCNT=0"
     );
 }
+
+/// GPIOTE task-mode drive must land in the port the chip YAML declares — for
+/// **both** ports.
+///
+/// The nRF52840 chip YAML deliberately remaps P1/`gpio1` from its silicon base
+/// (0x5000_0300) to 0x5000_1000, because the real P1 base sits *inside* GPIO0's
+/// 4 KB window and the two peripherals would otherwise collide on the bus. A
+/// GPIOTE model that hardcodes the silicon base therefore writes 0x5000_0810,
+/// which lands in gpio0's window and is swallowed with no error and no warning.
+///
+/// This asserts both ports so a "fix" that merely moves the breakage from
+/// port 1 to port 0 fails here.
+#[test]
+fn gpiote_task_drive_reaches_the_port_the_chip_yaml_declares() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/onboarding/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/onboarding/nrf52840.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+
+    // The bases under test come from the chip descriptor, not from this test's
+    // own opinion about Nordic silicon: if the YAML remap ever changes, this
+    // test follows it instead of encoding a second copy of the memory map.
+    let base_of = |id: &str| -> u64 {
+        chip.peripherals
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("chip yaml declares no peripheral '{id}'"))
+            .base_address
+    };
+    let gpio0_base = base_of("gpio0");
+    let gpio1_base = base_of("gpio1");
+    let gpiote_base = base_of("gpiote");
+    assert_ne!(
+        gpio0_base, gpio1_base,
+        "the two GPIO ports must not share a base"
+    );
+
+    const IN_OFFSET: u64 = 0x510;
+    const CONFIG_0: u64 = 0x510;
+    const TASKS_SET_0: u64 = 0x030;
+    const PIN: u32 = 5;
+
+    // MODE=Task(3), PSEL=PIN, PORT=<port>, POLARITY=None.
+    let cfg = |port: u32| 3u32 | (PIN << 8) | ((port & 1) << 13);
+
+    for (port, target_base, other_base, target, other) in [
+        (0u32, gpio0_base, gpio1_base, "gpio0", "gpio1"),
+        (1u32, gpio1_base, gpio0_base, "gpio1", "gpio0"),
+    ] {
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("onboarding bus");
+
+        bus.write_u32(gpiote_base + CONFIG_0, cfg(port)).unwrap();
+        bus.write_u32(gpiote_base + TASKS_SET_0, 1).unwrap();
+        for _ in 0..4 {
+            bus.tick_peripherals_fully_forced();
+        }
+
+        let target_in = bus.read_u32(target_base + IN_OFFSET).unwrap();
+        let other_in = bus.read_u32(other_base + IN_OFFSET).unwrap();
+
+        assert_eq!(
+            target_in & (1 << PIN),
+            1 << PIN,
+            "PORT={port}: GPIOTE TASKS_SET must drive {target}.IN bit {PIN} high \
+             ({target} base {target_base:#010x}); got {target}.IN = {target_in:#010x}, \
+             {other}.IN = {other_in:#010x}"
+        );
+        assert_eq!(
+            other_in & (1 << PIN),
+            0,
+            "PORT={port}: the drive must NOT leak into {other}.IN bit {PIN} \
+             ({other} base {other_base:#010x}); got {other}.IN = {other_in:#010x}"
+        );
+    }
+}

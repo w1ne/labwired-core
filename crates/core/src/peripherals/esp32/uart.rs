@@ -89,6 +89,12 @@ const CONFIG_REGS: &[(u64, u32, u32)] = &[
 #[derive(Default)]
 struct UartCore {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// The machine's ONE bus trace, and the name to stamp with. Lives on the
+    /// CORE, not on either window, for the same reason the FIFO does: the APB
+    /// and AHB aliases are two doors onto one UART, and a byte must be traced
+    /// once whichever door pushed it.
+    trace: crate::bus::bus_trace::BusTrace,
+    trace_name: String,
     regs: crate::FastMap<u64, u32>,
     tx_fifo: VecDeque<u8>,
     rx_fifo: VecDeque<u8>,
@@ -142,6 +148,8 @@ impl Esp32Uart {
         Self {
             core: Arc::new(Mutex::new(UartCore {
                 sink: None,
+                trace: crate::bus::bus_trace::BusTrace::new(),
+                trace_name: String::new(),
                 regs,
                 tx_fifo: VecDeque::new(),
                 rx_fifo: VecDeque::new(),
@@ -171,6 +179,16 @@ impl Esp32Uart {
         let mut core = self.core.lock().unwrap();
         if core.rx_fifo.len() < FIFO_LEN {
             core.rx_fifo.push_back(byte);
+            // Only a byte that landed is traced — a byte dropped into a full
+            // FIFO never reaches the firmware, and tracing it would make the
+            // analyzer disagree with the model about what arrived.
+            core.trace.push(
+                &core.trace_name,
+                crate::bus::bus_trace::BusPayload::Uart {
+                    direction: crate::bus::bus_trace::BusDir::Rx,
+                    byte,
+                },
+            );
             core.int_raw_sticky |= INT_RXFIFO_TOUT;
         } else {
             core.int_raw_sticky |= INT_RXFIFO_OVF;
@@ -268,6 +286,23 @@ impl UartCore {
 }
 
 impl Peripheral for Esp32Uart {
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        Some(self.core.lock().unwrap().trace.clone())
+    }
+
+    /// Join the machine's one bus trace, on behalf of the shared core.
+    ///
+    /// Deliberately NOT implemented on [`Esp32UartAhbFifo`]: that window is an
+    /// alias onto this same core, and if it also stamped a name the events for
+    /// one physical UART would be split across two bus names depending on
+    /// registration order. One UART, one name — the AHB door pushes into the
+    /// core and the core traces under the APB peripheral's id.
+    fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
+        let mut core = self.core.lock().unwrap();
+        core.trace = trace.clone();
+        core.trace_name = name.to_string();
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let mut core = self.core.lock().unwrap();
         if offset & !3 == OFF_FIFO {
@@ -360,6 +395,13 @@ impl Peripheral for Esp32Uart {
             while core.drain_accum >= per_byte && !core.tx_fifo.is_empty() {
                 core.drain_accum -= per_byte;
                 if let Some(byte) = core.tx_fifo.pop_front() {
+                    core.trace.push(
+                        &core.trace_name,
+                        crate::bus::bus_trace::BusPayload::Uart {
+                            direction: crate::bus::bus_trace::BusDir::Tx,
+                            byte,
+                        },
+                    );
                     if let Some(sink) = &core.sink {
                         if let Ok(mut g) = sink.lock() {
                             g.push(byte);
