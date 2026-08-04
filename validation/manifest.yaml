@@ -161,7 +161,7 @@ boards:
     # move. Evidence: the new per-family mux coverage drives a real EasyDMA
     # transaction through this controller and passes unchanged. No live re-capture.
     # 2026-08-03: ⚠ REAL MODEL CHANGE, not metadata. `spi2` in configs/chips/nrf52840.yaml had NO `config.profile`, and every *RegisterLayout derives Default = STM32 — so this nRF52840 SPI peripheral was being modelled with the STM32 SPI register map, silently. It now states `profile: "nrf52_spim"` and gets the Nordic SPIM layout (#753). This can only move values TOWARD silicon (the previous layout was the wrong vendor's), and SPI2 is not in the 2026-06-17 asserted set — that capture covers conformance 16/16, mmio 16/16, GPIO P0/P1 and POWER/SPIS/TWIS/RTC0/TIMER0 sweeps, none of which touch SPIM2 @ 0x40023000. But this is a fidelity change and a live SPIM2 re-capture IS owed; acking so the gate tracks it rather than hiding it. Same board also gained debug_schema entries (metadata only, see the note pattern on the other boards). Evidence: all 249 nrf52 tests green.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -238,7 +238,7 @@ boards:
     # change (#720); same silicon, defaulted trait hooks, byte-identical with no mux
     # attached. See the nrf52840 drift_ack note.
     # 2026-08-03: ⚠ REAL MODEL CHANGE, not metadata. `spi2` in configs/chips/nrf52840.yaml had NO `config.profile`, and every *RegisterLayout derives Default = STM32 — so this nRF52840 SPI peripheral was being modelled with the STM32 SPI register map, silently. It now states `profile: "nrf52_spim"` and gets the Nordic SPIM layout (#753). This can only move values TOWARD silicon (the previous layout was the wrong vendor's), and SPI2 is not in the 2026-06-17 asserted set — that capture covers conformance 16/16, mmio 16/16, GPIO P0/P1 and POWER/SPIS/TWIS/RTC0/TIMER0 sweeps, none of which touch SPIM2 @ 0x40023000. But this is a fidelity change and a live SPIM2 re-capture IS owed; acking so the gate tracks it rather than hiding it. Same board also gained debug_schema entries (metadata only, see the note pattern on the other boards). Evidence: all 249 nrf52 tests green.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
