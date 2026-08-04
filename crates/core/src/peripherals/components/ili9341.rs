@@ -823,8 +823,8 @@ mod tests {
         // Raw framebuffer: red landed at physical x=239 (logical col 0 with MX=1),
         // green at physical x=238 (logical col 1).
         let raw = dev.framebuffer();
-        let red_idx = (0 * WIDTH + 239) * 2;
-        let green_idx = (0 * WIDTH + 238) * 2;
+        let red_idx = 239 * 2;
+        let green_idx = 238 * 2;
         assert_eq!((raw[red_idx], raw[red_idx + 1]), (0xF8, 0x00));
         assert_eq!((raw[green_idx], raw[green_idx + 1]), (0x07, 0xE0));
 
