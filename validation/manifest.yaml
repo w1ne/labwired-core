@@ -394,7 +394,7 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -1012,7 +1012,7 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -1137,7 +1137,7 @@ boards:
     # smoke case pass unchanged. A future re-capture would agree with the NEW model,
     # not the old one. Re-capture of GPIOC IDR readback is owed and tracked.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -1280,7 +1280,7 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -1416,7 +1416,7 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -1637,7 +1637,7 @@ boards:
     # anchor untouched; esp32s3 reset conformance passes. No S3 board attached;
     # no live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-03
+    drift_ack: 2026-08-04
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
