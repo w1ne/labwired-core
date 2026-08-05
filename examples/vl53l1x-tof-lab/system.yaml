@@ -6,12 +6,4 @@ external_devices:
     connection: "i2c1"
     config:
       i2c_address: 0x29
-board_io:
-  - id: "vl53l1x"
-    kind: "i2c_device"
-    peripheral: "i2c1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    i2c_address: 0x29
-    device_type: "vl53l1x"
+board_io: []

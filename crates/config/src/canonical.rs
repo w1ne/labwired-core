@@ -912,8 +912,7 @@ fn attr_string(part: &CanonicalPart, key: &str) -> Option<String> {
 }
 
 /// Emit the `external_devices` fragment for a legacy I²C device (port of
-/// `emitLegacyI2cDevice`). board_io is only for the sensor-UI allowlist
-/// (adxl345 / mpu6050); displays and other kits are connection-only.
+/// `emitLegacyI2cDevice`). Connection-only — no board_io twin.
 fn emit_legacy_i2c_device(
     part_id: &str,
     part_type: &str,
@@ -924,12 +923,7 @@ fn emit_legacy_i2c_device(
     let external_device = format!(
         "  - id: \"{part_id}\"\n    type: \"{part_type}\"\n    connection: \"{connection}\"\n    config:\n      i2c_address: {addr}"
     );
-    let board_io = matches!(part_type, "adxl345" | "mpu6050").then(|| {
-        format!(
-            "  - id: \"{part_id}\"\n    kind: \"i2c_device\"\n    peripheral: \"{connection}\"\n    pin: 0\n    signal: \"input\"\n    active_high: true\n    i2c_address: {addr}\n    device_type: \"{part_type}\""
-        )
-    });
-    (external_device, board_io)
+    (external_device, None)
 }
 
 /// Format a numeric attr value the way the TS `${n}` template literal does:

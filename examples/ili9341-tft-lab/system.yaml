@@ -12,11 +12,4 @@ external_devices:
     connection: "spi1"
     config:
       cs_pin: "PA4"
-board_io:
-  - id: "tft"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 4
-    signal: "input"
-    active_high: true
-    device_type: "ili9341"
+board_io: []

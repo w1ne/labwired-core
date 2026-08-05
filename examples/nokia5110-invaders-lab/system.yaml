@@ -26,11 +26,4 @@ external_devices:
       echo_pin: "PB10"
       distance_cm: 30.0
       cpu_hz: 250000
-board_io:
-  - id: "lcd"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 6
-    signal: "input"
-    active_high: true
-    device_type: "pcd8544"
+board_io: []

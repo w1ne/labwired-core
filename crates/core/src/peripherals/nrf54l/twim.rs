@@ -184,6 +184,11 @@ impl Nrf54lTwim {
         self.last_us.push(u64::MAX);
     }
 
+    /// Borrow attached slaves (browser sensor readback / inspect).
+    pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
+        &self.slaves
+    }
+
     /// Resolve the slave that answers to `addr` and tell it which address was
     /// selected.
     ///

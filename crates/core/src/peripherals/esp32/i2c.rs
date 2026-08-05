@@ -198,6 +198,11 @@ impl Esp32I2c {
         self.slaves.push(slave);
     }
 
+    /// Borrow attached slaves (browser sensor readback / inspect).
+    pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
+        &self.slaves
+    }
+
     fn fifo_status(&self) -> u32 {
         // FIFO_ST.TXFIFO_START_ADDR (bits 14..10) is the TX-FIFO read pointer:
         // bytes consumed by the current command-list run. 0 at cold reset.

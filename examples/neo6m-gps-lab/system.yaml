@@ -5,11 +5,4 @@ external_devices:
     type: "neo6m-gps"
     connection: "uart1"
     config: {}
-board_io:
-  - id: "gps"
-    kind: "uart_device"
-    peripheral: "uart1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    device_type: "neo6m-gps"
+board_io: []

@@ -10,11 +10,4 @@ external_devices:
       ber: 0
       boot_urcs: true
       auto_attach: true
-board_io:
-  - id: "modem"
-    kind: "uart_device"
-    peripheral: "uart1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    device_type: "bg770a-cellular"
+board_io: []

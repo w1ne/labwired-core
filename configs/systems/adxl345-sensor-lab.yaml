@@ -6,12 +6,4 @@ external_devices:
     connection: "i2c1"
     config:
       i2c_address: 0x53
-board_io:
-  - id: "adxl345"
-    kind: "i2c_device"
-    peripheral: "i2c1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    i2c_address: 0x53
-    device_type: "adxl345"
+board_io: []

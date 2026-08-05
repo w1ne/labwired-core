@@ -43,17 +43,6 @@ board_io:
   # Framebuffer readback binding. The S3 GPIO matrix routes I2C0 SDA/SCL to
   # GPIO8/GPIO9; the behavioral controller responds at its register block
   # regardless, so the pin is documentation here.
-  - id: "oled"
-    kind: "i2c_device"
-    peripheral: "i2c0"
-    pin: 8
-    signal: "input"
-    active_high: true
-    i2c_address: 0x3D
-    device_type: "oled-sh1107"
-
-  # 10 momentary keys, KEY1..KEY10, active-high on the S3 GPIO bank. Pin numbers
-  # match KEY_PINS in src/main.rs.
   - id: "key1"
     kind: "button"
     peripheral: "gpio"

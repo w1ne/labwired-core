@@ -91,6 +91,11 @@ impl Rp2040I2c {
         self.attached_devices.push(RefCell::new(device));
     }
 
+    /// Borrow attached slaves (browser sensor readback / inspect).
+    pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        &self.attached_devices
+    }
+
     /// Resolve the attached device that answers to `addr7`. Uses
     /// `claims_address` (not `address()`) so a bus switch can answer for the
     /// devices behind its enabled channels — see
