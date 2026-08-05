@@ -26,7 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install thumb target
-        run: rustup target add thumbv7em-none-eabi
+        run: |
+          export PATH="$HOME/.cargo/bin:/usr/local/cargo/bin:$PATH"
+          if command -v rustup >/dev/null 2>&1; then
+            rustup target add thumbv7em-none-eabi
+          else
+            echo "rustup not found on PATH; requiring thumbv7em-none-eabi via rustc"
+            rustc --print target-list | grep -q thumbv7em-none-eabi
+          fi
       - name: Gate — no committed OEM private keys
         run: |
           if grep -RE "BEGIN EC PRIVATE KEY" examples/nrf52840-secure-boot-lab/; then
