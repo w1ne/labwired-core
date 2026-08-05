@@ -694,7 +694,7 @@ mod tests {
     #[test]
     fn legacy_rxd_pops_injection_queue() {
         let mut u = Nrf52Uarte::new();
-        u.rx_buffer().lock().unwrap().extend([b'O', b'K']);
+        u.rx_buffer().lock().unwrap().extend(*b"OK");
         u.write_u32(OFF_ENABLE, ENABLE_UART_LEGACY).unwrap();
         assert_eq!(u.read_u32(OFF_EVENTS_RXDRDY).unwrap(), 1);
         assert_eq!(u.read_u32(OFF_RXD_LEGACY).unwrap(), b'O' as u32);

@@ -75,9 +75,9 @@ fn set_pin(bus: &mut SystemBus, pin: u8, high: bool) {
 
 /// Present `value` on DB[15:0] (DB0 = LSB).
 fn set_db(bus: &mut SystemBus, value: u16) {
-    for i in 0..16 {
+    for (i, &pin) in DB.iter().enumerate() {
         let high = (value >> i) & 1 != 0;
-        set_pin(bus, DB[i], high);
+        set_pin(bus, pin, high);
     }
 }
 

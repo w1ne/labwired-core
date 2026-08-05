@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn injected_rx_bytes_reach_the_fifo() {
         let u = new(false, UART0_INTR_SOURCE_ID);
-        u.rx_buffer().lock().unwrap().extend([b'A', b'B']);
+        u.rx_buffer().lock().unwrap().extend(*b"AB");
         assert_eq!(u.read_u32(0x00).unwrap(), b'A' as u32);
         assert_eq!(u.read_u32(0x00).unwrap(), b'B' as u32);
     }
