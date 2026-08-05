@@ -1060,12 +1060,12 @@ impl SystemBus {
                     let rd = Self::gpio_from_config(ext, "rd_pin", "RD", "GPIO5")?;
                     let rst = Self::gpio_from_config(ext, "rst_pin", "RST", "GPIO33")?;
                     let mut db = [0u8; 16];
-                    for i in 0..16 {
+                    for (i, pin) in db.iter_mut().enumerate() {
                         let key = format!("db{i}_pin");
                         let alt = format!("DB{i}");
                         // Default DB0..DB15 → GPIO10..GPIO25 (common bit-bang map).
                         let default = format!("GPIO{}", 10 + i);
-                        db[i] = Self::gpio_from_config(ext, &key, &alt, &default)?;
+                        *pin = Self::gpio_from_config(ext, &key, &alt, &default)?;
                     }
                     let pins = crate::peripherals::components::ili9341_parallel::ParallelPins {
                         cs,
