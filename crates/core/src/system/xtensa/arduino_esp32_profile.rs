@@ -631,10 +631,10 @@ mod thunk_debt {
     ///  * firmware you genuinely cannot run yet: that is real debt. Raising the
     ///    ceiling is then a deliberate act, and the comment next to the stub has
     ///    to say what is missing.
-    /// 75 → 56 when the `esp_flash` chip driver stopped being nop'd. See the
-    /// note in `NOP_STUBS` where those 18 symbols used to be: the sim already
-    /// modelled the SPI NOR command set they probe with, so the debt was
-    /// buying nothing and costing `nvs_flash_init()`.
+    ///   * 75 → 56 when the `esp_flash` chip driver stopped being nop'd. See the
+    ///     note in `NOP_STUBS` where those 18 symbols used to be: the sim already
+    ///     modelled the SPI NOR command set they probe with, so the debt was
+    ///     buying nothing and costing `nvs_flash_init()`.
     const CEILING: usize = 56;
 
     #[test]
