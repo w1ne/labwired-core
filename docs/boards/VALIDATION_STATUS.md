@@ -7,10 +7,10 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 
 | Board | Tier | Last silicon capture | Newest model | Status |
 |-------|------|----------------------|--------------|--------|
-| `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-08-06 | ⚠ drift acked 2026-08-06 (re-capture pending) |
-| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-08-06 | ⚠ drift acked 2026-08-06 (re-capture pending) |
+| `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-08-05 | ⚠ drift acked 2026-08-06 (re-capture pending) |
+| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-08-05 | ⚠ drift acked 2026-08-06 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-08-05 | ⚠ drift acked 2026-08-05 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-08-06 | ⚠ drift acked 2026-08-06 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-08-05 | ⚠ drift acked 2026-08-06 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-08-05 | ⚠ drift acked 2026-08-05 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-08-05 | ⚠ drift acked 2026-08-05 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-08-05 | ⚠ drift acked 2026-08-05 (re-capture pending) |
@@ -19,12 +19,12 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `stm32f401` | 🟡 smoke-manual | — | 2026-08-03 | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-08-03 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-08-03 | no silicon capture |
-| `rp2040` | ⚪ structural | — | 2026-08-06 | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | 2026-08-06 | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-06 | no silicon capture |
+| `rp2040` | ⚪ structural | — | 2026-08-05 | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | 2026-08-05 | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-05 | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-05 | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-05 | no silicon capture |
-| `esp32` | ⚪ structural | — | 2026-08-06 | no silicon capture |
+| `esp32` | ⚪ structural | — | 2026-08-05 | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
