@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::peripherals::noise::ChannelNoise;
 use crate::peripherals::uart::UartStreamDevice;
 use std::any::Any;
 use std::collections::VecDeque;
@@ -13,9 +14,14 @@ use std::collections::VecDeque;
 /// Emits NMEA sentences (GGA + RMC, alternating) at 2 Hz over the UART RX path.
 /// All domain logic — NMEA formatting, DDMM.mmmm conversion, checksum, pacing — lives here in
 /// Rust core. The WASM bridge and UI are thin pass-throughs.
+///
+/// Optional seeded Gaussian noise on lat/lon (same [`ChannelNoise`] facility as
+/// MPU6050 / MMA8451Q / declarative sensors) is applied per sentence emission so
+/// firmware sees a stable sentence, not mid-stream jitter.
 #[derive(Debug, serde::Serialize)]
 pub struct Neo6mGps {
-    /// Current latitude in decimal degrees (positive = North).
+    /// Current latitude in decimal degrees (positive = North). Truth value;
+    /// NMEA emission samples through noise when enabled.
     latitude_deg: f64,
     /// Current longitude in decimal degrees (positive = East).
     longitude_deg: f64,
@@ -31,6 +37,13 @@ pub struct Neo6mGps {
     /// system.yaml `external_devices` id, stamped at attach (see
     /// [`crate::sim_input::SimInput::component_id`]).
     component_id: Option<String>,
+    /// Seeded Gaussian σ on lat/lon in **degrees** (0 = off, default — byte-
+    /// identical to pre-noise NMEA). ~1e-5 ° ≈ 1 m at mid-latitudes.
+    #[serde(skip)]
+    noise_sigma: f64,
+    /// Per-channel noise states for lat/lon, re-keyed when the component id is stamped.
+    #[serde(skip)]
+    noise: Option<[ChannelNoise; 2]>,
 }
 
 impl Default for Neo6mGps {
@@ -50,10 +63,33 @@ impl Neo6mGps {
             time_since_last_sentence_us: 0,
             sentence_index: 0,
             component_id: None,
+            noise_sigma: 0.0,
+            noise: None,
         }
     }
 
-    /// Set the simulated GPS position.
+    /// Enable seeded Gaussian noise on lat/lon NMEA emission. `sigma` is in
+    /// degrees (same unit as the `lat`/`lon` SimInput channels). 0 = off.
+    pub fn with_noise_sigma(mut self, sigma: f64) -> Self {
+        self.noise_sigma = sigma;
+        self.rebuild_noise();
+        self
+    }
+
+    /// (Re)build lat/lon noise states, keyed by the stamped component id so two
+    /// identical GPS modules on one board diverge.
+    fn rebuild_noise(&mut self) {
+        if self.noise_sigma <= 0.0 {
+            self.noise = None;
+            return;
+        }
+        let id = self.component_id.clone().unwrap_or_default();
+        self.noise = Some(["lat", "lon"].map(|ch| {
+            ChannelNoise::new(0, &id, ch, self.noise_sigma, 0.0, None)
+        }));
+    }
+
+    /// Set the simulated GPS position (truth; noise is applied at emit time).
     pub fn set_position(&mut self, lat_deg: f64, lon_deg: f64) {
         self.latitude_deg = lat_deg;
         self.longitude_deg = lon_deg;
@@ -64,9 +100,20 @@ impl Neo6mGps {
         self.fix_status = if active { 'A' } else { 'V' };
     }
 
-    /// Returns the current simulated position as (lat_deg, lon_deg).
+    /// Returns the current simulated **truth** position as (lat_deg, lon_deg).
     pub fn position(&self) -> (f64, f64) {
         (self.latitude_deg, self.longitude_deg)
+    }
+
+    /// Lat/lon as firmware observes them in NMEA: truth, or a seeded-noise
+    /// sample of it when noise is enabled. Applied once per sentence so a
+    /// multi-byte poll does not re-roll mid-stream.
+    fn observed_position(&mut self) -> (f64, f64) {
+        let (lat, lon) = (self.latitude_deg, self.longitude_deg);
+        match self.noise.as_mut() {
+            Some([n_lat, n_lon]) => (n_lat.sample(lat, None), n_lon.sample(lon, None)),
+            None => (lat, lon),
+        }
     }
 
     /// Returns true when the GPS has an active fix.
@@ -80,8 +127,9 @@ impl Neo6mGps {
     ///   $<payload>*<XX>\r\n
     /// where XX is the XOR checksum of every byte between '$' and '*' (exclusive).
     fn enqueue_next_sentence(&mut self) {
-        let (lat_dm, lat_hemi) = degrees_to_nmea(self.latitude_deg, true);
-        let (lon_dm, lon_hemi) = degrees_to_nmea(self.longitude_deg, false);
+        let (lat, lon) = self.observed_position();
+        let (lat_dm, lat_hemi) = degrees_to_nmea(lat, true);
+        let (lon_dm, lon_hemi) = degrees_to_nmea(lon, false);
 
         let payload = match self.sentence_index % 2 {
             0 => {
@@ -223,6 +271,7 @@ impl crate::sim_input::SimInput for Neo6mGps {
 
     fn set_component_id(&mut self, id: String) {
         self.component_id = Some(id);
+        self.rebuild_noise();
     }
 }
 
@@ -241,7 +290,8 @@ static NEO6M_METADATA: KitMetadata = KitMetadata {
     label: "NEO-6M GPS",
     summary: "GPS module streaming NMEA sentences over UART RX.",
     detail: "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. \
-             Firmware echoes the stream back to the host UART.",
+             Firmware echoes the stream back to the host UART. Optional noise_sigma (° lat/lon) \
+             uses the same seeded ChannelNoise facility as the IMU kits.",
     transport: Transport::Uart,
     category: Category::Uart,
     config_keys: &[
@@ -254,6 +304,11 @@ static NEO6M_METADATA: KitMetadata = KitMetadata {
             name: "lon_deg",
             ty: ConfigType::Float,
             doc: "Initial longitude in decimal degrees (paired with lat_deg).",
+        },
+        ConfigKey {
+            name: "noise_sigma",
+            ty: ConfigType::Float,
+            doc: "Seeded Gaussian σ on lat/lon (degrees) applied per NMEA sentence; 0 = off. ~1e-5 ° ≈ 1 m.",
         },
     ],
     labs: &[LabRef {
@@ -272,8 +327,9 @@ impl PeripheralKit for Neo6mGpsKit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let lat = ctx.config_f64("lat_deg");
         let lon = ctx.config_f64("lon_deg");
+        let sigma = ctx.config_f64("noise_sigma").unwrap_or(0.0);
 
-        let mut gps = Neo6mGps::new();
+        let mut gps = Neo6mGps::new().with_noise_sigma(sigma);
         if let (Some(lat), Some(lon)) = (lat, lon) {
             gps.set_position(lat, lon);
         }
@@ -368,5 +424,60 @@ mod tests {
             sentence.contains(",V,"),
             "void fix must show 'V' in RMC status field"
         );
+    }
+
+    fn drain_one_sentence(gps: &mut Neo6mGps) -> String {
+        gps.out_queue.clear();
+        gps.enqueue_next_sentence();
+        gps.out_queue.iter().map(|&b| b as char).collect()
+    }
+
+    #[test]
+    fn noise_moves_nmea_and_replays() {
+        use crate::sim_input::SimInput;
+        let mut a = Neo6mGps::new().with_noise_sigma(0.01); // ~1 km σ — large enough to change DDMM
+        let mut b = Neo6mGps::new().with_noise_sigma(0.01);
+        for g in [&mut a, &mut b] {
+            SimInput::set_component_id(g, "gps".into());
+            g.set_position(37.7749, -122.4194);
+            g.sentence_index = 0;
+        }
+        let sa = drain_one_sentence(&mut a);
+        let sb = drain_one_sentence(&mut b);
+        let quiet = {
+            let mut g = Neo6mGps::new();
+            g.set_position(37.7749, -122.4194);
+            g.sentence_index = 0;
+            drain_one_sentence(&mut g)
+        };
+        assert_ne!(sa, quiet, "noise never moved NMEA: {sa}");
+        assert_eq!(sa, sb, "same seed must replay bit-identically");
+    }
+
+    #[test]
+    fn noise_sigma_zero_is_byte_identical() {
+        use crate::sim_input::SimInput;
+        let mut noisy = Neo6mGps::new().with_noise_sigma(0.0);
+        SimInput::set_component_id(&mut noisy, "gps".into());
+        noisy.set_position(37.7749, -122.4194);
+        noisy.sentence_index = 0;
+        let mut quiet = Neo6mGps::new();
+        quiet.set_position(37.7749, -122.4194);
+        quiet.sentence_index = 0;
+        assert_eq!(drain_one_sentence(&mut noisy), drain_one_sentence(&mut quiet));
+    }
+
+    #[test]
+    fn different_component_ids_diverge() {
+        use crate::sim_input::SimInput;
+        let mut a = Neo6mGps::new().with_noise_sigma(0.01);
+        let mut b = Neo6mGps::new().with_noise_sigma(0.01);
+        SimInput::set_component_id(&mut a, "gps0".into());
+        SimInput::set_component_id(&mut b, "gps1".into());
+        for g in [&mut a, &mut b] {
+            g.set_position(37.7749, -122.4194);
+            g.sentence_index = 0;
+        }
+        assert_ne!(drain_one_sentence(&mut a), drain_one_sentence(&mut b));
     }
 }
