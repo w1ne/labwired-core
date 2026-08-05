@@ -27,11 +27,5 @@ external_devices:
     config:
       cs_pin: "PA4"
 
-board_io:
-  - id: "epaper"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    device_type: "ssd1680_tricolor_290"
+board_io: []
+

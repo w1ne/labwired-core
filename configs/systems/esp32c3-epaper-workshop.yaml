@@ -10,11 +10,5 @@ external_devices:
       cs_pin: "GPIO10"
       dc_pin: "GPIO2"
 
-board_io:
-  - id: "epaper"
-    kind: "spi_device"
-    peripheral: "spi2"
-    pin: 10
-    signal: "input"
-    active_high: true
-    device_type: "ssd1680_tricolor_290"
+board_io: []
+

@@ -20,6 +20,7 @@ external_devices:
       cs_pin: "PC4"
       dc_pin: "PC0"
 board_io:
+  # Sensor dual only — pcd8544 display is external_devices-only (inspect door).
   - id: "fxos8700"
     kind: "i2c_device"
     peripheral: "i2c1"
@@ -28,10 +29,3 @@ board_io:
     active_high: true
     i2c_address: 0x1f
     device_type: "fxos8700"
-  - id: "lcd"
-    kind: "spi_device"
-    peripheral: "spi0"
-    pin: 4
-    signal: "input"
-    active_high: true
-    device_type: "pcd8544"

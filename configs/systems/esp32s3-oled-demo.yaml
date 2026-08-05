@@ -19,15 +19,5 @@ external_devices:
     config:
       i2c_address: 0x3C
 
-board_io:
-  # Framebuffer readback binding (WasmSimulator::get_ssd1306_framebuffer). The
-  # S3 GPIO matrix routes I2C0 SDA/SCL to GPIO8/GPIO9; the behavioral controller
-  # responds at its register block regardless, so the pin is documentation here.
-  - id: "oled"
-    kind: "i2c_device"
-    peripheral: "i2c0"
-    pin: 8
-    signal: "input"
-    active_high: true
-    i2c_address: 0x3C
-    device_type: "oled-ssd1306"
+board_io: []
+

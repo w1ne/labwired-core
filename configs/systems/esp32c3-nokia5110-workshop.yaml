@@ -10,11 +10,5 @@ external_devices:
       cs_pin: "GPIO10"
       dc_pin: "GPIO2"
 
-board_io:
-  - id: "lcd"
-    kind: "spi_device"
-    peripheral: "spi2"
-    pin: 10
-    signal: "input"
-    active_high: true
-    device_type: "pcd8544"
+board_io: []
+

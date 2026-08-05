@@ -16,6 +16,8 @@ external_devices:
     config:
       i2c_address: 0x1f
 board_io:
+  # Temporary dual graph for UI sensor readback (get_i2c_sensor_states still
+  # walks board_io). Display-only duals have been removed; sensors next.
   - id: "fxos8700"
     kind: "i2c_device"
     peripheral: "i2c1"

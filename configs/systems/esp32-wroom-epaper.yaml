@@ -31,11 +31,5 @@ external_devices:
     config:
       cs_pin: "GPIO5"
       dc_pin: "GPIO17"
-board_io:
-  - id: "epaper"
-    kind: "spi_device"
-    peripheral: "spi3"
-    pin: 5
-    signal: "input"
-    active_high: true
-    device_type: "ssd1680_tricolor_290"
+board_io: []
+
