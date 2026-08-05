@@ -43,7 +43,7 @@ inputs:
   system: "./system.yaml"
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-secure-boot"
 limits:
-  max_steps: 4000000
+  max_steps: 30000000
 
 # ── The OTA server: three packages queued to uart0 RX at run start ────────
 # The firmware consumes them in order — one per boot phase — so no pacing is

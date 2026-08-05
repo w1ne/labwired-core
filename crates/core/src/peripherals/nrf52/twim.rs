@@ -119,7 +119,11 @@ const ERRORSRC_MASK: u32 = ERRORSRC_ANACK | ERRORSRC_DNACK;
 
 // ── Misc masks ────────────────────────────────────────────────────────────────
 const ENABLE_MASK: u32 = 0xF;
-const MAXCNT_MASK: u32 = 0xFF;
+// nRF52840 TWIM MAXCNT is 16 bits (PS §6.31: TXD.MAXCNT/RXD.MAXCNT are
+// 0xFFFF-wide) — the slave peripherals (SPIS/TWIS) are 8-bit, the master is
+// not. Capping this at 0xFF truncated >255-byte EasyDMA transfers (e.g. a
+// full-frame SSD1306 flush) to `len & 0xFF` bytes.
+const MAXCNT_MASK: u32 = 0xFFFF;
 const ADDRESS_MASK: u32 = 0x7F;
 const SHORTS_MASK: u32 = SHORT_LASTTX_STARTRX
     | SHORT_LASTTX_SUSPEND
@@ -933,12 +937,15 @@ mod tests {
     }
 
     #[test]
-    fn maxcnt_mask_8_bits() {
+    fn maxcnt_mask_16_bits() {
+        // TWIM master MAXCNT is 16-bit on silicon (0xFFFF); only the SPIS/
+        // TWIS slaves are 8-bit. A full-frame SSD1306 flush (1025 bytes)
+        // must round-trip.
         let mut t = Nrf52Twim::new();
-        write32(&mut t, OFF_TXD_MAXCNT, 0x1FF);
-        assert_eq!(read32(&t, OFF_TXD_MAXCNT), 0xFF);
-        write32(&mut t, OFF_RXD_MAXCNT, 0x1FF);
-        assert_eq!(read32(&t, OFF_RXD_MAXCNT), 0xFF);
+        write32(&mut t, OFF_TXD_MAXCNT, 0x1FFFF);
+        assert_eq!(read32(&t, OFF_TXD_MAXCNT), 0xFFFF);
+        write32(&mut t, OFF_RXD_MAXCNT, 0x401);
+        assert_eq!(read32(&t, OFF_RXD_MAXCNT), 0x401);
     }
 
     #[test]
