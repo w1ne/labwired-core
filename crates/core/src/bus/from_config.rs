@@ -243,6 +243,7 @@ impl SystemBus {
             h_bridge_motors: Vec::new(),
             motors: Vec::new(),
             motor_cycle_anchor: 0,
+            ili9341_parallel: Vec::new(),
             unipolar_steppers: Vec::new(),
             tm1637: Vec::new(),
             hx711: Vec::new(),
@@ -1047,6 +1048,41 @@ impl SystemBus {
                     );
                     Self::install_gpio_observer(&mut bus, motor.clone());
                     bus.unipolar_steppers.push(motor);
+                }
+                // ILI9341 over 16-bit Intel 8080 parallel (GPIO bit-bang).
+                // Distinct from SPI kit type `ili9341` — connection is gpio
+                // observers on CS/RS/WR/RD/RST + DB[15:0], not an SPI device.
+                "ili9341-16bit" | "ili9341_16bit" => {
+                    let cs = Self::gpio_from_config(ext, "cs_pin", "CS", "GPIO15")?;
+                    let rs = Self::gpio_from_config(ext, "rs_pin", "RS", "GPIO2")
+                        .or_else(|_| Self::gpio_from_config(ext, "dc_pin", "DC", "GPIO2"))?;
+                    let wr = Self::gpio_from_config(ext, "wr_pin", "WR", "GPIO4")?;
+                    let rd = Self::gpio_from_config(ext, "rd_pin", "RD", "GPIO5")?;
+                    let rst = Self::gpio_from_config(ext, "rst_pin", "RST", "GPIO33")?;
+                    let mut db = [0u8; 16];
+                    for i in 0..16 {
+                        let key = format!("db{i}_pin");
+                        let alt = format!("DB{i}");
+                        // Default DB0..DB15 → GPIO10..GPIO25 (common bit-bang map).
+                        let default = format!("GPIO{}", 10 + i);
+                        db[i] = Self::gpio_from_config(ext, &key, &alt, &default)?;
+                    }
+                    let pins = crate::peripherals::components::ili9341_parallel::ParallelPins {
+                        cs,
+                        rs,
+                        wr,
+                        rd,
+                        rst,
+                        db,
+                    };
+                    let panel = std::sync::Arc::new(
+                        crate::peripherals::components::ili9341_parallel::Ili9341Parallel::new(
+                            ext.id.clone(),
+                            pins,
+                        ),
+                    );
+                    Self::install_gpio_observer(&mut bus, panel.clone());
+                    bus.ili9341_parallel.push(panel);
                 }
                 "can-diagnostic-tester" | "uds-diagnostic-tester" => {
                     if bus.find_peripheral_index_by_name(&ext.connection).is_none() {

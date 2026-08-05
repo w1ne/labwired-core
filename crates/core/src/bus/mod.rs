@@ -379,6 +379,11 @@ pub struct SystemBus {
     motors: Vec<motors::MotorRuntime>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
+    /// ILI9341 16-bit 8080 parallel panels (GPIO bit-bang). Observer-driven on
+    /// ESP32 / ESP32-S3; held as `Arc` clones so inspect can read the RGB565
+    /// framebuffer. Empty by default → zero cost. Distinct from SPI `ili9341`.
+    pub ili9341_parallel:
+        Vec<std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>>,
     /// 4-phase unipolar steppers (28BYJ-48 + ULN2003). GPIO-observer driven.
     pub unipolar_steppers:
         Vec<std::sync::Arc<crate::peripherals::components::unipolar_stepper::UnipolarStepper>>,

@@ -167,6 +167,11 @@ impl SystemBus {
             };
             self.emit_resident(f, r);
         }
+        for dev in &self.ili9341_parallel {
+            // Parallel ILI9341 is a bus-resident display: evidence is the RGB565
+            // framebuffer, same shape as the SPI kit's artifacts.
+            self.emit_resident(f, Resident::gpio(dev.id(), Some(&**dev)));
+        }
         for dev in &self.unipolar_steppers {
             self.emit_resident(f, Resident::gpio(dev.id(), None));
         }

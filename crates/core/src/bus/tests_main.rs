@@ -672,6 +672,98 @@ board_io: []
     );
 }
 
+/// Parallel ILI9341 (`ili9341-16bit` / `ili9341_16bit`) attaches as a GPIO
+/// observer twin. Distinct from SPI kit type `ili9341`.
+#[test]
+fn test_from_config_attaches_ili9341_16bit_parallel_panel() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Classic ESP32: `install_gpio_observer` wires Esp32Gpio (C3 has no
+    // observer path for this model yet).
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
+        .expect("read ESP32 chip descriptor");
+
+    for type_str in ["ili9341-16bit", "ili9341_16bit"] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            r#"
+name: "ili9341-16bit-twin"
+chip: "../chips/esp32.yaml"
+external_devices:
+  - id: "tft"
+    type: "{type_str}"
+    connection: "gpio"
+    config:
+      cs_pin: "GPIO15"
+      rs_pin: "GPIO2"
+      wr_pin: "GPIO4"
+      rd_pin: "GPIO5"
+      rst_pin: "GPIO33"
+      db0_pin: "GPIO12"
+      db1_pin: "GPIO13"
+      db2_pin: "GPIO14"
+      db3_pin: "GPIO16"
+      db4_pin: "GPIO17"
+      db5_pin: "GPIO18"
+      db6_pin: "GPIO19"
+      db7_pin: "GPIO21"
+      db8_pin: "GPIO22"
+      db9_pin: "GPIO23"
+      db10_pin: "GPIO25"
+      db11_pin: "GPIO26"
+      db12_pin: "GPIO27"
+      db13_pin: "GPIO32"
+      db14_pin: "GPIO34"
+      db15_pin: "GPIO35"
+board_io: []
+"#
+        ))
+        .expect("parse ili9341-16bit manifest");
+
+        let bus = SystemBus::from_config(&chip, &manifest)
+            .unwrap_or_else(|e| panic!("build bus with {type_str}: {e:#}"));
+        assert_eq!(
+            bus.ili9341_parallel.len(),
+            1,
+            "one parallel panel attached for type '{type_str}'"
+        );
+        let panel = &bus.ili9341_parallel[0];
+        assert_eq!(panel.id(), "tft");
+        let pins = panel.pins();
+        assert_eq!(pins.cs, 15);
+        assert_eq!(pins.rs, 2);
+        assert_eq!(pins.wr, 4);
+        assert_eq!(pins.rd, 5);
+        assert_eq!(pins.rst, 33);
+        assert_eq!(pins.db[0], 12);
+        assert_eq!(pins.db[15], 35);
+        assert_eq!(panel.dimensions(), (240, 320));
+        assert_eq!(panel.ink_bytes(), 0, "fresh panel has no paint");
+
+        // Inspect join must surface the panel as declared ili9341-16bit with a
+        // framebuffer artifact (empty until firmware paints).
+        let devices = bus.inspect_devices(None, &crate::inspect::InspectOpts::default());
+        let tft = devices
+            .iter()
+            .find(|d| d.id == "tft")
+            .unwrap_or_else(|| panic!("inspect missing tft for type '{type_str}'"));
+        assert_eq!(
+            tft.device_type.as_deref(),
+            Some(type_str),
+            "declared type must match manifest"
+        );
+        assert!(tft.declared, "panel must join to external_devices decl");
+        assert_eq!(tft.attachment.transport, "gpio");
+        let fb = tft
+            .artifacts
+            .iter()
+            .find(|a| a.kind == "framebuffer")
+            .expect("framebuffer artifact");
+        assert_eq!(fb.meta["w"], 240);
+        assert_eq!(fb.meta["h"], 320);
+        assert_eq!(fb.meta["format"], crate::inspect::artifact_format::RGB565_BE);
+        assert_eq!(fb.meta["painted_bytes"], 0);
+    }
+}
+
 /// The `rotary_encoder` external device dispatches through the DECLARATIVE
 /// device path (`configs/devices/rotary_encoder.yaml`, `quadrature` primitive)
 /// rather than a hand-written `from_config` arm. This locks that seam: a
@@ -2936,6 +3028,7 @@ fn test_flash_boot_alias_read_and_write() {
         h_bridge_motors: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
+        ili9341_parallel: Vec::new(),
         unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
@@ -3040,6 +3133,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         h_bridge_motors: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
+        ili9341_parallel: Vec::new(),
         unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
@@ -3295,6 +3389,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         h_bridge_motors: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
+        ili9341_parallel: Vec::new(),
         unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
@@ -3548,6 +3643,7 @@ fn test_peripheral_range_index_lookup() {
         h_bridge_motors: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
+        ili9341_parallel: Vec::new(),
         unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
@@ -3656,6 +3752,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         h_bridge_motors: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
+        ili9341_parallel: Vec::new(),
         unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
