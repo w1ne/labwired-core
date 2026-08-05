@@ -1,7 +1,8 @@
 # Ping Pong
 
-Two ESP32-C3 boards throw a ball back and forth over a serial wire. The second
-board has an OLED and draws the match.
+Two ESP32-C3 boards throw a ball back and forth over a serial wire. **Each
+board has its own OLED** and draws the match live — both screens update as
+the rally runs.
 
 There is no host and no master. Each board only reacts to the other one, so if
 you pull a wire the ball stops moving.
@@ -12,16 +13,19 @@ Cross the link (each board's TX goes to the other's RX) and connect the grounds.
 If you skip the ground wire, neither board sees a single byte. That is the most
 common way this fails.
 
-```
-  Player A                    Player B (+ OLED)
-  GPIO6 TX  ---------------->  GPIO7 RX
-  GPIO7 RX  <----------------  GPIO6 TX
-  GND       -----------------  GND
+Each board has its **own** SSD1306 on local GPIO4/5 (same pin numbers, separate
+panels — do not share one OLED between both MCUs).
 
-                               OLED SDA -> GPIO4
-                               OLED SCL -> GPIO5
-                               OLED VCC -> 3V3
-                               OLED GND -> GND
+```
+  Player A (+ OLED A)              Player B (+ OLED B)
+  GPIO6 TX  -------------------->  GPIO7 RX
+  GPIO7 RX  <--------------------  GPIO6 TX
+  GND       ---------------------  GND
+
+  OLED A SDA -> A GPIO4            OLED B SDA -> B GPIO4
+  OLED A SCL -> A GPIO5            OLED B SCL -> B GPIO5
+  OLED A VCC -> A 3V3              OLED B VCC -> B 3V3
+  OLED A GND -> A GND              OLED B GND -> B GND
 ```
 
 `Serial1` is the link between the boards. `Serial` (over USB) stays free for
@@ -36,9 +40,9 @@ second of silence, so whichever board boots later just joins in.
 
 ## What you should see
 
-Player A counts rallies over USB. Player B counts returns. The ball on the OLED
-moves one step per ball received, so the picture tracks the real rally instead of
-running on its own timer.
+Both OLEDs paint paddles + ball + rally count. Player A counts rallies over USB
+as well. The ball moves one step per exchange, so the picture tracks the real
+rally instead of running on its own timer.
 
 Pull the link wire out. Player A prints `missed - rally ended at N` and serves
 again. Plug it back in and the rally picks up.
@@ -67,6 +71,10 @@ just running the drawing code.
 The two boards have not been run together in the hosted simulator, because that
 path only boots one chip at a time. The wire itself is covered by
 `crates/core/tests/world_esp32c3_pingpong.rs`.
+
+In the **playground multi-chip** path, both MCUs run at once and the canvas
+merges display framebuffers from every chip bridge so **both OLEDs paint while
+either chip is selected**.
 
 One thing worth knowing if you run this yourself: the C3's ROM boot uses up most
 of a default step budget before your sketch starts. Give it a bigger budget or

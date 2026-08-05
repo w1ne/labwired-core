@@ -1,13 +1,13 @@
 // Ping Pong - Player B
 //
-// Returns every ball the other board sends, and draws the match on a 128x64
-// SSD1306: a ball between two paddles, the current rally, and the best so far.
+// Returns every ball the other board sends, and draws the match on its own
+// 128x64 SSD1306. Player A draws on a separate OLED — both screens stay live.
 //
 // Wiring:
 //   B GPIO7 (RX) <--- A GPIO6 (TX)
 //   B GPIO6 (TX) ---> A GPIO7 (RX)
 //   B GND        ---- A GND
-//   OLED SDA -> GPIO4, SCL -> GPIO5, VCC -> 3V3, GND -> GND
+//   OLED B SDA -> GPIO4, SCL -> GPIO5, VCC -> 3V3, GND -> GND
 //
 // The OLED is driven with plain Wire writes into a local framebuffer, so there
 // are no libraries to install.
