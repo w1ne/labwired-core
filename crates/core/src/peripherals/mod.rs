@@ -42,6 +42,7 @@ pub mod nrf52;
 pub mod nrf54l;
 pub mod nvic;
 pub mod noise;
+pub mod rf_medium;
 pub mod pio;
 pub mod pwr;
 pub mod quadspi;
