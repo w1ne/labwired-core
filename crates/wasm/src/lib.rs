@@ -1998,10 +1998,24 @@ mod romboot_tests {
             if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
                 lit = fb.iter().map(|b| b.count_ones() as usize).sum();
                 if lit >= MIN_LIT {
-                    let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+                    // Framebuffer path is the browser OLED door
+                    // (`display_artifact` → external_devices id "oled"). Serial
+                    // can lag one idle-FF window behind the I²C paint on the
+                    // fast-start path — drain a few more batches so the app's
+                    // "OLED painted" log reaches the UART sink before we assert.
+                    let mut out =
+                        String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+                    for _ in 0..8 {
+                        if out.contains("oled-lab") || out.contains("OLED painted") {
+                            break;
+                        }
+                        let n = sim.step_batch(BATCH).expect("step_batch drain");
+                        steps += n as u64;
+                        out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+                    }
                     assert!(
                         out.contains("oled-lab") || out.contains("OLED painted"),
-                        "C3 flash fast-start painted but did not capture app serial; \
+                        "C3 flash fast-start painted (lit={lit}) but did not capture app serial; \
                          captured serial:\n{out}"
                     );
                     eprintln!(
