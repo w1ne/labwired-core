@@ -388,6 +388,104 @@ impl crate::peripherals::esp32::gpio::GpioObserver for Ili9341Parallel {
     }
 }
 
+// ─── PeripheralKit (universal attach) ──────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+};
+
+/// Kit for the 16-bit parallel ILI9341 (`ili9341-16bit`). Distinct device_type
+/// from the SPI kit (`ili9341`) so both can coexist in the registry.
+pub struct Ili9341ParallelKit;
+pub static ILI9341_PARALLEL_KIT: Ili9341ParallelKit = Ili9341ParallelKit;
+
+static ILI9341_PARALLEL_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "ili9341-16bit",
+    label: "ILI9341 TFT (16-bit parallel)",
+    summary: "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
+    detail: "LCDWiki MRB3205-class 3.2\" module contract: CS/RS/WR/RD/RST + DB0..DB15. \
+             Firmware bit-bangs the bus; the twin watches GPIO edges (classic ESP32 / \
+             ESP32-S3) and paints an in-memory RGB565 framebuffer. Not SPI — use \
+             device_type ili9341 for the 4-wire SPI kit.",
+    transport: Transport::GpioGroup,
+    category: Category::Gpio,
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "LCD chip-select GPIO (e.g. \"GPIO15\"). Defaults to GPIO15.",
+        },
+        ConfigKey {
+            name: "rs_pin",
+            ty: ConfigType::Str,
+            doc: "Register/data select GPIO (alias dc_pin). Defaults to GPIO2.",
+        },
+        ConfigKey {
+            name: "wr_pin",
+            ty: ConfigType::Str,
+            doc: "Write strobe GPIO. Defaults to GPIO4.",
+        },
+        ConfigKey {
+            name: "rd_pin",
+            ty: ConfigType::Str,
+            doc: "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5.",
+        },
+        ConfigKey {
+            name: "rst_pin",
+            ty: ConfigType::Str,
+            doc: "Reset GPIO (active low). Defaults to GPIO33.",
+        },
+        ConfigKey {
+            name: "db0_pin",
+            ty: ConfigType::Str,
+            doc: "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25.",
+        },
+    ],
+    labs: &[LabRef {
+        board_id: "ili9341-16bit-lab",
+        chip: "esp32",
+        example_dir: "ili9341-16bit-lab",
+        demo_elf: "",
+    }],
+};
+
+impl PeripheralKit for Ili9341ParallelKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &ILI9341_PARALLEL_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let cs = ctx.config_gpio_pin("cs_pin", "CS", "GPIO15")?;
+        let rs = ctx
+            .config_gpio_pin("rs_pin", "RS", "GPIO2")
+            .or_else(|_| ctx.config_gpio_pin("dc_pin", "DC", "GPIO2"))?;
+        let wr = ctx.config_gpio_pin("wr_pin", "WR", "GPIO4")?;
+        let rd = ctx.config_gpio_pin("rd_pin", "RD", "GPIO5")?;
+        let rst = ctx.config_gpio_pin("rst_pin", "RST", "GPIO33")?;
+        let mut db = [0u8; 16];
+        for (i, pin) in db.iter_mut().enumerate() {
+            let key = format!("db{i}_pin");
+            let alt = format!("DB{i}");
+            let default = format!("GPIO{}", 10 + i);
+            *pin = ctx.config_gpio_pin(&key, &alt, &default)?;
+        }
+        let pins = ParallelPins {
+            cs,
+            rs,
+            wr,
+            rd,
+            rst,
+            db,
+        };
+        let panel = std::sync::Arc::new(Ili9341Parallel::new(ctx.device_id(), pins));
+        // Universal GPIO bit-bang attach: same choke point as motors/servos.
+        ctx.install_gpio_observer(panel.clone());
+        ctx.bus.ili9341_parallel.push(panel);
+        Ok(())
+    }
+}
+
 /// Bus-resident parallel panel reports the same RGB565 framebuffer evidence as
 /// the SPI kit so inspect / `display_artifact` work without a SPI controller.
 impl crate::inspect::DeviceEvidence for Ili9341Parallel {

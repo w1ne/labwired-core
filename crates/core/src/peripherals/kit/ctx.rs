@@ -190,6 +190,48 @@ impl<'a> AttachCtx<'a> {
         SystemBus::resolve_pin_odr_pub(self.bus, pin)
     }
 
+    /// Parse a GPIO pad label into a pin number for bit-bang devices
+    /// (`Transport::GpioGroup`). Accepts ESP32/S3 spellings (`GPIO15`, `IO4`,
+    /// bare `15`) used by the ESP GPIO edge-observer path.
+    pub fn parse_gpio_pin(&self, label: &str) -> Option<u8> {
+        SystemBus::parse_esp32s3_gpio_pin(label).or_else(|| SystemBus::parse_esp32_gpio_pin(label))
+    }
+
+    /// Read a GPIO pin config key (or alternate key / default label) as a pad
+    /// number. Shared by every `GpioGroup` kit so pin parsing is not re-copied
+    /// per device.
+    pub fn config_gpio_pin(&self, key: &str, alt_key: &str, default: &str) -> Result<u8> {
+        let label = self
+            .ext
+            .config
+            .get(key)
+            .or_else(|| self.ext.config.get(alt_key))
+            .and_then(|v| v.as_str())
+            .unwrap_or(default);
+        self.parse_gpio_pin(label).ok_or_else(|| {
+            anyhow!(
+                "{} '{}': pin '{}' (config {}/{}) is not a parseable GPIO pad label",
+                self.device_type(),
+                self.device_id(),
+                label,
+                key,
+                alt_key
+            )
+        })
+    }
+
+    /// Subscribe `observer` to GPIO edge notifications on the bus GPIO block
+    /// (classic ESP32 + ESP32-S3 today). Kits use this instead of a hand arm
+    /// in `from_config` so bit-bang devices share one attach path.
+    pub fn install_gpio_observer<T>(&mut self, observer: std::sync::Arc<T>)
+    where
+        T: crate::peripherals::esp32s3::gpio::GpioObserver
+            + crate::peripherals::esp32::gpio::GpioObserver
+            + 'static,
+    {
+        SystemBus::install_gpio_observer(self.bus, observer);
+    }
+
     /// Hold an MCU input pin at `level` — for device status lines the host
     /// polls but nothing else drives (an e-paper BUSY, a sensor DRDY).
     ///

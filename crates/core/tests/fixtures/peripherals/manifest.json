@@ -859,6 +859,55 @@
       "inputs": []
     },
     {
+      "device_type": "ili9341-16bit",
+      "label": "ILI9341 TFT (16-bit parallel)",
+      "summary": "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
+      "detail": "LCDWiki MRB3205-class 3.2\" module contract: CS/RS/WR/RD/RST + DB0..DB15. Firmware bit-bangs the bus; the twin watches GPIO edges (classic ESP32 / ESP32-S3) and paints an in-memory RGB565 framebuffer. Not SPI — use device_type ili9341 for the 4-wire SPI kit.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "LCD chip-select GPIO (e.g. \"GPIO15\"). Defaults to GPIO15."
+        },
+        {
+          "name": "rs_pin",
+          "ty": "str",
+          "doc": "Register/data select GPIO (alias dc_pin). Defaults to GPIO2."
+        },
+        {
+          "name": "wr_pin",
+          "ty": "str",
+          "doc": "Write strobe GPIO. Defaults to GPIO4."
+        },
+        {
+          "name": "rd_pin",
+          "ty": "str",
+          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5."
+        },
+        {
+          "name": "rst_pin",
+          "ty": "str",
+          "doc": "Reset GPIO (active low). Defaults to GPIO33."
+        },
+        {
+          "name": "db0_pin",
+          "ty": "str",
+          "doc": "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "ili9341-16bit-lab",
+          "chip": "esp32",
+          "example_dir": "ili9341-16bit-lab",
+          "demo_elf": ""
+        }
+      ],
+      "inputs": []
+    },
+    {
       "device_type": "ssd1680_tricolor_290",
       "label": "SSD1680 Tri-Color E-Paper",
       "summary": "2.9\" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c — the WeAct / Waveshare 2.9\" B/W/R module. Not interchangeable with the UC8151D part.",
@@ -1993,7 +2042,7 @@
       "device_type": "tmp117",
       "label": "TMP117 Temperature",
       "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
-      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB.              Stimulus channel `temperature` (°C) sets the conversion result.",
+      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
