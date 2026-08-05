@@ -1,0 +1,39 @@
+# LCDWiki MRB3205-class 3.2" ILI9341 — 16-bit parallel (8080) on classic ESP32.
+#
+# Pin map uses only pad-drivable GPIOs (no flash 6–11, no input-only 34–39).
+# Same map as the e2e GPIO smoke test (e2e_ili9341_16bit_gpio_smoke.rs).
+#
+# Control:
+#   GPIO15 CS   GPIO2 RS   GPIO4 WR   GPIO5 RD   GPIO33 RST
+# Data DB0..DB15:
+#   12 13 14 16 17 18 19 21 22 23 25 26 27 32 0 3
+
+name: "ili9341-16bit-lab"
+chip: "../../configs/chips/esp32.yaml"
+external_devices:
+  - id: "tft"
+    type: "ili9341-16bit"
+    connection: "gpio"
+    config:
+      cs_pin: "GPIO15"
+      rs_pin: "GPIO2"
+      wr_pin: "GPIO4"
+      rd_pin: "GPIO5"
+      rst_pin: "GPIO33"
+      db0_pin: "GPIO12"
+      db1_pin: "GPIO13"
+      db2_pin: "GPIO14"
+      db3_pin: "GPIO16"
+      db4_pin: "GPIO17"
+      db5_pin: "GPIO18"
+      db6_pin: "GPIO19"
+      db7_pin: "GPIO21"
+      db8_pin: "GPIO22"
+      db9_pin: "GPIO23"
+      db10_pin: "GPIO25"
+      db11_pin: "GPIO26"
+      db12_pin: "GPIO27"
+      db13_pin: "GPIO32"
+      db14_pin: "GPIO0"
+      db15_pin: "GPIO3"
+board_io: []

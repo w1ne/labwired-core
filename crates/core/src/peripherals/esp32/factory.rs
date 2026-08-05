@@ -38,7 +38,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32_spi" => Box::new(spi::Esp32Spi::new()),
         "esp32_sar_adc" => Box::new(sar_adc::Esp32SarAdc::new()),
         "esp32_i2c" => Box::new(i2c::Esp32I2c::new()),
-        "esp32_gpio" => Box::new(gpio::Esp32Gpio::new()),
+        "esp32_gpio" | "gpio_esp32" => Box::new(gpio::Esp32Gpio::new()),
         "esp32_dport" => Box::new(dport::Dport::new()),
         "esp32_sha" => Box::new(sha::Sha::new()),
         "esp32_rtc_cntl" => Box::new(rtc_cntl::RtcCntl::new()),

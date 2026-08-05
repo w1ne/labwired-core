@@ -55,6 +55,13 @@ impl SystemBus {
                 &["nrf52840_gpiotasksevents", "nrf52_gpiote"],
                 "nrf52_gpiote",
             ),
+            // Classic ESP32 GPIO — chip YAML historically used `gpio_esp32`
+            // while the factory / configure_xtensa table own `esp32_gpio`.
+            // Without this alias, fuzzy `contains("gpio")` coerced the name
+            // onto the STM32-style GpioPort model, which has no observer
+            // hooks — so parallel bit-bang panels and servos attached via
+            // from_config never saw WR edges.
+            (&["gpio_esp32"], "esp32_gpio"),
         ];
         for (inputs, canonical) in ALIASES {
             if inputs.contains(&t.as_str()) {

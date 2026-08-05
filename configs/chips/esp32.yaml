@@ -63,7 +63,9 @@ peripherals:
   # Declared for the Tier-1 matrix class derivation (wiring stays programmatic
   # in configure_xtensa_esp32 — see header note). Bases match the model files.
   - id: "gpio"
-    type: "gpio_esp32"
+    # Canonical factory type is esp32_gpio (see peripherals/esp32/factory.rs).
+    # gpio_esp32 remains accepted as an alias in bus::profiles.
+    type: "esp32_gpio"
     base_address: 0x3FF44000
     size: "1KB"
     config:
