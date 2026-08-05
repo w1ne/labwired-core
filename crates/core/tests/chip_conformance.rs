@@ -150,6 +150,14 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        name: "rp2350",
+        yaml: "configs/chips/rp2350.yaml",
+        reset_oracle: None,
+        // Smoke-validated via the pico2 example (cli lane), not a
+        // firmware_survival case of its own yet.
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "stm32f407",
         yaml: "configs/chips/stm32f407.yaml",
         reset_oracle: None,

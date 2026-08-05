@@ -1,0 +1,3758 @@
+peripheral: USB_DPRAM
+version: 0.1.0
+registers:
+- id: SETUP_PACKET_LOW
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BMREQUESTTYPE
+    bit_range:
+    - 7
+    - 0
+    description: null
+  - name: BREQUEST
+    bit_range:
+    - 15
+    - 8
+    description: null
+  - name: WVALUE
+    bit_range:
+    - 31
+    - 16
+    description: null
+  side_effects: null
+- id: SETUP_PACKET_HIGH
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WINDEX
+    bit_range:
+    - 15
+    - 0
+    description: null
+  - name: WLENGTH
+    bit_range:
+    - 31
+    - 16
+    description: null
+  side_effects: null
+- id: EP1_IN_CONTROL
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP1_OUT_CONTROL
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP2_IN_CONTROL
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP2_OUT_CONTROL
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP3_IN_CONTROL
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP3_OUT_CONTROL
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP4_IN_CONTROL
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP4_OUT_CONTROL
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP5_IN_CONTROL
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP5_OUT_CONTROL
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP6_IN_CONTROL
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP6_OUT_CONTROL
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP7_IN_CONTROL
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP7_OUT_CONTROL
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP8_IN_CONTROL
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP8_OUT_CONTROL
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP9_IN_CONTROL
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP9_OUT_CONTROL
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP10_IN_CONTROL
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP10_OUT_CONTROL
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP11_IN_CONTROL
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP11_OUT_CONTROL
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP12_IN_CONTROL
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP12_OUT_CONTROL
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP13_IN_CONTROL
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP13_OUT_CONTROL
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP14_IN_CONTROL
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP14_OUT_CONTROL
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP15_IN_CONTROL
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP15_OUT_CONTROL
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BUFFER_ADDRESS
+    bit_range:
+    - 15
+    - 0
+    description: 64 byte aligned buffer address for this EP (bits 0-5 are ignored). Relative to the start of the DPRAM.
+  - name: INTERRUPT_ON_NAK
+    bit_range:
+    - 16
+    - 16
+    description: Trigger an interrupt if a NAK is sent. Intended for debug only.
+  - name: INTERRUPT_ON_STALL
+    bit_range:
+    - 17
+    - 17
+    description: Trigger an interrupt if a STALL is sent. Intended for debug only.
+  - name: ENDPOINT_TYPE
+    bit_range:
+    - 27
+    - 26
+    description: null
+  - name: INTERRUPT_PER_DOUBLE_BUFF
+    bit_range:
+    - 28
+    - 28
+    description: Trigger an interrupt each time both buffers are done. Only valid in double buffered mode.
+  - name: INTERRUPT_PER_BUFF
+    bit_range:
+    - 29
+    - 29
+    description: Trigger an interrupt each time a buffer is done.
+  - name: DOUBLE_BUFFERED
+    bit_range:
+    - 30
+    - 30
+    description: This endpoint is double buffered.
+  - name: ENABLE
+    bit_range:
+    - 31
+    - 31
+    description: Enable this endpoint. The device will not reply to any packets for this endpoint if this bit is not set.
+  side_effects: null
+- id: EP0_IN_BUFFER_CONTROL
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP0_OUT_BUFFER_CONTROL
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP1_IN_BUFFER_CONTROL
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP1_OUT_BUFFER_CONTROL
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP2_IN_BUFFER_CONTROL
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP2_OUT_BUFFER_CONTROL
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP3_IN_BUFFER_CONTROL
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP3_OUT_BUFFER_CONTROL
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP4_IN_BUFFER_CONTROL
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP4_OUT_BUFFER_CONTROL
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP5_IN_BUFFER_CONTROL
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP5_OUT_BUFFER_CONTROL
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP6_IN_BUFFER_CONTROL
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP6_OUT_BUFFER_CONTROL
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP7_IN_BUFFER_CONTROL
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP7_OUT_BUFFER_CONTROL
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP8_IN_BUFFER_CONTROL
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP8_OUT_BUFFER_CONTROL
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP9_IN_BUFFER_CONTROL
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP9_OUT_BUFFER_CONTROL
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP10_IN_BUFFER_CONTROL
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP10_OUT_BUFFER_CONTROL
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP11_IN_BUFFER_CONTROL
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP11_OUT_BUFFER_CONTROL
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP12_IN_BUFFER_CONTROL
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP12_OUT_BUFFER_CONTROL
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP13_IN_BUFFER_CONTROL
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP13_OUT_BUFFER_CONTROL
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP14_IN_BUFFER_CONTROL
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP14_OUT_BUFFER_CONTROL
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP15_IN_BUFFER_CONTROL
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+- id: EP15_OUT_BUFFER_CONTROL
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LENGTH_0
+    bit_range:
+    - 9
+    - 0
+    description: The length of the data in buffer 0.
+  - name: AVAILABLE_0
+    bit_range:
+    - 10
+    - 10
+    description: Buffer 0 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: STALL
+    bit_range:
+    - 11
+    - 11
+    description: Reply with a stall (valid for both buffers).
+  - name: RESET
+    bit_range:
+    - 12
+    - 12
+    description: Reset the buffer selector to buffer 0.
+  - name: PID_0
+    bit_range:
+    - 13
+    - 13
+    description: The data pid of buffer 0.
+  - name: LAST_0
+    bit_range:
+    - 14
+    - 14
+    description: Buffer 0 is the last buffer of the transfer.
+  - name: FULL_0
+    bit_range:
+    - 15
+    - 15
+    description: Buffer 0 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  - name: LENGTH_1
+    bit_range:
+    - 25
+    - 16
+    description: The length of the data in buffer 1.
+  - name: AVAILABLE_1
+    bit_range:
+    - 26
+    - 26
+    description: Buffer 1 is available. This bit is set to indicate the buffer can be used by the controller. The controller clears the available bit when writing the status back.
+  - name: DOUBLE_BUFFER_ISO_OFFSET
+    bit_range:
+    - 28
+    - 27
+    description: "The number of bytes buffer 1 is offset from buffer 0 in Isochronous mode. Only valid in double buffered mode for an Isochronous endpoint. \n                            For a non Isochronous endpoint the offset is always 64 bytes."
+  - name: PID_1
+    bit_range:
+    - 29
+    - 29
+    description: The data pid of buffer 1.
+  - name: LAST_1
+    bit_range:
+    - 30
+    - 30
+    description: Buffer 1 is the last buffer of the transfer.
+  - name: FULL_1
+    bit_range:
+    - 31
+    - 31
+    description: Buffer 1 is full. For an IN transfer (TX to the host) the bit is set to indicate the data is valid. For an OUT transfer (RX from the host) this bit should be left as a 0. The host will set it when it has filled the buffer with data.
+  side_effects: null
+interrupts: null
+timing: null

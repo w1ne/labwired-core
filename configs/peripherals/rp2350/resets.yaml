@@ -1,0 +1,401 @@
+peripheral: RESETS
+version: 0.1.0
+registers:
+- id: RESET
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 33554431
+  fields:
+  - name: ADC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: BUSCTRL
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: DMA
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: I2C0
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: I2C1
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: IO_BANK0
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: IO_QSPI
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: JTAG
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: PADS_BANK0
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: PADS_QSPI
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: PIO0
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: PIO1
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: PLL_SYS
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: PLL_USB
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: PWM
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: RTC
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: SPI0
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: SPI1
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: SYSCFG
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: SYSINFO
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: TBMAN
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: TIMER
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: UART0
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: UART1
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: USBCTRL
+    bit_range:
+    - 24
+    - 24
+    description: null
+  side_effects: null
+- id: WDSEL
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: BUSCTRL
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: DMA
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: I2C0
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: I2C1
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: IO_BANK0
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: IO_QSPI
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: JTAG
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: PADS_BANK0
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: PADS_QSPI
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: PIO0
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: PIO1
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: PLL_SYS
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: PLL_USB
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: PWM
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: RTC
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: SPI0
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: SPI1
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: SYSCFG
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: SYSINFO
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: TBMAN
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: TIMER
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: UART0
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: UART1
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: USBCTRL
+    bit_range:
+    - 24
+    - 24
+    description: null
+  side_effects: null
+- id: RESET_DONE
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADC
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: BUSCTRL
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: DMA
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: I2C0
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: I2C1
+    bit_range:
+    - 4
+    - 4
+    description: null
+  - name: IO_BANK0
+    bit_range:
+    - 5
+    - 5
+    description: null
+  - name: IO_QSPI
+    bit_range:
+    - 6
+    - 6
+    description: null
+  - name: JTAG
+    bit_range:
+    - 7
+    - 7
+    description: null
+  - name: PADS_BANK0
+    bit_range:
+    - 8
+    - 8
+    description: null
+  - name: PADS_QSPI
+    bit_range:
+    - 9
+    - 9
+    description: null
+  - name: PIO0
+    bit_range:
+    - 10
+    - 10
+    description: null
+  - name: PIO1
+    bit_range:
+    - 11
+    - 11
+    description: null
+  - name: PLL_SYS
+    bit_range:
+    - 12
+    - 12
+    description: null
+  - name: PLL_USB
+    bit_range:
+    - 13
+    - 13
+    description: null
+  - name: PWM
+    bit_range:
+    - 14
+    - 14
+    description: null
+  - name: RTC
+    bit_range:
+    - 15
+    - 15
+    description: null
+  - name: SPI0
+    bit_range:
+    - 16
+    - 16
+    description: null
+  - name: SPI1
+    bit_range:
+    - 17
+    - 17
+    description: null
+  - name: SYSCFG
+    bit_range:
+    - 18
+    - 18
+    description: null
+  - name: SYSINFO
+    bit_range:
+    - 19
+    - 19
+    description: null
+  - name: TBMAN
+    bit_range:
+    - 20
+    - 20
+    description: null
+  - name: TIMER
+    bit_range:
+    - 21
+    - 21
+    description: null
+  - name: UART0
+    bit_range:
+    - 22
+    - 22
+    description: null
+  - name: UART1
+    bit_range:
+    - 23
+    - 23
+    description: null
+  - name: USBCTRL
+    bit_range:
+    - 24
+    - 24
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

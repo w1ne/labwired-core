@@ -411,6 +411,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // (PLLSAI/DCKCFGR) are unmodeled. Promote when benched on F767
         // silicon and the clock-tree gap closes.
         "stm32f767",
+        // Dual M33 on the RP2040-model shared IP with an rp2350 clkrst
+        // address-map profile. Smoke-validated via examples/pico2 only:
+        // no catalog board, no silicon oracle, no TrustZone/bootrom/PIO
+        // v2. Promote when benched on Pico 2 silicon.
+        "rp2350",
         // WeAct F411 Black Pill. Has a tier-1 fixture + io-smoke and rides the
         // shared stm32f4 peripheral models, but it is not a bundled-configs.ts
         // catalog board and carries NO executing-fidelity test of its own (no

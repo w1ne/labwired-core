@@ -1,0 +1,10 @@
+# LabWired - Pico 2 (RP2350) UART smoke (lab entry)
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "RP2350_SMOKE_OK"
+  - expected_stop_reason: max_steps

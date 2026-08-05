@@ -44,6 +44,7 @@ members = [
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-perf-spin",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-rp2350-demo",
     "crates/firmware-kw41z-demo",
     "crates/firmware-kw41z-lcd",
     "crates/firmware-rp2040-pio-onboarding",
@@ -205,6 +206,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-perf-spin]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-rp2350-demo]
 codegen-units = 1
 opt-level = "s"
 

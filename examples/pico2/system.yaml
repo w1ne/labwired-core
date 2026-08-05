@@ -1,0 +1,11 @@
+# LabWired - Pico 2 (RP2350) Example System Configuration
+name: "pico2-example"
+chip: "../../configs/chips/rp2350.yaml"
+external_devices: []
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

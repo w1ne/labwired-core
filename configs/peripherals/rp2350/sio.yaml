@@ -1,0 +1,1335 @@
+peripheral: SIO
+version: 0.1.0
+registers:
+- id: CPUID
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPUID
+    bit_range:
+    - 31
+    - 0
+    description: Value is 0 when read from processor core 0, and 1 when read from processor core 1.
+  side_effects: null
+- id: GPIO_IN
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_IN
+    bit_range:
+    - 29
+    - 0
+    description: Input value for GPIO0...29
+  side_effects: null
+- id: GPIO_HI_IN
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_IN
+    bit_range:
+    - 5
+    - 0
+    description: 'Input value on QSPI IO in order 0..5: SCLK, SSn, SD0, SD1, SD2, SD3'
+  side_effects: null
+- id: GPIO_OUT
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OUT
+    bit_range:
+    - 29
+    - 0
+    description: "Set output level (1/0 -> high/low) for GPIO0...29. \n                            Reading back gives the last value written, NOT the input value from the pins. \n                            If core 0 and core 1 both write to GPIO_OUT simultaneously (or to a SET/CLR/XOR alias), \n                            the result is as though the write from core 0 took place first, \n                            and the write from core 1 was then applied to that intermediate result."
+  side_effects: null
+- id: GPIO_OUT_SET
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OUT_SET
+    bit_range:
+    - 29
+    - 0
+    description: Perform an atomic bit-set on GPIO_OUT, i.e. `GPIO_OUT |= wdata`
+  side_effects: null
+- id: GPIO_OUT_CLR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OUT_CLR
+    bit_range:
+    - 29
+    - 0
+    description: Perform an atomic bit-clear on GPIO_OUT, i.e. `GPIO_OUT &= ~wdata`
+  side_effects: null
+- id: GPIO_OUT_XOR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OUT_XOR
+    bit_range:
+    - 29
+    - 0
+    description: Perform an atomic bitwise XOR on GPIO_OUT, i.e. `GPIO_OUT ^= wdata`
+  side_effects: null
+- id: GPIO_OE
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OE
+    bit_range:
+    - 29
+    - 0
+    description: "Set output enable (1/0 -> output/input) for GPIO0...29. \n                            Reading back gives the last value written. \n                            If core 0 and core 1 both write to GPIO_OE simultaneously (or to a SET/CLR/XOR alias), \n                            the result is as though the write from core 0 took place first, \n                            and the write from core 1 was then applied to that intermediate result."
+  side_effects: null
+- id: GPIO_OE_SET
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OE_SET
+    bit_range:
+    - 29
+    - 0
+    description: Perform an atomic bit-set on GPIO_OE, i.e. `GPIO_OE |= wdata`
+  side_effects: null
+- id: GPIO_OE_CLR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OE_CLR
+    bit_range:
+    - 29
+    - 0
+    description: Perform an atomic bit-clear on GPIO_OE, i.e. `GPIO_OE &= ~wdata`
+  side_effects: null
+- id: GPIO_OE_XOR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_OE_XOR
+    bit_range:
+    - 29
+    - 0
+    description: Perform an atomic bitwise XOR on GPIO_OE, i.e. `GPIO_OE ^= wdata`
+  side_effects: null
+- id: GPIO_HI_OUT
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OUT
+    bit_range:
+    - 5
+    - 0
+    description: "Set output level (1/0 -> high/low) for QSPI IO0...5. \n                            Reading back gives the last value written, NOT the input value from the pins. \n                            If core 0 and core 1 both write to GPIO_HI_OUT simultaneously (or to a SET/CLR/XOR alias), \n                            the result is as though the write from core 0 took place first, \n                            and the write from core 1 was then applied to that intermediate result."
+  side_effects: null
+- id: GPIO_HI_OUT_SET
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OUT_SET
+    bit_range:
+    - 5
+    - 0
+    description: Perform an atomic bit-set on GPIO_HI_OUT, i.e. `GPIO_HI_OUT |= wdata`
+  side_effects: null
+- id: GPIO_HI_OUT_CLR
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OUT_CLR
+    bit_range:
+    - 5
+    - 0
+    description: Perform an atomic bit-clear on GPIO_HI_OUT, i.e. `GPIO_HI_OUT &= ~wdata`
+  side_effects: null
+- id: GPIO_HI_OUT_XOR
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OUT_XOR
+    bit_range:
+    - 5
+    - 0
+    description: Perform an atomic bitwise XOR on GPIO_HI_OUT, i.e. `GPIO_HI_OUT ^= wdata`
+  side_effects: null
+- id: GPIO_HI_OE
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OE
+    bit_range:
+    - 5
+    - 0
+    description: "Set output enable (1/0 -> output/input) for QSPI IO0...5. \n                            Reading back gives the last value written. \n                            If core 0 and core 1 both write to GPIO_HI_OE simultaneously (or to a SET/CLR/XOR alias), \n                            the result is as though the write from core 0 took place first, \n                            and the write from core 1 was then applied to that intermediate result."
+  side_effects: null
+- id: GPIO_HI_OE_SET
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OE_SET
+    bit_range:
+    - 5
+    - 0
+    description: Perform an atomic bit-set on GPIO_HI_OE, i.e. `GPIO_HI_OE |= wdata`
+  side_effects: null
+- id: GPIO_HI_OE_CLR
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OE_CLR
+    bit_range:
+    - 5
+    - 0
+    description: Perform an atomic bit-clear on GPIO_HI_OE, i.e. `GPIO_HI_OE &= ~wdata`
+  side_effects: null
+- id: GPIO_HI_OE_XOR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPIO_HI_OE_XOR
+    bit_range:
+    - 5
+    - 0
+    description: Perform an atomic bitwise XOR on GPIO_HI_OE, i.e. `GPIO_HI_OE ^= wdata`
+  side_effects: null
+- id: FIFO_ST
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 2
+  fields:
+  - name: VLD
+    bit_range:
+    - 0
+    - 0
+    description: Value is 1 if this core's RX FIFO is not empty (i.e. if FIFO_RD is valid)
+  - name: RDY
+    bit_range:
+    - 1
+    - 1
+    description: Value is 1 if this core's TX FIFO is not full (i.e. if FIFO_WR is ready for more data)
+  - name: WOF
+    bit_range:
+    - 2
+    - 2
+    description: Sticky flag indicating the TX FIFO was written when full. This write was ignored by the FIFO.
+  - name: ROE
+    bit_range:
+    - 3
+    - 3
+    description: Sticky flag indicating the RX FIFO was read when empty. This read was ignored by the FIFO.
+  side_effects: null
+- id: FIFO_WR
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO_WR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: FIFO_RD
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FIFO_RD
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK_ST
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK_ST
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_UDIVIDEND
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_UDIVIDEND
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_UDIVISOR
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_UDIVISOR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_SDIVIDEND
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_SDIVIDEND
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_SDIVISOR
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_SDIVISOR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_QUOTIENT
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_QUOTIENT
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_REMAINDER
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIV_REMAINDER
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DIV_CSR
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: "Reads as 0 when a calculation is in progress, 1 otherwise. \n                            Writing an operand (xDIVIDEND, xDIVISOR) will immediately start a new calculation, no \n                            matter if one is already in progress. \n                            Writing to a result register will immediately terminate any in-progress calculation \n                            and set the READY and DIRTY flags."
+  - name: DIRTY
+    bit_range:
+    - 1
+    - 1
+    description: "Changes to 1 when any register is written, and back to 0 when QUOTIENT is read. \n                            Software can use this flag to make save/restore more efficient (skip if not DIRTY). \n                            If the flag is used in this way, it's recommended to either read QUOTIENT only, \n                            or REMAINDER and then QUOTIENT, to prevent data loss on context switch."
+  side_effects: null
+- id: INTERP0_ACCUM0
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_ACCUM0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_ACCUM1
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_ACCUM1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_BASE0
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_BASE0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_BASE1
+  address_offset: 140
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_BASE1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_BASE2
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_BASE2
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_POP_LANE0
+  address_offset: 148
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_POP_LANE0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_POP_LANE1
+  address_offset: 152
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_POP_LANE1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_POP_FULL
+  address_offset: 156
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_POP_FULL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_PEEK_LANE0
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_PEEK_LANE0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_PEEK_LANE1
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_PEEK_LANE1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_PEEK_FULL
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_PEEK_FULL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_CTRL_LANE0
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SHIFT
+    bit_range:
+    - 4
+    - 0
+    description: Logical right-shift applied to accumulator before masking
+  - name: MASK_LSB
+    bit_range:
+    - 9
+    - 5
+    description: The least-significant bit allowed to pass by the mask (inclusive)
+  - name: MASK_MSB
+    bit_range:
+    - 14
+    - 10
+    description: "The most-significant bit allowed to pass by the mask (inclusive) \n                            Setting MSB < LSB may cause chip to turn inside-out"
+  - name: SIGNED
+    bit_range:
+    - 15
+    - 15
+    description: "If SIGNED is set, the shifted and masked accumulator value is sign-extended to 32 bits \n                            before adding to BASE0, and LANE0 PEEK/POP appear extended to 32 bits when read by processor."
+  - name: CROSS_INPUT
+    bit_range:
+    - 16
+    - 16
+    description: "If 1, feed the opposite lane's accumulator into this lane's shift + mask hardware. \n                            Takes effect even if ADD_RAW is set (the CROSS_INPUT mux is before the shift+mask bypass)"
+  - name: CROSS_RESULT
+    bit_range:
+    - 17
+    - 17
+    description: If 1, feed the opposite lane's result into this lane's accumulator on POP.
+  - name: ADD_RAW
+    bit_range:
+    - 18
+    - 18
+    description: If 1, mask + shift is bypassed for LANE0 result. This does not affect FULL result.
+  - name: FORCE_MSB
+    bit_range:
+    - 20
+    - 19
+    description: "ORed into bits 29:28 of the lane result presented to the processor on the bus. \n                            No effect on the internal 32-bit datapath. Handy for using a lane to generate sequence \n                            of pointers into flash or SRAM."
+  - name: BLEND
+    bit_range:
+    - 21
+    - 21
+    description: "Only present on INTERP0 on each core. If BLEND mode is enabled: \n                            - LANE1 result is a linear interpolation between BASE0 and BASE1, controlled \n                            by the 8 LSBs of lane 1 shift and mask value (a fractional number between \n                            0 and 255/256ths) \n                            - LANE0 result does not have BASE0 added (yields only the 8 LSBs of lane 1 shift+mask value) \n                            - FULL result does not have lane 1 shift+mask value added (BASE2 + lane 0 shift+mask) \n                            LANE1 SIGNED flag controls whether the interpolation is signed or unsigned."
+  - name: OVERF0
+    bit_range:
+    - 23
+    - 23
+    description: Indicates if any masked-off MSBs in ACCUM0 are set.
+  - name: OVERF1
+    bit_range:
+    - 24
+    - 24
+    description: Indicates if any masked-off MSBs in ACCUM1 are set.
+  - name: OVERF
+    bit_range:
+    - 25
+    - 25
+    description: Set if either OVERF0 or OVERF1 is set.
+  side_effects: null
+- id: INTERP0_CTRL_LANE1
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SHIFT
+    bit_range:
+    - 4
+    - 0
+    description: Logical right-shift applied to accumulator before masking
+  - name: MASK_LSB
+    bit_range:
+    - 9
+    - 5
+    description: The least-significant bit allowed to pass by the mask (inclusive)
+  - name: MASK_MSB
+    bit_range:
+    - 14
+    - 10
+    description: "The most-significant bit allowed to pass by the mask (inclusive) \n                            Setting MSB < LSB may cause chip to turn inside-out"
+  - name: SIGNED
+    bit_range:
+    - 15
+    - 15
+    description: "If SIGNED is set, the shifted and masked accumulator value is sign-extended to 32 bits \n                            before adding to BASE1, and LANE1 PEEK/POP appear extended to 32 bits when read by processor."
+  - name: CROSS_INPUT
+    bit_range:
+    - 16
+    - 16
+    description: "If 1, feed the opposite lane's accumulator into this lane's shift + mask hardware. \n                            Takes effect even if ADD_RAW is set (the CROSS_INPUT mux is before the shift+mask bypass)"
+  - name: CROSS_RESULT
+    bit_range:
+    - 17
+    - 17
+    description: If 1, feed the opposite lane's result into this lane's accumulator on POP.
+  - name: ADD_RAW
+    bit_range:
+    - 18
+    - 18
+    description: If 1, mask + shift is bypassed for LANE1 result. This does not affect FULL result.
+  - name: FORCE_MSB
+    bit_range:
+    - 20
+    - 19
+    description: "ORed into bits 29:28 of the lane result presented to the processor on the bus. \n                            No effect on the internal 32-bit datapath. Handy for using a lane to generate sequence \n                            of pointers into flash or SRAM."
+  side_effects: null
+- id: INTERP0_ACCUM0_ADD
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_ACCUM0_ADD
+    bit_range:
+    - 23
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_ACCUM1_ADD
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_ACCUM1_ADD
+    bit_range:
+    - 23
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP0_BASE_1AND0
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP0_BASE_1AND0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_ACCUM0
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_ACCUM0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_ACCUM1
+  address_offset: 196
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_ACCUM1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_BASE0
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_BASE0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_BASE1
+  address_offset: 204
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_BASE1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_BASE2
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_BASE2
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_POP_LANE0
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_POP_LANE0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_POP_LANE1
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_POP_LANE1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_POP_FULL
+  address_offset: 220
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_POP_FULL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_PEEK_LANE0
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_PEEK_LANE0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_PEEK_LANE1
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_PEEK_LANE1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_PEEK_FULL
+  address_offset: 232
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_PEEK_FULL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_CTRL_LANE0
+  address_offset: 236
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SHIFT
+    bit_range:
+    - 4
+    - 0
+    description: Logical right-shift applied to accumulator before masking
+  - name: MASK_LSB
+    bit_range:
+    - 9
+    - 5
+    description: The least-significant bit allowed to pass by the mask (inclusive)
+  - name: MASK_MSB
+    bit_range:
+    - 14
+    - 10
+    description: "The most-significant bit allowed to pass by the mask (inclusive) \n                            Setting MSB < LSB may cause chip to turn inside-out"
+  - name: SIGNED
+    bit_range:
+    - 15
+    - 15
+    description: "If SIGNED is set, the shifted and masked accumulator value is sign-extended to 32 bits \n                            before adding to BASE0, and LANE0 PEEK/POP appear extended to 32 bits when read by processor."
+  - name: CROSS_INPUT
+    bit_range:
+    - 16
+    - 16
+    description: "If 1, feed the opposite lane's accumulator into this lane's shift + mask hardware. \n                            Takes effect even if ADD_RAW is set (the CROSS_INPUT mux is before the shift+mask bypass)"
+  - name: CROSS_RESULT
+    bit_range:
+    - 17
+    - 17
+    description: If 1, feed the opposite lane's result into this lane's accumulator on POP.
+  - name: ADD_RAW
+    bit_range:
+    - 18
+    - 18
+    description: If 1, mask + shift is bypassed for LANE0 result. This does not affect FULL result.
+  - name: FORCE_MSB
+    bit_range:
+    - 20
+    - 19
+    description: "ORed into bits 29:28 of the lane result presented to the processor on the bus. \n                            No effect on the internal 32-bit datapath. Handy for using a lane to generate sequence \n                            of pointers into flash or SRAM."
+  - name: CLAMP
+    bit_range:
+    - 22
+    - 22
+    description: "Only present on INTERP1 on each core. If CLAMP mode is enabled: \n                            - LANE0 result is shifted and masked ACCUM0, clamped by a lower bound of \n                            BASE0 and an upper bound of BASE1. \n                            - Signedness of these comparisons is determined by LANE0_CTRL_SIGNED"
+  - name: OVERF0
+    bit_range:
+    - 23
+    - 23
+    description: Indicates if any masked-off MSBs in ACCUM0 are set.
+  - name: OVERF1
+    bit_range:
+    - 24
+    - 24
+    description: Indicates if any masked-off MSBs in ACCUM1 are set.
+  - name: OVERF
+    bit_range:
+    - 25
+    - 25
+    description: Set if either OVERF0 or OVERF1 is set.
+  side_effects: null
+- id: INTERP1_CTRL_LANE1
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SHIFT
+    bit_range:
+    - 4
+    - 0
+    description: Logical right-shift applied to accumulator before masking
+  - name: MASK_LSB
+    bit_range:
+    - 9
+    - 5
+    description: The least-significant bit allowed to pass by the mask (inclusive)
+  - name: MASK_MSB
+    bit_range:
+    - 14
+    - 10
+    description: "The most-significant bit allowed to pass by the mask (inclusive) \n                            Setting MSB < LSB may cause chip to turn inside-out"
+  - name: SIGNED
+    bit_range:
+    - 15
+    - 15
+    description: "If SIGNED is set, the shifted and masked accumulator value is sign-extended to 32 bits \n                            before adding to BASE1, and LANE1 PEEK/POP appear extended to 32 bits when read by processor."
+  - name: CROSS_INPUT
+    bit_range:
+    - 16
+    - 16
+    description: "If 1, feed the opposite lane's accumulator into this lane's shift + mask hardware. \n                            Takes effect even if ADD_RAW is set (the CROSS_INPUT mux is before the shift+mask bypass)"
+  - name: CROSS_RESULT
+    bit_range:
+    - 17
+    - 17
+    description: If 1, feed the opposite lane's result into this lane's accumulator on POP.
+  - name: ADD_RAW
+    bit_range:
+    - 18
+    - 18
+    description: If 1, mask + shift is bypassed for LANE1 result. This does not affect FULL result.
+  - name: FORCE_MSB
+    bit_range:
+    - 20
+    - 19
+    description: "ORed into bits 29:28 of the lane result presented to the processor on the bus. \n                            No effect on the internal 32-bit datapath. Handy for using a lane to generate sequence \n                            of pointers into flash or SRAM."
+  side_effects: null
+- id: INTERP1_ACCUM0_ADD
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_ACCUM0_ADD
+    bit_range:
+    - 23
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_ACCUM1_ADD
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_ACCUM1_ADD
+    bit_range:
+    - 23
+    - 0
+    description: null
+  side_effects: null
+- id: INTERP1_BASE_1AND0
+  address_offset: 252
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INTERP1_BASE_1AND0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK0
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK1
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK2
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK2
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK3
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK3
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK4
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK4
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK5
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK5
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK6
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK6
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK7
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK7
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK8
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK8
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK9
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK9
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK10
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK10
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK11
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK11
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK12
+  address_offset: 304
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK12
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK13
+  address_offset: 308
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK13
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK14
+  address_offset: 312
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK14
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK15
+  address_offset: 316
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK15
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK16
+  address_offset: 320
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK16
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK17
+  address_offset: 324
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK17
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK18
+  address_offset: 328
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK18
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK19
+  address_offset: 332
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK19
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK20
+  address_offset: 336
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK20
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK21
+  address_offset: 340
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK21
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK22
+  address_offset: 344
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK22
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK23
+  address_offset: 348
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK23
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK24
+  address_offset: 352
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK24
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK25
+  address_offset: 356
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK25
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK26
+  address_offset: 360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK26
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK27
+  address_offset: 364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK27
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK28
+  address_offset: 368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK28
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK29
+  address_offset: 372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK29
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK30
+  address_offset: 376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK30
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: SPINLOCK31
+  address_offset: 380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPINLOCK31
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+interrupts:
+  SIO_IRQ_PROC1: 16
+  SIO_IRQ_PROC0: 15
+timing: null

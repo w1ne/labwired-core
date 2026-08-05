@@ -1,0 +1,278 @@
+peripheral: TIMER
+version: 0.1.0
+registers:
+- id: TIMEHW
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMEHW
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: TIMELW
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMELW
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: TIMEHR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMEHR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: TIMELR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMELR
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: ALARM0
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM0
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: ALARM1
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM1
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: ALARM2
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM2
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: ALARM3
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM3
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: ARMED
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ARMED
+    bit_range:
+    - 3
+    - 0
+    description: null
+  side_effects: null
+- id: TIMERAWH
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMERAWH
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: TIMERAWL
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIMERAWL
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+- id: DBGPAUSE
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 7
+  fields:
+  - name: DBG0
+    bit_range:
+    - 1
+    - 1
+    description: Pause when processor 0 is in debug mode
+  - name: DBG1
+    bit_range:
+    - 2
+    - 2
+    description: Pause when processor 1 is in debug mode
+  side_effects: null
+- id: PAUSE
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PAUSE
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: INTR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: ALARM_3
+    bit_range:
+    - 3
+    - 3
+    description: null
+  side_effects: null
+- id: INTE
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: ALARM_3
+    bit_range:
+    - 3
+    - 3
+    description: null
+  side_effects: null
+- id: INTF
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: ALARM_3
+    bit_range:
+    - 3
+    - 3
+    description: null
+  side_effects: null
+- id: INTS
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ALARM_0
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: ALARM_1
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: ALARM_2
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: ALARM_3
+    bit_range:
+    - 3
+    - 3
+    description: null
+  side_effects: null
+interrupts:
+  TIMER_IRQ_0: 0
+  TIMER_IRQ_2: 2
+  TIMER_IRQ_1: 1
+  TIMER_IRQ_3: 3
+timing: null

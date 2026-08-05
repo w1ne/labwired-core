@@ -1,0 +1,342 @@
+peripheral: SPI0
+version: 0.1.0
+registers:
+- id: SSPCR0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DSS
+    bit_range:
+    - 3
+    - 0
+    description: 'Data Size Select: 0000 Reserved, undefined operation. 0001 Reserved, undefined operation. 0010 Reserved, undefined operation. 0011 4-bit data. 0100 5-bit data. 0101 6-bit data. 0110 7-bit data. 0111 8-bit data. 1000 9-bit data. 1001 10-bit data. 1010 11-bit data. 1011 12-bit data. 1100 13-bit data. 1101 14-bit data. 1110 15-bit data. 1111 16-bit data.'
+  - name: FRF
+    bit_range:
+    - 5
+    - 4
+    description: 'Frame format: 00 Motorola SPI frame format. 01 TI synchronous serial frame format. 10 National Microwire frame format. 11 Reserved, undefined operation.'
+  - name: SPO
+    bit_range:
+    - 6
+    - 6
+    description: SSPCLKOUT polarity, applicable to Motorola SPI frame format only. See Motorola SPI frame format on page 2-10.
+  - name: SPH
+    bit_range:
+    - 7
+    - 7
+    description: SSPCLKOUT phase, applicable to Motorola SPI frame format only. See Motorola SPI frame format on page 2-10.
+  - name: SCR
+    bit_range:
+    - 15
+    - 8
+    description: 'Serial clock rate. The value SCR is used to generate the transmit and receive bit rate of the PrimeCell SSP. The bit rate is: F SSPCLK CPSDVSR x (1+SCR) where CPSDVSR is an even value from 2-254, programmed through the SSPCPSR register and SCR is a value from 0-255.'
+  side_effects: null
+- id: SSPCR1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LBM
+    bit_range:
+    - 0
+    - 0
+    description: 'Loop back mode: 0 Normal serial port operation enabled. 1 Output of transmit serial shifter is connected to input of receive serial shifter internally.'
+  - name: SSE
+    bit_range:
+    - 1
+    - 1
+    description: 'Synchronous serial port enable: 0 SSP operation disabled. 1 SSP operation enabled.'
+  - name: MS
+    bit_range:
+    - 2
+    - 2
+    description: 'Master or slave mode select. This bit can be modified only when the PrimeCell SSP is disabled, SSE=0: 0 Device configured as master, default. 1 Device configured as slave.'
+  - name: SOD
+    bit_range:
+    - 3
+    - 3
+    description: 'Slave-mode output disable. This bit is relevant only in the slave mode, MS=1. In multiple-slave systems, it is possible for an PrimeCell SSP master to broadcast a message to all slaves in the system while ensuring that only one slave drives data onto its serial output line. In such systems the RXD lines from multiple slaves could be tied together. To operate in such systems, the SOD bit can be set if the PrimeCell SSP slave is not supposed to drive the SSPTXD line: 0 SSP can drive the SSPTXD output in slave mode. 1 SSP must not drive the SSPTXD output in slave mode.'
+  side_effects: null
+- id: SSPDR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 15
+    - 0
+    description: 'Transmit/Receive FIFO: Read Receive FIFO. Write Transmit FIFO. You must right-justify data when the PrimeCell SSP is programmed for a data size that is less than 16 bits. Unused bits at the top are ignored by transmit logic. The receive logic automatically right-justifies.'
+  side_effects: null
+- id: SSPSR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: TFE
+    bit_range:
+    - 0
+    - 0
+    description: 'Transmit FIFO empty, RO: 0 Transmit FIFO is not empty. 1 Transmit FIFO is empty.'
+  - name: TNF
+    bit_range:
+    - 1
+    - 1
+    description: 'Transmit FIFO not full, RO: 0 Transmit FIFO is full. 1 Transmit FIFO is not full.'
+  - name: RNE
+    bit_range:
+    - 2
+    - 2
+    description: 'Receive FIFO not empty, RO: 0 Receive FIFO is empty. 1 Receive FIFO is not empty.'
+  - name: RFF
+    bit_range:
+    - 3
+    - 3
+    description: 'Receive FIFO full, RO: 0 Receive FIFO is not full. 1 Receive FIFO is full.'
+  - name: BSY
+    bit_range:
+    - 4
+    - 4
+    description: 'PrimeCell SSP busy flag, RO: 0 SSP is idle. 1 SSP is currently transmitting and/or receiving a frame or the transmit FIFO is not empty.'
+  side_effects: null
+- id: SSPCPSR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPSDVSR
+    bit_range:
+    - 7
+    - 0
+    description: Clock prescale divisor. Must be an even number from 2-254, depending on the frequency of SSPCLK. The least significant bit always returns zero on reads.
+  side_effects: null
+- id: SSPIMSC
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RORIM
+    bit_range:
+    - 0
+    - 0
+    description: 'Receive overrun interrupt mask: 0 Receive FIFO written to while full condition interrupt is masked. 1 Receive FIFO written to while full condition interrupt is not masked.'
+  - name: RTIM
+    bit_range:
+    - 1
+    - 1
+    description: 'Receive timeout interrupt mask: 0 Receive FIFO not empty and no read prior to timeout period interrupt is masked. 1 Receive FIFO not empty and no read prior to timeout period interrupt is not masked.'
+  - name: RXIM
+    bit_range:
+    - 2
+    - 2
+    description: 'Receive FIFO interrupt mask: 0 Receive FIFO half full or less condition interrupt is masked. 1 Receive FIFO half full or less condition interrupt is not masked.'
+  - name: TXIM
+    bit_range:
+    - 3
+    - 3
+    description: 'Transmit FIFO interrupt mask: 0 Transmit FIFO half empty or less condition interrupt is masked. 1 Transmit FIFO half empty or less condition interrupt is not masked.'
+  side_effects: null
+- id: SSPRIS
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 8
+  fields:
+  - name: RORRIS
+    bit_range:
+    - 0
+    - 0
+    description: Gives the raw interrupt state, prior to masking, of the SSPRORINTR interrupt
+  - name: RTRIS
+    bit_range:
+    - 1
+    - 1
+    description: Gives the raw interrupt state, prior to masking, of the SSPRTINTR interrupt
+  - name: RXRIS
+    bit_range:
+    - 2
+    - 2
+    description: Gives the raw interrupt state, prior to masking, of the SSPRXINTR interrupt
+  - name: TXRIS
+    bit_range:
+    - 3
+    - 3
+    description: Gives the raw interrupt state, prior to masking, of the SSPTXINTR interrupt
+  side_effects: null
+- id: SSPMIS
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RORMIS
+    bit_range:
+    - 0
+    - 0
+    description: Gives the receive over run masked interrupt status, after masking, of the SSPRORINTR interrupt
+  - name: RTMIS
+    bit_range:
+    - 1
+    - 1
+    description: Gives the receive timeout masked interrupt state, after masking, of the SSPRTINTR interrupt
+  - name: RXMIS
+    bit_range:
+    - 2
+    - 2
+    description: Gives the receive FIFO masked interrupt state, after masking, of the SSPRXINTR interrupt
+  - name: TXMIS
+    bit_range:
+    - 3
+    - 3
+    description: Gives the transmit FIFO masked interrupt state, after masking, of the SSPTXINTR interrupt
+  side_effects: null
+- id: SSPICR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RORIC
+    bit_range:
+    - 0
+    - 0
+    description: Clears the SSPRORINTR interrupt
+  - name: RTIC
+    bit_range:
+    - 1
+    - 1
+    description: Clears the SSPRTINTR interrupt
+  side_effects: null
+- id: SSPDMACR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXDMAE
+    bit_range:
+    - 0
+    - 0
+    description: Receive DMA Enable. If this bit is set to 1, DMA for the receive FIFO is enabled.
+  - name: TXDMAE
+    bit_range:
+    - 1
+    - 1
+    description: Transmit DMA Enable. If this bit is set to 1, DMA for the transmit FIFO is enabled.
+  side_effects: null
+- id: SSPPERIPHID0
+  address_offset: 4064
+  size: 32
+  access: READ_WRITE
+  reset_value: 34
+  fields:
+  - name: PARTNUMBER0
+    bit_range:
+    - 7
+    - 0
+    description: These bits read back as 0x22
+  side_effects: null
+- id: SSPPERIPHID1
+  address_offset: 4068
+  size: 32
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: PARTNUMBER1
+    bit_range:
+    - 3
+    - 0
+    description: These bits read back as 0x0
+  - name: DESIGNER0
+    bit_range:
+    - 7
+    - 4
+    description: These bits read back as 0x1
+  side_effects: null
+- id: SSPPERIPHID2
+  address_offset: 4072
+  size: 32
+  access: READ_WRITE
+  reset_value: 52
+  fields:
+  - name: DESIGNER1
+    bit_range:
+    - 3
+    - 0
+    description: These bits read back as 0x4
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: These bits return the peripheral revision
+  side_effects: null
+- id: SSPPERIPHID3
+  address_offset: 4076
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CONFIGURATION
+    bit_range:
+    - 7
+    - 0
+    description: These bits read back as 0x00
+  side_effects: null
+- id: SSPPCELLID0
+  address_offset: 4080
+  size: 32
+  access: READ_WRITE
+  reset_value: 13
+  fields:
+  - name: SSPPCELLID0
+    bit_range:
+    - 7
+    - 0
+    description: These bits read back as 0x0D
+  side_effects: null
+- id: SSPPCELLID1
+  address_offset: 4084
+  size: 32
+  access: READ_WRITE
+  reset_value: 240
+  fields:
+  - name: SSPPCELLID1
+    bit_range:
+    - 7
+    - 0
+    description: These bits read back as 0xF0
+  side_effects: null
+- id: SSPPCELLID2
+  address_offset: 4088
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: SSPPCELLID2
+    bit_range:
+    - 7
+    - 0
+    description: These bits read back as 0x05
+  side_effects: null
+- id: SSPPCELLID3
+  address_offset: 4092
+  size: 32
+  access: READ_WRITE
+  reset_value: 177
+  fields:
+  - name: SSPPCELLID3
+    bit_range:
+    - 7
+    - 0
+    description: These bits read back as 0xB1
+  side_effects: null
+interrupts:
+  SPI0_IRQ: 18
+timing: null

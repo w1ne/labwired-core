@@ -431,9 +431,22 @@ pub fn try_build(
             )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
-        "rp2040_clkrst" => Box::new(crate::peripherals::rp2040_clocks::Rp2040ClockReset::new(
-            p_cfg.base_address,
-        )),
+        "rp2040_clkrst" => {
+            let profile = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => {
+                    crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2350
+                }
+                // Absent/anything else: the RP2040 map (the only map this
+                // peripheral had before RP2350 onboarding).
+                _ => crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2040,
+            };
+            Box::new(
+                crate::peripherals::rp2040_clocks::Rp2040ClockReset::with_profile(
+                    p_cfg.base_address,
+                    profile,
+                ),
+            )
+        }
         "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
         "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),

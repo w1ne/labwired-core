@@ -1,0 +1,650 @@
+peripheral: PPB
+version: 0.1.0
+registers:
+- id: SYST_CSR
+  address_offset: 57360
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: "Enable SysTick counter: \n                            0 = Counter disabled. \n                            1 = Counter enabled."
+  - name: TICKINT
+    bit_range:
+    - 1
+    - 1
+    description: "Enables SysTick exception request: \n                            0 = Counting down to zero does not assert the SysTick exception request. \n                            1 = Counting down to zero to asserts the SysTick exception request."
+  - name: CLKSOURCE
+    bit_range:
+    - 2
+    - 2
+    description: "SysTick clock source. Always reads as one if SYST_CALIB reports NOREF. \n                            Selects the SysTick timer clock source: \n                            0 = External reference clock. \n                            1 = Processor clock."
+  - name: COUNTFLAG
+    bit_range:
+    - 16
+    - 16
+    description: Returns 1 if timer counted to 0 since last time this was read. Clears on read by application or debugger.
+  side_effects: null
+- id: SYST_RVR
+  address_offset: 57364
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RELOAD
+    bit_range:
+    - 23
+    - 0
+    description: Value to load into the SysTick Current Value Register when the counter reaches 0.
+  side_effects: null
+- id: SYST_CVR
+  address_offset: 57368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CURRENT
+    bit_range:
+    - 23
+    - 0
+    description: Reads return the current value of the SysTick counter. This register is write-clear. Writing to it with any value clears the register to 0. Clearing this register also clears the COUNTFLAG bit of the SysTick Control and Status Register.
+  side_effects: null
+- id: SYST_CALIB
+  address_offset: 57372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TENMS
+    bit_range:
+    - 23
+    - 0
+    description: An optional Reload value to be used for 10ms (100Hz) timing, subject to system clock skew errors. If the value reads as 0, the calibration value is not known.
+  - name: SKEW
+    bit_range:
+    - 30
+    - 30
+    description: If reads as 1, the calibration value for 10ms is inexact (due to clock frequency).
+  - name: NOREF
+    bit_range:
+    - 31
+    - 31
+    description: If reads as 1, the Reference clock is not provided - the CLKSOURCE bit of the SysTick Control and Status register will be forced to 1 and cannot be cleared to 0.
+  side_effects: null
+- id: NVIC_ISER
+  address_offset: 57600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SETENA
+    bit_range:
+    - 31
+    - 0
+    description: "Interrupt set-enable bits. \n                            Write: \n                            0 = No effect. \n                            1 = Enable interrupt. \n                            Read: \n                            0 = Interrupt disabled. \n                            1 = Interrupt enabled."
+  side_effects: null
+- id: NVIC_ICER
+  address_offset: 57728
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLRENA
+    bit_range:
+    - 31
+    - 0
+    description: "Interrupt clear-enable bits. \n                            Write: \n                            0 = No effect. \n                            1 = Disable interrupt. \n                            Read: \n                            0 = Interrupt disabled. \n                            1 = Interrupt enabled."
+  side_effects: null
+- id: NVIC_ISPR
+  address_offset: 57856
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SETPEND
+    bit_range:
+    - 31
+    - 0
+    description: "Interrupt set-pending bits. \n                            Write: \n                            0 = No effect. \n                            1 = Changes interrupt state to pending. \n                            Read: \n                            0 = Interrupt is not pending. \n                            1 = Interrupt is pending. \n                            Note: Writing 1 to the NVIC_ISPR bit corresponding to: \n                            An interrupt that is pending has no effect. \n                            A disabled interrupt sets the state of that interrupt to pending."
+  side_effects: null
+- id: NVIC_ICPR
+  address_offset: 57984
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLRPEND
+    bit_range:
+    - 31
+    - 0
+    description: "Interrupt clear-pending bits. \n                            Write: \n                            0 = No effect. \n                            1 = Removes pending state and interrupt. \n                            Read: \n                            0 = Interrupt is not pending. \n                            1 = Interrupt is pending."
+  side_effects: null
+- id: NVIC_IPR0
+  address_offset: 58368
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_0
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 0
+  - name: IP_1
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 1
+  - name: IP_2
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 2
+  - name: IP_3
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 3
+  side_effects: null
+- id: NVIC_IPR1
+  address_offset: 58372
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_4
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 4
+  - name: IP_5
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 5
+  - name: IP_6
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 6
+  - name: IP_7
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 7
+  side_effects: null
+- id: NVIC_IPR2
+  address_offset: 58376
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_8
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 8
+  - name: IP_9
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 9
+  - name: IP_10
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 10
+  - name: IP_11
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 11
+  side_effects: null
+- id: NVIC_IPR3
+  address_offset: 58380
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_12
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 12
+  - name: IP_13
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 13
+  - name: IP_14
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 14
+  - name: IP_15
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 15
+  side_effects: null
+- id: NVIC_IPR4
+  address_offset: 58384
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_16
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 16
+  - name: IP_17
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 17
+  - name: IP_18
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 18
+  - name: IP_19
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 19
+  side_effects: null
+- id: NVIC_IPR5
+  address_offset: 58388
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_20
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 20
+  - name: IP_21
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 21
+  - name: IP_22
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 22
+  - name: IP_23
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 23
+  side_effects: null
+- id: NVIC_IPR6
+  address_offset: 58392
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_24
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 24
+  - name: IP_25
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 25
+  - name: IP_26
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 26
+  - name: IP_27
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 27
+  side_effects: null
+- id: NVIC_IPR7
+  address_offset: 58396
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IP_28
+    bit_range:
+    - 7
+    - 6
+    description: Priority of interrupt 28
+  - name: IP_29
+    bit_range:
+    - 15
+    - 14
+    description: Priority of interrupt 29
+  - name: IP_30
+    bit_range:
+    - 23
+    - 22
+    description: Priority of interrupt 30
+  - name: IP_31
+    bit_range:
+    - 31
+    - 30
+    description: Priority of interrupt 31
+  side_effects: null
+- id: CPUID
+  address_offset: 60672
+  size: 32
+  access: READ_WRITE
+  reset_value: 1091356161
+  fields:
+  - name: REVISION
+    bit_range:
+    - 3
+    - 0
+    description: "Minor revision number m in the rnpm revision status: \n                            0x1 = Patch 1."
+  - name: PARTNO
+    bit_range:
+    - 15
+    - 4
+    description: 'Number of processor within family: 0xC60 = Cortex-M0+'
+  - name: ARCHITECTURE
+    bit_range:
+    - 19
+    - 16
+    description: "Constant that defines the architecture of the processor: \n                            0xC = ARMv6-M architecture."
+  - name: VARIANT
+    bit_range:
+    - 23
+    - 20
+    description: "Major revision number n in the rnpm revision status: \n                            0x0 = Revision 0."
+  - name: IMPLEMENTER
+    bit_range:
+    - 31
+    - 24
+    description: 'Implementor code: 0x41 = ARM'
+  side_effects: null
+- id: ICSR
+  address_offset: 60676
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VECTACTIVE
+    bit_range:
+    - 8
+    - 0
+    description: Active exception number field. Reset clears the VECTACTIVE field.
+  - name: VECTPENDING
+    bit_range:
+    - 20
+    - 12
+    description: 'Indicates the exception number for the highest priority pending exception: 0 = no pending exceptions. Non zero = The pending state includes the effect of memory-mapped enable and mask registers. It does not include the PRIMASK special-purpose register qualifier.'
+  - name: ISRPENDING
+    bit_range:
+    - 22
+    - 22
+    description: External interrupt pending flag
+  - name: ISRPREEMPT
+    bit_range:
+    - 23
+    - 23
+    description: The system can only access this bit when the core is halted. It indicates that a pending interrupt is to be taken in the next running cycle. If C_MASKINTS is clear in the Debug Halting Control and Status Register, the interrupt is serviced.
+  - name: PENDSTCLR
+    bit_range:
+    - 25
+    - 25
+    description: "SysTick exception clear-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Removes the pending state from the SysTick exception. \n                            This bit is WO. On a register read its value is Unknown."
+  - name: PENDSTSET
+    bit_range:
+    - 26
+    - 26
+    description: "SysTick exception set-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Changes SysTick exception state to pending. \n                            Read: \n                            0 = SysTick exception is not pending. \n                            1 = SysTick exception is pending."
+  - name: PENDSVCLR
+    bit_range:
+    - 27
+    - 27
+    description: "PendSV clear-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Removes the pending state from the PendSV exception."
+  - name: PENDSVSET
+    bit_range:
+    - 28
+    - 28
+    description: "PendSV set-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Changes PendSV exception state to pending. \n                            Read: \n                            0 = PendSV exception is not pending. \n                            1 = PendSV exception is pending. \n                            Writing 1 to this bit is the only way to set the PendSV exception state to pending."
+  - name: NMIPENDSET
+    bit_range:
+    - 31
+    - 31
+    description: "Setting this bit will activate an NMI. Since NMI is the highest priority exception, it will activate as soon as it is registered. \n                            NMI set-pending bit. \n                            Write: \n                            0 = No effect. \n                            1 = Changes NMI exception state to pending. \n                            Read: \n                            0 = NMI exception is not pending. \n                            1 = NMI exception is pending. \n                            Because NMI is the highest-priority exception, normally the processor enters the NMI \n                            exception handler as soon as it detects a write of 1 to this bit. Entering the handler then clears \n                            this bit to 0. This means a read of this bit by the NMI exception handler returns 1 only if the \n                            NMI signal is reasserted while the processor is executing that handler."
+  side_effects: null
+- id: VTOR
+  address_offset: 60680
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TBLOFF
+    bit_range:
+    - 31
+    - 8
+    description: Bits [31:8] of the indicate the vector table offset address.
+  side_effects: null
+- id: AIRCR
+  address_offset: 60684
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VECTCLRACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: 'Clears all active state information for fixed and configurable exceptions. This bit: is self-clearing, can only be set by the DAP when the core is halted.  When set: clears all active exception status of the processor, forces a return to Thread mode, forces an IPSR of 0. A debugger must re-initialize the stack.'
+  - name: SYSRESETREQ
+    bit_range:
+    - 2
+    - 2
+    description: Writing 1 to this bit causes the SYSRESETREQ signal to the outer system to be asserted to request a reset. The intention is to force a large system reset of all major components except for debug. The C_HALT bit in the DHCSR is cleared as a result of the system reset requested. The debugger does not lose contact with the device.
+  - name: ENDIANESS
+    bit_range:
+    - 15
+    - 15
+    description: "Data endianness implemented: \n                            0 = Little-endian."
+  - name: VECTKEY
+    bit_range:
+    - 31
+    - 16
+    description: "Register key: \n                            Reads as Unknown \n                            On writes, write 0x05FA to VECTKEY, otherwise the write is ignored."
+  side_effects: null
+- id: SCR
+  address_offset: 60688
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLEEPONEXIT
+    bit_range:
+    - 1
+    - 1
+    description: "Indicates sleep-on-exit when returning from Handler mode to Thread mode: \n                            0 = Do not sleep when returning to Thread mode. \n                            1 = Enter sleep, or deep sleep, on return from an ISR to Thread mode. \n                            Setting this bit to 1 enables an interrupt driven application to avoid returning to an empty main application."
+  - name: SLEEPDEEP
+    bit_range:
+    - 2
+    - 2
+    description: "Controls whether the processor uses sleep or deep sleep as its low power mode: \n                            0 = Sleep. \n                            1 = Deep sleep."
+  - name: SEVONPEND
+    bit_range:
+    - 4
+    - 4
+    description: "Send Event on Pending bit: \n                            0 = Only enabled interrupts or events can wakeup the processor, disabled interrupts are excluded. \n                            1 = Enabled events and all interrupts, including disabled interrupts, can wakeup the processor. \n                            When an event or interrupt becomes pending, the event signal wakes up the processor from WFE. If the \n                            processor is not waiting for an event, the event is registered and affects the next WFE. \n                            The processor also wakes up on execution of an SEV instruction or an external event."
+  side_effects: null
+- id: CCR
+  address_offset: 60692
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UNALIGN_TRP
+    bit_range:
+    - 3
+    - 3
+    description: Always reads as one, indicates that all unaligned accesses generate a HardFault.
+  - name: STKALIGN
+    bit_range:
+    - 9
+    - 9
+    description: Always reads as one, indicates 8-byte stack alignment on exception entry. On exception entry, the processor uses bit[9] of the stacked PSR to indicate the stack alignment. On return from the exception it uses this stacked bit to restore the correct stack alignment.
+  side_effects: null
+- id: SHPR2
+  address_offset: 60700
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_11
+    bit_range:
+    - 31
+    - 30
+    description: Priority of system handler 11, SVCall
+  side_effects: null
+- id: SHPR3
+  address_offset: 60704
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRI_14
+    bit_range:
+    - 23
+    - 22
+    description: Priority of system handler 14, PendSV
+  - name: PRI_15
+    bit_range:
+    - 31
+    - 30
+    description: Priority of system handler 15, SysTick
+  side_effects: null
+- id: SHCSR
+  address_offset: 60708
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SVCALLPENDED
+    bit_range:
+    - 15
+    - 15
+    description: Reads as 1 if SVCall is Pending.  Write 1 to set pending SVCall, write 0 to clear pending SVCall.
+  side_effects: null
+- id: MPU_TYPE
+  address_offset: 60816
+  size: 32
+  access: READ_WRITE
+  reset_value: 2048
+  fields:
+  - name: SEPARATE
+    bit_range:
+    - 0
+    - 0
+    description: Indicates support for separate instruction and data address maps. Reads as 0 as ARMv6-M only supports a unified MPU.
+  - name: DREGION
+    bit_range:
+    - 15
+    - 8
+    description: Number of regions supported by the MPU.
+  - name: IREGION
+    bit_range:
+    - 23
+    - 16
+    description: Instruction region. Reads as zero as ARMv6-M only supports a unified MPU.
+  side_effects: null
+- id: MPU_CTRL
+  address_offset: 60820
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: "Enables the MPU. If the MPU is disabled, privileged and unprivileged accesses use the default memory map. \n                            0 = MPU disabled. \n                            1 = MPU enabled."
+  - name: HFNMIENA
+    bit_range:
+    - 1
+    - 1
+    description: "Controls the use of the MPU for HardFaults and NMIs. Setting this bit when ENABLE is clear results in UNPREDICTABLE behaviour. \n                            When the MPU is enabled: \n                            0 = MPU is disabled during HardFault and NMI handlers, regardless of the value of the ENABLE bit. \n                            1 = the MPU is enabled during HardFault and NMI handlers."
+  - name: PRIVDEFENA
+    bit_range:
+    - 2
+    - 2
+    description: "Controls whether the default memory map is enabled as a background region for privileged accesses. This bit is ignored when ENABLE is clear. \n                            0 = If the MPU is enabled, disables use of the default memory map. Any memory access to a location not \n                            covered by any enabled region causes a fault. \n                            1 = If the MPU is enabled, enables use of the default memory map as a background region for privileged software accesses. \n                            When enabled, the background region acts as if it is region number -1. Any region that is defined and enabled has priority over this default map."
+  side_effects: null
+- id: MPU_RNR
+  address_offset: 60824
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION
+    bit_range:
+    - 3
+    - 0
+    description: "Indicates the MPU region referenced by the MPU_RBAR and MPU_RASR registers. \n                            The MPU supports 8 memory regions, so the permitted values of this field are 0-7."
+  side_effects: null
+- id: MPU_RBAR
+  address_offset: 60828
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: REGION
+    bit_range:
+    - 3
+    - 0
+    description: On writes, specifies the number of the region whose base address to update provided VALID is set written as 1. On reads, returns bits [3:0] of MPU_RNR.
+  - name: VALID
+    bit_range:
+    - 4
+    - 4
+    description: "On writes, indicates whether the write must update the base address of the region identified by the REGION field, updating the MPU_RNR to indicate this new region. \n                            Write: \n                            0 = MPU_RNR not changed, and the processor: \n                            Updates the base address for the region specified in the MPU_RNR. \n                            Ignores the value of the REGION field. \n                            1 = The processor: \n                            Updates the value of the MPU_RNR to the value of the REGION field. \n                            Updates the base address for the region specified in the REGION field. \n                            Always reads as zero."
+  - name: ADDR
+    bit_range:
+    - 31
+    - 8
+    description: Base address of the region.
+  side_effects: null
+- id: MPU_RASR
+  address_offset: 60832
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 0
+    - 0
+    description: Enables the region.
+  - name: SIZE
+    bit_range:
+    - 5
+    - 1
+    description: Indicates the region size. Region size in bytes = 2^(SIZE+1). The minimum permitted value is 7 (b00111) = 256Bytes
+  - name: SRD
+    bit_range:
+    - 15
+    - 8
+    description: Subregion Disable. For regions of 256 bytes or larger, each bit of this field controls whether one of the eight equal subregions is enabled.
+  - name: ATTRS
+    bit_range:
+    - 31
+    - 16
+    description: "The MPU Region Attribute field. Use to define the region attribute control. \n                            28 = XN: Instruction access disable bit: \n                            0 = Instruction fetches enabled. \n                            1 = Instruction fetches disabled. \n                            26:24 = AP: Access permission field \n                            18 = S: Shareable bit \n                            17 = C: Cacheable bit \n                            16 = B: Bufferable bit"
+  side_effects: null
+interrupts: null
+timing: null

@@ -1,0 +1,166 @@
+# LabWired - RP2350 Chip Descriptor
+# Cortex-M33 ×2 (core 1 held; bring-up is single-core). Addresses verified
+# against pico-sdk rp2350 hardware_regs (addressmap.h / intctrl.h): the RP2350
+# moved the whole low-APB map, so every base below is the RP2350 one, not the
+# RP2040's. Reuses the RP2040 behavioural models (PL011 UART, DW I2C/SPI, PIO,
+# SIO, DMA, ADC, PWM, watchdog, clock/reset with the rp2350 profile).
+# Not declared (documented in docs/boards/rp2350.md): POWERMAN/TICKS/TRNG/
+# SHA-256/OTP/HSTX/USB enumeration/XIP QMI programming, TrustZone, Hazard3
+# RISC-V cores, second M33 core.
+name: "rp2350"
+arch: "arm"
+core: "cortex-m33"
+registers_count: 240
+flash:
+  base: 0x10000000
+  size: "2MB"
+ram:
+  base: 0x20000000
+  # 520KB contiguous: 10 striped banks + the two 4KB scratch banks
+  # (SCRATCH_X @0x20080000, SCRATCH_Y @0x20081000).
+  size: "520KB"
+# Bare ELFs (cortex-m-rt) place the vector table at flash base; pico-sdk
+# RP2350 images carry IMAGE_DEF first. We fast-boot bare ELFs, so no
+# reset_vector_offset here (unlike the RP2040 descriptor's boot2 offset).
+reset_vector_offset: 0x0
+# Atomic SET/CLR/XOR aliases, same scheme as RP2040 (rp2350 addressmap.h
+# REG_ALIAS_*_BITS).
+atomic_register_aliases: true
+peripherals:
+  # SYSINFO (CHIP_ID 0x30004927 = revision 3, part 0x0004, manufacturer 0x927
+  # — rp2350 sysinfo.h). The pico-sdk USB errata workaround asserts the
+  # Raspberry Pi manufacturer id here.
+  - id: "sysinfo"
+    type: "declarative"
+    base_address: 0x40000000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2350/sysinfo.yaml"
+  # CLOCKS / RESETS / XOSC / PLL_SYS / PLL_USB — the shared clock-reset model
+  # on the RP2350 address map (rp2350 profile: CLOCKS @0x40010000, RESETS
+  # @0x40020000, XOSC @0x40048000, PLLs @0x40050000/0x40058000). Window ends
+  # before ACCESSCTRL (0x40060000).
+  - id: "clk_rst"
+    type: "rp2040_clkrst"
+    base_address: 0x40010000
+    size: "288KB"
+    config:
+      debug_schema: "../peripherals/rp2350/clocks.yaml"
+      profile: "rp2350"
+  - id: "rosc"
+    type: "rp2040_clkrst"
+    base_address: 0x400E8000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  # POWERMAN + TICKS window (0x40100000..0x4010C000) — register storage only;
+  # no power sequencing.
+  - id: "powman"
+    type: "stub"
+    base_address: 0x40100000
+    size: "48KB"
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x40070000
+    irq: 33
+    config:
+      debug_schema: "../peripherals/rp2350/uart0.yaml"
+      profile: "pl011"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40078000
+    irq: 34
+    config:
+      profile: "pl011"
+  - id: "spi0"
+    type: "rp2040_spi"
+    base_address: 0x40080000
+    size: "4KB"
+    irq: 31
+  - id: "spi1"
+    type: "rp2040_spi"
+    base_address: 0x40088000
+    size: "4KB"
+    irq: 32
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40090000
+    size: "4KB"
+    irq: 36
+  - id: "i2c1"
+    type: "rp2040_i2c"
+    base_address: 0x40098000
+    size: "4KB"
+    irq: 37
+  - id: "adc"
+    type: "rp2040_adc"
+    base_address: 0x400A0000
+    size: "4KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/rp2350/adc.yaml"
+  - id: "pwm"
+    type: "rp2040_pwm"
+    base_address: 0x400A8000
+    size: "4KB"
+    irq: 8
+    config:
+      debug_schema: "../peripherals/rp2350/pwm.yaml"
+  - id: "timer0"
+    type: "rp2040_timer"
+    base_address: 0x400B0000
+    size: "4KB"
+  # XIP_CTRL (flash cache control) — declarative storage, as on RP2040.
+  - id: "xip_ctrl"
+    type: "declarative"
+    base_address: 0x400C8000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2350/xip_ctrl.yaml"
+  - id: "watchdog"
+    type: "rp2040_watchdog"
+    base_address: 0x400D8000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/watchdog.yaml"
+  - id: "dma"
+    type: "rp2040_dma"
+    base_address: 0x50000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/dma.yaml"
+  - id: "pio0"
+    type: "pio"
+    base_address: 0x50200000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/pio0.yaml"
+  - id: "pio1"
+    type: "pio"
+    base_address: 0x50300000
+    size: "4KB"
+  - id: "pio2"
+    type: "pio"
+    base_address: 0x50400000
+    size: "4KB"
+  # TBMAN — storage stub; PLATFORM reads 0 → ASIC path, correct for the sim.
+  - id: "tbman"
+    type: "stub"
+    base_address: 0x40160000
+    size: "4KB"
+  # SIO (single-cycle IO) — GPIO out/oe + readback. CPUID reads 0 (core 0;
+  # core 1 is not modeled yet).
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"

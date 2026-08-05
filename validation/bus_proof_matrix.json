@@ -234,6 +234,25 @@
     "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. rp2040_i2c_irq_delivery.rs drives the real shipped chip through Machine::advance but asserts only NVIC.ISPR bits; the byte-content proof in peripherals/rp2040/i2c.rs is a bare unit test with no chip and no firmware."
    }
   },
+  "rp2350": {
+   "in_boards": false,
+   "uart": {
+    "state": "proven",
+    "file": "examples/pico2/uart-smoke.yaml",
+    "test": "uart_contains",
+    "signal": "real firmware (firmware-rp2350-demo, Cortex-M33 bare-metal) boots on the rp2350 descriptor and its UART0 output matches the uart_contains 'RP2350_SMOKE_OK' oracle; run 2026-08-05, exit 0",
+    "lane": "manual example run (examples/pico2) - not yet CI-wired",
+    "note": "evidence covers PL011 UART0 on the RP2350 address map (0x40070000) and the rp2350 clkrst profile; TrustZone/bootrom/PIO v2/dual-core are not declared as modeled"
+   },
+   "spi": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/rp2350.yaml and moves SPI bytes; the descriptor reuses the RP2040 spi model on RP2350 bases but evidence does not transfer automatically - a pico2 SPI fixture is follow-up work"
+   },
+   "i2c": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
+   }
+  },
   "stm32f103": {
    "in_boards": true,
    "uart": {

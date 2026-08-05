@@ -693,6 +693,36 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "rp2040/xip_ctrl.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/xip_ctrl.yaml"
         )),
+        "rp2350/adc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/adc.yaml"
+        )),
+        "rp2350/clocks.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/clocks.yaml"
+        )),
+        "rp2350/dma.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/dma.yaml"
+        )),
+        "rp2350/pio0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/pio0.yaml"
+        )),
+        "rp2350/pwm.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/pwm.yaml"
+        )),
+        "rp2350/sio.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/sio.yaml"
+        )),
+        "rp2350/sysinfo.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/sysinfo.yaml"
+        )),
+        "rp2350/uart0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/uart0.yaml"
+        )),
+        "rp2350/watchdog.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/watchdog.yaml"
+        )),
+        "rp2350/xip_ctrl.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2350/xip_ctrl.yaml"
+        )),
         "stm32f103/adc1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32f103/adc1.yaml"
         )),
