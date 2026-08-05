@@ -25,11 +25,14 @@
 //!   counter chain from a fixed seed — deterministic across runs, like the
 //!   nRF52 RNG model, so tests can assert golden values.
 //!
-//! ## Keys (demo keys, provisioned in the model; regenerate for real use)
+//! ## Keys
 //!
 //! - Data slot 0: OEM **public** key — the update-signing authority. Only the
-//!   public half exists on the device, matching production (the private key
-//!   lives in the OEM backend, here `make_packages.py`).
+//!   public half exists on the device. Override via system.yaml
+//!   `config.oem_pubkey_hex` (128 hex chars = 64-byte X‖Y). Default is a
+//!   well-known demo pubkey so pre-signed playground packages keep working;
+//!   the matching private key is never committed — generate packages with
+//!   `make_packages.py --ephemeral` or `--key`.
 //! - Device key: a fixed P-256 keypair the SE signs attestation challenges
 //!   with (its private half never leaves the model — there is no command to
 //!   read it).
@@ -54,10 +57,11 @@ const STATUS_VERIFY_FAILED: u8 = 0x01;
 const STATUS_BAD_OPCODE: u8 = 0x0F;
 const STATUS_BAD_CRC: u8 = 0xFF;
 
-/// OEM update-signing public key (uncompressed P-256, 64 bytes X‖Y), held in
-/// data slot 0. The matching private key lives ONLY in
-/// `examples/nrf52840-secure-boot-lab/make_packages.py` — the "OEM backend".
-const OEM_PUBKEY: [u8; 64] = [
+/// Default OEM update-signing public key (uncompressed P-256, 64 bytes X‖Y).
+/// Used when system.yaml does not set `oem_pubkey_hex`. The matching private
+/// key is not in this repository — regenerate signed packages with
+/// `make_packages.py --ephemeral` (CI) or `--key` (local).
+const DEFAULT_OEM_PUBKEY: [u8; 64] = [
     0x11, 0xf7, 0x19, 0x76, 0xee, 0xfb, 0xfc, 0xb5, 0xfa, 0xc9, 0xb1, 0x6c, 0xfb, 0x78, 0x43, 0xbf,
     0x61, 0x4f, 0xc1, 0x59, 0x46, 0xa8, 0xb2, 0x94, 0x94, 0xf2, 0x8c, 0xcd, 0x94, 0xd3, 0x22, 0x9b,
     0xfe, 0x07, 0xb6, 0xaf, 0x2b, 0x38, 0x4a, 0xd6, 0x14, 0x4f, 0xfc, 0x1a, 0xdf, 0x92, 0x1e, 0x0a,
@@ -88,6 +92,8 @@ fn crc16(packet: &[u8]) -> u16 {
 
 pub struct Atecc608a {
     address: u8,
+    /// OEM update-verify public key in data slot 0 (X‖Y).
+    oem_pubkey: [u8; 64],
     /// Incoming packet accumulator (host → SE).
     rx: Vec<u8>,
     /// Executed response, drained by I²C reads (SE → host).
@@ -102,8 +108,13 @@ pub struct Atecc608a {
 
 impl Atecc608a {
     pub fn new(address: u8) -> Self {
+        Self::with_oem_pubkey(address, DEFAULT_OEM_PUBKEY)
+    }
+
+    pub fn with_oem_pubkey(address: u8, oem_pubkey: [u8; 64]) -> Self {
         Self {
             address,
+            oem_pubkey,
             rx: Vec::new(),
             resp: Vec::new(),
             tempkey: [0; 32],
@@ -155,7 +166,7 @@ impl Atecc608a {
                 let block: Option<[u8; 32]> = match slot_half {
                     0 | 1 => Some({
                         let mut b = [0u8; 32];
-                        b.copy_from_slice(&OEM_PUBKEY[slot_half * 32..slot_half * 32 + 32]);
+                        b.copy_from_slice(&self.oem_pubkey[slot_half * 32..slot_half * 32 + 32]);
                         b
                     }),
                     2 | 3 => {
@@ -277,11 +288,18 @@ static ATECC608A_METADATA: KitMetadata = KitMetadata {
              reproducible tests.",
     transport: Transport::I2c,
     category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
-        ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x60.",
-    }],
+    config_keys: &[
+        ConfigKey {
+            name: "i2c_address",
+            ty: ConfigType::Int,
+            doc: "7-bit slave address. Defaults to 0x60.",
+        },
+        ConfigKey {
+            name: "oem_pubkey_hex",
+            ty: ConfigType::Str,
+            doc: "Optional 128-char hex OEM update-verify public key (64-byte                   uncompressed P-256 X‖Y) for data slot 0. When omitted, the                   well-known demo pubkey is used.",
+        },
+    ],
     labs: &[],
 };
 
@@ -291,11 +309,35 @@ impl PeripheralKit for Atecc608aKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(ADDR_DEFAULT)?;
-        let mut dev = Atecc608a::new(address);
+        let oem_pubkey = match ctx.config_str("oem_pubkey_hex") {
+            Some(hex) => parse_oem_pubkey_hex(hex)?,
+            None => DEFAULT_OEM_PUBKEY,
+        };
+        let mut dev = Atecc608a::with_oem_pubkey(address, oem_pubkey);
         dev.component_id = Some(ctx.device_id().to_string());
         ctx.attach_i2c_device(Box::new(dev))?;
         Ok(())
     }
+}
+
+/// Parse 128 hex chars (optional 0x / whitespace) into a 64-byte P-256 pubkey.
+fn parse_oem_pubkey_hex(s: &str) -> anyhow::Result<[u8; 64]> {
+    let cleaned: String = s
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .collect();
+    if cleaned.len() != 128 {
+        anyhow::bail!(
+            "oem_pubkey_hex must be 128 hex chars (64 bytes), got {} hex digits",
+            cleaned.len()
+        );
+    }
+    let mut out = [0u8; 64];
+    for i in 0..64 {
+        out[i] = u8::from_str_radix(&cleaned[i * 2..i * 2 + 2], 16)
+            .map_err(|e| anyhow::anyhow!("oem_pubkey_hex: {e}"))?;
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -357,8 +399,8 @@ mod tests {
         let mut d = Atecc608a::new(ADDR_DEFAULT);
         let lo = send(&mut d, &request(OP_READ, 0x02, 0, &[]));
         let hi = send(&mut d, &request(OP_READ, 0x02, 1, &[]));
-        assert_eq!(&lo[1..33], &OEM_PUBKEY[..32]);
-        assert_eq!(&hi[1..33], &OEM_PUBKEY[32..]);
+        assert_eq!(&lo[1..33], &DEFAULT_OEM_PUBKEY[..32]);
+        assert_eq!(&hi[1..33], &DEFAULT_OEM_PUBKEY[32..]);
     }
 
     #[test]
@@ -420,4 +462,36 @@ mod tests {
         assert_eq!(resp0, 4); // count
         assert_eq!(resp1, STATUS_BAD_CRC);
     }
+
+    #[test]
+    fn custom_oem_pubkey_served_from_slot0() {
+        let mut custom = [0u8; 64];
+        for (i, b) in custom.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(3).wrapping_add(7);
+        }
+        let mut dev = Atecc608a::with_oem_pubkey(ADDR_DEFAULT, custom);
+        // READ slot half 0
+        let mut body = vec![0u8, OP_READ, 0x02, 0x00, 0x00];
+        body[0] = (body.len() + 2) as u8;
+        let lo = send(&mut dev, &body);
+        assert_eq!(&lo[1..33], &custom[..32]);
+        let mut body = vec![0u8, OP_READ, 0x02, 0x01, 0x00];
+        body[0] = (body.len() + 2) as u8;
+        let hi = send(&mut dev, &body);
+        assert_eq!(&hi[1..33], &custom[32..]);
+    }
+
+    #[test]
+    fn parse_oem_pubkey_hex_accepts_128_digits() {
+        let hex: String = (0..64).map(|i| format!("{:02x}", i)).collect();
+        let pk = parse_oem_pubkey_hex(&hex).unwrap();
+        assert_eq!(pk[0], 0);
+        assert_eq!(pk[63], 63);
+    }
+
+    #[test]
+    fn parse_oem_pubkey_hex_rejects_wrong_length() {
+        assert!(parse_oem_pubkey_hex("aabb").is_err());
+    }
+
 }

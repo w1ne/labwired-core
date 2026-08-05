@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "claims": [
+    {
+      "id": "root_of_trust_otp",
+      "title": "Hardware root of trust in OTP flash",
+      "cra_annex_i_ref": "Annex I — secure by design (root of trust)",
+      "evidence": [
+        { "kind": "uart_contains", "value": "ROT: PROVISIONED" },
+        { "kind": "uart_contains", "value": "SECURE BOOT OK (v1)" }
+      ]
+    },
+    {
+      "id": "authenticated_boot",
+      "title": "Authenticated boot (hardware AES challenge)",
+      "cra_annex_i_ref": "Annex I — protection of integrity of the product",
+      "evidence": [
+        { "kind": "uart_contains", "value": "SECURE BOOT OK (v1)" },
+        { "kind": "uart_contains", "value": "SECURE BOOT OK (v2)" }
+      ]
+    },
+    {
+      "id": "authenticated_update",
+      "title": "Integrity-protected software update (ECDSA via SE)",
+      "cra_annex_i_ref": "Annex I — secure updates",
+      "evidence": [
+        { "kind": "uart_contains", "value": "OTA v2 SIGNATURE OK" },
+        { "kind": "uart_contains", "value": "BAD SIGNATURE REJECTED" }
+      ]
+    },
+    {
+      "id": "rollback_protection",
+      "title": "Anti-rollback of authentic older images",
+      "cra_annex_i_ref": "Annex I / UNECE R156 — rollback protection",
+      "evidence": [
+        { "kind": "uart_contains", "value": "ANTI-ROLLBACK v2 ACTIVE" },
+        { "kind": "uart_contains", "value": "ROLLBACK REJECTED" }
+      ]
+    },
+    {
+      "id": "key_isolation_se",
+      "title": "Key isolation in secure element + attestation",
+      "cra_annex_i_ref": "Annex I — protection of confidentiality of cryptographic keys",
+      "evidence": [
+        { "kind": "uart_contains", "value": "ATTESTATION OK" },
+        { "kind": "uart_contains", "value": "OTA v2 SIGNATURE OK" }
+      ]
+    },
+    {
+      "id": "nv_commit",
+      "title": "Update committed to non-volatile storage",
+      "cra_annex_i_ref": "Annex I — secure updates (commit)",
+      "evidence": [
+        { "kind": "uart_contains", "value": "OTA v2 COMMITTED" },
+        { "kind": "uart_contains", "value": "UPDATE SLOT VERIFIED" }
+      ]
+    },
+    {
+      "id": "debug_lockout_recorded",
+      "title": "Debug lockout bit recorded (APPROTECT)",
+      "cra_annex_i_ref": "Annex I — protection against unauthorised access",
+      "notes": "APPROTECT is stored in the model; debug-port lockout side effects are not enforced in sim.",
+      "evidence": [
+        { "kind": "uart_contains", "value": "ROT: PROVISIONED" }
+      ]
+    },
+    {
+      "id": "ci_reproducible_manifest",
+      "title": "Signable run manifest present",
+      "cra_annex_i_ref": "Evidence process — reproducible CI artifact",
+      "evidence": [
+        { "kind": "file_present", "path": "run-manifest.json" },
+        { "kind": "manifest_digest_nonempty" }
+      ]
+    }
+  ]
+}

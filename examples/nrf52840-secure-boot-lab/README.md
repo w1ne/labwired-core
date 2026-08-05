@@ -84,10 +84,9 @@ is also bundled in the browser playground (nRF52840 Secure Boot).
 - `system.yaml` — nRF52840 + SSD1306 OLED + ATECC608A secure element on `i2c0`.
 - `secure-boot-smoke.yaml` — the 45-assertion test script, including the
   three `uart_injections` OTA packages.
-- `make_packages.py` — regenerates the OTA packages and golden digest
-  (openssl, ECDSA P-256). Re-run after any format change; never hand-edit
-  the byte arrays. Contains the DEMO OEM private key — a real OEM key lives
-  in an HSM/KMS, not a script.
+- `make_packages.py` — regenerates OTA packages + digests (openssl). Use
+  `--ephemeral` or `--key`; never hand-edit the byte arrays. Private keys
+  are not stored in git.
 - `packages.yaml` — last generated output, kept for reference.
 - Firmware: `crates/firmware-nrf52840-secure-boot/` — `main.rs` lifecycle,
   `se.rs` ATECC608A driver, `sha256.rs`, `display.rs` SSD1306-over-TWIM0,
@@ -106,6 +105,24 @@ is also bundled in the browser playground (nRF52840 Secure Boot).
 - The three OTA packages are injected `!at_start`; the firmware consumes one
   package per boot phase, so no cycle pacing is needed — every STARTRX finds
   its package already queued.
+
+
+## CI evidence pack
+
+```bash
+./examples/nrf52840-secure-boot-lab/run_evidence_ci.sh
+```
+
+This will:
+
+1. Build the secure-boot firmware
+2. Generate an **ephemeral** OEM P-256 keypair (private key discarded after signing)
+3. Run the three-boot smoke with SE `oem_pubkey_hex` set to the matching public key
+4. Write `out/nrf52840-secure-boot-evidence/cra-evidence-pack/` including
+   `claims.json`, `run-manifest.json`, logs, and `oem-verify-pubkey.hex` only
+
+GitHub Actions workflow: `.github/workflows/core-cra-secure-boot-evidence.yml`
+uploads the pack as the `cra-evidence-pack` artifact.
 
 ## Honest limitations
 
