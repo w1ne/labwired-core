@@ -129,6 +129,11 @@ pub struct Nrf52Uarte {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     /// Echo transmitted bytes to the process stdout (console behaviour).
     echo_stdout: bool,
+    /// The machine's ONE bus trace and this instance's name in it; see
+    /// [`crate::bus::bus_trace`]. Private until `attach_bus_trace` hands over
+    /// the shared handle at registration.
+    trace: crate::bus::bus_trace::BusTrace,
+    trace_name: String,
 }
 
 impl std::fmt::Debug for Nrf52Uarte {
@@ -167,6 +172,16 @@ impl Nrf52Uarte {
     }
 
     fn emit_byte(&mut self, byte: u8) {
+        // The one place a TX byte leaves this UARTE, so the one place it is
+        // traced. See `attach_bus_trace` for what this model recorded before:
+        // nothing, anywhere.
+        self.trace.push(
+            &self.trace_name,
+            crate::bus::bus_trace::BusPayload::Uart {
+                direction: crate::bus::bus_trace::BusDir::Tx,
+                byte,
+            },
+        );
         if let Some(sink) = &self.sink {
             if let Ok(mut guard) = sink.lock() {
                 guard.push(byte);
@@ -183,6 +198,19 @@ impl Nrf52Uarte {
 }
 
 impl Peripheral for Nrf52Uarte {
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        Some(self.trace.clone())
+    }
+
+    /// Join the machine's one bus trace. This model previously recorded no
+    /// trace at all — the browser located UARTs by `downcast_ref::<Uart>()`,
+    /// which a UARTE is not, so every nRF52 lab's UART analyzer was silently
+    /// empty.
+    fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
+        self.trace = trace.clone();
+        self.trace_name = name.to_string();
+    }
+
     /// Dual-path EasyDMA: scheduler delay-0 (`on_event`) under Machine +
     /// walk-free + batched `peripheral_tick_interval`, and `tick_with_bus`
     /// (`bus_tick_indices`) for bare-bus unit tests / feature-off. No

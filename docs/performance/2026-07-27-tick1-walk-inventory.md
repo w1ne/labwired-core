@@ -122,7 +122,8 @@ Notes:
 | i2c0 | scheduler | true | true |
 | spi2 | scheduler | true | true |
 | ledc | scheduler | false | true |
-| rmt, spi0/1, gpio_sd, efuse, uhci0/1, bb, twai0, i2s0 | inert | false | false |
+| rmt | scheduler | true | true |
+| spi0/1, gpio_sd, efuse, uhci0/1, bb, twai0, i2s0 | inert | false | false |
 | aes, sha, rsa, ds, hmac, dma | inert | false | false |
 | apb_saradc | scheduler | true | true |
 | usb_device, sensitive, extmem, xts_aes, assist_debug | inert | false | false |
@@ -236,8 +237,8 @@ Featureless builds still report `max_safe=1` (honest). Gates:
 
 | Class | Models | Mechanism |
 |-------|--------|-----------|
-| **Class-A inert** | `spi0`, `i2c0`, `sio`, `xip_ssi` | `needs_legacy_walk = false` — pure MMIO engines; `tick()` is the default no-op (loopback/abort/SSI shift complete inside register writes). **Walk-free Class-A is green intentional**; not a paced-SPI/I2C@512 EasyDMA certificate |
-| **Class-B scheduler** | `timer`, `dma`, `pio0`, `usbctrl` | `uses_scheduler` + `take_scheduled_events` / `on_event` (CycleClock on timer/dma; delay-1 SM/host chains on pio/usb) |
+| **Class-A inert** | `spi0`, `sio`, `xip_ssi` | `needs_legacy_walk = false` — pure MMIO engines; `tick()` is the default no-op (loopback/SSI shift complete inside register writes). **Walk-free Class-A is green intentional**; not a paced-SPI/I2C@512 EasyDMA certificate |
+| **Class-B scheduler** | `timer`, `dma`, `pio0`, `usbctrl`, `i2c0` | `uses_scheduler` + `take_scheduled_events` / `on_event` (CycleClock on timer/dma; delay-1 SM/host/level chains on pio/usb/i2c0) |
 | **Class-B / thin** | `uart0` | scheduler on the pico bus; baud / paced-transfer tick-512 fidelity is **interim** only (no EasyDMA-style differential gate) |
 
 Featureless builds still report `max_safe=1` (honest). Gates:
@@ -261,6 +262,14 @@ Featureless builds still report `max_safe=1` (honest). Gates:
 - **USB**: attach debounce / enumeration / bulk service + held `USBCTRL_IRQ`
   ride a delay-1 chain; attach countdown still counts host_poll steps (not
   wall-clock µs) — same model as pre-migration, now event-paced.
+- **I2C0**: held level `(IC_RAW_INTR_STAT & IC_INTR_MASK)` rides a delay-1
+  chain, armed from the MMIO write choke (the level can only RISE on a write;
+  the `IC_CLR_*` registers are read-to-clear). `on_event` returns
+  `raise_own_irq` — the event-path twin of the walk's `irq: true` — so
+  `I2C0_IRQ` (NVIC 23) pends on an NVIC bus, where
+  `deliver_scheduled_irq_levels` cannot help (it covers only the C3/S3
+  matrices). Costs a wakeup only while an interrupt is armed AND asserting.
+  Gate: `rp2040_i2c_irq_delivery.rs`.
 
 ### Full peripheral status
 
@@ -274,7 +283,7 @@ Featureless builds still report `max_safe=1` (honest). Gates:
 | rosc, watchdog | inert | false | false |
 | timer | scheduler | false | true |
 | spi0 | inert | false | false |
-| i2c0 | inert | false | false |
+| i2c0 | scheduler | true | true |
 | systick | scheduler | true | true |
 | sio | inert | false | false |
 | xip_ssi | inert | false | false |

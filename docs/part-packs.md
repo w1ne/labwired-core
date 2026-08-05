@@ -155,8 +155,16 @@ clear both.
 ## What a pack cannot do
 
 A pack is data interpreted by a **primitive** — `i2c_device`, `spi_device`,
-`quadrature`, `matrix`, `one_wire`, `pulse_echo`. Those primitives are the
-irreducible timing algorithms, and they live in Rust in this repository.
+`analog_source`, `quadrature`, `matrix`, `one_wire`, `pulse_echo`. Those
+primitives are the irreducible timing algorithms, and they live in Rust in this
+repository.
+
+`analog_source` is the primitive for parts whose whole interface is one
+analogue voltage (a Sharp IR ranger's `Vo`, an MQ-x module's `AOUT`): the
+descriptor carries the datasheet's output curve as `(input, mV)` points plus
+stated out-of-band rules (`below_first: clamp`, `above_last.floor_mv`), and the
+engine owns the rest (SimInput plumbing, mV→ADC count, attach). The proof part
+is `gp2y0a21.yaml`.
 
 So: a part whose datasheet behaviour is a register map, a command/response
 protocol, or one of the pin-timing shapes above is pure data and needs nothing

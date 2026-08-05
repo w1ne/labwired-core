@@ -19,7 +19,6 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -39,10 +38,6 @@ struct LeoRun {
 /// `labwired test` CLI and collect its result + UART log.
 fn run_leo(script_rel: &str) -> LeoRun {
     let root = repo_root();
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
     // Scenario name in the dir: the two tests run in parallel threads, and a
     // clock-tick nonce collision would make them share one result.json
     // (interleaved writes -> unparseable JSON).
@@ -51,7 +46,7 @@ fn run_leo(script_rel: &str) -> LeoRun {
         .next()
         .unwrap_or(script_rel)
         .replace(['.', '/'], "-");
-    let out_dir = std::env::temp_dir().join(format!("labwired-leo-{scenario}-{nonce}"));
+    let out_dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-leo-{scenario}"));
     std::fs::create_dir_all(&out_dir).expect("create out dir");
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))

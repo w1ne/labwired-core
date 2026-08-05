@@ -13,7 +13,9 @@
 //!   bus, so the capture opens directly in GTKWave, PulseView/sigrok, or any
 //!   other waveform viewer. Each event becomes one value-change at `#<seq>`
 //!   carrying the transacted byte (I²C: the `byte` field, already covering
-//!   the address frame via `I2cSym::AddrWrite`/`AddrRead`; SPI: `mosi`).
+//!   the address frame via `I2cSym::AddrWrite`/`AddrRead`; SPI: `mosi`; UART:
+//!   the octet). CAN is frame-oriented and has no 8-bit wire sample, so it
+//!   appears in the JSON export but not the VCD — see `event_byte`.
 
 use labwired_core::bus::bus_trace::{BusPayload, BusTraceEvent};
 use std::collections::BTreeMap;
@@ -25,11 +27,23 @@ pub fn write_bus_trace_json<W: Write>(events: &[BusTraceEvent], w: W) -> io::Res
     serde_json::to_writer_pretty(w, events).map_err(io::Error::other)
 }
 
-/// The byte a `BusTraceEvent` carries on the wire, for the VCD vector signal.
-fn event_byte(payload: &BusPayload) -> u8 {
+/// The byte a `BusTraceEvent` carries on the wire, for the VCD vector signal —
+/// or `None` when the event is not a single-byte wire symbol at all.
+///
+/// CAN is the `None` case, and deliberately so. A CAN event is a whole FRAME
+/// (arbitration id, DLC, up to 64 payload bytes); there is no one octet that
+/// represents it on an 8-bit vector. Emitting its first data byte, or a zero,
+/// would put a value in a waveform viewer that never existed on the wire —
+/// worse than omitting it, because a waveform is read as measurement. A
+/// frame-oriented bus wants its own VCD representation, which is a separate
+/// piece of work; until then the JSON export carries CAN losslessly and the VCD
+/// says nothing rather than something false.
+fn event_byte(payload: &BusPayload) -> Option<u8> {
     match payload {
-        BusPayload::I2c { byte, .. } => *byte,
-        BusPayload::Spi { mosi, .. } => *mosi,
+        BusPayload::I2c { byte, .. } => Some(*byte),
+        BusPayload::Spi { mosi, .. } => Some(*mosi),
+        BusPayload::Uart { byte, .. } => Some(*byte),
+        BusPayload::Can { .. } => None,
     }
 }
 
@@ -51,9 +65,13 @@ fn byte_to_bits(byte: u8) -> [Value; 8] {
 /// `#<seq>` / `b<binary> <id>` pair per event.
 pub fn write_bus_trace_vcd<W: Write>(events: &[BusTraceEvent], sink: W) -> io::Result<()> {
     // Distinct bus names, first-seen order (stable, deterministic output).
+    // Only buses that actually produce a wire sample get a signal — declaring a
+    // `wire 8` for a CAN controller and then never writing to it shows up in
+    // GTKWave as a channel stuck at its initial value, which reads as "this bus
+    // was idle" rather than "this bus is not representable here".
     let mut bus_order: Vec<String> = Vec::new();
     for e in events {
-        if !bus_order.contains(&e.bus) {
+        if event_byte(&e.payload).is_some() && !bus_order.contains(&e.bus) {
             bus_order.push(e.bus.clone());
         }
     }
@@ -70,9 +88,12 @@ pub fn write_bus_trace_vcd<W: Write>(events: &[BusTraceEvent], sink: W) -> io::R
     writer.enddefinitions()?;
 
     for e in events {
+        let Some(byte) = event_byte(&e.payload) else {
+            continue; // frame-oriented bus, no 8-bit wire sample — see `event_byte`
+        };
         let id = ids[&e.bus];
         writer.timestamp(e.seq)?;
-        writer.change_vector(id, byte_to_bits(event_byte(&e.payload)))?;
+        writer.change_vector(id, byte_to_bits(byte))?;
     }
     writer.flush()
 }

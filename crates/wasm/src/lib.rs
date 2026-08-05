@@ -628,6 +628,14 @@ impl WasmSimulator {
                     Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
                 );
                 bus.refresh_peripheral_index();
+                // A peripheral added AFTER bus assembly changes the input to
+                // `derive_walk_deletable`, which the boot path already ran. It
+                // is correct today only because this model happens to be inert
+                // — the walk-deletion flag would silently disagree with the
+                // live peripheral set the moment it stopped being. Re-derive
+                // rather than rely on that. (Cheap: one pass over the roster,
+                // once per simulator construction.)
+                bus.recompute_walk_deletable();
                 true
             } else {
                 false
@@ -654,6 +662,10 @@ impl WasmSimulator {
                 Box::new(usb_serial),
             );
             bus.refresh_peripheral_index();
+            // Same reason as the `rtc_i2c_ana` addition above: re-derive
+            // walk-deletion over the peripheral set that actually exists, not
+            // the one the boot path saw.
+            bus.recompute_walk_deletable();
         }
         if let Some(debug_uart) = manifest.debug_uart.as_deref() {
             if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {

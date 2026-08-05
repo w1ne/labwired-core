@@ -61,6 +61,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::lipo_charger::LIPO_CHARGER_KIT,
     &components::ldr::LDR_KIT,
     &components::mq6::MQ6_KIT,
+    &components::declarative_analog::GP2Y0A21_KIT,
     &components::soil_moisture::SOIL_MOISTURE_KIT,
     &components::hc595::HC595_KIT,
     &components::vl53l1x::VL53L1X_KIT,

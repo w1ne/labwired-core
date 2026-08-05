@@ -229,6 +229,7 @@ impl SystemBus {
         dev.attach_cycle_clock(self.cycle_clock.clone());
         // Twin of the `push_peripheral` attach — see there.
         dev.attach_irq_line(irq);
+        dev.attach_bus_trace(name, &self.bus_trace);
         self.peripherals.push(PeripheralEntry {
             name: name.to_string(),
             base,
@@ -258,6 +259,7 @@ impl SystemBus {
     ) {
         dev.attach_cycle_clock(self.cycle_clock.clone());
         dev.attach_irq_line(irq);
+        dev.attach_bus_trace(name, &self.bus_trace);
         if let Some(idx) = self.peripherals.iter().position(|p| p.name == name) {
             let e = &mut self.peripherals[idx];
             e.base = base;
@@ -664,6 +666,10 @@ impl SystemBus {
         // wired, so one whose only per-cycle wakeup holds a level-triggered IRQ
         // can stop scheduling itself on a bus where that pend is dropped.
         dev.attach_irq_line(p_cfg.irq);
+        // Same choke point again: the ONE universal bus trace. A UART or CAN
+        // model has no attachable slave to wrap, so it records for itself —
+        // being registered is what gets it the shared ring.
+        dev.attach_bus_trace(&p_cfg.id, &self.bus_trace);
         self.peripherals.push(PeripheralEntry {
             name: p_cfg.id.clone(),
             base: p_cfg.base_address,

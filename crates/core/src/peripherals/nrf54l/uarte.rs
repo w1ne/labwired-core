@@ -174,6 +174,11 @@ pub struct Nrf54lUarte {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     /// Echo transmitted bytes to the process stdout (console behaviour).
     echo_stdout: bool,
+    /// The machine's ONE bus trace and this instance's name in it; see
+    /// [`crate::bus::bus_trace`]. Private until `attach_bus_trace` hands over
+    /// the shared handle at registration.
+    trace: crate::bus::bus_trace::BusTrace,
+    trace_name: String,
 }
 
 impl std::fmt::Debug for Nrf54lUarte {
@@ -212,6 +217,15 @@ impl Nrf54lUarte {
     }
 
     fn emit_byte(&mut self, byte: u8) {
+        // The one place a TX byte leaves this UARTE, so the one place it is
+        // traced. See `attach_bus_trace`.
+        self.trace.push(
+            &self.trace_name,
+            crate::bus::bus_trace::BusPayload::Uart {
+                direction: crate::bus::bus_trace::BusDir::Tx,
+                byte,
+            },
+        );
         if let Some(sink) = &self.sink {
             if let Ok(mut guard) = sink.lock() {
                 guard.push(byte);
@@ -246,6 +260,17 @@ impl Nrf54lUarte {
 }
 
 impl Peripheral for Nrf54lUarte {
+    fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
+        Some(self.trace.clone())
+    }
+
+    /// Join the machine's one bus trace. Like its nRF52 sibling, this model
+    /// previously recorded no trace at all.
+    fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
+        self.trace = trace.clone();
+        self.trace_name = name.to_string();
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }

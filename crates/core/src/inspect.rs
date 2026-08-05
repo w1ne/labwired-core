@@ -545,6 +545,47 @@ impl DeviceEvidence for SpiEvidence<'_> {
     }
 }
 
+/// Is this artifact something a display surface can paint?
+///
+/// Kind, not model. `"framebuffer"` is packed pixels and `"text_display"` is
+/// decoded characters (an HD44780 panel, a TM1637 module, one 7-segment digit) —
+/// between them that is every way this engine has of saying "a human can see
+/// this". A reader asks the question once, here, instead of each caller keeping
+/// a list of the models it believes are screens; a new panel that reports either
+/// kind is renderable the day its model lands.
+pub fn is_display_artifact(artifact: &Artifact) -> bool {
+    matches!(artifact.kind.as_str(), "framebuffer" | "text_display")
+}
+
+/// The `meta.format` string each display model stamps on its own artifact —
+/// the ONE name for "how are these bytes packed".
+///
+/// A format is how a device says WHAT it is, in its own words, so that a reader
+/// can find it without downcasting to a concrete Rust type. That makes these
+/// strings load-bearing in two places at once: the model writes one, and
+/// [`crate::bus::SystemBus::device_artifact_at`]'s callers match on it. Two
+/// string literals that must agree and are edited in different crates is the
+/// same hazard this whole seam exists to remove, so there is one symbol per
+/// format and a typo is a compile error rather than a blank panel.
+///
+/// Two models sharing a constant is deliberate, not a collision: the SSD1680
+/// and the UC8151D differ in which opcodes they decode, not in how the planes
+/// are packed, so a reader that wants "a tri-color e-paper's pixels" genuinely
+/// does not care which one answered.
+pub mod artifact_format {
+    pub const SSD1306_PAGE: &str = "ssd1306_page";
+    pub const SH1107_PAGE: &str = "sh1107_page";
+    pub const RGB565_BE: &str = "rgb565_be";
+    pub const PCD8544_BANK: &str = "pcd8544_bank";
+    pub const MAX7219_ROWS: &str = "max7219_rows";
+    pub const HD44780_DDRAM: &str = "hd44780_ddram";
+    /// Emitted by BOTH tri-color e-paper models — see the module doc.
+    pub const EPAPER_TRICOLOR_PLANES: &str = "epaper_tricolor_1bpp_planes";
+    pub const TM1637_GRID: &str = "tm1637_grid";
+    pub const SEVEN_SEGMENT_MASK: &str = "seven_segment_mask";
+    pub const WS2812_GRB: &str = "ws2812_grb";
+}
+
 /// Shorthand for the payload half of an artifact: the buffer in full mode,
 /// nothing in summary mode. Every panel's `artifacts` impl uses it, so
 /// "summary omits the bytes" is one decision rather than eight.

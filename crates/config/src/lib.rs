@@ -2046,6 +2046,54 @@ pub struct DeviceBehavior {
     /// engine's generic SPI device interprets. Absent for non-SPI primitives.
     #[serde(default)]
     pub spi: Option<SpiSpec>,
+    /// For the `analog_source` primitive: the datasheet output curve the
+    /// engine's generic analog device interprets. Absent for non-analog
+    /// primitives.
+    #[serde(default)]
+    pub analog: Option<AnalogSpec>,
+}
+
+/// The `behavior.analog` section of a declarative `analog_source` — a
+/// datasheet-shaped description of a part whose whole interface is one
+/// analogue voltage (a Sharp IR ranger's Vo, an MQ-x module's AOUT). The
+/// generic engine device interprets it as an `AnalogSource`: a drivable
+/// input channel (declared under `metadata.inputs`, exactly one for this
+/// primitive) mapped through a piecewise-linear curve to millivolts.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnalogSpec {
+    /// The output curve as `(input value, output mV)` points, ascending in
+    /// input. Piecewise-linear between neighbours. Read straight off the
+    /// datasheet's typical-output graph.
+    pub curve: Vec<(f32, f32)>,
+    /// Behaviour below the first curve point. `clamp` (the only mode) holds
+    /// the first point's voltage: a region the datasheet does not specify is
+    /// held constant rather than invented.
+    #[serde(default)]
+    pub below_first: AnalogBelowFirst,
+    /// Behaviour above the last curve point: hold a named floor voltage
+    /// (`floor_mv`, e.g. the GP2Y0A21's ~0.4 V far floor — far is NOT zero)
+    /// or hold the last point's voltage (`hold_last`).
+    #[serde(default)]
+    pub above_last: AnalogAboveLast,
+}
+
+/// Out-of-band behaviour below the first curve point (see [`AnalogSpec`]).
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalogBelowFirst {
+    /// Hold the first curve point's voltage.
+    #[default]
+    Clamp,
+}
+
+/// Out-of-band behaviour above the last curve point (see [`AnalogSpec`]).
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Default)]
+pub struct AnalogAboveLast {
+    /// Hold an explicit floor voltage (mV) — the honest model of a part whose
+    /// output settles on a non-zero floor beyond its specified band. Absent ⇒
+    /// hold the last curve point's voltage.
+    #[serde(default)]
+    pub floor_mv: Option<f32>,
 }
 
 impl DeviceDescriptor {
@@ -2088,6 +2136,7 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "pca9685" => Some(include_str!("../../../configs/devices/pca9685.yaml")),
         "vcnl4010" => Some(include_str!("../../../configs/devices/vcnl4010.yaml")),
         "vl53l0x" => Some(include_str!("../../../configs/devices/vl53l0x.yaml")),
+        "gp2y0a21" => Some(include_str!("../../../configs/devices/gp2y0a21.yaml")),
         _ => None,
     }
 }

@@ -30,14 +30,235 @@ jobs:
       - name: Verify release runner contract
         run: bash scripts/ci/verify-release-runner-contract.sh
 
+  # ── Formatting is APPLIED, not demanded (PR only) ─────────────────────────
+  #
+  # `cargo fmt --all -- --check` used to sit in `pr-gate`, i.e. a REQUIRED
+  # check. It failed three times in one evening on a change whose content was
+  # already correct: the machine printed the exact diff it wanted and then
+  # refused to apply it. Whitespace is the one class of review comment a
+  # machine can settle by itself, so it does. This job runs `cargo fmt --all`
+  # and pushes the result back to the PR branch; the blocking `--check` step is
+  # gone from `pr-gate`.
+  #
+  # ─────────────────────────────────────────────────────────────────────────
+  # WHY A PAT AND NOT `GITHUB_TOKEN` + `permissions: contents: write`
+  # ─────────────────────────────────────────────────────────────────────────
+  # `GITHUB_TOKEN` CAN push here — one line of `permissions:` and it works.
+  # The problem is what happens next, and it is not "a check re-runs
+  # needlessly", it is "the PR can never be merged again":
+  #
+  #   * `main` requires exactly two contexts (`gh api
+  #     repos/w1ne/labwired-core/branches/main/protection`):
+  #     **pr-gate** and **release-runner-contract**;
+  #   * `enforce_admins` is ON, so nobody — including the repo owner — can
+  #     merge past a missing one;
+  #   * BOTH of those jobs are `pull_request`-only (`pr-gate` is gated on
+  #     `github.event_name == 'pull_request'`; `release-runner-contract` has no
+  #     `push`-to-branch trigger either, this workflow's `push` filter is
+  #     `branches: [main]`);
+  #   * required contexts are evaluated against the PR's **head SHA**;
+  #   * a push made with `GITHUB_TOKEN` deliberately triggers NO workflow run.
+  #
+  # Put together: the fixup commit advances the head SHA, no `pull_request`
+  # run fires for it, and the new head therefore carries ZERO of the two
+  # required contexts. The PR reads `BLOCKED` / "Expected — waiting for status
+  # to be reported" while every check it did run is green, and the only way out
+  # is a human pushing another commit. That is a strictly worse developer
+  # experience than the red `fmt --check` this job replaces — it is the same
+  # failure mode that stranded #1207/#1208/#1195 in the superproject, and it is
+  # why `.github/workflows/submodule-bump.yml` in the superproject also refuses
+  # to fall back to `GITHUB_TOKEN`.
+  #
+  # A PAT push is an ordinary user push: it fires `pull_request` → both
+  # required contexts are re-reported against the new head, and the PR stays
+  # mergeable. `permissions: contents: read` below is deliberate — the write
+  # capability comes from the PAT the checkout is given, so nothing here can
+  # push with the ambient token by accident.
+  #
+  # NO `[skip ci]` IN THE FIXUP COMMIT, for the same reason: it would suppress
+  # the very run that re-reports the required checks.
+  #
+  # ⚠️ The PAT needs only `contents: write` on this repo. If it is absent the
+  # job GREEN-SKIPS with a message (see below) rather than failing — a
+  # formatting job that goes red is exactly what is being removed here.
+  #
+  # ─────────────────────────────────────────────────────────────────────────
+  # WHERE FORMATTING IS STILL ENFORCED
+  # ─────────────────────────────────────────────────────────────────────────
+  # Dropping `--check` from `pr-gate` does NOT mean unformatted code can reach
+  # main unnoticed. `core-integrity` (push to main / nightly / dispatch) keeps
+  # its `Check Formatting` step, so main is still asserted formatted on every
+  # merge — it just reports there instead of gating the merge. That step is the
+  # backstop for the paths this job cannot cover: fork PRs, a missing PAT, and
+  # anything pushed to main outside the PR flow.
+  fmt-autofix:
+    name: fmt-autofix
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Read-only on purpose — see the PAT note above.
+    permissions:
+      contents: read
+    steps:
+      # Green-skip, never red. Two ways this job legitimately has nothing to
+      # do, and neither is an error:
+      #
+      #   1. FORK PR. `pull_request` from a fork gets a read-only `GITHUB_TOKEN`
+      #      and no access to secrets at all, so the push cannot work by
+      #      construction. This repo is effectively single-owner so this is a
+      #      landmine, not a daily path — but an unhandled landmine is how a
+      #      first outside contributor meets a red X they cannot fix.
+      #   2. NO PAT CONFIGURED. Same reasoning as submodule-bump.yml: a red
+      #      cron/PR job every morning trains people to ignore it.
+      - name: Can this run push to the PR branch?
+        id: gate
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+          PAT: ${{ secrets.CI_FMT_PAT }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+            echo "::notice title=fmt-autofix skipped::PR head is a fork ($HEAD_REPO). A fork PR's token is read-only and secrets are withheld, so the fixup cannot be pushed. Run 'cargo fmt --all' locally; 'core-integrity' still asserts formatting on main."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "${PAT:-}" ]; then
+            echo "::notice title=fmt-autofix skipped::Secret CI_FMT_PAT is not set. GITHUB_TOKEN is not a fallback: its pushes fire no workflow run, so the new head SHA would carry neither required context (pr-gate, release-runner-contract) and the PR would be unmergeable. Add a PAT with contents:write to enable auto-formatting."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The PR BRANCH TIP, not the merge commit `pull_request` checks out by
+      # default: the fixup has to land on the branch, and a detached merge
+      # commit has nowhere to push to.
+      - name: Checkout the PR branch tip
+        if: steps.gate.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.CI_FMT_PAT }}
+          persist-credentials: true
+          # Depth 1 is enough: one new commit whose parent the remote already
+          # has pushes fine from a shallow clone, and this job runs no
+          # history-dependent gate.
+          fetch-depth: 1
+
+      # ⚠️ PINNED, and it must stay pinned to whatever `pr-gate` /
+      # `core-integrity` use. rustfmt output is toolchain-dependent — the same
+      # drift that made `clippy::redundant_closure` fire only in CI would here
+      # mean CI reformats what the developer's local `cargo fmt` just
+      # formatted, on every push, forever. No `components: clippy`: this job
+      # lints nothing and compiles nothing, so it needs no cache either.
+      - name: Install Rust (pinned — must match pr-gate)
+        if: steps.gate.outputs.ok == 'true'
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt
+
+      - name: Format, and push the result if anything moved
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          MARKER: "style: cargo fmt --all [ci-autofix]"
+        run: |
+          set -euo pipefail
+
+          # Evidence in the log that the PINNED formatter ran, not whatever the
+          # runner image happened to ship.
+          cargo fmt --version
+          rustc --version
+
+          # LOOP GUARD. A PAT push fires a fresh `pull_request` run, so this
+          # job sees its own commit — that is the point (it is how the required
+          # checks get re-reported), but it must terminate. It does, because
+          # rustfmt is idempotent: the re-run reformats nothing and pushes
+          # nothing, so at most ONE fixup exists per human push.
+          #
+          # This flag exists for the case where that is NOT true. If the tip is
+          # already a fixup and `cargo fmt` STILL wants changes, formatting is
+          # not converging (two toolchains fighting, a rustfmt bug, an
+          # unparseable file) and the honest answer is to stop and say so
+          # rather than push a second time and start a cycle. That is the one
+          # condition under which this job goes red, and it should.
+          tip_subject=$(git log -1 --format=%s)
+          tip_is_fixup=false
+          if [ "$tip_subject" = "$MARKER" ]; then
+            tip_is_fixup=true
+            echo "Tip commit is a previous autofix — this run must not push again."
+          fi
+
+          cargo fmt --all
+
+          if git diff --quiet; then
+            if [ "$tip_is_fixup" = true ]; then
+              echo "Formatting converged: the previous autofix is stable under a re-run."
+            else
+              echo "Already formatted — nothing to push."
+            fi
+            echo "### Formatting: clean" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "rustfmt wants these changes:"
+          git --no-pager diff --stat
+
+          if [ "$tip_is_fixup" = true ]; then
+            echo "::error title=rustfmt is not converging::The tip commit is already a '${MARKER}' fixup and 'cargo fmt --all' still reports a diff. Pushing again would loop, so this run stops. Reproduce with the pinned 1.95.0 toolchain."
+            git --no-pager diff
+            exit 1
+          fi
+
+          git config user.name "Andrii Shylenko"
+          git config user.email "14119286+w1ne@users.noreply.github.com"
+          git add -A
+          # Subject is the loop-guard marker above — keep the two in step.
+          # No '[skip ci]': the run this push triggers is what re-reports
+          # pr-gate and release-runner-contract on the new head SHA.
+          git commit -m "$MARKER" \
+            -m "Applied by the fmt-autofix job in .github/workflows/core-ci.yml with the pinned 1.95.0 toolchain. Formatting only — no other step wrote to the tree."
+
+          # Never force. If the branch moved while this ran, the push is
+          # rejected and that is FINE: the newer push has its own fmt-autofix
+          # run which will do the same work against the current tip. Losing
+          # that race must not turn this job red.
+          if git push origin "HEAD:refs/heads/${BRANCH}"; then
+            echo "Pushed the formatting fixup to ${BRANCH}."
+            {
+              echo "### Formatting applied"
+              echo
+              echo 'Pushed `'"$MARKER"'`. A fresh CI run is now in flight against the new head SHA.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice title=fmt-autofix push skipped::${BRANCH} moved while this job was running, so the fixup was not pushed. The newer commit has its own fmt-autofix run."
+          fi
+
   # ── PR merge gate (REQUIRED) — target wall clock under ~1 minute ───────────
-  # fmt + focused clippy/tests only. No firmware builds, no feature-variant
+  # focused clippy/tests only. No firmware builds, no feature-variant
   # recompiles, no coverage/onboarding/arduino matrices (those are nightly).
+  #
+  # NO FORMATTING STEP HERE, ON PURPOSE. `cargo fmt --all -- --check` used to
+  # be the first thing that could fail this required check, and it failed on
+  # changes that were otherwise correct while printing the exact patch that
+  # would fix them. The `fmt-autofix` job above applies that patch instead.
+  # `core-integrity` still runs `--check` on push to main, so "formatted" is
+  # still asserted — it just is not a merge gate. Do not re-add a `--check`
+  # step here.
   pr-gate:
     name: pr-gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Was 5. The browser-layer steps below (crates/wasm clippy + lib tests) are
+    # a real ~1.5 min of additional compile — crates/wasm is a cdylib outside
+    # default-members, so nothing earlier in this job has already built it.
+    # Measured runs sat at 3.0-4.6 min before; the first run WITH those steps
+    # hit 5m15s and was killed by this timeout mid-`labwired_wasm` test, which
+    # reads as a test failure and is not one.
+    #
+    # 10 buys headroom on a shared runner without hiding a real slowdown: if
+    # this job starts approaching 10 it has genuinely grown and the browser
+    # steps should move to their own job, the way pr-scheduler-observable did.
+    timeout-minutes: 10
     steps:
       # Full history required: generate_validation_status.py uses
       # `git log -1 --format=%cI -- <model>` for drift. Shallow checkout
@@ -85,9 +306,6 @@ jobs:
             echo "Run scripts/regen-all.sh locally and commit the result."
             exit 1
           fi
-
-      - name: Check Formatting
-        run: cargo fmt --all -- --check
 
       # Clippy + lib tests over the workspace's default-members — cli, core,
       # dap, loader, labwired-fuzz. Feature lanes and the firmware/matrix
@@ -144,8 +362,11 @@ jobs:
       # needs no firmware, no `event-scheduler` recompile and no fixtures — it
       # only asserts that a chip's `legacy_walk_disabled` is what the
       # conservative derivation proves rather than a hand-written claim, and
-      # that check compiles under default features. Its observable twin (which
-      # does need `event-scheduler`) stays in `core-integrity`.
+      # that check compiles under default features. Under DEFAULT features the
+      # file's observable twin is `#[cfg]`-ed out entirely, so this command
+      # runs exactly ONE test; its twin needs an `event-scheduler` build and
+      # lives in the `pr-scheduler-observable` job below (which runs in
+      # PARALLEL with this job, so it costs this lane nothing).
       #
       # It is here because the bug it covers shipped precisely BECAUSE the only
       # lanes that could see it were nightly: a classic-ESP32 lab was 12/12 on
@@ -154,6 +375,78 @@ jobs:
       # class walks back through.
       - name: Walk-deletion derivation (PR-fast structural arm)
         run: cargo test -p labwired-core --test esp32_classic_walk_differential
+
+  # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
+  #
+  # THE LANE THAT DID NOT EXIST PRE-MERGE.
+  #
+  # `esp32_classic_walk_differential` has two arms. `pr-gate` carries the
+  # STRUCTURAL one, which is cheap because it compiles under default features.
+  # The OBSERVABLE one — the arm that boots the committed classic-ESP32 ELF
+  # under the browser's own scheduling policy and asserts that serial bytes
+  # actually reach the UART sink — is `#[cfg(feature = "event-scheduler")]`,
+  # because with the feature off `legacy_walk_disabled` is never read and the
+  # defect is unobservable by construction. Until this job existed that arm ran
+  # ONLY in `core-integrity` (push to main), i.e. AFTER the merge — which is
+  # exactly how the defect it covers shipped: a classic-ESP32 lab was 12/12
+  # green on the CLI and livelocked in the browser, and main was the first
+  # thing to notice.
+  #
+  # WHY A SEPARATE JOB RATHER THAN A STEP IN `pr-gate` (measured, not guessed):
+  #   * the feature-variant recompile of `labwired-core` costs ~45s on a warm
+  #     cache (measured: the `Feature gate — scheduler IRQ delivery` step in
+  #     `core-integrity`, run 30838517438, `Finished ... in 44.79s`; this job
+  #     builds it COLD in 46.32s, so ~45-50s either way);
+  #   * a PASSING observable arm exits on the first 500k-step batch, but a
+  #     FAILING one burns the whole 20M-step budget — locally 15s pass vs 129s
+  #     fail, ~8x. `pr-gate` has `timeout-minutes: 5` and already runs 3.0-4.5
+  #     min, so a failing arm inside it would hit the job timeout and kill the
+  #     lane WITHOUT printing the CLKDIV / TXFIFO_CNT / sink_bytes diagnostic
+  #     that makes this gate worth having.
+  # As its own job it runs concurrently with `pr-gate`, so the PR's critical
+  # path is unchanged, and it can afford a timeout sized for the failing case.
+  #
+  # `--features event-scheduler` WITHOUT `jit`: that is what `crates/wasm/
+  # Cargo.toml` pins, so this is the browser's exact feature set.
+  # `core-integrity` runs the same test with `jit,event-scheduler`, which the
+  # browser never builds — this lane is the faithful one. It does not replace
+  # the integrity run; both stay.
+  pr-scheduler-observable:
+    name: pr-scheduler-observable
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Shallow checkout is fine here: unlike `pr-gate` this job runs no
+      # git-history-dependent gate. The fixture it needs
+      # (`tests/fixtures/tier1/esp32.elf`) is a plain committed binary, not LFS.
+      - uses: actions/checkout@v4
+
+      # No rustfmt/clippy components: this job lints nothing.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      # NO CACHE STEP, ON PURPOSE — measured, not assumed. The first cut of this
+      # job used `Swatinem/rust-cache@v2` with `shared-key: core-ci` +
+      # `save-if: false`, on the theory that it would restore `core-integrity`'s
+      # warm target dir. Run 30842338316 reported `... Restoring cache ... No
+      # cache found.`: rust-cache's key folds in the installed toolchain
+      # components, and `core-integrity` installs rustfmt + clippy, so the two
+      # jobs never share a key. The cold build cost 46.32s and the whole job 71s
+      # — while `core-integrity`'s WARM feature-variant compile of the same
+      # crate is 44.79s. The cache was buying ~0s and would have cost an ~18s
+      # restore plus repo cache storage, so it is gone. Keep it that way unless
+      # a measurement says otherwise.
+
+      # `--nocapture` on purpose: on PASS the arm prints
+      # `uart0: CLKDIV=... TXFIFO_CNT=... sink_bytes=N`, which is the evidence
+      # that the lane actually observed bytes rather than merely existing in
+      # the YAML. A gate whose log cannot distinguish "ran and saw bytes" from
+      # "was skipped" is the failure mode this job was added to remove.
+      - name: Observable arm — classic-ESP32 serial reaches the sink (browser policy)
+        run: >
+          cargo test -p labwired-core --features event-scheduler
+          --test esp32_classic_walk_differential -- --nocapture
 
   # ── Main-branch integrity (push to main) — fuller than PR, still no matrices ─
   integrity:
@@ -192,6 +485,14 @@ jobs:
           python3 scripts/generate_validation_status.py --check --drift
           python3 scripts/generate_firmware_exercise_matrix.py --check
 
+      # THE FORMATTING BACKSTOP. This is now the ONLY `--check` in the file —
+      # `pr-gate` no longer has one, because `fmt-autofix` applies formatting to
+      # PR branches instead of demanding it. Keep this step: it is what makes
+      # "formatting is no longer enforced anywhere" false. It reports on main
+      # rather than gating a merge (this job is not a required context), and it
+      # covers exactly the paths `fmt-autofix` cannot: fork PRs, a run with no
+      # CI_FMT_PAT configured, and anything that reaches main outside the PR
+      # flow. If it ever goes red, run `cargo fmt --all` on 1.95.0.
       - name: Check Formatting
         run: cargo fmt --all -- --check
 
@@ -253,13 +554,21 @@ jobs:
           cargo test --release -p labwired-core --features event-scheduler
           --lib --test event_scheduler --test release_only_cfg_ratchet
 
-      # `esp32_classic_walk_differential` is here and NOT in `pr-gate` for the
-      # same structural reason the rest of this step is: the defect it covers is
-      # only reachable in an `event-scheduler` build, and the CLI (which every
-      # PR-fast lane exercises) deliberately compiles that feature OFF. A
-      # classic-ESP32 lab was 12/12 green on the CLI while livelocked in the
-      # browser because NO lane ran classic ESP32 under the browser's own
-      # feature set. This step is that lane.
+      # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
+      # covered pre-merge as well — do not read this step as their only lane.
+      # `pr-gate` runs the structural arm under default features, and
+      # `pr-scheduler-observable` runs the observable arm under
+      # `event-scheduler` on every PR. This step keeps the push-to-main copy
+      # (with `jit` on, which no PR lane exercises).
+      #
+      # The original note here said the test was "NOT in pr-gate" because the
+      # defect is only reachable in an `event-scheduler` build and the CLI
+      # deliberately compiles that feature OFF. The premise is still true; the
+      # conclusion no longer is. A classic-ESP32 lab was 12/12 green on the CLI
+      # while livelocked in the browser because no lane ran classic ESP32 under
+      # the browser's own feature set BEFORE THE MERGE — a push-to-main lane
+      # reports that after the fact. See the comment on
+      # `pr-scheduler-observable`.
       - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
         run: >
           cargo test -p labwired-core --features jit,event-scheduler

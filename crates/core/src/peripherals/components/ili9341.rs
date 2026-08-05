@@ -203,6 +203,29 @@ impl Ili9341 {
         &self.framebuffer
     }
 
+    /// Return the framebuffer as the physical display would scan it: MADCTL
+    /// applied so the bytes are in the orientation the firmware intended.
+    ///
+    /// The raw framebuffer stores pixels at the physical positions `to_physical`
+    /// maps them to. A host that renders those bytes row-major sees the mirror/
+    /// rotation the panel's scan-out would undo — exactly what the browser canvas
+    /// does today, which is why `setRotation(0)` (Adafruit's stock MADCTL 0x48)
+    /// shows up mirrored. This view reads back through the same mapping, so the
+    /// host can paint row-major and get the right picture.
+    pub fn oriented_framebuffer(&self) -> Vec<u8> {
+        let mut out = vec![0u8; FB_BYTES];
+        for col in 0..WIDTH as u16 {
+            for row in 0..HEIGHT as u16 {
+                let (x, y) = self.to_physical(col, row);
+                let src = (y * WIDTH + x) * 2;
+                let dst = (row as usize * WIDTH + col as usize) * 2;
+                out[dst] = self.framebuffer[src];
+                out[dst + 1] = self.framebuffer[src + 1];
+            }
+        }
+        out
+    }
+
     pub fn display_on(&self) -> bool {
         self.display_on
     }
@@ -490,7 +513,7 @@ impl SpiDevice for Ili9341 {
         id: &str,
         opts: &crate::inspect::InspectOpts,
     ) -> Vec<crate::inspect::Artifact> {
-        let fb = self.framebuffer();
+        let fb = self.oriented_framebuffer();
         let painted = fb.iter().filter(|&&b| b != 0x00).count();
         let (w, h) = self.dimensions();
         // The most common non-black pixel: says WHAT was drawn, not merely that
@@ -510,15 +533,15 @@ impl SpiDevice for Ili9341 {
             meta: serde_json::json!({
                 "w": w,
                 "h": h,
-                "format": "rgb565_be",
-                "generation": crate::inspect::artifact_generation(fb),
+                "format": crate::inspect::artifact_format::RGB565_BE,
+                "generation": crate::inspect::artifact_generation(&fb),
                 "display_on": self.display_on(),
                 "painted_bytes": painted,
                 "total_bytes": fb.len(),
                 "top_colour": top.map(|(v, _)| format!("0x{v:04X}")),
                 "top_colour_pixels": top.map(|(_, n)| *n),
             }),
-            bytes: crate::inspect::artifact_bytes(fb, opts),
+            bytes: crate::inspect::artifact_bytes(&fb, opts),
         }]
     }
 
@@ -781,6 +804,45 @@ mod tests {
             (0xF8, 0x00),
             "landscape pixel must land in frame memory"
         );
+    }
+
+    // The raw framebuffer is physical scan-out order; the canvas needs the
+    // firmware's logical order. `setRotation(0)` (Adafruit's stock MADCTL 0x48 =
+    // MX | BGR) mirrors horizontally, so the raw bytes read mirrored on a
+    // row-major canvas. The oriented view applies MADCTL back so the host sees
+    // the picture the firmware drew.
+    #[test]
+    fn oriented_framebuffer_applies_madctl_mirror() {
+        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
+        cmd(&mut dev, 0x36, &[MADCTL_MX]); // horizontal mirror
+        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x01]); // cols 0..1
+        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]); // row 0
+        dc_send(&mut dev, false, &[0x2C]);
+        dc_send(&mut dev, true, &[0xF8, 0x00, 0x07, 0xE0]); // red then green
+
+        // Raw framebuffer: red landed at physical x=239 (logical col 0 with MX=1),
+        // green at physical x=238 (logical col 1).
+        let raw = dev.framebuffer();
+        let red_idx = 239 * 2;
+        let green_idx = 238 * 2;
+        assert_eq!((raw[red_idx], raw[red_idx + 1]), (0xF8, 0x00));
+        assert_eq!((raw[green_idx], raw[green_idx + 1]), (0x07, 0xE0));
+
+        // Oriented framebuffer: red at logical col 0, green at logical col 1.
+        let oriented = dev.oriented_framebuffer();
+        assert_eq!((oriented[0], oriented[1]), (0xF8, 0x00));
+        assert_eq!((oriented[2], oriented[3]), (0x07, 0xE0));
+    }
+
+    #[test]
+    fn oriented_framebuffer_is_identity_when_madctl_is_zero() {
+        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
+        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x01]); // cols 0..1
+        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]); // row 0
+        dc_send(&mut dev, false, &[0x2C]);
+        dc_send(&mut dev, true, &[0xF8, 0x00, 0x07, 0xE0]);
+
+        assert_eq!(dev.oriented_framebuffer()[..4], dev.framebuffer()[..4]);
     }
 
     // Datasheet 8.2.2: "the Frame Memory contents are unaffected by this

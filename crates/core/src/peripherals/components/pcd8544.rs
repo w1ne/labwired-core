@@ -182,7 +182,7 @@ impl SpiDevice for Pcd8544 {
             meta: serde_json::json!({
                 "w": WIDTH,
                 "h": BANKS * 8,
-                "format": "pcd8544_bank",
+                "format": crate::inspect::artifact_format::PCD8544_BANK,
                 "generation": crate::inspect::artifact_generation(fb),
                 "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
                 "lit_pixels": fb.iter().map(|b| b.count_ones() as usize).sum::<usize>(),

@@ -1,0 +1,50 @@
+# Sharp GP2Y0A21YK0F infrared distance sensor — declarative `analog_source`
+# device. The part's whole interface is one analogue voltage: Vo falls with
+# distance over the specified 10–80 cm band. There are no registers and no
+# configuration, so the descriptor is the datasheet's typical-output graph and
+# nothing else.
+#
+# Curve provenance: Sharp GP2Y0A21YK0F datasheet, "Typical output voltage
+# vs. distance" graph, read off as a piecewise-linear table:
+#
+#   distance (mm) | 10   15   20   30   40   50   60   70   80
+#   Vo (mV, typ.) | 3100 2300 1900 1300 1000 800  650  550  500
+#
+# Out-of-band behaviour, stated rather than faked:
+#   * beyond 80 cm the real output settles on a ~0.4 V floor (far is NOT
+#     zero — a classic firmware bug) — `above_last.floor_mv: 400`;
+#   * below 10 cm the real output FALLS again (the "mirror region" —
+#     triangulation breaks down at contact). Out of spec: the descriptor
+#     clamps to the 10 cm value rather than inventing a curve.
+type: gp2y0a21
+
+behavior:
+  primitive: analog_source
+  analog:
+    curve:
+      - [100, 3100]
+      - [150, 2300]
+      - [200, 1900]
+      - [300, 1300]
+      - [400, 1000]
+      - [500, 800]
+      - [600, 650]
+      - [700, 550]
+      - [800, 500]
+    below_first: clamp
+    above_last: { floor_mv: 400 }
+
+metadata:
+  label: Sharp GP2Y0A21 IR Distance Sensor
+  summary: Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC).
+  detail: >-
+    Triangulation IR ranger: Vo falls with distance over the specified 10–80 cm
+    band, following the datasheet typical-output curve (3.1 V at 10 cm down to
+    0.5 V at 80 cm). Drive the `distance` channel (mm) at runtime and the ADC
+    channel follows. Beyond 80 cm the output holds a ~0.4 V floor (far is NOT
+    zero); below 10 cm the real part's output falls again (mirror region) and
+    this model clamps to the 10 cm value instead.
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
+  inputs:
+    - { key: distance, label: Distance, unit: mm, min: 0, max: 800 }

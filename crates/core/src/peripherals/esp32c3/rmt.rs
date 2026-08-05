@@ -119,12 +119,34 @@ impl Esp32c3Rmt {
 }
 
 impl Peripheral for Esp32c3Rmt {
-    fn needs_legacy_walk(&self) -> bool {
-        // Instant TX on CONF0 write + level IRQ via `matrix_irq_sources` —
-        // no per-cycle walk work. Must stay walk-independent so the C3 chip
-        // yaml (which now installs this model) can still derive walk-deletion
-        // for wifi_mac / rom-boot paths.
-        false
+    /// Scheduler-driven, level-only: TX completes inside the `CONF0` write and
+    /// the resulting `CHn_TX_END` level is published through
+    /// [`Self::matrix_irq_sources_into`], which the bus re-derives at the MMIO
+    /// write choke and at every matrix aggregation. There is no per-cycle work
+    /// and no deadline to schedule, so no `on_event` chain and no `sync_to`.
+    ///
+    /// This replaces a `needs_legacy_walk() -> false` override that was a lie:
+    /// `tick()` below emits `explicit_irqs` whenever `INT_ST != 0`, and on the
+    /// shipped C3 bus every peripheral qualifies for walk deletion, so that
+    /// `tick()` was never called. The level export did not save it either —
+    /// `SystemBus::poll_scheduler_matrix_sources` only polls `uses_scheduler()`
+    /// models, and this one did not declare it. Both delivery channels were
+    /// closed, so `rgbLedWrite`'s `rmtWrite(.., RMT_WAIT_FOR_EVER)` blocked
+    /// forever on the semaphore its ISR gives.
+    ///
+    /// Declaring `uses_scheduler()` — rather than flipping `needs_legacy_walk`
+    /// to `true` — is what keeps the fix free: the C3 bus stays walk-DELETED
+    /// (`derive_walk_deletable` accepts `uses_scheduler || !needs_legacy_walk`),
+    /// so every shipped C3 lab keeps its 512x peripheral-tick batching. Putting
+    /// the model back on the walk would have restored delivery by making the
+    /// whole chip slow.
+    ///
+    /// `needs_legacy_walk()` is deliberately left at its conservative default
+    /// (`true`): the walk-deletion derivation is already satisfied by
+    /// `uses_scheduler()`, and a `false` here would be the same false claim the
+    /// static contract in `crate::tests::walk_starvation_contract` now rejects.
+    fn uses_scheduler(&self) -> bool {
+        true
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
@@ -194,6 +216,11 @@ impl Peripheral for Esp32c3Rmt {
         self.write_u32(aligned, w)
     }
 
+    /// Legacy-walk / hardware-oracle path only.
+    ///
+    /// Under `event-scheduler` the walk skips this model (`uses_scheduler`) and
+    /// the level below is the delivery path. Without the feature the walk still
+    /// runs and this keeps the pre-migration behaviour byte-identical.
     fn tick(&mut self) -> PeripheralTickResult {
         if self.int_st() != 0 {
             PeripheralTickResult {
@@ -205,11 +232,17 @@ impl Peripheral for Esp32c3Rmt {
         }
     }
 
-    fn matrix_irq_sources(&self) -> Vec<u32> {
+    /// The live `CHn_TX_END` level, re-derived by the bus.
+    ///
+    /// Push form (`_into`) rather than the returning `matrix_irq_sources`:
+    /// `SystemBus::poll_scheduler_matrix_sources` fills ONE retained scratch
+    /// buffer through this method, so an RMT sitting on a walk-deleted C3 bus
+    /// costs no allocation per poll. Level semantics — the bitmap is rebuilt
+    /// from scratch each poll, so `INT_CLR` de-asserts the routed line at the
+    /// acknowledging write instead of latching it into an ISR storm.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
         if self.int_st() != 0 {
-            vec![self.source_id]
-        } else {
-            Vec::new()
+            out.push(self.source_id);
         }
     }
 

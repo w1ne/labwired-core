@@ -61,6 +61,12 @@ pub struct Rp2040I2c {
     rx_byte: Cell<Option<u8>>,
     activity: Cell<bool>,
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    /// Held-level event chain (see the `impl Peripheral` docs). Monotonic token
+    /// so a stale in-flight event from a previous arm is ignored.
+    arm_seq: u32,
+    /// True while an event for this model is in flight, so a burst of writes
+    /// arms exactly one chain rather than one per write.
+    scheduled: bool,
 }
 
 impl std::fmt::Debug for Rp2040I2c {
@@ -109,11 +115,86 @@ impl Rp2040I2c {
 }
 
 impl Peripheral for Rp2040I2c {
-    /// Pure write-driven transfer engine — `tick()` is structural no-op for
-    /// the walk (Class-A). Address NACK / slave traffic fire inside
-    /// `IC_DATA_CMD` writes; no per-cycle work.
-    fn needs_legacy_walk(&self) -> bool {
-        false
+    /// Scheduler-driven, held-level: `I2C0_IRQ` rides an event chain, not the
+    /// per-cycle walk.
+    ///
+    /// # What was wrong
+    ///
+    /// This model used to declare `needs_legacy_walk() -> false` with the
+    /// comment "pure write-driven transfer engine — `tick()` is structural
+    /// no-op". The transfer engine is write-driven; the *interrupt* was not.
+    /// `tick()` returns `irq: self.irq_pending()`, and that was the ONLY NVIC
+    /// pend the model had. Every peripheral on `rp2040-pico` makes the same
+    /// claim, so `SystemBus::derive_walk_deletable` deletes the walk and the
+    /// pend never happens. Nothing catches it downstream either:
+    /// `deliver_scheduled_irq_levels` covers only the C3 and S3 interrupt
+    /// matrices and returns `false` on an NVIC bus.
+    ///
+    /// Arduino `Wire` polls `IC_TX_ABRT_SOURCE` / `IC_STATUS`, which is why no
+    /// shipped lab noticed. pico-sdk's I2C-slave path and embassy-rp's async
+    /// I2C both wait on the interrupt and hang outright.
+    ///
+    /// # Why an event chain and not `needs_legacy_walk() -> true`
+    ///
+    /// Restoring the walk would fix delivery by making the whole RP2040 bus
+    /// slow: `derive_walk_deletable` is all-or-nothing, so one forcing model
+    /// drops `max_safe_tick_interval` from 512 to 1 for *every* RP2040 lab,
+    /// including the majority that never enable an I2C interrupt. The chain
+    /// below costs a scheduler wakeup only while an interrupt is genuinely
+    /// armed AND asserting — which is exactly when a real DW_apb_i2c holds its
+    /// level line up, and when the CPU would be in the ISR anyway.
+    ///
+    /// # The chain
+    ///
+    /// `(raw_intr & intr_mask)` can only *rise* on an MMIO write
+    /// (`IC_ENABLE`, `IC_INTR_MASK`, `IC_DATA_CMD`) — the `IC_CLR_*` registers
+    /// are read-to-clear and only lower it. So the write choke
+    /// (`SystemBus::collect_scheduled_events`, run after every write to a
+    /// `uses_scheduler()` model) is a complete arming point, and
+    /// `take_scheduled_events` needs no clock and no `sync_to`. `on_event` then
+    /// re-pends at delay 1 while the level holds and stops rescheduling the
+    /// moment firmware masks or clears it — the same held-level shape
+    /// [`crate::peripherals::rp2040::timer::Rp2040Timer`] uses for its alarms.
+    ///
+    /// Left ungated (not `cfg!(feature = "event-scheduler")`) so walk-deletion
+    /// derives identically in both builds; the walk's skip of scheduler models
+    /// is itself feature-gated, so a featureless build still ticks this model
+    /// exactly as before.
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // Only arm while a level is actually up, and only once per chain.
+        if !self.irq_pending() || self.scheduled {
+            return Vec::new();
+        }
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        self.scheduled = true;
+        // delay 0 → deadline `current_cycle + 1`: the cycle the legacy walk's
+        // next tick would have serviced this.
+        vec![(0, self.arm_seq)]
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token != self.arm_seq {
+            // Stale token from a superseded arm; the live chain owns delivery.
+            return crate::sched::EventResult::default();
+        }
+        let pending = self.irq_pending();
+        self.scheduled = pending;
+        crate::sched::EventResult {
+            // The bus pends `PeripheralEntry::irq` (NVIC 23 on rp2040-pico) —
+            // the event-path twin of the walk's `PeripheralTickResult::irq`.
+            raise_own_irq: pending,
+            reschedule_delay: pending.then_some(1),
+            ..Default::default()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -242,6 +323,11 @@ impl Peripheral for Rp2040I2c {
         self.write_u32(aligned, new)
     }
 
+    /// Legacy-walk / hardware-oracle path only.
+    ///
+    /// Under `event-scheduler` the walk skips this model (`uses_scheduler`) and
+    /// the event chain owns delivery. Without the feature the walk still runs
+    /// and this keeps the pre-migration behaviour byte-identical.
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult {
             irq: self.irq_pending(),

@@ -186,7 +186,7 @@ impl SpiDevice for Max7219 {
             meta: serde_json::json!({
                 "w": 8,
                 "h": fb.len(),
-                "format": "max7219_rows",
+                "format": crate::inspect::artifact_format::MAX7219_ROWS,
                 "generation": crate::inspect::artifact_generation(&fb),
                 "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
                 "lit_pixels": fb.iter().map(|b| b.count_ones() as usize).sum::<usize>(),

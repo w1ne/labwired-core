@@ -854,7 +854,56 @@ boards:
     # loop() iterations per node and five different successive counter values read by
     # the peer's application, both ways, with NO firmware assertion in the serial.
     # No live re-capture.
-    drift_ack: 2026-08-03
+    #
+    # 2026-08-04: an attempt to model RWBLECNTL bit 25 (the advertising-event
+    # abort) was merged and then REVERTED the same day, because the two-node run
+    # 2026-08-04 CORRECTION (measured, supersedes the note below): the bit25
+    # "regression" was a BUILD-FEATURE MISMATCH, not a model defect. A plain
+    # `cargo build` CLI binary has NO event-scheduler feature, and in that
+    # build the BLE radio engine never executes a single programmed event —
+    # so every "fix build regresses vs baseline" comparison measured a dead
+    # radio against a live one (the baseline binary had the feature via a
+    # gate-test build). With matched --features event-scheduler builds, main
+    # and the abort model produce byte-identical game runs. Furthermore the
+    # "20 ms re-publication stall" itself is NOT a twin defect: both nodes
+    # advertise fresh payloads continuously in the twin (traced: seq
+    # advancing, ball positions on the air), and the guest's frozen ball is
+    # the Arduino BLEScan default dedup-by-advertiser-address
+    # (setAdvertisedDeviceCallbacks(cb, wantDuplicates=false)), which drops
+    # every report after the first per address ON SILICON TOO. The game fix
+    # is one line in the sketch (wantDuplicates=true); verified in the twin
+    # on the unmodified core (guest tracked 89 distinct ball positions,
+    # score coherent on both nodes) and flashed to both boards. The bit25
+    # abort path never even fires for this game — every stop lands state 0
+    # and completes synchronously, and init itself writes bit25, which
+    # disarmed the reverted model's edge logic from boot. The rest of the
+    # note below is kept as the record of the misdiagnosis.
+    #
+    # --- earlier note (VOID conclusions, kept for the record) ---
+    # that would have justified it came back negative. Recorded so the next
+    # attempt does not repeat it:
+    #
+    #   baseline (no bit25 model): node A takes the host role, ball sweeps
+    #     x=4..122, score reaches 3:2 — one reception gets through and the
+    #     host-side game runs.
+    #   with the abort modelled:   no node ever takes the host role, the ball
+    #     never moves, and only ~50 loop iterations happen where the baseline
+    #     manages ~157. Strictly worse, same firmware image.
+    #
+    # Three scopings were tried and ALL regressed: abort any in-flight event;
+    # abort only Running events; abort only Running legacy-ADVERTISING events
+    # (CS_FORMAT gated). So the defect is not simply "the abort is missing" —
+    # ending the event early through the ordinary ET_STATUS_END + sch_prog_end
+    # path is not what the core does, or not all of it. The ROM evidence for the
+    # bit stands (r_lld_adv_stop 0x4001898A sets it only when state byte [137]
+    # == 1, then waits in state 2); what the CORE does in response is unknown.
+    #
+    # The bug it was chasing is real and still OPEN: at a 20 ms re-publication
+    # cadence a node goes quiet after its first publish, while two real C3s
+    # flashed with the identical image play correctly (live air capture
+    # 2026-08-04: roles negotiated, ball bytes advancing, ~200 frames per node
+    # per 20 s). Twin-only defect.
+    drift_ack: 2026-08-04
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md

@@ -196,7 +196,7 @@ impl I2cDevice for Sh1107 {
             meta: serde_json::json!({
                 "w": self.width(),
                 "h": self.height(),
-                "format": "sh1107_page",
+                "format": crate::inspect::artifact_format::SH1107_PAGE,
                 "generation": crate::inspect::artifact_generation(fb),
                 "ink_bytes": self.ink_bytes(),
                 "lit_pixels": self.lit_pixels(),
