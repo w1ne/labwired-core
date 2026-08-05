@@ -19,7 +19,8 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `stm32f401` | 🟡 smoke-manual | — | 2026-08-03 | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-08-03 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-08-03 | no silicon capture |
-| `rp2040` | ⚪ structural | — | 2026-08-03 | no silicon capture |
+| `rp2040` | ⚪ structural | — | 2026-08-05 | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | 2026-08-05 | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-05 | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
@@ -132,6 +133,13 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 
 - Doc: [`docs/boards/rp2040.md`](rp2040.md)  ·  Chip: `configs/chips/rp2040.yaml`
 - Note: Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip) + hardware spinlocks (SPINLOCK0..31 try-lock/release), PL022 SPI0 (loopback transfer), DW_apb_i2c I2C0 (no-slave address-NACK abort), the XIP_SSI flash controller (boot2 QSPI bring-up: SSI shift engine + W25Q-style RDSR/WREN/WRSR responder, so the stage-2 bootloader and pico-sdk flash_enable_xip_via_boot2 complete), a TBMAN storage stub (running_on_fpga probe), and the PL011 UART0 console. Each is exercised by the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) which reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 is declared but has no test coverage. No silicon bench.
+- Silicon: none — not validated against real hardware.
+- Drift status: **no silicon capture**
+
+## `rp2350` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/rp2350.md`](rp2350.md)  ·  Chip: `configs/chips/rp2350.yaml`
+- Note: Pico 2 / RP2350: UART0 smoke (examples/pico2) with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/bootrom/PIO v2/dual-core; no silicon bench.
 - Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 

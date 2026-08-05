@@ -1746,12 +1746,26 @@ boards:
     # 2026-07-04: added the XIP_SSI flash-controller model + SIO spinlocks +
     # TBMAN stub to fix the boot2/XIP bus-read fault at 0x18000028. Structural
     # tier (no silicon bench), so this is documentation, not a re-capture claim.
-    drift_ack: 2026-07-04
+    # 2026-08-05: shared clkrst model gained ClockResetProfile::Rp2350 for the
+    # RP2350 address map; RP2040 default path is unit-tested unchanged
+    # (rp2350_clkrst_profile::rp2040_profile_is_unchanged).
+    drift_ack: 2026-08-05
     models:
       - configs/chips/rp2040.yaml
       - crates/core/src/peripherals/rp2040
       - crates/core/src/peripherals/rp2040_clocks.rs
       - configs/peripherals/rp2040
+
+  - id: rp2350
+    doc: docs/boards/rp2350.md
+    chip: configs/chips/rp2350.yaml
+    tier: smoke-manual
+    note: "Pico 2 / RP2350: UART0 smoke (examples/pico2) with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/bootrom/PIO v2/dual-core; no silicon bench."
+    models:
+      - configs/chips/rp2350.yaml
+      - crates/core/src/peripherals/rp2040_clocks.rs
+      - crates/core/src/peripherals/rp2040
+      - configs/peripherals/rp2350
 
   - id: nrf5340
     doc: docs/boards/nrf5340.md
