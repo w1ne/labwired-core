@@ -107,22 +107,16 @@ is also bundled in the browser playground (nRF52840 Secure Boot).
   its package already queued.
 
 
-## CI evidence pack
+## CRA-style evidence pack (separate repo)
+
+Compliance packaging, ephemeral OEM keys, and the downloadable CI artifact live in [**w1ne/labwired-cra-evidence**](https://github.com/w1ne/labwired-cra-evidence) — not in this engine tree (same split as product stacks like udslib).
 
 ```bash
-./examples/nrf52840-secure-boot-lab/run_evidence_ci.sh
+git clone https://github.com/w1ne/labwired-cra-evidence
+cd labwired-cra-evidence && ./scripts/run_evidence.sh
+# → out/.../cra-evidence-pack/
 ```
 
-This will:
-
-1. Build the secure-boot firmware
-2. Generate an **ephemeral** OEM P-256 keypair (private key discarded after signing)
-3. Run the three-boot smoke with SE `oem_pubkey_hex` set to the matching public key
-4. Write `out/nrf52840-secure-boot-evidence/cra-evidence-pack/` including
-   `claims.json`, `run-manifest.json`, logs, and `oem-verify-pubkey.hex` only
-
-GitHub Actions workflow: `.github/workflows/core-cra-secure-boot-evidence.yml`
-uploads the pack as the `cra-evidence-pack` artifact.
 
 ## Honest limitations
 
