@@ -25,6 +25,7 @@ pub mod network;
 pub mod pc_coverage;
 pub mod peripherals;
 pub mod physics;
+pub mod plugin;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod signals;
