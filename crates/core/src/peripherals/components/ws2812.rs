@@ -29,7 +29,7 @@
 //! (see [`crate::peripherals::esp32s3::rmt`]), which flips the routed GPIO pad
 //! through [`Esp32s3Gpio::drive_pad_output`](crate::peripherals::esp32s3::gpio::Esp32s3Gpio::drive_pad_output).
 //! This component registers as an S3
-//! [`GpioObserver`](crate::peripherals::esp32s3::gpio::GpioObserver) and decodes
+//! [`GpioEdgeObserver`](crate::peripherals::gpio_edge::GpioEdgeObserver) and decodes
 //! purely from the `(pin, from, to, sim_cycle)` callbacks — accumulating each
 //! bit's HIGH duration, shifting it into a 24-bit register, and pushing a pixel
 //! every 24 bits.
@@ -201,7 +201,7 @@ impl Ws2812 {
 
 // Bridge into the ESP32-S3 GPIO observer protocol (the chip whose RMT drives the
 // pad today). `from` is unused — only the new level and the sim cycle matter.
-impl crate::peripherals::esp32s3::gpio::GpioObserver for Ws2812 {
+impl crate::peripherals::gpio_edge::GpioEdgeObserver for Ws2812 {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_edge(pin, to, sim_cycle);
     }

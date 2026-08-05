@@ -30,6 +30,7 @@ pub mod fmc;
 pub mod generic_factory;
 pub mod gpdma;
 pub mod gpio;
+pub mod gpio_edge;
 pub mod hc_sr04;
 pub mod hsem;
 pub mod i2c;

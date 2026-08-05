@@ -116,13 +116,7 @@ impl StepDirMotor {
     }
 }
 
-impl crate::peripherals::esp32s3::gpio::GpioObserver for StepDirMotor {
-    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
-        self.on_gpio_edge(pin, to, sim_cycle);
-    }
-}
-
-impl crate::peripherals::esp32::gpio::GpioObserver for StepDirMotor {
+impl crate::peripherals::gpio_edge::GpioEdgeObserver for StepDirMotor {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_gpio_edge(pin, to, sim_cycle);
     }

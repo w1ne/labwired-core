@@ -4,10 +4,11 @@
 
 //! ILI9341 8080-style parallel (bit-bang) panel twin.
 //!
-//! Phase-2 v1 targets ESP32 / ESP32-S3 GPIO bit-bang of the classic 16-bit
-//! Intel 8080 bus (CS, RS/D-C, WR, RD, RST, DB[15:0]). Edges arrive through
-//! [`GpioObserver`](crate::peripherals::esp32s3::gpio::GpioObserver); unit tests
-//! inject them directly.
+//! Targets GPIO bit-bang of the classic 16-bit Intel 8080 bus (CS, RS/D-C, WR,
+//! RD, RST, DB[15:0]). Edges arrive through the shared
+//! [`GpioEdgeObserver`](crate::peripherals::gpio_edge::GpioEdgeObserver) path
+//! (classic ESP32 / S3 / C3 + STM32 `GpioPort` banks); unit tests inject them
+//! directly.
 //!
 //! ## Bus protocol (write path)
 //!
@@ -329,7 +330,7 @@ impl Ili9341Parallel {
         out
     }
 
-    /// Feed one GPIO transition. Unit tests and the ESP32/S3 observers call this.
+    /// Feed one GPIO transition. Unit tests and GPIO edge observers call this.
     pub fn on_gpio_edge(&self, pin: u8, to: bool, _sim_cycle: u64) {
         let mut s = self.state.lock().unwrap();
         let p = &self.pins;
@@ -376,13 +377,7 @@ impl Ili9341Parallel {
     }
 }
 
-impl crate::peripherals::esp32s3::gpio::GpioObserver for Ili9341Parallel {
-    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
-        self.on_gpio_edge(pin, to, sim_cycle);
-    }
-}
-
-impl crate::peripherals::esp32::gpio::GpioObserver for Ili9341Parallel {
+impl crate::peripherals::gpio_edge::GpioEdgeObserver for Ili9341Parallel {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_gpio_edge(pin, to, sim_cycle);
     }
@@ -405,9 +400,9 @@ static ILI9341_PARALLEL_METADATA: KitMetadata = KitMetadata {
     label: "ILI9341 TFT (16-bit parallel)",
     summary: "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
     detail: "LCDWiki MRB3205-class 3.2\" module contract: CS/RS/WR/RD/RST + DB0..DB15. \
-             Firmware bit-bangs the bus; the twin watches GPIO edges (classic ESP32 / \
-             ESP32-S3) and paints an in-memory RGB565 framebuffer. Not SPI — use \
-             device_type ili9341 for the 4-wire SPI kit.",
+             Firmware bit-bangs the bus; the twin watches GPIO edges (classic ESP32, \
+             S3, C3, STM32 GpioPort banks) and paints an in-memory RGB565 framebuffer. \
+             Not SPI — use device_type ili9341 for the 4-wire SPI kit.",
     transport: Transport::GpioGroup,
     category: Category::Gpio,
     config_keys: &[

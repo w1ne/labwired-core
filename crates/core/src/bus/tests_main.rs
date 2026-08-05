@@ -677,8 +677,8 @@ board_io: []
 #[test]
 fn test_from_config_attaches_ili9341_16bit_parallel_panel() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Classic ESP32: `install_gpio_observer` wires Esp32Gpio (C3 has no
-    // observer path for this model yet).
+    // Classic ESP32 smoke for kit attach; multi-family edge delivery is covered
+    // by e2e_gpio_edge_all_families (C3 W1TS + STM32 GpioPort banks).
     let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
         .expect("read ESP32 chip descriptor");
 

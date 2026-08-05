@@ -112,6 +112,14 @@ impl SystemBus {
     /// modeled, matching [`Esp32Gpio`](crate::peripherals::esp32::gpio::Esp32Gpio).
     pub(crate) fn parse_esp32_gpio_pin(pin: &str) -> Option<u8> {
         let s = pin.trim();
+        let bytes = s.as_bytes();
+        // Do not swallow STM32 "PA0"/"PB12" as bare digits.
+        if bytes.len() >= 3
+            && (bytes[0] == b'P' || bytes[0] == b'p')
+            && bytes[1].is_ascii_alphabetic()
+        {
+            return None;
+        }
         let digits = s
             .trim_start_matches(|c: char| c.is_ascii_alphabetic())
             .trim();

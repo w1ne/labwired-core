@@ -18,15 +18,12 @@
 //! Observer protocol matches `peripherals::esp32s3::gpio::GpioObserver` —
 //! a single trait makes observer code work on both chip variants.
 
+use crate::peripherals::gpio_edge::{self, GpioEdgeObserver};
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
 
-/// Notified synchronously inside the bus write path on every GPIO pin
-/// transition. Observers must not panic — a panic propagates out of
-/// `bus.write_u8` and crashes the simulator.
-pub trait GpioObserver: Send + Sync + std::fmt::Debug {
-    fn on_pin_change(&self, pin: u8, from: bool, to: bool, sim_cycle: u64);
-}
+/// Shared edge-observer contract (see [`GpioEdgeObserver`]).
+pub use crate::peripherals::gpio_edge::GpioEdgeObserver as GpioObserver;
 
 /// ESP32-classic GPIO peripheral.
 pub struct Esp32Gpio {
@@ -47,7 +44,7 @@ pub struct Esp32Gpio {
     /// for the scheduler path. `cycle` is only an observability timestamp
     /// passed to `GpioObserver::on_pin_change`; no firmware register reads it.
     anchor_tick: u64,
-    observers: Vec<Arc<dyn GpioObserver>>,
+    observers: Vec<Arc<dyn GpioEdgeObserver>>,
 }
 
 impl Esp32Gpio {
@@ -66,7 +63,7 @@ impl Esp32Gpio {
         }
     }
 
-    pub fn add_observer(&mut self, obs: Arc<dyn GpioObserver>) {
+    pub fn add_observer(&mut self, obs: Arc<dyn GpioEdgeObserver>) {
         self.observers.push(obs);
     }
 
@@ -116,20 +113,7 @@ impl Esp32Gpio {
     fn apply_out(&mut self, new_out: u32) {
         let old = self.out;
         self.out = new_out;
-        let diff = old ^ new_out;
-        if diff == 0 {
-            return;
-        }
-        for pin in 0u8..32 {
-            let mask = 1u32 << pin;
-            if diff & mask != 0 {
-                let from = old & mask != 0;
-                let to = new_out & mask != 0;
-                for obs in &self.observers {
-                    obs.on_pin_change(pin, from, to, self.cycle);
-                }
-            }
-        }
+        gpio_edge::notify_bits_changed(&self.observers, old, new_out, 32, self.cycle);
     }
 
     /// OUT1 twin of [`apply_out`], for the GPIO32..39 pads. Bit 0 of `out1` is

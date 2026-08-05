@@ -11,7 +11,12 @@
 //! output back for CS/DC/bit-banged buses.
 
 use crate::peripherals::gpio::{GpioMode, GpioRouting};
+use crate::peripherals::gpio_edge::{self, GpioEdgeObserver};
 use crate::{MmioAccessClass, Peripheral, PeripheralTickResult, SimResult};
+use std::sync::Arc;
+
+/// Shared edge-observer contract (same trait as classic ESP32 / S3).
+pub use crate::peripherals::gpio_edge::GpioEdgeObserver as GpioObserver;
 
 const PIN_COUNT: u8 = 26;
 const PIN_MASK: u32 = (1u32 << PIN_COUNT) - 1;
@@ -124,6 +129,8 @@ pub struct Esp32c3Gpio {
     tap: Option<C3Tap>,
     cycle: u64,
     anchor_tick: u64,
+    /// Bit-bang / peripheral observers (parallel LCD, motors, …).
+    observers: Vec<Arc<dyn GpioEdgeObserver>>,
 }
 
 impl Esp32c3Gpio {
@@ -148,7 +155,20 @@ impl Esp32c3Gpio {
             tap: None,
             cycle: 0,
             anchor_tick: 0,
+            observers: Vec::new(),
         }
+    }
+
+    /// Subscribe to output-pad transitions (OUT / W1TS / W1TC).
+    pub fn add_observer(&mut self, obs: Arc<dyn GpioEdgeObserver>) {
+        self.observers.push(obs);
+    }
+
+    fn apply_out(&mut self, new_out: u32) {
+        let old = self.out;
+        let new = new_out & PIN_MASK;
+        self.out = new;
+        gpio_edge::notify_bits_changed(&self.observers, old, new, PIN_COUNT, self.cycle);
     }
 
     /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit
@@ -401,9 +421,9 @@ impl Esp32c3Gpio {
         let value = value & PIN_MASK;
         match word_off {
             BT_SELECT => self.bt_select = value,
-            OUT => self.out = value,
-            OUT_W1TS => self.out |= value,
-            OUT_W1TC => self.out &= !value,
+            OUT => self.apply_out(value),
+            OUT_W1TS => self.apply_out(self.out | value),
+            OUT_W1TC => self.apply_out(self.out & !value),
             SDIO_SELECT => self.sdio_select = value,
             ENABLE => self.enable = value,
             ENABLE_W1TS => self.enable |= value,
@@ -429,8 +449,8 @@ impl Esp32c3Gpio {
     fn write_byte_special(&mut self, word_off: u64, byte_off: u64, value: u8) -> bool {
         let mask = (value as u32) << (byte_off * 8);
         match word_off {
-            OUT_W1TS => self.out |= mask & PIN_MASK,
-            OUT_W1TC => self.out &= !(mask & PIN_MASK),
+            OUT_W1TS => self.apply_out(self.out | (mask & PIN_MASK)),
+            OUT_W1TC => self.apply_out(self.out & !(mask & PIN_MASK)),
             ENABLE_W1TS => self.enable |= mask & PIN_MASK,
             ENABLE_W1TC => self.enable &= !(mask & PIN_MASK),
             STATUS_W1TS => self.status |= mask & PIN_MASK,

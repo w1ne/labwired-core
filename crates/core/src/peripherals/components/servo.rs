@@ -17,7 +17,7 @@
 //! is therefore driven by a duty fraction, obtained two ways:
 //!
 //!   * [`Servo::on_gpio_edge`] — fed from real pin transitions (the
-//!     [`GpioObserver`](crate::peripherals::esp32s3::gpio::GpioObserver)
+//!     [`GpioEdgeObserver`](crate::peripherals::gpio_edge::GpioEdgeObserver)
 //!     path). It measures `high_cycles / period_cycles` across frames, so
 //!     it is robust to the simulator's instruction-paced (non-wall-clock)
 //!     cycle counter: only the *ratio* matters, not absolute cycle timing.
@@ -212,7 +212,7 @@ impl Servo {
     }
 
     /// Feed a single GPIO pin transition (the
-    /// [`GpioObserver`](crate::peripherals::esp32s3::gpio::GpioObserver)
+    /// [`GpioEdgeObserver`](crate::peripherals::gpio_edge::GpioEdgeObserver)
     /// hook). Measures the duty ratio across frames and updates the angle
     /// on each falling edge once a frame period is known. No-op for edges
     /// on other pins.
@@ -254,13 +254,7 @@ impl Servo {
 // Bridge the servo into each chip's GPIO observer protocol. Both traits
 // share the same `(pin, from, to, sim_cycle)` signature; the servo only
 // needs the `to` level and the cycle.
-impl crate::peripherals::esp32s3::gpio::GpioObserver for Servo {
-    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
-        self.on_gpio_edge(pin, to, sim_cycle);
-    }
-}
-
-impl crate::peripherals::esp32::gpio::GpioObserver for Servo {
+impl crate::peripherals::gpio_edge::GpioEdgeObserver for Servo {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_gpio_edge(pin, to, sim_cycle);
     }

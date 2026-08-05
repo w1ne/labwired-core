@@ -540,6 +540,9 @@ pub struct GpioPort {
     /// without a wired STM32 SPI.
     spi_cells: Vec<std::sync::Arc<crate::peripherals::spi::SpiLineLevels>>,
     spi_routes: Vec<SpiPadRoute>,
+    /// Local port-bit observers; install path remaps to global pin ids.
+    observers: Vec<std::sync::Arc<dyn crate::peripherals::gpio_edge::GpioEdgeObserver>>,
+    edge_cycle: u64,
 }
 
 impl Default for GpioPort {
@@ -555,6 +558,36 @@ impl GpioPort {
             tap: None,
             spi_cells: Vec::new(),
             spi_routes: Vec::new(),
+            observers: Vec::new(),
+            edge_cycle: 0,
+        }
+    }
+
+    pub fn add_observer(
+        &mut self,
+        obs: std::sync::Arc<dyn crate::peripherals::gpio_edge::GpioEdgeObserver>,
+    ) {
+        self.observers.push(obs);
+    }
+
+    fn odr_value(&self) -> u32 {
+        self.family.read_reg(self.odr_offset())
+    }
+
+    fn odr_width(&self) -> u8 {
+        match &self.family {
+            GpioFamily::Stm32F1(_) | GpioFamily::Stm32V2(_) => 16,
+            GpioFamily::Nrf52(g) => g.num_pins.min(32) as u8,
+            GpioFamily::Kinetis(_) => 32,
+        }
+    }
+
+    fn family_odr_alias(&self, offset: u64) -> bool {
+        match &self.family {
+            GpioFamily::Stm32F1(_) => matches!(offset, 0x10 | 0x14),
+            GpioFamily::Stm32V2(_) => matches!(offset, 0x18 | 0x28),
+            GpioFamily::Nrf52(_) => matches!(offset, 0x508 | 0x50C),
+            GpioFamily::Kinetis(_) => false,
         }
     }
 
@@ -596,7 +629,24 @@ impl GpioPort {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let odr_off = self.odr_offset();
+        let old_odr = if offset == odr_off || self.family_odr_alias(offset) {
+            Some(self.odr_value())
+        } else {
+            None
+        };
         self.family.write_reg(offset, value);
+        if let Some(old) = old_odr {
+            let new = self.odr_value();
+            self.edge_cycle = self.edge_cycle.wrapping_add(1);
+            crate::peripherals::gpio_edge::notify_bits_changed(
+                &self.observers,
+                old,
+                new,
+                self.odr_width(),
+                self.edge_cycle,
+            );
+        }
     }
 
     /// Register offset of the output data register (ODR) for this family.

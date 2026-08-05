@@ -3,11 +3,13 @@
 Smoke path for the **LCDWiki MRB3205** electrical contract: 3.2″ ILI9341 over
 **16-bit 8080 parallel** (`ili9341-16bit`), driven by **classic ESP32 GPIO**.
 
-## Why classic ESP32
+## Why classic ESP32 (this lab)
 
-`SystemBus::install_gpio_observer` wires observers on classic ESP32 and ESP32-S3
-GPIO models. ESP32-C3 does not yet deliver WR edges to this panel; STM32 FMC is
-out of scope for this lab.
+This lab’s pin map and firmware are classic-ESP32-shaped. Edge delivery itself
+is multi-family: `SystemBus::install_gpio_observer` also wires ESP32-S3,
+ESP32-C3, and STM32/nRF `GpioPort` banks (STM32 uses global pin ids
+`PAx = x`, `PBx = 16+x`, …). See `e2e_gpio_edge_all_families` for C3 + STM32
+paint proofs. STM32 FMC (parallel memory controller) remains out of scope.
 
 ## Pin map
 

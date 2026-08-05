@@ -1303,35 +1303,83 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    /// Install a GPIO edge observer on every GPIO model that supports pin
+    /// notifications: classic ESP32, ESP32-S3, ESP32-C3, and STM32/nRF
+    /// [`GpioPort`] banks.
     ///
-    /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
-    /// point — the same path `AttachCtx::install_gpio_observer` uses.
+    /// STM32 multi-port banks remap local bits 0..15 onto a global space
+    /// `port_index * 16 + bit` (PA0=0, PB0=16, …).
     pub fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>)
     where
-        T: crate::peripherals::esp32s3::gpio::GpioObserver
-            + crate::peripherals::esp32::gpio::GpioObserver
-            + 'static,
+        T: crate::peripherals::gpio_edge::GpioEdgeObserver + 'static,
     {
-        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            let any = bus.peripherals[idx].dev.as_any_mut();
-            if let Some(gpio) =
-                any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
-            {
-                gpio.add_observer(observer);
-                return;
-            }
-        }
-        // Classic ESP32 GPIO (separate type).
+        use crate::peripherals::gpio_edge::{GpioEdgeObserver, PinOffsetObserver};
+
+        let mut installed = false;
+        let obs: std::sync::Arc<dyn GpioEdgeObserver> = observer;
+
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
             if let Some(gpio) = bus.peripherals[idx]
                 .dev
                 .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
+            {
+                gpio.add_observer(obs.clone());
+                installed = true;
+            } else if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
                 .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
             {
-                gpio.add_observer(observer);
+                gpio.add_observer(obs.clone());
+                installed = true;
+            } else if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
+            {
+                gpio.add_observer(obs.clone());
+                installed = true;
             }
         }
+
+        for periph in bus.peripherals.iter_mut() {
+            let Some(port) = periph
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::gpio::GpioPort>())
+            else {
+                continue;
+            };
+            let offset = stm32_gpio_bank_offset(&periph.name);
+            let wrapped: std::sync::Arc<dyn GpioEdgeObserver> =
+                std::sync::Arc::new(PinOffsetObserver::new(obs.clone(), offset));
+            port.add_observer(wrapped);
+            installed = true;
+        }
+
+        if !installed {
+            tracing::debug!(
+                "install_gpio_observer: no GPIO peripheral accepted the observer"
+            );
+        }
+    }
+
+    /// STM32 pin label → global kit pin id (`PA0`=0 … `PB0`=16 … `PH15`=127).
+    pub fn parse_stm32_gpio_global_pin(label: &str) -> Option<u8> {
+        let s = label.trim().as_bytes();
+        if s.len() < 3 || (s[0] != b'P' && s[0] != b'p') {
+            return None;
+        }
+        let port = s[1].to_ascii_uppercase();
+        if !(b'A'..=b'H').contains(&port) {
+            return None;
+        }
+        let pin: u8 = std::str::from_utf8(&s[2..]).ok()?.parse().ok()?;
+        if pin > 15 {
+            return None;
+        }
+        Some((port - b'A') * 16 + pin)
     }
 
     fn gpio_from_config(
@@ -1346,7 +1394,8 @@ impl SystemBus {
             .or_else(|| ext.config.get(alt_key))
             .and_then(|v| v.as_str())
             .unwrap_or(default);
-        Self::parse_esp32s3_gpio_pin(label)
+        Self::parse_stm32_gpio_global_pin(label)
+            .or_else(|| Self::parse_esp32s3_gpio_pin(label))
             .or_else(|| Self::parse_esp32_gpio_pin(label))
             .ok_or_else(|| {
                 anyhow::anyhow!(
@@ -1439,4 +1488,24 @@ chip: "test-image-env"
              shadow the flash boot alias"
         );
     }
+}
+
+
+/// Bank offset for STM32/nRF multi-port GPIO peripheral names.
+fn stm32_gpio_bank_offset(name: &str) -> u8 {
+    let n = name.trim().to_ascii_lowercase();
+    if let Some(rest) = n.strip_prefix("gpio") {
+        if rest.len() == 1 {
+            let c = rest.as_bytes()[0];
+            if (b'a'..=b'h').contains(&c) {
+                return (c - b'a') * 16;
+            }
+        }
+    }
+    if let Some(rest) = n.strip_prefix('p') {
+        if let Ok(idx) = rest.parse::<u8>() {
+            return idx.saturating_mul(16);
+        }
+    }
+    0
 }

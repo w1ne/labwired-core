@@ -182,12 +182,9 @@ const fn spec(word: usize) -> Option<(u32, u32)> {
     }
 }
 
-/// Notified synchronously inside the bus write path on every GPIO pin
-/// transition. Observers must not panic — a panic propagates out of
-/// `bus.write_u8` and crashes the simulator.
-pub trait GpioObserver: Send + Sync + std::fmt::Debug {
-    fn on_pin_change(&self, pin: u8, from: bool, to: bool, sim_cycle: u64);
-}
+/// Shared edge-observer contract (see [`crate::peripherals::gpio_edge::GpioEdgeObserver`]).
+pub use crate::peripherals::gpio_edge::GpioEdgeObserver as GpioObserver;
+use crate::peripherals::gpio_edge::GpioEdgeObserver;
 
 /// ESP32-S3 GPIO peripheral. Mapped at 0x6000_4000.
 pub struct Esp32s3Gpio {
@@ -207,7 +204,7 @@ pub struct Esp32s3Gpio {
     cycle: u64,
     /// Bus cycle clock — stamps pin edges when the walk is deleted.
     clock: Option<CycleClock>,
-    observers: Vec<Arc<dyn GpioObserver>>,
+    observers: Vec<Arc<dyn GpioEdgeObserver>>,
 }
 
 impl Esp32s3Gpio {
@@ -238,7 +235,7 @@ impl Esp32s3Gpio {
         }
     }
 
-    pub fn add_observer(&mut self, obs: Arc<dyn GpioObserver>) {
+    pub fn add_observer(&mut self, obs: Arc<dyn GpioEdgeObserver>) {
         self.observers.push(obs);
     }
 
@@ -324,22 +321,14 @@ impl Esp32s3Gpio {
     /// flipped bit.
     fn apply_out(&mut self, new_out: u32) {
         let old = self.out;
-        let new = new_out;
-        self.out = new;
-        let diff = old ^ new;
-        if diff == 0 {
-            return;
-        }
-        for pin in 0u8..32 {
-            let mask = 1u32 << pin;
-            if diff & mask != 0 {
-                let from = old & mask != 0;
-                let to = new & mask != 0;
-                for obs in &self.observers {
-                    obs.on_pin_change(pin, from, to, self.stamp_cycle());
-                }
-            }
-        }
+        self.out = new_out;
+        crate::peripherals::gpio_edge::notify_bits_changed(
+            &self.observers,
+            old,
+            new_out,
+            32,
+            self.stamp_cycle(),
+        );
     }
 
     /// Internal: apply a new bank-1 `out1` value (masked to [`BANK1_MASK`]),
