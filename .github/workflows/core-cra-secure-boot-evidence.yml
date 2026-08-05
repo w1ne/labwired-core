@@ -22,29 +22,39 @@ permissions:
 
 jobs:
   evidence:
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","Linux","X64","ci"]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install thumb target
-        run: |
-          export PATH="$HOME/.cargo/bin:/usr/local/cargo/bin:$PATH"
-          if command -v rustup >/dev/null 2>&1; then
-            rustup target add thumbv7em-none-eabi
-          else
-            echo "rustup not found on PATH; requiring thumbv7em-none-eabi via rustc"
-            rustc --print target-list | grep -q thumbv7em-none-eabi
-          fi
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv7em-none-eabi
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cra-secure-boot-evidence
+
       - name: Gate — no committed OEM private keys
         run: |
-          if grep -RE "BEGIN EC PRIVATE KEY" examples/nrf52840-secure-boot-lab/; then
+          if find examples/nrf52840-secure-boot-lab -name "*.pem" | grep -q .; then
+            echo "PEM files must not live under the lab directory" >&2
+            exit 1
+          fi
+          if grep -R "BEGIN EC PRIVATE KEY" examples/nrf52840-secure-boot-lab \
+            --include="*.py" --include="*.yaml" --include="*.md" --include="*.json"; then
             echo "OEM private key material must not live in the lab directory" >&2
             exit 1
           fi
+
       - name: Run evidence CI
         run: ./examples/nrf52840-secure-boot-lab/run_evidence_ci.sh
         env:
           OUT_DIR: ${{ github.workspace }}/out/nrf52840-secure-boot-evidence
           PACK_DIR: ${{ github.workspace }}/out/nrf52840-secure-boot-evidence/cra-evidence-pack
+
       - name: Upload evidence pack
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,6 +62,7 @@ jobs:
           name: cra-evidence-pack
           path: out/nrf52840-secure-boot-evidence/cra-evidence-pack/
           if-no-files-found: warn
+
       - name: Job summary
         if: always()
         run: |

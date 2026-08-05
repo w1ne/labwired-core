@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 # CRA evidence CI driver: ephemeral OEM key → smoke → evidence pack.
 set -euo pipefail
+export PATH="$HOME/.cargo/bin:/usr/local/cargo/bin:$PATH"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LAB="$(cd "$(dirname "$0")" && pwd)"
