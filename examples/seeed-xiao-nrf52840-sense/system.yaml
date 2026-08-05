@@ -20,9 +20,3 @@ board_io:
     pin: 6
     signal: "output"
     active_high: false
-  - id: "spi0_bus"
-    kind: "spi_device"
-    peripheral: "spi0"
-    pin: 5
-    signal: "output"
-    active_high: false

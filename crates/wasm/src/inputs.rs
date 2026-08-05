@@ -344,67 +344,26 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Set the simulated wiper position on a potentiometer attached to an ADC channel.
+    /// Set the simulated wiper position on a potentiometer kit.
     ///
-    /// All divider math lives in Rust core (Potentiometer::wiper_output_mv).
-    /// This function only validates the position, recomputes wiper_mv via core,
-    /// and injects the result into the ADC peripheral's channel.
-    ///
-    /// `device_id` must match a `board_io` binding with `device_type: "potentiometer"`.
+    /// Thin wrapper over [`Machine::set_input_on`] — identity is the
+    /// `external_devices` id (no board_io twin). Kit math drives the ADC.
     /// `position_pct` must be in 0..=100.
     #[wasm_bindgen]
     pub fn set_potentiometer(&mut self, device_id: &str, position_pct: f32) -> Result<(), JsValue> {
-        use labwired_core::peripherals::components::Potentiometer;
-
         if !(0.0..=100.0).contains(&position_pct) {
             return Err(JsValue::from_str(&format!(
                 "potentiometer position {} out of range (0..=100)",
                 position_pct
             )));
         }
-
-        // Find the board_io binding for this device.
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("potentiometer"))
-            .cloned()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "No potentiometer board_io binding '{}'",
-                    device_id
-                ))
-            })?;
-
-        let channel = binding.pin;
-
-        // Build a temporary pot model to compute the millivolt output — all math in core.
-        let mv = Potentiometer::new(channel, position_pct).wiper_output_mv();
-
-        // Inject the computed millivolt value into the matching ADC peripheral's channel.
-        let machine = self.machine.as_mut().unwrap();
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "ADC peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("ADC peripheral does not support downcasting"))?;
-        let adc = any.downcast_mut::<Adc>().ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "Peripheral '{}' is not an ADC",
-                binding.peripheral
-            ))
-        })?;
-
-        adc.set_channel_input(channel, mv);
-        Ok(())
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        machine
+            .set_input_on(device_id, "position", f64::from(position_pct))
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     /// Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
@@ -877,6 +836,46 @@ board_io: []
                 .iter()
                 .any(|a| a.source.component_id() == Some("thermistor")),
             "NTC kit must be stamped with external_devices id"
+        );
+    }
+
+    #[test]
+    fn potentiometer_uses_external_devices_sim_input() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip_yaml =
+            std::fs::read_to_string(root.join("../../configs/chips/stm32f103.yaml"))
+                .expect("chip");
+        let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "pot-only"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "pot1"
+    type: "potentiometer"
+    connection: "adc1"
+    config:
+      channel: 0
+board_io: []
+"#,
+        )
+        .expect("manifest");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+        bus.refresh_peripheral_index();
+        let mut machine = Machine::new(
+            Box::new(labwired_core::cpu::cortex_m::CortexM::new()) as Box<dyn Cpu>,
+            bus,
+        );
+        machine
+            .set_input_on("pot1", "position", 75.0)
+            .expect("drive pot via external_devices id");
+        assert!(
+            machine
+                .bus
+                .analog_inputs
+                .iter()
+                .any(|a| a.source.component_id() == Some("pot1")),
+            "pot kit must be stamped with external_devices id"
         );
     }
 

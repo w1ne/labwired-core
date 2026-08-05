@@ -27,32 +27,20 @@ fn scan_yaml(path: &std::path::Path, offenders: &mut Vec<String>) {
         return;
     };
     let bio = &text[bio_start..];
-    // Only flag bus-controller twins (i2c_device / spi_device / uart_device).
-    // adc_input + device_type for NTC is a separate temporary dual (stimulus
-    // still keys board_io) — not the same bug class as I²C OLED twins.
-    let mut current_kind: Option<String> = None;
+    // Bus-controller kinds in board_io are always dual debt — with or without
+    // device_type. Onboard led/button/adc_input/pwm stay allowed.
     for line in bio.lines() {
         let t = line.trim();
-        if let Some(rest) = t.strip_prefix("kind:") {
-            current_kind = Some(
-                rest.trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .to_string(),
-            );
-            continue;
-        }
-        let Some(rest) = t.strip_prefix("device_type:") else {
+        let Some(rest) = t.strip_prefix("kind:") else {
             continue;
         };
-        let rest = rest.trim().trim_matches('"').trim_matches('\'');
-        if rest.is_empty() || rest.starts_with('#') {
-            continue;
-        }
-        let kind = current_kind.as_deref().unwrap_or("");
+        let kind = rest
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'');
         if matches!(kind, "i2c_device" | "spi_device" | "uart_device") {
             offenders.push(format!(
-                "{}: board_io kind={kind} device_type='{rest}' (use external_devices only)",
+                "{}: board_io kind={kind} (use external_devices only)",
                 path.file_name().unwrap().to_string_lossy(),
             ));
         }

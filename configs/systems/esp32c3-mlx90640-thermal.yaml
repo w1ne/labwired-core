@@ -34,7 +34,5 @@ external_devices:
       cooling_fault_at_s: 30.0 # at t=30 s cooling collapses → hotspot climbs
       frame_period_s: 0.5      # simulated time advanced per captured frame (2 Hz)
 
-board_io:
-  - id: "thermal_cam"
-    kind: "i2c_device"
-    peripheral: "i2c0"
+# Identity is external_devices only — no board_io twin for bus modules.
+board_io: []
