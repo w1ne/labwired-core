@@ -49,13 +49,18 @@ pub trait ChipPlugin {
         None
     }
 
-    /// Try to build a peripheral. Return `None` to fall through to the open
-    /// families, the generic factory, and the declarative loaders.
+    /// Try to build a peripheral. The three-way return distinguishes:
+    /// - `None`: "not my peripheral type" — fall through to the open
+    ///   families, the generic factory, and the declarative loaders;
+    /// - `Some(Err(_))`: "mine, but construction failed" — must propagate
+    ///   as an error instead of falling through to a misleading
+    ///   unknown-type error;
+    /// - `Some(Ok(_))`: a successfully built device.
     fn try_build_peripheral(
         &self,
         ctx: &PeripheralBuildCtx<'_>,
         p_cfg: &PeripheralConfig,
-    ) -> Option<Box<dyn Peripheral>> {
+    ) -> Option<anyhow::Result<Box<dyn Peripheral>>> {
         let _ = (ctx, p_cfg);
         None
     }

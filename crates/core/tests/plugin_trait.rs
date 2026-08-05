@@ -1,4 +1,4 @@
-use labwired_core::plugin::{ChipPlugin, PeripheralBuildCtx, PLUGIN_API_VERSION};
+use labwired_core::plugin::{ChipPlugin, PLUGIN_API_VERSION};
 
 struct EmptyPlugin;
 
