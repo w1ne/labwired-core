@@ -6,11 +6,4 @@ external_devices:
     connection: "adc1"
     config:
       channel: 0
-board_io:
-  - id: "thermistor"
-    kind: "adc_input"
-    peripheral: "adc1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    device_type: "ntc-thermistor"
+board_io: []

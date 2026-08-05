@@ -2,13 +2,26 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Factory: build an [`I2cDevice`] from a system-manifest `external_devices`
-//! entry's `type:` string + `config:` map.
+//! Factory: **construct** an [`I2cDevice`] from a system-manifest
+//! `external_devices` entry's `type:` string + `config:` map.
 //!
-//! Called by the bus loader (`crates/core/src/bus/mod.rs`) for every
-//! `external_devices` entry whose `connection:` id matches an i2c
-//! peripheral declared in the chip yaml. Unknown types return `None`
-//! so a yaml typo doesn't silently produce an empty bus.
+//! # Role vs PeripheralKit
+//!
+//! **Attach** (what runs on every MCU) goes through
+//! [`crate::bus::external_devices::attach_external_device_universal`] →
+//! kit registry / declarative YAML. Kit types must **not** be attached
+//! from this factory on the hot path (nRF factories skip kit types).
+//!
+//! **This factory** still builds `Box<dyn I2cDevice>` for:
+//! 1. **Mux trees** ([`build_i2c_tree`]) — children need construct-before-attach
+//! 2. **Unit tests** that exercise models without a full system bus
+//! 3. **Legacy residual** — `tca9548a` / `shm_i2c` (allowlisted in
+//!    `i2c_factory_kit_coverage`)
+//!
+//! Product types that also have a kit may keep a thin construct arm here so
+//! mux children of that type still resolve; the kit is the source of
+//! metadata and the universal attach path. Do not add a new product type
+//! to this match without a kit (the coverage gate fails).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
