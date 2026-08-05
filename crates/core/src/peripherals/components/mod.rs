@@ -33,6 +33,7 @@ pub mod hc595_7seg;
 pub mod hx711;
 pub mod i2c_factory;
 pub mod ili9341;
+pub mod ili9341_parallel;
 pub mod ina219;
 pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
@@ -120,6 +121,7 @@ pub use i2c_factory::{
     is_i2c_mux_type, validate_i2c_mux_topology,
 };
 pub use ili9341::Ili9341;
+pub use ili9341_parallel::{Ili9341Parallel, ParallelPins};
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,
 };

@@ -1,0 +1,525 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
+//! ILI9341 8080-style parallel (bit-bang) panel twin.
+//!
+//! Phase-2 v1 targets ESP32 / ESP32-S3 GPIO bit-bang of the classic 16-bit
+//! Intel 8080 bus (CS, RS/D-C, WR, RD, RST, DB[15:0]). Edges arrive through
+//! [`GpioObserver`](crate::peripherals::esp32s3::gpio::GpioObserver); unit tests
+//! inject them directly.
+//!
+//! ## Bus protocol (write path)
+//!
+//! - **CS active low.** While CS is high, WR edges are ignored.
+//! - **WR falling edge** (high→low) while CS is low samples RS and DB[15:0]:
+//!   - RS low → command (low 8 bits of the bus)
+//!   - RS high → data / pixel stream
+//! - **RST low** clears the framebuffer and resets the addressing window
+//!   (hardware reset; distinct from SPI SWRESET which leaves frame memory).
+//!
+//! Commands supported for paint: CASET (`0x2A`), PASET (`0x2B`), RAMWR
+//! (`0x2C`), DISPON (`0x29`), SWRESET (`0x01`), MADCTL (`0x36`), COLMOD
+//! (`0x3A`). Framebuffer is 240×320 RGB565 big-endian, matching the SPI kit.
+//!
+//! Interior mutability: the observer hook is `&self`, so protocol + FB state
+//! live behind a `Mutex`. Hold as `Arc<Ili9341Parallel>` when attaching to GPIO.
+
+use std::sync::Mutex;
+
+const WIDTH: usize = 240;
+const HEIGHT: usize = 320;
+const FB_BYTES: usize = WIDTH * HEIGHT * 2; // RGB565, 2 bytes per pixel
+
+const MADCTL_MY: u8 = 0x80;
+const MADCTL_MX: u8 = 0x40;
+const MADCTL_MV: u8 = 0x20;
+
+/// GPIO numbers for the 8080 control + data bus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParallelPins {
+    pub cs: u8,
+    pub rs: u8,
+    pub wr: u8,
+    pub rd: u8,
+    pub rst: u8,
+    /// Data bus pins, DB0..DB15 (DB0 is LSB).
+    pub db: [u8; 16],
+}
+
+/// Latched pad levels + ILI9341 command/pixel state.
+#[derive(Debug)]
+struct State {
+    cs: bool,
+    rs: bool,
+    wr: bool,
+    rd: bool,
+    rst: bool,
+    /// Latched DB[15:0] (bit i = pin `db[i]`).
+    db: u16,
+
+    display_on: bool,
+    cur_col: u16,
+    cur_row: u16,
+    col_start: u16,
+    col_end: u16,
+    row_start: u16,
+    row_end: u16,
+    framebuffer: Vec<u8>,
+    madctl: u8,
+    cur_cmd: u8,
+    param_buf: [u8; 4],
+    param_len: usize,
+    in_ramwr: bool,
+}
+
+impl State {
+    fn new() -> Self {
+        Self {
+            // Idle: CS/WR/RD/RST high, RS low, data zero.
+            cs: true,
+            rs: false,
+            wr: true,
+            rd: true,
+            rst: true,
+            db: 0,
+            display_on: false,
+            cur_col: 0,
+            cur_row: 0,
+            col_start: 0,
+            col_end: (WIDTH as u16) - 1,
+            row_start: 0,
+            row_end: (HEIGHT as u16) - 1,
+            framebuffer: vec![0u8; FB_BYTES],
+            madctl: 0,
+            cur_cmd: 0,
+            param_buf: [0; 4],
+            param_len: 0,
+            in_ramwr: false,
+        }
+    }
+
+    fn addressable_width(&self) -> u16 {
+        if self.madctl & MADCTL_MV != 0 {
+            HEIGHT as u16
+        } else {
+            WIDTH as u16
+        }
+    }
+
+    fn addressable_height(&self) -> u16 {
+        if self.madctl & MADCTL_MV != 0 {
+            WIDTH as u16
+        } else {
+            HEIGHT as u16
+        }
+    }
+
+    fn to_physical(&self, col: u16, row: u16) -> (usize, usize) {
+        let (mut x, mut y) = if self.madctl & MADCTL_MV != 0 {
+            (row, col)
+        } else {
+            (col, row)
+        };
+        if self.madctl & MADCTL_MX != 0 {
+            x = (WIDTH as u16).saturating_sub(1).saturating_sub(x);
+        }
+        if self.madctl & MADCTL_MY != 0 {
+            y = (HEIGHT as u16).saturating_sub(1).saturating_sub(y);
+        }
+        (x as usize, y as usize)
+    }
+
+    fn hard_reset(&mut self) {
+        self.display_on = false;
+        self.cur_col = 0;
+        self.cur_row = 0;
+        self.col_start = 0;
+        self.col_end = (WIDTH as u16) - 1;
+        self.row_start = 0;
+        self.row_end = (HEIGHT as u16) - 1;
+        self.framebuffer.fill(0);
+        self.madctl = 0;
+        self.cur_cmd = 0;
+        self.param_buf = [0; 4];
+        self.param_len = 0;
+        self.in_ramwr = false;
+    }
+
+    fn param_count(cmd: u8) -> usize {
+        match cmd {
+            0x2A | 0x2B => 4, // CASET / PASET
+            0x36 | 0x3A => 1, // MADCTL / COLMOD
+            _ => 0,
+        }
+    }
+
+    fn apply_simple_command(&mut self, cmd: u8) {
+        match cmd {
+            0x01 => {
+                // SWRESET — reset window / display state. Frame memory left
+                // alone (datasheet); hardware RST clears memory separately.
+                self.col_start = 0;
+                self.col_end = self.addressable_width() - 1;
+                self.row_start = 0;
+                self.row_end = self.addressable_height() - 1;
+                self.display_on = false;
+                self.madctl = 0;
+            }
+            0x28 => self.display_on = false,
+            0x29 => self.display_on = true,
+            _ => {}
+        }
+    }
+
+    fn on_command(&mut self, cmd: u8) {
+        self.cur_cmd = cmd;
+        self.param_len = 0;
+        self.param_buf = [0; 4];
+        match cmd {
+            0x2C => {
+                // RAMWR — open pixel stream at window origin.
+                self.cur_col = self.col_start;
+                self.cur_row = self.row_start;
+                self.in_ramwr = true;
+            }
+            0x3C => {
+                // RAMWR continue — resume without resetting pointer.
+                self.in_ramwr = true;
+            }
+            _ => {
+                self.in_ramwr = false;
+                self.apply_simple_command(cmd);
+            }
+        }
+    }
+
+    fn on_data_byte(&mut self, byte: u8) {
+        if self.param_len < self.param_buf.len() {
+            self.param_buf[self.param_len] = byte;
+        }
+        self.param_len += 1;
+        let want = Self::param_count(self.cur_cmd);
+        if want > 0 && self.param_len == want {
+            let (cmd, params) = (self.cur_cmd, self.param_buf);
+            self.handle_params_complete(cmd, &params);
+        }
+    }
+
+    fn handle_params_complete(&mut self, cmd: u8, params: &[u8; 4]) {
+        match cmd {
+            0x2A => {
+                let start = ((params[0] as u16) << 8) | (params[1] as u16);
+                let end = ((params[2] as u16) << 8) | (params[3] as u16);
+                let limit = self.addressable_width() - 1;
+                self.col_start = start.min(limit);
+                self.col_end = end.min(limit);
+            }
+            0x2B => {
+                let start = ((params[0] as u16) << 8) | (params[1] as u16);
+                let end = ((params[2] as u16) << 8) | (params[3] as u16);
+                let limit = self.addressable_height() - 1;
+                self.row_start = start.min(limit);
+                self.row_end = end.min(limit);
+            }
+            0x36 => {
+                self.madctl = params[0];
+            }
+            _ => {}
+        }
+    }
+
+    fn write_pixel_u16(&mut self, pixel: u16) {
+        let hi = (pixel >> 8) as u8;
+        let lo = (pixel & 0xFF) as u8;
+        let (x, y) = self.to_physical(self.cur_col, self.cur_row);
+        let idx = (y * WIDTH + x) * 2;
+        if x < WIDTH && idx + 1 < self.framebuffer.len() {
+            self.framebuffer[idx] = hi;
+            self.framebuffer[idx + 1] = lo;
+        }
+        if self.cur_col >= self.col_end {
+            self.cur_col = self.col_start;
+            if self.cur_row >= self.row_end {
+                self.cur_row = self.row_start;
+            } else {
+                self.cur_row += 1;
+            }
+        } else {
+            self.cur_col += 1;
+        }
+    }
+
+    /// WR falling edge while CS is low: sample RS + DB.
+    fn on_wr_strobe(&mut self) {
+        let bus = self.db;
+        if !self.rs {
+            // Command — low 8 bits (ILI9341 command register is 8-bit).
+            self.on_command((bus & 0xFF) as u8);
+        } else if self.in_ramwr {
+            // One 16-bit RGB565 pixel per WR on a 16-bit 8080 bus.
+            self.write_pixel_u16(bus);
+        } else {
+            // Parameter stream as successive 8-bit values on D[7:0].
+            self.on_data_byte((bus & 0xFF) as u8);
+        }
+    }
+}
+
+/// Simulated ILI9341 driven by GPIO bit-bang of an 8080 parallel bus.
+#[derive(Debug)]
+pub struct Ili9341Parallel {
+    pins: ParallelPins,
+    state: Mutex<State>,
+    id: String,
+}
+
+impl Ili9341Parallel {
+    pub fn new(id: impl Into<String>, pins: ParallelPins) -> Self {
+        Self {
+            pins,
+            state: Mutex::new(State::new()),
+            id: id.into(),
+        }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn pins(&self) -> &ParallelPins {
+        &self.pins
+    }
+
+    /// Non-zero framebuffer bytes (paint evidence for tests / inspect).
+    pub fn ink_bytes(&self) -> usize {
+        let s = self.state.lock().unwrap();
+        s.framebuffer.iter().filter(|&&b| b != 0).count()
+    }
+
+    /// Snapshot of the raw RGB565 framebuffer (row-major, big-endian per pixel).
+    pub fn framebuffer(&self) -> Vec<u8> {
+        self.state.lock().unwrap().framebuffer.clone()
+    }
+
+    pub fn display_on(&self) -> bool {
+        self.state.lock().unwrap().display_on
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (WIDTH, HEIGHT)
+    }
+
+    /// Feed one GPIO transition. Unit tests and the ESP32/S3 observers call this.
+    pub fn on_gpio_edge(&self, pin: u8, to: bool, _sim_cycle: u64) {
+        let mut s = self.state.lock().unwrap();
+        let p = &self.pins;
+
+        if pin == p.cs {
+            s.cs = to;
+            return;
+        }
+        if pin == p.rs {
+            s.rs = to;
+            return;
+        }
+        if pin == p.rd {
+            s.rd = to;
+            return;
+        }
+        if pin == p.rst {
+            let was = s.rst;
+            s.rst = to;
+            if was && !to {
+                // Falling edge on RST → hardware reset (clears FB).
+                s.hard_reset();
+            }
+            return;
+        }
+        if pin == p.wr {
+            let was = s.wr;
+            s.wr = to;
+            // Falling edge while selected (CS low).
+            if was && !to && !s.cs {
+                s.on_wr_strobe();
+            }
+            return;
+        }
+
+        // Data bus pin?
+        if let Some(bit) = p.db.iter().position(|&d| d == pin) {
+            if to {
+                s.db |= 1u16 << bit;
+            } else {
+                s.db &= !(1u16 << bit);
+            }
+        }
+    }
+}
+
+impl crate::peripherals::esp32s3::gpio::GpioObserver for Ili9341Parallel {
+    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
+        self.on_gpio_edge(pin, to, sim_cycle);
+    }
+}
+
+impl crate::peripherals::esp32::gpio::GpioObserver for Ili9341Parallel {
+    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
+        self.on_gpio_edge(pin, to, sim_cycle);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Default pin map used by unit tests (GPIO numbers are arbitrary).
+    fn test_pins() -> ParallelPins {
+        ParallelPins {
+            cs: 0,
+            rs: 1,
+            wr: 2,
+            rd: 3,
+            rst: 4,
+            // DB0..DB15 → GPIO 10..25
+            db: [
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+            ],
+        }
+    }
+
+    fn panel() -> Ili9341Parallel {
+        Ili9341Parallel::new("ili9341-par", test_pins())
+    }
+
+    fn set_bus(p: &Ili9341Parallel, value: u16) {
+        let pins = p.pins();
+        for bit in 0..16u8 {
+            let level = (value >> bit) & 1 != 0;
+            p.on_gpio_edge(pins.db[bit as usize], level, 0);
+        }
+    }
+
+    /// Pulse WR low→high while holding the bus (falling edge samples).
+    fn strobe_wr(p: &Ili9341Parallel) {
+        let wr = p.pins().wr;
+        // Ensure WR is high before the falling edge (idle is already high).
+        p.on_gpio_edge(wr, true, 0);
+        p.on_gpio_edge(wr, false, 0);
+        p.on_gpio_edge(wr, true, 0);
+    }
+
+    fn write_cmd(p: &Ili9341Parallel, cmd: u8) {
+        let pins = p.pins();
+        p.on_gpio_edge(pins.rs, false, 0); // command
+        set_bus(p, cmd as u16);
+        strobe_wr(p);
+    }
+
+    fn write_data8(p: &Ili9341Parallel, byte: u8) {
+        let pins = p.pins();
+        p.on_gpio_edge(pins.rs, true, 0); // data
+        set_bus(p, byte as u16);
+        strobe_wr(p);
+    }
+
+    fn write_data16(p: &Ili9341Parallel, word: u16) {
+        let pins = p.pins();
+        p.on_gpio_edge(pins.rs, true, 0);
+        set_bus(p, word);
+        strobe_wr(p);
+    }
+
+    fn select(p: &Ili9341Parallel) {
+        p.on_gpio_edge(p.pins().cs, false, 0);
+    }
+
+    fn deselect(p: &Ili9341Parallel) {
+        p.on_gpio_edge(p.pins().cs, true, 0);
+    }
+
+    #[test]
+    fn ramwr_pixels_produce_ink() {
+        let p = panel();
+        select(&p);
+        write_cmd(&p, 0x29); // DISPON
+        write_cmd(&p, 0x2C); // RAMWR
+        write_data16(&p, 0xF800); // one red RGB565 pixel
+        assert!(
+            p.ink_bytes() > 0,
+            "expected non-zero ink after RAMWR + pixel, got {}",
+            p.ink_bytes()
+        );
+        assert!(p.display_on(), "DISPON should latch display_on");
+        let fb = p.framebuffer();
+        assert_eq!(fb.len(), FB_BYTES);
+        assert_eq!(fb[0], 0xF8);
+        assert_eq!(fb[1], 0x00);
+    }
+
+    #[test]
+    fn cs_high_ignores_wr() {
+        let p = panel();
+        // CS left high (deselected) — WR strobes must not paint.
+        deselect(&p);
+        write_cmd(&p, 0x2C);
+        write_data16(&p, 0xF800);
+        assert_eq!(
+            p.ink_bytes(),
+            0,
+            "CS high must ignore WR; ink={}",
+            p.ink_bytes()
+        );
+    }
+
+    #[test]
+    fn rst_clears_framebuffer() {
+        let p = panel();
+        select(&p);
+        write_cmd(&p, 0x2C);
+        write_data16(&p, 0x07E0); // green
+        assert!(p.ink_bytes() > 0);
+
+        // Hardware reset: RST falling edge clears FB.
+        let rst = p.pins().rst;
+        p.on_gpio_edge(rst, true, 0);
+        p.on_gpio_edge(rst, false, 0);
+        assert_eq!(p.ink_bytes(), 0, "RST must clear framebuffer");
+        assert!(!p.display_on());
+        // Window reset to full portrait.
+        select(&p);
+        write_cmd(&p, 0x2C);
+        write_data16(&p, 0x001F); // blue at origin
+        let fb = p.framebuffer();
+        assert_eq!(fb[0], 0x00);
+        assert_eq!(fb[1], 0x1F);
+    }
+
+    #[test]
+    fn caset_paset_window_places_pixel() {
+        let p = panel();
+        select(&p);
+        // CASET: columns 2..=2
+        write_cmd(&p, 0x2A);
+        write_data8(&p, 0x00);
+        write_data8(&p, 0x02);
+        write_data8(&p, 0x00);
+        write_data8(&p, 0x02);
+        // PASET: rows 3..=3
+        write_cmd(&p, 0x2B);
+        write_data8(&p, 0x00);
+        write_data8(&p, 0x03);
+        write_data8(&p, 0x00);
+        write_data8(&p, 0x03);
+        write_cmd(&p, 0x2C);
+        write_data16(&p, 0xABCD);
+
+        let fb = p.framebuffer();
+        let idx = (3 * WIDTH + 2) * 2;
+        assert_eq!(fb[idx], 0xAB);
+        assert_eq!(fb[idx + 1], 0xCD);
+        // Origin untouched.
+        assert_eq!(fb[0], 0);
+        assert_eq!(fb[1], 0);
+    }
+}
