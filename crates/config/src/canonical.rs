@@ -344,7 +344,7 @@ impl CanonicalConfig {
                 };
                 let (ed, bio) =
                     emit_legacy_i2c_device(&part.id, &part.r#type, &connection, address);
-                push(Some(ed), Some(bio));
+                push(Some(ed), bio);
             }
             // 6. SPI devices (ili9341, max31855, ssd1680_tricolor_290).
             for part in non_mcu() {
@@ -911,21 +911,24 @@ fn attr_string(part: &CanonicalPart, key: &str) -> Option<String> {
     })
 }
 
-/// Emit the `external_devices` + `board_io` fragments for a legacy I²C device
-/// (port of `emitLegacyI2cDevice`).
+/// Emit the `external_devices` fragment for a legacy I²C device (port of
+/// `emitLegacyI2cDevice`). board_io is only for the sensor-UI allowlist
+/// (adxl345 / mpu6050); displays and other kits are connection-only.
 fn emit_legacy_i2c_device(
     part_id: &str,
     part_type: &str,
     connection: &str,
     address: u32,
-) -> (String, String) {
+) -> (String, Option<String>) {
     let addr = format!("0x{address:x}");
     let external_device = format!(
         "  - id: \"{part_id}\"\n    type: \"{part_type}\"\n    connection: \"{connection}\"\n    config:\n      i2c_address: {addr}"
     );
-    let board_io = format!(
-        "  - id: \"{part_id}\"\n    kind: \"i2c_device\"\n    peripheral: \"{connection}\"\n    pin: 0\n    signal: \"input\"\n    active_high: true\n    i2c_address: {addr}\n    device_type: \"{part_type}\""
-    );
+    let board_io = matches!(part_type, "adxl345" | "mpu6050").then(|| {
+        format!(
+            "  - id: \"{part_id}\"\n    kind: \"i2c_device\"\n    peripheral: \"{connection}\"\n    pin: 0\n    signal: \"input\"\n    active_high: true\n    i2c_address: {addr}\n    device_type: \"{part_type}\""
+        )
+    });
     (external_device, board_io)
 }
 
@@ -1195,8 +1198,8 @@ fn emit_seven_segment(
     (Some(ext), None)
 }
 
-/// Emit the `external_devices` + `board_io` fragments for a pcd8544 part (port of
-/// `emitPcd8544`).
+/// Emit the `external_devices` fragment for a pcd8544 part (port of
+/// `emitPcd8544`). No board_io twin — browser panels use part id / display_artifact.
 fn emit_pcd8544(
     board: &str,
     wires: &[Wire],
@@ -1212,12 +1215,7 @@ fn emit_pcd8544(
     let ext = format!(
         "  - id: \"{part_id}\"\n    type: \"pcd8544\"\n    connection: \"{connection}\"\n    config:\n      cs_pin: \"{cs_pin}\"\n      dc_pin: \"{dc_pin}\""
     );
-    let bio = parse_mcu_pin(cs_pin).map(|(_, pin)| {
-        format!(
-            "  - id: \"{part_id}\"\n    kind: \"spi_device\"\n    peripheral: \"{connection}\"\n    pin: {pin}\n    signal: \"input\"\n    active_high: true\n    device_type: \"pcd8544\""
-        )
-    });
-    (Some(ext), bio)
+    (Some(ext), None)
 }
 
 /// Emit the `external_devices` fragment for a sn74hc165 part (port of
@@ -1265,8 +1263,9 @@ fn emit_iolink_master(
     (Some(ext), None)
 }
 
-/// Emit the `external_devices` + `board_io` fragments for an SPI device from the
-/// [`SPI_DEVICE_TYPES`] set (port of `emitSpiDevice`).
+/// Emit the `external_devices` fragment for an SPI device from the
+/// [`SPI_DEVICE_TYPES`] set (port of `emitSpiDevice`). No board_io twin —
+/// browser panels use part id / display_artifact.
 fn emit_spi_device(
     board: &str,
     wires: &[Wire],
@@ -1293,12 +1292,7 @@ fn emit_spi_device(
     let ext = format!(
         "  - id: \"{part_id}\"\n    type: \"{part_type}\"\n    connection: \"{connection}\"\n    config:\n{config}"
     );
-    let bio = parse_mcu_pin(cs_pin).map(|(_, pin)| {
-        format!(
-            "  - id: \"{part_id}\"\n    kind: \"spi_device\"\n    peripheral: \"{connection}\"\n    pin: {pin}\n    signal: \"input\"\n    active_high: true\n    device_type: \"{part_type}\""
-        )
-    });
-    (Some(ext), bio)
+    (Some(ext), None)
 }
 
 /// Emit the `external_devices` + `board_io` fragments for a neo6m-gps part (port
