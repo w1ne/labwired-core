@@ -385,6 +385,44 @@ impl crate::sim_input::SimInput for Cap1188 {
     }
 }
 
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Cap1188Kit;
+pub static CAP1188_KIT: Cap1188Kit = Cap1188Kit;
+
+static CAP1188_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
+    device_type: "cap1188",
+    label: "CAP1188 Touch",
+    summary: "Microchip CAP1188 8-channel capacitive touch controller over I2C.",
+    detail: "Multi-channel touch sensor. Prefer a single GPIO touch for ring-class              products; this kit remains for boards that wire the CAP1188.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x29.",
+    }],
+    labs: &[],
+};
+
+impl PeripheralKit for Cap1188Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &CAP1188_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(CAP1188_ADDR)?;
+        ctx.attach_i2c_device(Box::new(Cap1188::new(address)))?;
+        Ok(())
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

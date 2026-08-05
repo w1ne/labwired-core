@@ -1988,6 +1988,304 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "tmp117",
+      "label": "TMP117 Temperature",
+      "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
+      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB.              Stimulus channel `temperature` (°C) sets the conversion result.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADD0→GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -55.0,
+          "max": 150.0
+        }
+      ]
+    },
+    {
+      "device_type": "bmi270",
+      "label": "BMI270 IMU",
+      "summary": "Bosch BMI270 low-power IMU with hardware step counter over I2C.",
+      "detail": "Wearable IMU used on the smart-ring reference system. Stimulus channels              drive accel/gyro samples; feature-engine step counter is modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ax",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "ay",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "az",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "gx",
+          "label": "Gyro X",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0
+        },
+        {
+          "key": "gy",
+          "label": "Gyro Y",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0
+        },
+        {
+          "key": "gz",
+          "label": "Gyro Z",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0
+        },
+        {
+          "key": "temp",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -41.0,
+          "max": 87.0
+        },
+        {
+          "key": "steps",
+          "label": "Step count",
+          "unit": "steps",
+          "min": 0.0,
+          "max": 4294967295.0
+        }
+      ]
+    },
+    {
+      "device_type": "fxos8700",
+      "label": "FXOS8700 Accel/Mag",
+      "summary": "NXP FXOS8700 6-axis accelerometer + magnetometer over I2C.",
+      "detail": "Onboard sensor on FRDM-KW41Z. Stimulus channels x/y/z in g.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x1F."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        }
+      ]
+    },
+    {
+      "device_type": "max30102",
+      "label": "MAX30102 PPG",
+      "summary": "Maxim MAX30102 pulse-oximetry / heart-rate front-end over I2C.",
+      "detail": "Reflective PPG with FIFO. Stimulus channels `bpm` and `perfusion`.              Optional config: seed, heart_rate_bpm, transaction_advance.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x57."
+        },
+        {
+          "name": "seed",
+          "ty": "int",
+          "doc": "Optional RNG seed for deterministic waveform noise."
+        },
+        {
+          "name": "heart_rate_bpm",
+          "ty": "float",
+          "doc": "Optional initial heart-rate stimulus (bpm)."
+        },
+        {
+          "name": "transaction_advance",
+          "ty": "bool",
+          "doc": "When true, advance one sample per I2C transaction (fallback clock)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bpm",
+          "label": "Heart Rate",
+          "unit": "bpm",
+          "min": 20.0,
+          "max": 250.0
+        },
+        {
+          "key": "perfusion",
+          "label": "Perfusion Index",
+          "unit": "%",
+          "min": 0.0,
+          "max": 20.0
+        }
+      ]
+    },
+    {
+      "device_type": "cap1188",
+      "label": "CAP1188 Touch",
+      "summary": "Microchip CAP1188 8-channel capacitive touch controller over I2C.",
+      "detail": "Multi-channel touch sensor. Prefer a single GPIO touch for ring-class              products; this kit remains for boards that wire the CAP1188.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x29."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "touch1",
+          "label": "Touch CS1",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch2",
+          "label": "Touch CS2",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch3",
+          "label": "Touch CS3",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch4",
+          "label": "Touch CS4",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch5",
+          "label": "Touch CS5",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch6",
+          "label": "Touch CS6",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch7",
+          "label": "Touch CS7",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "touch8",
+          "label": "Touch CS8",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "drv2605",
+      "label": "DRV2605 Haptic",
+      "summary": "TI DRV2605 haptic motor driver over I2C.",
+      "detail": "Waveform library + realtime playback for ERM/LRA actuators.              Alias type `drv2605l` is accepted by the I2C factory construct path.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x5A."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "mlx90640",
+      "label": "MLX90640 Thermal",
+      "summary": "Melexis MLX90640 32×24 far-IR thermal array over I2C.",
+      "detail": "Thermal scene configured via ambient_c / hot_* config keys (see factory).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x33."
+        },
+        {
+          "name": "ambient_c",
+          "ty": "float",
+          "doc": "Ambient temperature of the thermal scene (°C)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     }
   ]
 }

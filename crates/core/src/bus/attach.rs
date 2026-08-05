@@ -55,6 +55,12 @@ impl SystemBus {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::nrf52::twim::Nrf52Twim>() {
             c.push_slave(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::nrf54l::twim::Nrf54lTwim>() {
+            // Same kit → attach_i2c_device path as every other family. Without
+            // this arm, smart-ring sensors could only reach the bus via the
+            // nRF54L factory's build_i2c_tree loop — a second home for "what
+            // does type X mean on this MCU".
+            c.push_slave(wrapped);
         } else if let Some(c) =
             any.downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
         {

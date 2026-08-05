@@ -65,6 +65,44 @@ fn celsius_to_raw(t_c: f64) -> i16 {
 }
 
 /// Decode an int16 count back to Celsius (used by tests / inspection).
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Tmp117Kit;
+pub static TMP117_KIT: Tmp117Kit = Tmp117Kit;
+
+static TMP117_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
+    device_type: "tmp117",
+    label: "TMP117 Temperature",
+    summary: "TI TMP117 high-accuracy digital temperature sensor over I2C.",
+    detail: "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB.              Stimulus channel `temperature` (°C) sets the conversion result.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x48 (ADD0→GND).",
+    }],
+    labs: &[],
+};
+
+impl PeripheralKit for Tmp117Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &TMP117_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(TMP117_ADDR)?;
+        ctx.attach_i2c_device(Box::new(Tmp117::new(address)))?;
+        Ok(())
+    }
+}
+
+
 #[cfg(test)]
 fn raw_to_celsius(raw: i16) -> f64 {
     raw as f64 * LSB_C

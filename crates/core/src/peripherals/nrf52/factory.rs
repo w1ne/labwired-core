@@ -123,6 +123,13 @@ pub fn try_build(
                 if ext.connection != p_cfg.id {
                     continue;
                 }
+                // Kits attach through the universal pass after this peripheral
+                // is on the bus. Building them here would mean a second home
+                // for the type (and double-attach when both paths fire). Only
+                // factory-only residue (mux, shm_i2c, …) is assembled here.
+                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_some() {
+                    continue;
+                }
                 // `build_i2c_tree` assembles a TCA9548A bus switch together
                 // with everything wired behind it, so what is pushed onto the
                 // TWIM is one unit. The topology was validated in
@@ -169,7 +176,11 @@ pub fn try_build(
                 if ext.connection != p_cfg.id {
                     continue;
                 }
-                // Try I²C device first.
+                // Try I²C device first. Kits attach later via the universal
+                // pass (see TWIM arm above).
+                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_some() {
+                    continue;
+                }
                 // See the TWIM arm above: `build_i2c_tree` assembles a bus
                 // switch with its downstream devices into one unit.
                 if let Some(device) = crate::peripherals::components::build_i2c_tree(manifest, ext)

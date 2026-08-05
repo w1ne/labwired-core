@@ -494,6 +494,44 @@ impl crate::sim_input::SimInput for Bmi270 {
     }
 }
 
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Bmi270Kit;
+pub static BMI270_KIT: Bmi270Kit = Bmi270Kit;
+
+static BMI270_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
+    device_type: "bmi270",
+    label: "BMI270 IMU",
+    summary: "Bosch BMI270 low-power IMU with hardware step counter over I2C.",
+    detail: "Wearable IMU used on the smart-ring reference system. Stimulus channels              drive accel/gyro samples; feature-engine step counter is modelled.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x68.",
+    }],
+    labs: &[],
+};
+
+impl PeripheralKit for Bmi270Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &BMI270_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(BMI270_ADDR)?;
+        ctx.attach_i2c_device(Box::new(Bmi270::new(address)))?;
+        Ok(())
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

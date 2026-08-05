@@ -55,6 +55,12 @@ pub fn try_build(
                 if ext.connection != p_cfg.id {
                     continue;
                 }
+                // Kits attach through the universal pass after this peripheral
+                // is on the bus (same contract as nRF52 TWIM and STM32 I²C).
+                // Factory-only residue (mux, …) still builds here.
+                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_some() {
+                    continue;
+                }
                 // `build_i2c_tree` assembles a TCA9548A bus switch together
                 // with everything wired behind it, so what is pushed onto the
                 // TWIM is one unit. The topology was validated in

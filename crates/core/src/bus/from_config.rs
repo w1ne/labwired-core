@@ -424,6 +424,13 @@ impl SystemBus {
                         if ext.connection != p_cfg.id {
                             continue;
                         }
+                        // Kits are attached by the universal pass after the
+                        // controller is on the bus (nRF factories skip kit
+                        // types in their own loop). Only mark factory-only
+                        // residue as already attached.
+                        if crate::peripherals::kit::registry::lookup(&ext.r#type).is_some() {
+                            continue;
+                        }
                         // Only suppress the kit pass when the family factory
                         // actually can build this type. Kit-only devices were
                         // previously marked attached even when the factory
