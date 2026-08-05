@@ -172,7 +172,9 @@ boards:
     # behaviors only fire on firmware actions (STARTRX, flash store, erase
     # request) that no capture performs. Evidence: 263 nrf52 tests + 7 new
     # nvmc tests green. Live re-capture owed for the RX drain timing.
-    drift_ack: 2026-08-05
+    # 2026-08-06: universal I2C kits + external_devices attach path; nRF UARTE RX test style only.
+    # No register map / base / reset change on silicon-asserted set. Offline gates unchanged.
+    drift_ack: 2026-08-06
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -260,7 +262,9 @@ boards:
     # behaviors only fire on firmware actions (STARTRX, flash store, erase
     # request) that no capture performs. Evidence: 263 nrf52 tests + 7 new
     # nvmc tests green. Live re-capture owed for the RX drain timing.
-    drift_ack: 2026-08-05
+    # 2026-08-06: universal I2C kits + external_devices attach path; nRF UARTE RX test style only.
+    # No register map / base / reset change on silicon-asserted set. Offline gates unchanged.
+    drift_ack: 2026-08-06
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -935,7 +939,9 @@ boards:
     # either way; they used to resolve differently per family). No peripheral
     # register surface, reset value, or captured behavior changes. Evidence:
     # 2603 core lib tests + xtensa 57 + esp32_ili9341_attach 2/2 green.
-    drift_ack: 2026-08-05
+    # 2026-08-06: universal I2C kits + external_devices attach path; nRF UARTE RX test style only.
+    # No register map / base / reset change on silicon-asserted set. Offline gates unchanged.
+    drift_ack: 2026-08-06
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
