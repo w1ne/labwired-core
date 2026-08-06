@@ -249,7 +249,8 @@ fn lists_channels_across_all_transports() {
         ("dio", "ch0"),             // 74HC165 (SPI device)
         ("gps", "lat"),             // NEO-6M (UART stream)
         ("gps", "fix"),
-        ("modem", "rssi"), // BG770A cellular (UART stream) — CSQ like air-monitor knobs
+        ("modem", "range_m"), // BG770A — path-loss range (shared RfMedium story)
+        ("modem", "rssi"),
         ("modem", "ber"),
         ("sonar", "distance"), // HC-SR04 (bus-direct)
     ] {
@@ -280,9 +281,25 @@ fn drives_each_transport_through_the_generic_api() {
     assert_eq!(lat, 50.45);
     assert_ne!(lon, 0.0, "driving lat must preserve lon");
 
-    // UART stream (modem): RSSI CSQ step must land in AT+CSQ (air-monitor-style).
+    // UART stream (modem): range_m → path-loss CSQ on AT+CSQ (unified RfMedium).
+    bus.set_input(Some("modem"), "range_m", 0.0)
+        .expect("drive modem range");
+    let near = with_device::<QuectelBg770a, _>(&mut bus, "uart2", |modem| {
+        for b in b"AT+CSQ\r" {
+            modem.on_tx_byte(*b);
+        }
+        let mut out = String::new();
+        while let Some(b) = modem.poll(1_000_000) {
+            out.push(b as char);
+        }
+        out
+    });
+    assert!(
+        near.contains("+CSQ: 31,"),
+        "co-located path loss should be CSQ 31, got {near:?}"
+    );
     bus.set_input(Some("modem"), "rssi", 12.0)
-        .expect("drive modem rssi");
+        .expect("drive modem rssi override");
     bus.set_input(Some("modem"), "ber", 2.0)
         .expect("drive modem ber");
     let csq = with_device::<QuectelBg770a, _>(&mut bus, "uart2", |modem| {
@@ -297,7 +314,7 @@ fn drives_each_transport_through_the_generic_api() {
     });
     assert!(
         csq.contains("+CSQ: 12,2"),
-        "driven CSQ should be visible on AT+CSQ, got {csq:?}"
+        "CSQ override should be visible on AT+CSQ, got {csq:?}"
     );
 }
 

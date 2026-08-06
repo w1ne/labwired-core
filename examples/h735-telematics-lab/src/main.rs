@@ -547,9 +547,8 @@ fn main() -> ! {
     wr32(GPIOA_BASE, (moder & !(0x3 << 10)) | (0x1 << 10));
     wr32(GPIOA_BASE + 0x18, 1 << 5);
 
-    console_str("[idle — drag modem RSSI/BER; AT+CSQ re-polls below]\r\n");
-    // Re-query CSQ so playground slider changes are visible on serial (same
-    // pattern as air-monitor: external SimInput → model → firmware reads).
+    console_str("[idle — drag modem Range (m); AT+CSQ tracks path loss]\r\n");
+    // Re-query CSQ so Range/RSSI SimInput (RfMedium path loss) shows on serial.
     loop {
         send_at("AT+CSQ", &mut resp, &mut resp_len);
         for _ in 0..500_000 {

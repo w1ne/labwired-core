@@ -36,9 +36,26 @@
 //! AT+VZ Verizon extension. Those commands return `ERROR` so probing firmware
 //! sees a deterministic miss instead of a lie.
 
+use crate::peripherals::rf_medium::{NodePosition, PathLossParams, RfMedium};
 use crate::peripherals::uart::UartStreamDevice;
 use std::any::Any;
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::{Arc, Mutex};
+
+/// Synthetic cell-tower node id in the shared [`RfMedium`] (path-loss peer).
+const CELL_TOWER_NODE: &str = "cell";
+/// Assumed downlink TX power (dBm) used to map distance → RSSI when the medium
+/// has no per-frame TX. Co-located (range 0) → 0 dBm → CSQ 31.
+const CELL_TX_POWER_DBM: f64 = 0.0;
+
+/// Map path-loss RSSI (dBm) → AT+CSQ steps (3GPP 27.007: 0 = −113 dBm, 31 = −51 dBm).
+fn csq_from_dbm(dbm: f64) -> u8 {
+    if !dbm.is_finite() {
+        return 99;
+    }
+    let steps = ((dbm + 113.0) / 2.0).round() as i32;
+    steps.clamp(0, 31) as u8
+}
 
 /// Default identity for a real BG770A-GL on the bench.
 const ID_MANUFACTURER: &str = "Quectel";
@@ -241,12 +258,22 @@ pub struct QuectelBg770a {
     /// "invalid"; real HW seems to allocate from 1.
     open_files: BTreeMap<u16, (String, usize, u8)>,
     next_file_handle: u16,
-    /// `+CSQ` last RSSI/BER. Defaults to 99,99 (no service); test code or the
-    /// `complete_network_attach` helper updates these. Also drivable at runtime
-    /// via the `rssi` / `ber` SimInput channels (same contract as air-monitor
-    /// sensors — playground slider → `set_input` → next `AT+CSQ` / `AT+QCSQ`).
+    /// Seed CSQ when no RfMedium is driving quality (or as fallback). Defaults
+    /// to 99,99 (no service). Prefer [`Self::effective_csq`] for AT replies.
     csq_rssi: u8,
     csq_ber: u8,
+    /// When set, forces CSQ steps and bypasses path-loss (scripted demos).
+    /// Cleared by the `range_m` SimInput so geometry wins again.
+    csq_override: Option<u8>,
+    /// Distance (m) from this UE to the synthetic cell tower in the shared
+    /// [`RfMedium`]. Drive with SimInput `range_m` — same physics as air path loss.
+    range_m: f64,
+    /// Shared medium slot with VirtualAirBus / lab AirBus (path loss + positions).
+    #[serde(skip)]
+    medium: Arc<Mutex<Option<RfMedium>>>,
+    /// RfMedium node id (defaults to external_devices id, else `"modem"`).
+    #[serde(skip)]
+    rf_node_id: Option<String>,
     /// system.yaml `external_devices` id for SimInput discovery (`modem`, …).
     #[serde(skip)]
     component_id: Option<String>,
@@ -368,6 +395,10 @@ impl QuectelBg770a {
             next_file_handle: 1,
             csq_rssi: 99,
             csq_ber: 99,
+            csq_override: None,
+            range_m: 0.0,
+            medium: Arc::new(Mutex::new(None)),
+            rf_node_id: None,
             component_id: None,
             qgps_outport: String::from("uartnmea"),
             qgps_outport_baud: 115200,
@@ -463,15 +494,92 @@ impl QuectelBg770a {
         self.schedule(URC_DELAY_QMTPUB_US, urc.into_bytes());
     }
 
-    /// Update the value reported by `AT+CSQ` (defaults to 99,99 = no service).
-    /// RSSI is 0..=31, BER is 0..=7; 99 means "unknown".
+    /// Update the seed / override reported by `AT+CSQ` (defaults to 99,99).
+    /// RSSI is 0..=31 (or 99), BER is 0..=7 (or 99). Sets a CSQ override so
+    /// scripted values win until `range_m` re-enables path-loss.
     pub fn set_signal(&mut self, rssi: u8, ber: u8) {
         self.csq_rssi = rssi;
         self.csq_ber = ber;
+        self.csq_override = Some(rssi);
+    }
+
+    /// Share the lab AirBus / VirtualAirBus medium slot so path-loss geometry
+    /// is the same story as nRF RADIO RSSI.
+    pub fn share_medium_slot(&mut self, slot: Arc<Mutex<Option<RfMedium>>>) {
+        self.medium = slot;
+        self.sync_geometry();
+    }
+
+    /// Label this UE in the medium (multi-node `node_id` or device id).
+    pub fn set_rf_node_id(&mut self, id: impl Into<String>) {
+        self.rf_node_id = Some(id.into());
+        self.sync_geometry();
+    }
+
+    fn rf_node_key(&self) -> &str {
+        self.rf_node_id
+            .as_deref()
+            .or(self.component_id.as_deref())
+            .unwrap_or("modem")
+    }
+
+    /// Ensure a local RfMedium exists when nothing has been shared yet so
+    /// single-board labs still get path-loss CSQ without an AirBus.
+    fn ensure_medium(&mut self) {
+        let Ok(mut slot) = self.medium.lock() else {
+            return;
+        };
+        if slot.is_none() {
+            *slot = Some(RfMedium::new(1).with_params(PathLossParams::default()));
+        }
+    }
+
+    /// Write cell + UE positions from `range_m` into the medium (no create).
+    fn sync_geometry(&mut self) {
+        let ue = self.rf_node_key().to_string();
+        let range = self.range_m.max(0.0);
+        if let Ok(mut slot) = self.medium.lock() {
+            if let Some(m) = slot.as_mut() {
+                m.set_node(CELL_TOWER_NODE, NodePosition { x: 0.0, y: 0.0 });
+                m.set_node(ue, NodePosition { x: range, y: 0.0 });
+            }
+        }
+    }
+
+    /// Place the UE `range_m` metres from the cell tower and clear CSQ override
+    /// so AT+CSQ follows path loss. Spins up a local medium if none is shared yet.
+    pub fn set_range_m(&mut self, range_m: f64) {
+        self.range_m = range_m.max(0.0);
+        self.csq_override = None;
+        self.ensure_medium();
+        self.sync_geometry();
+    }
+
+    /// CSQ (rssi_steps, ber) actually reported on AT+CSQ / AT+QCSQ.
+    ///
+    /// Priority: explicit override → path-loss from shared/local [`RfMedium`]
+    /// (only if a medium is present) → seed `csq_rssi`. Below the medium RSSI
+    /// floor → 99 (no service). Does **not** invent a medium just to answer CSQ.
+    pub fn effective_csq(&mut self) -> (u8, u8) {
+        if let Some(o) = self.csq_override {
+            return (o, self.csq_ber);
+        }
+        self.sync_geometry();
+        if let Ok(slot) = self.medium.lock() {
+            if let Some(m) = slot.as_ref() {
+                let d = m.distance_m(CELL_TOWER_NODE, self.rf_node_key());
+                let dbm = m.rssi_dbm(CELL_TX_POWER_DBM, d);
+                if dbm < m.params().rssi_floor_dbm {
+                    return (99, self.csq_ber);
+                }
+                return (csq_from_dbm(dbm), self.csq_ber);
+            }
+        }
+        (self.csq_rssi, self.csq_ber)
     }
 
     /// One-shot helper that flips the modem into a "registered home" state:
-    /// `+CGATT: 1`, `+CGACT: 1,1`, `+CEREG: 0,1`, `+CSQ: 28,99` (-57 dBm).
+    /// `+CGATT: 1`, `+CGACT: 1,1`, `+CEREG: 0,1`, co-located medium (strong CSQ).
     /// If `+CEREG=1` or `+CEREG=2` is in effect, schedules the `+CEREG: 1`
     /// URC the same way real hardware does on attach completion.
     pub fn complete_network_attach(&mut self) {
@@ -480,7 +588,12 @@ impl QuectelBg770a {
         // Quectel PDP context used by QMTOPEN / QIOPEN. auto_attach labs that
         // skip AT+QIACT still need a live context or MQTT open returns result 3.
         self.qiact_cid1 = 1;
-        self.set_signal(28, 99);
+        // Co-located on the medium → path-loss CSQ (not a free-floating number).
+        self.csq_ber = 99;
+        self.csq_override = None;
+        self.ensure_medium();
+        self.set_range_m(0.0);
+        self.csq_rssi = self.effective_csq().0;
         self.set_registration(1);
     }
 
@@ -755,16 +868,18 @@ impl QuectelBg770a {
             return self.ok();
         }
         if upper == "AT+CSQ" {
-            self.emit(&format!("\r\n+CSQ: {},{}\r\n", self.csq_rssi, self.csq_ber));
+            let (rssi, ber) = self.effective_csq();
+            self.emit(&format!("\r\n+CSQ: {},{}\r\n", rssi, ber));
             return self.ok();
         }
         if upper == "AT+QCSQ" {
-            if self.csq_rssi >= 99 {
+            let (csq, _) = self.effective_csq();
+            if csq >= 99 {
                 self.emit("\r\n+QCSQ: \"NOSERVICE\"\r\n");
             } else {
                 // Derived RSRP/RSRQ values for the populated CSQ; -113 dBm
                 // baseline + 2 dB per CSQ step is the standard mapping.
-                let rssi_dbm = -113 + 2 * self.csq_rssi as i16;
+                let rssi_dbm = -113 + 2 * csq as i16;
                 let rsrp = rssi_dbm - 18; // approximate eMTC offset
                 self.emit(&format!(
                     "\r\n+QCSQ: \"eMTC\",{},{},{},{}\r\n",
@@ -2551,14 +2666,23 @@ impl UartStreamDevice for QuectelBg770a {
     }
 }
 
-/// Radio-quality channels, in AT+CSQ units. ONE table backs BOTH the `SimInput`
-/// impl and the kit metadata (same pattern as SCD41 / NEO-6M).
+/// Radio-quality channels. ONE table backs BOTH the `SimInput` impl and kit
+/// metadata. Prefer `range_m` (shared RfMedium path loss, same story as air);
+/// `rssi` is an optional CSQ override for scripts.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
+        key: "range_m",
+        label: "Range",
+        unit: "m",
+        // UE ↔ cell distance for path loss. 0 = co-located (strong CSQ).
+        min: 0.0,
+        max: 50_000.0,
+    },
+    crate::sim_input::InputChannel {
         key: "rssi",
-        label: "RSSI",
+        label: "RSSI override",
         unit: "CSQ",
-        // 0..=31 = usable signal, 99 = not known / no service (3GPP 27.007).
+        // Optional force of AT+CSQ steps; clears when range_m is driven.
         min: 0.0,
         max: 99.0,
     },
@@ -2566,7 +2690,6 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         key: "ber",
         label: "BER",
         unit: "CSQ",
-        // 0..=7 = bit-error rate class, 99 = not known.
         min: 0.0,
         max: 99.0,
     },
@@ -2579,11 +2702,15 @@ impl crate::sim_input::SimInput for QuectelBg770a {
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
         self.require_channel(key, value)?;
-        // Round to nearest integer CSQ step; clamp already enforced by require_channel.
-        let v = value.round().clamp(0.0, 99.0) as u8;
         match key {
-            "rssi" => self.csq_rssi = v,
-            "ber" => self.csq_ber = v,
+            "range_m" => self.set_range_m(value),
+            "rssi" => {
+                let v = value.round().clamp(0.0, 99.0) as u8;
+                self.set_signal(v, self.csq_ber);
+            }
+            "ber" => {
+                self.csq_ber = value.round().clamp(0.0, 99.0) as u8;
+            }
             _ => unreachable!("require_channel validated the key"),
         }
         Ok(())
@@ -2594,7 +2721,11 @@ impl crate::sim_input::SimInput for QuectelBg770a {
     }
 
     fn set_component_id(&mut self, id: String) {
-        self.component_id = Some(id);
+        self.component_id = Some(id.clone());
+        if self.rf_node_id.is_none() {
+            self.rf_node_id = Some(id);
+        }
+        self.sync_geometry();
     }
 }
 
@@ -2614,8 +2745,9 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
     summary: "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
     detail: "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, \
              validated against real BG770A-GL hardware captures. Firmware sends AT commands, \
-             modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) is \
-             externally driven like air-monitor sensors: channels `rssi` and `ber`.",
+             modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) uses the \
+             same RfMedium path-loss geometry as VirtualAirBus: drive `range_m` (metres to \
+             cell) or share the lab AirBus medium; optional `rssi` CSQ override for scripts.",
     transport: Transport::Uart,
     category: Category::Uart,
     config_keys: &[
@@ -2627,8 +2759,8 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: "rssi",
             ty: ConfigType::Int,
-            doc: "Initial signal strength reported by AT+CSQ (0..99). Drive it at runtime \
-                  with the `rssi` input channel.",
+            doc: "Initial CSQ override (0..99). Prefer runtime `range_m` so quality tracks \
+                  path loss; this forces AT+CSQ until range_m is driven.",
         },
         ConfigKey {
             name: "ber",
@@ -2688,6 +2820,10 @@ impl PeripheralKit for QuectelBg770aKit {
         }
         if auto_attach {
             modem.complete_network_attach();
+        } else {
+            // Local medium so range_m / CSQ physics work without AirBus.
+            modem.ensure_medium();
+            modem.sync_geometry();
         }
         crate::sim_input::SimInput::set_component_id(&mut modem, ctx.device_id().to_string());
         let uart = ctx.uart()?;
@@ -3378,7 +3514,8 @@ mod tests {
         let _ = exchange(&mut m, "AT+CEREG=2");
         m.complete_network_attach();
         let r = exchange(&mut m, "AT+CSQ");
-        assert!(r.contains("+CSQ: 28,99"), "got {r:?}");
+        // Co-located on RfMedium (0 dBm TX, 0 m) → CSQ 31, not a free-floating 28.
+        assert!(r.contains("+CSQ: 31,99"), "got {r:?}");
         assert!(exchange(&mut m, "AT+CEREG?").contains("+CEREG: 2,1"));
         assert!(exchange(&mut m, "AT+CGATT?").contains("+CGATT: 1"));
         // Quectel PDP context is ready so MQTT/TCP open can succeed without AT+QIACT.
@@ -3395,23 +3532,55 @@ mod tests {
     }
 
     #[test]
-    fn sim_input_rssi_and_ber_drive_at_csq() {
+    fn sim_input_range_drives_csq_via_path_loss() {
         use crate::sim_input::SimInput;
         let mut m = QuectelBg770a::new();
+        m.complete_network_attach();
+        assert!(
+            exchange(&mut m, "AT+CSQ").contains("+CSQ: 31,"),
+            "co-located should be strongest CSQ"
+        );
+        // Far away: path loss drops RSSI → lower CSQ (or 99 below floor).
+        m.set_input("range_m", 5_000.0).expect("range");
+        let far = exchange(&mut m, "AT+CSQ");
+        assert!(
+            !far.contains("+CSQ: 31,"),
+            "5 km should not stay CSQ 31, got {far:?}"
+        );
+        // Override forces CSQ regardless of range.
         m.set_input("rssi", 15.0).expect("rssi");
         m.set_input("ber", 3.0).expect("ber");
         let r = exchange(&mut m, "AT+CSQ");
         assert!(r.contains("+CSQ: 15,3"), "got {r:?}");
-        // dBm mapping used by QCSQ: -113 + 2*CSQ
-        let q = exchange(&mut m, "AT+QCSQ");
+        // range_m clears override and physics resume.
+        m.set_input("range_m", 0.0).expect("range home");
         assert!(
-            q.contains("+QCSQ: \"eMTC\",-83,"),
-            "expected -83 dBm for CSQ 15, got {q:?}"
+            exchange(&mut m, "AT+CSQ").contains("+CSQ: 31,"),
+            "back home should be CSQ 31 again"
         );
-        // 99 = no service
-        m.set_input("rssi", 99.0).expect("rssi noservice");
-        let q2 = exchange(&mut m, "AT+QCSQ");
-        assert!(q2.contains("+QCSQ: \"NOSERVICE\""), "got {q2:?}");
+    }
+
+    #[test]
+    fn shared_air_medium_slot_is_one_story() {
+        use crate::peripherals::nrf52::radio::VirtualAirBus;
+        use crate::peripherals::rf_medium::{PathLossParams, RfMedium};
+        use crate::sim_input::SimInput;
+        let air = VirtualAirBus::new();
+        air.attach_medium(RfMedium::new(7).with_params(PathLossParams::default()));
+        let mut m = QuectelBg770a::new();
+        m.share_medium_slot(air.medium_slot());
+        m.set_component_id("ue".into());
+        m.set_input("range_m", 0.0).unwrap();
+        assert_eq!(m.effective_csq().0, 31);
+        // Same medium Arc: range_m writes UE pose into the air bus medium.
+        m.set_input("range_m", 10_000.0).unwrap();
+        let csq = m.effective_csq().0;
+        // Weakened CSQ step or no-service (99) if below the floor — not CSQ 31.
+        assert_ne!(csq, 31, "10 km path loss should not stay max CSQ, got {csq}");
+        assert!(
+            air.medium_slot().lock().unwrap().is_some(),
+            "shared slot still holds the medium"
+        );
     }
 
     #[test]

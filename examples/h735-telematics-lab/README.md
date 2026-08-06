@@ -18,9 +18,9 @@ CLM-style telematics story for demos (e.g. Proemion):
 | Modem | **BG770A AT stand-in**, not production telematics module |
 | GPS | Simulator default coordinates from `+QGPSLOC` |
 | MQTT | Happy-path Quectel AT model, not a real broker |
-| RSSI / BER | Live **SimInput** channels on the modem part (CSQ units 0–99), same slider path as air-monitor sensors |
+| Radio quality | Same **RfMedium** path-loss as VirtualAirBus / lab AirBus. Drag **Range (m)** on the modem (UE ↔ cell). Optional **RSSI override** (CSQ) for scripts. |
 
-Drag **RSSI** / **BER** on the modem in the playground; firmware re-polls `AT+CSQ` in idle so serial tracks the slider.
+Drag **Range** on the modem; firmware re-polls `AT+CSQ` in idle so serial tracks path loss. Multi-chip labs that call `attach_lab_air` share the air medium slot with the modem.
 
 ## Build
 

@@ -687,6 +687,9 @@ impl SystemBus {
 
     /// Bind every nRF RADIO and ESP32-C3 BT on this bus to the lab-group air
     /// buses (browser multi-chip). `node_id` labels the radio for path-loss.
+    /// Also shares the nRF air's [`RfMedium`](crate::peripherals::rf_medium::RfMedium)
+    /// slot with any Quectel BG770A modem streams so AT+CSQ uses the same
+    /// path-loss geometry as virtual air.
     /// No-op when neither peripheral is present.
     pub fn attach_lab_air(
         &mut self,
@@ -694,8 +697,12 @@ impl SystemBus {
         nrf_air: crate::peripherals::nrf52::radio::VirtualAirBus,
         ble_air: crate::peripherals::ble_air::BleAirBus,
     ) {
+        use crate::peripherals::components::QuectelBg770a;
         use crate::peripherals::esp32c3::bt::Esp32c3Bt;
         use crate::peripherals::nrf52::radio::Nrf52Radio;
+        use crate::peripherals::uart::Uart;
+        use crate::sim_input::SimInput;
+        let medium = nrf_air.medium_slot();
         for entry in &mut self.peripherals {
             if let Some(radio) = entry
                 .dev
@@ -711,6 +718,24 @@ impl SystemBus {
                 .and_then(|a| a.downcast_mut::<Esp32c3Bt>())
             {
                 bt.set_air(ble_air.clone());
+            }
+            if let Some(uart) = entry
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Uart>())
+            {
+                for stream in uart.attached_streams.iter_mut() {
+                    if let Some(modem) = stream
+                        .as_any_mut()
+                        .and_then(|a| a.downcast_mut::<QuectelBg770a>())
+                    {
+                        modem.share_medium_slot(medium.clone());
+                        // Prefer the stamped external_devices id; fall back to lab node.
+                        if SimInput::component_id(modem).is_none() {
+                            modem.set_rf_node_id(node_id);
+                        }
+                    }
+                }
             }
         }
     }

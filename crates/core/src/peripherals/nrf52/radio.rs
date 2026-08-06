@@ -156,6 +156,13 @@ impl VirtualAirBus {
         }
     }
 
+    /// Shared medium slot — same `Arc` that path-loss decisions use. Cellular
+    /// modems (BG770A) and other non-RADIO peers clone this so AT+CSQ / geometry
+    /// knobs and nRF air share one [`RfMedium`] story.
+    pub fn medium_slot(&self) -> Arc<Mutex<Option<RfMedium>>> {
+        self.medium.clone()
+    }
+
     pub fn set_node_position(&self, id: impl Into<String>, pos: NodePosition) {
         if let Ok(mut slot) = self.medium.lock() {
             if let Some(m) = slot.as_mut() {

@@ -213,10 +213,16 @@ Today there are **three** RF-ish media — intentionally different frame types:
 | nRF virtual air | `nrf52/radio.rs` `VirtualAirBus` | Whitened RADIO buffer + MODE/addr | nRF52 RADIO |
 | BLE PDU air | `ble_air.rs` | BLE PDU + access address | ESP32-C3 BT |
 | Wi‑Fi MAC / virtual AP | `wifi_mac`, `virtual_wifi*` | 802.11 / host-side services | ESP Wi‑Fi |
+| Cellular AT (CSQ) | `components/bg770a.rs` | No air frames — reports path-loss CSQ | Quectel BG770A |
 
 **Unification goal:** one **`RfMedium`** decides path loss / collision /
 seeded PER; each air remains the correct **frame type** but asks the medium
 before deliver. nRF optional attach is step 1; BLE + Wi‑Fi frame path next.
+
+**Cellular (shipped):** BG770A shares the VirtualAirBus medium slot via
+`attach_lab_air` (or spins a local medium for single-board labs). `AT+CSQ` /
+`AT+QCSQ` map UE↔`cell` distance to CSQ steps; SimInput `range_m` moves the
+UE. Optional `rssi` CSQ override is for scripts only.
 
 Do **not** force one bit layout across RADIO / BLE / Wi‑Fi.
 
