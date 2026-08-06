@@ -1404,8 +1404,7 @@ impl QuectelBg770a {
                         self.mqtt[id as usize].state = MqttState::Initialized;
                         self.mqtt[id as usize].broker_host = host.to_string();
                         self.mqtt[id as usize].broker_port = port;
-                        self.mqtt_net
-                            .open(&self.mqtt_endpoint_id(), id, host, port);
+                        self.mqtt_net.open(&self.mqtt_endpoint_id(), id, host, port);
                     }
                     let urc = format!("\r\n+QMTOPEN: {},{}\r\n", id, result);
                     self.deferred_urcs
@@ -3782,7 +3781,10 @@ mod tests {
         m.set_input("range_m", 10_000.0).unwrap();
         let csq = m.effective_csq().0;
         // Weakened CSQ step or no-service (99) if below the floor — not CSQ 31.
-        assert_ne!(csq, 31, "10 km path loss should not stay max CSQ, got {csq}");
+        assert_ne!(
+            csq, 31,
+            "10 km path loss should not stay max CSQ, got {csq}"
+        );
         assert!(
             air.medium_slot().lock().unwrap().is_some(),
             "shared slot still holds the medium"

@@ -207,7 +207,7 @@ fn spi_enable() {
     let moder = rd32(GPIOA_BASE);
     wr32(GPIOA_BASE, (moder & !(0x3 << 8)) | (0x1 << 8)); // PA4 MODER=01
     wr32(GPIOA_BASE + 0x18, 1 << 4); // CS high
-    // SPI master, SSM, SSI, 8-bit default CFG1, endless TSIZE=0
+                                     // SPI master, SSM, SSI, 8-bit default CFG1, endless TSIZE=0
     wr32(SPI1_BASE, H5_SSI); // CR1 SSI first
     wr32(SPI1_BASE + 0x0C, H5_MASTER | H5_SSM); // CFG2
     wr32(SPI1_BASE + 0x04, 0); // CR2 TSIZE=0 endless
@@ -305,7 +305,7 @@ fn tft_init_compact() {
     spin(5_000);
     tft_cmd1(0x3A, 0x55); // COLMOD RGB565
     tft_cmd(0x29); // DISPON
-    // Compact header only: 240×16 navy
+                   // Compact header only: 240×16 navy
     tft_fill_rect(0, 0, 240, 16, 0x0010);
 }
 
@@ -430,7 +430,13 @@ fn main() -> ! {
     // (those cost 150s of model time and blow the smoke step budget).
 
     send_at("AT+QGPS=1", &mut resp, &mut resp_len);
-    send_at_until("AT+QGPSLOC=0", &mut resp, &mut resp_len, b"+QGPSLOC:", 200_000);
+    send_at_until(
+        "AT+QGPSLOC=0",
+        &mut resp,
+        &mut resp_len,
+        b"+QGPSLOC:",
+        200_000,
+    );
 
     let (lat, lon) = parse_qgpsloc(&resp, resp_len).unwrap_or((37.7749, -122.4194));
     let mut lat_buf = [0u8; 16];

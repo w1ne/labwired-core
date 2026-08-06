@@ -1609,9 +1609,7 @@ impl AirBus {
     /// Latest payload bytes for an exact topic, or empty if none.
     #[wasm_bindgen]
     pub fn cellular_last_payload(&self, topic: &str) -> Vec<u8> {
-        self.cellular
-            .last_payload_on(topic)
-            .unwrap_or_default()
+        self.cellular.last_payload_on(topic).unwrap_or_default()
     }
 
     /// Inspect fabric: up to `limit` lines of `topic\\tpayload` (most recent first).

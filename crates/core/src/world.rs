@@ -356,12 +356,7 @@ impl World {
                 let ble = BleAirBus::new();
                 let fabric = SimMqttFabric::new();
                 for (id, machine) in world.machines.iter_mut() {
-                    machine.attach_lab_air(
-                        id.as_str(),
-                        nrf.clone(),
-                        ble.clone(),
-                        fabric.clone(),
-                    );
+                    machine.attach_lab_air(id.as_str(), nrf.clone(), ble.clone(), fabric.clone());
                 }
             }
         }

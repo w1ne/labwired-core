@@ -87,8 +87,7 @@ impl SimMqttFabric {
     pub fn open(&self, endpoint: &str, client_id: u8, host: &str, port: u16) {
         self.with_mut(|inner| {
             let ep = inner.endpoints.entry(endpoint.to_string()).or_default();
-            ep.brokers
-                .insert(client_id, (host.to_string(), port));
+            ep.brokers.insert(client_id, (host.to_string(), port));
         });
     }
 
@@ -119,13 +118,7 @@ impl SimMqttFabric {
     }
 
     /// Publish from `endpoint`. Returns number of subscriber deliveries queued.
-    pub fn publish(
-        &self,
-        endpoint: &str,
-        client_id: u8,
-        topic: &str,
-        payload: &[u8],
-    ) -> usize {
+    pub fn publish(&self, endpoint: &str, client_id: u8, topic: &str, payload: &[u8]) -> usize {
         self.with_mut(|inner| {
             let (host, port) = inner
                 .endpoints
@@ -209,13 +202,7 @@ impl SimMqttFabric {
                 .log
                 .iter()
                 .take(limit)
-                .map(|m| {
-                    format!(
-                        "{}\t{}",
-                        m.topic,
-                        String::from_utf8_lossy(&m.payload)
-                    )
-                })
+                .map(|m| format!("{}\t{}", m.topic, String::from_utf8_lossy(&m.payload)))
                 .collect()
         })
     }
