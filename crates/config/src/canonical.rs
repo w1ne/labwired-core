@@ -1699,14 +1699,7 @@ external_devices:
     config:
       i2c_address: 0x3c
 board_io:
-  - id: "oled"
-    kind: "i2c_device"
-    peripheral: "i2c1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    i2c_address: 0x3c
-    device_type: "oled-ssd1306"
+  []
 "#;
 
     const FIXTURE_GPIO_LED: &str = r#"{
@@ -1760,14 +1753,6 @@ external_devices:
     config:
       i2c_address: 0x3c
 board_io:
-  - id: "oled"
-    kind: "i2c_device"
-    peripheral: "i2c1"
-    pin: 0
-    signal: "input"
-    active_high: true
-    i2c_address: 0x3c
-    device_type: "oled-ssd1306"
   - id: "led1"
     kind: "led"
     peripheral: "gpioa"
@@ -1807,13 +1792,7 @@ external_devices:
     config:
       cs_pin: "PA4"
 board_io:
-  - id: "disp"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 4
-    signal: "input"
-    active_high: true
-    device_type: "ili9341"
+  []
 "#;
 
     const FIXTURE_SPI_MAX31855: &str = r#"{
@@ -1840,13 +1819,7 @@ external_devices:
     config:
       cs_pin: "PA4"
 board_io:
-  - id: "tc"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 4
-    signal: "input"
-    active_high: true
-    device_type: "max31855"
+  []
 "#;
 
     const FIXTURE_SPI_SSD1680: &str = r#"{
@@ -1873,13 +1846,7 @@ external_devices:
     config:
       cs_pin: "PA4"
 board_io:
-  - id: "epd"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 4
-    signal: "input"
-    active_high: true
-    device_type: "ssd1680_tricolor_290"
+  []
 "#;
 
     const FIXTURE_ULTRASONIC: &str = r#"{
@@ -2241,13 +2208,7 @@ external_devices:
       cs_pin: "PA4"
       dc_pin: "PA3"
 board_io:
-  - id: "lcd"
-    kind: "spi_device"
-    peripheral: "spi1"
-    pin: 4
-    signal: "input"
-    active_high: true
-    device_type: "pcd8544"
+  []
 "#;
 
     const FIXTURE_SN74HC165: &str = r#"{
