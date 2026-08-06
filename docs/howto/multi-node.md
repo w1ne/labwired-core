@@ -222,14 +222,16 @@ before deliver. nRF optional attach is step 1; BLE + Wi‑Fi frame path next.
 **Cellular (shipped):** BG770A shares the VirtualAirBus medium slot via
 `attach_lab_air` (or spins a local medium for single-board labs). `AT+CSQ` /
 `AT+QCSQ` map UE↔`cell` distance to CSQ steps; SimInput `range_m` moves the
-UE. Optional `rssi` CSQ override is for scripts only.
+UE. YAML `config.rssi` seeds CSQ until `range_m` is driven — **not** a UI channel.
 
 **SimMqttFabric (shipped on AirBus):** topic fabric for BG770A AT MQTT — **not**
 a wire broker or EPC. Lives on lab `AirBus` next to nRF/BLE. **One bind API:**
-`attach_lab_air` (CLI private mint via `attach_private_lab_air` / browser shared
-rebind). Path-loss CSQ **gates** `QMTOPEN`/`CONN`/`PUB` (no RF → open fails,
-publish result ≠ 0). Multi-node `World` rebinds all cellular nodes onto one
-fabric. Inspect: `cellular_inspect` / playground fabric strip.
+`attach_lab_air` (CLI mints private air via `attach_private_lab_air`; browser /
+multi-node World **rebind** the same API with a shared air — deliberate replace,
+not a second fabric). Path-loss CSQ **gates** `QMTOPEN`/`CONN`/`PUB` (no RF →
+open fails, publish result ≠ 0). Inspect: `mqtt_fabric_inspect` (wasm aliases
+`cellular_*` still work one release) / playground fabric strip. Smoke:
+`mqtt_fabric: { topic, payload_contains }`.
 
 Do **not** force one bit layout across RADIO / BLE / Wi‑Fi.
 

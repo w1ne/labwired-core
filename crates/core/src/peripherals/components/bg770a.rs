@@ -505,10 +505,18 @@ impl QuectelBg770a {
         self.schedule(URC_DELAY_QMTPUB_US, urc.into_bytes());
     }
 
-    /// Update the seed / override reported by `AT+CSQ` (defaults to 99,99).
-    /// RSSI is 0..=31 (or 99), BER is 0..=7 (or 99). Sets a CSQ override so
-    /// scripted values win until `range_m` re-enables path-loss.
+    /// Seed CSQ values (0..=31 or 99). Does **not** force an override —
+    /// path-loss wins when an RfMedium is attached. Prefer `range_m` SimInput.
     pub fn set_signal(&mut self, rssi: u8, ber: u8) {
+        self.csq_rssi = rssi;
+        self.csq_ber = ber;
+    }
+
+    /// Force CSQ steps until the next `range_m` drive.
+    ///
+    /// Used by system-yaml `config.rssi` seed and unit tests — **not** a
+    /// playground SimInput channel (UI drives `range_m` only).
+    pub fn set_csq_override(&mut self, rssi: u8, ber: u8) {
         self.csq_rssi = rssi;
         self.csq_ber = ber;
         self.csq_override = Some(rssi);
@@ -559,9 +567,12 @@ impl QuectelBg770a {
     }
 
     fn mqtt_endpoint_id(&self) -> String {
-        self.component_id
+        // Prefer lab node id (multi-UE World / attach_lab_air) so two boards
+        // that both declare external_devices id "modem" still get distinct
+        // fabric endpoints for pub/sub fan-out.
+        self.rf_node_id
             .clone()
-            .or_else(|| self.rf_node_id.clone())
+            .or_else(|| self.component_id.clone())
             .unwrap_or_else(|| "modem".into())
     }
 
@@ -2810,8 +2821,7 @@ impl UartStreamDevice for QuectelBg770a {
 }
 
 /// Radio-quality channels. ONE table backs BOTH the `SimInput` impl and kit
-/// metadata. Prefer `range_m` (shared RfMedium path loss, same story as air);
-/// `rssi` is an optional CSQ override for scripts.
+/// metadata. Drive `range_m` (path loss) — no free-floating CSQ override in UI.
 pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
     crate::sim_input::InputChannel {
         key: "range_m",
@@ -2820,14 +2830,6 @@ pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
         // UE ↔ cell distance for path loss. 0 = co-located (strong CSQ).
         min: 0.0,
         max: 50_000.0,
-    },
-    crate::sim_input::InputChannel {
-        key: "rssi",
-        label: "RSSI override",
-        unit: "CSQ",
-        // Optional force of AT+CSQ steps; clears when range_m is driven.
-        min: 0.0,
-        max: 99.0,
     },
     crate::sim_input::InputChannel {
         key: "ber",
@@ -2847,10 +2849,6 @@ impl crate::sim_input::SimInput for QuectelBg770a {
         self.require_channel(key, value)?;
         match key {
             "range_m" => self.set_range_m(value),
-            "rssi" => {
-                let v = value.round().clamp(0.0, 99.0) as u8;
-                self.set_signal(v, self.csq_ber);
-            }
             "ber" => {
                 self.csq_ber = value.round().clamp(0.0, 99.0) as u8;
             }
@@ -2890,7 +2888,7 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
              validated against real BG770A-GL hardware captures. Firmware sends AT commands, \
              modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) uses the \
              same RfMedium path-loss geometry as VirtualAirBus: drive `range_m` (metres to \
-             cell) or share the lab AirBus medium; optional `rssi` CSQ override for scripts.",
+             cell). Seed CSQ via config `rssi` only when no medium is attached.",
     transport: Transport::Uart,
     category: Category::Uart,
     config_keys: &[
@@ -2902,8 +2900,8 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: "rssi",
             ty: ConfigType::Int,
-            doc: "Initial CSQ override (0..99). Prefer runtime `range_m` so quality tracks \
-                  path loss; this forces AT+CSQ until range_m is driven.",
+            doc: "YAML seed CSQ (0..99) until `range_m` is driven. Not a UI SimInput — \
+                  playground radio quality is path-loss only (`range_m`).",
         },
         ConfigKey {
             name: "ber",
@@ -2959,7 +2957,8 @@ impl PeripheralKit for QuectelBg770aKit {
         }
         if let Some(rssi) = rssi {
             let ber = ber.unwrap_or(99);
-            modem.set_signal(rssi.clamp(0, 99) as u8, ber.clamp(0, 99) as u8);
+            // Config seed only — not exposed as a free-floating SimInput.
+            modem.set_csq_override(rssi.clamp(0, 99) as u8, ber.clamp(0, 99) as u8);
         }
         if auto_attach {
             modem.complete_network_attach();
@@ -3752,9 +3751,8 @@ mod tests {
             !far.contains("+CSQ: 31,"),
             "5 km should not stay CSQ 31, got {far:?}"
         );
-        // Override forces CSQ regardless of range.
-        m.set_input("rssi", 15.0).expect("rssi");
-        m.set_input("ber", 3.0).expect("ber");
+        // YAML/test override (not a SimInput channel) forces CSQ.
+        m.set_csq_override(15, 3);
         let r = exchange(&mut m, "AT+CSQ");
         assert!(r.contains("+CSQ: 15,3"), "got {r:?}");
         // range_m clears override and physics resume.

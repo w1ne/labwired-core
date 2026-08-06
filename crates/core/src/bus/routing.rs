@@ -704,7 +704,6 @@ impl SystemBus {
         use crate::peripherals::esp32c3::bt::Esp32c3Bt;
         use crate::peripherals::nrf52::radio::Nrf52Radio;
         use crate::peripherals::uart::Uart;
-        use crate::sim_input::SimInput;
         let medium = nrf_air.medium_slot();
         for entry in &mut self.peripherals {
             if let Some(radio) = entry
@@ -735,9 +734,9 @@ impl SystemBus {
                         // One AirBus story: path-loss medium + cellular MQTT fabric.
                         modem.share_medium_slot(medium.clone());
                         modem.set_mqtt_net(cellular.clone());
-                        if SimInput::component_id(modem).is_none() {
-                            modem.set_rf_node_id(node_id);
-                        }
+                        // Always label the UE with the lab node id so multi-node
+                        // fabric endpoints differ (device id is often both "modem").
+                        modem.set_rf_node_id(node_id);
                     }
                 }
             }
@@ -768,6 +767,44 @@ impl SystemBus {
         false
     }
 
+    /// True if any modem's SimMqttFabric has a publish on `topic`, optionally
+    /// requiring `payload_contains` as a UTF-8 substring of the latest payload.
+    pub fn mqtt_fabric_matches(&self, topic: &str, payload_contains: Option<&str>) -> bool {
+        use crate::peripherals::components::QuectelBg770a;
+        use crate::peripherals::uart::Uart;
+        for entry in &self.peripherals {
+            let Some(any) = entry.dev.as_any() else {
+                continue;
+            };
+            let Some(uart) = any.downcast_ref::<Uart>() else {
+                continue;
+            };
+            for stream in &uart.attached_streams {
+                let Some(modem) = stream
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<QuectelBg770a>())
+                else {
+                    continue;
+                };
+                let fabric = modem.mqtt_net();
+                if !fabric.has_publish_on(topic) {
+                    continue;
+                }
+                match payload_contains {
+                    None => return true,
+                    Some(needle) => {
+                        if let Some(payload) = fabric.last_payload_on(topic) {
+                            if String::from_utf8_lossy(&payload).contains(needle) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// Mint a private lab AirBus trio and bind via [`Self::attach_lab_air`].
     /// Used by `from_config` (CLI) and multi-node `World` so there is exactly
     /// one bind API: `attach_lab_air`.
@@ -781,17 +818,6 @@ impl SystemBus {
         let ble = BleAirBus::new();
         let cellular = SimMqttFabric::new();
         self.attach_lab_air(node_id, nrf, ble, cellular);
-    }
-
-    /// Bind to an existing lab air (shared across World nodes or browser chips).
-    pub fn attach_shared_lab_air(
-        &mut self,
-        node_id: &str,
-        nrf_air: crate::peripherals::nrf52::radio::VirtualAirBus,
-        ble_air: crate::peripherals::ble_air::BleAirBus,
-        cellular: crate::network::SimMqttFabric,
-    ) {
-        self.attach_lab_air(node_id, nrf_air, ble_air, cellular);
     }
 
     /// Attach a UART stream device (e.g. an inter-chip wire endpoint) to the

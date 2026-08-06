@@ -1596,31 +1596,49 @@ impl AirBus {
 
     /// Drop SimMqttFabric state (publish log + subscriptions).
     #[wasm_bindgen]
-    pub fn clear_cellular(&self) {
+    pub fn mqtt_fabric_clear(&self) {
         self.cellular.clear();
     }
 
     /// True if any modem on this air published to `topic` (exact match).
     #[wasm_bindgen]
-    pub fn cellular_has_publish(&self, topic: &str) -> bool {
+    pub fn mqtt_fabric_has_publish(&self, topic: &str) -> bool {
         self.cellular.has_publish_on(topic)
     }
 
     /// Latest payload bytes for an exact topic, or empty if none.
     #[wasm_bindgen]
-    pub fn cellular_last_payload(&self, topic: &str) -> Vec<u8> {
+    pub fn mqtt_fabric_last_payload(&self, topic: &str) -> Vec<u8> {
         self.cellular.last_payload_on(topic).unwrap_or_default()
     }
 
     /// Inspect fabric: up to `limit` lines of `topic\\tpayload` (most recent first).
     #[wasm_bindgen]
-    pub fn cellular_inspect(&self, limit: f64) -> String {
+    pub fn mqtt_fabric_inspect(&self, limit: f64) -> String {
         let n = if limit.is_finite() && limit > 0.0 {
             limit as usize
         } else {
             16
         };
         self.cellular.inspect_lines(n.min(64)).join("\n")
+    }
+
+    // --- deprecated aliases (wasm keeps old names working one release) ---
+    #[wasm_bindgen]
+    pub fn clear_cellular(&self) {
+        self.mqtt_fabric_clear();
+    }
+    #[wasm_bindgen]
+    pub fn cellular_has_publish(&self, topic: &str) -> bool {
+        self.mqtt_fabric_has_publish(topic)
+    }
+    #[wasm_bindgen]
+    pub fn cellular_last_payload(&self, topic: &str) -> Vec<u8> {
+        self.mqtt_fabric_last_payload(topic)
+    }
+    #[wasm_bindgen]
+    pub fn cellular_inspect(&self, limit: f64) -> String {
+        self.mqtt_fabric_inspect(limit)
     }
 }
 

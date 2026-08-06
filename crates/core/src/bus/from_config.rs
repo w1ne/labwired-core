@@ -898,9 +898,10 @@ impl SystemBus {
             None => bus.derive_walk_deletable(),
         };
 
-        // One attach API: attach_lab_air. CLI/single-board mints a private lab
-        // air here; browser multi-chip later rebinds the same API with a shared
-        // AirBus (deliberate replace, not a second fabric).
+        // One bind API only: attach_lab_air. Single-board CLI mints a private
+        // lab air here so MQTT/CSQ work without a browser. Multi-node World and
+        // the playground rebind via attach_lab_air with a *shared* air (same
+        // method — deliberate replace of the private fabric, not double-bind).
         if bus.has_cellular_modem() {
             let node = if manifest.name.is_empty() {
                 "lab"

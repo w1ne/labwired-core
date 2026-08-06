@@ -15,4 +15,8 @@ assertions:
   - uart_contains: "GPS fix"
   - uart_contains: "location published"
   - uart_contains: "+QMTPUB:"
+  # Collect path: payload must land on SimMqttFabric, not only the UART log.
+  - mqtt_fabric:
+      topic: "telematics/location"
+      payload_contains: "\"src\":\"qgpsloc\""
   - expected_stop_reason: assertions_passed

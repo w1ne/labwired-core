@@ -1555,6 +1555,10 @@ fn assertion_currently_passes(
                     .as_ref()
                     .is_none_or(|fault| motor.faults.contains(fault))
         }),
+        TestAssertion::MqttFabric(a) => machine.bus.mqtt_fabric_matches(
+            &a.mqtt_fabric.topic,
+            a.mqtt_fabric.payload_contains.as_deref(),
+        ),
         // This assertion requires immutable event-cycle evidence collected by
         // the runner; accumulated text alone is deliberately insufficient.
         TestAssertion::ShutdownLatency(_) => false,
@@ -2416,7 +2420,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let passed = match assertion {
             TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
-            TestAssertion::UartOrdered(_) | TestAssertion::MotorState(_) => {
+            TestAssertion::UartOrdered(_)
+            | TestAssertion::MotorState(_)
+            | TestAssertion::MqttFabric(_) => {
                 assertion_currently_passes(assertion, &uart_text, machine)
             }
             TestAssertion::MotorSpeedReached(_) => {
@@ -2484,7 +2490,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         false
                     }
                 }
-            }
+            } // MqttFabric is handled above via assertion_currently_passes.
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -3397,6 +3403,13 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
             "memory_value: @{:#x}={:#x}",
             a.memory_value.address, a.memory_value.expected_value
         ),
+        TestAssertion::MqttFabric(a) => {
+            let mut s = format!("mqtt_fabric: topic={}", a.mqtt_fabric.topic);
+            if let Some(p) = &a.mqtt_fabric.payload_contains {
+                s.push_str(&format!(" payload_contains={p}"));
+            }
+            s
+        }
         TestAssertion::UdsTester(a) => {
             format!(
                 "uds_tester: {} result={:?}",

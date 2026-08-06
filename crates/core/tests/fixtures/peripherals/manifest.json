@@ -5,7 +5,7 @@
       "device_type": "bg770a-cellular",
       "label": "Quectel BG770A Cellular",
       "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
-      "detail": "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) uses the same RfMedium path-loss geometry as VirtualAirBus: drive `range_m` (metres to cell) or share the lab AirBus medium; optional `rssi` CSQ override for scripts.",
+      "detail": "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) uses the same RfMedium path-loss geometry as VirtualAirBus: drive `range_m` (metres to cell). Seed CSQ via config `rssi` only when no medium is attached.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
@@ -17,7 +17,7 @@
         {
           "name": "rssi",
           "ty": "int",
-          "doc": "Initial CSQ override (0..99). Prefer runtime `range_m` so quality tracks path loss; this forces AT+CSQ until range_m is driven."
+          "doc": "YAML seed CSQ (0..99) until `range_m` is driven. Not a UI SimInput — playground radio quality is path-loss only (`range_m`)."
         },
         {
           "name": "ber",
@@ -56,13 +56,6 @@
           "unit": "m",
           "min": 0.0,
           "max": 50000.0
-        },
-        {
-          "key": "rssi",
-          "label": "RSSI override",
-          "unit": "CSQ",
-          "min": 0.0,
-          "max": 99.0
         },
         {
           "key": "ber",

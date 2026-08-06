@@ -18,19 +18,20 @@ CLM-style telematics story for demos (e.g. Proemion):
 | Modem | **BG770A AT stand-in**, not production telematics module |
 | GPS | Simulator default coordinates from `+QGPSLOC` |
 | MQTT | Happy-path Quectel AT model, not a real broker |
-| Radio quality | Same **RfMedium** path-loss as VirtualAirBus / lab AirBus. Drag **Range (m)** on the modem (UE ↔ cell). Optional **RSSI override** (CSQ) for scripts. |
-| Messages | **SimMqttFabric** on AirBus: **send** (`QMTPUB`) + **collect** (log / playground strip). Not a full network or real broker. RF path-loss can gate open/pub when range is bad. |
+| Radio quality | Same **RfMedium** path-loss as VirtualAirBus / lab AirBus. Drag **Range (m)** on the modem (UE ↔ cell). YAML `config.rssi` is a seed only (not a UI SimInput). |
+| Messages | **SimMqttFabric** on AirBus: **send** (`QMTPUB`) + **collect** (log / fabric strip / `mqtt_fabric` smoke). Not a full network or real broker. RF path-loss can gate open/pub when range is bad. |
 
-Drag **Range** if you care about CSQ. After Run, the fabric strip shows published `topic` + payload (collect). Optional two-UE: `env-two-ue.yaml`.
+Drag **Range** if you care about CSQ. After Run, the fabric strip shows published `topic` + payload (collect). Two-UE pub/sub: `env-two-ue.yaml` (publisher + subscriber ELFs).
 
 ## Build
 
 ```bash
-cd core/examples/h735-telematics-lab
-cargo build --release --target thumbv7em-none-eabi
+# from core/
+cargo build -p h735-telematics-lab --release --target thumbv7em-none-eabi \
+  --bin h735-telematics-lab --bin h735-telematics-subscriber
 ```
 
-Copy ELF into playground assets as `demo-h735-telematics-lab.elf` when packaging.
+Copy publisher ELF into playground assets as `demo-h735-telematics-lab.elf` when packaging.
 
 ## Run in sim (CLI)
 
@@ -47,6 +48,18 @@ Expect UART log lines containing:
 - `> AT`
 - `QGPSLOC` / `GPS fix`
 - `location published`
+
+Plus a **`mqtt_fabric`** assertion that topic `telematics/location` collected payload with `"src":"qgpsloc"`.
+
+### Dual-UE (publisher + subscriber)
+
+```bash
+cargo run -q -p labwired-cli -- test \
+  --script examples/h735-telematics-lab/env-two-ue-smoke.yaml \
+  --output-dir /tmp/h735-two-ue-out --no-uart-stdout
+```
+
+`ue_a` runs the publisher; `ue_b` runs `h735-telematics-subscriber` (`QMTSUB` → `+QMTRECV` / `location received` in `uart.log`).
 
 ## Playground
 

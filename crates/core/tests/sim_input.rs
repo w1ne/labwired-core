@@ -250,7 +250,6 @@ fn lists_channels_across_all_transports() {
         ("gps", "lat"),             // NEO-6M (UART stream)
         ("gps", "fix"),
         ("modem", "range_m"), // BG770A — path-loss range (shared RfMedium story)
-        ("modem", "rssi"),
         ("modem", "ber"),
         ("sonar", "distance"), // HC-SR04 (bus-direct)
     ] {
@@ -298,10 +297,12 @@ fn drives_each_transport_through_the_generic_api() {
         near.contains("+CSQ: 31,"),
         "co-located path loss should be CSQ 31, got {near:?}"
     );
-    bus.set_input(Some("modem"), "rssi", 12.0)
-        .expect("drive modem rssi override");
+    // ber is a SimInput channel (path-loss still owns RSSI steps).
     bus.set_input(Some("modem"), "ber", 2.0)
         .expect("drive modem ber");
+    // Far range should drop CSQ steps while ber sticks.
+    bus.set_input(Some("modem"), "range_m", 5_000.0)
+        .expect("drive modem far");
     let csq = with_device::<QuectelBg770a, _>(&mut bus, "uart2", |modem| {
         for b in b"AT+CSQ\r" {
             modem.on_tx_byte(*b);
@@ -313,8 +314,8 @@ fn drives_each_transport_through_the_generic_api() {
         out
     });
     assert!(
-        csq.contains("+CSQ: 12,2"),
-        "CSQ override should be visible on AT+CSQ, got {csq:?}"
+        csq.contains(",2") && !csq.contains("+CSQ: 31,"),
+        "path-loss CSQ + ber channel should show, got {csq:?}"
     );
 }
 

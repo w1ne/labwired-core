@@ -1,0 +1,10 @@
+# Multi-node runner: publisher + subscriber on shared SimMqttFabric.
+# Requires both ELFs built (see env-two-ue.yaml header).
+schema_version: "1.0"
+inputs:
+  env: "./env-two-ue.yaml"
+limits:
+  # Single-UE publish ~0.8M steps; dual interleave + sub needs headroom.
+  max_steps: 5000000
+  # No durable assertions (env runner only allows memory_value). Artifacts
+  # under --output-dir include per-node UART (`location received` on ue_b).

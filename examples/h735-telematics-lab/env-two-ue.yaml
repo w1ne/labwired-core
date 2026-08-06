@@ -1,17 +1,20 @@
 # Two H735 telematics UEs on one lab AirBus (shared SimMqttFabric + path-loss).
-# Not a full multi-board CI matrix — demonstrates proper World rebind of air.
+# Real pub/sub: ue_a publishes location; ue_b QMTSUBs and collects via fabric
+# fan-out (+QMTRECV). Not a full multi-board CI matrix — World rebind of air.
 #
-# Build firmware first:
-#   cargo build -p h735-telematics-lab --release --target thumbv7em-none-eabi
+# Build firmwares first:
+#   cargo build -p h735-telematics-lab --release --target thumbv7em-none-eabi \
+#     --bin h735-telematics-lab --bin h735-telematics-subscriber
 #
 # Run (from core/):
 #   cargo run -q -p labwired-cli -- environment-test \
 #     --env examples/h735-telematics-lab/env-two-ue.yaml \
 #     --max-steps 50000000
 #
-# Honesty: both nodes run the same demo firmware (each publishes its fix).
-# Shared fabric means publishes land on one SimMqttFabric; RF positions
-# differ so CSQ can diverge with path loss.
+# Honesty: publisher + subscriber ELFs share one SimMqttFabric; RF positions
+# differ so CSQ can diverge with path loss. Environment-test only allows
+# node-qualified memory_value assertions — collect is proven by subscriber
+# UART (`location received`) and by unit/io-smoke mqtt_fabric asserts.
 schema_version: "1.0"
 name: "h735-two-ue-telematics"
 nodes:
@@ -20,7 +23,7 @@ nodes:
     firmware: "../../target/thumbv7em-none-eabi/release/h735-telematics-lab"
   - id: ue_b
     system: "system.yaml"
-    firmware: "../../target/thumbv7em-none-eabi/release/h735-telematics-lab"
+    firmware: "../../target/thumbv7em-none-eabi/release/h735-telematics-subscriber"
 rf:
   seed: 7
   rssi_floor_dbm: -95.0

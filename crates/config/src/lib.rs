@@ -3225,6 +3225,23 @@ pub struct UdsTesterAssertion {
     pub uds_tester: UdsTesterDetails,
 }
 
+/// Assert SimMqttFabric collected a publish (send→collect), not only UART text.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MqttFabricDetails {
+    /// Exact topic that must appear on the fabric.
+    pub topic: String,
+    /// Optional substring that must appear in the latest payload for that topic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload_contains: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct MqttFabricAssertion {
+    pub mqtt_fabric: MqttFabricDetails,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
@@ -3237,6 +3254,7 @@ pub enum TestAssertion {
     ExpectedStopReason(StopReasonAssertion),
     MemoryValue(MemoryValueAssertion),
     UdsTester(UdsTesterAssertion),
+    MqttFabric(MqttFabricAssertion),
 }
 
 /// Where a fault is applied. Either a peripheral (by `id`, optionally narrowed
