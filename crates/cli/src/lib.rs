@@ -2894,11 +2894,19 @@ fn write_outputs<C: labwired_core::Cpu>(
                 if let Some(sys) = system_path {
                     configs.push(hash_file(sys));
                 }
+                // Stamp honestly: `any_noise_enabled` matches kit config keys
+                // and declarative noise inputs. Seeded noise is bit-identical
+                // across runs, but it is not the absence of variation.
+                let nondeterminism = system_path
+                    .and_then(|sys| std::fs::read_to_string(sys).ok())
+                    .filter(|yaml| manifest::any_noise_enabled(yaml))
+                    .map(|_| "seeded(sensor-noise)".to_string())
+                    .unwrap_or_else(|| "none".to_string());
                 let mut man = manifest::RunManifest {
                     manifest_schema_version: manifest::MANIFEST_SCHEMA_VERSION.to_string(),
                     engine_version: env!("CARGO_PKG_VERSION").to_string(),
                     seed: 0,
-                    nondeterminism: "none".to_string(),
+                    nondeterminism,
                     firmware: manifest::HashedFile {
                         path: basename(firmware_path),
                         sha256: result.firmware_hash.clone(),
