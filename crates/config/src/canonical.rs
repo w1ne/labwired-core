@@ -434,7 +434,8 @@ const STM32_BOARDS: &[&str] = &[
 ];
 
 /// SPI display/sensor devices addressed by their own emitter
-/// (port of the TS `SPI_DEVICE_TYPES` set).
+/// (port of the TS `SPI_DEVICE_TYPES` set in board-config emitters-graph.ts).
+/// Keep in sync — `device-type-reachability.test.ts` asserts equality.
 const SPI_DEVICE_TYPES: &[&str] = &[
     "ili9341",
     "max31855",
@@ -442,6 +443,7 @@ const SPI_DEVICE_TYPES: &[&str] = &[
     // Was missing while `device_class` already classed it as a spi_device, so a
     // diagram with this panel emitted no external_devices entry at all.
     "uc8151d_tricolor_290",
+    "hc595-7seg",
 ];
 
 /// Map an MCU part `type` to the chip-family key the pin map is keyed by.
