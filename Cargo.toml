@@ -74,6 +74,7 @@ members = [
     "examples/ssd1306-hello-lab",
     "examples/neo6m-gps-lab",
     "examples/quectel-bg770a-lab",
+    "examples/h735-telematics-lab",
     "examples/ntc-thermistor-lab",
     "examples/ili9341-tft-lab",
     "examples/epaper-tricolor-lab",
@@ -279,6 +280,11 @@ debug = true
 opt-level = "s"
 
 [profile.release.package.quectel-bg770a-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.h735-telematics-lab]
 codegen-units = 1
 debug = true
 opt-level = "s"

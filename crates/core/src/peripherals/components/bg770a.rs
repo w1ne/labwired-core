@@ -471,6 +471,9 @@ impl QuectelBg770a {
     pub fn complete_network_attach(&mut self) {
         self.cgatt = 1;
         self.cgact_cid1 = 1;
+        // Quectel PDP context used by QMTOPEN / QIOPEN. auto_attach labs that
+        // skip AT+QIACT still need a live context or MQTT open returns result 3.
+        self.qiact_cid1 = 1;
         self.set_signal(28, 99);
         self.set_registration(1);
     }
@@ -3309,6 +3312,11 @@ mod tests {
         assert!(r.contains("+CSQ: 28,99"), "got {r:?}");
         assert!(exchange(&mut m, "AT+CEREG?").contains("+CEREG: 2,1"));
         assert!(exchange(&mut m, "AT+CGATT?").contains("+CGATT: 1"));
+        // Quectel PDP context is ready so MQTT/TCP open can succeed without AT+QIACT.
+        assert!(
+            exchange(&mut m, "AT+QIACT?").contains("+QIACT: 1,1,1,"),
+            "auto_attach should activate Quectel PDP context"
+        );
         // QCSQ should now have populated values, not NOSERVICE.
         let q = exchange(&mut m, "AT+QCSQ");
         assert!(

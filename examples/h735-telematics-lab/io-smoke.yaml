@@ -1,0 +1,17 @@
+# Smoke: run h735-telematics-lab ELF against system.yaml; assert AT + publish transcript.
+# Build first: cargo build -p h735-telematics-lab --release --target thumbv7em-none-eabi
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/h735-telematics-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 50000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 2000
+  stop_when_assertions_pass_min_steps: 10000
+assertions:
+  - uart_contains: "LabWired telematics"
+  - uart_contains: "> AT"
+  - uart_contains: "GPS fix"
+  - uart_contains: "location published"
+  - expected_stop_reason: assertions_passed

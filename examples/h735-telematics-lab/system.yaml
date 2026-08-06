@@ -1,0 +1,27 @@
+# H735 telematics demo: MCU + virtual cellular modem + ILI9341 TFT.
+# Modem GNSS (AT+QGPSLOC) → paint lat/lon → MQTT publish of location JSON.
+# Stand-in modem (BG770A AT model) until a real Proemion pinout is shared.
+name: "h735-telematics-lab"
+chip: "../../configs/chips/stm32h735.yaml"
+external_devices:
+  - id: "modem"
+    type: "bg770a-cellular"
+    connection: "usart1"
+    config:
+      apn: "internet"
+      rssi: 22
+      ber: 0
+      boot_urcs: true
+      auto_attach: true
+  - id: "tft"
+    type: "ili9341"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io:
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
