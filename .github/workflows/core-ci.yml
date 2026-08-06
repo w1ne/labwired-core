@@ -298,8 +298,18 @@ jobs:
       # against. Adding a chip on an unhandled memory map used to drop it out of
       # the gate silently — this asserts, on the PR that adds it, that it is
       # either covered or waived with a reason. Pure Python, seconds.
+      #
+      # The pytest run alongside it covers the same property from the other
+      # side (a stale baseline for a deleted chip, a fixture that shares a
+      # memory map it must not). scripts/ has carried unit tests for a while
+      # with nothing executing them — scripts/ci/test_board_matrix.py has never
+      # been run by any workflow — so this step names the files it runs rather
+      # than discovering them, and grows a line when a suite is added.
       - name: Perf gate — every chip covered or waived
-        run: python3 scripts/perf/board_perf.py --check-coverage
+        run: |
+          python -m pip install --quiet pytest
+          python3 scripts/perf/board_perf.py --check-coverage
+          python3 -m pytest -q scripts/perf/test_board_perf.py scripts/ci/test_board_matrix.py
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
