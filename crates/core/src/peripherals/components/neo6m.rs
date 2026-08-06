@@ -84,9 +84,9 @@ impl Neo6mGps {
             return;
         }
         let id = self.component_id.clone().unwrap_or_default();
-        self.noise = Some(["lat", "lon"].map(|ch| {
-            ChannelNoise::new(0, &id, ch, self.noise_sigma, 0.0, None)
-        }));
+        self.noise = Some(
+            ["lat", "lon"].map(|ch| ChannelNoise::new(0, &id, ch, self.noise_sigma, 0.0, None)),
+        );
     }
 
     /// Set the simulated GPS position (truth; noise is applied at emit time).
@@ -464,7 +464,10 @@ mod tests {
         let mut quiet = Neo6mGps::new();
         quiet.set_position(37.7749, -122.4194);
         quiet.sentence_index = 0;
-        assert_eq!(drain_one_sentence(&mut noisy), drain_one_sentence(&mut quiet));
+        assert_eq!(
+            drain_one_sentence(&mut noisy),
+            drain_one_sentence(&mut quiet)
+        );
     }
 
     #[test]
