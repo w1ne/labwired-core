@@ -109,6 +109,100 @@ impl crate::peripherals::esp32::gpio::GpioObserver for HBridgeMotor {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+use std::sync::Arc;
+
+/// Dual H-bridge motor kit (L298N / TB6612 / L293D-class).
+pub struct HBridgeMotorKit;
+pub static H_BRIDGE_MOTOR_KIT: HBridgeMotorKit = HBridgeMotorKit;
+
+static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "l298n",
+    label: "H-bridge motor driver",
+    summary: "L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort).",
+    detail: "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when \
+             IN3/IN4 or BIN* keys are present. Aliases: tb6612, l293d.",
+    transport: Transport::GpioGroup,
+    category: Category::Gpio,
+    config_keys: &[
+        ConfigKey {
+            name: "in1_pin",
+            ty: ConfigType::Str,
+            doc: "Channel A input 1 (or ain1_pin).",
+        },
+        ConfigKey {
+            name: "in2_pin",
+            ty: ConfigType::Str,
+            doc: "Channel A input 2 (or ain2_pin).",
+        },
+        ConfigKey {
+            name: "en_pin",
+            ty: ConfigType::Str,
+            doc: "Channel A enable (or pwma_pin).",
+        },
+    ],
+    labs: &[],
+};
+
+impl PeripheralKit for HBridgeMotorKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &H_BRIDGE_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let in1 = ctx
+            .config_gpio_pin("in1_pin", "AIN1", "GPIO16")
+            .or_else(|_| ctx.config_gpio_pin("ain1_pin", "IN1", "GPIO16"))?;
+        let in2 = ctx
+            .config_gpio_pin("in2_pin", "AIN2", "GPIO17")
+            .or_else(|_| ctx.config_gpio_pin("ain2_pin", "IN2", "GPIO17"))?;
+        let en = ctx
+            .config_str("en_pin")
+            .or_else(|| ctx.config_str("ENA"))
+            .or_else(|| ctx.config_str("pwma_pin"))
+            .or_else(|| ctx.config_str("PWMA"))
+            .and_then(|l| ctx.parse_gpio_pin(l));
+        let motor = Arc::new(
+            HBridgeMotor::new(format!("{}-a", ctx.device_id()), in1, in2, en)
+                .with_declared_id(ctx.device_id().to_string()),
+        );
+        ctx.install_gpio_observer(motor.clone());
+        ctx.bus.h_bridge_motors.push(motor);
+
+        let has_b = ctx.ext.config.contains_key("in3_pin")
+            || ctx.ext.config.contains_key("IN3")
+            || ctx.ext.config.contains_key("bin1_pin")
+            || ctx.ext.config.contains_key("BIN1");
+        if has_b {
+            if let (Ok(b1), Ok(b2)) = (
+                ctx.config_gpio_pin("in3_pin", "BIN1", "GPIO18")
+                    .or_else(|_| ctx.config_gpio_pin("bin1_pin", "IN3", "GPIO18")),
+                ctx.config_gpio_pin("in4_pin", "BIN2", "GPIO19")
+                    .or_else(|_| ctx.config_gpio_pin("bin2_pin", "IN4", "GPIO19")),
+            ) {
+                let enb = ctx
+                    .config_str("enb_pin")
+                    .or_else(|| ctx.config_str("ENB"))
+                    .or_else(|| ctx.config_str("pwmb_pin"))
+                    .or_else(|| ctx.config_str("PWMB"))
+                    .and_then(|l| ctx.parse_gpio_pin(l));
+                let motor_b = Arc::new(
+                    HBridgeMotor::new(format!("{}-b", ctx.device_id()), b1, b2, enb)
+                        .with_declared_id(ctx.device_id().to_string()),
+                );
+                ctx.install_gpio_observer(motor_b.clone());
+                ctx.bus.h_bridge_motors.push(motor_b);
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

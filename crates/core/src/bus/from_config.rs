@@ -841,92 +841,9 @@ impl SystemBus {
                 // super::declarative_device.
                 // neopixel / ws2812 → PeripheralKit registry (`WS2812_KIT`).
                 // servo / sg90 / mg996r → PeripheralKit registry (`SERVO_KIT`).
-                "a4988" | "drv8825" | "tmc2209" => {
-                    let step = Self::gpio_from_config(ext, "step_pin", "STEP", "GPIO16")?;
-                    let dir = Self::gpio_from_config(ext, "dir_pin", "DIR", "GPIO17")?;
-                    let en = Self::optional_gpio_from_config(ext, "en_pin", "EN");
-                    let mut motor =
-                        crate::peripherals::components::step_dir_motor::StepDirMotor::new(
-                            &ext.id, step, dir, en,
-                        );
-                    if ext.r#type == "tmc2209" {
-                        // SilentStepStick often 1/16 microstep default → treat as 1.8/16
-                        motor = motor.with_config(
-                            crate::peripherals::components::step_dir_motor::StepDirConfig {
-                                degrees_per_step: 1.8 / 16.0,
-                                enable_active_low: true,
-                            },
-                        );
-                    }
-                    let motor = std::sync::Arc::new(motor);
-                    Self::install_gpio_observer(&mut bus, motor.clone());
-                    bus.step_dir_motors.push(motor);
-                }
-                "l298n" | "tb6612" | "l293d" => {
-                    // First motor channel (A)
-                    let in1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")
-                        .or_else(|_| Self::gpio_from_config(ext, "ain1_pin", "AIN1", "GPIO16"))?;
-                    let in2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")
-                        .or_else(|_| Self::gpio_from_config(ext, "ain2_pin", "AIN2", "GPIO17"))?;
-                    let en = Self::optional_gpio_from_config(ext, "en_pin", "ENA")
-                        .or_else(|| Self::optional_gpio_from_config(ext, "pwma_pin", "PWMA"));
-                    let motor = std::sync::Arc::new(
-                        crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
-                            format!("{}-a", ext.id),
-                            in1,
-                            in2,
-                            en,
-                        )
-                        .with_declared_id(ext.id.clone()),
-                    );
-                    Self::install_gpio_observer(&mut bus, motor.clone());
-                    bus.h_bridge_motors.push(motor);
-                    // Optional B channel when IN3/IN4 (or BIN*) are configured.
-                    let has_b = ext.config.contains_key("in3_pin")
-                        || ext.config.contains_key("IN3")
-                        || ext.config.contains_key("bin1_pin")
-                        || ext.config.contains_key("BIN1");
-                    if has_b {
-                        if let (Ok(b1), Ok(b2)) = (
-                            Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18").or_else(|_| {
-                                Self::gpio_from_config(ext, "bin1_pin", "BIN1", "GPIO18")
-                            }),
-                            Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19").or_else(|_| {
-                                Self::gpio_from_config(ext, "bin2_pin", "BIN2", "GPIO19")
-                            }),
-                        ) {
-                            let enb = Self::optional_gpio_from_config(ext, "enb_pin", "ENB")
-                                .or_else(|| {
-                                    Self::optional_gpio_from_config(ext, "pwmb_pin", "PWMB")
-                                });
-                            let motor_b = std::sync::Arc::new(
-                                crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
-                                    format!("{}-b", ext.id),
-                                    b1,
-                                    b2,
-                                    enb,
-                                )
-                                .with_declared_id(ext.id.clone()),
-                            );
-                            Self::install_gpio_observer(&mut bus, motor_b.clone());
-                            bus.h_bridge_motors.push(motor_b);
-                        }
-                    }
-                }
-                "uln2003" | "stepper-28byj48" => {
-                    let p1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")?;
-                    let p2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")?;
-                    let p3 = Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18")?;
-                    let p4 = Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19")?;
-                    let motor = std::sync::Arc::new(
-                        crate::peripherals::components::unipolar_stepper::UnipolarStepper::new_28byj48(
-                            &ext.id,
-                            [p1, p2, p3, p4],
-                        ),
-                    );
-                    Self::install_gpio_observer(&mut bus, motor.clone());
-                    bus.unipolar_steppers.push(motor);
-                }
+                // a4988 / drv8825 / tmc2209 → `STEP_DIR_MOTOR_KIT`.
+                // l298n / tb6612 / l293d → `H_BRIDGE_MOTOR_KIT`.
+                // uln2003 / stepper-28byj48 → `UNIPOLAR_STEPPER_KIT`.
                 // ili9341-16bit / ili9341_16bit: PeripheralKit registry
                 // (`Ili9341ParallelKit`, Transport::GpioGroup) — see
                 // peripherals::kit and ili9341_parallel.rs.
@@ -1210,6 +1127,7 @@ impl SystemBus {
         }
     }
 
+    #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them
     fn gpio_from_config(
         ext: &labwired_config::ExternalDevice,
         key: &str,
@@ -1235,6 +1153,7 @@ impl SystemBus {
             })
     }
 
+    #[allow(dead_code)]
     fn optional_gpio_from_config(
         ext: &labwired_config::ExternalDevice,
         key: &str,
