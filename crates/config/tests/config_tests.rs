@@ -225,6 +225,7 @@ undervoltage_fault_pin: PB5
     };
     assert_eq!(cfg.id, "spindle");
     assert_eq!(cfg.pole_pairs, 7);
+    assert_eq!(cfg.timer_name, "tim1");
     assert_eq!(cfg.encoder_index_pin, None);
     assert_eq!(cfg.simulation_clock_hz, 80_000_000);
     assert_eq!(cfg.motor_fault_pin, None);
@@ -237,6 +238,80 @@ undervoltage_fault_pin: PB5
     assert_eq!(
         serde_yaml::from_str::<MotorModelConfig>(&serde_yaml::to_string(&model).unwrap()).unwrap(),
         model
+    );
+}
+
+#[test]
+fn motor_model_bldc_accepts_non_tim1_timer_name() {
+    let yaml = r#"
+kind: bldc
+id: spindle_tim8
+resistance_ohm: 0.35
+inductance_h: 0.00018
+torque_constant_nm_per_a: 0.04
+back_emf_constant_v_per_rad_s: 0.04
+rotor_inertia_kg_m2: 0.00002
+viscous_friction_nm_per_rad_s: 0.000003
+supply_voltage_v: 24.0
+load_torque_nm: 0.015
+encoder_cpr: 2048
+pole_pairs: 7
+timer_name: tim8
+phase_a_high_pin: PA8
+phase_a_low_pin: PA7
+phase_b_high_pin: PA9
+phase_b_low_pin: PB0
+phase_c_high_pin: PA10
+phase_c_low_pin: PB1
+enable_pin: PB2
+hall_a_pin: PC0
+hall_b_pin: PC1
+hall_c_pin: PC2
+encoder_a_pin: PC6
+encoder_b_pin: PC7
+"#;
+    let model: MotorModelConfig = serde_yaml::from_str(yaml).unwrap();
+    let MotorModelConfig::Bldc(cfg) = &model else {
+        panic!("expected bldc motor");
+    };
+    assert_eq!(cfg.timer_name, "tim8");
+    assert!(model.validate().is_empty());
+}
+
+#[test]
+fn motor_model_bldc_rejects_blank_timer_name() {
+    let yaml = r#"
+kind: bldc
+id: spindle
+resistance_ohm: 0.35
+inductance_h: 0.00018
+torque_constant_nm_per_a: 0.04
+back_emf_constant_v_per_rad_s: 0.04
+rotor_inertia_kg_m2: 0.00002
+viscous_friction_nm_per_rad_s: 0.000003
+supply_voltage_v: 24.0
+load_torque_nm: 0.015
+encoder_cpr: 2048
+pole_pairs: 7
+timer_name: "   "
+phase_a_high_pin: PA8
+phase_a_low_pin: PA7
+phase_b_high_pin: PA9
+phase_b_low_pin: PB0
+phase_c_high_pin: PA10
+phase_c_low_pin: PB1
+enable_pin: PB2
+hall_a_pin: PC0
+hall_b_pin: PC1
+hall_c_pin: PC2
+encoder_a_pin: PC6
+encoder_b_pin: PC7
+"#;
+    let model: MotorModelConfig = serde_yaml::from_str(yaml).unwrap();
+    let issues = model.validate();
+    assert!(
+        issues.iter().any(|issue| issue.contains("timer_name")),
+        "expected blank timer_name issue, got {issues:?}"
     );
 }
 

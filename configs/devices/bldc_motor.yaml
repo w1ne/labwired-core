@@ -61,6 +61,7 @@ emit:
     - { key: overcurrent_fault_pin, from_part_pin: [OVERCURRENT_FAULT], required: false }
     - { key: undervoltage_fault_pin, from_part_pin: [UNDERVOLTAGE_FAULT], required: false }
     - { key: simulation_clock_hz, from: sim_cpu_hz }
+    - { key: timer_name, from_attr: timer_name, default_str: tim1 }
     - { key: resistance_ohm, from_attr: resistance_ohm, default: 0.35 }
     - { key: inductance_h, from_attr: inductance_h, default: 0.00018 }
     - { key: torque_constant_nm_per_a, from_attr: torque_constant_nm_per_a, default: 0.04 }

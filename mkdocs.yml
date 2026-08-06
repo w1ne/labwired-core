@@ -55,11 +55,19 @@ plugins:
 
 nav:
   - Home: index.md
+  - Fidelity: fidelity.md
+  - llms.txt (agents): llms.md
   - Architecture Overview: architecture.md
   - Hardware-Sim Parity: golden_reference.md
-  - AI Agent Manual: agents.md
+
+  - Agent:
+    - Connect MCP: agent/mcp.md
+    - Tool reference: agent/tools.md
+    - First agent run: agent/first-run.md
+    - Contributing (engine agents): agents.md
 
   - Tutorials:
+    - Playground first run: tutorials/playground.md
     - Running Firmware: getting_started_firmware.md
     - Simulating Sensors (I2C): examples/i2c_sensor_example.md
     - Mastering DMA & Interrupts: examples/dma_exti_example.md
@@ -90,22 +98,40 @@ nav:
     - Target Support Rubric: target_support_rubric.md
 
   - Boards:
+    - ESP32-C3: boards/esp32c3.md
+    - ESP32-S3: boards/esp32s3.md
+    - nRF52840: boards/nrf52840.md
+    - XIAO nRF52840 Sense: boards/seeed-xiao-nrf52840-sense.md
+    - RP2040: boards/rp2040.md
+    - RP2350: boards/rp2350.md
     - STM32F103: boards/stm32f103.md
     - STM32F401: boards/stm32f401.md
+    - STM32F405: boards/stm32f405.md
     - STM32F407: boards/stm32f407.md
+    - STM32F411: boards/stm32f411.md
+    - STM32F767: boards/stm32f767.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
+    - NUCLEO-L073RZ: boards/nucleo-l073rz.md
     - STM32H563: boards/stm32h563.md
     - STM32H735: boards/stm32h735.md
     - STM32WBA52: boards/stm32wba52.md
     - nRF52832: boards/nrf52832.md
-    - nRF52840: boards/nrf52840.md
-    - RP2040: boards/rp2040.md
-    - ESP32-C3: boards/esp32c3.md
-    - ESP32-S3: boards/esp32s3.md
     - nRF5340: boards/nrf5340.md
     - nRF54L15: boards/nrf54l15.md
-    - NUCLEO-L073RZ: boards/nucleo-l073rz.md
-    - XIAO nRF52840 Sense: boards/seeed-xiao-nrf52840-sense.md
+
+  - Parts:
+    - Overview: parts/index.md
+    - MCP9808: parts/mcp9808.md
+    - MMA8451Q: parts/mma8451q.md
+    - MPU-6050: parts/mpu6050.md
+    - BMP280: parts/bmp280.md
+    - SSD1306 OLED: parts/ssd1306.md
+    - LCD1602: parts/lcd1602.md
+    - APA102: parts/apa102.md
+    - Servo: parts/servo.md
+    - Button: parts/button.md
+    - Buzzer: parts/buzzer.md
+    - Seven-segment: parts/seven-segment.md
 
   - Operations:
     - Release Strategy: release_strategy.md

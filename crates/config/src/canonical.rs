@@ -434,7 +434,8 @@ const STM32_BOARDS: &[&str] = &[
 ];
 
 /// SPI display/sensor devices addressed by their own emitter
-/// (port of the TS `SPI_DEVICE_TYPES` set).
+/// (port of the TS `SPI_DEVICE_TYPES` set in board-config emitters-graph.ts).
+/// Keep in sync — `device-type-reachability.test.ts` asserts equality.
 const SPI_DEVICE_TYPES: &[&str] = &[
     "ili9341",
     "max31855",
@@ -442,6 +443,7 @@ const SPI_DEVICE_TYPES: &[&str] = &[
     // Was missing while `device_class` already classed it as a spi_device, so a
     // diagram with this panel emitted no external_devices entry at all.
     "uc8151d_tricolor_290",
+    "hc595-7seg",
 ];
 
 /// Map an MCU part `type` to the chip-family key the pin map is keyed by.
@@ -1031,12 +1033,21 @@ fn emit_from_descriptor(
                 }
             }
         } else if let Some(attr) = &c.from_attr {
-            let default = c.default.unwrap_or(0.0);
-            let n = attr_string(part, attr)
-                .and_then(|s| s.trim().parse::<f64>().ok())
-                .filter(|d| d.is_finite())
-                .unwrap_or(default);
-            format_js_number(n)
+            if let Some(default_str) = &c.default_str {
+                // String attr path (e.g. BLDC timer_name). Emit a quoted YAML string.
+                let raw = attr_string(part, attr)
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| default_str.clone());
+                format!("\"{}\"", raw.replace('\\', "\\\\").replace('"', "\\\""))
+            } else {
+                let default = c.default.unwrap_or(0.0);
+                let n = attr_string(part, attr)
+                    .and_then(|s| s.trim().parse::<f64>().ok())
+                    .filter(|d| d.is_finite())
+                    .unwrap_or(default);
+                format_js_number(n)
+            }
         } else {
             ext_ok = false;
             break;
