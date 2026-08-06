@@ -207,6 +207,12 @@ impl crate::peripherals::esp32s3::gpio::GpioObserver for Ws2812 {
     }
 }
 
+impl crate::peripherals::esp32::gpio::GpioObserver for Ws2812 {
+    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
+        self.on_edge(pin, to, sim_cycle);
+    }
+}
+
 /// An addressable LED strip is a display surface wired to ONE pin, so like the
 /// TM1637 it binds to the bus rather than to a controller and reports through
 /// the evidence seam directly.
@@ -214,6 +220,72 @@ impl crate::peripherals::esp32s3::gpio::GpioObserver for Ws2812 {
 /// The pixels are whatever the decoder reconstructed from real edge timing on
 /// the data pad; a strip that never saw an edge reports zero lit pixels, not a
 /// plausible pattern. Bytes are the decoded frame in wire (GRB) order.
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+/// WS2812 / Neopixel kit — single-wire edge decoder on one GPIO.
+pub struct Ws2812Kit;
+pub static WS2812_KIT: Ws2812Kit = Ws2812Kit;
+
+static WS2812_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "neopixel",
+    label: "WS2812 / Neopixel strip",
+    summary: "Addressable RGB LED strip on one data pin (edge-timed bit stream).",
+    detail: "Attaches as a GPIO observer on data_pin. On ESP32-S3 the RMT + GPIO matrix \
+             drive real edges; elsewhere the strip is held for readback until edges appear. \
+             Alias type `ws2812` resolves to this kit.",
+    transport: Transport::GpioGroup,
+    category: Category::Gpio,
+    config_keys: &[
+        ConfigKey {
+            name: "data_pin",
+            ty: ConfigType::Str,
+            doc: "Data line GPIO (e.g. \"GPIO48\"). Defaults to GPIO48.",
+        },
+        ConfigKey {
+            name: "num_pixels",
+            ty: ConfigType::Int,
+            doc: "Number of LEDs on the strip. Defaults to 1.",
+        },
+        ConfigKey {
+            name: "cpu_hz",
+            ty: ConfigType::Int,
+            doc: "Simulated CPU Hz for edge timing. Defaults to 160_000_000.",
+        },
+    ],
+    labs: &[],
+};
+
+impl PeripheralKit for Ws2812Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &WS2812_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let data = ctx.config_str("data_pin").unwrap_or("GPIO48");
+        let num_pixels = ctx.config_i64("num_pixels").unwrap_or(1).max(1) as usize;
+        let cpu_hz = ctx.config_i64("cpu_hz").unwrap_or(160_000_000) as u64;
+        let pin = ctx.parse_gpio_pin(data).ok_or_else(|| {
+            anyhow::anyhow!(
+                "neopixel '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",
+                ctx.device_id(),
+                data
+            )
+        })?;
+        let strip = std::sync::Arc::new(
+            Ws2812::new(pin, num_pixels, cpu_hz).with_component_id(ctx.device_id().to_string()),
+        );
+        // Classic ESP32 + S3 GPIO observers (same choke as motors / parallel TFT).
+        ctx.install_gpio_observer(strip.clone());
+        ctx.bus.ws2812.push(strip);
+        Ok(())
+    }
+}
+
 impl crate::inspect::DeviceEvidence for Ws2812 {
     fn artifacts(
         &self,

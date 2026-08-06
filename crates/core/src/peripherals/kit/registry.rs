@@ -107,6 +107,9 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::cap1188::CAP1188_KIT,
     &components::drv2605::DRV2605_KIT,
     &components::mlx90640::MLX90640_KIT,
+    // GPIO-group actuators migrated off from_config residual arms.
+    &components::servo::SERVO_KIT,
+    &components::ws2812::WS2812_KIT,
 ];
 
 /// Borrow the registry slice.
@@ -129,6 +132,11 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     ("drv2605l", "drv2605"),
     // Underscore spelling of the parallel ILI9341 kit.
     ("ili9341_16bit", "ili9341-16bit"),
+    // Hobby servo calibrations as top-level type strings.
+    ("sg90", "servo"),
+    ("mg996r", "servo"),
+    // WS2812 synonym for neopixel kit.
+    ("ws2812", "neopixel"),
 ];
 
 /// Resolve a `device_type` spelling to its canonical form.

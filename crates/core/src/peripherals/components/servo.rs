@@ -316,6 +316,101 @@ impl crate::peripherals::esp32::mcpwm::McpwmDutyObserver for McpwmServoDriver {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+/// Hobby PWM servo kit — GPIO edges + optional LEDC duty observers.
+pub struct ServoKit;
+pub static SERVO_KIT: ServoKit = ServoKit;
+
+static SERVO_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "servo",
+    label: "Hobby PWM Servo",
+    summary: "RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty).",
+    detail: "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC \
+             duty for ledcWrite paths. Type aliases sg90 / mg996r select calibration via config.model \
+             or the top-level type string.",
+    transport: Transport::GpioGroup,
+    category: Category::Gpio,
+    config_keys: &[
+        ConfigKey {
+            name: "signal_pin",
+            ty: ConfigType::Str,
+            doc: "Control pin (also control_pin / pwm_pin / pin). Defaults to GPIO18.",
+        },
+        ConfigKey {
+            name: "model",
+            ty: ConfigType::Str,
+            doc: "Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted.",
+        },
+        ConfigKey {
+            name: "ledc_channel",
+            ty: ConfigType::Int,
+            doc: "Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe.",
+        },
+    ],
+    labs: &[],
+};
+
+impl PeripheralKit for ServoKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &SERVO_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let pin_label = ctx
+            .config_str("signal_pin")
+            .or_else(|| ctx.config_str("control_pin"))
+            .or_else(|| ctx.config_str("pwm_pin"))
+            .or_else(|| ctx.config_str("pin"))
+            .unwrap_or("GPIO18");
+        let pin = ctx.parse_gpio_pin(pin_label).ok_or_else(|| {
+            anyhow::anyhow!(
+                "servo '{}' control/signal pin '{}' is not a parseable GPIO",
+                ctx.device_id(),
+                pin_label
+            )
+        })?;
+        let model = ctx
+            .config_str("model")
+            .unwrap_or(ctx.device_type());
+        let cal = match model {
+            "sg90" => ServoCal::sg90(),
+            "mg996r" => ServoCal::mg996r(),
+            _ => ServoCal::standard(),
+        };
+        let servo = Arc::new(Servo::with_id(ctx.device_id().to_string(), cal, pin));
+        ctx.install_gpio_observer(servo.clone());
+        let ledc_channel = ctx.config_i64("ledc_channel").map(|v| v as u64);
+        for name in ["ledc", "LEDC"] {
+            if let Some(idx) = ctx.bus.find_peripheral_index_by_name(name) {
+                if let Some(ledc) = ctx.bus.peripherals[idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>())
+                {
+                    if let Some(ch) = ledc_channel {
+                        ledc.add_duty_observer(Arc::new(LedcServoDriver::new(ch, servo.clone())));
+                    } else {
+                        for ch in 0..16u64 {
+                            ledc.add_duty_observer(Arc::new(LedcServoDriver::new(
+                                ch,
+                                servo.clone(),
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+        ctx.bus.servos.push(servo);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
