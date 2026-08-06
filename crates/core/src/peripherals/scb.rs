@@ -6,7 +6,7 @@
 
 use crate::{CycleClock, SimResult};
 use std::cell::Cell;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// Event token for the ICSR pend-drain chain (the SCB schedules exactly one
@@ -22,6 +22,9 @@ pub struct SharedScbState {
     pub shpr1: Arc<AtomicU32>,
     pub shpr2: Arc<AtomicU32>,
     pub shpr3: Arc<AtomicU32>,
+    /// Mirror of `pending_reset` the CPU can read without reaching the bus.
+    /// See the field docs on [`Scb::sysreset_signal`].
+    pub sysreset_signal: Arc<AtomicBool>,
 }
 
 /// System Control Block (SCB)
@@ -87,6 +90,21 @@ pub struct Scb {
     /// Drained by the machine reset routing via drain_reset_request().
     #[serde(skip)]
     pending_reset: Cell<bool>,
+    /// Lock-free mirror of `pending_reset`, shared with the CPU by
+    /// `configure_cortex_m`. The machine drains the reset at a committed
+    /// instruction boundary (`Machine::drain_scb_reset_request`), so the CPU
+    /// must not retire further instructions once SYSRESETREQ latches. Reaching
+    /// `pending_reset` from inside the batch loop would mean a bus scan and a
+    /// downcast per instruction; this flag makes the check a relaxed atomic
+    /// load, cheap enough for `CortexM::step_batch` to poll per instruction and
+    /// break the batch on the same boundary interval-1 would have stopped at.
+    ///
+    /// That is what lets `plan_cpu_window` batch on Cortex-M at all: the plan
+    /// used to pin the quantum to 1 for the entire life of any bus carrying an
+    /// SCB — which `configure_cortex_m` installs unconditionally, so *every*
+    /// ARM board paid it forever to keep a reset that almost never comes exact.
+    #[serde(skip)]
+    sysreset_signal: Arc<AtomicBool>,
     /// Walk-free plan batch B1: bus cycle clock, attached by the registration
     /// choke (`configure_cortex_m`). Used purely as the "machine-driven bus"
     /// marker that flips `uses_scheduler()` — the SCB has no time-derived
@@ -110,6 +128,7 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            sysreset_signal: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -120,6 +139,7 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            sysreset_signal: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -148,6 +168,7 @@ impl Scb {
             mpu_mair0: 0,
             mpu_mair1: 0,
             pending_reset: Cell::new(false),
+            sysreset_signal: s.sysreset_signal,
             clock: None,
             drain_chain_armed: false,
         }
@@ -197,8 +218,20 @@ impl Scb {
     }
 
     /// Returns true once if a SYSRESETREQ was latched, then clears the latch.
+    /// Clears the CPU-visible mirror with it, so the batch loop stops breaking
+    /// once the machine has applied the reset.
     pub fn drain_reset_request(&self) -> bool {
-        self.pending_reset.replace(false)
+        let latched = self.pending_reset.replace(false);
+        if latched {
+            self.sysreset_signal.store(false, Ordering::Relaxed);
+        }
+        latched
+    }
+
+    /// The CPU-visible SYSRESETREQ mirror, for `configure_cortex_m` to hand to
+    /// the core. See the field docs on `sysreset_signal`.
+    pub fn sysreset_signal(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.sysreset_signal)
     }
 
     /// Write a 32-bit value to an SCB register at the given word-aligned offset.
@@ -299,6 +332,9 @@ impl Scb {
             0x0C => {
                 if (value >> 16) == 0x05FA && value & (1 << 2) != 0 {
                     self.pending_reset.set(true);
+                    // Cut the CPU batch at this instruction so the machine
+                    // drains the reset on the very next boundary.
+                    self.sysreset_signal.store(true, Ordering::Relaxed);
                 }
                 // Store masked: VECTKEY field reads back as 0 (matches silicon).
                 self.aircr = value & 0x0000_FFFF;

@@ -4575,8 +4575,11 @@ fn iolink_master_cache_tracks_every_mutation_path() {
     );
     assert!(bus.has_iolink_master());
     assert!(
-        bus.requires_cycle_accurate(),
-        "an attached IO-Link master must force cycle-accurate execution"
+        !bus.requires_cycle_accurate(),
+        "an IO-Link master no longer forces cycle-accurate execution: the UART \
+         replays one poll per tick-equivalent (`Uart::advance_ticks`), so the \
+         master's tick-counted schedule is interval-independent. This predicate \
+         tracks the CACHE seam, not a pacing policy."
     );
 
     // A later peripheral-set mutation re-derives the cache; it must not clobber

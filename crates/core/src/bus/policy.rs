@@ -42,10 +42,18 @@ impl SystemBus {
     /// CLI/batch run path would record the op in the FLASH cell but never apply
     /// it (no 0xFF fill, no bank swap, no reset).
     ///
+    /// An attached IO-Link master used to be an arm here. It no longer is: the
+    /// shared `Uart` now replays one `poll` per tick-equivalent when it is
+    /// serviced on a widened interval (`Uart::advance_ticks`), so the master
+    /// sees exactly the poll count per simulated cycle it saw at interval 1 and
+    /// its tick-counted startup schedule keeps its original length. Pinning the
+    /// whole machine to one instruction per batch for it was costing every lab
+    /// on the bus, not just the IO-Link ones.
+    ///
     /// HOT: called per batch plan (`machine/plan.rs`), per interpreted step
     /// (`cpu/riscv.rs`) and in the idle fast-forward check (`lib.rs`), so every
-    /// clause must be O(1). Two of the three read bools cached at bus
-    /// build/mutation (`iolink_master_attached`, `flash_models_ops`); the
+    /// clause must be O(1). `flash_models_ops` is a bool cached at bus
+    /// build/mutation; the
     /// HC-SR04 clause is deliberately NOT cached because it is run-dynamic —
     /// `hcsr04_event_scheduled` gates on `config.peripheral_tick_interval`,
     /// which the wasm engine (`set_peripheral_tick_interval`) and the
@@ -54,7 +62,7 @@ impl SystemBus {
     #[inline]
     pub fn requires_cycle_accurate(&self) -> bool {
         let hcsr04_needs_cycle_accurate = !self.hcsr04.is_empty() && !self.hcsr04_event_scheduled();
-        hcsr04_needs_cycle_accurate || self.has_iolink_master() || self.flash_models_ops
+        hcsr04_needs_cycle_accurate || self.flash_models_ops
     }
 
     /// The largest `peripheral_tick_interval` this bus can run at without
@@ -84,7 +92,7 @@ impl SystemBus {
         #[cfg(feature = "event-scheduler")]
         {
             let hcsr04_forced_legacy = !self.hcsr04.is_empty() && self.hcsr04_scheduling_disabled;
-            if self.legacy_walk_disabled && !self.has_iolink_master() && !hcsr04_forced_legacy {
+            if self.legacy_walk_disabled && !hcsr04_forced_legacy {
                 return RECOMMENDED_TICK_INTERVAL;
             }
         }
@@ -189,10 +197,14 @@ impl SystemBus {
     /// True when an IO-Link master peer is attached to any UART. The master is
     /// paced one byte per UART tick and runs a deterministic, tick-counted
     /// startup schedule (wake-up → IDLE → OPERATE → cyclic) with a large
-    /// inter-frame gap. Under instruction batching the UART would tick only once
-    /// per ~10k-instruction batch, stretching the handshake to hundreds of
-    /// millions of steps; ticking per instruction keeps it well within the
-    /// runner's step budget.
+    /// inter-frame gap.
+    ///
+    /// This used to force `requires_cycle_accurate` and pin
+    /// `max_safe_tick_interval` to 1, because a widened interval ticked the
+    /// UART once per batch and stretched the handshake by the interval factor.
+    /// `Uart::advance_ticks` now replays the skipped tick-equivalents at each
+    /// service, so poll count per simulated cycle is interval-independent and
+    /// neither pin is needed. Retained as an inspector/diagnostic predicate.
     ///
     /// O(1): reads the `iolink_master_attached` bool cached at every
     /// peripheral-set mutation (`rebuild_peripheral_ranges`) and at the

@@ -10,7 +10,7 @@ use crate::peripherals::dwt::Dwt;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::{Scb, SharedScbState};
 use crate::Peripheral;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 
 pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
@@ -20,12 +20,18 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let shpr2 = Arc::new(AtomicU32::new(0));
     let shpr3 = Arc::new(AtomicU32::new(0));
     let nvic_state = Arc::new(NvicState::default());
+    // Shared SYSRESETREQ latch: the SCB sets it on an AIRCR write, the CPU's
+    // batch loop stops on it, and `Machine::drain_scb_reset_request` clears it.
+    // Without this the plan had to pin the CPU quantum to 1 on every
+    // Cortex-M bus just to keep the reset boundary exact.
+    let sysreset_signal = Arc::new(AtomicBool::new(false));
 
     let mut cpu = CortexM::default();
     cpu.set_shared_vtor(vtor.clone());
     cpu.set_shared_vectactive(vectactive.clone());
     cpu.set_shared_shpr(shpr1.clone(), shpr2.clone(), shpr3.clone());
     cpu.set_shared_nvic_state(nvic_state.clone());
+    cpu.set_shared_sysreset_signal(sysreset_signal.clone());
 
     bus.nvic = Some(nvic_state.clone());
 
@@ -36,6 +42,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         shpr1,
         shpr2,
         shpr3,
+        sysreset_signal,
     });
     // Walk-free plan batch B1: this install path replaces the placeholder dev
     // (or pushes directly) and so bypasses the `add_peripheral`/`push_peripheral`

@@ -1185,6 +1185,18 @@ pub trait Bus {
     #[cfg(feature = "event-scheduler")]
     fn publish_cycle(&mut self, _cycle: u64) {}
 
+    /// This bus's `peripheral_tick_interval` — how many cycles one
+    /// tick-equivalent of peripheral work covers. A scheduler-driven model that
+    /// paces output over time (the shared `Uart` and its RX streams) reads it
+    /// to size its own service cadence, so it wakes once per interval and
+    /// replays that many tick-equivalents instead of demanding a wakeup every
+    /// cycle. Returning `1` (the default, and what a cycle-accurate bus
+    /// reports) reproduces the per-cycle cadence exactly.
+    #[cfg(feature = "event-scheduler")]
+    fn peripheral_tick_interval(&self) -> u32 {
+        1
+    }
+
     /// Plan 2: deliver a coherent 32-bit value to peripherals after the
     /// four byte writes that compose a write_u32 have been dispatched.
     /// Default: no-op for buses that don't route to peripherals.

@@ -7,7 +7,7 @@
 use crate::bus::SystemBus;
 use crate::decoder::arm::{decode_thumb_16, decode_thumb_32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// `LABWIRED_TRACE_INSN` / `LABWIRED_TRACE_EXC` are developer trace gates read
@@ -103,6 +103,14 @@ pub struct CortexM {
     pub shpr3: Arc<AtomicU32>,
     /// Shared NVIC state for IRQ priority lookups via IPR.
     pub nvic_state: Option<Arc<crate::peripherals::nvic::NvicState>>,
+    /// Shared with SCB: AIRCR.SYSRESETREQ latched by firmware. `step_batch`
+    /// polls it after each retired instruction and ends the batch, so the
+    /// machine drains the reset (`Machine::drain_scb_reset_request`) at the
+    /// same committed boundary a one-instruction quantum would have stopped
+    /// at — without pinning the quantum to 1 for the life of the bus.
+    /// `None` on hand-built buses that never went through `configure_cortex_m`;
+    /// those keep the legacy behaviour of their caller.
+    pub sysreset_signal: Option<Arc<AtomicBool>>,
     pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
     /// FPU single-precision register file (VFPv4 single — S0..S31).
     /// Each S register is the IEEE-754 binary32 bit pattern; reads via
@@ -152,6 +160,7 @@ impl Default for CortexM {
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
             nvic_state: None,
+            sysreset_signal: None,
             decode_cache: Box::new([None; 4096]),
             fpu_s: [0u32; 32],
             sleeping: false,
@@ -199,6 +208,21 @@ impl CortexM {
     /// IPR bytes for IRQs (exception number ≥ 16).
     pub fn set_shared_nvic_state(&mut self, state: Arc<crate::peripherals::nvic::NvicState>) {
         self.nvic_state = Some(state);
+    }
+
+    /// Wire the SCB's SYSRESETREQ mirror so the batch loop can stop on the
+    /// instruction that requests a system reset. See the field docs.
+    pub fn set_shared_sysreset_signal(&mut self, signal: Arc<AtomicBool>) {
+        self.sysreset_signal = Some(signal);
+    }
+
+    /// True once firmware has latched AIRCR.SYSRESETREQ and the machine has
+    /// not yet drained it. One relaxed load; `false` when no SCB is wired.
+    #[inline(always)]
+    fn sysreset_latched(&self) -> bool {
+        self.sysreset_signal
+            .as_ref()
+            .is_some_and(|f| f.load(Ordering::Relaxed))
     }
 
     /// ARMv7-M exception priority. Lower numeric value = higher priority.
@@ -714,6 +738,12 @@ impl Cpu for CortexM {
                     tap.bump_clock();
                 }
                 self.step(bus, observers, config)?;
+                // A latched SYSRESETREQ ends the batch on the instruction that
+                // wrote AIRCR, so the machine boundary applies the reset before
+                // anything else retires (see `CortexM::sysreset_signal`).
+                if self.sysreset_latched() {
+                    return Ok(i + 1);
+                }
                 // WFI idle escape: leave the batch once the core is sleeping so
                 // `Machine::run` can fast-forward the idle window (mirrors the
                 // batch paths below and the RISC-V core).
@@ -759,6 +789,11 @@ impl Cpu for CortexM {
                 }
                 self.step_internal(sysbus, observers, config)?;
                 executed += 1;
+                // See the `!batch_mode_enabled` arm: a latched SYSRESETREQ ends
+                // the batch here so the reset lands on this exact boundary.
+                if self.sysreset_latched() {
+                    break;
+                }
                 // Taken branches no longer break the batch — the run loop bounds
                 // it to the next peripheral tick, so bouncing back through
                 // `Machine::run` at every branch was pure overhead. Only WFI
@@ -793,6 +828,9 @@ impl Cpu for CortexM {
                 }
                 self.step_internal(bus, observers, config)?;
                 executed += 1;
+                if self.sysreset_latched() {
+                    break;
+                }
                 if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some()
                 {
                     break;
