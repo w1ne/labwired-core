@@ -2,19 +2,15 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! [`SimMqttFabric`] — a **simulated MQTT topic fabric**, not a real broker.
+//! [`SimMqttFabric`] — **just enough to send messages and collect data**.
 //!
-//! Honesty: this is enough for firmware “pub/sub over AT” demos and multi-UE
-//! fan-out on a shared lab [`AirBus`](crate). It is **not** MQTT 3.1.1 on the
-//! wire, not an EPC, and not a substitute for host egress MQTT.
+//! Scope (intentional, not a full network):
+//!   * **Send:** firmware `QMTPUB` lands a topic + payload on the fabric
+//!   * **Collect:** ring log + `inspect` / smoke / playground strip
+//!   * Optional: same-fabric `QMTSUB` → `+QMTRECV` fan-out (loopback / multi-UE)
 //!
-//! What it does:
-//!   * Tracks open/connect/subscribe per modem endpoint + client index
-//!   * Retains a ring of publishes for inspect / smoke / playground
-//!   * Fan-out to matching subscribers as pending `+QMTRECV` deliveries
-//!
-//! Lives on the lab AirBus (browser multi-chip) or a private lab air minted by
-//! `SystemBus::attach_private_lab_air` (CLI). Not a process-global singleton.
+//! Not in scope: MQTT wire protocol, EPC/RAN, TLS, real brokers, host egress.
+//! Lives on lab AirBus (or CLI private lab air via `attach_lab_air`).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
