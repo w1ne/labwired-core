@@ -771,7 +771,16 @@ impl SystemBus {
         let fdcan = any
             .downcast_mut::<crate::peripherals::fdcan::Fdcan>()
             .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
-        fdcan.attach_bus(tx, rx)
+        fdcan.attach_bus(tx, rx)?;
+        // FDCAN is walk-free under `event-scheduler` until a CanBus endpoint is
+        // attached (`scheduler_mode` is `event-scheduler && bus_rx.is_none()`).
+        // from_config latches `legacy_walk_disabled` over the pre-attach set, so
+        // without a recompute the multi-node bus stays walk-deleted and mpsc RX
+        // never drains — world_can_bus / CanBus paths under cargo test --workspace
+        // (feature-unified event-scheduler) receive zero frames.
+        self.rebuild_peripheral_ranges();
+        self.recompute_walk_deletable();
+        Ok(())
     }
 
     /// Detach a single UART (by peripheral id) from the shared console TX sink.
