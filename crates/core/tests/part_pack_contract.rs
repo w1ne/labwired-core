@@ -131,16 +131,20 @@ fn a_part_the_engine_has_never_seen_attaches_and_answers() {
 }
 
 /// The negative control for the test above: without `parts:`, the very same
-/// manifest must NOT quietly produce a working device. If this ever passes, the
-/// test above has stopped proving that the pack is what made the part work.
+/// manifest must NOT quietly produce a working device. Unknown types fail loud
+/// (a green run with a silently missing device proves nothing — see
+/// `from_config` residual attach). If this ever passes, the pack no longer
+/// proves anything.
 #[test]
-fn the_same_part_without_its_pack_attaches_nothing() {
+fn the_same_part_without_its_pack_is_rejected() {
     let src = manifest_yaml(&[], "acme:tmp999");
-    let mut bus = build_bus(&src).expect("an unknown device type is skipped, not fatal");
-
+    let msg = build_error(
+        &src,
+        "an unknown device type must fail the build, not attach a silent stub",
+    );
     assert!(
-        slave_bytes_at(&mut bus, 0x4a, 0x00, 2).is_none(),
-        "an unknown `type:` must not attach a device — otherwise the pack proves nothing"
+        msg.contains("unsupported type") && msg.contains("acme:tmp999"),
+        "the error must name the missing type, got: {msg}"
     );
 }
 
