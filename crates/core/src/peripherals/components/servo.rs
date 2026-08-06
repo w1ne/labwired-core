@@ -375,9 +375,7 @@ impl PeripheralKit for ServoKit {
                 pin_label
             )
         })?;
-        let model = ctx
-            .config_str("model")
-            .unwrap_or(ctx.device_type());
+        let model = ctx.config_str("model").unwrap_or(ctx.device_type());
         let cal = match model {
             "sg90" => ServoCal::sg90(),
             "mg996r" => ServoCal::mg996r(),

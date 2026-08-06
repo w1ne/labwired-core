@@ -405,12 +405,24 @@ impl SystemBus {
                                 counter_ticks: pwm.counter_ticks,
                                 prescaler_phase: pwm.prescaler_phase,
                             };
+                            // Lazy clock already brought CNT to "now" for this
+                            // service; advancing again would double-count.
+                            // Legacy walk still needs the elapsed advance —
+                            // motor runs before the timer tick.
+                            if pwm.counter_enabled
+                                && !pwm.counter_frozen
+                                && !pwm.clock_authoritative
+                            {
+                                advance_pwm_phase_cursor(cursor.as_mut(), *pwm, elapsed);
+                            }
                         } else {
+                            // Steady state: track phase across the elapsed
+                            // window independently of the upcoming timer walk.
                             pwm.counter_ticks = cursor.counter_ticks;
                             pwm.prescaler_phase = cursor.prescaler_phase;
-                        }
-                        if pwm.counter_enabled && !pwm.counter_frozen {
-                            advance_pwm_phase_cursor(cursor.as_mut(), *pwm, elapsed);
+                            if pwm.counter_enabled && !pwm.counter_frozen {
+                                advance_pwm_phase_cursor(cursor.as_mut(), *pwm, elapsed);
+                            }
                         }
                     } else {
                         *pwm_phase_cursor = None;
@@ -955,6 +967,7 @@ mod tests {
             phase_revision: 0,
             counter_frozen: false,
             freeze_revision: 0,
+            clock_authoritative: false,
         }
     }
 
@@ -976,6 +989,7 @@ mod tests {
             phase_revision: 0,
             counter_frozen: false,
             freeze_revision: 0,
+            clock_authoritative: false,
         };
         let mut motor = BldcMotor::new(BldcMotorParams {
             resistance_ohm: 1.0,

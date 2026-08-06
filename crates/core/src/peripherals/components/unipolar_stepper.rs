@@ -166,7 +166,10 @@ impl PeripheralKit for UnipolarStepperKit {
         let p2 = ctx.config_gpio_pin("in2_pin", "IN2", "GPIO17")?;
         let p3 = ctx.config_gpio_pin("in3_pin", "IN3", "GPIO18")?;
         let p4 = ctx.config_gpio_pin("in4_pin", "IN4", "GPIO19")?;
-        let motor = Arc::new(UnipolarStepper::new_28byj48(ctx.device_id(), [p1, p2, p3, p4]));
+        let motor = Arc::new(UnipolarStepper::new_28byj48(
+            ctx.device_id(),
+            [p1, p2, p3, p4],
+        ));
         ctx.install_gpio_observer(motor.clone());
         ctx.bus.unipolar_steppers.push(motor);
         Ok(())

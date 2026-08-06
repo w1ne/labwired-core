@@ -245,7 +245,6 @@ impl crate::inspect::DeviceEvidence for Ws2812 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{

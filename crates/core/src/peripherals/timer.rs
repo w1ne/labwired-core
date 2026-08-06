@@ -202,6 +202,10 @@ pub struct TimerOutputSnapshot {
     pub phase_revision: u64,
     pub counter_frozen: bool,
     pub freeze_revision: u64,
+    /// True when this snapshot was taken after a lazy cycle-clock sync
+    /// (`event-scheduler` + attached clock). Motor PWM phase must treat CNT
+    /// as already at "now" and must not advance again for the same elapsed.
+    pub clock_authoritative: bool,
 }
 
 impl Timer {
@@ -280,7 +284,14 @@ impl Timer {
     }
 
     /// Read-only PWM state derived from the timer's register-owned truth.
+    ///
+    /// Under `event-scheduler` the counter is advanced lazily from the bus
+    /// cycle clock; MMIO reads call `sync_from_clock` but motor service only
+    /// uses this snapshot. Sync here so PWM phase tracking sees current CNT
+    /// (otherwise workspace `--lib` tests unify features via labwired-wasm and
+    /// freeze/unfreeze phase assertions observe a stale counter).
     pub fn output_snapshot(&self) -> TimerOutputSnapshot {
+        self.sync_from_clock();
         let period = u64::from(self.arr) + 1;
         let ccr = [self.ccr1, self.ccr2, self.ccr3, self.ccr4];
         let channels = std::array::from_fn(|channel| {
@@ -321,6 +332,7 @@ impl Timer {
             phase_revision: self.phase_revision,
             counter_frozen: self.irq_level_held(),
             freeze_revision: self.freeze_revision.get(),
+            clock_authoritative: self.scheduler_mode(),
         }
     }
 
