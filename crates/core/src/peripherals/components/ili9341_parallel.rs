@@ -391,7 +391,7 @@ impl crate::peripherals::esp32::gpio::GpioObserver for Ili9341Parallel {
 // ─── PeripheralKit (universal attach) ──────────────────────────────────────
 
 use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
 };
 
 /// Kit for the 16-bit parallel ILI9341 (`ili9341-16bit`). Distinct device_type
@@ -442,12 +442,9 @@ static ILI9341_PARALLEL_METADATA: KitMetadata = KitMetadata {
             doc: "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25.",
         },
     ],
-    labs: &[LabRef {
-        board_id: "ili9341-16bit-lab",
-        chip: "esp32",
-        example_dir: "ili9341-16bit-lab",
-        demo_elf: "",
-    }],
+    // Example system lives at examples/ili9341-16bit-lab; keep labs empty until
+    // a non-empty demo_elf ships (UI kitsWithLabs requires demo_elf length > 0).
+    labs: &[],
 };
 
 impl PeripheralKit for Ili9341ParallelKit {

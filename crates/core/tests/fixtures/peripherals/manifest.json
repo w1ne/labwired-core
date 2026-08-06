@@ -902,14 +902,7 @@
           "doc": "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25."
         }
       ],
-      "labs": [
-        {
-          "board_id": "ili9341-16bit-lab",
-          "chip": "esp32",
-          "example_dir": "ili9341-16bit-lab",
-          "demo_elf": ""
-        }
-      ],
+      "labs": [],
       "inputs": []
     },
     {
