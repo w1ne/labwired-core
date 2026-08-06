@@ -657,7 +657,10 @@ mod tests {
         bus.ram = LinearMemory::new(256, 0x2000_0000);
 
         let mut u = Nrf52Uarte::new();
-        u.rx_buffer().lock().unwrap().extend([0xDE, 0xAD, 0xBE, 0xEF]);
+        u.rx_buffer()
+            .lock()
+            .unwrap()
+            .extend([0xDE, 0xAD, 0xBE, 0xEF]);
 
         u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
         u.write_u32(OFF_RXD_PTR, 0x2000_0020).unwrap();

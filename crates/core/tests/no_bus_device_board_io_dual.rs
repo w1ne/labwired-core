@@ -34,10 +34,7 @@ fn scan_yaml(path: &std::path::Path, offenders: &mut Vec<String>) {
         let Some(rest) = t.strip_prefix("kind:") else {
             continue;
         };
-        let kind = rest
-            .trim()
-            .trim_matches('"')
-            .trim_matches('\'');
+        let kind = rest.trim().trim_matches('"').trim_matches('\'');
         if matches!(kind, "i2c_device" | "spi_device" | "uart_device") {
             offenders.push(format!(
                 "{}: board_io kind={kind} (use external_devices only)",

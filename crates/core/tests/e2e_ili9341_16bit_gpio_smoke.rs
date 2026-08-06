@@ -65,11 +65,13 @@ fn set_pin(bus: &mut SystemBus, pin: u8, high: bool) {
     if pin < 32 {
         let mask = 1u32 << pin;
         let off = if high { GPIO_OUT_W1TS } else { GPIO_OUT_W1TC };
-        bus.write_u32(GPIO_BASE + off, mask).expect("gpio out bank0");
+        bus.write_u32(GPIO_BASE + off, mask)
+            .expect("gpio out bank0");
     } else {
         let mask = 1u32 << (pin - 32);
         let off = if high { GPIO_OUT1_W1TS } else { GPIO_OUT1_W1TC };
-        bus.write_u32(GPIO_BASE + off, mask).expect("gpio out bank1");
+        bus.write_u32(GPIO_BASE + off, mask)
+            .expect("gpio out bank1");
     }
 }
 
@@ -160,7 +162,7 @@ fn paint_red_band(bus: &mut SystemBus) {
     data8(bus, 0x00);
     data8(bus, 0x0F); // 15
     cmd(bus, 0x2C); // RAMWR
-    // RGB565 red = 0xF800 (big-endian on wire: one 16-bit bus write per pixel)
+                    // RGB565 red = 0xF800 (big-endian on wire: one 16-bit bus write per pixel)
     const RED: u16 = 0xF800;
     for _ in 0..(240 * 16) {
         data16(bus, RED);

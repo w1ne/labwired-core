@@ -494,7 +494,6 @@ impl crate::sim_input::SimInput for Bmi270 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -530,7 +529,6 @@ impl PeripheralKit for Bmi270Kit {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

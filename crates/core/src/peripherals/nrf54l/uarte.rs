@@ -544,7 +544,10 @@ mod tests {
     #[test]
     fn dma_rx_writes_queued_bytes_to_ram() {
         let (mut u, mut bus, _sink) = fixture(0x2000_0010, b"");
-        u.rx_buffer().lock().unwrap().extend([0xDE, 0xAD, 0xBE, 0xEF]);
+        u.rx_buffer()
+            .lock()
+            .unwrap()
+            .extend([0xDE, 0xAD, 0xBE, 0xEF]);
 
         u.write_u32(OFF_DMA_RX_PTR, 0x2000_0020).unwrap();
         u.write_u32(OFF_DMA_RX_MAXCNT, 3).unwrap(); // MAXCNT < queued: drains 3

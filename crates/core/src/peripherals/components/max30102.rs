@@ -677,7 +677,6 @@ impl crate::sim_input::SimInput for Max30102 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -740,7 +739,6 @@ impl PeripheralKit for Max30102Kit {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -589,8 +589,7 @@ impl SystemBus {
             }
             // nRF52 UARTE/legacy-UART twin: same injection queue, drained by
             // EasyDMA (UARTE personality) or RXD pops (legacy personality).
-            if let Some(uarte) =
-                any.downcast_ref::<crate::peripherals::nrf52::uarte::Nrf52Uarte>()
+            if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf52::uarte::Nrf52Uarte>()
             {
                 return Some(uarte.rx_buffer());
             }

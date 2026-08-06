@@ -324,9 +324,7 @@ impl SystemBus {
         self.nrf52_nvmc_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
-                .and_then(|a| {
-                    a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>()
-                })
+                .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>())
                 .is_some()
         });
         self.esp32c3_system_idx = self

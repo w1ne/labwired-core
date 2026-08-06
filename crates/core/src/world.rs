@@ -275,9 +275,8 @@ impl World {
                             format!("node '{}': plugin chip '{}'", node.id, sysman.chip)
                         })?,
                     None => {
-                        return Err(file_err).with_context(|| {
-                            format!("node '{}': chip {:?}", node.id, chip_path)
-                        });
+                        return Err(file_err)
+                            .with_context(|| format!("node '{}': chip {:?}", node.id, chip_path));
                     }
                 },
             };

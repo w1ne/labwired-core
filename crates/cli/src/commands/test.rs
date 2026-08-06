@@ -108,17 +108,23 @@ fn run_c3_rom_boot_no_elf(
 ) -> ExitCode {
     // Build the from_config bus (peripherals + external devices) exactly as the
     // ELF rom-boot path does before build_c3_rom_boot_machine.
-    let mut bus = match labwired_core::system::builder::build_system_bus_with_plugins(
-        system, plugins,
-    ) {
-        Ok(bus) => bus,
-        Err(e) => {
-            let msg = format!("{:#}", e);
-            error!("{}", msg);
-            write_config_error_outputs(args, None, system_path, None, Some(resolved_limits), msg);
-            return ExitCode::from(EXIT_CONFIG_ERROR);
-        }
-    };
+    let mut bus =
+        match labwired_core::system::builder::build_system_bus_with_plugins(system, plugins) {
+            Ok(bus) => bus,
+            Err(e) => {
+                let msg = format!("{:#}", e);
+                error!("{}", msg);
+                write_config_error_outputs(
+                    args,
+                    None,
+                    system_path,
+                    None,
+                    Some(resolved_limits),
+                    msg,
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
 
     // Load the manifest once: it drives both the UART sink selection (debug_uart)
     // and — the universal WiFi adapter — the `wifi_ap` attach below.
@@ -533,18 +539,20 @@ pub(crate) fn run_test(
                 return ExitCode::from(EXIT_CONFIG_ERROR);
             }
         },
-        (None, Some(chip)) => match labwired_config::ResolvedSystem::from_builtin_chip_with_plugins(
-            chip,
-            &crate::plugin_chip_yaml(plugins),
-        ) {
-            Ok(s) => Some(s),
-            Err(e) => {
-                let msg = format!("{e:#}");
-                error!("{}", msg);
-                write_config_error_outputs(&args, None, None, None, None, msg);
-                return ExitCode::from(EXIT_CONFIG_ERROR);
+        (None, Some(chip)) => {
+            match labwired_config::ResolvedSystem::from_builtin_chip_with_plugins(
+                chip,
+                &crate::plugin_chip_yaml(plugins),
+            ) {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    let msg = format!("{e:#}");
+                    error!("{}", msg);
+                    write_config_error_outputs(&args, None, None, None, None, msg);
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
             }
-        },
+        }
         (None, None) => None,
     };
 

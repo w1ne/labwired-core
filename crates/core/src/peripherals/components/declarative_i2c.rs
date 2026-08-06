@@ -292,7 +292,7 @@ impl GenericI2cDevice {
                             (
                                 i.key.clone(),
                                 ChannelNoise::new(
-                                    0, // run seed: 0 is still fully deterministic
+                                    0,  // run seed: 0 is still fully deterministic
                                     "", // re-keyed with the component id at attach
                                     &i.key,
                                     i.noise_sigma.unwrap_or(0.0),

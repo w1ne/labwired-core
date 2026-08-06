@@ -165,10 +165,7 @@ impl PeripheralKit for Apa102Kit {
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let cs = ctx
-            .config_str("cs_pin")
-            .unwrap_or("PA4")
-            .to_string();
+        let cs = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
         let n = ctx.config_i64("num_pixels").unwrap_or(8).max(1) as usize;
         ctx.attach_spi_device(Box::new(Apa102::new(cs, n)))?;
         Ok(())

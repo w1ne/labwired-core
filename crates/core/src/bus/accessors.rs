@@ -215,9 +215,7 @@ impl crate::Bus for SystemBus {
                 let allowed = self.peripherals[nvmc_idx]
                     .dev
                     .as_any()
-                    .and_then(|a| {
-                        a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>()
-                    })
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>())
                     .is_some_and(|n| n.write_enabled());
                 if !allowed {
                     // Dropped on silicon: no commit, no error, no observers.

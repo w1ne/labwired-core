@@ -237,7 +237,7 @@ pub const MODELLED_FLASH_SIZE: u32 = 4 * 1024 * 1024;
 pub fn seed_rom_flashchip(bus: &mut dyn Bus, addr: u32) {
     let base = addr as u64;
     for (off, val) in [
-        (0u64, 0x0016_40EFu32),  // device_id — Winbond W25Q32
+        (0u64, 0x0016_40EFu32),   // device_id — Winbond W25Q32
         (4, MODELLED_FLASH_SIZE), // chip_size
         (8, 64 * 1024),           // block_size
         (12, 4 * 1024),           // sector_size
@@ -310,14 +310,8 @@ mod tests {
     /// by both sides being wrong the same way. Vectors are RFC 1321 A.5.
     #[test]
     fn md5_digest_matches_rfc1321_vectors() {
-        assert_eq!(
-            hex(&md5_digest(b"")),
-            "d41d8cd98f00b204e9800998ecf8427e"
-        );
-        assert_eq!(
-            hex(&md5_digest(b"abc")),
-            "900150983cd24fb0d6963f7d28e17f72"
-        );
+        assert_eq!(hex(&md5_digest(b"")), "d41d8cd98f00b204e9800998ecf8427e");
+        assert_eq!(hex(&md5_digest(b"abc")), "900150983cd24fb0d6963f7d28e17f72");
         assert_eq!(
             hex(&md5_digest(
                 b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

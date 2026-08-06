@@ -84,7 +84,11 @@ fn crc16(packet: &[u8]) -> u16 {
     for &byte in packet {
         crc ^= byte as u16;
         for _ in 0..8 {
-            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xA001 } else { crc >> 1 };
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xA001
+            } else {
+                crc >> 1
+            };
         }
     }
     crc
@@ -215,9 +219,7 @@ impl Atecc608a {
                     return;
                 }
                 let sk = self.device_signing_key();
-                let sig: Signature = sk
-                    .sign_prehash(&self.tempkey)
-                    .expect("device key signs");
+                let sig: Signature = sk.sign_prehash(&self.tempkey).expect("device key signs");
                 self.respond(&sig.to_bytes());
                 self.tempkey_valid = false;
             }
@@ -322,10 +324,7 @@ impl PeripheralKit for Atecc608aKit {
 
 /// Parse 128 hex chars (optional 0x / whitespace) into a 64-byte P-256 pubkey.
 fn parse_oem_pubkey_hex(s: &str) -> anyhow::Result<[u8; 64]> {
-    let cleaned: String = s
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .collect();
+    let cleaned: String = s.chars().filter(|c| c.is_ascii_hexdigit()).collect();
     if cleaned.len() != 128 {
         anyhow::bail!(
             "oem_pubkey_hex must be 128 hex chars (64 bytes), got {} hex digits",
@@ -493,5 +492,4 @@ mod tests {
     fn parse_oem_pubkey_hex_rejects_wrong_length() {
         assert!(parse_oem_pubkey_hex("aabb").is_err());
     }
-
 }

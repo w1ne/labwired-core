@@ -41,7 +41,11 @@ fn crc16(bytes: &[u8]) -> u16 {
     for &byte in bytes {
         crc ^= byte as u16;
         for _ in 0..8 {
-            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xA001 } else { crc >> 1 };
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xA001
+            } else {
+                crc >> 1
+            };
         }
     }
     crc

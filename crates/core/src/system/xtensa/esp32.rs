@@ -93,9 +93,7 @@ pub fn attach_esp32_external_devices(
         // 3. Nothing claims this type: hard error. A green run with a
         //    silently missing device is worse than no run — the simulator's
         //    worst failure mode is a pass that proves nothing.
-        return Err(crate::bus::external_devices::unsupported_external_device_error(
-            "ESP32", ext,
-        ));
+        return Err(crate::bus::external_devices::unsupported_external_device_error("ESP32", ext));
     }
     Ok(())
 }

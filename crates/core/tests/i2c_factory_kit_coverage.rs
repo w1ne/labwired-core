@@ -18,9 +18,7 @@ use std::path::PathBuf;
 const FACTORY_ONLY_ALLOWLIST: &[&str] = &[
     // Bus switch: attach needs the full manifest to assemble children; kit
     // AttachCtx does not carry the manifest yet (see universal-modules-design).
-    "tca9548a",
-    "pca9548a",
-    "tca9548",
+    "tca9548a", "pca9548a", "tca9548",
     // Shared-memory cosim fixture — not a product part.
     "shm_i2c",
 ];
@@ -118,7 +116,9 @@ fn allowlist_entries_are_not_also_kits() {
 
 #[test]
 fn migrated_smart_ring_sensors_are_kits() {
-    for ty in ["bmi270", "max30102", "tmp117", "drv2605", "fxos8700", "cap1188", "mlx90640"] {
+    for ty in [
+        "bmi270", "max30102", "tmp117", "drv2605", "fxos8700", "cap1188", "mlx90640",
+    ] {
         assert!(
             registry::lookup(ty).is_some(),
             "expected kit for '{ty}' after legacy→kit migration"

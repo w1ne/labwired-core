@@ -42,9 +42,27 @@ pub struct Mma8451q {
 }
 
 pub const INPUT_CHANNELS: &[InputChannel] = &[
-    InputChannel { key: "x", label: "Accel X", unit: "g", min: -8.0, max: 8.0 },
-    InputChannel { key: "y", label: "Accel Y", unit: "g", min: -8.0, max: 8.0 },
-    InputChannel { key: "z", label: "Accel Z", unit: "g", min: -8.0, max: 8.0 },
+    InputChannel {
+        key: "x",
+        label: "Accel X",
+        unit: "g",
+        min: -8.0,
+        max: 8.0,
+    },
+    InputChannel {
+        key: "y",
+        label: "Accel Y",
+        unit: "g",
+        min: -8.0,
+        max: 8.0,
+    },
+    InputChannel {
+        key: "z",
+        label: "Accel Z",
+        unit: "g",
+        min: -8.0,
+        max: 8.0,
+    },
 ];
 
 impl Mma8451q {
@@ -88,9 +106,9 @@ impl Mma8451q {
             return;
         }
         let id = self.component_id.clone().unwrap_or_default();
-        self.noise = Some(["x", "y", "z"].map(|ch| {
-            ChannelNoise::new(0, &id, ch, self.noise_sigma, 0.0, None)
-        }));
+        self.noise = Some(
+            ["x", "y", "z"].map(|ch| ChannelNoise::new(0, &id, ch, self.noise_sigma, 0.0, None)),
+        );
     }
 
     fn read_register(&mut self, reg: u8) -> u8 {

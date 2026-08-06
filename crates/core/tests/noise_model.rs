@@ -36,8 +36,7 @@ fn gaussian_has_requested_sigma() {
     let n_samples = 20_000;
     let samples: Vec<f64> = (0..n_samples).map(|_| n.sample(0.0, None)).collect();
     let mean = samples.iter().sum::<f64>() / n_samples as f64;
-    let var =
-        samples.iter().map(|s| (s - mean).powi(2)).sum::<f64>() / n_samples as f64;
+    let var = samples.iter().map(|s| (s - mean).powi(2)).sum::<f64>() / n_samples as f64;
     assert!(mean.abs() < 0.01, "mean {mean} drifted");
     let sigma = var.sqrt();
     assert!((sigma - 0.1).abs() < 0.01, "sigma {sigma} off");
@@ -51,7 +50,10 @@ fn thermal_lag_smooths_step() {
     let base = n.sample(20.0, Some(0));
     assert_eq!(base, 20.0);
     let after_step = n.sample(100.0, Some(100_000)); // +0.1 s
-    assert!(after_step > 20.0, "must move toward the step, got {after_step}");
+    assert!(
+        after_step > 20.0,
+        "must move toward the step, got {after_step}"
+    );
     assert!(after_step < 100.0, "must not reach the step within 0.1 tau");
     let later = n.sample(100.0, Some(2_100_000)); // +2 s more
     assert!(later > after_step, "must keep converging");
