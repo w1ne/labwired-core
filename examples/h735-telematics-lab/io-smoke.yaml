@@ -14,4 +14,5 @@ assertions:
   - uart_contains: "> AT"
   - uart_contains: "GPS fix"
   - uart_contains: "location published"
+  - uart_contains: "+QMTPUB:"
   - expected_stop_reason: assertions_passed

@@ -8,10 +8,12 @@ use crate::SimResult;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 pub mod candump;
+pub mod cellular_mqtt;
 pub mod egress;
 pub mod mqtt;
 pub mod sim;
 pub mod virtual_uart_wire;
+pub use cellular_mqtt::{CellularDelivery, CellularMqttBus, CellularPublish};
 pub use virtual_uart_wire::{VirtualWireBus, VirtualWireEndpoint};
 
 /// Trait for virtual interconnects between machines.

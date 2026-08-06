@@ -19,8 +19,9 @@ CLM-style telematics story for demos (e.g. Proemion):
 | GPS | Simulator default coordinates from `+QGPSLOC` |
 | MQTT | Happy-path Quectel AT model, not a real broker |
 | Radio quality | Same **RfMedium** path-loss as VirtualAirBus / lab AirBus. Drag **Range (m)** on the modem (UE ↔ cell). Optional **RSSI override** (CSQ) for scripts. |
+| Network peer | **CellularMqttBus** virtual broker fabric: `QMTOPEN`/`CONN`/`SUB`/`PUB` land publishes on the fabric (inspectable); subscribers get `+QMTRECV`. Enough for networks to work — not a full packet core. |
 
-Drag **Range** on the modem; firmware re-polls `AT+CSQ` in idle so serial tracks path loss. Multi-chip labs that call `attach_lab_air` share the air medium slot with the modem.
+Drag **Range** on the modem; firmware re-polls `AT+CSQ` in idle so serial tracks path loss. Multi-chip labs that call `attach_lab_air` share the air medium slot with the modem. MQTT publishes appear on the default cellular fabric (topic e.g. `telematics/location`).
 
 ## Build
 

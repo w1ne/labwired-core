@@ -36,6 +36,7 @@
 //! AT+VZ Verizon extension. Those commands return `ERROR` so probing firmware
 //! sees a deterministic miss instead of a lie.
 
+use crate::network::CellularMqttBus;
 use crate::peripherals::rf_medium::{NodePosition, PathLossParams, RfMedium};
 use crate::peripherals::uart::UartStreamDevice;
 use std::any::Any;
@@ -157,6 +158,11 @@ struct MqttClient {
     /// TLS using SSL context `ssl_ctxid` (port 8883 typical).
     ssl_enabled: bool,
     ssl_ctxid: u8,
+    /// Broker host from last successful `AT+QMTOPEN`.
+    #[serde(skip)]
+    broker_host: String,
+    /// Broker port from last successful `AT+QMTOPEN`.
+    broker_port: u16,
 }
 
 /// Strip a leading `"<key>"` from `s`, then split the rest on commas. Returns
@@ -324,12 +330,17 @@ pub struct QuectelBg770a {
     cedrxs_mode: u8,
     /// Per-client "post-publish payload" mode: when in this mode, the modem
     /// is waiting for the firmware to send the QMTPUB payload (followed by
-    /// 0x1A / Ctrl-Z to terminate). Tracks `(client_id, msg_id)`.
+    /// 0x1A / Ctrl-Z to terminate). Tracks `(client_id, msg_id, topic)`.
     #[serde(skip)]
-    awaiting_qmtpub_payload: Option<(u8, u16)>,
+    awaiting_qmtpub_payload: Option<(u8, u16, String)>,
     /// Accumulator for QMTPUB payload bytes received while in payload mode.
     #[serde(skip)]
     qmtpub_payload_buf: Vec<u8>,
+    /// Network-side MQTT fabric (virtual broker / cell peer). Publishes land
+    /// here; subscribers get `+QMTRECV`. Enough for networks to work — not a
+    /// full packet core.
+    #[serde(skip)]
+    mqtt_net: CellularMqttBus,
 
     /// Per-command response delay set by the current handler; cleared between
     /// commands. Drives the `ScheduledChunk` inserted after the line completes.
@@ -422,6 +433,7 @@ impl QuectelBg770a {
             cedrxs_mode: 0,
             awaiting_qmtpub_payload: None,
             qmtpub_payload_buf: Vec::new(),
+            mqtt_net: CellularMqttBus::default_bus(),
             current_delay_us: DELAY_DEFAULT_US,
             pending_cfun_resume_urcs: false,
             deferred_urcs: Vec::new(),
@@ -514,6 +526,32 @@ impl QuectelBg770a {
     pub fn set_rf_node_id(&mut self, id: impl Into<String>) {
         self.rf_node_id = Some(id.into());
         self.sync_geometry();
+    }
+
+    /// Attach a private cellular MQTT fabric (multi-node worlds). Default is
+    /// the process-shared bus so single-board labs still see publishes.
+    pub fn set_mqtt_net(&mut self, bus: CellularMqttBus) {
+        self.mqtt_net = bus;
+    }
+
+    /// Shared network-side fabric handle (publish log / fan-out).
+    pub fn mqtt_net(&self) -> &CellularMqttBus {
+        &self.mqtt_net
+    }
+
+    fn mqtt_endpoint_id(&self) -> String {
+        self.component_id
+            .clone()
+            .or_else(|| self.rf_node_id.clone())
+            .unwrap_or_else(|| "modem".into())
+    }
+
+    /// Drain fabric → modem `+QMTRECV` URCs (called from UART poll).
+    fn drain_mqtt_network(&mut self) {
+        let ep = self.mqtt_endpoint_id();
+        for d in self.mqtt_net.take_pending(&ep) {
+            self.inject_mqtt_recv(d.client_id, &d.topic, &d.payload);
+        }
     }
 
     fn rf_node_key(&self) -> &str {
@@ -1313,11 +1351,23 @@ impl QuectelBg770a {
         // QMTOPEN write — open MQTT network. Returns OK immediately, then
         // a `+QMTOPEN: <id>,<result>` URC. With no active PDP the result is 3
         // (PDP failed), matching real HW.
-        if let Some(arg) = upper.strip_prefix("AT+QMTOPEN=") {
-            let client_id = arg
-                .split(',')
+        // Form: AT+QMTOPEN=<id>,"host",port  (use original `line` for host quotes)
+        if upper.starts_with("AT+QMTOPEN=") {
+            let arg = line
+                .strip_prefix("AT+QMTOPEN=")
+                .or_else(|| {
+                    // line may be mixed-case; fall back to upper without host fidelity
+                    upper.strip_prefix("AT+QMTOPEN=")
+                })
+                .unwrap_or("");
+            let mut parts = arg.splitn(3, ',');
+            let client_id = parts.next().and_then(|s| s.trim().parse::<u8>().ok());
+            let host_raw = parts.next().unwrap_or("").trim();
+            let host = host_raw.trim_matches('"');
+            let port = parts
                 .next()
-                .and_then(|s| s.trim().parse::<u8>().ok());
+                .and_then(|s| s.trim().parse::<u16>().ok())
+                .unwrap_or(1883);
             return match client_id {
                 Some(id @ 0..=5) => {
                     self.current_delay_us = DELAY_QMTOPEN_US;
@@ -1325,6 +1375,10 @@ impl QuectelBg770a {
                     let result: i8 = if self.qiact_cid1 == 1 { 0 } else { 3 };
                     if result == 0 {
                         self.mqtt[id as usize].state = MqttState::Initialized;
+                        self.mqtt[id as usize].broker_host = host.to_string();
+                        self.mqtt[id as usize].broker_port = port;
+                        self.mqtt_net
+                            .open(&self.mqtt_endpoint_id(), id, host, port);
                     }
                     let urc = format!("\r\n+QMTOPEN: {},{}\r\n", id, result);
                     self.deferred_urcs
@@ -1348,6 +1402,7 @@ impl QuectelBg770a {
                     self.current_delay_us = DELAY_QMTCONN_US;
                     self.ok();
                     self.mqtt[id as usize].state = MqttState::Connected;
+                    self.mqtt_net.connect(&self.mqtt_endpoint_id(), id);
                     let urc = format!("\r\n+QMTCONN: {},0,0\r\n", id);
                     self.deferred_urcs
                         .push((URC_DELAY_QMTCONN_US, urc.into_bytes()));
@@ -1358,32 +1413,76 @@ impl QuectelBg770a {
 
         // QMTPUB write — publish. Real HW: emits `> ` prompt, firmware sends
         // payload + 0x1A, modem emits OK + async `+QMTPUB: <id>,<msgid>,<r>`.
-        // We model the prompt mode here.
+        // Form: AT+QMTPUB=<id>,<msgId>,<qos>,<retain>,"topic"[,len]
         if let Some(arg) = line.strip_prefix("AT+QMTPUB=") {
-            let mut parts = arg.split(',');
-            let client_id = parts.next().and_then(|s| s.trim().parse::<u8>().ok());
-            let msg_id = parts.next().and_then(|s| s.trim().parse::<u16>().ok());
+            // Parse with awareness of quoted topic.
+            let mut client_id: Option<u8> = None;
+            let mut msg_id: Option<u16> = None;
+            let mut topic = String::from("topic");
+            let mut field = String::new();
+            let mut in_quote = false;
+            let mut fields: Vec<String> = Vec::new();
+            for ch in arg.chars() {
+                match ch {
+                    '"' => in_quote = !in_quote,
+                    ',' if !in_quote => {
+                        fields.push(std::mem::take(&mut field));
+                    }
+                    c => field.push(c),
+                }
+            }
+            if !field.is_empty() || arg.ends_with(',') {
+                fields.push(field);
+            }
+            if !fields.is_empty() {
+                client_id = fields[0].trim().parse().ok();
+            }
+            if fields.len() > 1 {
+                msg_id = fields[1].trim().parse().ok();
+            }
+            // fields: id, msgid, qos, retain, topic, [len]
+            if fields.len() > 4 {
+                topic = fields[4].trim().trim_matches('"').to_string();
+            }
             return match (client_id, msg_id) {
                 (Some(id @ 0..=5), Some(mid)) => {
                     if self.mqtt[id as usize].state != MqttState::Connected {
                         return self.error();
                     }
-                    // Enter payload-receive mode; emit "> " prompt.
                     self.emit("\r\n> ");
-                    self.awaiting_qmtpub_payload = Some((id, mid));
+                    self.awaiting_qmtpub_payload = Some((id, mid, topic));
+                    self.qmtpub_payload_buf.clear();
                 }
                 _ => self.error(),
             };
         }
 
-        // QMTSUB — subscribe. We acknowledge with a synthetic URC.
+        // QMTSUB — subscribe. Form: AT+QMTSUB=<id>,<msgId>,"topic",qos
         if let Some(arg) = line.strip_prefix("AT+QMTSUB=") {
-            let client_id = arg
-                .split(',')
-                .next()
-                .and_then(|s| s.trim().parse::<u8>().ok());
+            let mut in_quote = false;
+            let mut field = String::new();
+            let mut fields: Vec<String> = Vec::new();
+            for ch in arg.chars() {
+                match ch {
+                    '"' => in_quote = !in_quote,
+                    ',' if !in_quote => fields.push(std::mem::take(&mut field)),
+                    c => field.push(c),
+                }
+            }
+            if !field.is_empty() {
+                fields.push(field);
+            }
+            let client_id = fields.first().and_then(|s| s.trim().parse::<u8>().ok());
+            let topic = fields
+                .get(2)
+                .map(|s| s.trim().trim_matches('"').to_string())
+                .unwrap_or_default();
             return match client_id {
                 Some(id @ 0..=5) if self.mqtt[id as usize].state == MqttState::Connected => {
+                    if !topic.is_empty() {
+                        self.mqtt_net
+                            .subscribe(&self.mqtt_endpoint_id(), id, &topic);
+                    }
                     self.ok();
                     let urc = format!("\r\n+QMTSUB: {},1,0,0\r\n", id);
                     self.deferred_urcs
@@ -1400,6 +1499,7 @@ impl QuectelBg770a {
                 Some(id @ 0..=5) if self.mqtt[id as usize].state == MqttState::Connected => {
                     self.ok();
                     self.mqtt[id as usize].state = MqttState::Initialized;
+                    self.mqtt_net.disconnect(&self.mqtt_endpoint_id(), id);
                     let urc = format!("\r\n+QMTDISC: {},0\r\n", id);
                     self.deferred_urcs
                         .push((URC_DELAY_QMTDISC_US, urc.into_bytes()));
@@ -2467,6 +2567,8 @@ impl QuectelBg770a {
 
 impl UartStreamDevice for QuectelBg770a {
     fn poll(&mut self, elapsed_us: u32) -> Option<u8> {
+        // Pull any fabric deliveries into scheduled +QMTRECV URCs.
+        self.drain_mqtt_network();
         // Already-drainable bytes take priority.
         if let Some(b) = self.out_queue.pop_front() {
             return Some(b);
@@ -2598,12 +2700,16 @@ impl UartStreamDevice for QuectelBg770a {
         // QMTPUB payload mode: after `> ` prompt, every byte is payload until
         // 0x1A (Ctrl-Z, "submit") or 0x1B (Esc, "cancel"). No echo in this
         // mode — real HW falls silent until the terminator.
-        if let Some((id, msg_id)) = self.awaiting_qmtpub_payload {
+        if let Some((id, msg_id, topic)) = self.awaiting_qmtpub_payload.clone() {
             match byte {
                 0x1A => {
-                    // Submit: response is `\r\nOK\r\n` then async +QMTPUB.
+                    // Submit: land on the cellular MQTT fabric, then OK + +QMTPUB.
+                    let payload = std::mem::take(&mut self.qmtpub_payload_buf);
                     self.awaiting_qmtpub_payload = None;
-                    self.qmtpub_payload_buf.clear();
+                    let ep = self.mqtt_endpoint_id();
+                    self.mqtt_net.publish(&ep, id, &topic, &payload);
+                    // Fan-out may have queued +QMTRECV for us / peers.
+                    self.drain_mqtt_network();
                     let mut bytes = b"\r\nOK\r\n".to_vec();
                     bytes.extend_from_slice(
                         format!("\r\n+QMTPUB: {},{},0\r\n", id, msg_id).as_bytes(),
@@ -3148,6 +3254,51 @@ mod tests {
             tail.contains("+QMTPUB: 0,42,0"),
             "missing publish-result URC, got {tail:?}"
         );
+        // Network side: payload lands on the cellular MQTT fabric.
+        assert!(
+            m.mqtt_net().has_publish_on("topic"),
+            "fabric should retain publish on topic"
+        );
+        assert_eq!(
+            m.mqtt_net().last_payload_on("topic").as_deref(),
+            Some(b"Hello, world!".as_slice())
+        );
+    }
+
+    #[test]
+    fn mqtt_fabric_loopback_delivers_qmtrecv() {
+        use crate::sim_input::SimInput;
+        let bus = crate::network::CellularMqttBus::new();
+        let mut m = QuectelBg770a::new();
+        m.set_mqtt_net(bus.clone());
+        m.set_component_id("ue1".into());
+        for cmd in [
+            "AT+QIACT=1",
+            "AT+QMTOPEN=0,\"broker.labwired.local\",1883",
+            "AT+QMTCONN=0,\"cid\"",
+            "AT+QMTSUB=0,1,\"telematics/#\",0",
+        ] {
+            let _ = exchange(&mut m, cmd);
+        }
+        for b in b"AT+QMTPUB=0,1,0,0,\"telematics/location\"" {
+            m.on_tx_byte(*b);
+        }
+        m.on_tx_byte(b'\r');
+        while m.poll(1_000_000).is_some() {}
+        for b in br#"{"lat":1}"# {
+            m.on_tx_byte(*b);
+        }
+        m.on_tx_byte(0x1A);
+        let mut out = String::new();
+        while let Some(b) = m.poll(2_000_000) {
+            out.push(b as char);
+        }
+        assert!(out.contains("+QMTPUB:"), "got {out:?}");
+        assert!(
+            out.contains("+QMTRECV:") && out.contains("telematics/location"),
+            "loopback subscriber should get +QMTRECV, got {out:?}"
+        );
+        assert!(bus.has_publish_on("telematics/location"));
     }
 
     #[test]
