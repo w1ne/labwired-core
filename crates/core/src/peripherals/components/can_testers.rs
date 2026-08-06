@@ -137,11 +137,16 @@ impl PeripheralKit for CanUdsTesterKit {
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         require_can_connection(ctx, "UDS tester")?;
-        let mut tester = CanUdsTester::new(ctx.device_id().to_string(), ctx.connection().to_string());
-        tester.request_id =
-            SystemBus::yaml_u32(ctx.ext.config.get("request_id"), CanUdsTester::DEFAULT_REQUEST_ID);
-        tester.reply_id =
-            SystemBus::yaml_u32(ctx.ext.config.get("reply_id"), CanUdsTester::DEFAULT_REPLY_ID);
+        let mut tester =
+            CanUdsTester::new(ctx.device_id().to_string(), ctx.connection().to_string());
+        tester.request_id = SystemBus::yaml_u32(
+            ctx.ext.config.get("request_id"),
+            CanUdsTester::DEFAULT_REQUEST_ID,
+        );
+        tester.reply_id = SystemBus::yaml_u32(
+            ctx.ext.config.get("reply_id"),
+            CanUdsTester::DEFAULT_REPLY_ID,
+        );
         tester.first_frame = SystemBus::yaml_bytes(
             ctx.ext.config.get("first_frame"),
             &CanUdsTester::DEFAULT_FIRST_FRAME,
