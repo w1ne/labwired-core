@@ -1711,7 +1711,7 @@ boards:
     # either way; they used to resolve differently per family). No peripheral
     # register surface, reset value, or captured behavior changes. Evidence:
     # 2603 core lib tests + xtensa 57 + esp32_ili9341_attach 2/2 green.
-    drift_ack: 2026-08-05
+    drift_ack: 2026-08-06
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
