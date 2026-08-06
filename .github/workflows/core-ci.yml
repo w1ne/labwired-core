@@ -661,10 +661,15 @@ jobs:
             . -> target
 
       - name: Install ARM targets
+        # thumbv7em-none-eabihf is required by nucleo_l476rg BLDC tests
+        # (firmware-l476-demo / six-step). Soft-float eabi alone is not enough;
+        # without the hard-float target, cargo test --workspace fails mid-suite
+        # with E0463 can't find crate for `core`. Nightly already installs it.
         run: |
           rustup target add thumbv6m-none-eabi
           rustup target add thumbv7m-none-eabi
           rustup target add thumbv7em-none-eabi
+          rustup target add thumbv7em-none-eabihf
 
       - name: Build test firmware fixture
         run: |
