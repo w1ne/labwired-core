@@ -61,12 +61,12 @@ pub(crate) fn run_machine_load(
         reconstructed_system.as_ref(),
         plugins,
     ) {
-            Ok(bus) => bus,
-            Err(e) => {
-                error!("Failed to reconstruct bus: {:#}", e);
-                return ExitCode::from(EXIT_CONFIG_ERROR);
-            }
-        };
+        Ok(bus) => bus,
+        Err(e) => {
+            error!("Failed to reconstruct bus: {:#}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
 
     // Load original firmware (required for memory content that isn't in snapshot yet)
     // Note: Our snapshot currently doesn't include full RAM/Flash dumps to keep it small.

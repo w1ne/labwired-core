@@ -35,7 +35,7 @@ fn probe_foreign_firmware() {
         chip: chip_path.to_string_lossy().to_string(),
         external_devices: vec![],
         cosim_models: Vec::new(),
-            motor_models: Vec::new(),
+        motor_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
         wifi_ap: None,

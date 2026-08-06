@@ -51,7 +51,7 @@ fn one_g_x_encodes_14bit_left_justified() {
     let msb = read_reg(&mut dev, 0x01);
     let lsb = read_reg(&mut dev, 0x02);
     let raw14 = ((msb as i16) << 8 | lsb as i16) >> 2; // signed 14-bit
-    // ±2g default → 4096 counts/g
+                                                       // ±2g default → 4096 counts/g
     assert!((raw14 - 4096).abs() < 64, "raw14={raw14}");
 }
 

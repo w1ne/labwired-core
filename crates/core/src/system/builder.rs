@@ -26,7 +26,8 @@ pub fn build_system_bus_with_plugins(
 ) -> anyhow::Result<SystemBus> {
     let bus = if let Some(system) = system {
         info!("Loading chip descriptor: {}", system.manifest.chip);
-        let chip = system.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))?;
+        let chip =
+            system.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))?;
         let mut manifest = system.manifest.clone();
         // Peripheral descriptor paths inside a chip file are resolved relative
         // to it, so a file-backed chip keeps its full path. A built-in name has
@@ -91,7 +92,8 @@ pub fn build_esp32_system_from_manifest_with_plugins(
 ) -> anyhow::Result<(SystemBus, XtensaLx7, XtensaLx7)> {
     let chip_dir = system_path.parent().unwrap_or_else(|| Path::new("."));
     info!("Loading chip descriptor: {}", manifest.chip);
-    let chip = labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
+    let chip =
+        labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, plugin_chips)?;
 
     let mut bus = SystemBus::new();
     let pro_cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);

@@ -64,7 +64,6 @@ pub(crate) fn motor_states_json(
         .collect()
 }
 
-
 /// Both tri-color e-paper models emit this format. They are interchangeable to
 /// a reader on purpose — see [`WasmSimulator::panel_artifact`] and
 /// [`labwired_core::bus::SystemBus::device_artifact_at`].

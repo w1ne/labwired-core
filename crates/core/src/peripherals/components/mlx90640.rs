@@ -586,7 +586,6 @@ impl I2cDevice for Mlx90640 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -645,7 +644,6 @@ impl PeripheralKit for Mlx90640Kit {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

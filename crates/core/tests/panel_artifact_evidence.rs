@@ -50,7 +50,7 @@ fn rig(device_type: &str, connection: &str, config: &[(&str, serde_yaml::Value)]
     }
     let manifest = SystemManifest {
         cosim_models: Vec::new(),
-            motor_models: Vec::new(),
+        motor_models: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "panel-rig".to_string(),

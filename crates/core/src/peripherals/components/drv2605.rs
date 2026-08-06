@@ -450,7 +450,6 @@ impl I2cDevice for Drv2605 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -486,7 +485,6 @@ impl PeripheralKit for Drv2605Kit {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

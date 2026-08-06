@@ -1735,8 +1735,6 @@ fn riscv_jit_test_eligible<C: labwired_core::Cpu>(
     assertion_compatible_jit_eligibility(otherwise_jit_eligible, assertions)
 }
 
-
-
 /// Map a core `SimulationError` to the CLI `StopReason` so a halt or fault from
 /// `Machine::advance` ends the run with the CLI's established reason.
 fn map_sim_error_to_stop_reason(e: &labwired_core::SimulationError) -> StopReason {
@@ -1925,7 +1923,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         machine.bus.config.peripheral_tick_interval = interval;
     }
 
-        let otherwise_batch_eligible = machine.config.batch_mode_enabled
+    let otherwise_batch_eligible = machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
         && detect_stuck.is_none()
         // Cycle-tight GPIO-timing devices (e.g. HC-SR04 ECHO pulse) only behave
@@ -2348,11 +2346,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         || (matches!(assertion, TestAssertion::MotorSpeedReached(_))
                             && assertion_latched[index])
                         || matches!(assertion, TestAssertion::ShutdownLatency(a)
-                            if shutdown_latency_passes(
-                                &a.shutdown_latency,
-                                &stimulus_cycles,
-                                &uart_milestone_cycles,
-                            ))
+                        if shutdown_latency_passes(
+                            &a.shutdown_latency,
+                            &stimulus_cycles,
+                            &uart_milestone_cycles,
+                        ))
                         || assertion_currently_passes(assertion, &uart_text, machine)
                 });
                 if all_pass {

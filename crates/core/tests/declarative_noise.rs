@@ -63,7 +63,10 @@ fn noisy_reads_differ_from_ideal_but_replay() {
     // σ = 0.25 °C = 4 LSB; 40 LSB is 10σ — generous but catches runaway gain.
     for &r in &reads_a {
         let delta = (r as i32 - ideal as i32).abs();
-        assert!(delta < 40, "reading {r:#x} unreasonably far from {ideal:#x}");
+        assert!(
+            delta < 40,
+            "reading {r:#x} unreasonably far from {ideal:#x}"
+        );
     }
     assert_eq!(reads_a, reads_b, "same seed must replay bit-identically");
 }

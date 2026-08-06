@@ -458,7 +458,10 @@ fn i2c_sensor_state_on_bus(
     found
 }
 
-fn for_each_i2c_slave(bus: &SystemBus, mut f: impl FnMut(&str, &dyn labwired_core::peripherals::i2c::I2cDevice)) {
+fn for_each_i2c_slave(
+    bus: &SystemBus,
+    mut f: impl FnMut(&str, &dyn labwired_core::peripherals::i2c::I2cDevice),
+) {
     use labwired_core::peripherals::esp32::i2c::Esp32I2c;
     use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
     use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
@@ -843,8 +846,7 @@ board_io: []
     fn potentiometer_uses_external_devices_sim_input() {
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let chip_yaml =
-            std::fs::read_to_string(root.join("../../configs/chips/stm32f103.yaml"))
-                .expect("chip");
+            std::fs::read_to_string(root.join("../../configs/chips/stm32f103.yaml")).expect("chip");
         let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip");
         let manifest: SystemManifest = serde_yaml::from_str(
             r#"
@@ -884,8 +886,7 @@ board_io: []
         // adxl345-sensor-lab shape: external_devices only (no board_io twin).
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let chip_yaml =
-            std::fs::read_to_string(root.join("../../configs/chips/stm32f103.yaml"))
-                .expect("chip");
+            std::fs::read_to_string(root.join("../../configs/chips/stm32f103.yaml")).expect("chip");
         let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip");
         let manifest: SystemManifest = serde_yaml::from_str(
             r#"

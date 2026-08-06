@@ -5,8 +5,8 @@
 // See the LICENSE file in the project root for full license information.
 
 use labwired_config::{
-    ChipDescriptor, CosimAdapter, DeviceDescriptor,
-    MemoryValueDetails, MotorModelConfig, SystemManifest,
+    ChipDescriptor, CosimAdapter, DeviceDescriptor, MemoryValueDetails, MotorModelConfig,
+    SystemManifest,
 };
 
 #[test]

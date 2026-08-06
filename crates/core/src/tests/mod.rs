@@ -27,6 +27,7 @@ pub mod logic_capture_differential;
 pub mod machine_advance;
 #[cfg(test)]
 pub mod nrf52;
+pub mod nrf52_nvmc;
 #[cfg(test)]
 pub mod peripheral_reachability;
 #[cfg(test)]
@@ -37,7 +38,6 @@ pub mod rp2040;
 pub mod rp2040_spi_carries_a_byte;
 #[cfg(test)]
 pub mod scb_reset;
-pub mod nrf52_nvmc;
 #[cfg(test)]
 pub mod stm32_spi_waveform;
 #[cfg(test)]

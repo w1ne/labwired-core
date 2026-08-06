@@ -282,7 +282,6 @@ impl crate::sim_input::SimInput for Fxos8700 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -343,7 +342,6 @@ impl PeripheralKit for Fxos8700Kit {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

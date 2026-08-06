@@ -156,7 +156,13 @@ impl RfMedium {
 
     /// Push a TX frame into the medium (not yet delivered). Call
     /// [`resolve_channel`] after all concurrent TX on this channel are in.
-    pub fn transmit(&mut self, tx: impl Into<String>, channel: u32, tx_power_dbm: f64, bytes: Vec<u8>) {
+    pub fn transmit(
+        &mut self,
+        tx: impl Into<String>,
+        channel: u32,
+        tx_power_dbm: f64,
+        bytes: Vec<u8>,
+    ) {
         let sequence = self.sequence;
         self.sequence = self.sequence.wrapping_add(1);
         self.on_air.entry(channel).or_default().push(MediumFrame {
@@ -257,7 +263,11 @@ impl RfMedium {
         let sinr = rssi - self.params.noise_floor_dbm;
         // Simple logistic: higher SINR → lower PER.
         let per = (self.params.per_at_0db / (1.0 + (sinr / 6.0).exp())).clamp(0.0, 1.0);
-        let seed = channel_seed(self.run_seed, &frame.tx, &format!("{rx}/{}", frame.sequence));
+        let seed = channel_seed(
+            self.run_seed,
+            &frame.tx,
+            &format!("{rx}/{}", frame.sequence),
+        );
         let mut rng = SplitMix64::new(seed);
         rng.next_f64_open01() < per
     }
@@ -275,7 +285,10 @@ mod tests {
         let out = m.send_and_resolve("a", 0, 0.0, b"hi".to_vec(), &["b".into()]);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].1, b"hi");
-        assert_eq!(m.trace().last().unwrap().outcome, DeliveryOutcome::Delivered);
+        assert_eq!(
+            m.trace().last().unwrap().outcome,
+            DeliveryOutcome::Delivered
+        );
     }
 
     #[test]
@@ -307,7 +320,10 @@ mod tests {
         let out = m.resolve_channel(7, &["rx".into()]);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].1, b"S");
-        assert_eq!(m.trace().last().unwrap().outcome, DeliveryOutcome::Delivered);
+        assert_eq!(
+            m.trace().last().unwrap().outcome,
+            DeliveryOutcome::Delivered
+        );
     }
 
     #[test]

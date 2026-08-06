@@ -498,11 +498,9 @@ fn build_bus_and_uart(
     let resolved = labwired_config::ResolvedSystem::from_manifest_file(system)
         .map_err(|e| format!("failed to load system manifest {}: {e:#}", system.display()))?;
 
-    let mut bus = labwired_core::system::builder::build_system_bus_with_plugins(
-        Some(&resolved),
-        plugins,
-    )
-    .map_err(|e| format!("failed to build system bus: {e:#}"))?;
+    let mut bus =
+        labwired_core::system::builder::build_system_bus_with_plugins(Some(&resolved), plugins)
+            .map_err(|e| format!("failed to build system bus: {e:#}"))?;
 
     let manifest = resolved.manifest.clone();
     let debug_uart = manifest.debug_uart.clone();

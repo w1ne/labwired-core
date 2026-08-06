@@ -152,20 +152,20 @@ static mut OTA_STAGE: [u8; OTA_PKG_LEN] = [0; OTA_PKG_LEN];
 // content is undefined at cold power-on.
 #[repr(C)]
 pub struct Results {
-    pub ota_accepted: u32,        // 0x00: 1 = v2 package verified + committed
-    pub digest: [u32; 8],         // 0x04: firmware-computed SHA-256 of v2 pkg
-    pub approtect_readback: u32,  // 0x24: UICR.APPROTECT as read in boot 2/3
-    pub rollback_counter: u32,    // 0x28: UICR CUSTOMER[4] readback
-    pub badsig_rejected: u32,     // 0x2C: 1 = forged v3 rejected by the SE
-    pub boot_phase: u32,          // 0x30: 1 = provisioned, 2 = OTA, 3 = enforce
-    pub installed_version: u32,   // 0x34: decoded from the rollback counter
-    pub rollback_rejected: u32,   // 0x38: 1 = authentic v1 rejected as too old
+    pub ota_accepted: u32,         // 0x00: 1 = v2 package verified + committed
+    pub digest: [u32; 8],          // 0x04: firmware-computed SHA-256 of v2 pkg
+    pub approtect_readback: u32,   // 0x24: UICR.APPROTECT as read in boot 2/3
+    pub rollback_counter: u32,     // 0x28: UICR CUSTOMER[4] readback
+    pub badsig_rejected: u32,      // 0x2C: 1 = forged v3 rejected by the SE
+    pub boot_phase: u32,           // 0x30: 1 = provisioned, 2 = OTA, 3 = enforce
+    pub installed_version: u32,    // 0x34: decoded from the rollback counter
+    pub rollback_rejected: u32,    // 0x38: 1 = authentic v1 rejected as too old
     pub tamper_reject_result: u32, // 0x3C: 1 = wrong-key ciphertext differs
-    pub verify_result: u32,       // 0x40: 1 = boot ciphertext matches golden
-    pub attestation_ok: u32,      // 0x44: 1 = SE sign/verify round-trip passed
-    pub ciphertext: [u32; 4],     // 0x48: AES-128-ECB(CHALLENGE) under root key
-    pub key_words: [u32; 4],      // 0x58: root key as read back from UICR
-    pub flash_digest: [u32; 8],   // 0x68: SHA-256 of the committed update slot
+    pub verify_result: u32,        // 0x40: 1 = boot ciphertext matches golden
+    pub attestation_ok: u32,       // 0x44: 1 = SE sign/verify round-trip passed
+    pub ciphertext: [u32; 4],      // 0x48: AES-128-ECB(CHALLENGE) under root key
+    pub key_words: [u32; 4],       // 0x58: root key as read back from UICR
+    pub flash_digest: [u32; 8],    // 0x68: SHA-256 of the committed update slot
 }
 
 #[no_mangle]

@@ -87,7 +87,11 @@ mod nrf52_nvmc_tests {
             "flash bits only flip 1→0: 0xF0 & 0x0F = 0x00"
         );
         bus.write_u8(0x100, 0xFF).unwrap();
-        assert_eq!(bus.read_u8(0x100).unwrap(), 0x00, "1→0 transitions are lost");
+        assert_eq!(
+            bus.read_u8(0x100).unwrap(),
+            0x00,
+            "1→0 transitions are lost"
+        );
     }
 
     #[test]

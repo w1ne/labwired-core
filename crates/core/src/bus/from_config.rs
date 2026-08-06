@@ -815,9 +815,7 @@ impl SystemBus {
             // `bus::external_devices`. Anything it doesn't claim falls
             // through to the hand-written arms below.
             if matches!(
-                super::external_devices::attach_external_device_universal(
-                    &mut bus, manifest, ext
-                )?,
+                super::external_devices::attach_external_device_universal(&mut bus, manifest, ext)?,
                 super::external_devices::UniversalResolution::Attached
             ) {
                 continue;
@@ -1172,12 +1170,10 @@ impl SystemBus {
                     // Nothing claims this device: hard error, same policy as
                     // the Xtensa path. A green run with a silently missing
                     // device proves nothing — the simulator's worst outcome.
-                    return Err(
-                        super::external_devices::unsupported_external_device_error(
-                            &format!("from_config (connection '{}')", ext.connection),
-                            ext,
-                        ),
-                    );
+                    return Err(super::external_devices::unsupported_external_device_error(
+                        &format!("from_config (connection '{}')", ext.connection),
+                        ext,
+                    ));
                 }
             }
         }

@@ -759,7 +759,10 @@ board_io: []
             .expect("framebuffer artifact");
         assert_eq!(fb.meta["w"], 240);
         assert_eq!(fb.meta["h"], 320);
-        assert_eq!(fb.meta["format"], crate::inspect::artifact_format::RGB565_BE);
+        assert_eq!(
+            fb.meta["format"],
+            crate::inspect::artifact_format::RGB565_BE
+        );
         assert_eq!(fb.meta["painted_bytes"], 0);
     }
 }

@@ -156,13 +156,15 @@ mod noise_tests {
     #[test]
     fn declarative_descriptor_noise_is_detected() {
         // mcp9808's embedded descriptor declares noise_sigma on its input.
-        let yaml = "name: x\nexternal_devices:\n  - id: temp\n    type: mcp9808\n    connection: i2c1\n";
+        let yaml =
+            "name: x\nexternal_devices:\n  - id: temp\n    type: mcp9808\n    connection: i2c1\n";
         assert!(super::any_noise_enabled(yaml));
     }
 
     #[test]
     fn plain_device_is_not_flagged() {
-        let yaml = "name: x\nexternal_devices:\n  - id: imu\n    type: mpu6050\n    connection: i2c1\n";
+        let yaml =
+            "name: x\nexternal_devices:\n  - id: imu\n    type: mpu6050\n    connection: i2c1\n";
         assert!(!super::any_noise_enabled(yaml));
     }
 

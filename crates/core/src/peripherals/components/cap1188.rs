@@ -385,7 +385,6 @@ impl crate::sim_input::SimInput for Cap1188 {
     }
 }
 
-
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -421,7 +420,6 @@ impl PeripheralKit for Cap1188Kit {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

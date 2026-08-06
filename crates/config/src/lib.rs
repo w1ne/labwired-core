@@ -1052,7 +1052,11 @@ impl ChipDescriptor {
     ) -> Result<Self> {
         if is_builtin_chip_spec(spec) {
             let builtin = embedded_chip_yaml(spec);
-            let source = if builtin.is_some() { "built-in" } else { "plugin" };
+            let source = if builtin.is_some() {
+                "built-in"
+            } else {
+                "plugin"
+            };
             if let Some(yaml) = builtin.or_else(|| plugin_chips(spec)) {
                 return serde_yaml::from_str(yaml)
                     .with_context(|| format!("Failed to parse {source} chip descriptor '{spec}'"));
@@ -5901,8 +5905,8 @@ mod builtin_chip_tests {
         let impostor = "name: \"impostor\"\narch: \"arm\"\ncore: \"cortex-m0+\"\n\
                         flash: { base: 0, size: \"4KB\" }\n\
                         ram: { base: 0x20000000, size: \"1KB\" }\nperipherals: []\n";
-        let d = ChipDescriptor::resolve_with("stm32f103", Path::new("."), &|_| Some(impostor))
-            .unwrap();
+        let d =
+            ChipDescriptor::resolve_with("stm32f103", Path::new("."), &|_| Some(impostor)).unwrap();
         assert_eq!(d.name, "stm32f103c8");
     }
 

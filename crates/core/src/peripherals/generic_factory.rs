@@ -433,9 +433,7 @@ pub fn try_build(
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
         "rp2040_clkrst" => {
             let profile = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-                Some("rp2350") => {
-                    crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2350
-                }
+                Some("rp2350") => crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2350,
                 // Absent/anything else: the RP2040 map (the only map this
                 // peripheral had before RP2350 onboarding).
                 _ => crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2040,

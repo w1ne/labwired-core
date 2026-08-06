@@ -303,11 +303,9 @@ impl<C: Cpu> Machine<C> {
                     }
                     Nrf52NvmcOp::EraseUicr => {
                         for p in &mut self.bus.peripherals {
-                            if let Some(uicr) = p
-                                .dev
-                                .as_any_mut()
-                                .and_then(|a| a.downcast_mut::<crate::peripherals::nrf52::uicr::Nrf52Uicr>())
-                            {
+                            if let Some(uicr) = p.dev.as_any_mut().and_then(|a| {
+                                a.downcast_mut::<crate::peripherals::nrf52::uicr::Nrf52Uicr>()
+                            }) {
                                 uicr.erase();
                                 tracing::debug!("NVMC ERASEUICR: UICR reset to erased state");
                                 break;
