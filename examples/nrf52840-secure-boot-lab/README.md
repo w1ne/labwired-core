@@ -19,10 +19,10 @@ OTP flash state, and UART narrative.
 **Downloadable claims pack / ephemeral OEM keys / CI artifact** live in a
 separate repo so packaging does not sit in the engine tree:
 
-→ [**w1ne/labwired-cra-evidence**](https://github.com/w1ne/labwired-cra-evidence)
+→ [**LabWired/labwired-cra-evidence**](https://github.com/LabWired/labwired-cra-evidence)
 
 ```bash
-git clone https://github.com/w1ne/labwired-cra-evidence
+git clone https://github.com/LabWired/labwired-cra-evidence
 cd labwired-cra-evidence && ./scripts/run_evidence.sh
 ```
 
@@ -118,10 +118,10 @@ is also bundled in the browser playground (nRF52840 Secure Boot).
 
 ## CRA-style evidence pack (separate repo)
 
-Compliance packaging, ephemeral OEM keys, and the downloadable CI artifact live in [**w1ne/labwired-cra-evidence**](https://github.com/w1ne/labwired-cra-evidence) — not in this engine tree (same split as product stacks like udslib).
+Compliance packaging, ephemeral OEM keys, and the downloadable CI artifact live in [**LabWired/labwired-cra-evidence**](https://github.com/LabWired/labwired-cra-evidence) — not in this engine tree (same split as product stacks like udslib).
 
 ```bash
-git clone https://github.com/w1ne/labwired-cra-evidence
+git clone https://github.com/LabWired/labwired-cra-evidence
 cd labwired-cra-evidence && ./scripts/run_evidence.sh
 # → out/.../cra-evidence-pack/
 ```
