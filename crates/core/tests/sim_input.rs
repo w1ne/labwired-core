@@ -132,10 +132,10 @@ fn set_input_rejects_unknown_channel_and_out_of_range() {
 // exercise `component` disambiguation.
 
 use labwired_core::peripherals::components::{
-    Adxl345, GenericSpiDevice, Mpu6050, Neo6mGps, Sn74hc165, Vl53l1x,
+    Adxl345, GenericSpiDevice, Mpu6050, Neo6mGps, QuectelBg770a, Sn74hc165, Vl53l1x,
 };
 use labwired_core::peripherals::spi::Spi;
-use labwired_core::peripherals::uart::Uart;
+use labwired_core::peripherals::uart::{Uart, UartStreamDevice};
 
 fn f103_input_matrix_bus() -> SystemBus {
     let chip = ChipDescriptor::from_file(workspace_root().join("configs/chips/stm32f103.yaml"))
@@ -175,6 +175,13 @@ external_devices:
   - id: "gps"
     type: "neo6m-gps"
     connection: "uart1"
+  - id: "modem"
+    type: "bg770a-cellular"
+    connection: "uart2"
+    config:
+      rssi: 22
+      ber: 0
+      auto_attach: true
   - id: "sonar"
     type: "hc-sr04"
     connection: "gpioa"
@@ -242,6 +249,8 @@ fn lists_channels_across_all_transports() {
         ("dio", "ch0"),             // 74HC165 (SPI device)
         ("gps", "lat"),             // NEO-6M (UART stream)
         ("gps", "fix"),
+        ("modem", "rssi"), // BG770A cellular (UART stream) — CSQ like air-monitor knobs
+        ("modem", "ber"),
         ("sonar", "distance"), // HC-SR04 (bus-direct)
     ] {
         assert!(
@@ -270,6 +279,26 @@ fn drives_each_transport_through_the_generic_api() {
     let (lat, lon) = with_device::<Neo6mGps, _>(&mut bus, "uart1", |gps| gps.position());
     assert_eq!(lat, 50.45);
     assert_ne!(lon, 0.0, "driving lat must preserve lon");
+
+    // UART stream (modem): RSSI CSQ step must land in AT+CSQ (air-monitor-style).
+    bus.set_input(Some("modem"), "rssi", 12.0)
+        .expect("drive modem rssi");
+    bus.set_input(Some("modem"), "ber", 2.0)
+        .expect("drive modem ber");
+    let csq = with_device::<QuectelBg770a, _>(&mut bus, "uart2", |modem| {
+        for b in b"AT+CSQ\r" {
+            modem.on_tx_byte(*b);
+        }
+        let mut out = String::new();
+        while let Some(b) = modem.poll(1_000_000) {
+            out.push(b as char);
+        }
+        out
+    });
+    assert!(
+        csq.contains("+CSQ: 12,2"),
+        "driven CSQ should be visible on AT+CSQ, got {csq:?}"
+    );
 }
 
 #[test]

@@ -5,7 +5,7 @@
       "device_type": "bg770a-cellular",
       "label": "Quectel BG770A Cellular",
       "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
-      "detail": "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART.",
+      "detail": "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) is externally driven like air-monitor sensors: channels `rssi` and `ber`.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
@@ -17,12 +17,12 @@
         {
           "name": "rssi",
           "ty": "int",
-          "doc": "Initial signal strength reported by AT+CSQ (0..99)."
+          "doc": "Initial signal strength reported by AT+CSQ (0..99). Drive it at runtime with the `rssi` input channel."
         },
         {
           "name": "ber",
           "ty": "int",
-          "doc": "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99)."
+          "doc": "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99). Drive it at runtime with the `ber` input channel."
         },
         {
           "name": "boot_urcs",
@@ -41,9 +41,30 @@
           "chip": "stm32f103",
           "example_dir": "quectel-bg770a-lab",
           "demo_elf": "demo-quectel-bg770a-lab.elf"
+        },
+        {
+          "board_id": "h735-telematics-lab",
+          "chip": "stm32h735",
+          "example_dir": "h735-telematics-lab",
+          "demo_elf": "demo-h735-telematics-lab.elf"
         }
       ],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "rssi",
+          "label": "RSSI",
+          "unit": "CSQ",
+          "min": 0.0,
+          "max": 99.0
+        },
+        {
+          "key": "ber",
+          "label": "BER",
+          "unit": "CSQ",
+          "min": 0.0,
+          "max": 99.0
+        }
+      ]
     },
     {
       "device_type": "neo6m-gps",

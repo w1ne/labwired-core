@@ -242,9 +242,14 @@ pub struct QuectelBg770a {
     open_files: BTreeMap<u16, (String, usize, u8)>,
     next_file_handle: u16,
     /// `+CSQ` last RSSI/BER. Defaults to 99,99 (no service); test code or the
-    /// `complete_network_attach` helper updates these.
+    /// `complete_network_attach` helper updates these. Also drivable at runtime
+    /// via the `rssi` / `ber` SimInput channels (same contract as air-monitor
+    /// sensors — playground slider → `set_input` → next `AT+CSQ` / `AT+QCSQ`).
     csq_rssi: u8,
     csq_ber: u8,
+    /// system.yaml `external_devices` id for SimInput discovery (`modem`, …).
+    #[serde(skip)]
+    component_id: Option<String>,
     /// QGPSCFG sub-key state. Real HW persists these across reboot; we keep
     /// just the values exposed by the bench-captured read forms.
     qgps_outport: String,
@@ -363,6 +368,7 @@ impl QuectelBg770a {
             next_file_handle: 1,
             csq_rssi: 99,
             csq_ber: 99,
+            component_id: None,
             qgps_outport: String::from("uartnmea"),
             qgps_outport_baud: 115200,
             qgps_autogps: 0,
@@ -2539,6 +2545,57 @@ impl UartStreamDevice for QuectelBg770a {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Radio-quality channels, in AT+CSQ units. ONE table backs BOTH the `SimInput`
+/// impl and the kit metadata (same pattern as SCD41 / NEO-6M).
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "rssi",
+        label: "RSSI",
+        unit: "CSQ",
+        // 0..=31 = usable signal, 99 = not known / no service (3GPP 27.007).
+        min: 0.0,
+        max: 99.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "ber",
+        label: "BER",
+        unit: "CSQ",
+        // 0..=7 = bit-error rate class, 99 = not known.
+        min: 0.0,
+        max: 99.0,
+    },
+];
+
+impl crate::sim_input::SimInput for QuectelBg770a {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        // Round to nearest integer CSQ step; clamp already enforced by require_channel.
+        let v = value.round().clamp(0.0, 99.0) as u8;
+        match key {
+            "rssi" => self.csq_rssi = v,
+            "ber" => self.csq_ber = v,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -2551,13 +2608,14 @@ pub struct QuectelBg770aKit;
 pub static BG770A_KIT: QuectelBg770aKit = QuectelBg770aKit;
 
 static BG770A_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
+    inputs: INPUT_CHANNELS,
     device_type: "bg770a-cellular",
     label: "Quectel BG770A Cellular",
     summary: "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
     detail: "Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, \
              validated against real BG770A-GL hardware captures. Firmware sends AT commands, \
-             modem replies stream back over UART.",
+             modem replies stream back over UART. Radio quality (AT+CSQ / AT+QCSQ) is \
+             externally driven like air-monitor sensors: channels `rssi` and `ber`.",
     transport: Transport::Uart,
     category: Category::Uart,
     config_keys: &[
@@ -2569,12 +2627,14 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: "rssi",
             ty: ConfigType::Int,
-            doc: "Initial signal strength reported by AT+CSQ (0..99).",
+            doc: "Initial signal strength reported by AT+CSQ (0..99). Drive it at runtime \
+                  with the `rssi` input channel.",
         },
         ConfigKey {
             name: "ber",
             ty: ConfigType::Int,
-            doc: "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99).",
+            doc: "Initial bit-error-rate reported by AT+CSQ (0..99, defaults to 99). Drive \
+                  it at runtime with the `ber` input channel.",
         },
         ConfigKey {
             name: "boot_urcs",
@@ -2587,12 +2647,20 @@ static BG770A_METADATA: KitMetadata = KitMetadata {
             doc: "If true, the modem reports itself already registered + attached at boot.",
         },
     ],
-    labs: &[LabRef {
-        board_id: "quectel-bg770a-lab",
-        chip: "stm32f103",
-        example_dir: "quectel-bg770a-lab",
-        demo_elf: "demo-quectel-bg770a-lab.elf",
-    }],
+    labs: &[
+        LabRef {
+            board_id: "quectel-bg770a-lab",
+            chip: "stm32f103",
+            example_dir: "quectel-bg770a-lab",
+            demo_elf: "demo-quectel-bg770a-lab.elf",
+        },
+        LabRef {
+            board_id: "h735-telematics-lab",
+            chip: "stm32h735",
+            example_dir: "h735-telematics-lab",
+            demo_elf: "demo-h735-telematics-lab.elf",
+        },
+    ],
 };
 
 impl PeripheralKit for QuectelBg770aKit {
@@ -2607,7 +2675,6 @@ impl PeripheralKit for QuectelBg770aKit {
         let ber = ctx.config_i64("ber");
         let auto_attach = matches!(ctx.config_bool("auto_attach"), Some(true));
 
-        let uart = ctx.uart()?;
         let mut modem = QuectelBg770a::new();
         if boot_urcs {
             modem = modem.with_boot_urcs();
@@ -2622,6 +2689,8 @@ impl PeripheralKit for QuectelBg770aKit {
         if auto_attach {
             modem.complete_network_attach();
         }
+        crate::sim_input::SimInput::set_component_id(&mut modem, ctx.device_id().to_string());
+        let uart = ctx.uart()?;
         uart.attach_stream(Box::new(modem));
         Ok(())
     }
@@ -3323,6 +3392,26 @@ mod tests {
             q.contains("+QCSQ: \"eMTC\","),
             "expected eMTC entry, got {q:?}"
         );
+    }
+
+    #[test]
+    fn sim_input_rssi_and_ber_drive_at_csq() {
+        use crate::sim_input::SimInput;
+        let mut m = QuectelBg770a::new();
+        m.set_input("rssi", 15.0).expect("rssi");
+        m.set_input("ber", 3.0).expect("ber");
+        let r = exchange(&mut m, "AT+CSQ");
+        assert!(r.contains("+CSQ: 15,3"), "got {r:?}");
+        // dBm mapping used by QCSQ: -113 + 2*CSQ
+        let q = exchange(&mut m, "AT+QCSQ");
+        assert!(
+            q.contains("+QCSQ: \"eMTC\",-83,"),
+            "expected -83 dBm for CSQ 15, got {q:?}"
+        );
+        // 99 = no service
+        m.set_input("rssi", 99.0).expect("rssi noservice");
+        let q2 = exchange(&mut m, "AT+QCSQ");
+        assert!(q2.contains("+QCSQ: \"NOSERVICE\""), "got {q2:?}");
     }
 
     #[test]
