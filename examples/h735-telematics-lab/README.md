@@ -19,9 +19,9 @@ CLM-style telematics story for demos (e.g. Proemion):
 | GPS | Simulator default coordinates from `+QGPSLOC` |
 | MQTT | Happy-path Quectel AT model, not a real broker |
 | Radio quality | Same **RfMedium** path-loss as VirtualAirBus / lab AirBus. Drag **Range (m)** on the modem (UE ↔ cell). Optional **RSSI override** (CSQ) for scripts. |
-| Network peer | **AirBus.cellular** (`CellularMqttBus`): same attach path as nRF/BLE air. `QMT*` publishes land on the lab fabric; subscribers get `+QMTRECV`. |
+| Network peer | **AirBus.cellular** = `SimMqttFabric` (not a real broker). Same `attach_lab_air` as nRF/BLE. RF path-loss **gates** MQTT open/pub. |
 
-Drag **Range** on the modem; firmware re-polls `AT+CSQ` in idle. Playground/CLI attach one **AirBus** per lab (path-loss + cellular MQTT). Multi-chip labs share that AirBus so modem A’s publish can `+QMTRECV` on modem B.
+Drag **Range** on the modem: CSQ drops with distance; **MQTT open fails** when CSQ is no-service. Fabric strip in the playground shows `topic` + payload after `QMTPUB`. Two-UE env: `env-two-ue.yaml` (shared fabric via World).
 
 ## Build
 

@@ -1536,15 +1536,15 @@ impl WireBus {
     }
 }
 
-/// Shared lab air: nRF `VirtualAirBus` + ESP `BleAirBus` + cellular
-/// [`CellularMqttBus`] + optional path-loss [`RfMedium`]. Create ONE per
+/// Shared lab air: nRF `VirtualAirBus` + ESP `BleAirBus` +
+/// [`SimMqttFabric`] + optional path-loss [`RfMedium`]. Create ONE per
 /// lab-group and pass it to every chip via `attach_lab_air` — same pattern as
-/// [`WireBus`]. Cellular MQTT and radio path-loss are one AirBus story.
+/// [`WireBus`]. Path-loss CSQ and MQTT fabric share this air.
 #[wasm_bindgen]
 pub struct AirBus {
     nrf: labwired_core::peripherals::nrf52::radio::VirtualAirBus,
     ble: labwired_core::peripherals::ble_air::BleAirBus,
-    cellular: labwired_core::network::CellularMqttBus,
+    cellular: labwired_core::network::SimMqttFabric,
 }
 
 #[wasm_bindgen]
@@ -1555,7 +1555,7 @@ impl AirBus {
         AirBus {
             nrf: labwired_core::peripherals::nrf52::radio::VirtualAirBus::new(),
             ble: labwired_core::peripherals::ble_air::BleAirBus::new(),
-            cellular: labwired_core::network::CellularMqttBus::new(),
+            cellular: labwired_core::network::SimMqttFabric::new(),
         }
     }
 
@@ -1594,7 +1594,7 @@ impl AirBus {
         self.ble.clear();
     }
 
-    /// Drop cellular MQTT fabric state (publish log + subscriptions).
+    /// Drop SimMqttFabric state (publish log + subscriptions).
     #[wasm_bindgen]
     pub fn clear_cellular(&self) {
         self.cellular.clear();
@@ -1612,6 +1612,17 @@ impl AirBus {
         self.cellular
             .last_payload_on(topic)
             .unwrap_or_default()
+    }
+
+    /// Inspect fabric: up to `limit` lines of `topic\\tpayload` (most recent first).
+    #[wasm_bindgen]
+    pub fn cellular_inspect(&self, limit: f64) -> String {
+        let n = if limit.is_finite() && limit > 0.0 {
+            limit as usize
+        } else {
+            16
+        };
+        self.cellular.inspect_lines(n.min(64)).join("\n")
     }
 }
 

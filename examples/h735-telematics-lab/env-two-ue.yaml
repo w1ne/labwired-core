@@ -1,0 +1,32 @@
+# Two H735 telematics UEs on one lab AirBus (shared SimMqttFabric + path-loss).
+# Not a full multi-board CI matrix — demonstrates proper World rebind of air.
+#
+# Build firmware first:
+#   cargo build -p h735-telematics-lab --release --target thumbv7em-none-eabi
+#
+# Run (from core/):
+#   cargo run -q -p labwired-cli -- environment-test \
+#     --env examples/h735-telematics-lab/env-two-ue.yaml \
+#     --max-steps 50000000
+#
+# Honesty: both nodes run the same demo firmware (each publishes its fix).
+# Shared fabric means publishes land on one SimMqttFabric; RF positions
+# differ so CSQ can diverge with path loss.
+schema_version: "1.0"
+name: "h735-two-ue-telematics"
+nodes:
+  - id: ue_a
+    system: "system.yaml"
+    firmware: "../../target/thumbv7em-none-eabi/release/h735-telematics-lab"
+  - id: ue_b
+    system: "system.yaml"
+    firmware: "../../target/thumbv7em-none-eabi/release/h735-telematics-lab"
+rf:
+  seed: 7
+  rssi_floor_dbm: -95.0
+  path_loss_exponent: 2.0
+  ref_loss_db: 40.0
+  nodes:
+    ue_a: { x: 0.0, y: 0.0 }
+    ue_b: { x: 5.0, y: 0.0 }
+interconnects: []

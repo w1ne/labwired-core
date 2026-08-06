@@ -54,6 +54,19 @@ pub trait MachineTrait: Send {
         uart_id: &str,
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()>;
+    /// True if this machine hosts a Quectel BG770A (needs lab AirBus).
+    fn has_cellular_modem(&self) -> bool {
+        false
+    }
+    /// Bind nRF/BLE/cellular peers to a shared lab air. Default no-op for mocks.
+    fn attach_lab_air(
+        &mut self,
+        _node_id: &str,
+        _nrf: crate::peripherals::nrf52::radio::VirtualAirBus,
+        _ble: crate::peripherals::ble_air::BleAirBus,
+        _cellular: crate::network::SimMqttFabric,
+    ) {
+    }
     /// Attach a per-node UART capture sink. The default is intentionally a
     /// no-op so existing third-party/mock `MachineTrait` implementations stay
     /// source-compatible; real [`Machine`] instances wire every console UART.
@@ -122,6 +135,20 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()> {
         self.bus.attach_uart_stream_by_id(uart_id, dev)
+    }
+
+    fn has_cellular_modem(&self) -> bool {
+        self.bus.has_cellular_modem()
+    }
+
+    fn attach_lab_air(
+        &mut self,
+        node_id: &str,
+        nrf: crate::peripherals::nrf52::radio::VirtualAirBus,
+        ble: crate::peripherals::ble_air::BleAirBus,
+        cellular: crate::network::SimMqttFabric,
+    ) {
+        self.bus.attach_lab_air(node_id, nrf, ble, cellular);
     }
 
     fn attach_uart_tx_sink(
@@ -298,6 +325,45 @@ impl World {
             // across all nodes).
             machine.set_stdout_prefix(&format!("[{}] ", node.id));
             world.add_machine(node.id.clone(), machine);
+        }
+
+        // One shared lab air for all nodes that carry cellular (and rebind nRF/BLE
+        // airs too). Replaces each bus's private from_config air so two UEs share
+        // SimMqttFabric fan-out and a single path-loss medium when rf: is set.
+        {
+            use crate::network::SimMqttFabric;
+            use crate::peripherals::ble_air::BleAirBus;
+            use crate::peripherals::nrf52::radio::VirtualAirBus;
+            use crate::peripherals::rf_medium::{PathLossParams, RfMedium};
+            let any_cellular = world.machines.values().any(|m| m.has_cellular_modem());
+            if any_cellular {
+                let nrf = VirtualAirBus::new();
+                if let Some(shared) = &world.rf_medium {
+                    if let Ok(guard) = shared.lock() {
+                        nrf.attach_medium(
+                            RfMedium::new(guard.run_seed()).with_params(guard.params()),
+                        );
+                    }
+                } else {
+                    nrf.attach_medium(RfMedium::new(1).with_params(PathLossParams::default()));
+                }
+                if let Some(rf) = manifest.rf.as_ref() {
+                    use crate::peripherals::rf_medium::NodePosition;
+                    for (id, pos) in &rf.nodes {
+                        nrf.set_node_position(id.clone(), NodePosition { x: pos.x, y: pos.y });
+                    }
+                }
+                let ble = BleAirBus::new();
+                let fabric = SimMqttFabric::new();
+                for (id, machine) in world.machines.iter_mut() {
+                    machine.attach_lab_air(
+                        id.as_str(),
+                        nrf.clone(),
+                        ble.clone(),
+                        fabric.clone(),
+                    );
+                }
+            }
         }
 
         for ic in &manifest.interconnects {

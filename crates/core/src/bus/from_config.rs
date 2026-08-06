@@ -898,9 +898,9 @@ impl SystemBus {
             None => bus.derive_walk_deletable(),
         };
 
-        // Cellular modems use the same AirBus wiring as the browser: RfMedium +
-        // CellularMqttBus. Browser multi-chip rebinds via attach_lab_air; CLI /
-        // single-board gets a private lab air so MQTT fabric is not process-global.
+        // One attach API: attach_lab_air. CLI/single-board mints a private lab
+        // air here; browser multi-chip later rebinds the same API with a shared
+        // AirBus (deliberate replace, not a second fabric).
         if bus.has_cellular_modem() {
             let node = if manifest.name.is_empty() {
                 "lab"

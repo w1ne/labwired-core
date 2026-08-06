@@ -36,7 +36,7 @@
 //! AT+VZ Verizon extension. Those commands return `ERROR` so probing firmware
 //! sees a deterministic miss instead of a lie.
 
-use crate::network::CellularMqttBus;
+use crate::network::SimMqttFabric;
 use crate::peripherals::rf_medium::{NodePosition, PathLossParams, RfMedium};
 use crate::peripherals::uart::UartStreamDevice;
 use std::any::Any;
@@ -336,11 +336,9 @@ pub struct QuectelBg770a {
     /// Accumulator for QMTPUB payload bytes received while in payload mode.
     #[serde(skip)]
     qmtpub_payload_buf: Vec<u8>,
-    /// Network-side MQTT fabric (virtual broker / cell peer). Publishes land
-    /// here; subscribers get `+QMTRECV`. Enough for networks to work — not a
-    /// full packet core.
+    /// Simulated MQTT topic fabric (AirBus.cellular). Not a real broker.
     #[serde(skip)]
-    mqtt_net: CellularMqttBus,
+    mqtt_net: SimMqttFabric,
 
     /// Per-command response delay set by the current handler; cleared between
     /// commands. Drives the `ScheduledChunk` inserted after the line completes.
@@ -433,8 +431,8 @@ impl QuectelBg770a {
             cedrxs_mode: 0,
             awaiting_qmtpub_payload: None,
             qmtpub_payload_buf: Vec::new(),
-            // Private fabric until attach_lab_air / from_config private AirBus rebinds.
-            mqtt_net: CellularMqttBus::new(),
+            // Replaced by attach_lab_air / attach_private_lab_air (one AirBus path).
+            mqtt_net: SimMqttFabric::new(),
             current_delay_us: DELAY_DEFAULT_US,
             pending_cfun_resume_urcs: false,
             deferred_urcs: Vec::new(),
@@ -529,15 +527,35 @@ impl QuectelBg770a {
         self.sync_geometry();
     }
 
-    /// Attach a private cellular MQTT fabric (multi-node worlds). Default is
-    /// the process-shared bus so single-board labs still see publishes.
-    pub fn set_mqtt_net(&mut self, bus: CellularMqttBus) {
+    /// Bind this modem to the lab AirBus MQTT fabric (shared across UEs).
+    pub fn set_mqtt_net(&mut self, bus: SimMqttFabric) {
         self.mqtt_net = bus;
     }
 
-    /// Shared network-side fabric handle (publish log / fan-out).
-    pub fn mqtt_net(&self) -> &CellularMqttBus {
+    /// Lab AirBus fabric handle (publish log / fan-out). Not a wire broker.
+    pub fn mqtt_net(&self) -> &SimMqttFabric {
         &self.mqtt_net
+    }
+
+    /// True when radio quality may carry MQTT.
+    ///
+    /// - CSQ override 99 → no
+    /// - [`RfMedium`] present → RSSI must be ≥ floor (same path-loss as CSQ)
+    /// - No medium yet (bare unit tests) → allow if PDP active (`qiact`) so
+    ///   AT-only tests still exercise QMT* without inventing geometry
+    pub fn rf_link_ok(&mut self) -> bool {
+        if let Some(o) = self.csq_override {
+            return o < 99;
+        }
+        self.sync_geometry();
+        if let Ok(slot) = self.medium.lock() {
+            if let Some(m) = slot.as_ref() {
+                let d = m.distance_m(CELL_TOWER_NODE, self.rf_node_key());
+                let dbm = m.rssi_dbm(CELL_TX_POWER_DBM, d);
+                return dbm >= m.params().rssi_floor_dbm;
+            }
+        }
+        self.qiact_cid1 == 1 || self.csq_rssi < 99
     }
 
     fn mqtt_endpoint_id(&self) -> String {
@@ -1373,7 +1391,15 @@ impl QuectelBg770a {
                 Some(id @ 0..=5) => {
                     self.current_delay_us = DELAY_QMTOPEN_US;
                     self.ok();
-                    let result: i8 = if self.qiact_cid1 == 1 { 0 } else { 3 };
+                    // Result codes (Quectel-shaped): 0 ok, 1 open fail, 3 PDP fail.
+                    // RF path-loss gates open: no service (CSQ 99) cannot open MQTT.
+                    let result: i8 = if self.qiact_cid1 != 1 {
+                        3
+                    } else if !self.rf_link_ok() {
+                        1
+                    } else {
+                        0
+                    };
                     if result == 0 {
                         self.mqtt[id as usize].state = MqttState::Initialized;
                         self.mqtt[id as usize].broker_host = host.to_string();
@@ -1402,9 +1428,16 @@ impl QuectelBg770a {
                     }
                     self.current_delay_us = DELAY_QMTCONN_US;
                     self.ok();
-                    self.mqtt[id as usize].state = MqttState::Connected;
-                    self.mqtt_net.connect(&self.mqtt_endpoint_id(), id);
-                    let urc = format!("\r\n+QMTCONN: {},0,0\r\n", id);
+                    // +QMTCONN: <id>,<result>,<ret_code> — result 0 = accepted.
+                    let (result, ret) = if self.rf_link_ok() {
+                        self.mqtt[id as usize].state = MqttState::Connected;
+                        self.mqtt_net.connect(&self.mqtt_endpoint_id(), id);
+                        (0, 0)
+                    } else {
+                        // Stay Initialized; broker connect refused without RF.
+                        (1, 1)
+                    };
+                    let urc = format!("\r\n+QMTCONN: {},{},{}\r\n", id, result, ret);
                     self.deferred_urcs
                         .push((URC_DELAY_QMTCONN_US, urc.into_bytes()));
                 }
@@ -2704,16 +2737,20 @@ impl UartStreamDevice for QuectelBg770a {
         if let Some((id, msg_id, topic)) = self.awaiting_qmtpub_payload.clone() {
             match byte {
                 0x1A => {
-                    // Submit: land on the cellular MQTT fabric, then OK + +QMTPUB.
+                    // Submit: RF must still be up; land on SimMqttFabric if so.
                     let payload = std::mem::take(&mut self.qmtpub_payload_buf);
                     self.awaiting_qmtpub_payload = None;
-                    let ep = self.mqtt_endpoint_id();
-                    self.mqtt_net.publish(&ep, id, &topic, &payload);
-                    // Fan-out may have queued +QMTRECV for us / peers.
-                    self.drain_mqtt_network();
+                    let pub_result: i8 = if !self.rf_link_ok() {
+                        2 // packet send failed (no service / floor)
+                    } else {
+                        let ep = self.mqtt_endpoint_id();
+                        self.mqtt_net.publish(&ep, id, &topic, &payload);
+                        self.drain_mqtt_network();
+                        0
+                    };
                     let mut bytes = b"\r\nOK\r\n".to_vec();
                     bytes.extend_from_slice(
-                        format!("\r\n+QMTPUB: {},{},0\r\n", id, msg_id).as_bytes(),
+                        format!("\r\n+QMTPUB: {},{},{}\r\n", id, msg_id, pub_result).as_bytes(),
                     );
                     self.schedule(URC_DELAY_QMTPUB_US, bytes);
                 }
@@ -3269,12 +3306,12 @@ mod tests {
     #[test]
     fn mqtt_fabric_loopback_delivers_qmtrecv() {
         use crate::sim_input::SimInput;
-        let bus = crate::network::CellularMqttBus::new();
+        let bus = crate::network::SimMqttFabric::new();
         let mut m = QuectelBg770a::new();
         m.set_mqtt_net(bus.clone());
         m.set_component_id("ue1".into());
+        m.complete_network_attach(); // medium + co-located RF
         for cmd in [
-            "AT+QIACT=1",
             "AT+QMTOPEN=0,\"broker.labwired.local\",1883",
             "AT+QMTCONN=0,\"cid\"",
             "AT+QMTSUB=0,1,\"telematics/#\",0",
@@ -3294,12 +3331,29 @@ mod tests {
         while let Some(b) = m.poll(2_000_000) {
             out.push(b as char);
         }
-        assert!(out.contains("+QMTPUB:"), "got {out:?}");
+        assert!(out.contains("+QMTPUB: 0,1,0"), "got {out:?}");
         assert!(
             out.contains("+QMTRECV:") && out.contains("telematics/location"),
             "loopback subscriber should get +QMTRECV, got {out:?}"
         );
         assert!(bus.has_publish_on("telematics/location"));
+    }
+
+    #[test]
+    fn mqtt_open_fails_when_rf_below_floor() {
+        use crate::sim_input::SimInput;
+        let mut m = QuectelBg770a::new();
+        m.complete_network_attach();
+        m.set_input("range_m", 50_000.0).unwrap(); // far → no service
+        let r = exchange(&mut m, "AT+QMTOPEN=0,\"broker\",1883");
+        assert!(
+            r.contains("+QMTOPEN: 0,1"),
+            "no RF must refuse open, got {r:?}"
+        );
+        assert!(
+            !m.mqtt_net().has_publish_on("x"),
+            "fabric must stay empty when open fails"
+        );
     }
 
     #[test]

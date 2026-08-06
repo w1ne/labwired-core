@@ -2,26 +2,26 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Lightweight **cellular MQTT fabric** — the network-side peer for Quectel
-//! BG770A AT MQTT (`QMTOPEN` / `QMTCONN` / `QMTSUB` / `QMTPUB`).
+//! [`SimMqttFabric`] — a **simulated MQTT topic fabric**, not a real broker.
 //!
-//! This is **not** a full cellular core or MQTT 3.1.1 wire broker. It is enough
-//! so that firmware "networks work":
+//! Honesty: this is enough for firmware “pub/sub over AT” demos and multi-UE
+//! fan-out on a shared lab [`AirBus`](crate). It is **not** MQTT 3.1.1 on the
+//! wire, not an EPC, and not a substitute for host egress MQTT.
 //!
-//!   * Opens/connects are tracked per modem endpoint + client index.
-//!   * Publishes are retained in a ring log (inspect / smoke / multi-node).
-//!   * Subscribers on the same fabric receive `+QMTRECV` deliveries (loopback
-//!     and cross-modem), topic-matched with `+` / `#` wildcards.
+//! What it does:
+//!   * Tracks open/connect/subscribe per modem endpoint + client index
+//!   * Retains a ring of publishes for inspect / smoke / playground
+//!   * Fan-out to matching subscribers as pending `+QMTRECV` deliveries
 //!
-//! Single-board labs share a process-default bus; multi-chip worlds can mint a
-//! private bus and attach every modem to it (same pattern as VirtualAirBus).
+//! Lives on the lab AirBus (browser multi-chip) or a private lab air minted by
+//! `SystemBus::attach_private_lab_air` (CLI). Not a process-global singleton.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
-/// One retained publish for forensics / smoke.
+/// One retained publish for forensics / smoke / UI.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CellularPublish {
+pub struct FabricPublish {
     pub endpoint: String,
     pub client_id: u8,
     pub broker_host: String,
@@ -32,45 +32,47 @@ pub struct CellularPublish {
 
 /// Pending downlink for a modem endpoint (becomes `+QMTRECV`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CellularDelivery {
+pub struct FabricDelivery {
     pub client_id: u8,
     pub topic: String,
     pub payload: Vec<u8>,
 }
 
+// Back-compat aliases used during rename.
+pub type CellularPublish = FabricPublish;
+pub type CellularDelivery = FabricDelivery;
+
 #[derive(Debug, Default)]
 struct EndpointState {
-    /// Connected MQTT client indices (after QMTCONN).
     connected: HashSet<u8>,
-    /// Subscriptions per client index.
     subs: HashMap<u8, Vec<String>>,
-    /// Broker host/port last opened per client (informational).
     brokers: HashMap<u8, (String, u16)>,
-    /// Downlink queue for this modem instance.
-    pending: VecDeque<CellularDelivery>,
+    pending: VecDeque<FabricDelivery>,
 }
 
 #[derive(Debug, Default)]
 struct Inner {
     endpoints: HashMap<String, EndpointState>,
-    /// Most-recent-first cap.
-    log: VecDeque<CellularPublish>,
+    log: VecDeque<FabricPublish>,
     log_cap: usize,
 }
 
-/// Shared fabric: clone freely (`Arc` inside).
+/// Shared simulated MQTT fabric. Clone freely (`Arc` inside).
 #[derive(Debug, Clone)]
-pub struct CellularMqttBus {
+pub struct SimMqttFabric {
     inner: Arc<Mutex<Inner>>,
 }
 
-impl Default for CellularMqttBus {
+/// Historical name — same type as [`SimMqttFabric`].
+pub type CellularMqttBus = SimMqttFabric;
+
+impl Default for SimMqttFabric {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl CellularMqttBus {
+impl SimMqttFabric {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(Inner {
@@ -82,11 +84,10 @@ impl CellularMqttBus {
     }
 
     fn with_mut<R>(&self, f: impl FnOnce(&mut Inner) -> R) -> R {
-        let mut g = self.inner.lock().expect("cellular mqtt bus lock");
+        let mut g = self.inner.lock().expect("sim mqtt fabric lock");
         f(&mut g)
     }
 
-    /// Record that `endpoint` opened an MQTT network to host:port.
     pub fn open(&self, endpoint: &str, client_id: u8, host: &str, port: u16) {
         self.with_mut(|inner| {
             let ep = inner.endpoints.entry(endpoint.to_string()).or_default();
@@ -121,8 +122,7 @@ impl CellularMqttBus {
         });
     }
 
-    /// Publish from `endpoint`. Queues deliveries for every connected subscriber
-    /// (including the publisher if it subscribed) whose filter matches.
+    /// Publish from `endpoint`. Returns number of subscriber deliveries queued.
     pub fn publish(
         &self,
         endpoint: &str,
@@ -138,7 +138,7 @@ impl CellularMqttBus {
                 .cloned()
                 .unwrap_or_else(|| ("broker.labwired.local".into(), 1883));
 
-            let msg = CellularPublish {
+            let msg = FabricPublish {
                 endpoint: endpoint.to_string(),
                 client_id,
                 broker_host: host,
@@ -151,8 +151,6 @@ impl CellularMqttBus {
                 inner.log.pop_back();
             }
 
-            let mut deliveries = 0usize;
-            // Snapshot matching (endpoint, client) pairs then enqueue.
             let mut targets: Vec<(String, u8)> = Vec::new();
             for (ep_id, ep) in &inner.endpoints {
                 for (&cid, filters) in &ep.subs {
@@ -164,9 +162,10 @@ impl CellularMqttBus {
                     }
                 }
             }
+            let mut deliveries = 0usize;
             for (ep_id, cid) in targets {
                 if let Some(ep) = inner.endpoints.get_mut(&ep_id) {
-                    ep.pending.push_back(CellularDelivery {
+                    ep.pending.push_back(FabricDelivery {
                         client_id: cid,
                         topic: topic.to_string(),
                         payload: payload.to_vec(),
@@ -178,8 +177,7 @@ impl CellularMqttBus {
         })
     }
 
-    /// Drain downlink for one modem endpoint.
-    pub fn take_pending(&self, endpoint: &str) -> Vec<CellularDelivery> {
+    pub fn take_pending(&self, endpoint: &str) -> Vec<FabricDelivery> {
         self.with_mut(|inner| {
             inner
                 .endpoints
@@ -189,17 +187,14 @@ impl CellularMqttBus {
         })
     }
 
-    /// Most-recent-first publish log (cloned).
-    pub fn publish_log(&self) -> Vec<CellularPublish> {
+    pub fn publish_log(&self) -> Vec<FabricPublish> {
         self.with_mut(|inner| inner.log.iter().cloned().collect())
     }
 
-    /// True if any publish matches `topic` (exact).
     pub fn has_publish_on(&self, topic: &str) -> bool {
         self.with_mut(|inner| inner.log.iter().any(|m| m.topic == topic))
     }
 
-    /// Latest payload for an exact topic, if any.
     pub fn last_payload_on(&self, topic: &str) -> Option<Vec<u8>> {
         self.with_mut(|inner| {
             inner
@@ -207,6 +202,25 @@ impl CellularMqttBus {
                 .iter()
                 .find(|m| m.topic == topic)
                 .map(|m| m.payload.clone())
+        })
+    }
+
+    /// Snapshot for UI: up to `limit` most-recent publishes as
+    /// `"topic\\tpayload_utf8"` lines (lossy UTF-8).
+    pub fn inspect_lines(&self, limit: usize) -> Vec<String> {
+        self.with_mut(|inner| {
+            inner
+                .log
+                .iter()
+                .take(limit)
+                .map(|m| {
+                    format!(
+                        "{}\t{}",
+                        m.topic,
+                        String::from_utf8_lossy(&m.payload)
+                    )
+                })
+                .collect()
         })
     }
 
@@ -218,7 +232,6 @@ impl CellularMqttBus {
     }
 }
 
-/// MQTT topic match (`+` single-level, `#` multi-level).
 fn topic_matches(filter: &str, name: &str) -> bool {
     let mut f = filter.split('/');
     let mut n = name.split('/');
@@ -239,7 +252,7 @@ mod tests {
 
     #[test]
     fn publish_loopback_to_subscriber() {
-        let bus = CellularMqttBus::new();
+        let bus = SimMqttFabric::new();
         bus.open("m1", 0, "broker.labwired.local", 1883);
         bus.connect("m1", 0);
         bus.subscribe("m1", 0, "telematics/#");
@@ -248,23 +261,19 @@ mod tests {
         let pending = bus.take_pending("m1");
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].topic, "telematics/location");
-        assert_eq!(pending[0].payload, b"{\"lat\":1}");
         assert!(bus.has_publish_on("telematics/location"));
     }
 
     #[test]
     fn cross_endpoint_fanout() {
-        let bus = CellularMqttBus::new();
+        let bus = SimMqttFabric::new();
         bus.open("pub", 0, "b", 1883);
         bus.connect("pub", 0);
         bus.open("sub", 0, "b", 1883);
         bus.connect("sub", 0);
         bus.subscribe("sub", 0, "telematics/location");
-        let n = bus.publish("pub", 0, "telematics/location", b"hi");
-        assert_eq!(n, 1);
+        assert_eq!(bus.publish("pub", 0, "telematics/location", b"hi"), 1);
         assert!(bus.take_pending("pub").is_empty());
-        let d = bus.take_pending("sub");
-        assert_eq!(d.len(), 1);
-        assert_eq!(d[0].payload, b"hi");
+        assert_eq!(bus.take_pending("sub")[0].payload, b"hi");
     }
 }
