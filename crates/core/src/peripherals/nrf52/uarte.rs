@@ -136,6 +136,21 @@ pub struct Nrf52Uarte {
     /// Set by a STARTRX task write (UARTE personality); consumed by
     /// `do_easydma_rx` once the RX queue has bytes to drain.
     rx_pending: bool,
+    /// Scheduler-side singleton: a TX wake is already queued (or in
+    /// `reschedule_delay` flight). `collect_scheduled_events` runs after
+    /// every MMIO write; without this guard each STARTTX-pending poll arms
+    /// a new absolute deadline and trips
+    /// [`MAX_LIVE_EVENTS_PER_PERIPHERAL`](crate::sched::MAX_LIVE_EVENTS_PER_PERIPHERAL)
+    /// on Zephyr hello_world (nRF5340 UARTE console).
+    tx_chain_live: bool,
+    /// Scheduler-side singleton for the RX EasyDMA / empty-queue poll chain.
+    /// Same contract as `tx_chain_live`. An empty-queue poll may upgrade to
+    /// delay-0 once when bytes arrive (`rx_poll_upgrade_live`).
+    rx_chain_live: bool,
+    /// True after an empty-queue RX poll has been upgraded to an immediate
+    /// drain while the original poll event is still resident. Caps the
+    /// upgrade pile-up at one extra live event.
+    rx_poll_upgrade_live: bool,
     /// Host-injected serial input. Shared with the runner via
     /// `Bus::attach_uart_rx_source_named`; bytes pushed there sit in the
     /// queue until firmware reads them (RXD pop or EasyDMA drain).
@@ -418,14 +433,27 @@ impl Peripheral for Nrf52Uarte {
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         let mut events = Vec::new();
-        if self.tx_pending {
+        // Layer-2 singleton (see `event_scheduler` cancellation contract):
+        // arm at most one TX / one RX wake. Re-arming at a new absolute
+        // deadline on every MMIO collect is what tripped the live-event
+        // ceiling on nRF5340 Zephyr hello_world (peripheral idx = UARTE0).
+        if self.tx_pending && !self.tx_chain_live {
+            self.tx_chain_live = true;
             events.push((0, 1)); // STARTTX EasyDMA drain (delay-0 → next cycle)
         }
         if self.rx_pending {
-            // Bytes already queued: drain next cycle. Empty queue: poll at a
-            // modest cadence until the host injects something (STARTRX with
-            // nothing to receive must not busy-spin the scheduler at delay-0).
-            events.push((if self.rx_queued() > 0 { 0 } else { 1023 }, 2));
+            let delay = if self.rx_queued() > 0 { 0 } else { 1023 };
+            if !self.rx_chain_live {
+                self.rx_chain_live = true;
+                self.rx_poll_upgrade_live = false;
+                events.push((delay, 2));
+            } else if delay == 0 && !self.rx_poll_upgrade_live {
+                // Bytes arrived while an empty-queue poll is still resident:
+                // schedule one immediate drain. The stale poll still fires
+                // later and is a no-op once `rx_pending` is cleared.
+                self.rx_poll_upgrade_live = true;
+                events.push((0, 2));
+            }
         }
         events
     }
@@ -436,18 +464,36 @@ impl Peripheral for Nrf52Uarte {
         _sched: &mut crate::sched::EventScheduler,
         bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        if event_token == 1 && self.tx_pending {
-            self.do_easydma_tx(bus);
+        if event_token == 1 {
+            // Drain decrements live; clear our singleton so a later STARTTX
+            // can arm again. Bare-bus `tick_with_bus` also clears this.
+            self.tx_chain_live = false;
+            if self.tx_pending {
+                self.do_easydma_tx(bus);
+            }
         }
-        if event_token == 2 && self.rx_pending {
-            if self.rx_queued() > 0 {
-                self.do_easydma_rx(bus);
+        if event_token == 2 {
+            if self.rx_pending {
+                if self.rx_queued() > 0 {
+                    self.do_easydma_rx(bus);
+                    self.rx_chain_live = false;
+                    self.rx_poll_upgrade_live = false;
+                } else {
+                    // Nothing to receive yet: stay armed via reschedule so
+                    // `take_scheduled_events` does not pile a second poll.
+                    // Keep `rx_chain_live` set — the reschedule path arms the
+                    // next poll under the same token after live is briefly
+                    // decremented by drain.
+                    self.rx_poll_upgrade_live = false;
+                    return crate::sched::EventResult {
+                        reschedule_delay: Some(1023),
+                        ..Default::default()
+                    };
+                }
             } else {
-                // Nothing to receive yet: stay armed, poll again later.
-                return crate::sched::EventResult {
-                    reschedule_delay: Some(1023),
-                    ..Default::default()
-                };
+                // Stale poll after an upgrade already drained RX.
+                self.rx_chain_live = false;
+                self.rx_poll_upgrade_live = false;
             }
         }
         crate::sched::EventResult::default()
@@ -470,6 +516,7 @@ impl Nrf52Uarte {
             return;
         }
         self.tx_pending = false;
+        self.tx_chain_live = false;
 
         // EasyDMA reads MAXCNT bytes starting at TXD.PTR. A disconnected pin or
         // a disabled peripheral still completes the transfer on real silicon
@@ -504,6 +551,8 @@ impl Nrf52Uarte {
             return;
         }
         self.rx_pending = false;
+        self.rx_chain_live = false;
+        self.rx_poll_upgrade_live = false;
 
         let max = (self.rxd_maxcnt & 0xFFFF) as usize;
         let mut n = 0usize;
@@ -687,11 +736,32 @@ mod tests {
         u.write_u32(OFF_TASKS_STARTRX, 1).unwrap();
         // Bare-bus path: no work until bytes exist (no busy-spin).
         assert!(!u.needs_bus_tick());
-        // Scheduler path: re-arms at the poll cadence, not delay-0.
+        // Scheduler path: one empty-queue poll, not delay-0.
         assert_eq!(u.take_scheduled_events(), vec![(1023, 2)]);
-        // Bytes arrive → next event drains immediately.
+        // Singleton: further collects while still empty do not pile wakes.
+        assert!(u.take_scheduled_events().is_empty());
+        // Bytes arrive → one upgrade to immediate drain (still ≤2 live).
         u.rx_buffer().lock().unwrap().push_back(0x42);
         assert_eq!(u.take_scheduled_events(), vec![(0, 2)]);
+        assert!(
+            u.take_scheduled_events().is_empty(),
+            "upgrade is one-shot; further collects must not pile"
+        );
+    }
+
+    #[test]
+    fn starttx_does_not_pile_identical_scheduler_wakes() {
+        let mut u = Nrf52Uarte::new();
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+        assert_eq!(u.take_scheduled_events(), vec![(0, 1)]);
+        // Simulate many MMIO-side collects while STARTTX is still pending.
+        for _ in 0..16 {
+            assert!(
+                u.take_scheduled_events().is_empty(),
+                "TX chain is a singleton under the event-scheduler contract"
+            );
+        }
     }
 
     #[test]
