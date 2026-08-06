@@ -1,5 +1,15 @@
 # LabWired - Raspberry Pi Pico System Configuration
+#
+# On-board LED is GP25 (same pad as Pico 2 / core/examples/pico2). Product MCU
+# profile rpi-pico onboard must match these pins (board-config source-drift +
+# playground product-board-io-alignment).
 name: "rp2040-pico"
 chip: "../chips/rp2040.yaml"
 external_devices: []
-board_io: []
+board_io:
+  - id: "led_gp25"
+    kind: "led"
+    peripheral: "sio"
+    pin: 25
+    signal: "output"
+    active_high: true

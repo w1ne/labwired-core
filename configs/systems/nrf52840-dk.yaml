@@ -1,3 +1,61 @@
+# LabWired - nRF52840-DK System Configuration
+#
+# Pin assignments from Zephyr board target nrf52840dk/nrf52840 (aliases in
+# core/configs/chips/onboarding/nrf52840dk_nrf52840.yaml). LEDs and buttons are
+# active-low. Product MCU profile nrf52840-dk onboard must match these pins
+# (board-config source-drift + playground product-board-io-alignment).
 name: "nrf52840-dk"
 chip: "../chips/nrf52840.yaml"
-peripherals: []
+external_devices: []
+board_io:
+  # LEDs — active-low (DT: GPIO_ACTIVE_LOW).
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: false
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 14
+    signal: "output"
+    active_high: false
+  - id: "led2"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 15
+    signal: "output"
+    active_high: false
+  - id: "led3"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 16
+    signal: "output"
+    active_high: false
+
+  # Buttons — active-low with pull-ups.
+  - id: "button0"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 11
+    signal: "input"
+    active_high: false
+  - id: "button1"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 12
+    signal: "input"
+    active_high: false
+  - id: "button2"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 24
+    signal: "input"
+    active_high: false
+  - id: "button3"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 25
+    signal: "input"
+    active_high: false
