@@ -220,6 +220,32 @@ impl crate::peripherals::esp32::gpio::GpioObserver for Ws2812 {
 /// The pixels are whatever the decoder reconstructed from real edge timing on
 /// the data pad; a strip that never saw an edge reports zero lit pixels, not a
 /// plausible pattern. Bytes are the decoded frame in wire (GRB) order.
+impl crate::inspect::DeviceEvidence for Ws2812 {
+    fn artifacts(
+        &self,
+        id: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::Artifact> {
+        let pixels = self.pixels();
+        let flat: Vec<u8> = pixels.iter().flatten().copied().collect();
+        vec![crate::inspect::Artifact {
+            kind: "framebuffer".to_string(),
+            id: id.to_string(),
+            meta: serde_json::json!({
+                "w": self.num_pixels(),
+                "h": 1,
+                "format": crate::inspect::artifact_format::WS2812_GRB,
+                "generation": crate::inspect::artifact_generation(&flat),
+                "pixels_decoded": pixels.len(),
+                "lit_pixels": pixels.iter().filter(|p| p.iter().any(|&c| c != 0)).count(),
+                "data_pin": self.pin(),
+            }),
+            bytes: crate::inspect::artifact_bytes(&flat, opts),
+        }]
+    }
+}
+
+
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -283,31 +309,6 @@ impl PeripheralKit for Ws2812Kit {
         ctx.install_gpio_observer(strip.clone());
         ctx.bus.ws2812.push(strip);
         Ok(())
-    }
-}
-
-impl crate::inspect::DeviceEvidence for Ws2812 {
-    fn artifacts(
-        &self,
-        id: &str,
-        opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
-        let pixels = self.pixels();
-        let flat: Vec<u8> = pixels.iter().flatten().copied().collect();
-        vec![crate::inspect::Artifact {
-            kind: "framebuffer".to_string(),
-            id: id.to_string(),
-            meta: serde_json::json!({
-                "w": self.num_pixels(),
-                "h": 1,
-                "format": crate::inspect::artifact_format::WS2812_GRB,
-                "generation": crate::inspect::artifact_generation(&flat),
-                "pixels_decoded": pixels.len(),
-                "lit_pixels": pixels.iter().filter(|p| p.iter().any(|&c| c != 0)).count(),
-                "data_pin": self.pin(),
-            }),
-            bytes: crate::inspect::artifact_bytes(&flat, opts),
-        }]
     }
 }
 
