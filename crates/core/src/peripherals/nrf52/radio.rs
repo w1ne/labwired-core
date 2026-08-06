@@ -516,6 +516,15 @@ impl Nrf52Radio {
         self.node_id = id.into();
     }
 
+    /// Rebind the shared air bus (browser multi-chip lab-group isolation).
+    pub fn set_air(&mut self, air: VirtualAirBus) {
+        self.air = air;
+    }
+
+    pub fn air(&self) -> &VirtualAirBus {
+        &self.air
+    }
+
     /// Approximate TX power in dBm from the TXPOWER register (signed 8-bit).
     fn tx_power_dbm(&self) -> f64 {
         (self.txpower as i8) as f64
@@ -779,6 +788,13 @@ impl PacketDescriptor {
 }
 
 impl Peripheral for Nrf52Radio {
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
