@@ -128,6 +128,14 @@ impl RfMedium {
         self.run_seed
     }
 
+    pub fn params(&self) -> PathLossParams {
+        self.params
+    }
+
+    pub fn set_params(&mut self, params: PathLossParams) {
+        self.params = params;
+    }
+
     pub fn trace(&self) -> &[FrameTraceEntry] {
         &self.trace
     }
