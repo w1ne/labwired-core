@@ -56,6 +56,7 @@ plugins:
 nav:
   - Home: index.md
   - Fidelity: fidelity.md
+  - llms.txt (agents): llms.md
   - Architecture Overview: architecture.md
   - Hardware-Sim Parity: golden_reference.md
 
@@ -120,6 +121,17 @@ nav:
 
   - Parts:
     - Overview: parts/index.md
+    - MCP9808: parts/mcp9808.md
+    - MMA8451Q: parts/mma8451q.md
+    - MPU-6050: parts/mpu6050.md
+    - BMP280: parts/bmp280.md
+    - SSD1306 OLED: parts/ssd1306.md
+    - LCD1602: parts/lcd1602.md
+    - APA102: parts/apa102.md
+    - Servo: parts/servo.md
+    - Button: parts/button.md
+    - Buzzer: parts/buzzer.md
+    - Seven-segment: parts/seven-segment.md
 
   - Operations:
     - Release Strategy: release_strategy.md

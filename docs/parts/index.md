@@ -1,42 +1,34 @@
 # Parts (external components)
 
-External devices you wire to an MCU in the Playground or system YAML — sensors, displays, actuators, and (when documented) network helpers.
-
-**Board pages** describe the MCU. **Part pages** describe everything else.
+External devices you wire to an MCU in the Playground or system YAML.
 
 !!! tip "Template"
-    Authors: copy [parts/_TEMPLATE.md](_TEMPLATE.md). Tone and matrix style match [ESP32-C3](../boards/esp32c3.md).
+    Authors: [parts/_TEMPLATE.md](_TEMPLATE.md). Board tone: [ESP32-C3](../boards/esp32c3.md).
 
----
+## Agent path
 
-## How to use parts from an agent
+1. `labwired_list` (`kind=component` if supported)
+2. `labwired_describe` with catalog id
+3. `labwired_validate` → `labwired_run` / `labwired_verify`
 
-1. `labwired_list` with `kind=component` (or search)
-2. `labwired_describe` with the catalog id
-3. Wire in a diagram → `labwired_validate` → `labwired_run` / `labwired_verify`
+## Catalog (documented)
 
-Do not invent I2C addresses or pin names — use describe / part pages.
+| Part | Catalog id | Bus |
+|------|------------|-----|
+| [MCP9808](mcp9808.md) | `mcp9808` | I²C |
+| [MMA8451Q](mma8451q.md) | `mma8451q` | I²C |
+| [MPU-6050](mpu6050.md) | `mpu6050` | I²C |
+| [BMP280](bmp280.md) | `bmp280` | I²C (primary in playground) |
+| [SSD1306 OLED](ssd1306.md) | `oled-ssd1306 / oled-ssd1306-128x32` | I²C |
+| [LCD1602](lcd1602.md) | `lcd1602` | GPIO parallel / I²C backpack variants |
+| [APA102 / DotStar](apa102.md) | `apa102` | SPI-like (data + clock) |
+| [SG90 / hobby servo](servo.md) | `servo` | GPIO PWM / pulse |
+| [Button](button.md) | `button` | GPIO |
+| [Buzzer](buzzer.md) | `buzzer` | GPIO |
+| [Seven-segment display](seven-segment.md) | `seven-segment` | GPIO / SPI shift |
 
----
-
-## Catalog (v1 pages)
-
-Full device models live in engine configs (`configs/devices/`, Rust kits) and the product catalog. **Public part pages** land here as they are written.
-
-| Category | Planned public pages (parity / playground) |
-|----------|--------------------------------------------|
-| Sensors | MCP9808, BMP280, MPU6050, MMA8451Q, … |
-| Displays | SSD1306, LCD1602, seven-segment, … |
-| Actuators | SG90, LED / RGB, APA102, buzzer, … |
-| Inputs | Button, switch |
-| Network | RF / Wi-Fi helpers when product-ready |
-
-Until a part page exists: use `labwired_describe`, board examples under `examples/`, and [I2C sensor tutorial](../examples/i2c_sensor_example.md).
-
----
+More devices exist in engine configs and the product catalog — if a part is missing here, describe still works when the id is in the live catalog.
 
 ## Related
 
-- [Boards](../boards/esp32c3.md)
-- [MCP tools](../agent/tools.md)
-- [Simulating sensors (I2C)](../examples/i2c_sensor_example.md)
+- [Boards](../boards/esp32c3.md) · [MCP tools](../agent/tools.md) · [I²C tutorial](../examples/i2c_sensor_example.md)
