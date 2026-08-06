@@ -17,7 +17,7 @@
 //! private bus and attach every modem to it (same pattern as VirtualAirBus).
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 /// One retained publish for forensics / smoke.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,12 +79,6 @@ impl CellularMqttBus {
                 log_cap: 64,
             })),
         }
-    }
-
-    /// Process-default bus for single-board labs (one fabric per process).
-    pub fn default_bus() -> CellularMqttBus {
-        static BUS: OnceLock<CellularMqttBus> = OnceLock::new();
-        BUS.get_or_init(CellularMqttBus::new).clone()
     }
 
     fn with_mut<R>(&self, f: impl FnOnce(&mut Inner) -> R) -> R {

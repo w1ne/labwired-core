@@ -1073,13 +1073,17 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("attach_uart_wire(sink): {e:#}")))
     }
 
-    /// Bind this chip's nRF RADIO + ESP32-C3 BT to a shared multi-chip [`AirBus`]
-    /// (browser lab-group). `node_id` is the MCU part id for path-loss layout.
+    /// Bind this chip's nRF RADIO + ESP32-C3 BT + cellular modem to a shared
+    /// multi-chip [`AirBus`] (browser lab-group). `node_id` is the MCU part id
+    /// for path-loss layout and UE identity.
     #[wasm_bindgen]
     pub fn attach_lab_air(&mut self, node_id: &str, air: &AirBus) {
-        self.machine()
-            .bus
-            .attach_lab_air(node_id, air.nrf.clone(), air.ble.clone());
+        self.machine().bus.attach_lab_air(
+            node_id,
+            air.nrf.clone(),
+            air.ble.clone(),
+            air.cellular.clone(),
+        );
     }
 
     #[wasm_bindgen]
@@ -1532,13 +1536,15 @@ impl WireBus {
     }
 }
 
-/// Shared radio air for a multi-chip browser lab: nRF `VirtualAirBus` + ESP
-/// `BleAirBus` + optional path-loss [`RfMedium`]. Create ONE per lab-group and
-/// pass it to every chip via `attach_lab_air` — same pattern as [`WireBus`].
+/// Shared lab air: nRF `VirtualAirBus` + ESP `BleAirBus` + cellular
+/// [`CellularMqttBus`] + optional path-loss [`RfMedium`]. Create ONE per
+/// lab-group and pass it to every chip via `attach_lab_air` — same pattern as
+/// [`WireBus`]. Cellular MQTT and radio path-loss are one AirBus story.
 #[wasm_bindgen]
 pub struct AirBus {
     nrf: labwired_core::peripherals::nrf52::radio::VirtualAirBus,
     ble: labwired_core::peripherals::ble_air::BleAirBus,
+    cellular: labwired_core::network::CellularMqttBus,
 }
 
 #[wasm_bindgen]
@@ -1549,6 +1555,7 @@ impl AirBus {
         AirBus {
             nrf: labwired_core::peripherals::nrf52::radio::VirtualAirBus::new(),
             ble: labwired_core::peripherals::ble_air::BleAirBus::new(),
+            cellular: labwired_core::network::CellularMqttBus::new(),
         }
     }
 
@@ -1585,6 +1592,26 @@ impl AirBus {
     #[wasm_bindgen]
     pub fn clear_ble(&self) {
         self.ble.clear();
+    }
+
+    /// Drop cellular MQTT fabric state (publish log + subscriptions).
+    #[wasm_bindgen]
+    pub fn clear_cellular(&self) {
+        self.cellular.clear();
+    }
+
+    /// True if any modem on this air published to `topic` (exact match).
+    #[wasm_bindgen]
+    pub fn cellular_has_publish(&self, topic: &str) -> bool {
+        self.cellular.has_publish_on(topic)
+    }
+
+    /// Latest payload bytes for an exact topic, or empty if none.
+    #[wasm_bindgen]
+    pub fn cellular_last_payload(&self, topic: &str) -> Vec<u8> {
+        self.cellular
+            .last_payload_on(topic)
+            .unwrap_or_default()
     }
 }
 

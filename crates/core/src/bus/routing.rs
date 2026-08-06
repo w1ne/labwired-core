@@ -685,17 +685,21 @@ impl SystemBus {
         self.peripherals.iter().position(|p| p.name == name)
     }
 
-    /// Bind every nRF RADIO and ESP32-C3 BT on this bus to the lab-group air
-    /// buses (browser multi-chip). `node_id` labels the radio for path-loss.
-    /// Also shares the nRF air's [`RfMedium`](crate::peripherals::rf_medium::RfMedium)
-    /// slot with any Quectel BG770A modem streams so AT+CSQ uses the same
-    /// path-loss geometry as virtual air.
-    /// No-op when neither peripheral is present.
+    /// Bind every nRF RADIO, ESP32-C3 BT, and Quectel BG770A modem on this bus
+    /// to the lab-group [`AirBus`](crate) components (browser multi-chip + CLI).
+    ///
+    /// - nRF / BLE hear each other on the virtual airs
+    /// - BG770A shares the nRF [`RfMedium`] for path-loss CSQ and the
+    ///   [`CellularMqttBus`](crate::network::CellularMqttBus) for MQTT network peer
+    ///
+    /// `node_id` labels radios / UE pose for path-loss. No-op when none of the
+    /// peer types are present.
     pub fn attach_lab_air(
         &mut self,
         node_id: &str,
         nrf_air: crate::peripherals::nrf52::radio::VirtualAirBus,
         ble_air: crate::peripherals::ble_air::BleAirBus,
+        cellular: crate::network::CellularMqttBus,
     ) {
         use crate::peripherals::components::QuectelBg770a;
         use crate::peripherals::esp32c3::bt::Esp32c3Bt;
@@ -729,8 +733,9 @@ impl SystemBus {
                         .as_any_mut()
                         .and_then(|a| a.downcast_mut::<QuectelBg770a>())
                     {
+                        // One AirBus story: path-loss medium + cellular MQTT fabric.
                         modem.share_medium_slot(medium.clone());
-                        // Prefer the stamped external_devices id; fall back to lab node.
+                        modem.set_mqtt_net(cellular.clone());
                         if SimInput::component_id(modem).is_none() {
                             modem.set_rf_node_id(node_id);
                         }
@@ -738,6 +743,45 @@ impl SystemBus {
                 }
             }
         }
+    }
+
+    /// True if any Quectel BG770A modem stream is attached (needs lab AirBus).
+    pub fn has_cellular_modem(&self) -> bool {
+        use crate::peripherals::components::QuectelBg770a;
+        use crate::peripherals::uart::Uart;
+        for entry in &self.peripherals {
+            let Some(any) = entry.dev.as_any() else {
+                continue;
+            };
+            let Some(uart) = any.downcast_ref::<Uart>() else {
+                continue;
+            };
+            for stream in &uart.attached_streams {
+                if stream
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<QuectelBg770a>())
+                    .is_some()
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Mint a private lab AirBus trio (nRF air + BLE air + cellular MQTT + path-loss
+    /// medium) and bind it — used by `from_config` so CLI/single-board runs get the
+    /// same AirBus wiring as the browser without a process-global fabric.
+    pub fn attach_private_lab_air(&mut self, node_id: &str) {
+        use crate::network::CellularMqttBus;
+        use crate::peripherals::ble_air::BleAirBus;
+        use crate::peripherals::nrf52::radio::VirtualAirBus;
+        use crate::peripherals::rf_medium::{PathLossParams, RfMedium};
+        let nrf = VirtualAirBus::new();
+        nrf.attach_medium(RfMedium::new(1).with_params(PathLossParams::default()));
+        let ble = BleAirBus::new();
+        let cellular = CellularMqttBus::new();
+        self.attach_lab_air(node_id, nrf, ble, cellular);
     }
 
     /// Attach a UART stream device (e.g. an inter-chip wire endpoint) to the

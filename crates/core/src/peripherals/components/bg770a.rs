@@ -433,7 +433,8 @@ impl QuectelBg770a {
             cedrxs_mode: 0,
             awaiting_qmtpub_payload: None,
             qmtpub_payload_buf: Vec::new(),
-            mqtt_net: CellularMqttBus::default_bus(),
+            // Private fabric until attach_lab_air / from_config private AirBus rebinds.
+            mqtt_net: CellularMqttBus::new(),
             current_delay_us: DELAY_DEFAULT_US,
             pending_cfun_resume_urcs: false,
             deferred_urcs: Vec::new(),

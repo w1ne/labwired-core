@@ -224,11 +224,12 @@ before deliver. nRF optional attach is step 1; BLE + Wi‑Fi frame path next.
 `AT+QCSQ` map UE↔`cell` distance to CSQ steps; SimInput `range_m` moves the
 UE. Optional `rssi` CSQ override is for scripts only.
 
-**Network peer (shipped, light):** `CellularMqttBus` is the other side of the
-modem — enough for networks to work, not a full EPC/broker. `QMTOPEN`/`CONN`/
-`SUB`/`PUB` register on the fabric; publishes are retained (inspect/smoke);
-matching subscribers (same or other modem endpoints) get `+QMTRECV`. Default
-process bus for single-board labs; multi-node can share a private bus.
+**Network peer (shipped on AirBus):** `CellularMqttBus` lives **on the lab
+`AirBus`** next to nRF/BLE virtual airs — not a process-global singleton.
+`attach_lab_air` binds every BG770A to that fabric + shared `RfMedium`.
+`from_config` mints a private lab AirBus when a modem is present (CLI).
+`QMTOPEN`/`CONN`/`SUB`/`PUB` register on the fabric; publishes are retained;
+matching subscribers get `+QMTRECV`. Enough for networks to work, not a full EPC.
 
 Do **not** force one bit layout across RADIO / BLE / Wi‑Fi.
 
