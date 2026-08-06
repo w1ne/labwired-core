@@ -685,6 +685,28 @@ impl SystemBus {
         self.peripherals.iter().position(|p| p.name == name)
     }
 
+    /// Bind every nRF RADIO and ESP32-C3 BT on this bus to the lab-group air
+    /// buses (browser multi-chip). `node_id` labels the radio for path-loss.
+    /// No-op when neither peripheral is present.
+    pub fn attach_lab_air(
+        &mut self,
+        node_id: &str,
+        nrf_air: crate::peripherals::nrf52::radio::VirtualAirBus,
+        ble_air: crate::peripherals::ble_air::BleAirBus,
+    ) {
+        use crate::peripherals::esp32c3::bt::Esp32c3Bt;
+        use crate::peripherals::nrf52::radio::Nrf52Radio;
+        for entry in &mut self.peripherals {
+            if let Some(radio) = entry.dev.as_any_mut().and_then(|a| a.downcast_mut::<Nrf52Radio>()) {
+                radio.set_air(nrf_air.clone());
+                radio.set_node_id(node_id);
+            }
+            if let Some(bt) = entry.dev.as_any_mut().and_then(|a| a.downcast_mut::<Esp32c3Bt>()) {
+                bt.set_air(ble_air.clone());
+            }
+        }
+    }
+
     /// Attach a UART stream device (e.g. an inter-chip wire endpoint) to the
     /// UART peripheral registered under `uart_id`. This is the post-build
     /// counterpart to `AttachCtx::uart().attach_stream(..)`, used by

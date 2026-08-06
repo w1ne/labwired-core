@@ -1073,6 +1073,15 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("attach_uart_wire(sink): {e:#}")))
     }
 
+    /// Bind this chip's nRF RADIO + ESP32-C3 BT to a shared multi-chip [`AirBus`]
+    /// (browser lab-group). `node_id` is the MCU part id for path-loss layout.
+    #[wasm_bindgen]
+    pub fn attach_lab_air(&mut self, node_id: &str, air: &AirBus) {
+        self.machine()
+            .bus
+            .attach_lab_air(node_id, air.nrf.clone(), air.ble.clone());
+    }
+
     #[wasm_bindgen]
     pub fn get_pc(&self) -> u32 {
         self.machine.as_ref().unwrap().cpu.get_pc()
@@ -1520,6 +1529,63 @@ impl WireBus {
     #[wasm_bindgen]
     pub fn clear(&self) {
         self.inner.clear();
+    }
+}
+
+/// Shared radio air for a multi-chip browser lab: nRF `VirtualAirBus` + ESP
+/// `BleAirBus` + optional path-loss [`RfMedium`]. Create ONE per lab-group and
+/// pass it to every chip via `attach_lab_air` — same pattern as [`WireBus`].
+#[wasm_bindgen]
+pub struct AirBus {
+    nrf: labwired_core::peripherals::nrf52::radio::VirtualAirBus,
+    ble: labwired_core::peripherals::ble_air::BleAirBus,
+}
+
+#[wasm_bindgen]
+impl AirBus {
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> AirBus {
+        AirBus {
+            nrf: labwired_core::peripherals::nrf52::radio::VirtualAirBus::new(),
+            ble: labwired_core::peripherals::ble_air::BleAirBus::new(),
+        }
+    }
+
+    /// Enable path-loss medium (seeded). Positions via `set_node_position`.
+    /// Co-located nodes stay lossless until placed apart.
+    #[wasm_bindgen]
+    pub fn enable_path_loss(&self, seed: f64, rssi_floor_dbm: f64) {
+        use labwired_core::peripherals::rf_medium::{PathLossParams, RfMedium};
+        let mut params = PathLossParams::default();
+        if rssi_floor_dbm.is_finite() {
+            params.rssi_floor_dbm = rssi_floor_dbm;
+        }
+        let seed_u = if seed.is_finite() && seed >= 0.0 {
+            seed as u64
+        } else {
+            0
+        };
+        self.nrf
+            .attach_medium(RfMedium::new(seed_u).with_params(params));
+    }
+
+    /// Place a node (MCU part id) in metres for path-loss.
+    #[wasm_bindgen]
+    pub fn set_node_position(&self, node_id: &str, x: f64, y: f64) {
+        use labwired_core::peripherals::rf_medium::NodePosition;
+        self.nrf
+            .set_node_position(node_id, NodePosition { x, y });
+    }
+
+    #[wasm_bindgen]
+    pub fn clear_nrf(&self) {
+        self.nrf.clear();
+    }
+
+    #[wasm_bindgen]
+    pub fn clear_ble(&self) {
+        self.ble.clear();
     }
 }
 

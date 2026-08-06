@@ -23,6 +23,10 @@ pub struct World {
     /// Serial links on that medium, in manifest order.
     uart_links: Vec<UartLink>,
     next_uart_link_id: u32,
+    /// Shared RF medium built from optional env-manifest `rf:` (path loss / RSSI).
+    /// Radios attach via their air bus when product wiring is enabled; always
+    /// available for inspect / tests when the manifest declared `rf:`.
+    pub rf_medium: Option<std::sync::Arc<std::sync::Mutex<crate::peripherals::rf_medium::RfMedium>>>,
 }
 
 /// One point-to-point serial link between two nodes, as carried on the world's
@@ -163,6 +167,7 @@ impl World {
             uart_wires: crate::network::VirtualWireBus::new(),
             uart_links: Vec::new(),
             next_uart_link_id: 0,
+            rf_medium: None,
         }
     }
 
@@ -258,6 +263,7 @@ impl World {
             .validate()
             .context("invalid environment manifest")?;
         let mut world = World::new(manifest.name.clone());
+        world.rf_medium = build_world_rf_medium(manifest.rf.as_ref());
 
         for node in &manifest.nodes {
             let sys_path = root_dir.join(&node.system);
@@ -400,6 +406,35 @@ impl World {
 
         Ok(world)
     }
+}
+
+/// Build a shared [`crate::peripherals::rf_medium::RfMedium`] from env `rf:`.
+fn build_world_rf_medium(
+    rf: Option<&labwired_config::EnvironmentRfConfig>,
+) -> Option<std::sync::Arc<std::sync::Mutex<crate::peripherals::rf_medium::RfMedium>>> {
+    let rf = rf?;
+    use crate::peripherals::rf_medium::{NodePosition, PathLossParams, RfMedium};
+    let mut params = PathLossParams::default();
+    if let Some(floor) = rf.rssi_floor_dbm {
+        params.rssi_floor_dbm = floor;
+    }
+    if let Some(exp) = rf.path_loss_exponent {
+        params.exponent = exp;
+    }
+    if let Some(r) = rf.ref_loss_db {
+        params.ref_loss_db = r;
+    }
+    let mut medium = RfMedium::new(rf.seed).with_params(params);
+    for (id, pos) in &rf.nodes {
+        medium.set_node(
+            id.clone(),
+            NodePosition {
+                x: pos.x,
+                y: pos.y,
+            },
+        );
+    }
+    Some(std::sync::Arc::new(std::sync::Mutex::new(medium)))
 }
 
 /// Build the egress tap channel and `EgressBus` for an `egress` interconnect.
