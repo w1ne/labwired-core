@@ -2437,12 +2437,17 @@ pub struct EmitConfig {
     /// clock) or `"echo_pacing_cpu_hz"` (the HC-SR04 echo-pacing override).
     #[serde(default)]
     pub from: Option<String>,
-    /// Source: a numeric part attribute of this name, parsed as f64.
+    /// Source: a part attribute of this name. When `default_str` is set the
+    /// value is emitted as a quoted string; otherwise it is parsed as f64.
     #[serde(default)]
     pub from_attr: Option<String>,
-    /// Fallback for `from_attr` when the attribute is absent or non-numeric.
+    /// Fallback for numeric `from_attr` when the attribute is absent or non-numeric.
     #[serde(default)]
     pub default: Option<f64>,
+    /// Fallback for string `from_attr` when the attribute is absent or blank.
+    /// Presence of this field selects the string emission path.
+    #[serde(default)]
+    pub default_str: Option<String>,
     /// Whether a missing pin binding suppresses the whole device. Defaults to
     /// true; optional feedback signals such as encoder index set this false.
     #[serde(default = "default_true")]
