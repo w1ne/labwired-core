@@ -97,6 +97,9 @@ pub enum Transport {
     Spi,
     Analog,
     GpioGroup,
+    /// Host-side CAN tool attached to a named bxCAN/FDCAN peripheral
+    /// (`connection:` is the controller id, not a pad bus).
+    Can,
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

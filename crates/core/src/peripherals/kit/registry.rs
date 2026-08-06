@@ -113,6 +113,10 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::step_dir_motor::STEP_DIR_MOTOR_KIT,
     &components::h_bridge_motor::H_BRIDGE_MOTOR_KIT,
     &components::unipolar_stepper::UNIPOLAR_STEPPER_KIT,
+    // Host-side CAN tools (were residual from_config arms).
+    &components::can_testers::CAN_DIAGNOSTIC_TESTER_KIT,
+    &components::can_testers::CAN_UDS_TESTER_KIT,
+    &components::can_testers::CAN_LOG_PLAYER_KIT,
 ];
 
 /// Borrow the registry slice.
@@ -148,6 +152,8 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     ("l293d", "l298n"),
     // Unipolar stepper.
     ("stepper-28byj48", "uln2003"),
+    // CAN diagnostic one-shot injector alias.
+    ("uds-diagnostic-tester", "can-diagnostic-tester"),
 ];
 
 /// Resolve a `device_type` spelling to its canonical form.

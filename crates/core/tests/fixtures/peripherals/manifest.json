@@ -49,7 +49,7 @@
       "device_type": "neo6m-gps",
       "label": "NEO-6M GPS",
       "summary": "GPS module streaming NMEA sentences over UART RX.",
-      "detail": "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream back to the host UART.",
+      "detail": "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream back to the host UART. Optional noise_sigma (° lat/lon) uses the same seeded ChannelNoise facility as the IMU kits.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
@@ -62,6 +62,11 @@
           "name": "lon_deg",
           "ty": "float",
           "doc": "Initial longitude in decimal degrees (paired with lat_deg)."
+        },
+        {
+          "name": "noise_sigma",
+          "ty": "float",
+          "doc": "Seeded Gaussian σ on lat/lon (degrees) applied per NMEA sentence; 0 = off. ~1e-5 ° ≈ 1 m."
         }
       ],
       "labs": [
@@ -2469,6 +2474,87 @@
           "name": "in4_pin",
           "ty": "str",
           "doc": "Phase 4 pin (default GPIO19)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "can-diagnostic-tester",
+      "label": "CAN diagnostic tester",
+      "summary": "One-shot single-frame UDS-style request injector on bxCAN/FDCAN.",
+      "detail": "Injects a single diagnostic request frame (default 0x7E0 / ReadDataByIdentifier) once the connected CAN controller is up. Alias: uds-diagnostic-tester.",
+      "transport": "can",
+      "category": "misc",
+      "config_keys": [
+        {
+          "name": "request_id",
+          "ty": "int",
+          "doc": "CAN id for the request (default 0x7E0)."
+        },
+        {
+          "name": "request_data",
+          "ty": "str",
+          "doc": "Hex/bytes payload (default 03 22 F1 90)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "uds-tester",
+      "label": "UDS / ISO-TP tester",
+      "summary": "Stateful multi-frame UDS tester (SecurityAccess-class handshakes).",
+      "detail": "Second CAN node that drives ISO-TP First/Consecutive frames and observes ECU responses via the public bxCAN/FDCAN inject API. Optional `script:` steps; legacy first_frame/consecutive_frame still work.",
+      "transport": "can",
+      "category": "misc",
+      "config_keys": [
+        {
+          "name": "request_id",
+          "ty": "int",
+          "doc": "Tester → ECU id (default 0x111)."
+        },
+        {
+          "name": "reply_id",
+          "ty": "int",
+          "doc": "ECU → tester id (default 0x222)."
+        },
+        {
+          "name": "first_frame",
+          "ty": "str",
+          "doc": "Legacy ISO-TP FirstFrame bytes when script is omitted."
+        },
+        {
+          "name": "consecutive_frame",
+          "ty": "str",
+          "doc": "Legacy ISO-TP ConsecutiveFrame bytes when script is omitted."
+        },
+        {
+          "name": "script",
+          "ty": "str",
+          "doc": "YAML list of {send, expect, expect_nrc} steps."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "can-player",
+      "label": "CAN log player",
+      "summary": "Replays candump-format traffic into a bxCAN/FDCAN controller.",
+      "detail": "Host-side log player for J1939 / bus-monitor labs. Requires inline `data:` (candump text) and optional ticks_per_second.",
+      "transport": "can",
+      "category": "misc",
+      "config_keys": [
+        {
+          "name": "data",
+          "ty": "str",
+          "doc": "Inline candump .log text (required)."
+        },
+        {
+          "name": "ticks_per_second",
+          "ty": "int",
+          "doc": "Sim ticks per log second (default 1_000_000)."
         }
       ],
       "labs": [],
