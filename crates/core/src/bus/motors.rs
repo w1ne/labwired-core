@@ -196,16 +196,29 @@ impl SystemBus {
         ] {
             self.resolve_motor_pin(&c.id, role, pin)?;
         }
-        let timer = self.find_peripheral_index_by_name("tim1").ok_or_else(|| {
-            anyhow::anyhow!("motor '{}': BLDC requires advanced timer 'tim1'", c.id)
-        })?;
+        let timer_name = if c.timer_name.trim().is_empty() {
+            "tim1"
+        } else {
+            c.timer_name.trim()
+        };
+        let timer = self
+            .find_peripheral_index_by_name(timer_name)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "motor '{}': BLDC requires advanced timer '{timer_name}' (set timer_name in motor config)",
+                    c.id
+                )
+            })?;
         let is_timer = self.peripherals[timer]
             .dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::timer::Timer>())
             .is_some();
         if !is_timer {
-            anyhow::bail!("motor '{}': peripheral 'tim1' is not an STM32 timer", c.id);
+            anyhow::bail!(
+                "motor '{}': peripheral '{timer_name}' is not an STM32 timer",
+                c.id
+            );
         }
         let plant = BldcMotor::new(BldcMotorParams {
             resistance_ohm: c.resistance_ohm,

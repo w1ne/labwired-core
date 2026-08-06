@@ -266,6 +266,10 @@ pub struct BldcMotorConfig {
     pub overcurrent_trip_steps: u32,
     #[serde(default = "default_motor_simulation_clock_hz")]
     pub simulation_clock_hz: u64,
+    /// Chip-descriptor peripheral name for the advanced timer that owns the
+    /// six complementary PWM legs (default `tim1` for STM32 advanced timers).
+    #[serde(default = "default_bldc_timer_name")]
+    pub timer_name: String,
     pub phase_a_high_pin: String,
     pub phase_a_low_pin: String,
     pub phase_b_high_pin: String,
@@ -292,6 +296,10 @@ pub struct BldcMotorConfig {
 
 fn default_motor_simulation_clock_hz() -> u64 {
     80_000_000
+}
+
+fn default_bldc_timer_name() -> String {
+    "tim1".to_owned()
 }
 
 fn default_overcurrent_trip_steps() -> u32 {
@@ -405,6 +413,12 @@ impl MotorModelConfig {
                 if config.pole_pairs == 0 {
                     issues.push(format!(
                         "motor_models[{}].pole_pairs must be between 1 and 255 inclusive",
+                        config.id
+                    ));
+                }
+                if config.timer_name.trim().is_empty() {
+                    issues.push(format!(
+                        "motor_models[{}].timer_name must be nonblank",
                         config.id
                     ));
                 }
