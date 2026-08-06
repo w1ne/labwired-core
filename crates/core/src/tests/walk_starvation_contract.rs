@@ -161,13 +161,6 @@ const CONDITIONAL_ALLOWLIST: &[(&str, &str, &str)] = &[
          whole reachable space.",
     ),
     (
-        "peripherals/esp_uart.rs",
-        "EspUart",
-        "`!uses_scheduler() || !attached_streams.is_empty()`: strictly STRONGER \
-         than the auto-accepted negation — a cross-linked UART stays on the walk \
-         even under the scheduler because its peer is polled from tick_elapsed.",
-    ),
-    (
         "peripherals/nrf52/rng.rs",
         "Nrf52Rng",
         "`self.clock.is_none()` is the semantic negation of \
