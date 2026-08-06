@@ -840,47 +840,16 @@ impl SystemBus {
             ) {
                 continue;
             }
-            match ext.r#type.as_str() {
-                // ili9341, adxl345/mpu6050/bme280/oled-ssd1306, neo6m-gps,
-                // and bg770a-cellular dispatch through the PeripheralKit
-                // registry above — see `peripherals::kit`.
-                // iolink-master dispatches through the PeripheralKit registry above.
-                // max31855, sn74hc165, ssd1680_tricolor_290, uc8151d_tricolor_290,
-                // and pcd8544 dispatch through the PeripheralKit registry above.
-                // hc-sr04 / hcsr04 now dispatches through the declarative device
-                // path above (configs/devices/hc_sr04.yaml, `pulse_echo`
-                // primitive) — see super::declarative_device.
-                // dht22 / am2302 now dispatches through the declarative device
-                // path above (configs/devices/dht22.yaml, `one_wire` primitive) —
-                // see super::declarative_device.
-                // rotary-encoder / rotary_encoder now dispatches through the
-                // declarative device path above (configs/devices/rotary_encoder.yaml,
-                // `quadrature` primitive) — see super::declarative_device.
-                // keypad now dispatches through the declarative device path above
-                // (configs/devices/keypad.yaml, `matrix` primitive) — see
-                // super::declarative_device.
-                // neopixel / ws2812 → PeripheralKit registry (`WS2812_KIT`).
-                // servo / sg90 / mg996r → PeripheralKit registry (`SERVO_KIT`).
-                // a4988 / drv8825 / tmc2209 → `STEP_DIR_MOTOR_KIT`.
-                // l298n / tb6612 / l293d → `H_BRIDGE_MOTOR_KIT`.
-                // uln2003 / stepper-28byj48 → `UNIPOLAR_STEPPER_KIT`.
-                // ili9341-16bit / ili9341_16bit: PeripheralKit registry
-                // (`Ili9341ParallelKit`, Transport::GpioGroup) — see
-                // peripherals::kit and ili9341_parallel.rs.
-                // can-diagnostic-tester / uds-diagnostic-tester → `CAN_DIAGNOSTIC_TESTER_KIT`.
-                // uds-tester → `CAN_UDS_TESTER_KIT`.
-                // can-player → `CAN_LOG_PLAYER_KIT`.
-                // ntc-thermistor dispatches through the PeripheralKit registry above.
-                _ => {
-                    // Nothing claims this device: hard error, same policy as
-                    // the Xtensa path. A green run with a silently missing
-                    // device proves nothing — the simulator's worst outcome.
-                    return Err(super::external_devices::unsupported_external_device_error(
-                        &format!("from_config (connection '{}')", ext.connection),
-                        ext,
-                    ));
-                }
-            }
+            // Residual product attach arms are gone — kits / declarative / parts
+            // claim every supported external above. History of migrations:
+            // ili9341, sensors, neo6m, bg770a, iolink-master, SPI displays,
+            // hc-sr04/dht22/rotary/keypad declarative, neopixel/servo/motors
+            // kits, CAN testers (`CAN_*_KIT`). Nothing left here but fail-loud.
+            // A green run with a silently missing device proves nothing.
+            return Err(super::external_devices::unsupported_external_device_error(
+                &format!("from_config (connection '{}')", ext.connection),
+                ext,
+            ));
         }
 
         bus.rebuild_peripheral_ranges();
