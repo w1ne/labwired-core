@@ -294,6 +294,13 @@ jobs:
           python3 scripts/generate_validation_status.py --check --drift
           python3 scripts/generate_firmware_exercise_matrix.py --check
 
+      # The perf gate measures whatever chip descriptors it can link a fixture
+      # against. Adding a chip on an unhandled memory map used to drop it out of
+      # the gate silently — this asserts, on the PR that adds it, that it is
+      # either covered or waived with a reason. Pure Python, seconds.
+      - name: Perf gate — every chip covered or waived
+        run: python3 scripts/perf/board_perf.py --check-coverage
+
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
       # generators that have no --check flag of their own (7 of 9 at the time
