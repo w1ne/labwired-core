@@ -12,8 +12,11 @@ on:
     - cron: "30 2 * * *"
   workflow_dispatch:
 
+# PR runs still cancel superseded PR heads. push / schedule / workflow_dispatch
+# each get their own group so a manual full-CI dispatch (or nightly) cannot
+# cancel the push-to-main integrity lane mid-flight (and vice versa).
 concurrency:
-  group: core-ci-${{ github.event.pull_request.number || github.ref }}
+  group: core-ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.event_name) }}
   cancel-in-progress: true
 
 jobs:
