@@ -1438,6 +1438,11 @@ impl Esp32c3Bt {
     /// Build a controller on an explicitly-owned air, so two nodes in one
     /// world share a medium and two worlds do not. Mirrors
     /// [`Nrf52Radio::with_air`](crate::peripherals::nrf52::radio::Nrf52Radio::with_air).
+    /// Rebind the shared BLE air (browser multi-chip lab-group isolation).
+    pub fn set_air(&mut self, air: BleAirBus) {
+        self.air = air;
+    }
+
     pub fn with_air(air: BleAirBus) -> Self {
         Self { air, ..Self::new() }
     }

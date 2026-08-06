@@ -34,7 +34,7 @@
 //!   MODE-tagged) crosses to another RADIO instance on the same FREQUENCY via
 //!   a shared in-process registry, where it is verified end to end.
 //!
-//! Idealized — present but not physical:
+//! Idealized — present but not physical (default bus, no [`RfMedium`]):
 //! * **The channel is lossless and collision-free.** No bit errors, no
 //!   interference, no packet loss, no two-transmitter collision; CRC therefore
 //!   essentially always passes. RX *consumes* the frame from the queue, so
@@ -44,10 +44,16 @@
 //! * **RSSI is a deterministic PRNG** around ~-50 dBm — plausible jitter with
 //!   no physical meaning (no path loss / distance).
 //!
+//! When a shared [`crate::peripherals::rf_medium::RfMedium`] is attached to the
+//! [`VirtualAirBus`], path loss / RSSI floor can drop frames and
+//! `RSSISAMPLE` tracks distance (seeded, deterministic). Co-located nodes
+//! (default positions) keep the lossless path.
+//!
 //! Not modeled at all: GFSK modulation, preamble / access-address bit sync,
 //! channel hopping, AAR encryption, and the advertising / connection state
 //! machines.
 
+use crate::peripherals::rf_medium::{NodePosition, RfMedium};
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -87,6 +93,10 @@ struct AirFrame {
     /// the energy but won't decode — we model that as "frame stays in
     /// the queue for a mode-matching receiver to consume".
     mode: u32,
+    /// Medium node id of the transmitter (for path-loss / RSSI).
+    tx_node: String,
+    /// TXPOWER as dBm (approx) for the medium path-loss model.
+    tx_power_dbm: f64,
 }
 
 #[derive(Debug, Default)]
@@ -124,14 +134,34 @@ pub struct AirFrameTrace {
 /// registry could not offer, so two BLE labs (or two workers) can coexist.
 /// `Arc<Mutex<…>>` keeps radios `Send` inside a `Machine` (native requires
 /// `MachineTrait: Send`); the browser is single-threaded so it never contends.
+///
+/// Optional [`RfMedium`]: when set, RX delivery and RSSI use path loss /
+/// RSSI-floor decisions (deterministic). Without it, air stays lossless + PRNG RSSI.
 #[derive(Debug, Clone, Default)]
 pub struct VirtualAirBus {
     inner: Arc<Mutex<VirtualAir>>,
+    medium: Arc<Mutex<Option<RfMedium>>>,
 }
 
 impl VirtualAirBus {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Attach a seeded RF medium. Co-located node positions keep existing
+    /// lossless behaviour; place nodes with [`set_node_position`] to stress links.
+    pub fn attach_medium(&self, medium: RfMedium) {
+        if let Ok(mut slot) = self.medium.lock() {
+            *slot = Some(medium);
+        }
+    }
+
+    pub fn set_node_position(&self, id: impl Into<String>, pos: NodePosition) {
+        if let Ok(mut slot) = self.medium.lock() {
+            if let Some(m) = slot.as_mut() {
+                m.set_node(id, pos);
+            }
+        }
     }
 
     /// Most-recent-first snapshot of the TX trace, for the playground's BLE-air
@@ -155,6 +185,38 @@ impl VirtualAirBus {
     fn lock(&self) -> std::sync::LockResult<std::sync::MutexGuard<'_, VirtualAir>> {
         self.inner.lock()
     }
+
+    /// Evaluate path-loss delivery for (tx_node → rx_node). Returns
+    /// `Some(rssi_dbm)` if delivered, `None` if the medium drops the frame.
+    /// When no medium is attached, always delivers with `None` RSSI (caller
+    /// keeps PRNG sample).
+    fn medium_try_deliver(
+        &self,
+        tx_node: &str,
+        rx_node: &str,
+        tx_power_dbm: f64,
+    ) -> MediumVerdict {
+        let Ok(slot) = self.medium.lock() else {
+            return MediumVerdict::NoMedium;
+        };
+        let Some(m) = slot.as_ref() else {
+            return MediumVerdict::NoMedium;
+        };
+        let d = m.distance_m(tx_node, rx_node);
+        let rssi = m.rssi_dbm(tx_power_dbm, d);
+        if rssi < m.params().rssi_floor_dbm {
+            MediumVerdict::Drop
+        } else {
+            MediumVerdict::Deliver { rssi_dbm: rssi }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MediumVerdict {
+    NoMedium,
+    Drop,
+    Deliver { rssi_dbm: f64 },
 }
 
 // --- Transitional process-global air (browser back-compat) -------------------
@@ -405,6 +467,8 @@ pub struct Nrf52Radio {
     /// Radios sharing a bus hear each other; `new()` uses the process-global
     /// default, `with_air` binds an explicit per-group bus.
     air: VirtualAirBus,
+    /// Identity in an attached [`RfMedium`] (path loss / RSSI). Stable per radio.
+    node_id: String,
 }
 
 impl Nrf52Radio {
@@ -440,6 +504,36 @@ impl Nrf52Radio {
     /// `new()`'s process-global default once the host owns per-lab-group buses.
     pub fn with_air(air: VirtualAirBus) -> Self {
         Self { air, ..Self::new() }
+    }
+
+    /// Set the RF-medium node id used for path loss when a medium is attached.
+    pub fn with_node_id(mut self, id: impl Into<String>) -> Self {
+        self.node_id = id.into();
+        self
+    }
+
+    pub fn set_node_id(&mut self, id: impl Into<String>) {
+        self.node_id = id.into();
+    }
+
+    /// Rebind the shared air bus (browser multi-chip lab-group isolation).
+    pub fn set_air(&mut self, air: VirtualAirBus) {
+        self.air = air;
+    }
+
+    pub fn air(&self) -> &VirtualAirBus {
+        &self.air
+    }
+
+    /// Approximate TX power in dBm from the TXPOWER register (signed 8-bit).
+    fn tx_power_dbm(&self) -> f64 {
+        (self.txpower as i8) as f64
+    }
+
+    /// Map medium RSSI (dBm, typically negative) to Nordic RSSISAMPLE (0..=127).
+    fn rssi_sample_from_dbm(rssi_dbm: f64) -> u32 {
+        let v = (-rssi_dbm).round() as i32;
+        v.clamp(0, 127) as u32
     }
 
     /// Apply SHORTS-style automatic task triggers when an event fires.
@@ -694,6 +788,13 @@ impl PacketDescriptor {
 }
 
 impl Peripheral for Nrf52Radio {
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
@@ -1148,6 +1249,8 @@ impl Peripheral for Nrf52Radio {
                 whitening_iv: self.datawhiteiv as u8,
                 crcinit: self.crcinit,
                 mode: self.mode,
+                tx_node: self.node_id.clone(),
+                tx_power_dbm: self.tx_power_dbm(),
             };
             self.last_tx_packet = Some(packet);
 
@@ -1194,13 +1297,34 @@ impl Peripheral for Nrf52Radio {
             // are also computed here against the DAB/DAP whitelist.
             let mut popped = None;
             let mut popped_frame_addr: Option<(u32, u8)> = None;
+            let mut medium_rssi: Option<f64> = None;
             if let Ok(mut air) = self.air.lock() {
                 let key = self.frequency as u8;
                 if let Some(queue) = air.queues.get_mut(&key) {
-                    let pos = queue
-                        .iter()
-                        .position(|f| f.mode == self.mode && self.matches_address(f));
-                    if let Some(idx) = pos {
+                    // Prefer the first mode/address match the medium also delivers.
+                    let mut chosen: Option<usize> = None;
+                    for (idx, f) in queue.iter().enumerate() {
+                        if f.mode != self.mode || !self.matches_address(f) {
+                            continue;
+                        }
+                        match self.air.medium_try_deliver(
+                            &f.tx_node,
+                            &self.node_id,
+                            f.tx_power_dbm,
+                        ) {
+                            MediumVerdict::Drop => continue,
+                            MediumVerdict::Deliver { rssi_dbm } => {
+                                medium_rssi = Some(rssi_dbm);
+                                chosen = Some(idx);
+                                break;
+                            }
+                            MediumVerdict::NoMedium => {
+                                chosen = Some(idx);
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(idx) = chosen {
                         if let Some(f) = queue.remove(idx) {
                             popped_frame_addr = Some((f.addr_base, f.addr_prefix));
                             popped = Some(f.bytes);
@@ -1262,7 +1386,10 @@ impl Peripheral for Nrf52Radio {
                 }
 
                 // ── RSSI sampling per-frame ──────────────────────────
-                self.rssisample = self.next_rssi_sample();
+                self.rssisample = match medium_rssi {
+                    Some(dbm) => Self::rssi_sample_from_dbm(dbm),
+                    None => self.next_rssi_sample(),
+                };
 
                 // Set bit-rate countdown for the actual received packet
                 // length (including the 3 CRC bytes we stripped above).
@@ -1981,5 +2108,93 @@ mod tests {
 
         // RAM at PACKETPTR stays at reset 0; frame stays in the air.
         assert_eq!(bus_rx.read_u8(0x2000_7000).unwrap(), 0);
+    }
+
+    /// Path-loss medium: far nodes do not deliver; co-located do. RSSI tracks distance.
+    #[test]
+    fn rf_medium_path_loss_gates_delivery_and_rssi() {
+        use crate::bus::SystemBus;
+        use crate::peripherals::rf_medium::{NodePosition, PathLossParams, RfMedium};
+        use crate::Bus;
+
+        let air = VirtualAirBus::new();
+        air.attach_medium(
+            RfMedium::new(7).with_params(PathLossParams {
+                rssi_floor_dbm: -55.0,
+                ref_loss_db: 40.0,
+                exponent: 2.0,
+                ..PathLossParams::default()
+            }),
+        );
+        air.set_node_position("tx", NodePosition { x: 0.0, y: 0.0 });
+        // 50 m → path loss ≈ 40 + 20*log10(50) ≈ 74 dB → RSSI ≈ -74 at 0 dBm TX
+        air.set_node_position("rx_far", NodePosition { x: 50.0, y: 0.0 });
+        air.set_node_position("rx_near", NodePosition { x: 0.0, y: 0.0 });
+
+        let mut bus_tx = SystemBus::new();
+        bus_tx.write_u8(0x2000_0000, 0x11).unwrap();
+        bus_tx.write_u8(0x2000_0001, 1).unwrap();
+        bus_tx.write_u8(0x2000_0002, 0xEE).unwrap();
+        let mut tx = Nrf52Radio::with_air(air.clone()).with_node_id("tx");
+        tx.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        tx.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        tx.write_u32(OFF_PACKETPTR, 0x2000_0000).unwrap();
+        tx.write_u32(OFF_FREQUENCY, 22).unwrap();
+        tx.write_u32(OFF_MODE, 3).unwrap();
+        tx.write_u32(OFF_CRCINIT, 0).unwrap();
+        tx.write_u32(OFF_BASE0, 0x1111_1100).unwrap();
+        tx.write_u32(OFF_PREFIX0, 0x11).unwrap();
+        tx.write_u32(OFF_TXADDRESS, 0).unwrap();
+        tx.write_u32(OFF_TXPOWER, 0).unwrap(); // 0 dBm
+        tx.write_u32(OFF_TASKS_TXEN, 1).unwrap();
+        tx.tick();
+        tx.write_u32(OFF_TASKS_START, 1).unwrap();
+        tx.tick_with_bus(&mut bus_tx);
+
+        // Far RX: medium drops → no DMA
+        let mut bus_far = SystemBus::new();
+        let mut rx_far = Nrf52Radio::with_air(air.clone()).with_node_id("rx_far");
+        rx_far.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx_far.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx_far.write_u32(OFF_PACKETPTR, 0x2000_8000).unwrap();
+        rx_far.write_u32(OFF_FREQUENCY, 22).unwrap();
+        rx_far.write_u32(OFF_MODE, 3).unwrap();
+        rx_far.write_u32(OFF_CRCINIT, 0).unwrap();
+        rx_far.write_u32(OFF_BASE0, 0x1111_1100).unwrap();
+        rx_far.write_u32(OFF_PREFIX0, 0x11).unwrap();
+        rx_far.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+        rx_far.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx_far.tick();
+        rx_far.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx_far.tick_with_bus(&mut bus_far);
+        assert_eq!(
+            bus_far.read_u8(0x2000_8000).unwrap(),
+            0,
+            "far RX must not receive under RSSI floor"
+        );
+
+        // Near RX: delivers; RSSI sample reflects ~0 dB path loss (strong)
+        let mut bus_near = SystemBus::new();
+        let mut rx_near = Nrf52Radio::with_air(air).with_node_id("rx_near");
+        rx_near.write_u32(OFF_PCNF0, 8 | (1 << 8)).unwrap();
+        rx_near.write_u32(OFF_PCNF1, 0xFF).unwrap();
+        rx_near.write_u32(OFF_PACKETPTR, 0x2000_9000).unwrap();
+        rx_near.write_u32(OFF_FREQUENCY, 22).unwrap();
+        rx_near.write_u32(OFF_MODE, 3).unwrap();
+        rx_near.write_u32(OFF_CRCINIT, 0).unwrap();
+        rx_near.write_u32(OFF_BASE0, 0x1111_1100).unwrap();
+        rx_near.write_u32(OFF_PREFIX0, 0x11).unwrap();
+        rx_near.write_u32(OFF_RXADDRESSES, 0x01).unwrap();
+        rx_near.write_u32(OFF_TASKS_RXEN, 1).unwrap();
+        rx_near.tick();
+        rx_near.write_u32(OFF_TASKS_START, 1).unwrap();
+        rx_near.tick_with_bus(&mut bus_near);
+        assert_eq!(
+            bus_near.read_u8(0x2000_9000).unwrap(),
+            0x11,
+            "co-located RX must receive"
+        );
+        // 0 dBm TX, 0 m → rssi_dbm 0 → sample 0 (strongest)
+        assert_eq!(rx_near.read_u32(OFF_RSSISAMPLE).unwrap(), 0);
     }
 }
