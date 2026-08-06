@@ -13,6 +13,8 @@
 #   the NON-secure alias base 0x50000000 (DT `peripheral@50000000`,
 #   `ranges = <0x0 0x50000000 0x10000000>`), so e.g. UARTE0 = 0x50008000,
 #   CLOCK = 0x50005000, GPIO P0 = 0x50842500.
+# - Peripheral bases cross-checked against tests/fixtures/real_world/nrf5340.svd
+#   (NordicSemiconductor/nrfx v3.12.0, mdk/nrf5340_application.svd).
 # - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, TIMER0..2=15..17,
 #   RTC0=20, RTC1=21).
 #
@@ -98,37 +100,53 @@ peripherals:
     config:
       debug_schema: "../peripherals/nrf5340/timer2_s.yaml"
 
-  # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2000, far from the rest
+  # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2500, far from the rest
   # of the peripheral window.
   #
-  # The devicetree says gpio0@50842500 / gpio1@50842800, but a Nordic GPIO DT
-  # node points at the OUT register, which is peripheral_base + 0x500 — so the
-  # bases below are the DT addresses minus 0x500. The gpio model uses
-  # peripheral-relative offsets (OUT 0x504, OUTSET 0x508, DIRSET 0x518), so
-  # mapping the DT address directly would put every GPIO register 0x500 too
-  # high. That is a silent failure: UART still works and the boot still
-  # completes, only the pins never move. Found while onboarding the nRF54L15,
-  # which has the identical layout quirk.
+  # These two used to be declared at 0x5084_2000 / 0x5084_2300 — the vendor
+  # bases minus 0x500 — because the shared nRF52 GPIO model counts registers
+  # from the block start (OUT at +0x504) while Nordic bases an nRF53 port at
+  # OUT itself (P0_S = 0x5084_2500, OUT at +0x004). Both describe the same
+  # silicon and the same absolute addresses, but the two ports are only 0x300
+  # apart, so a window anchored 0x500 low starts INSIDE its neighbour's. With
+  # both declared 4 KB wide, gpio1's window covered every gpio0 register, and
+  # the router's greatest-start-wins rule handed all of them to gpio1: P0.OUT
+  # (0x5084_2504) was answered by gpio1 at its offset 0x204, which is not a
+  # register, so P0 writes vanished and P0 reads returned 0. Every P0 pin on
+  # the nRF5340-DK — the LEDs and the buttons — was dead, silently. No size or
+  # ordering change can fix that; the window has to move.
   #
-  # For the SAME reason these two carry NO `debug_schema`: the SVD's P0_S/P1_S
-  # descriptors are written against the MDK base (0x50842500 / 0x50842800), so
-  # attaching one here would name every register 0x500 off — a debugger
-  # confidently labelling the wrong address is worse than no names at all.
-  # A shifted-offset descriptor would have to be authored by hand; do not
-  # "fix" this by pointing at p0_s.yaml.
+  # So the windows are now declared where the vendor puts them, and
+  # `reg_offset: 0x500` tells the model how far into its register map each
+  # window starts (the SVD `addressBlock.offset` idea). Sources, both in-tree:
+  # tests/fixtures/real_world/nrf5340.svd (nrfx v3.12.0 mdk) gives P0_S
+  # 0x5084_2500 / P1_S 0x5084_2800 with a 0x300 addressBlock, and the Zephyr
+  # `nrf5340dk/nrf5340/cpuapp` devicetree agrees: gpio0@50842500 /
+  # gpio1@50842800, reg length 0x300.
+  #
+  # These two still carry no `debug_schema`, but the reason has changed. It was
+  # that the SVD's P0_S/P1_S names are written against the MDK base, so on the
+  # old anchor a debugger would have labelled every register 0x500 off. That is
+  # fixed — the window IS the MDK base now, and p0_s.yaml / p1_s.yaml would line
+  # up exactly. What stops it is only cost: they are 48 KB each and every
+  # referenced descriptor is `include_str!`d into the wasm download, so wiring
+  # them is a 96 KB change to the browser bundle and belongs in its own commit,
+  # not in a collision fix.
   - id: "gpio0"
     type: "gpio"
-    base_address: 0x50842000
-    size: "4KB"
+    base_address: 0x50842500
+    size: "768B"
     config:
       profile: "nrf52"
+      reg_offset: 0x500
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x50842300
-    size: "4KB"
+    base_address: 0x50842800
+    size: "768B"
     config:
       profile: "nrf52"
       num_pins: 16
+      reg_offset: 0x500
 
   # ── Benign stub windows (trim/config blocks: write-only or never polled) ──
   # These are poked by SystemInit / soc-level errata + DCDC/regulator setup but

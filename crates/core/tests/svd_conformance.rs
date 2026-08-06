@@ -76,20 +76,16 @@ const ALLOWED: &[(&str, &str, Deviation, &str)] = &[
     // nRF-family GPIO model uses the block start with OUT at +0x504 (the
     // classic nRF52 layout it shares with every other Nordic part). The config
     // back-offsets the base by 0x504 so the two agree on where OUT lands. This
-    // is uniform across all Nordic ports and is load-bearing: "correcting" the
-    // base to the SVD's number would move every GPIO register by 0x504.
-    (
-        "nrf5340",
-        "gpio0",
-        Deviation::Base,
-        "Nordic SVD bases a port at its OUT register; model uses block start.",
-    ),
-    (
-        "nrf5340",
-        "gpio1",
-        Deviation::Base,
-        "Nordic SVD bases a port at its OUT register; model uses block start.",
-    ),
+    // is load-bearing WHERE IT IS STILL USED: "correcting" such a base to the
+    // SVD's number, without telling the model the window moved, would shift
+    // every GPIO register by 0x500.
+    //
+    // nRF5340's two ports are no longer among them. On that part the back-offset
+    // was not merely a bookkeeping convention: P0 and P1 are 0x300 apart, so a
+    // window anchored 0x500 low sits inside its neighbour's and one port's
+    // registers were entirely served by the other. They now sit at the SVD bases
+    // with `reg_offset: 0x500` in the chip yaml, so no deviation is claimed.
+    // nRF54L15 still uses the remap and still needs these entries.
     (
         "nrf54l15",
         "gpio0",

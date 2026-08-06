@@ -208,31 +208,56 @@ fn timer_and_temp_and_grtc_windows_are_reachable() {
     let _ = bus.read_u32(GRTC);
 }
 
-/// Regression probe for a PRE-EXISTING nRF5340 profile bug found while
-/// onboarding the nRF54L15 (kept here because this is where the reasoning
-/// lives; move it if the nRF5340 profile is fixed).
+/// Companion probe for the nRF5340, which has the identical Nordic GPIO layout
+/// quirk (kept here because this is where the reasoning lives).
 ///
-/// `configs/chips/nrf5340.yaml` maps GPIO P0 at 0x5084_2500, which is the
-/// DEVICETREE address — i.e. the OUT register — not the peripheral base. By
-/// the same +0x500 rule this file documents, the base should be 0x5084_2000.
-/// If this test fails, the nRF5340 GPIO registers are all 0x500 too high and
-/// its LEDs cannot be driven either.
+/// This used to assert the *convention*: that `gpio0.base_address` was the
+/// devicetree address minus 0x500. That is a mirror of whatever the yaml
+/// happens to say, and it was green throughout the whole time nRF5340 P0 was
+/// unreachable — the -0x500 anchor put gpio0's window 0x300 inside gpio1's, and
+/// under greatest-start-wins gpio1 answered every P0 register. nRF5340 now
+/// anchors its ports at the vendor bases with `reg_offset: 0x500`.
+///
+/// So assert the thing the convention was only ever a means to: whatever anchor
+/// and offset the yaml chooses, P0.OUT must come out at the devicetree address.
+/// That holds under both conventions and fails for a chip that picks one and
+/// forgets the other. Whether the two ports are also *distinguishable* is
+/// checked behaviourally by
+/// `peripheral_reachability::nrf5340_gpio_ports_answer_at_their_own_silicon_addresses`.
 #[test]
-fn nrf5340_gpio_base_follows_the_same_plus_0x500_rule() {
+fn nrf5340_gpio_out_lands_on_the_devicetree_address() {
+    // Zephyr nrf5340dk/nrf5340/cpuapp DT: gpio0@50842500 / gpio1@50842800, and
+    // a Nordic GPIO DT node points at OUT. Nordic's SVD agrees (P0_S/P1_S).
+    const DT_P0_OUT: u64 = 0x5084_2500 + 0x004;
+    const DT_P1_OUT: u64 = 0x5084_2800 + 0x004;
+    // OUT in the shared nRF52 GPIO register map, counted from the block start.
+    const OUT_IN_BLOCK: u64 = 0x504;
+
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../configs/chips/nrf5340.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load nrf5340 chip");
-    let gpio0 = chip
-        .peripherals
-        .iter()
-        .find(|p| p.id == "gpio0")
-        .expect("nrf5340 gpio0");
 
-    assert_eq!(
-        gpio0.base_address, 0x5084_2000,
-        "nRF5340 GPIO P0 base should be the DT address 0x5084_2500 minus 0x500; \
-         mapping the DT address directly puts every GPIO register 0x500 too high"
-    );
+    for (id, want) in [("gpio0", DT_P0_OUT), ("gpio1", DT_P1_OUT)] {
+        let p = chip
+            .peripherals
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("nrf5340 {id}"));
+        let reg_offset = p
+            .config
+            .get("reg_offset")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        assert_eq!(
+            p.base_address + (OUT_IN_BLOCK - reg_offset),
+            want,
+            "nRF5340 {id}: base {:#x} with reg_offset {:#x} puts OUT at {:#x}, \
+             but the devicetree and the SVD both say {want:#x}",
+            p.base_address,
+            reg_offset,
+            p.base_address + (OUT_IN_BLOCK - reg_offset)
+        );
+    }
 }
 
 // ── CLOCK ────────────────────────────────────────────────────────────────

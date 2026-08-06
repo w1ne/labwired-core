@@ -540,6 +540,23 @@ pub struct GpioPort {
     /// without a wired STM32 SPI.
     spi_cells: Vec<std::sync::Arc<crate::peripherals::spi::SpiLineLevels>>,
     spi_routes: Vec<SpiPadRoute>,
+    /// Offset of this port's MMIO window inside the family's register space,
+    /// i.e. the SVD `addressBlock.offset`. Zero for every port whose window
+    /// starts where its register map starts, which is all of them except the
+    /// nRF53/nRF54 GPIO ports.
+    ///
+    /// Nordic describes an nRF52 GPIO port from the block start, with `OUT` at
+    /// +0x504 and 0x500 of reserved space in front of it. From the nRF5340 on,
+    /// the MDK and the SVD instead base a port at `OUT` (P0_S = 0x5084_2500,
+    /// `OUT` at +0x004) and give it a 0x300 `addressBlock`. Same silicon, same
+    /// absolute addresses — but the ports are only 0x300 apart, so a window
+    /// anchored 0x500 low is necessarily 0x300 deep inside its neighbour's.
+    /// That is not a fixable overlap: whichever anchor loses the router's
+    /// greatest-start-wins tie-break has ALL of its registers served by the
+    /// other port. Declaring the window where the vendor puts it and telling
+    /// the model how far in it starts is the only arrangement in which both
+    /// ports are addressable at once.
+    window_offset: u64,
 }
 
 impl Default for GpioPort {
@@ -555,7 +572,15 @@ impl GpioPort {
             tap: None,
             spi_cells: Vec::new(),
             spi_routes: Vec::new(),
+            window_offset: 0,
         }
+    }
+
+    /// Anchor this port's MMIO window `offset` bytes into its register map.
+    /// See [`GpioPort::window_offset`]. Chip yaml: `config: { reg_offset: … }`.
+    pub fn with_window_offset(mut self, offset: u64) -> Self {
+        self.window_offset = offset;
+        self
     }
 
     pub fn new() -> Self {
@@ -591,34 +616,43 @@ impl GpioPort {
         }))
     }
 
+    /// Window-relative offset -> family register offset. The only place the
+    /// two coordinate systems meet; every `Peripheral` entry point below goes
+    /// through here, so a port with a non-zero window offset cannot be reached
+    /// by one path and missed by another.
     fn read_reg(&self, offset: u64) -> u32 {
-        self.family.read_reg(offset)
+        self.family.read_reg(offset + self.window_offset)
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
-        self.family.write_reg(offset, value);
+        self.family.write_reg(offset + self.window_offset, value);
     }
 
-    /// Register offset of the output data register (ODR) for this family.
+    /// Register offset of the output data register (ODR) for this family,
+    /// relative to the port's MMIO window (so `base + odr_offset()` is an
+    /// address the bus can route).
     /// Used by the bus to resolve a display's D/C line to a concrete address.
     pub fn odr_offset(&self) -> u64 {
-        match &self.family {
+        let family: u64 = match &self.family {
             GpioFamily::Stm32F1(_) => 0x0C,
             GpioFamily::Stm32V2(_) => 0x14,
             GpioFamily::Nrf52(_) => 0x504,
             GpioFamily::Kinetis(_) => 0x00,
-        }
+        };
+        family.saturating_sub(self.window_offset)
     }
 
-    /// Register offset of the input data register (IDR) for this family.
+    /// Register offset of the input data register (IDR) for this family,
+    /// relative to the port's MMIO window (see [`GpioPort::odr_offset`]).
     /// Used by the bus to resolve a sensor's input line (e.g. HC-SR04 ECHO).
     pub fn idr_offset(&self) -> u64 {
-        match &self.family {
+        let family: u64 = match &self.family {
             GpioFamily::Stm32F1(_) => 0x08,
             GpioFamily::Stm32V2(_) => 0x10,
             GpioFamily::Nrf52(_) => 0x510,
             GpioFamily::Kinetis(_) => 0x10,
-        }
+        };
+        family.saturating_sub(self.window_offset)
     }
 
     /// Register layout of this port (used by the SPI pad-wiring helper to
@@ -1084,6 +1118,43 @@ mod routing_tests {
         g.write_u32(0x14, 1 << 3).unwrap(); // PDDR: pin3 output
         assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Output);
         assert_eq!(g.gpio_routing(4).unwrap().mode, GpioMode::Input);
+    }
+
+    /// A window offset shifts EVERY door into the model by the same amount —
+    /// the MMIO reads/writes and the `odr_offset`/`idr_offset` the bus uses to
+    /// resolve a pin to an address. If those two disagreed, a pin-bound device
+    /// would be wired to an address the register path never serves.
+    #[test]
+    fn window_offset_shifts_mmio_and_the_pin_address_helpers_together() {
+        // nRF53/nRF54 anchor: the window starts at OUT, 0x500 into the map.
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Nrf52).with_window_offset(0x500);
+
+        assert_eq!(
+            g.odr_offset(),
+            0x004,
+            "OUT is 0x504 - 0x500 into the window"
+        );
+        assert_eq!(g.idr_offset(), 0x010, "IN is 0x510 - 0x500 into the window");
+
+        // PIN_CNF[7].DIR = Output, then OUTSET pin 7 — all at window-relative
+        // offsets (0x700-0x500, 0x508-0x500).
+        g.write_u32(0x200 + 7 * 4, 1).unwrap();
+        g.write_u32(0x008, 1 << 7).unwrap();
+        assert_eq!(g.read_gpio_pad(7), Some(true));
+        assert_eq!(
+            g.read_u32(g.odr_offset()).unwrap() & (1 << 7),
+            1 << 7,
+            "reading OUT through odr_offset() must see the same bit the MMIO \
+             write set — the bus resolves pin addresses through this helper"
+        );
+
+        // And the un-offset default is untouched: same port, same registers,
+        // at the block-start offsets every other Nordic part uses.
+        let mut plain = GpioPort::new_with_layout(GpioRegisterLayout::Nrf52);
+        assert_eq!(plain.odr_offset(), 0x504);
+        plain.write_u32(0x700 + 7 * 4, 1).unwrap();
+        plain.write_u32(0x508, 1 << 7).unwrap();
+        assert_eq!(plain.read_gpio_pad(7), Some(true));
     }
 }
 
