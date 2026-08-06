@@ -181,8 +181,8 @@ fn adc_channel_count(bus: &mut SystemBus, connection: &str, channel: u8) -> u16 
         {
             return sens.channel_input_count(channel);
         }
-        if let Some(adc) = any
-            .downcast_mut::<labwired_core::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc>()
+        if let Some(adc) =
+            any.downcast_mut::<labwired_core::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc>()
         {
             return adc.channel_input_count(channel);
         }
@@ -233,7 +233,9 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
 
     let inputs = bus.list_inputs();
     assert!(
-        inputs.iter().any(|(o, ch)| o == "vlA" && ch.key == "distance"),
+        inputs
+            .iter()
+            .any(|(o, ch)| o == "vlA" && ch.key == "distance"),
         "distance channel missing: {inputs:?}"
     );
 
