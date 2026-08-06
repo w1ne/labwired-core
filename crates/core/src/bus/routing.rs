@@ -697,11 +697,19 @@ impl SystemBus {
         use crate::peripherals::esp32c3::bt::Esp32c3Bt;
         use crate::peripherals::nrf52::radio::Nrf52Radio;
         for entry in &mut self.peripherals {
-            if let Some(radio) = entry.dev.as_any_mut().and_then(|a| a.downcast_mut::<Nrf52Radio>()) {
+            if let Some(radio) = entry
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Nrf52Radio>())
+            {
                 radio.set_air(nrf_air.clone());
                 radio.set_node_id(node_id);
             }
-            if let Some(bt) = entry.dev.as_any_mut().and_then(|a| a.downcast_mut::<Esp32c3Bt>()) {
+            if let Some(bt) = entry
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32c3Bt>())
+            {
                 bt.set_air(ble_air.clone());
             }
         }

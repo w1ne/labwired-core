@@ -714,6 +714,11 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x60."
+        },
+        {
+          "name": "oem_pubkey_hex",
+          "ty": "str",
+          "doc": "Optional 128-char hex OEM update-verify public key (64-byte                   uncompressed P-256 X‖Y) for data slot 0. When omitted, the                   well-known demo pubkey is used."
         }
       ],
       "labs": [],
@@ -2331,6 +2336,60 @@
           "name": "ambient_c",
           "ty": "float",
           "doc": "Ambient temperature of the thermal scene (°C)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "servo",
+      "label": "Hobby PWM Servo",
+      "summary": "RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty).",
+      "detail": "Attaches as a GPIO observer on signal_pin; optional ledc_channel binds ESP32 LEDC duty for ledcWrite paths. Type aliases sg90 / mg996r select calibration via config.model or the top-level type string.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "signal_pin",
+          "ty": "str",
+          "doc": "Control pin (also control_pin / pwm_pin / pin). Defaults to GPIO18."
+        },
+        {
+          "name": "model",
+          "ty": "str",
+          "doc": "Calibration: sg90 | mg996r | standard. Defaults from type alias when omitted."
+        },
+        {
+          "name": "ledc_channel",
+          "ty": "int",
+          "doc": "Optional ESP32 LEDC channel (0..15). When omitted, all 16 channels observe."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "neopixel",
+      "label": "WS2812 / Neopixel strip",
+      "summary": "Addressable RGB LED strip on one data pin (edge-timed bit stream).",
+      "detail": "Attaches as a GPIO observer on data_pin. On ESP32-S3 the RMT + GPIO matrix drive real edges; elsewhere the strip is held for readback until edges appear. Alias type `ws2812` resolves to this kit.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "data_pin",
+          "ty": "str",
+          "doc": "Data line GPIO (e.g. \"GPIO48\"). Defaults to GPIO48."
+        },
+        {
+          "name": "num_pixels",
+          "ty": "int",
+          "doc": "Number of LEDs on the strip. Defaults to 1."
+        },
+        {
+          "name": "cpu_hz",
+          "ty": "int",
+          "doc": "Simulated CPU Hz for edge timing. Defaults to 160_000_000."
         }
       ],
       "labs": [],

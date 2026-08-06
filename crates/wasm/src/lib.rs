@@ -1574,8 +1574,7 @@ impl AirBus {
     #[wasm_bindgen]
     pub fn set_node_position(&self, node_id: &str, x: f64, y: f64) {
         use labwired_core::peripherals::rf_medium::NodePosition;
-        self.nrf
-            .set_node_position(node_id, NodePosition { x, y });
+        self.nrf.set_node_position(node_id, NodePosition { x, y });
     }
 
     #[wasm_bindgen]
