@@ -410,6 +410,18 @@ impl WasmSimulator {
             .machine
             .as_ref()
             .ok_or_else(|| JsValue::from_str("no machine"))?;
+        // Ask before taking. On a CPU without a runtime_snapshot impl this
+        // used to reach `unimplemented!()`, and a Rust panic in wasm is an
+        // `unreachable` TRAP: no destructors run, so wasm-bindgen's borrow
+        // guard leaks and the simulator is borrowed forever. Every later
+        // call — `step_batch` above all — then dies with "recursive use of
+        // an object", which is what froze every Cortex-M lab a few seconds
+        // in. An Err returns normally and leaves the machine healthy.
+        if !machine.cpu.supports_runtime_snapshot() {
+            return Err(JsValue::from_str(
+                "runtime snapshot is not supported for this CPU",
+            ));
+        }
         Ok(machine.take_runtime_snapshot().to_bytes())
     }
 
