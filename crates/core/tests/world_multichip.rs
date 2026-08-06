@@ -76,7 +76,7 @@ fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
             nodes: vec!["n1".into(), "n2".into()],
             config: HashMap::new(),
         }],
-            rf: None,
+        rf: None,
     };
 
     let mut world = World::from_manifest(env, &station_root()).expect("build world from manifest");

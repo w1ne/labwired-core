@@ -807,7 +807,6 @@ pub struct InterconnectConfig {
 }
 
 impl EnvironmentManifest {
-
     /// Test/helper constructor with no RF block.
     pub fn bare(
         name: impl Into<String>,

@@ -26,7 +26,8 @@ pub struct World {
     /// Shared RF medium built from optional env-manifest `rf:` (path loss / RSSI).
     /// Radios attach via their air bus when product wiring is enabled; always
     /// available for inspect / tests when the manifest declared `rf:`.
-    pub rf_medium: Option<std::sync::Arc<std::sync::Mutex<crate::peripherals::rf_medium::RfMedium>>>,
+    pub rf_medium:
+        Option<std::sync::Arc<std::sync::Mutex<crate::peripherals::rf_medium::RfMedium>>>,
 }
 
 /// One point-to-point serial link between two nodes, as carried on the world's
@@ -426,13 +427,7 @@ fn build_world_rf_medium(
     }
     let mut medium = RfMedium::new(rf.seed).with_params(params);
     for (id, pos) in &rf.nodes {
-        medium.set_node(
-            id.clone(),
-            NodePosition {
-                x: pos.x,
-                y: pos.y,
-            },
-        );
+        medium.set_node(id.clone(), NodePosition { x: pos.x, y: pos.y });
     }
     Some(std::sync::Arc::new(std::sync::Mutex::new(medium)))
 }

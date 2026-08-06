@@ -190,12 +190,7 @@ impl VirtualAirBus {
     /// `Some(rssi_dbm)` if delivered, `None` if the medium drops the frame.
     /// When no medium is attached, always delivers with `None` RSSI (caller
     /// keeps PRNG sample).
-    fn medium_try_deliver(
-        &self,
-        tx_node: &str,
-        rx_node: &str,
-        tx_power_dbm: f64,
-    ) -> MediumVerdict {
+    fn medium_try_deliver(&self, tx_node: &str, rx_node: &str, tx_power_dbm: f64) -> MediumVerdict {
         let Ok(slot) = self.medium.lock() else {
             return MediumVerdict::NoMedium;
         };
@@ -1307,11 +1302,10 @@ impl Peripheral for Nrf52Radio {
                         if f.mode != self.mode || !self.matches_address(f) {
                             continue;
                         }
-                        match self.air.medium_try_deliver(
-                            &f.tx_node,
-                            &self.node_id,
-                            f.tx_power_dbm,
-                        ) {
+                        match self
+                            .air
+                            .medium_try_deliver(&f.tx_node, &self.node_id, f.tx_power_dbm)
+                        {
                             MediumVerdict::Drop => continue,
                             MediumVerdict::Deliver { rssi_dbm } => {
                                 medium_rssi = Some(rssi_dbm);
@@ -2118,14 +2112,12 @@ mod tests {
         use crate::Bus;
 
         let air = VirtualAirBus::new();
-        air.attach_medium(
-            RfMedium::new(7).with_params(PathLossParams {
-                rssi_floor_dbm: -55.0,
-                ref_loss_db: 40.0,
-                exponent: 2.0,
-                ..PathLossParams::default()
-            }),
-        );
+        air.attach_medium(RfMedium::new(7).with_params(PathLossParams {
+            rssi_floor_dbm: -55.0,
+            ref_loss_db: 40.0,
+            exponent: 2.0,
+            ..PathLossParams::default()
+        }));
         air.set_node_position("tx", NodePosition { x: 0.0, y: 0.0 });
         // 50 m → path loss ≈ 40 + 20*log10(50) ≈ 74 dB → RSSI ≈ -74 at 0 dBm TX
         air.set_node_position("rx_far", NodePosition { x: 50.0, y: 0.0 });
