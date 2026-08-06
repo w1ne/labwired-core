@@ -2394,6 +2394,92 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "a4988",
+      "label": "STEP/DIR stepper driver",
+      "summary": "A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle).",
+      "detail": "Counts rising STEP edges while EN is active; DIR selects direction. Type aliases drv8825 and tmc2209 map here (tmc2209 uses 1/16 microstep cal).",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "step_pin",
+          "ty": "str",
+          "doc": "STEP pin (default GPIO16)."
+        },
+        {
+          "name": "dir_pin",
+          "ty": "str",
+          "doc": "DIR pin (default GPIO17)."
+        },
+        {
+          "name": "en_pin",
+          "ty": "str",
+          "doc": "Optional EN pin."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "l298n",
+      "label": "H-bridge motor driver",
+      "summary": "L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort).",
+      "detail": "Channel A from IN1/IN2/ENA (or AIN1/AIN2/PWMA). Optional channel B when IN3/IN4 or BIN* keys are present. Aliases: tb6612, l293d.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "in1_pin",
+          "ty": "str",
+          "doc": "Channel A input 1 (or ain1_pin)."
+        },
+        {
+          "name": "in2_pin",
+          "ty": "str",
+          "doc": "Channel A input 2 (or ain2_pin)."
+        },
+        {
+          "name": "en_pin",
+          "ty": "str",
+          "doc": "Channel A enable (or pwma_pin)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "uln2003",
+      "label": "ULN2003 / 28BYJ-48 stepper",
+      "summary": "Four-phase unipolar stepper twin (IN1..IN4).",
+      "detail": "Alias stepper-28byj48 maps to this kit. Half-step sequencing from GPIO edges.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "in1_pin",
+          "ty": "str",
+          "doc": "Phase 1 pin (default GPIO16)."
+        },
+        {
+          "name": "in2_pin",
+          "ty": "str",
+          "doc": "Phase 2 pin (default GPIO17)."
+        },
+        {
+          "name": "in3_pin",
+          "ty": "str",
+          "doc": "Phase 3 pin (default GPIO18)."
+        },
+        {
+          "name": "in4_pin",
+          "ty": "str",
+          "doc": "Phase 4 pin (default GPIO19)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     }
   ]
 }

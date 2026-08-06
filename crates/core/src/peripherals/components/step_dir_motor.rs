@@ -128,6 +128,72 @@ impl crate::peripherals::esp32::gpio::GpioObserver for StepDirMotor {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+use std::sync::Arc;
+
+/// STEP/DIR driver kit (A4988 / DRV8825 / TMC2209-class).
+pub struct StepDirMotorKit;
+pub static STEP_DIR_MOTOR_KIT: StepDirMotorKit = StepDirMotorKit;
+
+static STEP_DIR_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "a4988",
+    label: "STEP/DIR stepper driver",
+    summary: "A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle).",
+    detail: "Counts rising STEP edges while EN is active; DIR selects direction. \
+             Type aliases drv8825 and tmc2209 map here (tmc2209 uses 1/16 microstep cal).",
+    transport: Transport::GpioGroup,
+    category: Category::Gpio,
+    config_keys: &[
+        ConfigKey {
+            name: "step_pin",
+            ty: ConfigType::Str,
+            doc: "STEP pin (default GPIO16).",
+        },
+        ConfigKey {
+            name: "dir_pin",
+            ty: ConfigType::Str,
+            doc: "DIR pin (default GPIO17).",
+        },
+        ConfigKey {
+            name: "en_pin",
+            ty: ConfigType::Str,
+            doc: "Optional EN pin.",
+        },
+    ],
+    labs: &[],
+};
+
+impl PeripheralKit for StepDirMotorKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &STEP_DIR_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let step = ctx.config_gpio_pin("step_pin", "STEP", "GPIO16")?;
+        let dir = ctx.config_gpio_pin("dir_pin", "DIR", "GPIO17")?;
+        let en = ctx
+            .config_str("en_pin")
+            .or_else(|| ctx.config_str("EN"))
+            .and_then(|l| ctx.parse_gpio_pin(l));
+        let mut motor = StepDirMotor::new(ctx.device_id(), step, dir, en);
+        if ctx.device_type() == "tmc2209" {
+            motor = motor.with_config(StepDirConfig {
+                degrees_per_step: 1.8 / 16.0,
+                enable_active_low: true,
+            });
+        }
+        let motor = Arc::new(motor);
+        ctx.install_gpio_observer(motor.clone());
+        ctx.bus.step_dir_motors.push(motor);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -112,6 +112,67 @@ impl crate::peripherals::esp32::gpio::GpioObserver for UnipolarStepper {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+use std::sync::Arc;
+
+/// 28BYJ-48 unipolar stepper via ULN2003-style IN1..IN4.
+pub struct UnipolarStepperKit;
+pub static UNIPOLAR_STEPPER_KIT: UnipolarStepperKit = UnipolarStepperKit;
+
+static UNIPOLAR_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "uln2003",
+    label: "ULN2003 / 28BYJ-48 stepper",
+    summary: "Four-phase unipolar stepper twin (IN1..IN4).",
+    detail: "Alias stepper-28byj48 maps to this kit. Half-step sequencing from GPIO edges.",
+    transport: Transport::GpioGroup,
+    category: Category::Gpio,
+    config_keys: &[
+        ConfigKey {
+            name: "in1_pin",
+            ty: ConfigType::Str,
+            doc: "Phase 1 pin (default GPIO16).",
+        },
+        ConfigKey {
+            name: "in2_pin",
+            ty: ConfigType::Str,
+            doc: "Phase 2 pin (default GPIO17).",
+        },
+        ConfigKey {
+            name: "in3_pin",
+            ty: ConfigType::Str,
+            doc: "Phase 3 pin (default GPIO18).",
+        },
+        ConfigKey {
+            name: "in4_pin",
+            ty: ConfigType::Str,
+            doc: "Phase 4 pin (default GPIO19).",
+        },
+    ],
+    labs: &[],
+};
+
+impl PeripheralKit for UnipolarStepperKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &UNIPOLAR_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let p1 = ctx.config_gpio_pin("in1_pin", "IN1", "GPIO16")?;
+        let p2 = ctx.config_gpio_pin("in2_pin", "IN2", "GPIO17")?;
+        let p3 = ctx.config_gpio_pin("in3_pin", "IN3", "GPIO18")?;
+        let p4 = ctx.config_gpio_pin("in4_pin", "IN4", "GPIO19")?;
+        let motor = Arc::new(UnipolarStepper::new_28byj48(ctx.device_id(), [p1, p2, p3, p4]));
+        ctx.install_gpio_observer(motor.clone());
+        ctx.bus.unipolar_steppers.push(motor);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

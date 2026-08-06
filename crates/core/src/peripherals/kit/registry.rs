@@ -110,6 +110,9 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // GPIO-group actuators migrated off from_config residual arms.
     &components::servo::SERVO_KIT,
     &components::ws2812::WS2812_KIT,
+    &components::step_dir_motor::STEP_DIR_MOTOR_KIT,
+    &components::h_bridge_motor::H_BRIDGE_MOTOR_KIT,
+    &components::unipolar_stepper::UNIPOLAR_STEPPER_KIT,
 ];
 
 /// Borrow the registry slice.
@@ -137,6 +140,14 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     ("mg996r", "servo"),
     // WS2812 synonym for neopixel kit.
     ("ws2812", "neopixel"),
+    // STEP/DIR driver family.
+    ("drv8825", "a4988"),
+    ("tmc2209", "a4988"),
+    // H-bridge family.
+    ("tb6612", "l298n"),
+    ("l293d", "l298n"),
+    // Unipolar stepper.
+    ("stepper-28byj48", "uln2003"),
 ];
 
 /// Resolve a `device_type` spelling to its canonical form.
