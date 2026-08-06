@@ -1,28 +1,37 @@
 # nRF52840 Secure Boot + Signed OTA / Anti-Rollback Lab
 
-A one-file demonstration that LabWired can simulate — and, more importantly,
-**verify with real cryptographic evidence** — the hardware security story the
-EU Cyber Resilience Act (CRA) expects from a connected device, and the one
-UNECE R155/R156 expects from a vehicle ECU:
+LabWired lab: a **three-boot security lifecycle** on a modelled nRF52840 with an
+ATECC608A-shaped secure element — bit-for-bit assertions on crypto outputs,
+OTP flash state, and UART narrative.
 
-| Requirement story | What this lab shows | Sim model |
+| Mechanism | What this lab shows | Sim model |
 |---|---|---|
-| Hardware root of trust | Boot state anchored in one-time flash (UICR), not RAM | `nrf52840_uicr` (flash 1→0 write semantics) |
-| TRNG-backed key provisioning | 16-byte root key drawn from the RNG into UICR CUSTOMER | `nrf52840_rng` |
-| Cryptographic boot verification | Hardware AES-128-ECB of a challenge vs a golden vector | `nrf52840_ecb` (FIPS-vector-tested AES) |
-| Secure element / HSM / "external TPM" | ATECC608A on I²C: real ECDSA P-256 verify/sign, key slots that never leave the chip | `components/atecc608a.rs` (p256 crate) |
-| Signed OTA update | Firmware hashes (SHA-256), the SE verifies the OEM's ECDSA signature; the private key never exists on the device | SE + UART RX injection |
-| Anti-rollback (R156) | Monotonic version counter burned into one-time flash; authentic-but-old image rejected | `nrf52840_uicr` |
-| Device attestation | SE signs a challenge with its internal key and verifies it — key present, usable, unextractable | SE |
-| Debug lockout | `UICR.APPROTECT` programmed after provisioning | `nrf52840_uicr` |
-| Reboot persistence | Real CPU reboots via `AIRCR.SYSRESETREQ`; boot N+1 verifies what boot N provisioned | sim reset machinery |
+| OTP root key | Boot state in UICR (1→0 flash semantics), not RAM | `nrf52840_uicr` |
+| Key material | 16-byte root key from the **sim RNG** into UICR CUSTOMER | `nrf52840_rng` (deterministic PRNG) |
+| Boot challenge | Hardware AES-128-ECB of a fixed challenge vs OpenSSL golden | `nrf52840_ecb` |
+| Secure element | Real ECDSA P-256 verify/sign; OEM public key in data slot 0 | `atecc608a` (`p256` crate) |
+| Signed OTA | SHA-256 of package + SE verify; private key never on device | SE + UART RX injection |
+| Anti-rollback | Monotonic OTP counter; authentic-but-old image rejected | `nrf52840_uicr` |
+| Attestation | SE signs a challenge and verifies it | SE |
+| APPROTECT | Value written after provision (**stored**, not enforced) | `nrf52840_uicr` |
+| Reboot persistence | `AIRCR.SYSRESETREQ`; boot N+1 checks what boot N wrote | sim reset |
+
+**Downloadable claims pack / ephemeral OEM keys / CI artifact** live in a
+separate repo so packaging does not sit in the engine tree:
+
+→ [**LabWired/labwired-cra-evidence**](https://github.com/LabWired/labwired-cra-evidence)
+
+```bash
+git clone https://github.com/LabWired/labwired-cra-evidence
+cd labwired-cra-evidence && ./scripts/run_evidence.sh
+```
 
 ## What a single run shows
 
 Three boots in one simulation:
 
 1. **Factory provisioning.** UICR CUSTOMER reads erased (`0xFFFFFFFF`).
-   Firmware pulls 16 bytes from the TRNG, programs them as the device root
+   Firmware pulls 16 bytes from the sim RNG, programs them as the device root
    key into `UICR.CUSTOMER[0..4]`, burns the anti-rollback counter
    (`CUSTOMER[4]`) to v1, sets `APPROTECT`, prints `ROT: PROVISIONED`, reboots.
 2. **Verified boot + signed OTA.** Hardware-encrypt a challenge, compare
@@ -40,10 +49,10 @@ Three boots in one simulation:
    signs a challenge and verifies it → `ATTESTATION OK`.
 
 The SSD1306 OLED on `i2c0` paints every verdict (`PROVISIONING`,
-`SE: SIG OK`, `ROLLBACK REJECTED`, `ATTESTATION OK`, `CRA READY`) — open the
+`SE: SIG OK`, `ROLLBACK REJECTED`, `ATTESTATION OK`, `READY` (demo panel)) — open the
 lab in the playground and watch the whole lifecycle on the panel.
 
-## Why the assertions are real evidence
+## Why the assertions are serious (and what they are not)
 
 The simulator's RNG is a deterministic xorshift32 (seed `0xC0DEF00D`), so
 the provisioned key is identical on every fresh run:
@@ -109,10 +118,10 @@ is also bundled in the browser playground (nRF52840 Secure Boot).
 
 ## CRA-style evidence pack (separate repo)
 
-Compliance packaging, ephemeral OEM keys, and the downloadable CI artifact live in [**w1ne/labwired-cra-evidence**](https://github.com/w1ne/labwired-cra-evidence) — not in this engine tree (same split as product stacks like udslib).
+Compliance packaging, ephemeral OEM keys, and the downloadable CI artifact live in [**LabWired/labwired-cra-evidence**](https://github.com/LabWired/labwired-cra-evidence) — not in this engine tree (same split as product stacks like udslib).
 
 ```bash
-git clone https://github.com/w1ne/labwired-cra-evidence
+git clone https://github.com/LabWired/labwired-cra-evidence
 cd labwired-cra-evidence && ./scripts/run_evidence.sh
 # → out/.../cra-evidence-pack/
 ```
