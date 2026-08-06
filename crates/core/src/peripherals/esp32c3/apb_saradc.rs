@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(a.channel_input_count(1), ((1650u32 * 4095) / 3300) as u16);
         a.write_u32(ONETIME_SAMPLE, sar1_oneshot(1)).unwrap();
         let data = a.read_u32(SAR1DATA_STATUS).unwrap() & 0x0FFF;
-        let expected = ((1650u32 * 4095) / 3300) as u32;
+        let expected = (1650u32 * 4095) / 3300;
         assert_eq!(data, expected, "oneshot must return the injected count");
         // Un-injected channel still uses the ramp.
         a.write_u32(ONETIME_SAMPLE, sar1_oneshot(2)).unwrap();
