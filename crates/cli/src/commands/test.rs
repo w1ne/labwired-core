@@ -1548,6 +1548,17 @@ pub(crate) fn run_test(
                                 const PAGE: usize = 64 * 1024;
                                 const FACTORY_OFF: usize = 0x1_0000;
                                 const FACTORY_PAGE: u32 = (FACTORY_OFF / PAGE) as u32; // 1
+                                // Flash pages start either zero-filled (legacy) or
+                                // NOR-erased 0xFF (`LinearMemory::new_erased`, #777).
+                                // Occupancy must treat BOTH pads as blank — otherwise
+                                // every 64 KiB page looks "used", the MMU table fills
+                                // (62 entries), spi_flash_mmap has no free slots for
+                                // partitions @ 0x8000, and Arduino C3 hangs with no
+                                // UART (matrix boot_fail since secure-boot-lab).
+                                let flash_page_has_payload = |page: &[u8]| -> bool {
+                                    !(page.iter().all(|&b| b == 0)
+                                        || page.iter().all(|&b| b == 0xFF))
+                                };
                                 // virt_page index within the 8 MiB window
                                 let mut virt_pages: Vec<u32> = Vec::new();
                                 let irom_len = machine.bus.flash.data.len();
@@ -1557,10 +1568,9 @@ pub(crate) fn run_test(
                                     }
                                     let start = page * PAGE;
                                     let end = (start + PAGE).min(irom_len);
-                                    if machine.bus.flash.data[start..end]
-                                        .iter()
-                                        .any(|&b| b != 0)
-                                    {
+                                    if flash_page_has_payload(
+                                        &machine.bus.flash.data[start..end],
+                                    ) {
                                         virt_pages.push(page as u32);
                                     }
                                 }
@@ -1580,6 +1590,7 @@ pub(crate) fn run_test(
                                             }
                                             let start = page * PAGE;
                                             let end = (start + PAGE).min(drom.len());
+                                            // DROM extra_mem is still zero-filled.
                                             if !drom[start..end].iter().any(|&b| b != 0)
                                             {
                                                 continue;
@@ -1596,6 +1607,8 @@ pub(crate) fn run_test(
                                     }
                                     // Mirror IROM into factory pages (cache2phys);
                                     // execute still uses bus.flash at 0x4200_0000.
+                                    // Skip NOR-erased 0xFF pad (and legacy 0x00) so
+                                    // we do not clobber DROM bytes already seeded.
                                     for page in virt_pages.clone() {
                                         let start = page as usize * PAGE;
                                         let end = (start + PAGE).min(irom_len);
@@ -1606,7 +1619,7 @@ pub(crate) fn run_test(
                                         let n = (end - start).min(f.len() - dst);
                                         for i in 0..n {
                                             let b = machine.bus.flash.data[start + i];
-                                            if b != 0 {
+                                            if b != 0 && b != 0xFF {
                                                 f[dst + i] = b;
                                             }
                                         }
