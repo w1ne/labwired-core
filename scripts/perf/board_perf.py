@@ -29,13 +29,19 @@ HOW THE FIXED COST IS REMOVED
     pollute the number.
 
 WHICH BOARDS ARE COVERED
-    Every chip descriptor in `configs/chips/` is measured unless it is WAIVED
-    below with a reason. Coverage is *derived* from the descriptors, not from a
-    hand-kept list, because a hand-kept list silently stops covering whatever
-    is added after it was last edited — which is how stm32f405, stm32f411ceu6,
-    stm32f767 and rp2350 ended up outside the gate without appearing in its
-    "not covered" note. A chip that is neither measurable nor waived is a hard
-    error, so adding a chip forces a decision either way.
+    All of them — every chip descriptor in `configs/chips/`, across four
+    memory maps on Cortex-M plus the RISC-V and Xtensa ESP parts.
+
+    Coverage is *derived* from the descriptors, not from a hand-kept list,
+    because a hand-kept list silently stops covering whatever is added after it
+    was last edited — which is how stm32f405, stm32f411ceu6, stm32f767 and
+    rp2350 ended up outside the gate without even appearing in its "not
+    covered" note. A chip that no fixture matches is a hard error, so adding a
+    chip forces a decision rather than a silent gap.
+
+    The Xtensa fixture needs the esp toolchain (espup). Where it is absent the
+    two ESP32 parts are reported as NOT measured rather than quietly dropped,
+    and --require-all (what CI passes) turns that into a failure.
 
 WHY A BASELINE THAT IS TOO HIGH ALSO FAILS
     A board that measures far *below* its baseline is not good news, it is a
@@ -60,6 +66,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -67,30 +74,74 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = Path(__file__).resolve().parent / "baselines.json"
 CHIP_DIR = REPO_ROOT / "configs/chips"
 
-FIXTURE_TARGET = "thumbv6m-none-eabi"
 FIXTURE_DIR = REPO_ROOT / "target/perf-fixtures"
 
-# One linked image per memory map. The spin loop is identical in all of them —
-# thumbv6m runs unchanged on M0+ through M33 — so a board's number stays
-# comparable to every other board's; only the link origins differ.
-#
-# Keyed by (flash base, RAM base) as read from the chip descriptor, so a chip
-# is matched to a fixture by what it actually models rather than by name.
+
+class Spin(NamedTuple):
+    """How to build one flavour of the spin-loop fixture.
+
+    `crate` is a workspace package built with `-p` when `directory` is None,
+    and a standalone crate built from `directory` otherwise — the Xtensa
+    fixture needs its own `.cargo/config.toml` (build-std, linkall.x), which
+    only applies when cargo runs inside that directory.
+
+    `optional` marks a fixture whose toolchain is not on a stock image: it may
+    be skipped with a loud note rather than taking the whole gate down.
+    """
+
+    crate: str
+    target: str
+    toolchain: str | None = None
+    features: str | None = None
+    directory: str | None = None
+    optional: bool = False
+    # Xtensa placement comes from esp-hal's linkall.x per chip feature, not
+    # from a memory.x this gate generates.
+    env_origins: bool = True
+
+
+# The spin loop, one crate per ISA. Within an ISA the source is identical, so a
+# board's number tracks its own history exactly; across ISAs it does not, and
+# cannot — a different instruction mix per simulated step is not something
+# re-linking can normalise away. The gate is per-board-over-time either way.
+SPIN_CORTEX_M = Spin("firmware-perf-spin", "thumbv6m-none-eabi")
+SPIN_RISCV = Spin("firmware-perf-spin-riscv", "riscv32imc-unknown-none-elf")
+# Xtensa is not a rustup target: it needs the esp-rs LLVM fork, which espup
+# installs as the `esp` toolchain. CI installs it (core-nightly already does
+# this for the S3 fixtures); a developer's machine usually has not, so these
+# are optional and skip loudly instead of failing.
+SPIN_XTENSA_ESP32 = Spin(
+    crate="perf-spin-xtensa",
+    target="xtensa-esp32-none-elf",
+    toolchain="esp",
+    features="esp32",
+    directory="crates/firmware-perf-spin-xtensa",
+    optional=True,
+    env_origins=False,
+)
+SPIN_XTENSA_ESP32S3 = SPIN_XTENSA_ESP32._replace(
+    target="xtensa-esp32s3-none-elf", features="esp32s3"
+)
+
+# One linked image per (arch, flash base, RAM base), read from the chip
+# descriptor, so a chip is matched to a fixture by what it actually models
+# rather than by name. Arch is part of the key because two ISAs can share a
+# flash origin (the C3 and the S3 both boot at 0x42000000).
 FIXTURES = {
-    (0x08000000, 0x20000000): "stm32",  # STM32 family
-    (0x00000000, 0x20000000): "nrf",  # Nordic nRF52/nRF53/nRF54
-    (0x00000000, 0x1FFF8000): "kinetis",  # NXP Kinetis (MKW41Z4)
-    (0x10000000, 0x20000000): "rp2xxx",  # Raspberry Pi RP2040 / RP2350
+    ("arm", 0x08000000, 0x20000000): ("stm32", SPIN_CORTEX_M),
+    ("arm", 0x00000000, 0x20000000): ("nrf", SPIN_CORTEX_M),
+    ("arm", 0x00000000, 0x1FFF8000): ("kinetis", SPIN_CORTEX_M),
+    ("arm", 0x10000000, 0x20000000): ("rp2xxx", SPIN_CORTEX_M),
+    ("riscv", 0x42000000, 0x3FC80000): ("esp32c3", SPIN_RISCV),
+    ("xtensa-lx6", 0x400D0000, 0x3FFB0000): ("esp32", SPIN_XTENSA_ESP32),
+    ("xtensa-lx7", 0x42000000, 0x3FC88000): ("esp32s3", SPIN_XTENSA_ESP32S3),
 }
 
-# Chips the gate cannot measure, with the reason. Anything here is reported on
-# every run; anything neither here nor matched to a fixture aborts the run.
-WAIVED = {
-    "esp32": "Xtensa — needs the esp-rs rustc fork, not available on the CI image",
-    "esp32s3": "Xtensa — needs the esp-rs rustc fork, not available on the CI image",
-    "esp32s3-zero": "Xtensa — needs the esp-rs rustc fork, not available on the CI image",
-    "esp32c3": "RISC-V — needs a riscv32imc fixture crate (cortex-m-rt cannot link it)",
-}
+# Chips the gate cannot measure at all, with the reason. Anything here is
+# reported on every run; anything neither here nor matched to a fixture aborts
+# the run. Empty is the goal, not merely the current state — a chip belongs
+# here only while there is a concrete reason it cannot be linked or run.
+WAIVED: dict[str, str] = {}
 
 # Descriptors that are CI plumbing rather than a modelled part.
 CHIP_EXCLUDE_PREFIX = "ci-fixture-"
@@ -127,13 +178,49 @@ def discover_chips() -> dict[str, dict]:
 
 def fixture_for(chip: dict) -> str | None:
     """Which linked fixture a chip's memory map needs, if any covers it."""
-    if chip.get("arch") != "arm":
-        return None
     try:
-        key = (int(chip["flash"]["base"]), int(chip["ram"]["base"]))
+        key = (chip["arch"], int(chip["flash"]["base"]), int(chip["ram"]["base"]))
     except (KeyError, TypeError, ValueError):
         return None
-    return FIXTURES.get(key)
+    entry = FIXTURES.get(key)
+    return entry[0] if entry else None
+
+
+def fixture_spec(name: str) -> Spin:
+    """The build recipe behind a fixture name."""
+    for fixture_name, spec in FIXTURES.values():
+        if fixture_name == name:
+            return spec
+    raise KeyError(name)
+
+
+def fixture_origins(name: str) -> tuple[int, int]:
+    """The (flash, RAM) origins a fixture links against."""
+    for (_arch, flash, ram), (fixture_name, _spec) in FIXTURES.items():
+        if fixture_name == name:
+            return flash, ram
+    raise KeyError(name)
+
+
+def toolchain_available(spec: Spin) -> bool:
+    """Whether the toolchain this fixture needs is installed."""
+    cmd = ["cargo"]
+    if spec.toolchain:
+        cmd.append(f"+{spec.toolchain}")
+    cmd += ["--version"]
+    try:
+        if subprocess.run(cmd, capture_output=True).returncode != 0:
+            return False
+    except OSError:
+        return False
+    if spec.toolchain:
+        # The esp toolchain carries its Xtensa targets in-tree; `rustup target
+        # list` cannot see them, so the toolchain's presence is the signal.
+        return True
+    installed = subprocess.run(
+        ["rustup", "target", "list", "--installed"], capture_output=True, text=True
+    )
+    return spec.target in installed.stdout.split()
 
 
 def plan_coverage(chips: dict[str, dict]) -> tuple[dict[str, str], dict[str, str]]:
@@ -173,38 +260,71 @@ def plan_coverage(chips: dict[str, dict]) -> tuple[dict[str, str], dict[str, str
     return covered, waived
 
 
-def build_fixtures(fixtures: set[str]) -> dict[str, Path]:
-    """Link the spin loop once per memory map; return {fixture: ELF path}."""
-    origins = {name: key for key, name in FIXTURES.items()}
+def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]:
+    """Link the spin loop once per memory map.
+
+    Returns ({fixture: ELF path}, {fixture: reason it was skipped}).
+    """
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
     built: dict[str, Path] = {}
+    skipped: dict[str, str] = {}
     for name in sorted(fixtures):
-        flash, ram = origins[name]
-        env_note = f"flash={flash:#010x} ram={ram:#010x}"
-        out = FIXTURE_DIR / f"firmware-perf-spin-{name}"
-        print(f"building fixture '{name}' ({env_note})", file=sys.stderr)
-        subprocess.run(
-            [
-                "cargo",
-                "build",
-                "-p",
-                "firmware-perf-spin",
-                "--release",
-                "--target",
-                FIXTURE_TARGET,
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-            env={
-                **os.environ,
-                "LABWIRED_PERF_FLASH_ORIGIN": f"{flash:#010x}",
-                "LABWIRED_PERF_RAM_ORIGIN": f"{ram:#010x}",
-            },
+        spec = fixture_spec(name)
+        if not toolchain_available(spec):
+            reason = f"toolchain for {spec.target} is not installed" + (
+                f" (run `espup install` for the `{spec.toolchain}` toolchain)"
+                if spec.toolchain
+                else ""
+            )
+            if not spec.optional:
+                raise RuntimeError(f"fixture '{name}': {reason}")
+            skipped[name] = reason
+            print(f"SKIPPING fixture '{name}': {reason}", file=sys.stderr)
+            continue
+
+        flash, ram = fixture_origins(name)
+        out = FIXTURE_DIR / f"perf-spin-{name}"
+        print(
+            f"building fixture '{name}' ({spec.crate} {spec.target} "
+            f"flash={flash:#010x} ram={ram:#010x})",
+            file=sys.stderr,
         )
-        src = REPO_ROOT / f"target/{FIXTURE_TARGET}/release/firmware-perf-spin"
-        shutil.copy2(src, out)
+
+        cwd = REPO_ROOT / spec.directory if spec.directory else REPO_ROOT
+        cmd = ["cargo"]
+        if spec.toolchain:
+            cmd.append(f"+{spec.toolchain}")
+        cmd += ["build", "--release", "--target", spec.target]
+        if not spec.directory:
+            cmd += ["-p", spec.crate]
+        if spec.features:
+            cmd += ["--features", spec.features]
+
+        env = dict(os.environ)
+        if spec.env_origins:
+            env["LABWIRED_PERF_FLASH_ORIGIN"] = f"{flash:#010x}"
+            env["LABWIRED_PERF_RAM_ORIGIN"] = f"{ram:#010x}"
+
+        proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
+        if proc.returncode != 0:
+            # A fixture on an optional toolchain that fails to build is
+            # reported and skipped; anything on the stock toolchain is a real
+            # break and takes the gate down, because silently not measuring the
+            # STM32 boards is the failure this whole file exists to prevent.
+            if not spec.optional:
+                raise RuntimeError(
+                    f"fixture '{name}' failed to build:\n{proc.stderr[-2000:]}"
+                )
+            skipped[name] = f"fixture build failed: {proc.stderr.strip().splitlines()[-1:]}"
+            print(f"SKIPPING fixture '{name}': build failed\n{proc.stderr[-2000:]}", file=sys.stderr)
+            continue
+
+        elf = cwd / f"target/{spec.target}/release/{spec.crate}"
+        if not elf.exists():
+            elf = REPO_ROOT / f"target/{spec.target}/release/{spec.crate}"
+        shutil.copy2(elf, out)
         built[name] = out
-    return built
+    return built, skipped
 
 
 def measure_once(cli: Path, chip: Path, firmware: Path, steps: int) -> int:
@@ -267,6 +387,12 @@ def main() -> int:
         help="write a machine-readable result here (used by the CI issue step)",
     )
     parser.add_argument(
+        "--require-all",
+        action="store_true",
+        help="fail if any covered board could not be measured (missing toolchain, "
+        "failed fixture build) — what CI uses, so a skipped chip is never green",
+    )
+    parser.add_argument(
         "--check-coverage",
         action="store_true",
         help="only verify every chip is covered or waived, then exit (no build, "
@@ -316,8 +442,16 @@ def main() -> int:
         )
         return 2
 
-    firmware = build_fixtures({covered[b] for b in boards})
+    firmware, skipped_fixtures = build_fixtures({covered[b] for b in boards})
     baselines = json.loads(BASELINE_PATH.read_text()) if BASELINE_PATH.exists() else {}
+
+    # A board whose toolchain is missing is not measured, and must not be
+    # silently dropped: it is reported below and, when it was asked for by
+    # name, it fails rather than passing on a measurement that never happened.
+    skipped_boards = {
+        b: skipped_fixtures[covered[b]] for b in boards if covered[b] in skipped_fixtures
+    }
+    boards = [b for b in boards if b not in skipped_boards]
 
     measured: dict[str, float] = {}
     regressions: list[dict] = []
@@ -355,11 +489,23 @@ def main() -> int:
 
     print()
     print(f"covered: {len(covered)} chips across {len(set(covered.values()))} memory maps")
-    print("not covered by this gate:")
-    for board, reason in sorted(waived.items()):
-        print(f"  {board}: {reason}")
+    print(f"measured this run: {len(measured)}")
+    if skipped_boards:
+        print("NOT measured this run (toolchain missing on this machine):")
+        for board, reason in sorted(skipped_boards.items()):
+            print(f"  {board}: {reason}")
+    if waived:
+        print("not covered by this gate at all:")
+        for board, reason in sorted(waived.items()):
+            print(f"  {board}: {reason}")
 
-    ok = not regressions and not stale
+    # A skipped board is only tolerable on a developer machine that simply
+    # lacks an optional toolchain. Asking for it by name, or running under
+    # --require-all as CI does, and getting silence back is precisely the
+    # failure mode this gate exists to not have.
+    strict = bool(args.boards) or args.require_all
+    named_and_skipped = strict and bool(skipped_boards)
+    ok = not regressions and not stale and not named_and_skipped
     if args.status_json:
         Path(args.status_json).write_text(
             json.dumps(
@@ -368,6 +514,7 @@ def main() -> int:
                     "regressions": regressions,
                     "stale": stale,
                     "covered": {b: covered[b] for b in boards},
+                    "skipped": skipped_boards,
                     "waived": waived,
                     "measured": measured,
                 },
@@ -412,6 +559,14 @@ def main() -> int:
             "scripts/perf/board_perf.py --update",
             file=sys.stderr,
         )
+
+    if named_and_skipped:
+        print(
+            "\ncovered boards that could not be measured here:",
+            file=sys.stderr,
+        )
+        for board, reason in sorted(skipped_boards.items()):
+            print(f"  {board}: {reason}", file=sys.stderr)
 
     if not ok:
         return 1

@@ -1309,6 +1309,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-perf-spin-riscv"
+version = "0.21.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
+]
+
+[[package]]
 name = "firmware-rp2040-demo"
 version = "0.1.0"
 dependencies = [

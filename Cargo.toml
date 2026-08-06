@@ -43,6 +43,7 @@ members = [
     "crates/firmware-nrf52840-secure-boot",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-perf-spin",
+    "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
     "crates/firmware-rp2350-demo",
     "crates/firmware-kw41z-demo",
@@ -99,6 +100,7 @@ exclude = [
     "examples/esp32-epaper-lab",
     "examples/tier1-fixture/esp32s3",
     "examples/tier1-fixture/esp32",
+    "crates/firmware-perf-spin-xtensa",
 ]
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
@@ -207,6 +209,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-perf-spin]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-perf-spin-riscv]
 codegen-units = 1
 opt-level = "s"
 

@@ -54,7 +54,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi
+          targets: thumbv6m-none-eabi,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -72,6 +72,20 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y valgrind
           python -m pip install --quiet pyyaml
+
+      # Xtensa has no rustup target — the ESP32 and ESP32-S3 need the esp-rs
+      # LLVM fork. Without this the gate still runs and still reports, but it
+      # reports those two chips as NOT measured, which is the whole coverage
+      # hole this job is supposed to have closed. `continue-on-error` keeps a
+      # flaky espup download from taking the other 23 boards down with it; the
+      # skip is loud in the report either way. Same install core-nightly's
+      # esp32s3-fixtures-e2e job already uses.
+      - name: Install Xtensa toolchain (espup)
+        continue-on-error: true
+        run: |
+          cargo install espup --locked
+          espup install
+          echo "$HOME/.rustup/toolchains/esp/bin" >> "$GITHUB_PATH"
 
       # Fails in seconds if a chip descriptor exists that no fixture covers and
       # no waiver names, rather than after a 40-minute build and measure.
@@ -92,8 +106,8 @@ jobs:
         id: perf
         run: |
           set -o pipefail
-          python3 scripts/perf/board_perf.py --status-json perf-status.json 2>&1 \
-            | tee perf-report.txt
+          python3 scripts/perf/board_perf.py --require-all \
+            --status-json perf-status.json 2>&1 | tee perf-report.txt
 
       - name: Upload report
         if: always()
