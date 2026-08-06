@@ -102,6 +102,7 @@ fn temporary_arm_world(
                 config_overrides: HashMap::new(),
             }],
             interconnects: Vec::new(),
+            rf: None,
         },
     )
 }
@@ -113,6 +114,7 @@ fn world_rejects_a_direct_manifest_that_bypasses_file_validation() {
         name: "invalid-world".to_string(),
         nodes: Vec::new(),
         interconnects: Vec::new(),
+        rf: None,
     };
 
     let error = match World::from_manifest(manifest, Path::new(".")) {
@@ -148,6 +150,7 @@ fn world_runs_riscv_nodes() {
             },
         ],
         interconnects: Vec::new(),
+        rf: None,
     };
 
     let mut world = World::from_manifest(manifest, &repo_root())
@@ -184,6 +187,7 @@ fn world_rejects_nodes_whose_chip_declares_no_known_architecture() {
             config_overrides: HashMap::new(),
         }],
         interconnects: Vec::new(),
+        rf: None,
     };
 
     let error = match World::from_manifest(manifest, &repo_root()) {
@@ -241,6 +245,7 @@ fn world_rejects_riscv_firmware_for_a_cortex_m_node_before_execution() {
             config_overrides: HashMap::new(),
         }],
         interconnects: Vec::new(),
+        rf: None,
     };
 
     let error = match World::from_manifest(manifest, &repo_root()) {

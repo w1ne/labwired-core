@@ -750,6 +750,39 @@ pub struct NodeConfig {
     pub config_overrides: HashMap<String, serde_yaml::Value>,
 }
 
+/// Optional shared RF medium for a multi-node world (path loss / RSSI floor).
+/// Positions are planar metres; co-located (default 0,0) keeps lossless links
+/// until nodes are placed. Radios that honor [`labwired_core::peripherals::rf_medium`]
+/// attach separately; this block is the env-manifest source of truth for seed + layout.
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentRfConfig {
+    /// Run seed for seeded PER / medium draws (0 is valid).
+    #[serde(default)]
+    pub seed: u64,
+    /// Node id → planar position in metres.
+    #[serde(default)]
+    pub nodes: HashMap<String, EnvironmentRfNode>,
+    /// Minimum RSSI (dBm) for decode; below → drop. Omit for medium default.
+    #[serde(default)]
+    pub rssi_floor_dbm: Option<f64>,
+    /// Path-loss exponent (free space ≈ 2). Omit for medium default.
+    #[serde(default)]
+    pub path_loss_exponent: Option<f64>,
+    /// Reference loss at 1 m (dB). Omit for medium default.
+    #[serde(default)]
+    pub ref_loss_db: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentRfNode {
+    #[serde(default)]
+    pub x: f64,
+    #[serde(default)]
+    pub y: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct EnvironmentManifest {
@@ -759,6 +792,9 @@ pub struct EnvironmentManifest {
     pub nodes: Vec<NodeConfig>,
     #[serde(default)]
     pub interconnects: Vec<InterconnectConfig>,
+    /// Shared RF medium parameters (optional).
+    #[serde(default)]
+    pub rf: Option<EnvironmentRfConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -771,6 +807,22 @@ pub struct InterconnectConfig {
 }
 
 impl EnvironmentManifest {
+
+    /// Test/helper constructor with no RF block.
+    pub fn bare(
+        name: impl Into<String>,
+        nodes: Vec<NodeConfig>,
+        interconnects: Vec<InterconnectConfig>,
+    ) -> Self {
+        Self {
+            schema_version: "1.0".into(),
+            name: name.into(),
+            nodes,
+            interconnects,
+            rf: None,
+        }
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let source = std::fs::read_to_string(path)?;
         // `NodeConfig` deliberately keeps a plain HashMap for source
@@ -828,6 +880,33 @@ impl EnvironmentManifest {
 
         for (index, interconnect) in self.interconnects.iter().enumerate() {
             validate_environment_interconnect_config(index, interconnect)?;
+        }
+
+        if let Some(rf) = &self.rf {
+            for node_id in rf.nodes.keys() {
+                if !node_ids.contains(node_id) {
+                    anyhow::bail!(
+                        "Environment manifest rf.nodes contains unknown node id '{node_id}'"
+                    );
+                }
+            }
+            if let Some(exp) = rf.path_loss_exponent {
+                if !exp.is_finite() || exp <= 0.0 {
+                    anyhow::bail!(
+                        "Environment manifest rf.path_loss_exponent must be a positive finite number"
+                    );
+                }
+            }
+            if let Some(r) = rf.ref_loss_db {
+                if !r.is_finite() {
+                    anyhow::bail!("Environment manifest rf.ref_loss_db must be finite");
+                }
+            }
+            if let Some(floor) = rf.rssi_floor_dbm {
+                if !floor.is_finite() {
+                    anyhow::bail!("Environment manifest rf.rssi_floor_dbm must be finite");
+                }
+            }
         }
 
         Ok(())

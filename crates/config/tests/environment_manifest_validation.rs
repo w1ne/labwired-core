@@ -296,3 +296,51 @@ interconnects:
         assert!(error.contains(expected), "{name}: {error}");
     }
 }
+
+#[test]
+fn environment_manifest_accepts_rf_block_with_known_nodes() {
+    let m = parse_environment(
+        r#"
+schema_version: "1.0"
+name: two-node-rf
+nodes:
+  - id: alpha
+    system: a.yaml
+    firmware: a.elf
+  - id: beta
+    system: b.yaml
+    firmware: b.elf
+rf:
+  seed: 42
+  rssi_floor_dbm: -70.0
+  nodes:
+    alpha: { x: 0.0, y: 0.0 }
+    beta: { x: 12.0, y: 0.0 }
+"#,
+    )
+    .expect("rf block should parse");
+    let rf = m.rf.expect("rf present");
+    assert_eq!(rf.seed, 42);
+    assert_eq!(rf.rssi_floor_dbm, Some(-70.0));
+    assert_eq!(rf.nodes["beta"].x, 12.0);
+}
+
+#[test]
+fn environment_manifest_rejects_rf_unknown_node() {
+    let error = parse_environment(
+        r#"
+schema_version: "1.0"
+name: two-node-rf
+nodes:
+  - id: alpha
+    system: a.yaml
+    firmware: a.elf
+rf:
+  nodes:
+    ghost: { x: 1.0, y: 0.0 }
+"#,
+    )
+    .unwrap_err();
+    let error = format!("{error:#}");
+    assert!(error.contains("unknown node id 'ghost'"), "{error}");
+}

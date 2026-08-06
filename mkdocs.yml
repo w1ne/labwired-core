@@ -75,6 +75,7 @@ nav:
 
   - How-To Guides:
     - Board Onboarding: board_onboarding_playbook.md
+    - Multi-node worlds: howto/multi-node.md
     - CI/CD Integration: ci_integration.md
     - Peripheral Modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
