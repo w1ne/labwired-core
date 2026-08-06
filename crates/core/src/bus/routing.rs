@@ -745,6 +745,12 @@ impl SystemBus {
         // silently change IO-Link timing. Re-derive it from the streams we just
         // mutated. Cheap: attaching is a wiring-time operation, not a hot path.
         self.iolink_master_attached = self.scan_iolink_master();
+        // Stream attach can flip models that force walk when a peer is wired
+        // (CanBus-style). Rebuild tick indices and recompute walk-deletion —
+        // same seam as `attach_can_bus_by_id`. EspUart under event-scheduler
+        // stays walk-free and polls peers from `on_event` / take_scheduled.
+        self.rebuild_peripheral_ranges();
+        self.recompute_walk_deletable();
         Ok(())
     }
 

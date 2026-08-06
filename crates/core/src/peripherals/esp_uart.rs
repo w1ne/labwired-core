@@ -760,10 +760,9 @@ impl Peripheral for EspUart {
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        // A cross-linked UART must keep being ticked even under the scheduler:
-        // the peer is polled from `tick_elapsed`, and walk-deletion would
-        // starve it so the link would carry traffic one way only.
-        !self.uses_scheduler() || !self.attached_streams.is_empty()
+        // Feature-off: walk drives TX/RX. Feature-on: scheduler path owns
+        // TX drain AND cross-link stream poll (`on_event` / take_scheduled).
+        !self.uses_scheduler()
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -780,14 +779,21 @@ impl Peripheral for EspUart {
         if !self.uses_scheduler() {
             return Vec::new();
         }
-        // Pace TX while the FIFO has data; level IRQs ride matrix export.
+        // Pace TX while the FIFO has data; also keep a cadence when a
+        // cross-link stream is attached so peer RX is polled under walk-
+        // free (world_esp32c3_pingpong). Level IRQs ride matrix export.
         // The wake lands on the cycle the in-flight byte's frame completes,
         // measured from the anchor set when the FIFO went non-empty — not
         // `per_byte` from whenever the bus happened to poll us. That is what
         // keeps the scheduler byte-identical to the per-cycle walk.
-        if !self.tx_fifo.is_empty() && !self.scheduled {
-            self.scheduled = true;
-            let per_byte = self.cycles_per_byte().max(1);
+        let need_tx = !self.tx_fifo.is_empty();
+        let need_stream = !self.attached_streams.is_empty();
+        if !(need_tx || need_stream) || self.scheduled {
+            return Vec::new();
+        }
+        self.scheduled = true;
+        let per_byte = self.cycles_per_byte().max(1);
+        if need_tx {
             let elapsed = self
                 .drain_anchor
                 .and_then(|a| self.clock.as_ref().map(|c| c.now().saturating_sub(a)))
@@ -795,7 +801,8 @@ impl Peripheral for EspUart {
             let done = self.drain_accum + elapsed;
             return vec![(per_byte.saturating_sub(done).max(1), UART_WAKE_TOKEN)];
         }
-        Vec::new()
+        // Stream-only: poll peer at baud-paced intervals.
+        vec![(per_byte, UART_WAKE_TOKEN)]
     }
 
     fn on_event(
@@ -810,12 +817,18 @@ impl Peripheral for EspUart {
         // byte-identical instead of drifting by the event phase.
         let per_byte = self.cycles_per_byte().max(1);
         self.ingest_rx_source_mut();
+        // Cross-link peers are polled from the walk's `tick_elapsed`; under
+        // scheduler mode the walk is deleted, so poll here with the same
+        // baud-paced quantum or RX starves (server: no PONG).
+        if !self.attached_streams.is_empty() {
+            self.poll_attached_streams(per_byte);
+        }
         if let Some(now) = self.clock.as_ref().map(|c| c.now()) {
             self.advance_to(now);
         } else {
             self.drain_cycles(per_byte);
         }
-        let keep = !self.tx_fifo.is_empty();
+        let keep = !self.tx_fifo.is_empty() || !self.attached_streams.is_empty();
         self.scheduled = keep;
         let mut explicit_irqs = Vec::new();
         if self.int_raw() & self.reg(OFF_INT_ENA) != 0 {
