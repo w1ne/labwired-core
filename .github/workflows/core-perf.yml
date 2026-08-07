@@ -85,7 +85,15 @@ jobs:
         run: |
           cargo install espup --locked
           espup install
-          echo "$HOME/.rustup/toolchains/esp/bin" >> "$GITHUB_PATH"
+          # NOTHING gets added to PATH here, deliberately. Putting
+          # ~/.rustup/toolchains/esp/bin on PATH makes every later `cargo`
+          # resolve to the esp fork's binary directly instead of the rustup
+          # shim, and that fork carries no std for thumbv6m or riscv32imc — so
+          # the FIRST fixture build dies with "can't find crate for `core`"
+          # before a single board is measured (issue #843, run 31183553289).
+          # board_perf.py already asks for this toolchain the correct way, with
+          # `cargo +esp build`, which the shim resolves without help.
+          rustup toolchain list
 
       # Fails in seconds if a chip descriptor exists that no fixture covers and
       # no waiver names, rather than after a 40-minute build and measure.
