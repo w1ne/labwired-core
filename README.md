@@ -1,8 +1,24 @@
+<a href="https://labwired.com">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/w1ne/labwired-core/main/docs/assets/brand/labwired-logo-dark.png">
+    <img alt="LabWired" src="https://raw.githubusercontent.com/w1ne/labwired-core/main/docs/assets/brand/labwired-logo.png" width="300">
+  </picture>
+</a>
+
 # LabWired Core
 
 > Run your firmware on a virtual instance of a real chip, from your terminal, your CI, or
 > your AI coding agent. No board on your desk.
 
+[![Rust Core CI](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-ci.yml)
+[![Board CI](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-board-ci.yml)
+[![HW target validation](https://github.com/w1ne/labwired-core/actions/workflows/core-validate-hw-targets.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-validate-hw-targets.yml)
+[![Unsupported instruction audit](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-unsupported-audit.yml)
+[![Onboarding smoke](https://github.com/w1ne/labwired-core/actions/workflows/core-onboarding-smoke.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-onboarding-smoke.yml)
+[![Arduino matrix](https://github.com/w1ne/labwired-core/actions/workflows/core-arduino-matrix-smoke.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-arduino-matrix-smoke.yml)
+[![IO-Link native](https://github.com/w1ne/labwired-core/actions/workflows/core-iolink-native.yml/badge.svg?branch=main)](https://github.com/w1ne/labwired-core/actions/workflows/core-iolink-native.yml)
+
+[![Latest release](https://img.shields.io/github/v/release/w1ne/labwired-core?label=release&color=0b7285)](https://github.com/w1ne/labwired-core/releases/latest)
 [![Website](https://img.shields.io/badge/web-labwired.com-0b7285.svg)](https://labwired.com/)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.labwired.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -156,6 +172,46 @@ peripheral is modeled. The browsable catalog of chips, boards, and peripherals i
 
 The full list is in [docs/demos.md](docs/demos.md). Each example's README and validation
 file is the source of truth for what that example actually models.
+
+## The LabWired ecosystem
+
+This repository is the engine. Everything below runs on it, and all of it is public.
+
+**Put it in your workflow**
+
+| Project | What it gives you |
+| --- | --- |
+| [firmware-test](https://github.com/LabWired/firmware-test) | GitHub Action. Run a LabWired test script as a merge gate — no hardware, no cross-toolchain on the runner. |
+| [firmware-ci-starter](https://github.com/LabWired/firmware-ci-starter) | Template repo. Firmware, test script, and workflow already wired — [generate](https://github.com/LabWired/firmware-ci-starter/generate) it and your first push runs green. |
+| [labwired-zephyr](https://github.com/w1ne/labwired-zephyr) | Zephyr west runner. `west simulate`, or `west flash -r labwired`. |
+| [labwired-vscode](https://github.com/w1ne/labwired-vscode) | VS Code extension. Run and debug firmware from the editor without a probe. |
+| [labwired-lab-template](https://github.com/w1ne/labwired-lab-template) | Bare template for a repo whose merges gate on a simulation run. |
+
+**Drive it from an agent**
+
+| Project | What it gives you |
+| --- | --- |
+| [agent](https://github.com/LabWired/agent) | The LabWired Firmware Agent — writes firmware and checks it on a virtual board. |
+| [skills](https://github.com/LabWired/skills) | Agent Skills for firmware work against the simulator as a hardware oracle. |
+| [`docs/agents.md`](docs/agents.md) | The MCP surface and the rules an agent working in this repo should follow. |
+
+**See it doing real work**
+
+| Project | What it shows |
+| --- | --- |
+| [labwired-cra-evidence](https://github.com/LabWired/labwired-cra-evidence) | CRA-style secure-boot and signed-OTA evidence, regenerated in CI on a virtual nRF52840 + ATECC608A. Evidence, not a certificate. |
+| [smart-ring-digital-twin](https://github.com/w1ne/smart-ring-digital-twin) | An nRF54L15 smart ring, register-level sensor models, and an honest BLE-contention demonstration. |
+| [labwired-nokia-ci-demo](https://github.com/w1ne/labwired-nokia-ci-demo) | STM32L476 driving a Nokia 5110 (PCD8544) and an HC-SR04, gated in CI. |
+| [labwired-demo-stm32f1xx](https://github.com/w1ne/labwired-demo-stm32f1xx) | Rust `embedded-hal` on STM32F1 under the simulator. |
+
+**Firmware stacks that use LabWired as their test bench**
+
+[iolinki](https://github.com/w1ne/iolinki) (IO-Link device stack for Zephyr) ·
+[iolinki-master](https://github.com/w1ne/iolinki-master) (IO-Link master stack) ·
+[udslib](https://github.com/w1ne/udslib) (ISO 14229 UDS for embedded ECUs) ·
+[thermal-io-link-condition-sensor](https://github.com/w1ne/thermal-io-link-condition-sensor) (MLX90640 + ESP32-C3 condition monitoring)
+
+Using LabWired for something public? [Open an issue][new-issue] and it goes on this list.
 
 ## Missing a chip? Peripheral behaving wrong? Tell us here.
 
