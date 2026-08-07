@@ -420,7 +420,19 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-06
+    # 2026-08-07: CPU batch planning (plan_cpu_window no longer pins the quantum
+    # to 1 for the life of any SCB-bearing bus), the SCB's SYSRESETREQ latch shared
+    # with the core, and UART RX-stream service cadence (advance_ticks replays the
+    # tick-equivalents a widened interval slept through). See #830.
+    # No register map, base address, or reset-value change on the silicon-asserted
+    # set: the change alters how many instructions retire per batch, not what any
+    # register reads at a boundary. Machine state is proven byte-identical between
+    # 32 single boundaries and one 32-instruction batch on a real Cortex-M topology
+    # WITH peripherals attached — full machine snapshot, CPU snapshot, peripheral
+    # list, total_cycles, bus.current_cycle, PC and every peripheral-work counter
+    # (labwired_wasm configured_arm_batch_matches_32_single_boundaries).
+    # Live re-capture still owed; no hardware ran for this change.
+    drift_ack: 2026-08-07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1073,7 +1085,19 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-06
+    # 2026-08-07: CPU batch planning (plan_cpu_window no longer pins the quantum
+    # to 1 for the life of any SCB-bearing bus), the SCB's SYSRESETREQ latch shared
+    # with the core, and UART RX-stream service cadence (advance_ticks replays the
+    # tick-equivalents a widened interval slept through). See #830.
+    # No register map, base address, or reset-value change on the silicon-asserted
+    # set: the change alters how many instructions retire per batch, not what any
+    # register reads at a boundary. Machine state is proven byte-identical between
+    # 32 single boundaries and one 32-instruction batch on a real Cortex-M topology
+    # WITH peripherals attached — full machine snapshot, CPU snapshot, peripheral
+    # list, total_cycles, bus.current_cycle, PC and every peripheral-work counter
+    # (labwired_wasm configured_arm_batch_matches_32_single_boundaries).
+    # Live re-capture still owed; no hardware ran for this change.
+    drift_ack: 2026-08-07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1199,7 +1223,19 @@ boards:
     # smoke case pass unchanged. A future re-capture would agree with the NEW model,
     # not the old one. Re-capture of GPIOC IDR readback is owed and tracked.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-06
+    # 2026-08-07: CPU batch planning (plan_cpu_window no longer pins the quantum
+    # to 1 for the life of any SCB-bearing bus), the SCB's SYSRESETREQ latch shared
+    # with the core, and UART RX-stream service cadence (advance_ticks replays the
+    # tick-equivalents a widened interval slept through). See #830.
+    # No register map, base address, or reset-value change on the silicon-asserted
+    # set: the change alters how many instructions retire per batch, not what any
+    # register reads at a boundary. Machine state is proven byte-identical between
+    # 32 single boundaries and one 32-instruction batch on a real Cortex-M topology
+    # WITH peripherals attached — full machine snapshot, CPU snapshot, peripheral
+    # list, total_cycles, bus.current_cycle, PC and every peripheral-work counter
+    # (labwired_wasm configured_arm_batch_matches_32_single_boundaries).
+    # Live re-capture still owed; no hardware ran for this change.
+    drift_ack: 2026-08-07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1343,7 +1379,19 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-06
+    # 2026-08-07: CPU batch planning (plan_cpu_window no longer pins the quantum
+    # to 1 for the life of any SCB-bearing bus), the SCB's SYSRESETREQ latch shared
+    # with the core, and UART RX-stream service cadence (advance_ticks replays the
+    # tick-equivalents a widened interval slept through). See #830.
+    # No register map, base address, or reset-value change on the silicon-asserted
+    # set: the change alters how many instructions retire per batch, not what any
+    # register reads at a boundary. Machine state is proven byte-identical between
+    # 32 single boundaries and one 32-instruction batch on a real Cortex-M topology
+    # WITH peripherals attached — full machine snapshot, CPU snapshot, peripheral
+    # list, total_cycles, bus.current_cycle, PC and every peripheral-work counter
+    # (labwired_wasm configured_arm_batch_matches_32_single_boundaries).
+    # Live re-capture still owed; no hardware ran for this change.
+    drift_ack: 2026-08-07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1480,7 +1528,19 @@ boards:
     # through this controller; all six families pass unchanged, no dispatch bug
     # found. No live re-capture.
     # 2026-08-03: this board's chip YAML gained `config.debug_schema:` entries pointing at SVD-derived register descriptors (#753). DEBUGGER METADATA ONLY: `load_debug_schemas` feeds them to `inspect_with_schema`, which supplies register NAMES, offsets and bit slices for a debugger view. Every VALUE still comes from the peripheral's own model, read through side-effect-free `peek`. No peripheral model, register layout, base address or reset value changed, so nothing in the asserted capture set can move. Evidence on this commit: full `cargo test -p labwired-core` green except the pre-existing esp32_ili9341_attach failure, plus svd_conformance and chip_conformance_ratchet green. No live re-capture.
-    drift_ack: 2026-08-06
+    # 2026-08-07: CPU batch planning (plan_cpu_window no longer pins the quantum
+    # to 1 for the life of any SCB-bearing bus), the SCB's SYSRESETREQ latch shared
+    # with the core, and UART RX-stream service cadence (advance_ticks replays the
+    # tick-equivalents a widened interval slept through). See #830.
+    # No register map, base address, or reset-value change on the silicon-asserted
+    # set: the change alters how many instructions retire per batch, not what any
+    # register reads at a boundary. Machine state is proven byte-identical between
+    # 32 single boundaries and one 32-instruction batch on a real Cortex-M topology
+    # WITH peripherals attached — full machine snapshot, CPU snapshot, peripheral
+    # list, total_cycles, bus.current_cycle, PC and every peripheral-work counter
+    # (labwired_wasm configured_arm_batch_matches_32_single_boundaries).
+    # Live re-capture still owed; no hardware ran for this change.
+    drift_ack: 2026-08-07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
