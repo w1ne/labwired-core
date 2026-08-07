@@ -1,0 +1,296 @@
+//! Two ESP32-C3 nodes running ONE image must start the owner's BLE Pong game.
+//!
+//! This is the end-to-end proof for connectionless BLE between two instances in
+//! one lab, and it deliberately uses the owner's published lab
+//! (api.labwired.com project `c477f82961e86f601e7b908ae7e12311`, "BLE Pong —
+//! two ESP32-C3s") rather than a purpose-built fixture, because the whole point
+//! is that a real user's real sketch works.
+//!
+//! The sketch elects its host over the air: each node publishes its state in
+//! the manufacturer data of its advertisement, and in its scan callback
+//!
+//! ```c
+//! if ((uint8_t)m[2] == myTag) return;   // our own frame
+//! ...
+//! if (!roleLocked) { if (!strapHost) isHost = (myTag < peerTag); roleLocked = true; }
+//! ```
+//!
+//! where `myTag = BLEDevice::getAddress().getNative()[5]`. Two properties have
+//! to hold for that to settle, and this file asserts each on its own so a
+//! failure names which one broke:
+//!
+//! 1. **Distinct identity.** Two C3 dice in one lab must not share a Bluetooth
+//!    device address. With a zero factory eFuse MAC on both, both nodes derive
+//!    `tag=2`, every peer report looks like an echo of their own advertisement,
+//!    and both stay GUEST forever with the ball frozen at spawn.
+//! 2. **Delivery.** An advertising report transmitted by one controller has to
+//!    reach the other's scan.
+//!
+//! Both are observed the way a user observes them: from the serial the sketch
+//! prints. Nothing here reads engine internals.
+//!
+//! The image is the flash the hosted PlatformIO toolchain builds from that
+//! project's `src/main.ino` (`fixtures/esp32c3-ble-pong-flash.bin`). Reproduce
+//! with `labwired_compile`, board `esp32-c3-supermini`, language `arduino`,
+//! lib_deps `adafruit/Adafruit SSD1306` + `adafruit/Adafruit GFX Library`, then
+//! concatenate the returned flash images at their offsets.
+
+// RELEASE-ONLY. Two C3 mask-ROM boots plus enough advertising rounds for the
+// election to settle is ~180M cycles; that is seconds in release and tens of
+// minutes in debug, and every ordinary cargo step in `core-ci.yml` builds
+// debug. The `Release-gated tests` step names this target explicitly and
+// `release_only_cfg_ratchet` fails if it ever stops doing so — a release-only
+// block that no lane compiles is worse than no test at all.
+#![cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::boot::esp32c3_rom::{
+    build_rom_boot_machine, c3_rom_data_init_writes, inject_rom_regions, RomBootOpts,
+};
+use labwired_core::boot::esp32s3_rom::RomImages;
+use labwired_core::bus::SystemBus;
+use labwired_core::cpu::RiscV;
+use labwired_core::memory::ProgramImage;
+use labwired_core::{Arch, Bus, Cpu, Machine};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+fn root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+const ESP_IMAGE_HEADER_LEN: usize = 24;
+const ESP_IMAGE_MAGIC: u8 = 0xE9;
+
+fn esp32c3_bootloader_image(flash: &[u8]) -> ProgramImage {
+    assert!(flash.len() > ESP_IMAGE_HEADER_LEN, "flash image truncated");
+    assert_eq!(flash[0], ESP_IMAGE_MAGIC, "bad bootloader image magic");
+    let segment_count = flash[1] as usize;
+    let entry = u32::from_le_bytes(flash[4..8].try_into().unwrap()) as u64;
+    let mut program = ProgramImage::new(entry, Arch::RiscV);
+    let mut cursor = ESP_IMAGE_HEADER_LEN;
+    for _ in 0..segment_count {
+        let load_addr = u32::from_le_bytes(flash[cursor..cursor + 4].try_into().unwrap()) as u64;
+        let len = u32::from_le_bytes(flash[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        cursor += 8;
+        program.add_segment(load_addr, flash[cursor..cursor + len].to_vec());
+        cursor += len;
+    }
+    program
+}
+
+struct Node {
+    machine: Machine<RiscV>,
+    serial: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Node {
+    fn console(&self) -> String {
+        let bytes = self
+            .serial
+            .lock()
+            .expect("serial sink not poisoned")
+            .clone();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+}
+
+/// The browser fast-start assembly for one C3 node, identical to the shipped
+/// lab batch gate's `build_lab` — same ROM injection, same rom-boot options,
+/// same browser tick policy — so what runs here is what runs in the tab.
+fn build_node(flash: &[u8]) -> Node {
+    let chip = ChipDescriptor::from_file(root().join("../../configs/chips/esp32c3.yaml"))
+        .expect("load esp32c3 chip yaml");
+    let manifest =
+        SystemManifest::from_file(root().join("../../configs/systems/esp32c3-ble-pong.yaml"))
+            .expect("load ble-pong system yaml");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build ble-pong bus");
+
+    let irom = std::fs::read(root().join("roms/esp32c3/esp32c3_rom.bin")).expect("read C3 IROM");
+    let drom = std::fs::read(root().join("roms/esp32c3/esp32c3_drom.bin")).expect("read C3 DROM");
+    assert!(
+        inject_rom_regions(
+            &mut bus,
+            &RomImages {
+                irom: irom.clone(),
+                drom,
+            },
+        ),
+        "chip yaml must declare the C3 IROM region"
+    );
+    for (dst, bytes) in c3_rom_data_init_writes(&irom) {
+        for (i, b) in bytes.iter().enumerate() {
+            let _ = bus.write_u8(dst as u64 + i as u64, *b);
+        }
+    }
+
+    let serial = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(serial.clone(), false);
+
+    let bootloader = esp32c3_bootloader_image(flash);
+    let mut machine = build_rom_boot_machine(
+        bus,
+        flash.to_vec(),
+        RomBootOpts {
+            // Unpinned: each node is its own die, exactly as the browser builds
+            // one bridge per MCU on the canvas.
+            pinned_efuse_mac: None,
+            usb_serial_sink: None,
+        },
+        |c| c,
+    );
+    for segment in &bootloader.segments {
+        if machine.bus.flash.load_from_segment(segment)
+            || machine.bus.ram.load_from_segment(segment)
+            || machine
+                .bus
+                .extra_mem
+                .iter_mut()
+                .any(|m| m.load_from_segment(segment))
+        {
+            continue;
+        }
+        for (i, byte) in segment.data.iter().enumerate() {
+            machine
+                .bus
+                .write_u8(segment.start_addr + i as u64, *byte)
+                .expect("load bootloader segment");
+        }
+    }
+    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    machine.cpu.set_sp(sp_top & !0xF);
+    machine.cpu.set_pc(bootloader.entry_point as u32);
+
+    let rec = machine.bus.max_safe_tick_interval();
+    machine.config.peripheral_tick_interval = rec;
+    machine.bus.config.peripheral_tick_interval = rec;
+    machine.config.idle_fast_forward_enabled = true;
+    Node { machine, serial }
+}
+
+/// Slice both nodes in lockstep. Advertising is latest-value-wins with a
+/// bounded backlog, so a node that runs a huge uninterrupted batch would talk
+/// past its peer's scan window — the same reasoning the browser's per-chip
+/// ticker uses for wire-linked chips.
+const SLICE_CYCLES: usize = 100_000;
+
+fn run_pong(cycles_per_node: usize) -> (Node, Node) {
+    let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin"))
+        .expect("read BLE Pong flash image");
+    let mut a = build_node(&flash);
+    let mut b = build_node(&flash);
+    let mut done = 0usize;
+    while done < cycles_per_node {
+        let slice = SLICE_CYCLES.min(cycles_per_node - done);
+        for node in [&mut a, &mut b] {
+            for _ in 0..slice {
+                if node.machine.step().is_err() {
+                    break;
+                }
+            }
+        }
+        done += slice;
+    }
+    (a, b)
+}
+
+/// The `tag=` a node printed in its `ROLE …` banner — the last byte of the BLE
+/// device address the stack handed the sketch.
+fn ble_tag(console: &str) -> u8 {
+    let line = console
+        .lines()
+        .find(|l| l.starts_with("ROLE "))
+        .unwrap_or_else(|| panic!("no ROLE banner in console:\n{console}"));
+    let tag = line
+        .split("tag=")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .unwrap_or_else(|| panic!("no tag= in {line:?}"));
+    tag.parse().unwrap_or_else(|e| panic!("tag {tag:?}: {e}"))
+}
+
+/// The last per-loop status line, e.g. `H ball=64,32 me=25 peer=24 score=0:0 rally=0`.
+fn last_status(console: &str) -> String {
+    console
+        .lines()
+        .rev()
+        .find(|l| l.contains(" ball=") && l.contains(" rally="))
+        .unwrap_or_else(|| panic!("no status line in console:\n{console}"))
+        .to_string()
+}
+
+fn ball(status: &str) -> (i32, i32) {
+    let f = status
+        .split(" ball=")
+        .nth(1)
+        .and_then(|r| r.split_whitespace().next())
+        .unwrap_or_else(|| panic!("no ball= in {status:?}"));
+    let (x, y) = f.split_once(',').expect("ball=x,y");
+    (x.parse().expect("ball x"), y.parse().expect("ball y"))
+}
+
+/// Cycles per node. The C3 rom-boot path reaches `setup()`'s ROLE banner in
+/// roughly 45M and needs a few advertising rounds after that for the election
+/// to settle and the ball to move.
+const PONG_CYCLES: usize = 90_000_000;
+
+/// ONE two-node run, shared by both tests. The run is the expensive part and
+/// both properties are readable from the same serial, so paying for it twice
+/// would double the release lane for nothing. Each property still gets its own
+/// `#[test]` so a failure names which one broke.
+fn consoles() -> &'static (String, String) {
+    static RUN: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
+    RUN.get_or_init(|| {
+        let (a, b) = run_pong(PONG_CYCLES);
+        (a.console(), b.console())
+    })
+}
+
+/// Property 1: two dice, two addresses. A lab with two of the same board is the
+/// ordinary case, and the sketch's self-filter (`m[2] == myTag`) is the
+/// ordinary way to write connectionless BLE — a shared address makes every peer
+/// advertisement indistinguishable from an echo.
+#[test]
+fn two_c3_nodes_in_one_lab_do_not_share_a_bluetooth_address() {
+    let (ca, cb) = consoles();
+    let (ta, tb) = (ble_tag(ca), ble_tag(cb));
+    assert_ne!(
+        ta, tb,
+        "both nodes report BLE address byte tag={ta}; a peer's advertisement is \
+         then indistinguishable from the node's own and the game never starts"
+    );
+}
+
+/// Property 2: the game starts. Exactly one node takes the host role, and the
+/// ball leaves its spawn — which can only happen once host election has run,
+/// i.e. once a peer advertising report was delivered and accepted.
+#[test]
+fn two_c3_nodes_running_one_ble_pong_image_start_the_game() {
+    let (ca, cb) = consoles();
+    let (sa, sb) = (last_status(ca), last_status(cb));
+    // The evidence a human reads out of a CI log, printed on pass as well as
+    // fail: what each node decided it was, and what it was painting.
+    eprintln!("nodeA tag={} {sa}", ble_tag(ca));
+    eprintln!("nodeB tag={} {sb}", ble_tag(cb));
+
+    let hosts = [&sa, &sb].iter().filter(|s| s.starts_with("H ")).count();
+    assert_eq!(
+        hosts, 1,
+        "exactly one node must elect HOST\n  nodeA: {sa}\n  nodeB: {sb}"
+    );
+
+    // The host owns ball physics; the guest paints the host's snapshot. Neither
+    // may still be sitting on the spawn point.
+    for (name, status) in [("nodeA", &sa), ("nodeB", &sb)] {
+        assert_ne!(
+            ball(status),
+            (64, 32),
+            "{name} ball never left spawn — no host frame ever arrived: {status}"
+        );
+    }
+    // Same picture on both panels: the guest mirrors the host's ball.
+    assert!(
+        ball(&sa).0.abs_diff(ball(&sb).0) <= 8,
+        "the two nodes are painting different worlds\n  nodeA: {sa}\n  nodeB: {sb}"
+    );
+}

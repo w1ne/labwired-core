@@ -451,14 +451,6 @@ impl WasmSimulator {
         Self::new_from_config_riscv_program_image(chip, manifest, &program_image, blobs)
     }
 
-    /// Station eFuse MAC seeded when a `wifi_ap` is on the diagram. Delegates to
-    /// the shared core helper so the browser ctors, CLI `test`, and CLI `run`
-    /// all seed the identical station MAC (one source of truth). Absent
-    /// `wifi_ap` ⇒ None (unchanged non-WiFi boot).
-    fn wifi_ap_efuse_mac(manifest: &SystemManifest) -> Option<[u8; 6]> {
-        labwired_core::system::wifi::wifi_ap_station_mac(manifest)
-    }
-
     /// Attach every real WiFi MAC to a per-lab virtual-WiFi medium built from the
     /// manifest's `wifi_ap`. Delegates to the shared, CPU-generic core helper so
     /// the browser ctors and the CLI `test`/`run` paths attach identically — the
@@ -534,9 +526,10 @@ impl WasmSimulator {
             bus,
             flash.clone(),
             RomBootOpts {
-                // Seed the station MAC when a wifi-ap is present, exactly like the
-                // rom-boot path — a zero eFuse MAC won't stay associated.
-                efuse_mac: Self::wifi_ap_efuse_mac(manifest),
+                // A new die per bridge. Two MCUs on one canvas are two dies, and
+                // the browser builds one bridge each, so leaving this unpinned is
+                // what gives them distinct WiFi station MACs and BLE addresses.
+                pinned_efuse_mac: None,
                 usb_serial_sink: capture_usb_serial.then(|| uart_sink.clone()),
             },
             |c| Box::new(c) as Box<dyn Cpu>,
@@ -785,9 +778,8 @@ impl WasmSimulator {
             bus,
             flash_bytes,
             RomBootOpts {
-                // Seed the station MAC when a wifi-ap is present (a zero eFuse MAC
-                // won't stay associated). Shared with the fast-start path.
-                efuse_mac: Self::wifi_ap_efuse_mac(manifest),
+                // A new die per bridge — see the fast-start path above.
+                pinned_efuse_mac: None,
                 usb_serial_sink: capture_usb_serial.then(|| uart_sink.clone()),
             },
             // WasmSimulator holds Machine<Box<dyn Cpu>>; box the concrete RiscV.

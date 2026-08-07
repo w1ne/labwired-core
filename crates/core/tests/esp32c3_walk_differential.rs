@@ -146,7 +146,9 @@ fn build_oled_lab(
         bus,
         flash,
         RomBootOpts {
-            efuse_mac: None,
+            // Both sides of this comparison are the SAME die: pin the factory
+            // MAC so the only axis that varies is the one under test.
+            pinned_efuse_mac: Some(labwired_core::system::efuse::FIRST_FACTORY_MAC),
             usb_serial_sink: None,
         },
         |c| c,

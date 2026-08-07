@@ -1,0 +1,43 @@
+# LabWired - "BLE Pong": two ESP32-C3 SuperMinis, one image, connectionless BLE.
+#
+# This is ONE node of the owner's published two-MCU lab
+# (api.labwired.com project c477f82961e86f601e7b908ae7e12311). Each node drives
+# a 128x64 SSD1306 OLED on I2C0 (SDA=GPIO8 / SCL=GPIO9, address 0x3C) and reads
+# a Sharp GP2Y0A21 IR ranger on GPIO1 (ADC1_CH1) for its paddle. The two nodes
+# talk only over BLE advertising: each publishes its state in the manufacturer
+# data of its advertisement and reads the peer's in a scan callback.
+#
+# The two nodes are IDENTICAL by construction — same image, same peripherals —
+# so the ONLY thing that can tell them apart is the factory eFuse MAC that
+# becomes their BLE device address. That is exactly what
+# `crates/core/tests/world_esp32c3_ble_pong.rs` pins down.
+name: "esp32c3-ble-pong"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices:
+  # SSD1306 OLED on I2C0 at 0x3C (diagram wires GPIO8=SDA, GPIO9=SCL).
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x3C
+  # Sharp GP2Y0A21 analogue IR ranger on GPIO1 = ADC1_CH1, behind the C3's
+  # behavioral one-shot SAR ADC — the shape `emitAnalogAdcKit` lowers to.
+  - id: "vl"
+    type: "gp2y0a21"
+    connection: "apb_saradc"
+    config:
+      channel: 1
+
+board_io:
+  - id: "vl"
+    kind: "adc_input"
+    peripheral: "apb_saradc"
+    pin: 1
+    signal: "input"
+    active_high: true
+    device_type: "gp2y0a21"

@@ -183,10 +183,17 @@ pub(crate) fn discover_rom_elf() -> Option<PathBuf> {
 /// Options for [`build_rom_boot_machine`].
 #[derive(Default)]
 pub struct RomBootOpts {
-    /// Program a distinct factory MAC into the eFuse MAC words so multiple
-    /// instances are distinguishable on the shared VirtualWifi air. `None`
-    /// leaves the seeded defaults.
-    pub efuse_mac: Option<[u8; 6]>,
+    /// Pin this die's factory eFuse MAC — the base address `esp_read_mac`
+    /// derives the WiFi station MAC and the BLE device address from.
+    ///
+    /// `None` mints a NEW die: [`next_factory_efuse_mac`] hands out an address
+    /// no other die in this process has, which is what a chip on a lab bench
+    /// has and what two MCUs in one lab need in order to tell each other apart.
+    /// Pin a value when two runs must be the *same* die — an engine
+    /// differential comparing two builds, or a capture that has to reproduce.
+    ///
+    /// [`next_factory_efuse_mac`]: crate::system::efuse::next_factory_efuse_mac
+    pub pinned_efuse_mac: Option<[u8; 6]>,
     /// If set, USB-Serial-JTAG console bytes are mirrored into this sink (the
     /// browser widget's Serial tab). Native leaves it `None` — the same
     /// console bytes already reach stdout via UART0, and a second echo here
@@ -501,7 +508,16 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     {
         bus.legacy_walk_disabled = bus.derive_walk_deletable();
     }
-    if let Some(mac) = opts.efuse_mac {
+    // Every die has a factory MAC. There is no such thing as a shipped ESP32
+    // whose eFuse base MAC reads zero, and a zero one is not neutral: it makes
+    // two instances in one lab indistinguishable to every stack that derives an
+    // address from it (BLE especially, where "is this advert mine?" is the only
+    // way a connectionless protocol can work). So a die always gets one — the
+    // caller's, or a fresh identity from the process-wide fab.
+    {
+        let mac = opts
+            .pinned_efuse_mac
+            .unwrap_or_else(crate::system::efuse::next_factory_efuse_mac);
         let lo =
             mac[5] as u32 | (mac[4] as u32) << 8 | (mac[3] as u32) << 16 | (mac[2] as u32) << 24;
         let hi = mac[1] as u32 | (mac[0] as u32) << 8;

@@ -130,12 +130,6 @@ fn run_c3_rom_boot_no_elf(
     // and — the universal WiFi adapter — the `wifi_ap` attach below.
     let manifest_opt = system.map(|s| s.manifest.clone());
     let debug_uart = manifest_opt.as_ref().and_then(|m| m.debug_uart.clone());
-    // Seed the station eFuse MAC when a `wifi_ap` is present so the C3 stays
-    // associated (a zero eFuse MAC associates but drops); None otherwise keeps
-    // non-WiFi rom-boot byte-identical.
-    let wifi_station_mac = manifest_opt
-        .as_ref()
-        .and_then(labwired_core::system::wifi::wifi_ap_station_mac);
 
     // UART capture, mirroring the main flow: honour debug_uart, else all UARTs,
     // plus the IO-Link master log sink.
@@ -207,7 +201,7 @@ fn run_c3_rom_boot_no_elf(
             error!("resume snapshot self-key mismatch ({e}); cold-boot required");
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
-        let mut machine = match crate::build_c3_rom_boot_machine(bus, wifi_station_mac) {
+        let mut machine = match crate::build_c3_rom_boot_machine(bus, None) {
             Ok(m) => m,
             Err(code) => return code,
         };
@@ -229,7 +223,7 @@ fn run_c3_rom_boot_no_elf(
         // Cold faithful rom-boot. --capture-app-entry (the cache-miss path) is
         // handled inside execute_test_loop; with no ELF the app-entry PC falls
         // back to the XIP app-window detector.
-        match crate::build_c3_rom_boot_machine(bus, wifi_station_mac) {
+        match crate::build_c3_rom_boot_machine(bus, None) {
             Ok(m) => m,
             Err(code) => return code,
         }
