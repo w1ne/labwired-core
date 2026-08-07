@@ -799,18 +799,22 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
 
     let cli = Cli::parse();
 
-    // Initialize tracing with appropriate level based on --trace flag
-    if cli.trace {
-        tracing_subscriber::fmt()
-            .with_writer(std::io::stderr)
-            .with_max_level(tracing::Level::DEBUG)
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .with_writer(std::io::stderr)
-            .with_max_level(tracing::Level::INFO)
-            .init();
-    }
+    // RUST_LOG used to be silently ignored. `with_max_level` is a hard ceiling
+    // compiled into the binary — no environment variable can raise or lower it —
+    // so `RUST_LOG=error labwired test ...` still printed every INFO line and
+    // there was no way to quiet the runner at all.
+    //
+    // `EnvFilter` honours RUST_LOG (including per-module directives such as
+    // `RUST_LOG=warn,labwired_core=debug`) and falls back to the previous
+    // default when it is unset or unparseable, so behaviour with no RUST_LOG in
+    // the environment is unchanged: DEBUG under `--trace`, INFO otherwise.
+    let default_level = if cli.trace { "debug" } else { "info" };
+    let log_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(log_filter)
+        .init();
 
     match cli.command {
         Some(Commands::Chips) => {
@@ -2887,6 +2891,44 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     } else {
         None
     };
+
+    // ── THE VERDICT ──────────────────────────────────────────────────────────
+    //
+    // `labwired test` is the deterministic gate, and until now a PASSING run
+    // said nothing at all about what it had verified: failures went out through
+    // `error!`, passes were silent, and the only machine-readable answer lived
+    // in `result.json` / JUnit. A human running the gate in a terminal saw the
+    // firmware's own UART output and had to infer the verdict from `$?`.
+    //
+    // One line, on STDERR. That is deliberate and it is what makes this safe to
+    // print unconditionally: firmware UART echo and the `--json` agent payload
+    // both go to stdout, so a human-facing line on stderr can never corrupt a
+    // piped capture or a JSON parse. No new parameter threaded through this
+    // already twenty-argument signature to decide whether to speak.
+    {
+        let checked = assertion_results.len();
+        let passed = assertion_results.iter().filter(|a| a.passed).count();
+        let label = match status {
+            "pass" => "PASS",
+            "fail" => "FAIL",
+            _ => "ERROR",
+        };
+        // The SCRIPT, not the system manifest: nearly every board ships its
+        // manifest as `system.yaml`, so naming that would print the same
+        // uninformative "system" for every board in the repo. The script stem
+        // is what the caller actually typed and what a CI log needs to
+        // identify. Firmware stem is the fallback for a scriptless run.
+        let subject = args
+            .script
+            .file_stem()
+            .or_else(|| firmware_path.file_stem())
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "run".to_string());
+        eprintln!(
+            "{label}  {passed}/{checked} checks · {subject} · {steps_executed} steps · {:.2}s",
+            duration.as_secs_f64()
+        );
+    }
 
     write_outputs(
         args,
