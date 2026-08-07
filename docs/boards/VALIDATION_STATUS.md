@@ -21,7 +21,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `nrf52832` | ⚪ structural | — | 2026-08-03 | no silicon capture |
 | `rp2040` | ⚪ structural | — | 2026-08-05 | no silicon capture |
 | `rp2350` | 🟡 smoke-manual | — | 2026-08-05 | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-06 | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-07 | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-06 | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-06 | no silicon capture |
 | `esp32` | ⚪ structural | — | 2026-08-05 | no silicon capture |
