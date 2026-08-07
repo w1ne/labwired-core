@@ -89,10 +89,16 @@ fn every_documented_register_reads_its_datasheet_reset_value() {
     for &(addr, name, _, reset) in TABLE_16 {
         let got = read_u8(&mut d, addr);
         if got != reset {
-            wrong.push(format!("{name} (0x{addr:02X}): got 0x{got:02X}, datasheet 0x{reset:02X}"));
+            wrong.push(format!(
+                "{name} (0x{addr:02X}): got 0x{got:02X}, datasheet 0x{reset:02X}"
+            ));
         }
     }
-    assert!(wrong.is_empty(), "registers disagree with Table 16:\n  {}", wrong.join("\n  "));
+    assert!(
+        wrong.is_empty(),
+        "registers disagree with Table 16:\n  {}",
+        wrong.join("\n  ")
+    );
 }
 
 #[test]
@@ -109,10 +115,16 @@ fn writable_registers_store_what_a_driver_writes() {
         write_u8(&mut d, addr, 0x5A);
         let got = read_u8(&mut d, addr);
         if got != 0x5A {
-            lost.push(format!("{name} (0x{addr:02X}): wrote 0x5A, read 0x{got:02X}"));
+            lost.push(format!(
+                "{name} (0x{addr:02X}): wrote 0x5A, read 0x{got:02X}"
+            ));
         }
     }
-    assert!(lost.is_empty(), "writes did not stick:\n  {}", lost.join("\n  "));
+    assert!(
+        lost.is_empty(),
+        "writes did not stick:\n  {}",
+        lost.join("\n  ")
+    );
 }
 
 #[test]
@@ -135,7 +147,11 @@ fn read_only_registers_ignore_writes() {
 fn the_table_covers_every_address_the_datasheet_documents() {
     // Guards the failure where this file quietly shrinks: Table 16 names thirty
     // registers, six of which are the DATAX0..DATAZ1 pair halves excluded above.
-    assert_eq!(TABLE_16.len(), 24, "Table 16 has 30 registers, 6 of them data-pair halves");
+    assert_eq!(
+        TABLE_16.len(),
+        24,
+        "Table 16 has 30 registers, 6 of them data-pair halves"
+    );
 }
 
 #[test]

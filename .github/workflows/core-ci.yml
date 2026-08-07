@@ -236,6 +236,57 @@ jobs:
             echo "::notice title=fmt-autofix push skipped::${BRANCH} moved while this job was running, so the fixup was not pushed. The newer commit has its own fmt-autofix run."
           fi
 
+      # ── FALLBACK when the fixup CANNOT be pushed (fork PR / no PAT) ───────
+      #
+      # WHY THIS EXISTS. The green-skip above was meant to keep a job that has
+      # nothing to do from going red. What it actually did was report SUCCESS
+      # while formatting went unchecked, so unformatted code merged and
+      # `core-integrity` — which runs on push-to-main only — turned main red
+      # instead. On 2026-08-07 `CI_FMT_PAT` was unset and main was red on
+      # `Check Formatting` for seven consecutive pushes; every one of those PRs
+      # showed a green fmt-autofix.
+      #
+      # So the skip is now narrowed to what it always claimed to be: green when
+      # there is genuinely NOTHING TO DO. A PR whose tree is already formatted
+      # still passes with no PAT and no push. Only a PR that is actually
+      # unformatted, on a run that cannot fix it, goes red — and it says which
+      # files and what to type. That is a signal, not noise, so it cannot train
+      # anyone to ignore it.
+      #
+      # Configure `CI_FMT_PAT` (contents:write) and this path stops running at
+      # all: the push branch above handles it silently, as designed.
+      - name: Checkout for the read-only formatting check
+        if: steps.gate.outputs.ok != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust (pinned — must match pr-gate)
+        if: steps.gate.outputs.ok != 'true'
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt
+
+      - name: Verify formatting (cannot push the fixup)
+        if: steps.gate.outputs.ok != 'true'
+        run: |
+          set -euo pipefail
+          cargo fmt --version
+
+          if cargo fmt --all -- --check; then
+            echo "Already formatted — nothing to push, and nothing to fix."
+            echo "### Formatting: clean (checked, not applied)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error title=Unformatted code, and this run cannot fix it::This PR is not rustfmt-clean and the autofix could not be pushed (fork PR, or CI_FMT_PAT is unset). Run 'cargo fmt --all' with the pinned 1.95.0 toolchain and push. Merging as-is turns main red on core-integrity."
+          {
+            echo "### Formatting: FAILED"
+            echo
+            echo 'Run `cargo +1.95.0 fmt --all` and push. The autofix job could not do it for you on this run.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
   # ── PR merge gate (REQUIRED) — target wall clock under ~1 minute ───────────
   # focused clippy/tests only. No firmware builds, no feature-variant
   # recompiles, no coverage/onboarding/arduino matrices (those are nightly).
