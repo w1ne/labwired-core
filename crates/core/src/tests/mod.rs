@@ -43,6 +43,8 @@ pub mod stm32_spi_waveform;
 #[cfg(test)]
 pub mod test_cycles;
 #[cfg(test)]
+pub mod uart_stream_interval_differential;
+#[cfg(test)]
 pub mod walk_starvation_contract;
 #[cfg(test)]
 pub mod yaml_owned_base_contract;

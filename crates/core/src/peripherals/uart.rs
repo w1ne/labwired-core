@@ -757,6 +757,19 @@ pub struct Uart {
     /// [`Uart::force_legacy_walk`].
     #[serde(skip)]
     legacy_walk_forced: bool,
+    /// Bus cycle clock, attached by the registration choke
+    /// (`add_peripheral` / `push_peripheral`). Present ⇒ this UART knows how
+    /// much simulated time passed between two scheduler wakeups and can
+    /// service its RX streams in a catch-up loop instead of demanding one
+    /// wakeup per cycle. `None` (hand-built test buses, or the feature off)
+    /// keeps the exact legacy cadence — the same conservative contract every
+    /// other `attach_cycle_clock` opt-in follows.
+    #[serde(skip)]
+    stream_clock: Option<crate::CycleClock>,
+    /// Cycle at which the RX streams were last serviced. Only meaningful with
+    /// `stream_clock` attached.
+    #[serde(skip)]
+    last_stream_cycle: u64,
 }
 
 impl core::fmt::Debug for Uart {
@@ -809,6 +822,8 @@ impl Uart {
             // Conservative until the bus says otherwise (see `attach_irq_line`).
             irq_wired: true,
             legacy_walk_forced: false,
+            stream_clock: None,
+            last_stream_cycle: 0,
         }
     }
 
@@ -864,6 +879,18 @@ impl Uart {
     /// `tick()` and the scheduler `on_event` so both paths are identical.
     /// Returns `(raise_irq, dma_signals)`.
     fn advance_one_tick(&mut self) -> (bool, Vec<u32>) {
+        self.advance_ticks(1)
+    }
+
+    /// `n` tick-equivalents of work. The DMA-TX signal and the level-triggered
+    /// IRQ answer are per-WAKEUP (they are edge/level state, not accumulators),
+    /// so they are evaluated once; only the RX-stream pacing is replayed `n`
+    /// times. Replaying it — rather than handing a stream one poll carrying
+    /// `n * TICK_US` — is what keeps this refactor byte-exact: the
+    /// [`UartStreamDevice::poll`] contract emits at most ONE byte per call, so
+    /// `n` polls is the only way to produce the `n` bytes the per-cycle path
+    /// would have produced, in the same order.
+    fn advance_ticks(&mut self, n: u32) -> (bool, Vec<u32>) {
         let mut dma_signals = Vec::new();
         if self.dma_tx_pending {
             dma_signals.push(1); // 1 = TX Signal
@@ -875,22 +902,30 @@ impl Uart {
         // 9600 baud that is about 1 byte/ms, which matches the GPS pacing.
         if !self.attached_streams.is_empty() {
             const TICK_US: u32 = 1000;
-            self.elapsed_us = self.elapsed_us.saturating_add(TICK_US);
-            let elapsed = self.elapsed_us;
-            self.elapsed_us = 0; // consumed this tick
+            // One lock for the whole catch-up run, not one per tick-equivalent.
+            // Disjoint field borrows: the guard borrows `rx_buf`, the poll loop
+            // borrows `attached_streams` and `elapsed_us`.
+            let Self {
+                rx_buf,
+                attached_streams,
+                elapsed_us,
+                ..
+            } = self;
+            let mut rx_trace = Vec::new();
+            if let Ok(mut rx_guard) = rx_buf.lock() {
+                for _ in 0..n.max(1) {
+                    *elapsed_us = elapsed_us.saturating_add(TICK_US);
+                    let elapsed = *elapsed_us;
+                    *elapsed_us = 0; // consumed this tick
 
-            let rx_trace = if let Ok(mut rx_guard) = self.rx_buf.lock() {
-                let mut rx_trace = Vec::new();
-                for stream in &mut self.attached_streams {
-                    if let Some(byte) = stream.poll(elapsed) {
-                        rx_guard.push_back(byte);
-                        rx_trace.push(byte);
+                    for stream in attached_streams.iter_mut() {
+                        if let Some(byte) = stream.poll(elapsed) {
+                            rx_guard.push_back(byte);
+                            rx_trace.push(byte);
+                        }
                     }
                 }
-                rx_trace
-            } else {
-                Vec::new()
-            };
+            }
             for byte in rx_trace {
                 self.record_trace("rx", byte);
             }
@@ -1232,6 +1267,14 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
+    /// Opt in to interval-paced RX-stream service. See `on_event` and the
+    /// field docs on `stream_clock`; without this the model keeps waking (and
+    /// pacing) once per cycle.
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        self.last_stream_cycle = clock.now();
+        self.stream_clock = Some(clock);
+    }
+
     /// Join the machine's one bus trace, replacing the private handle this
     /// model was born with. See the `trace` field docs.
     fn attach_bus_trace(&mut self, name: &str, trace: &crate::bus::bus_trace::BusTrace) {
@@ -1261,15 +1304,73 @@ impl crate::Peripheral for Uart {
         &mut self,
         _event_token: u32,
         _sched: &mut crate::sched::EventScheduler,
-        _bus: &mut dyn crate::Bus,
+        bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        let (irq, dma_signals) = self.advance_one_tick();
+        // Service cadence. An attached RX stream used to hold this UART at
+        // `reschedule_delay: 1` for the whole run, which pinned
+        // `plan_cpu_window` to a one-instruction quantum through the
+        // next-event-deadline clamp — so EVERY lab with a GPS, an HC-05, a
+        // modem, an IO-Link peer or a cross-chip UART link ran unbatched, for
+        // a peer that emits at most one byte per tick-equivalent.
+        //
+        // Instead wake once per `peripheral_tick_interval` and replay that many
+        // tick-equivalents (`advance_ticks`). Byte VALUES and ORDER are
+        // identical to the per-cycle path; only the instant they become visible
+        // in the RX buffer is quantised, by at most one interval — the same
+        // bound every other scheduler-driven peripheral on a walk-deleted bus
+        // already carries. A bus that needs cycle-exact delivery reports an
+        // interval of 1 and gets the old cadence back verbatim.
+        //
+        // `Bus::current_cycle` / `Bus::peripheral_tick_interval` only exist
+        // under `event-scheduler`, and so does the widened cadence they feed:
+        // without the feature nothing drives `on_event` at all, so the
+        // featureless arm is the legacy one-tick-per-wakeup path verbatim.
+        #[cfg(feature = "event-scheduler")]
+        let (interval, ticks) = {
+            let interval = if self.stream_clock.is_some() {
+                bus.peripheral_tick_interval().max(1)
+            } else {
+                // No clock attached (hand-built bus): keep the legacy cadence.
+                1
+            };
+            let ticks = if interval > 1 && !self.attached_streams.is_empty() {
+                let now = bus.current_cycle();
+                let elapsed = now.saturating_sub(self.last_stream_cycle);
+                self.last_stream_cycle = now;
+                // Clamp: the first wakeup (and any wakeup delayed past its
+                // deadline, e.g. across an idle fast-forward window) must not
+                // turn into an unbounded poll loop. Bounded at one interval
+                // because that is the cadence we re-arm at.
+                elapsed.clamp(1, u64::from(interval)) as u32
+            } else {
+                1
+            };
+            (interval, ticks)
+        };
+        #[cfg(not(feature = "event-scheduler"))]
+        let (interval, ticks) = {
+            let _ = &bus;
+            (1u32, 1u32)
+        };
+
+        let (irq, dma_signals) = self.advance_ticks(ticks);
         let keep_going = self.has_active_work();
         self.scheduled = keep_going;
+        // Level-triggered IRQ and DMA-TX work keep their exact per-cycle
+        // cadence: those are edge/level answers the machine consumes per
+        // wakeup, not something `advance_ticks` accumulates.
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+        let irq_paced = self.irq_wired && (txeie_set || tcie_set);
+        let delay = if irq_paced || self.dma_tx_pending {
+            1
+        } else {
+            interval.max(1)
+        };
         crate::sched::EventResult {
             raise_own_irq: irq,
             dma_signals,
-            reschedule_delay: keep_going.then_some(1),
+            reschedule_delay: keep_going.then_some(u64::from(delay)),
             ..Default::default()
         }
     }

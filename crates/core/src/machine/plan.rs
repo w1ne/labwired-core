@@ -33,11 +33,28 @@ impl<C: Cpu> Machine<C> {
             .is_some_and(|sec| sec.is_parked_idle());
         let secondary_lockstep = self.cpu_secondary.is_some() && !secondary_parked;
 
-        // SCB presence permanently forces quantum-1 (cycle-accurate push
-        // capture + SYSRESETREQ fidelity). RTC_CNTL only clamps while a
-        // SW_SYS_RST is actually latched — otherwise ESP dual-core would
-        // never leave quantum-1 and WAITI primary batch would be dead code.
-        let reset_fidelity = self.scb_index.is_some() || self.rtc_cntl_reset_pending();
+        // Reset fidelity is enforced by the party that can see the request,
+        // not by pinning the quantum for the life of the bus:
+        //   * SCB (Cortex-M SYSRESETREQ) — the CPU batch loop breaks on the
+        //     instruction that writes AIRCR, via the latch shared by
+        //     `configure_cortex_m` (`CortexM::sysreset_signal`), so the
+        //     boundary drain lands exactly where quantum-1 put it.
+        //   * RTC_CNTL (ESP SW_SYS_RST) — clamps only while a request is
+        //     actually latched; `boundary.rs` steps the dual-core WAITI window
+        //     one instruction at a time and breaks the moment it latches.
+        // `scb_index.is_some()` used to sit here too, and since
+        // `configure_cortex_m` installs an SCB on EVERY Cortex-M bus that
+        // meant every ARM board ran at one instruction per batch forever —
+        // discarding the whole walk-deletion batching win (measured ~16x on
+        // NUCLEO-L476RG, ~9x on NUCLEO-F401RE).
+        //
+        // The other half of that clause's old rationale — "cycle-accurate push
+        // capture" — was already carried elsewhere and needs nothing here:
+        // push-mode capture advances the tap clock per RETIRED INSTRUCTION
+        // inside the batch (`CortexM::step_batch` calls `tap.bump_clock()`
+        // before each `step_internal`), and poll-mode capture has its own
+        // `poll_sampling` arm below.
+        let reset_fidelity = self.rtc_cntl_reset_pending();
 
         // Pending cycle-accurate bus cells and operations require a lifecycle
         // commit after every instruction.

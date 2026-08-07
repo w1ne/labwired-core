@@ -121,12 +121,29 @@ mod logic_capture_differential_tests {
                 "tick={tick_interval}: poll fallback runs one instruction per batch"
             );
             if tick_interval > 1 {
-                // This Cortex-M fixture contains an SCB, so the machine's
-                // permanent reset-fidelity clamp intentionally keeps both
-                // capture modes at one instruction per boundary.
+                // Push capture is genuinely BATCHED now, and the `poll.edges ==
+                // push.edges` assertion above is what proves it stays exact
+                // while batched: the tap clock advances per retired instruction
+                // inside the batch (`CortexM::step_batch` calls
+                // `tap.bump_clock()` before each `step_internal`), so an MMIO
+                // pad write still stamps the cycle it becomes observable at.
+                //
+                // This used to assert `push.batches == push.instructions`. That
+                // was never push capture's own requirement — it was an
+                // incidental consequence of the machine's SCB reset-fidelity
+                // clamp, which pinned EVERY Cortex-M bus to a one-instruction
+                // quantum. With that clamp gone (the reset boundary is now held
+                // by the latch the SCB shares with the core), push capture
+                // collects the batching it was always safe for.
+                assert!(
+                    push.batches < push.instructions,
+                    "tick={tick_interval}: push capture must batch — it needs no                      per-instruction clamp of its own ({} batches for {} instructions)",
+                    push.batches,
+                    push.instructions
+                );
                 assert_eq!(
-                    push.batches, push.instructions,
-                    "tick={tick_interval}: SCB-equipped push capture must remain cycle-accurate"
+                    poll.edges, push.edges,
+                    "tick={tick_interval}: and batching must not cost a single edge"
                 );
             }
         }

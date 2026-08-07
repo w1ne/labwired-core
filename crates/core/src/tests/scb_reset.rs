@@ -122,10 +122,18 @@ mod scb_reset_tests {
             MSP,
             "SP must reload from vector[0] (MSP) after SYSRESETREQ on the batched run path"
         );
-        assert_eq!(
-            m.step_profile().cpu_batches,
-            8,
-            "SCB presence permanently clamps execution to clean reset boundaries"
+        // The two asserts above are the fidelity contract, and they are
+        // unchanged: the reset drains after exactly ONE retired instruction, so
+        // seven post-reset NOPs land the PC at RESET_ADDR + 14 out of an
+        // 8-instruction budget. What changed is only how many CPU batches that
+        // costs. SCB presence used to pin the quantum to 1 for the life of the
+        // bus (8 instructions ⇒ 8 batches); the latch shared with the core now
+        // cuts exactly the batch that retires the AIRCR write, and the seven
+        // NOPs after the reboot come back as one batch.
+        assert!(
+            m.step_profile().cpu_batches < 8,
+            "the run must batch now, not spend one batch per instruction (got {})",
+            m.step_profile().cpu_batches
         );
     }
 
@@ -161,6 +169,83 @@ mod scb_reset_tests {
             m.cpu.get_register(13),
             0x2000_8000,
             "SP must be untouched without a valid reset request"
+        );
+    }
+
+    /// The plan used to pin the CPU quantum to 1 for the whole life of any bus
+    /// carrying an SCB — i.e. every Cortex-M board — purely so a SYSRESETREQ
+    /// could never retire an instruction past its boundary. The quantum is
+    /// batched now, and the boundary is held by the latch `configure_cortex_m`
+    /// shares with the core (`CortexM::sysreset_signal`): a wide batch stops
+    /// dead on the instruction that latched the request.
+    ///
+    /// Asserted at the CPU level because that is where the guarantee lives —
+    /// the machine's run loop keeps going after the reboot, which would only
+    /// obscure the one number that matters here.
+    #[test]
+    fn sysresetreq_cuts_a_wide_cpu_batch_after_one_instruction() {
+        use crate::{Cpu, SimulationConfig};
+
+        let mut bus = crate::bus::SystemBus::new();
+        let (mut cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+
+        const PC: u32 = 0x2000_0000;
+        for i in 0..64u64 {
+            bus.write_u16(PC as u64 + i * 2, 0xBF00).unwrap(); // NOPs
+        }
+        cpu.set_pc(PC);
+        cpu.set_sp(0x2000_8000);
+
+        let config = SimulationConfig::default();
+        assert!(config.batch_mode_enabled, "fixture assumes the batched arm");
+
+        // Baseline: with no request latched, a 64-instruction window is taken
+        // whole — the SCB no longer stands in the way of batching.
+        let clean = cpu.step_batch(&mut bus, &[], &config, 64).unwrap();
+        assert_eq!(clean, 64, "an SCB-equipped core must take the whole window");
+
+        // Now latch SYSRESETREQ through the exact MMIO path firmware uses and
+        // re-offer the same wide window.
+        cpu.set_pc(PC);
+        bus.write_u32(SCB_AIRCR, (0x05FA << 16) | (1 << 2)).unwrap();
+        let cut = cpu.step_batch(&mut bus, &[], &config, 64).unwrap();
+
+        assert_eq!(
+            cut, 1,
+            "a latched SYSRESETREQ must end the batch after one instruction, so \
+             the machine boundary drains the reset exactly where a \
+             one-instruction quantum would have"
+        );
+    }
+
+    /// The batch break must not fire on a bus with no reset request: a plain
+    /// Cortex-M run has to actually collect its multi-instruction window, which
+    /// is the entire point of removing the SCB pin.
+    #[test]
+    fn no_reset_request_leaves_the_window_batched() {
+        use crate::AdvanceRequest;
+
+        let mut bus = crate::bus::SystemBus::new();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        let mut m = Machine::new(cpu, bus);
+        m.config.peripheral_tick_interval = 512;
+        m.bus.config.peripheral_tick_interval = 512;
+
+        const PC: u32 = 0x2000_0000;
+        for i in 0..64u64 {
+            m.bus.write_u16(PC as u64 + i * 2, 0xBF00).unwrap();
+        }
+        m.cpu.set_pc(PC);
+        m.cpu.set_sp(0x2000_8000);
+
+        let report = m.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+        assert_eq!(report.primary_steps, 64, "all 64 NOPs must retire");
+        assert!(
+            report.cpu_batches < 64,
+            "64 NOPs must not cost 64 CPU batches — the SCB pin is gone, so the \
+             plan is free to batch (got {} batches)",
+            report.cpu_batches
         );
     }
 }

@@ -42,10 +42,18 @@ impl SystemBus {
     /// CLI/batch run path would record the op in the FLASH cell but never apply
     /// it (no 0xFF fill, no bank swap, no reset).
     ///
+    /// An attached IO-Link master used to be an arm here. It no longer is: the
+    /// shared `Uart` now replays one `poll` per tick-equivalent when it is
+    /// serviced on a widened interval (`Uart::advance_ticks`), so the master
+    /// sees exactly the poll count per simulated cycle it saw at interval 1 and
+    /// its tick-counted startup schedule keeps its original length. Pinning the
+    /// whole machine to one instruction per batch for it was costing every lab
+    /// on the bus, not just the IO-Link ones.
+    ///
     /// HOT: called per batch plan (`machine/plan.rs`), per interpreted step
     /// (`cpu/riscv.rs`) and in the idle fast-forward check (`lib.rs`), so every
-    /// clause must be O(1). Two of the three read bools cached at bus
-    /// build/mutation (`iolink_master_attached`, `flash_models_ops`); the
+    /// clause must be O(1). `flash_models_ops` is a bool cached at bus
+    /// build/mutation; the
     /// HC-SR04 clause is deliberately NOT cached because it is run-dynamic —
     /// `hcsr04_event_scheduled` gates on `config.peripheral_tick_interval`,
     /// which the wasm engine (`set_peripheral_tick_interval`) and the
@@ -54,7 +62,7 @@ impl SystemBus {
     #[inline]
     pub fn requires_cycle_accurate(&self) -> bool {
         let hcsr04_needs_cycle_accurate = !self.hcsr04.is_empty() && !self.hcsr04_event_scheduled();
-        hcsr04_needs_cycle_accurate || self.has_iolink_master() || self.flash_models_ops
+        hcsr04_needs_cycle_accurate || self.flash_models_ops
     }
 
     /// The largest `peripheral_tick_interval` this bus can run at without
@@ -84,7 +92,7 @@ impl SystemBus {
         #[cfg(feature = "event-scheduler")]
         {
             let hcsr04_forced_legacy = !self.hcsr04.is_empty() && self.hcsr04_scheduling_disabled;
-            if self.legacy_walk_disabled && !self.has_iolink_master() && !hcsr04_forced_legacy {
+            if self.legacy_walk_disabled && !hcsr04_forced_legacy {
                 return RECOMMENDED_TICK_INTERVAL;
             }
         }
@@ -184,48 +192,5 @@ impl SystemBus {
         self.gpio_devices
             .iter()
             .all(|d| d.is_level_driven_on_stimulus())
-    }
-
-    /// True when an IO-Link master peer is attached to any UART. The master is
-    /// paced one byte per UART tick and runs a deterministic, tick-counted
-    /// startup schedule (wake-up → IDLE → OPERATE → cyclic) with a large
-    /// inter-frame gap. Under instruction batching the UART would tick only once
-    /// per ~10k-instruction batch, stretching the handshake to hundreds of
-    /// millions of steps; ticking per instruction keeps it well within the
-    /// runner's step budget.
-    ///
-    /// O(1): reads the `iolink_master_attached` bool cached at every
-    /// peripheral-set mutation (`rebuild_peripheral_ranges`) and at the
-    /// post-build stream seam (`attach_uart_stream_by_id`); the nested scan
-    /// itself lives in [`Self::scan_iolink_master`]. This is NOT a
-    /// once-at-setup predicate — an earlier doc comment claimed so and was
-    /// wrong: `requires_cycle_accurate` calls it per batch plan
-    /// (`machine/plan.rs`), per step (`cpu/riscv.rs`) and in the idle
-    /// fast-forward check (`lib.rs`), so the scan ran millions of times per
-    /// run and dominated the profile of buses with no IO-Link at all.
-    #[inline]
-    pub(crate) fn has_iolink_master(&self) -> bool {
-        self.iolink_master_attached
-    }
-
-    /// The authoritative nested scan behind `iolink_master_attached`. Only the
-    /// cache-refresh points call this; every hot-path reader goes through
-    /// [`Self::has_iolink_master`].
-    pub(crate) fn scan_iolink_master(&self) -> bool {
-        use crate::peripherals::components::IolinkMaster;
-        for p in &self.peripherals {
-            let Some(any) = p.dev.as_any() else { continue };
-            let Some(uart) = any.downcast_ref::<Uart>() else {
-                continue;
-            };
-            for stream in &uart.attached_streams {
-                if let Some(sa) = stream.as_any() {
-                    if sa.downcast_ref::<IolinkMaster>().is_some() {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
     }
 }
