@@ -181,6 +181,76 @@ fn adc_channel_count(bus: &mut SystemBus, connection: &str, channel: u8) -> u16 
         {
             return sens.channel_input_count(channel);
         }
+        if let Some(adc) =
+            any.downcast_mut::<labwired_core::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc>()
+        {
+            return adc.channel_input_count(channel);
+        }
+        if let Some(adc) =
+            any.downcast_mut::<labwired_core::peripherals::esp32::sar_adc::Esp32SarAdc>()
+        {
+            return adc.channel_input_count(channel);
+        }
     }
     panic!("no ADC controller found for connection '{connection}'");
+}
+
+/// ESP32-C3 BLE-Pong style: a Sharp GP2Y0A21 on `apb_saradc` channel 1 must
+/// attach and move the SAR oneshot result when `distance` is driven. Before
+/// C3 inject support, bus config failed with
+/// `connection 'adc1' is not a ADC peripheral` (or attach refused seed).
+#[test]
+fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
+    let chip_path = root("configs/chips/esp32c3.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load esp32c3");
+    let mut config = std::collections::HashMap::new();
+    config.insert("channel".to_string(), serde_yaml::Value::from(1u64));
+    let manifest = SystemManifest {
+        parts: Vec::new(),
+        cosim_models: Vec::new(),
+        motor_models: Vec::new(),
+        walk_deleted: Some(false),
+        schema_version: "1.0".to_string(),
+        name: "c3-gp2y".to_string(),
+        chip: chip_path.to_string_lossy().to_string(),
+        external_devices: vec![labwired_config::ExternalDevice {
+            id: "vlA".to_string(),
+            r#type: "gp2y0a21".to_string(),
+            // Intentional legacy wrong name: playground used to emit `adc1`.
+            // Seed must still find `apb_saradc` via the bus-wide fallback.
+            connection: "adc1".to_string(),
+            channel: None,
+            route: Default::default(),
+            config,
+        }],
+        board_io: vec![],
+        debug_uart: None,
+        wifi_ap: None,
+        peripherals: vec![],
+        memory_overrides: Default::default(),
+    };
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus with gp2y on C3");
+
+    let inputs = bus.list_inputs();
+    assert!(
+        inputs
+            .iter()
+            .any(|(o, ch)| o == "vlA" && ch.key == "distance"),
+        "distance channel missing: {inputs:?}"
+    );
+
+    // 100 mm → datasheet 3100 mV → ~3847 counts on 12-bit / 3.3 V.
+    bus.set_input(Some("vlA"), "distance", 100.0)
+        .expect("set near");
+    let near = adc_channel_count(&mut bus, "apb_saradc", 1);
+    assert!(
+        near > 3500,
+        "near distance should be high counts, got {near}"
+    );
+
+    bus.set_input(Some("vlA"), "distance", 800.0)
+        .expect("set far");
+    let far = adc_channel_count(&mut bus, "apb_saradc", 1);
+    assert!(far < 1000, "far distance should be low counts, got {far}");
+    assert!(near > far, "near={near} must exceed far={far}");
 }

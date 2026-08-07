@@ -71,10 +71,14 @@ const SAMPLE_BIT_MASK: u32 = 0x3;
 
 /// Deterministic fixed 12-bit source code for `channel`. The ramp is injective
 /// over the ESP32's ADC channel range (0..11) so a reader can prove the result
-/// tracks the SELECTED channel, not a constant.
+/// tracks the SELECTED channel, not a constant. Used when no external analog
+/// source has injected a level via [`Esp32SarAdc::set_channel_input`].
 fn channel_sample(channel: u32) -> u32 {
     (0x100 + channel * 0x111) & 0x0FFF
 }
+
+const NO_INJECT: u16 = 0xFFFF;
+const CHANNEL_SLOTS: usize = 16;
 
 /// One SAR unit's latched conversion state.
 #[derive(Default)]
@@ -91,6 +95,8 @@ pub struct Esp32SarAdc {
     regs: Vec<u32>,
     sar1: SarUnit,
     sar2: SarUnit,
+    /// Per-channel 12-bit counts from external analog sources (kits).
+    channel_inputs: [u16; CHANNEL_SLOTS],
 }
 
 impl Default for Esp32SarAdc {
@@ -120,7 +126,25 @@ impl Esp32SarAdc {
             regs,
             sar1: SarUnit::default(),
             sar2: SarUnit::default(),
+            channel_inputs: [NO_INJECT; CHANNEL_SLOTS],
         }
+    }
+
+    /// Inject a millivolt reading for a SAR channel. Next conversion on that
+    /// channel returns the equivalent 12-bit count (3.3 V Vref). Used by
+    /// [`SystemBus::seed_adc_channel`] for analog kits on classic ESP32.
+    pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
+        if (channel as usize) < self.channel_inputs.len() {
+            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
+            self.channel_inputs[channel as usize] = count;
+        }
+    }
+
+    pub fn channel_input_count(&self, channel: u8) -> u16 {
+        self.channel_inputs
+            .get(channel as usize)
+            .copied()
+            .unwrap_or(NO_INJECT)
     }
 
     fn reg(&self, off: u64) -> u32 {
@@ -129,14 +153,21 @@ impl Esp32SarAdc {
 
     /// Run a conversion for the given `start_word` and resolution, returning the
     /// latched unit state, or `None` if no channel was selected.
-    fn convert(start_word: u32, width_bits: u32) -> Option<SarUnit> {
+    fn convert(&self, start_word: u32, width_bits: u32) -> Option<SarUnit> {
         let en_pad = (start_word >> EN_PAD_SHIFT) & EN_PAD_MASK;
         if en_pad == 0 {
             return None;
         }
         // The IDF selects exactly one channel via a one-hot EN_PAD bitmap.
         let channel = en_pad.trailing_zeros();
-        let full = channel_sample(channel);
+        let full = {
+            let idx = channel as usize;
+            if idx < self.channel_inputs.len() && self.channel_inputs[idx] != NO_INJECT {
+                self.channel_inputs[idx] as u32
+            } else {
+                channel_sample(channel)
+            }
+        };
         // Faithful lower-resolution SAR: drop the low (12 - width) bits.
         let data = full >> (12 - width_bits);
         Some(SarUnit {
@@ -187,16 +218,20 @@ impl Peripheral for Esp32SarAdc {
                     *slot = value & MEAS_START_WRITABLE;
                 }
                 if value & MEAS_START_SAR != 0 {
-                    let (ctrl_off, unit) = if off == SAR_MEAS_START1 {
-                        (SAR_READ_CTRL, &mut self.sar1)
+                    let ctrl_off = if off == SAR_MEAS_START1 {
+                        SAR_READ_CTRL
                     } else {
-                        (SAR_READ_CTRL2, &mut self.sar2)
+                        SAR_READ_CTRL2
                     };
                     let bits = 9
                         + ((self.regs[(ctrl_off / 4) as usize] >> SAMPLE_BIT_SHIFT)
                             & SAMPLE_BIT_MASK);
-                    if let Some(converted) = Self::convert(value, bits) {
-                        *unit = converted;
+                    if let Some(converted) = self.convert(value, bits) {
+                        if off == SAR_MEAS_START1 {
+                            self.sar1 = converted;
+                        } else {
+                            self.sar2 = converted;
+                        }
                     }
                 }
             }

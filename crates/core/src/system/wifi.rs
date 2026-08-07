@@ -11,25 +11,17 @@
 //!     second real MAC lands, teach THIS function and every host — CLI `test`,
 //!     CLI `run`, the browser ctors — gets it for free, no drift.
 //!
-//! Absent a `wifi_ap` in the manifest both helpers are inert, so non-WiFi boots
-//! stay byte-identical to before.
+//! Absent a `wifi_ap` in the manifest this is inert, so non-WiFi boots stay
+//! byte-identical to before.
+//!
+//! The station's eFuse MAC is NOT seeded here. It is not a property of the AP —
+//! it is the die's factory identity, which every ESP32 has whether or not a
+//! WiFi lab is asking. See [`crate::system::efuse`].
 
 use crate::bus::SystemBus;
 use crate::peripherals::esp32c3::virtual_wifi::{ApConfig, VirtualWifiBus};
 use crate::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac;
 use labwired_config::SystemManifest;
-
-/// Station eFuse MAC seeded when a `wifi_ap` is on the diagram. A zero eFuse MAC
-/// associates but does NOT stay associated (hard-won C3 WiFi rule), so every
-/// boot path that can host WiFi seeds the same station MAC. Absent `wifi_ap` ⇒
-/// `None` (unchanged non-WiFi boot). Pass the result as the `build_*` /
-/// `RomBootOpts` eFuse MAC.
-pub fn wifi_ap_station_mac(manifest: &SystemManifest) -> Option<[u8; 6]> {
-    manifest
-        .wifi_ap
-        .as_ref()
-        .map(|_| [0x02, 0x00, 0x00, 0x00, 0x00, 0x02])
-}
 
 /// If the manifest declares a `wifi_ap`, build a per-lab virtual-WiFi medium from
 /// its config and attach every real WiFi MAC on the bus to it, keeping the MAC
@@ -128,15 +120,6 @@ mod tests {
             !mac_needs_bus_tick(&mut bus),
             "no wifi_ap ⇒ MAC stays idle (honest 'no AP present')"
         );
-    }
-
-    #[test]
-    fn station_mac_seeded_only_with_wifi_ap() {
-        assert_eq!(
-            wifi_ap_station_mac(&manifest(true)),
-            Some([0x02, 0x00, 0x00, 0x00, 0x00, 0x02])
-        );
-        assert_eq!(wifi_ap_station_mac(&manifest(false)), None);
     }
 
     #[test]

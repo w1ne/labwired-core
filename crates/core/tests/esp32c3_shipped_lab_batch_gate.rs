@@ -179,7 +179,10 @@ fn build_lab(chip_yaml: &str, system_yaml: &str, flash_path: &PathBuf) -> Lab {
         bus,
         flash,
         RomBootOpts {
-            efuse_mac: None,
+            // A fresh browser tab mints its first die at FIRST_FACTORY_MAC;
+            // pin it so a batch of labs in ONE process each boot the die the
+            // tab would have given them rather than the next one in sequence.
+            pinned_efuse_mac: Some(labwired_core::system::efuse::FIRST_FACTORY_MAC),
             usb_serial_sink: None,
         },
         |c| c,

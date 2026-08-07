@@ -100,10 +100,17 @@ const RESET_REGS: &[(u64, u32)] = &[
 
 /// Deterministic fixed 12-bit source code for `channel`. The ramp is injective
 /// over the C3's five ADC1 channels so a reader can prove the result tracks the
-/// SELECTED channel, not a constant.
+/// SELECTED channel, not a constant. Used when no external analog source has
+/// injected a level via [`Esp32c3ApbSarAdc::set_channel_input`].
 fn channel_sample(channel: u32) -> u32 {
     (0x100 + channel * 0x111) & 0x0FFF
 }
+
+/// Sentinel: no external analog injection for this channel (use `channel_sample`).
+const NO_INJECT: u16 = 0xFFFF;
+
+/// ADC1 channels on the C3: GPIO0..GPIO4 → CH0..CH4. Room for headroom.
+const ADC1_CHANNEL_SLOTS: usize = 16;
 
 pub struct Esp32c3ApbSarAdc {
     /// Interrupt-matrix source ID (`APB_SARADC` = 43 on the C3).
@@ -116,6 +123,10 @@ pub struct Esp32c3ApbSarAdc {
     /// Latched conversion results for SAR1 / SAR2 (the `*DATA_STATUS` regs).
     sar1_data: u32,
     sar2_data: u32,
+    /// Per-channel 12-bit counts from external analog sources (GP2Y, pot, …).
+    /// `NO_INJECT` means the fixed ramp still applies. Written by
+    /// [`SystemBus::seed_adc_channel`] via [`Self::set_channel_input`].
+    channel_inputs: [u16; ADC1_CHANNEL_SLOTS],
     /// Bus-published cycle clock (walk-free plan). `Some` once
     /// `SystemBus::push_peripheral`/`add_peripheral` attaches it. Its presence
     /// (under the `event-scheduler` feature) flips the model onto the event
@@ -164,6 +175,7 @@ impl Esp32c3ApbSarAdc {
             int_raw: Cell::new(0),
             sar1_data: 0,
             sar2_data: 0,
+            channel_inputs: [NO_INJECT; ADC1_CHANNEL_SLOTS],
             clock: None,
         }
     }
@@ -174,6 +186,35 @@ impl Esp32c3ApbSarAdc {
     /// the same bus assembly (mirrors `Esp32c3I2c::force_legacy_walk`).
     pub fn force_legacy_walk(&mut self) {
         self.clock = None;
+    }
+
+    /// Inject a millivolt reading for an ADC1 channel (CH0..4 = GPIO0..4).
+    /// The next oneshot that selects this channel returns the equivalent
+    /// 12-bit count (3.3 V Vref) instead of the fixed ramp placeholder.
+    /// This is the seam [`SystemBus::seed_adc_channel`] uses for analog kits
+    /// (GP2Y0A21, pot, NTC, …) on the C3.
+    pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
+        if (channel as usize) < self.channel_inputs.len() {
+            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
+            self.channel_inputs[channel as usize] = count;
+        }
+    }
+
+    /// Read back the injected 12-bit count (`NO_INJECT` = nothing injected).
+    pub fn channel_input_count(&self, channel: u8) -> u16 {
+        self.channel_inputs
+            .get(channel as usize)
+            .copied()
+            .unwrap_or(NO_INJECT)
+    }
+
+    fn sample_for_channel(&self, channel: u32) -> u32 {
+        let idx = channel as usize;
+        if idx < self.channel_inputs.len() && self.channel_inputs[idx] != NO_INJECT {
+            self.channel_inputs[idx] as u32
+        } else {
+            channel_sample(channel)
+        }
     }
 
     fn int_st(&self) -> u32 {
@@ -188,7 +229,8 @@ impl Esp32c3ApbSarAdc {
     /// channel-dependent packed result and raise the matching DONE bit.
     fn convert(&mut self, sample_word: u32) {
         let channel = (sample_word >> ONETIME_CHANNEL_SHIFT) & ONETIME_CHANNEL_MASK;
-        let packed = ((channel << DATA_CHANNEL_SHIFT) | channel_sample(channel)) & DATA_MASK;
+        let code = self.sample_for_channel(channel);
+        let packed = ((channel << DATA_CHANNEL_SHIFT) | code) & DATA_MASK;
         let mut raw = self.int_raw.get();
         if sample_word & SAR1_ONETIME_SAMPLE != 0 {
             self.sar1_data = packed;
@@ -356,6 +398,22 @@ mod tests {
             0,
             "ONETIME_START self-clears"
         );
+    }
+
+    #[test]
+    fn set_channel_input_overrides_the_fixed_ramp_on_oneshot() {
+        let mut a = Esp32c3ApbSarAdc::new(APB_SARADC_INTR_SOURCE_ID);
+        // 1650 mV ≈ half scale on 3.3 V / 12-bit.
+        a.set_channel_input(1, 1650);
+        assert_eq!(a.channel_input_count(1), ((1650u32 * 4095) / 3300) as u16);
+        a.write_u32(ONETIME_SAMPLE, sar1_oneshot(1)).unwrap();
+        let data = a.read_u32(SAR1DATA_STATUS).unwrap() & 0x0FFF;
+        let expected = (1650u32 * 4095) / 3300;
+        assert_eq!(data, expected, "oneshot must return the injected count");
+        // Un-injected channel still uses the ramp.
+        a.write_u32(ONETIME_SAMPLE, sar1_oneshot(2)).unwrap();
+        let ramp = a.read_u32(SAR1DATA_STATUS).unwrap() & 0x0FFF;
+        assert_eq!(ramp, channel_sample(2));
     }
 
     #[test]

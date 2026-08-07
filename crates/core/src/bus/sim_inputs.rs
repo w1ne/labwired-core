@@ -34,14 +34,17 @@ impl SystemBus {
     ///
     /// Several unrelated ADC controller models exist
     /// ([`crate::peripherals::adc::Adc`] for STM32-class parts, `Esp32s3Sens`
-    /// for the ESP32-S3 SAR ADC, `Rp2040Adc` for the RP2040), so this is the
-    /// single choke point that hides which one a given system.yaml wired up —
-    /// the analog kits are controller-agnostic, exactly as the I²C kits are via
+    /// for the ESP32-S3 SAR ADC, `Esp32c3ApbSarAdc` for the C3, `Esp32SarAdc`
+    /// for classic ESP32, `Rp2040Adc` for the RP2040), so this is the single
+    /// choke point that hides which one a given system.yaml wired up — the
+    /// analog kits are controller-agnostic, exactly as the I²C kits are via
     /// `attach_i2c_slave_with_route`.
     ///
     /// Falls back to a bus scan when `connection` names no ADC: S3 manifests
     /// declare `connection: "sar_adc_s3"` while the peripheral is registered as
-    /// `sens_s3`, and that mismatch predates this path.
+    /// `sens_s3`, and that mismatch predates this path. The same fallback
+    /// covers older playground emits that still say `adc1` on a C3 (real id is
+    /// `apb_saradc`).
     pub(crate) fn seed_adc_channel(
         &mut self,
         connection: &str,
@@ -71,6 +74,18 @@ impl SystemBus {
         }
         if let Some(sens) = any.downcast_mut::<crate::peripherals::esp32s3::sens::Esp32s3Sens>() {
             sens.set_channel_input(channel, millivolts);
+            return true;
+        }
+        if let Some(adc) =
+            any.downcast_mut::<crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc>()
+        {
+            // ESP32-C3 oneshot path (IDF adc_oneshot / Arduino analogRead).
+            adc.set_channel_input(channel, millivolts);
+            return true;
+        }
+        if let Some(adc) = any.downcast_mut::<crate::peripherals::esp32::sar_adc::Esp32SarAdc>() {
+            // Classic ESP32 SENS SAR ADC.
+            adc.set_channel_input(channel, millivolts);
             return true;
         }
         if let Some(adc) = any.downcast_mut::<crate::peripherals::rp2040::adc::Rp2040Adc>() {

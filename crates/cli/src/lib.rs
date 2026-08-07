@@ -861,13 +861,36 @@ fn rom_boot_flash_self_key() -> Option<(&'static str, [u8; 32])> {
     Some((chip, out))
 }
 
-/// Build an ESP32-C3 ROM-boot machine; `efuse_mac` programs a distinct factory
-/// MAC so multiple instances are distinguishable on the shared VirtualWifi air.
+/// The factory MAC a built C3 die actually carries, read back from its eFuse
+/// MAC words (`EFUSE_RD_MAC_SPI_SYS_0/1`). Reported rather than assumed, so a
+/// dual-node banner cannot claim an address the die does not have.
+fn format_efuse_mac(m: &labwired_core::Machine<labwired_core::cpu::RiscV>) -> String {
+    use labwired_core::Bus;
+    let lo = m.bus.read_u32(0x6000_8844).unwrap_or(0);
+    let hi = m.bus.read_u32(0x6000_8848).unwrap_or(0);
+    let mac = [
+        (hi >> 8) as u8,
+        hi as u8,
+        (lo >> 24) as u8,
+        (lo >> 16) as u8,
+        (lo >> 8) as u8,
+        lo as u8,
+    ];
+    mac.iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+/// Build an ESP32-C3 ROM-boot machine. `pinned_efuse_mac` fixes this die's
+/// factory MAC; `None` mints a new one, so multiple instances are
+/// distinguishable on the shared VirtualWifi/BLE air without the caller
+/// arranging it.
 pub(crate) fn build_c3_rom_boot_machine(
     bus: labwired_core::bus::SystemBus,
-    efuse_mac: Option<[u8; 6]>,
+    pinned_efuse_mac: Option<[u8; 6]>,
 ) -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
-    build_c3_rom_boot_machine_from(bus, efuse_mac, "LABWIRED_ESP32C3_FLASH")
+    build_c3_rom_boot_machine_from(bus, pinned_efuse_mac, "LABWIRED_ESP32C3_FLASH")
 }
 
 /// As [`build_c3_rom_boot_machine`], but the flash image comes from the named
@@ -876,7 +899,7 @@ pub(crate) fn build_c3_rom_boot_machine(
 /// cannot express.
 pub(crate) fn build_c3_rom_boot_machine_from(
     mut bus: labwired_core::bus::SystemBus,
-    efuse_mac: Option<[u8; 6]>,
+    pinned_efuse_mac: Option<[u8; 6]>,
     flash_env: &str,
 ) -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
     // ── Faithful RISC-V ROM boot (ESP32-C3) ──────────────────────────
@@ -944,7 +967,7 @@ pub(crate) fn build_c3_rom_boot_machine_from(
         bus,
         flash_bytes,
         labwired_core::boot::esp32c3_rom::RomBootOpts {
-            efuse_mac,
+            pinned_efuse_mac,
             ..Default::default()
         },
         // Native keeps the concrete RiscV CPU (the wasm path boxes it).
@@ -966,14 +989,10 @@ fn run_two_c3_ble(
 ) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
-    eprintln!(
-        "[ble] two-C3 BLE over the shared air: A=02:00:00:00:00:02 (LABWIRED_ESP32C3_FLASH), \
-         B=02:00:00:00:00:03 (LABWIRED_ESP32C3_FLASH_B)"
-    );
-
-    let build = |mac: [u8; 6],
-                 env: &str|
-     -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
+    // Two nodes = two dies. Nothing is arranged here: leaving the factory MAC
+    // unpinned makes the builder mint one identity per node, which is the same
+    // thing that separates two MCUs on a browser canvas.
+    let build = |env: &str| -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
         let bus = match SystemBus::from_config_with_plugins(chip, manifest, plugins) {
             Ok(b) => b,
             Err(e) => {
@@ -981,16 +1000,22 @@ fn run_two_c3_ble(
                 return Err(ExitCode::from(EXIT_CONFIG_ERROR));
             }
         };
-        build_c3_rom_boot_machine_from(bus, Some(mac), env)
+        build_c3_rom_boot_machine_from(bus, None, env)
     };
-    let mut a = match build([0x02, 0, 0, 0, 0, 0x02], "LABWIRED_ESP32C3_FLASH") {
+    let mut a = match build("LABWIRED_ESP32C3_FLASH") {
         Ok(m) => m,
         Err(c) => return c,
     };
-    let mut b = match build([0x02, 0, 0, 0, 0, 0x03], "LABWIRED_ESP32C3_FLASH_B") {
+    let mut b = match build("LABWIRED_ESP32C3_FLASH_B") {
         Ok(m) => m,
         Err(c) => return c,
     };
+    eprintln!(
+        "[ble] two-C3 BLE over the shared air: A={} (LABWIRED_ESP32C3_FLASH), \
+         B={} (LABWIRED_ESP32C3_FLASH_B)",
+        format_efuse_mac(&a),
+        format_efuse_mac(&b)
+    );
     // Give each node its own serial capture and silence the shared console
     // echo: two machines writing stdout byte-by-byte interleave into an
     // unreadable mess, and the whole point of this run is reading both.
@@ -1070,29 +1095,31 @@ fn run_two_c3_wifi(
     use labwired_core::peripherals::esp32c3::{virtual_wifi, wifi_mac::Esp32c3WifiMac};
 
     virtual_wifi::reset();
-    eprintln!(
-        "[dual] two-C3 WiFi over shared VirtualWifi: A=02:00:00:00:00:02, B=02:00:00:00:00:03"
-    );
 
-    let build =
-        |mac: [u8; 6]| -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
-            let bus = match SystemBus::from_config_with_plugins(chip, manifest, plugins) {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("error: failed to build system bus: {e:#}");
-                    return Err(ExitCode::from(EXIT_CONFIG_ERROR));
-                }
-            };
-            build_c3_rom_boot_machine(bus, Some(mac))
+    // Two stations = two dies; the builder mints an identity for each.
+    let build = || -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
+        let bus = match SystemBus::from_config_with_plugins(chip, manifest, plugins) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("error: failed to build system bus: {e:#}");
+                return Err(ExitCode::from(EXIT_CONFIG_ERROR));
+            }
         };
-    let mut a = match build([0x02, 0, 0, 0, 0, 0x02]) {
+        build_c3_rom_boot_machine(bus, None)
+    };
+    let mut a = match build() {
         Ok(m) => m,
         Err(c) => return c,
     };
-    let mut b = match build([0x02, 0, 0, 0, 0, 0x03]) {
+    let mut b = match build() {
         Ok(m) => m,
         Err(c) => return c,
     };
+    eprintln!(
+        "[dual] two-C3 WiFi over shared VirtualWifi: A={}, B={}",
+        format_efuse_mac(&a),
+        format_efuse_mac(&b)
+    );
     // Attach each station's WiFi MAC to the medium (medium mode), and label each
     // station's UART output so the shared stdout is readable.
     for (m, label) in [(&mut a, "[A] "), (&mut b, "[B] ")] {
@@ -1145,7 +1172,6 @@ pub(crate) fn run_one_c3_wifi(
     use labwired_core::peripherals::esp32c3::{virtual_wifi, wifi_mac::Esp32c3WifiMac};
 
     virtual_wifi::reset();
-    eprintln!("[solo] one C3 on VirtualWifi: STA=02:00:00:00:00:02 (AP hosts DHCP + HTTP)");
 
     // If the manifest declares a `wifi_ap`, host a medium with that config;
     // otherwise the MACs bind the process-global default AP (byte-identical to
@@ -1173,10 +1199,14 @@ pub(crate) fn run_one_c3_wifi(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-    let mut m = match build_c3_rom_boot_machine(bus, Some([0x02, 0, 0, 0, 0, 0x02])) {
+    let mut m = match build_c3_rom_boot_machine(bus, None) {
         Ok(m) => m,
         Err(c) => return c,
     };
+    eprintln!(
+        "[solo] one C3 on VirtualWifi: STA={} (AP hosts DHCP + HTTP)",
+        format_efuse_mac(&m)
+    );
     for p in m.bus.peripherals.iter_mut() {
         let Some(any) = p.dev.as_any_mut() else {
             continue;
@@ -2150,18 +2180,32 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             let pc = machine.cpu.get_pc();
             let reached = cap.target_pc == Some(pc) || (0x4200_0000..0x4400_0000).contains(&pc);
             if reached {
-                let mut snap = machine.take_runtime_snapshot();
-                snap.set_self_key(cap.chip, cap.fw_sha);
-                if let Some(parent) = cap.path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                match std::fs::write(&cap.path, snap.to_bytes()) {
-                    Ok(()) => info!(
-                        "capture-app-entry: snapshot written to {:?} at app-entry pc=0x{pc:08x} \
-                         (cold-boot step {step})",
+                // Same reason as `snapshot capture`: the trait default is now a
+                // non-panicking EMPTY blob, so an ungated call would write a
+                // resume file that restores no CPU state and still looks valid.
+                // Say so and write nothing. NOT a `continue` — the rest of this
+                // loop body is what actually advances the machine, so skipping
+                // it would hang the run instead of just declining the capture.
+                if !machine.cpu.supports_runtime_snapshot() {
+                    error!(
+                        "capture-app-entry: this CPU has no runtime-snapshot implementation \
+                         (supported: RISC-V, Xtensa LX7) — no snapshot written to {:?}",
                         cap.path
-                    ),
-                    Err(e) => error!("capture-app-entry: failed to write {:?}: {e}", cap.path),
+                    );
+                } else {
+                    let mut snap = machine.take_runtime_snapshot();
+                    snap.set_self_key(cap.chip, cap.fw_sha);
+                    if let Some(parent) = cap.path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    match std::fs::write(&cap.path, snap.to_bytes()) {
+                        Ok(()) => info!(
+                            "capture-app-entry: snapshot written to {:?} at app-entry pc=0x{pc:08x} \
+                             (cold-boot step {step})",
+                            cap.path
+                        ),
+                        Err(e) => error!("capture-app-entry: failed to write {:?}: {e}", cap.path),
+                    }
                 }
                 // Capture once; keep running so the cold invocation still
                 // produces the normal serial/cycle evidence.

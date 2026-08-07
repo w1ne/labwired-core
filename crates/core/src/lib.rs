@@ -298,11 +298,29 @@ pub trait Cpu: Send {
     fn snapshot(&self) -> snapshot::CpuSnapshot;
     fn apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot);
 
+    /// Whether this CPU can produce a runtime snapshot. FALSE by default:
+    /// only the arches that override `runtime_snapshot` say yes.
+    ///
+    /// Ask this BEFORE calling `runtime_snapshot`. It exists because the old
+    /// default was `unimplemented!()`, and in wasm a Rust panic lowers to an
+    /// `unreachable` TRAP. A trap runs no destructors, so wasm-bindgen's
+    /// borrow guard leaks and the WasmSimulator stays borrowed forever —
+    /// every later call, `step_batch` included, then fails with "recursive
+    /// use of an object". One snapshot attempt on an unsupported CPU bricked
+    /// the whole engine, which is exactly how every Cortex-M lab died a few
+    /// seconds into a run.
+    fn supports_runtime_snapshot(&self) -> bool {
+        false
+    }
+
     /// Full mid-flight CPU state for binary runtime snapshots. Returns the
     /// arch tag + an opaque blob the matching CPU type knows how to parse.
-    /// Default panics — every concrete `Cpu` impl must override.
+    ///
+    /// Overridden by the arches that support it; the default answers empty
+    /// rather than panicking, so a stray call can never trap the module. Gate
+    /// real callers on `supports_runtime_snapshot()`.
     fn runtime_snapshot(&self) -> (runtime_snapshot::CpuKind, Vec<u8>) {
-        unimplemented!("runtime_snapshot not implemented for this Cpu")
+        (runtime_snapshot::CpuKind::ArmCortexM, Vec::new())
     }
 
     /// Apply a previously-taken runtime snapshot. Default no-op so
@@ -435,6 +453,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn apply_snapshot(&mut self, s: &snapshot::CpuSnapshot) {
         (**self).apply_snapshot(s)
+    }
+    fn supports_runtime_snapshot(&self) -> bool {
+        (**self).supports_runtime_snapshot()
     }
     fn runtime_snapshot(&self) -> (runtime_snapshot::CpuKind, Vec<u8>) {
         (**self).runtime_snapshot()
