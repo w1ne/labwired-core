@@ -288,6 +288,9 @@ jobs:
       # Full history required: generate_validation_status.py uses
       # `git log -1 --format=%cI -- <model>` for drift. Shallow checkout
       # makes every path resolve to HEAD's date → false DRIFT failures.
+      # The generator now refuses to run at all on a truncated history rather
+      # than emitting wrong dates, so lowering this turns the whole job red with
+      # an explanation instead of quietly producing a bad document.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -327,11 +330,20 @@ jobs:
       # with nothing executing them — scripts/ci/test_board_matrix.py has never
       # been run by any workflow — so this step names the files it runs rather
       # than discovering them, and grows a line when a suite is added.
+      #
+      # ADDING A TEST FILE UNDER scripts/? Add it to the pytest line below or it
+      # will never run. test_generate_validation_status.py covers the
+      # incomplete-history guard, which is precisely a "this ran and told you
+      # nothing" bug; a test for it that nothing executes would be the same bug
+      # one level up. It needs pyyaml, installed by the step above.
       - name: Perf gate — every chip covered or waived
         run: |
           python -m pip install --quiet pytest
           python3 scripts/perf/board_perf.py --check-coverage
-          python3 -m pytest -q scripts/perf/test_board_perf.py scripts/ci/test_board_matrix.py
+          python3 -m pytest -q \
+            scripts/perf/test_board_perf.py \
+            scripts/ci/test_board_matrix.py \
+            scripts/test_generate_validation_status.py
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the

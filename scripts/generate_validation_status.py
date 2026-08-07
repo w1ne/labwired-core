@@ -43,7 +43,9 @@ Coded (non-declarative) peripheral impls cannot be derived from the yaml and are
 still listed by hand; this audit closes the mechanical half of the hole.
 
 Needs PyYAML (pip install pyyaml) and a full-history checkout (fetch-depth: 0)
-so `git log -- <path>` resolves dates.
+so `git log -- <path>` resolves dates. That requirement is ENFORCED, not
+documented — see require_full_history(); on a truncated history this script used
+to emit a plausible document with wrong dates rather than fail.
 """
 
 from __future__ import annotations
@@ -144,8 +146,130 @@ def audit_watch_lists(manifest: dict) -> int:
     return rc
 
 
+def git_out(*args: str) -> str | None:
+    """stdout of a read-only git command in CORE_ROOT, or None if git exited nonzero.
+
+    None and "" are different answers here: `config --get-regexp` exits 1 with no
+    output when nothing matches (fine), while `rev-parse` exits 1 when this is not
+    a repository at all (not fine). Callers below depend on telling those apart.
+    """
+    p = subprocess.run(["git", *args], cwd=CORE_ROOT, capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+def history_defect() -> str | None:
+    """Why this checkout cannot answer "when did <path> last change?", or None.
+
+    Each branch below is a way for `git log -1 -- <path>` to return an answer that
+    is confidently wrong rather than absent, which is why they are checked at all.
+    """
+    # No repository → every `git log` returns empty, every date renders "—", and
+    # the drift gate silently degrades to "nothing has ever drifted".
+    if git_out("rev-parse", "--is-inside-work-tree") != "true":
+        return "not a git checkout — there is no history here to read dates from"
+
+    if git_out("rev-parse", "--is-shallow-repository") == "true":
+        return "shallow clone — history is truncated at the graft boundary"
+
+    # `git replace` refs and the legacy .git/info/grafts file rewrite the parent
+    # chain the log walk follows, so the walk can terminate at a synthetic
+    # boundary exactly as a shallow clone does. Rare, but the resulting wrongness
+    # is identical and the check is two cheap plumbing calls.
+    #
+    # --git-path answers relative to git's cwd, i.e. CORE_ROOT, not this process's;
+    # joining is a no-op when it comes back absolute (linked worktrees, GIT_DIR).
+    grafts = git_out("rev-parse", "--git-path", "info/grafts")
+    if grafts and (CORE_ROOT / grafts).exists():
+        return f"grafted history (`{grafts}` exists) — the parent chain is rewritten"
+    if git_out("for-each-ref", "--format=%(refname)", "refs/replace/"):
+        return "replace refs present (refs/replace/*) — the parent chain is rewritten"
+
+    # Partial clones: only a filter that omits TREES is disqualifying, and that
+    # distinction is deliberate rather than an oversight. This script never reads
+    # file contents — it walks commits and diffs trees against a pathspec — so
+    # `--filter=blob:none` (and blob:limit=*) leaves every object the walk touches
+    # local and the dates exact. That is the cheap full-history clone worth
+    # encouraging for a metadata-only job like this one, so it is allowed. A
+    # tree-omitting filter (`tree:0`) is a different animal: git must refetch
+    # trees from the promisor one at a time to evaluate the pathspec — unusably
+    # slow when it works, and wrong when the promisor is unreachable — so treat
+    # anything that is not blob-scoped as unusable rather than guessing.
+    configured = git_out("config", "--get-regexp", r"^remote\..*\.partialclonefilter") or ""
+    bad = set()
+    for line in configured.splitlines():
+        # `remote.origin.partialclonefilter blob:none` — key, space, filter spec.
+        parts = line.split(None, 1)
+        if len(parts) == 2 and not parts[1].startswith("blob:"):
+            bad.add(parts[1])
+    if bad:
+        return (
+            f"partial clone with a tree-omitting filter ({', '.join(sorted(bad))}) — the tree "
+            "objects `git log -- <path>` needs are not local"
+        )
+    return None
+
+
+def require_full_history() -> None:
+    """Refuse to run at all on a history this script cannot read correctly.
+
+    WHY THIS IS FATAL AND NOT A WARNING
+        Every "Newest model" date in the rendered document comes from
+        `git log -1 --format=%cI -- <path>`. On a truncated history that walk
+        bottoms out at the graft boundary instead of the real last-touching
+        commit, and git reports the boundary commit — for every path whose real
+        last change predates it. Nothing errors. The document simply comes out
+        wrong, and it comes out looking entirely plausible: on a 112-commit
+        shallow clone of this repo `ci-fixture-riscv` rendered 2026-08-04 (the
+        graft commit b730a43) where the truth on full history is 2026-03-09
+        (9957cda8) — four months out, and eight boards wrong at once. The only
+        reason it was caught is that CI, which checks out fetch-depth: 0,
+        disagreed with a locally regenerated file.
+
+        Those dates are not decoration; they are the left-hand side of the drift
+        comparison. Truncation always skews them NEW (an unreachable parent reads
+        as "created at the boundary"), which manufactures drift on boards that are
+        fine — and the natural way to silence a red gate is to stamp a drift_ack
+        at the date the tool just printed. That ack is dated from the graft, not
+        from any model change anyone reviewed, so it then blankets every genuine
+        model change up to that date: the false positive converts itself into a
+        durable false negative. A silicon-validation gate that quietly reads the
+        wrong input is worse than no gate, because it is believed.
+
+    WHY IT GUARDS EVERY MODE, NOT ONLY --check/--drift
+        Plain generate is the most dangerous mode, not the least. It is the one
+        that exits 0 and writes the wrong dates into the committed file, which is
+        how they get pushed. --check and --drift do at least fail, but they fail
+        with the wrong story — a spurious "out of date" diff, or a phantom DRIFT
+        list — and the remedy their own error text prints is the regenerate
+        command that commits the damage. No invocation of this script has any use
+        for a document built from dates it cannot trust, so all of them stop.
+    """
+    defect = history_defect()
+    if defect is None:
+        return
+    print(
+        f"ERROR: incomplete git history ({defect}).\n"
+        "       Board dates here are derived from `git log -1 -- <model path>`, which on a\n"
+        "       truncated history resolves to the graft boundary instead of the real commit.\n"
+        "       Refusing to emit a document whose dates and drift verdict would be wrong.\n"
+        "       Fix: git fetch --unshallow\n"
+        "       In CI: actions/checkout with `fetch-depth: 0`.\n"
+        "       A bounded `git fetch --depth=<n>` is NOT a fix — it only moves the boundary,\n"
+        "       and the depth that would suffice is whatever reaches past the OLDEST last-touch\n"
+        "       among all `models` paths (months of history), which you cannot know without\n"
+        "       already having the history. Deepen until `git rev-parse\n"
+        "       --is-shallow-repository` prints false.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def newest_commit_date(paths: list[str]) -> date | None:
-    """Newest committer date (YYYY-MM-DD) across the given repo paths, or None."""
+    """Newest committer date (YYYY-MM-DD) across the given repo paths, or None.
+
+    Correctness rests on the whole history being present; require_full_history()
+    is what makes that an assertion instead of an assumption.
+    """
     newest: date | None = None
     for rel in paths:
         target = CORE_ROOT / rel
@@ -260,6 +384,11 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="fail if committed doc is stale")
     ap.add_argument("--drift", action="store_true", help="fail if any board drifted past its ack")
     args = ap.parse_args()
+
+    # Before anything reads the manifest or touches the doc: this exits(2) — an
+    # environment precondition failure, like the missing-PyYAML exit above, not a
+    # gate verdict (1) — if the checkout cannot supply trustworthy dates.
+    require_full_history()
 
     manifest = yaml.safe_load(MANIFEST.read_text())
     rendered = render(manifest)
