@@ -38,11 +38,12 @@ pub mod rp2040;
 pub mod rp2040_spi_carries_a_byte;
 #[cfg(test)]
 pub mod scb_reset;
-pub mod uart_stream_interval_differential;
 #[cfg(test)]
 pub mod stm32_spi_waveform;
 #[cfg(test)]
 pub mod test_cycles;
+#[cfg(test)]
+pub mod uart_stream_interval_differential;
 #[cfg(test)]
 pub mod walk_starvation_contract;
 #[cfg(test)]
