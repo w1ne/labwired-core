@@ -1860,7 +1860,7 @@
       "device_type": "tmp102",
       "label": "TI TMP102 Temperature",
       "summary": "12-bit I²C temperature sensor (self-drifting demo).",
-      "detail": "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read-only storage.",
+      "detail": "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read/write, as on silicon: a driver can program shutdown mode, one-shot, conversion rate, extended mode and the alert limits and read them back. The bits the datasheet reserves for silicon (the converter-resolution field R1:R0, the Alert status bit, and the unused low bits of each word) keep their reset value.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [

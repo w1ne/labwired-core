@@ -1781,7 +1781,19 @@ boards:
     # either way; they used to resolve differently per family). No peripheral
     # register surface, reset value, or captured behavior changes. Evidence:
     # 2603 core lib tests + xtensa 57 + esp32_ili9341_attach 2/2 green.
-    drift_ack: 2026-08-06
+    # 2026-08-07: crates/core/src/peripherals/esp32s3/tmp102.rs — an EXTERNAL
+    # I²C slave model that hangs off the bus, not S3 silicon. It is retained
+    # only as the byte-parity oracle for configs/devices/tmp102.yaml. Both it
+    # and the descriptor stopped discarding writes to the TMP102 Configuration
+    # / TLOW / THIGH registers, which the TMP102 datasheet's pointer-address
+    # table marks Read/Write (see the PR for the write_mask derivation). No S3
+    # peripheral, register map, base address or reset value is touched, so
+    # nothing in the 9-register reset-state anchor can move —
+    # esp32s3_reset_conformance is green. Evidence on this commit: full
+    # `cargo test -p labwired-core` green, 161 test binaries, 3533 passed, 0
+    # failed, 34 ignored; declarative_device_byte_parity 7/7 with every golden
+    # literal unchanged. No S3 board attached; no live re-capture.
+    drift_ack: 2026-08-07
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

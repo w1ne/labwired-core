@@ -3,11 +3,69 @@
 # crates/core/src/peripherals/esp32s3/tmp102.rs (now retained only as the
 # parity oracle), including the demo self-drift.
 #
-# Per the TMP102 datasheet (SBOS397) the master writes a 1-byte pointer (only
+# Per the TMP102 datasheet (SBOS397I) the master writes a 1-byte pointer (only
 # the low two bits are decoded, `pointer_mask: 0x03`) then streams a 16-bit
-# BIG-ENDIAN word (MSB first). The four pointer slots are read-only 16-bit
-# registers; a write of config/T_LOW/T_HIGH bytes is absorbed and ignored
-# (access `r`), so those registers always read back their reset value.
+# BIG-ENDIAN word (MSB first). Table 6-7 "Pointer Addresses" gives the access of
+# each slot, and only ONE of the four is read-only:
+#
+#   P1 P0  REGISTER
+#   0  0   Temperature Register (Read Only)
+#   0  1   Configuration Register (Read/Write)
+#   1  0   TLOW Register (Read/Write)
+#   1  1   THIGH Register (Read/Write)
+#
+# §6.5.3 repeats it — "The Configuration Register is a 16-bit read/write
+# register" — and a driver that programs shutdown mode, one-shot, conversion
+# rate, extended mode or the alert limits and reads the register back must see
+# what it wrote. Modelling those three as `access: r` handed the driver the
+# reset value instead.
+#
+# Not every bit inside the writable registers belongs to firmware, so each one
+# carries a `write_mask` covering exactly the bits the datasheet lets a master
+# change. Bits outside the mask keep their reset value.
+#
+#   CONFIG (`write_mask: 0x9FD0`). Layout from Tables 6-10 / 6-11:
+#     byte 1 (D15:D8) = OS  R1 R0 F1 F0 POL TM SD
+#     byte 2 (D7:D0)  = CR1 CR0 AL EM  0  0  0  0
+#   Silicon owns, and the mask therefore clears:
+#     * R1:R0 (D14:D13, mask bits 0x6000) — "Converter Resolution. Read-only
+#       bits… set on start-up to 11", i.e. 12-bit resolution. They always
+#       read 11 — which is the whole of the reset word's 0x60 MSB byte.
+#     * AL (D5, 0x0020) — the Alert output status. It is the comparator's
+#       answer, not firmware's; it powers up 1 (no alert) and stays there,
+#       because no alert condition is modelled.
+#     * D3:D0 (0x000F) — unused in byte 2, shown as `0` in the tables and
+#       always read back 0.
+#   Everything else is firmware's: OS, F1:F0, POL, TM, SD, CR1:CR0, EM
+#   (0xFFFF & ~0x602F == 0x9FD0). OS is left writable deliberately: a driver
+#   that sets OS to trigger a one-shot then polls OS for "conversion complete"
+#   must be able to see it set, or it spins forever — and the model's
+#   temperature register is always ready, so an instantly-complete conversion
+#   is the honest answer.
+#
+#   T_LOW / T_HIGH (`write_mask: 0xFFF8`). Both limits are left-justified:
+#   12-bit (D15:D4) in normal mode and 13-bit (D15:D3) in extended mode
+#   (EM = 1). D2:D0 are unused in BOTH modes and always read 0, so the mask
+#   is the union of the two layouts — the widest field any legal driver
+#   writes. (A static mask cannot follow EM, so a normal-mode driver that
+#   sets D3 would see it stick where silicon reads 0; a driver that computes
+#   the limit correctly, `°C / 0.0625 << 4`, never sets it.)
+#
+# Reset values are unchanged and come straight from the datasheet:
+# CONFIG 0x60A0 (byte 1 = 0110_0000, byte 2 = 1010_0000 — Tables 6-10/6-11),
+# T_LOW 0x4B00 (75 °C), T_HIGH 0x5000 (80 °C).
+#
+# Two things this descriptor still approximates, named so they are not mistaken
+# for fidelity:
+#   * AL is held at its power-up 1 rather than driven. On silicon it is the
+#     comparator's output — with POL = 0 it drops to 0 once the temperature
+#     reaches T_HIGH for F1:F0 consecutive faults and returns to 1 below
+#     T_LOW. Driving it needs a comparator primitive, not a register bit.
+#   * A single-byte update is absorbed. The datasheet's "Data Transfer" note
+#     lets a master update only the MS byte by ending the frame after one data
+#     byte; the shared engine stores a register write only at its full declared
+#     width, so a half-word write lands nowhere. (Pinned in
+#     `pca9685_tmp102_parity.rs::tmp102_short_config_write_is_absorbed_identically`.)
 #
 # The temperature register is left-justified 12-bit, 1 LSB = 0.0625 °C
 # (0x1900 = 25.0 °C). It is **self-driving** for the demo: every full
@@ -24,10 +82,12 @@ behavior:
     registers:
       # Temperature: 12-bit left-justified, big-endian, self-drifting (below).
       - { name: TEMP, addr: 0x00, width: 2, endian: be, access: r, reset: 0x1900 }
-      # Config / T_LOW / T_HIGH: read-only storage; writes are absorbed.
-      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: r, reset: 0x60A0 }
-      - { name: T_LOW, addr: 0x02, width: 2, endian: be, access: r, reset: 0x4B00 }
-      - { name: T_HIGH, addr: 0x03, width: 2, endian: be, access: r, reset: 0x5000 }
+      # Config / T_LOW / T_HIGH: Read/Write (Table 6-7). The `write_mask`s are
+      # derived in the header comment above — 0x9FD0 protects CONFIG's R1:R0,
+      # AL and unused D3:D0; 0xFFF8 protects the limits' unused D2:D0.
+      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: rw, write_mask: 0x9FD0, reset: 0x60A0 }
+      - { name: T_LOW, addr: 0x02, width: 2, endian: be, access: rw, write_mask: 0xFFF8, reset: 0x4B00 }
+      - { name: T_HIGH, addr: 0x03, width: 2, endian: be, access: rw, write_mask: 0xFFF8, reset: 0x5000 }
     updates:
       # +0.5 °C per full temperature read; wrap to 20 °C once it exceeds 35 °C.
       - trigger: { read_complete: { pointer: 0x00 } }
@@ -36,7 +96,7 @@ behavior:
 metadata:
   label: "TI TMP102 Temperature"
   summary: "12-bit I²C temperature sensor (self-drifting demo)."
-  detail: "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read-only storage."
+  detail: "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read/write, as on silicon: a driver can program shutdown mode, one-shot, conversion rate, extended mode and the alert limits and read them back. The bits the datasheet reserves for silicon (the converter-resolution field R1:R0, the Alert status bit, and the unused low bits of each word) keep their reset value."
   category: i2c
   config_keys:
     - name: i2c_address

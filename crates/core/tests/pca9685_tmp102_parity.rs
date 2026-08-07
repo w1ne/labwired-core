@@ -234,19 +234,63 @@ fn tmp102_config_tlow_thigh_read_back_identically() {
 }
 
 #[test]
-fn tmp102_config_write_is_absorbed_identically() {
-    // Write pointer 0x01 (config), then a data byte (0x55) — absorbed/ignored by
-    // both models; read back config and assert byte equality (proves absorb, not
-    // just by-construction).
+fn tmp102_short_config_write_is_absorbed_identically() {
+    // Write pointer 0x01 (config), then ONE data byte (0x55).
+    //
+    // KNOWN GAP, pinned here rather than hidden: the datasheet's "Data
+    // Transfer" note says the TMP102 "can also be used for single byte
+    // updates. To update only the MS byte, terminate the communication by
+    // issuing a START or STOP", so on silicon this WOULD land 0x55 in
+    // config byte 1. Neither model implements it — the declarative engine
+    // stores a register write only when the master supplies the register's
+    // full width, and the oracle likewise waits for both bytes. This test
+    // asserts only that the two models agree; closing the gap needs a
+    // partial-width write in the shared engine, which is a separate change.
     let ops = vec![
         Op::Start,
         Op::Write(0x01), // pointer → config
-        Op::Write(0x55), // absorbed by both
+        Op::Write(0x55), // half a word: absorbed by both
         Op::Start,
         Op::Write(0x01),
         Op::Read, // config MSB
         Op::Read, // config LSB
     ];
+    drive_both(&mut Tmp102::new(), &mut declarative("tmp102"), &ops);
+}
+
+#[test]
+fn tmp102_full_width_config_and_limit_writes_are_byte_equivalent() {
+    // Table 6-7 marks config / TLOW / THIGH Read/Write, and both models
+    // implement them with the same datasheet-derived read-only bits (CONFIG
+    // R1:R0 + AL + unused D3:D0; limits' unused D2:D0). A complete two-byte
+    // write must therefore read back identically on both.
+    let mut ops = Vec::new();
+    let program = |ops: &mut Vec<Op>, ptr: u8, msb: u8, lsb: u8| {
+        ops.push(Op::Start);
+        ops.push(Op::Write(ptr));
+        ops.push(Op::Write(msb));
+        ops.push(Op::Write(lsb));
+    };
+    let readback = |ops: &mut Vec<Op>, ptr: u8| {
+        ops.push(Op::Start);
+        ops.push(Op::Write(ptr));
+        ops.push(Op::Read);
+        ops.push(Op::Read);
+    };
+    // Shutdown + one-shot, 1 Hz, extended mode; R1:R0 and AL written as 0.
+    program(&mut ops, 0x01, 0x81, 0x50);
+    // Thermostat window 25 °C … 30 °C, with stray unused low bits set.
+    program(&mut ops, 0x02, 0x19, 0x07);
+    program(&mut ops, 0x03, 0x1E, 0x05);
+    for ptr in 1..=3u8 {
+        readback(&mut ops, ptr);
+    }
+    // Clear every firmware-owned bit and read back again.
+    program(&mut ops, 0x01, 0x00, 0x00);
+    readback(&mut ops, 0x01);
+    // A write to the Read Only temperature register must still be dropped.
+    program(&mut ops, 0x00, 0xDE, 0xAD);
+    readback(&mut ops, 0x00);
     drive_both(&mut Tmp102::new(), &mut declarative("tmp102"), &ops);
 }
 
