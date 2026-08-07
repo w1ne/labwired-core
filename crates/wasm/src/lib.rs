@@ -1810,9 +1810,21 @@ mod machine_advance_tests {
 
     #[test]
     fn configured_arm_batch_matches_32_single_boundaries() {
-        // A real Cortex-M topology contains an SCB, whose reset-fidelity rail
-        // intentionally commits one instruction per CPU batch.
-        assert_batch_matches_32_singles(configured_arm_simulator, 32, true);
+        // A real Cortex-M topology contains an SCB, and its reset-fidelity rail
+        // used to commit one instruction per CPU batch for the life of the bus
+        // — so this case expected 32 batches where every other arch expected 1.
+        // The rail is now the latch the SCB shares with the core, which cuts
+        // the batch only on the instruction that actually writes AIRCR, so a
+        // configured Cortex-M batches like everything else.
+        //
+        // The 32-vs-1 batch count is the ONLY thing that changed. Everything
+        // this helper asserts before reaching the count — full machine
+        // snapshot, CPU snapshot, peripheral list, total_cycles,
+        // bus.current_cycle, PC, and every peripheral-work counter — is still
+        // identical between 32 single boundaries and one 32-instruction batch,
+        // on a real topology WITH peripherals attached (`expect_peripherals`).
+        // That equivalence is the fidelity claim behind the whole change.
+        assert_batch_matches_32_singles(configured_arm_simulator, 1, true);
     }
 
     #[test]
