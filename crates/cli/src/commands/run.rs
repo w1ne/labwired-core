@@ -339,16 +339,30 @@ pub(crate) fn run_firmware_riscv(
         if debug && i > 0 && i % 20_000_000 == 0 {
             eprintln!("[progress] step {i} pc={pc:#010x}");
         }
-        if let Err(e) = machine.step() {
-            // Surface the halt (was a silent debug log): the fault PC + reason is
-            // the key signal when bringing real firmware up on the sim.
-            tracing::debug!("labwired-riscv: step {i} pc={pc:#010x} halt: {e}");
-            if !break_at.is_empty() {
-                eprintln!("[halt] step {i} pc={pc:#010x} err={e}");
-                let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
-                eprintln!("[trail] {}", trail.join(" -> "));
+        // `advance` rather than `step`: `step` throws away the AdvanceReport,
+        // and a firmware-authored verdict lives only in that report. The
+        // request is the one `step` issues, so stepping is unchanged.
+        match machine.advance(labwired_core::AdvanceRequest::single()) {
+            Ok(report) => {
+                if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
+                    eprintln!(
+                        "[firmware] {} (step {i})",
+                        crate::firmware_exit_message(code)
+                    );
+                    break;
+                }
             }
-            break;
+            Err(e) => {
+                // Surface the halt (was a silent debug log): the fault PC + reason is
+                // the key signal when bringing real firmware up on the sim.
+                tracing::debug!("labwired-riscv: step {i} pc={pc:#010x} halt: {e}");
+                if !break_at.is_empty() {
+                    eprintln!("[halt] step {i} pc={pc:#010x} err={e}");
+                    let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
+                    eprintln!("[trail] {}", trail.join(" -> "));
+                }
+                break;
+            }
         }
     }
 
@@ -1298,8 +1312,18 @@ pub(crate) fn run_firmware_arm(
         if dbg_trace != 0 && i % dbg_trace == 0 {
             eprintln!("[arm-trace] step {i} pc={:#010x}", machine.cpu.get_pc());
         }
-        match machine.step() {
-            Ok(()) => {}
+        // `advance` rather than `step`: `step` discards the AdvanceReport, and
+        // a firmware-authored verdict appears nowhere else.
+        match machine.advance(labwired_core::AdvanceRequest::single()) {
+            Ok(report) => {
+                if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
+                    eprintln!(
+                        "[firmware] {} (step {i})",
+                        crate::firmware_exit_message(code)
+                    );
+                    break;
+                }
+            }
             Err(e) => {
                 eprintln!("labwired run (arm): simulation error: {e}");
                 // Non-fatal for TIER1: the protocol may already be complete.

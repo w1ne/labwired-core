@@ -3016,6 +3016,13 @@ pub enum StopReason {
     DecodeError,
     Halt,
     Exception,
+    /// The **firmware** ended its own run by writing to the `simctl` device.
+    ///
+    /// Deliberately distinct from [`Self::Halt`]: a halt is the machine
+    /// stopping, this is the firmware reporting a result. The exit code travels
+    /// beside it in the run result's `firmware_exit_code`; a run that ends this
+    /// way passed only if that code is `0`.
+    FirmwareExit,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -3093,6 +3100,23 @@ pub struct ShutdownLatencyAssertion {
 #[serde(deny_unknown_fields)]
 pub struct StopReasonAssertion {
     pub expected_stop_reason: StopReason,
+}
+
+/// Assert the firmware ended its own run with a specific exit code.
+///
+/// ```yaml
+/// assertions:
+///   - firmware_exit: 0
+/// ```
+///
+/// This is the assertion the `simctl` device exists for. `uart_contains: "PASS"`
+/// proves some bytes reached a serial line; this proves the firmware reached
+/// its own success path and said so. A run that ends any other way — timeout,
+/// halt, fault — fails this assertion rather than passing by silence.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FirmwareExitAssertion {
+    pub firmware_exit: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -3252,6 +3276,7 @@ pub enum TestAssertion {
     MotorState(MotorStateAssertion),
     ShutdownLatency(ShutdownLatencyAssertion),
     ExpectedStopReason(StopReasonAssertion),
+    FirmwareExit(FirmwareExitAssertion),
     MemoryValue(MemoryValueAssertion),
     UdsTester(UdsTesterAssertion),
     MqttFabric(MqttFabricAssertion),

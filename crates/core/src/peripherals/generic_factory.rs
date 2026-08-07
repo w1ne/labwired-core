@@ -57,6 +57,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "pwr",
     "flash",
     "rng",
+    "simctl",
     "crc",
     "rtc",
     "rtc_f1",
@@ -431,6 +432,9 @@ pub fn try_build(
             )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
+        // Simulation-control device: firmware ends its own run with an exit
+        // code. No configuration — the device has no non-deterministic knobs.
+        "simctl" => Box::new(crate::peripherals::simctl::SimCtl::new()),
         "rp2040_clkrst" => {
             let profile = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("rp2350") => crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2350,

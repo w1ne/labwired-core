@@ -238,8 +238,19 @@ pub(crate) fn run_snapshot_capture(
     let mut i: u64 = 0;
     let progress = args.progress_every;
     while i < args.steps {
-        match machine.step() {
-            Ok(()) => {}
+        // `advance` rather than `step`: `step` discards the AdvanceReport, so a
+        // firmware `simctl` verdict would be silently swallowed and this loop
+        // would keep stepping a run the firmware had already ended.
+        match machine.advance(labwired_core::AdvanceRequest::single()) {
+            Ok(report) => {
+                if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
+                    eprintln!(
+                        "[firmware] {} (step {i})",
+                        crate::firmware_exit_message(code)
+                    );
+                    break;
+                }
+            }
             Err(SimulationError::BreakpointHit(_)) => {}
             Err(e) => {
                 eprintln!(

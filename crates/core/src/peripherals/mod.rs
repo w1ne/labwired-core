@@ -58,6 +58,7 @@ pub mod rtc_v3;
 pub mod sai;
 pub mod scb;
 pub mod sdmmc;
+pub mod simctl;
 pub mod spi;
 pub mod stm32f4_dma;
 pub mod stub;

@@ -1,0 +1,30 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Raspberry Pi Pico with the simulation-control device attached — the board to
+# use when the firmware itself should decide whether the run passed.
+#
+# This is a SEPARATE manifest from `pico.yaml` on purpose. `simctl` is a
+# simulation-only device: it does not exist on RP2040 silicon, so adding it to
+# the plain Pico board would put a window on every existing Pico lab that no
+# real chip answers. Opt in by choosing this board.
+#
+# The base address is deliberately OUTSIDE the RP2040's real peripheral space
+# (silicon uses 0x4000_0000-0x4007_0000, 0x5000_0000-0x5020_0000, 0xD000_0000,
+# 0x1400_0000/0x1800_0000 and the Cortex-M block at 0xE000_E000). 0x6000_0000
+# answers on no real Pico, so firmware that writes there can never be mistaken
+# for firmware that talks to hardware — guard it with `#ifdef LABWIRED_SIM`.
+#
+# Firmware-side helpers: `examples/common/labwired_simctl.h`.
+name: "pico-selftest"
+chip: "../chips/rp2040.yaml"
+peripherals:
+  - id: "simctl"
+    type: "simctl"
+    base_address: 0x60000000
+    # 32 bytes — exactly the device's register window. Without this the bus
+    # claims the 4KB default for a device that answers in 0x20.
+    size: "32"

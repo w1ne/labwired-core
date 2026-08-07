@@ -135,6 +135,23 @@ impl<C: Cpu> Machine<C> {
             }
 
             self.commit_advance_boundary(mode, batch_start, progress)?;
+
+            // Firmware-authored verdict. Drained here — after the batch's
+            // writes have committed — so the `EXIT` store is observed with the
+            // instruction that made it retired. `None` on
+            // every bus without a `simctl` device (a cached `Option` test),
+            // so boards that do not declare one run exactly as before.
+            if let Some(code) = self.drain_simctl_exit_code() {
+                state.fuel_consumed += u64::from(progress.primary_steps);
+                state.primary_steps += u64::from(progress.primary_steps);
+                state.secondary_steps += u64::from(progress.secondary_steps);
+                state.cpu_batches += 1;
+                return Ok(state.report(
+                    AdvanceStop::FirmwareExit { code },
+                    self.total_cycles - start_cycles,
+                ));
+            }
+
             state.fuel_consumed += u64::from(progress.primary_steps);
             state.primary_steps += u64::from(progress.primary_steps);
             state.secondary_steps += u64::from(progress.secondary_steps);

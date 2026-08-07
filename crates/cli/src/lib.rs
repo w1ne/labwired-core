@@ -14,6 +14,7 @@ pub mod coverage;
 pub mod faults;
 pub mod manifest;
 pub mod pc_coverage_report;
+pub mod regex;
 pub mod test_support;
 pub mod tier1;
 
@@ -1325,6 +1326,12 @@ fn run_machine(args: MachineArgs, plugins: &[&dyn labwired_core::plugin::ChipPlu
     }
 }
 
+/// The ONE message a firmware exit produces, so `simctl` cannot read one way on
+/// `labwired run` and another under a test script.
+pub(crate) fn firmware_exit_message(code: u32) -> String {
+    format!("Firmware ended the run with exit code {code}")
+}
+
 struct LoopResult {
     stop_reason: StopReason,
     steps_executed: u64,
@@ -1352,9 +1359,25 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
             steps_executed = step as u64;
             break;
         }
-        match machine.step() {
-            Ok(_) => {
+        // `advance` rather than `step`: `step` discards the AdvanceReport, and
+        // the report is the only place a firmware-authored verdict appears.
+        // `AdvanceRequest::single()` is exactly what `step` issues, so the
+        // stepping behaviour is unchanged — we simply stop throwing the result
+        // away.
+        match machine.advance(labwired_core::AdvanceRequest::single()) {
+            Ok(report) => {
                 steps_executed = (step + 1) as u64;
+                if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
+                    // The message names the exit code, which is all three
+                    // consumers of this LoopResult forward. The structured
+                    // `firmware_exit_code` lives on TestResult, the run-result
+                    // contract, and is set by the test loop below.
+                    let message = firmware_exit_message(code);
+                    info!("{} (step={})", message, step);
+                    stop_reason = StopReason::FirmwareExit;
+                    stop_message = Some(message);
+                    break;
+                }
                 if !cli.trace && step > 0 && step % 10000 == 0 {
                     info!(
                         "Progress: {} steps, current IPS: {:.2}",
@@ -1488,6 +1511,10 @@ pub(crate) fn build_stop_reason_details(
             }),
         ),
         StopReason::AssertionsPassed => (None, None),
+        // No limit triggered this one — the firmware chose to end the run. The
+        // exit code is reported separately as `firmware_exit_code`, not as a
+        // limit/observation pair.
+        StopReason::FirmwareExit => (None, None),
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
@@ -1534,6 +1561,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         metrics,
         StopReason::Halt,
         stop_reason_details,
+        // This is the pre-run bail-out path: no firmware verdict exists.
+        None,
         resolved_limits.clone(),
         vec![],
         firmware_bytes,
@@ -1593,6 +1622,9 @@ fn assertion_currently_passes(
         // the runner; accumulated text alone is deliberately insufficient.
         TestAssertion::ShutdownLatency(_) => false,
         TestAssertion::ExpectedStopReason(_) => true,
+        // Terminal, like ExpectedStopReason: decided by how the run ENDED, so
+        // it is not a runtime condition the early-stop logic can wait on.
+        TestAssertion::FirmwareExit(_) => true,
         TestAssertion::MemoryValue(a) => {
             let size = a.memory_value.size.unwrap_or(32);
             let result = match size {
@@ -1826,6 +1858,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let start = std::time::Instant::now();
     let mut stop_reason = StopReason::MaxSteps;
     let mut steps_executed: u64 = 0;
+    // Set only when the firmware ends its own run via `simctl`; read by the
+    // `firmware_exit` assertion below.
+    let mut firmware_exit_code: Option<u32> = None;
 
     let trace_observer = if args.trace {
         let obs = Arc::new(labwired_core::trace::TraceObserver::new(
@@ -2330,6 +2365,15 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             Ok(report) => {
                 step += report.primary_steps;
                 steps_executed = step;
+                // A firmware-authored verdict ends the run immediately: the
+                // firmware has stated the result, so continuing would only let
+                // a later timeout overwrite it.
+                if let labwired_core::AdvanceStop::FirmwareExit { code } = report.stop {
+                    info!("{} (step={})", firmware_exit_message(code), step);
+                    stop_reason = StopReason::FirmwareExit;
+                    firmware_exit_code = Some(code);
+                    break;
+                }
                 if report.primary_steps == 0 && report.idle_cycles == 0 {
                     stop_reason = StopReason::Halt;
                     break;
@@ -2370,9 +2414,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         }
 
         if resolved_limits.stop_when_assertions_pass {
-            let has_runtime_assertions = assertions
-                .iter()
-                .any(|a| !matches!(a, TestAssertion::ExpectedStopReason(_)));
+            let has_runtime_assertions = assertions.iter().any(|a| {
+                !matches!(
+                    a,
+                    TestAssertion::ExpectedStopReason(_) | TestAssertion::FirmwareExit(_)
+                )
+            });
             if has_runtime_assertions {
                 let uart_text = {
                     let bytes = uart_tx.lock().map(|g| g.clone()).unwrap_or_default();
@@ -2390,9 +2437,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                 }
                 let all_pass = assertions.iter().enumerate().all(|(index, assertion)| {
-                    matches!(assertion, TestAssertion::ExpectedStopReason(_))
-                        || (matches!(assertion, TestAssertion::MotorSpeedReached(_))
-                            && assertion_latched[index])
+                    matches!(
+                        assertion,
+                        TestAssertion::ExpectedStopReason(_) | TestAssertion::FirmwareExit(_)
+                    ) || (matches!(assertion, TestAssertion::MotorSpeedReached(_))
+                        && assertion_latched[index])
                         || matches!(assertion, TestAssertion::ShutdownLatency(a)
                         if shutdown_latency_passes(
                             &a.shutdown_latency,
@@ -2479,6 +2528,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 &uart_milestone_cycles,
             ),
             TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
+            // Passes only if the FIRMWARE ended the run with exactly this code.
+            // A timeout, halt or fault leaves `firmware_exit_code` None, so a
+            // run that never reached its own success path fails rather than
+            // passing by silence.
+            TestAssertion::FirmwareExit(a) => firmware_exit_code == Some(a.firmware_exit),
             TestAssertion::MemoryValue(a) => {
                 // `size` is the value width. Accept either bytes (1/2/4) or
                 // bits (8/16/32) — both name the same u8/u16/u32 reads — so a
@@ -2631,9 +2685,27 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     // `rejected` dominates the other verdicts on purpose: a "fail" produced by a
     // run whose inputs were never delivered is not a trustworthy fail either.
+    // A firmware that declared its own failure fails the run, whether or not
+    // the script asserted anything. Without this a run with no assertions would
+    // report `status: "pass"` for firmware that explicitly said `EXIT 5` — the
+    // proved-nothing failure mode again, and the worse for being self-inflicted:
+    // the run has an unambiguous verdict from the firmware itself and would be
+    // ignoring it. `None` (a bare `STOP`, or any non-simctl stop) is not a
+    // failure claim and does not trigger this.
+    let firmware_declared_failure = firmware_exit_code.is_some_and(|code| code != 0);
+    if firmware_declared_failure {
+        error!(
+            "firmware ended the run with a non-zero exit code ({}); the run fails",
+            firmware_exit_code.unwrap_or_default()
+        );
+    }
+
     let status = if stimuli_rejected > 0 {
         "error"
-    } else if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
+    } else if firmware_declared_failure
+        || !all_passed
+        || (stop_requires_assertion && !expected_stop_reason_matched)
+    {
         "fail"
     } else if sim_error_happened && !expected_stop_reason_matched {
         "error"
@@ -2701,6 +2773,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         metrics,
         stop_reason.clone(),
         stop_reason_details,
+        firmware_exit_code,
         resolved_limits.clone(),
         assertion_results,
         firmware_bytes,
@@ -2739,6 +2812,8 @@ fn write_outputs<C: labwired_core::Cpu>(
     metrics: &labwired_core::metrics::PerformanceMetrics,
     stop_reason: StopReason,
     stop_reason_details: StopReasonDetails,
+    // Set only when the firmware ended its own run through `simctl`.
+    firmware_exit_code: Option<u32>,
     limits: TestLimits,
     assertions: Vec<AssertionResult>,
     firmware_bytes: &[u8],
@@ -2792,6 +2867,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         instructions: metrics.get_instructions(),
         stop_reason,
         stop_reason_details: stop_reason_details.clone(),
+        firmware_exit_code,
         limits: limits.clone(),
         message,
         assertions,
@@ -3123,6 +3199,8 @@ pub(crate) fn write_config_error_outputs(
         instructions: 0,
         stop_reason,
         stop_reason_details: stop_reason_details.clone(),
+        // A config error never ran firmware, so there is no verdict.
+        firmware_exit_code: None,
         limits: resolved_limits.clone(),
         message: Some(message.clone()),
         assertions: vec![],
@@ -3443,6 +3521,7 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
         TestAssertion::ExpectedStopReason(a) => {
             format!("expected_stop_reason: {:?}", a.expected_stop_reason)
         }
+        TestAssertion::FirmwareExit(a) => format!("firmware_exit: {}", a.firmware_exit),
         TestAssertion::MemoryValue(a) => format!(
             "memory_value: @{:#x}={:#x}",
             a.memory_value.address, a.memory_value.expected_value
@@ -3491,56 +3570,21 @@ pub(crate) fn evaluate_uds_tester(
 
 // Minimal regex matcher supporting: '^' anchor, '$' anchor, '.' and '*' (Kleene star).
 // This is intentionally small to avoid introducing new deps; it does not implement full PCRE/Rust regex.
+/// Does `pattern` match anywhere in `text`?
+///
+/// Thin wrapper over [`crate::regex`], which replaced a `^ $ . *`-only matcher.
+/// The call sites want a plain `bool`, so a pattern that cannot be evaluated is
+/// logged and reported as "did not match" — which makes the assertion fail. A
+/// typo therefore fails the test loudly instead of being mistaken for a
+/// firmware bug that never printed the expected line.
 pub(crate) fn simple_regex_is_match(pattern: &str, text: &str) -> bool {
-    fn char_eq(pat: char, ch: char) -> bool {
-        pat == '.' || pat == ch
-    }
-
-    fn match_here(pat: &[char], text: &[char]) -> bool {
-        if pat.is_empty() {
-            return true;
-        }
-        if pat.len() >= 2 && pat[1] == '*' {
-            return match_star(pat[0], &pat[2..], text);
-        }
-        if pat[0] == '$' && pat.len() == 1 {
-            return text.is_empty();
-        }
-        if !text.is_empty() && char_eq(pat[0], text[0]) {
-            return match_here(&pat[1..], &text[1..]);
-        }
-        false
-    }
-
-    fn match_star(ch: char, pat: &[char], text: &[char]) -> bool {
-        let mut i = 0;
-        loop {
-            if match_here(pat, &text[i..]) {
-                return true;
-            }
-            if i >= text.len() {
-                return false;
-            }
-            if !char_eq(ch, text[i]) {
-                return false;
-            }
-            i += 1;
+    match crate::regex::is_match(pattern, text) {
+        Ok(hit) => hit,
+        Err(e) => {
+            error!("uart_regex `{pattern}`: {e}");
+            false
         }
     }
-
-    let pat_chars: Vec<char> = pattern.chars().collect();
-    let text_chars: Vec<char> = text.chars().collect();
-
-    if pat_chars.first().copied() == Some('^') {
-        return match_here(&pat_chars[1..], &text_chars);
-    }
-
-    for start in 0..=text_chars.len() {
-        if match_here(&pat_chars, &text_chars[start..]) {
-            return true;
-        }
-    }
-    false
 }
 
 #[cfg(test)]
@@ -3835,5 +3879,93 @@ mod tests {
 
         let json = serde_json::to_value(snapshot).expect("snapshot should serialize");
         assert_eq!(json["type"], "config_error");
+    }
+}
+
+#[cfg(test)]
+mod simctl_exit_tests {
+    use super::*;
+
+    #[test]
+    fn the_message_names_the_code() {
+        assert!(firmware_exit_message(42).contains("42"));
+    }
+
+    #[test]
+    fn the_stop_reason_serialises_as_snake_case_for_the_json_contract() {
+        let json = serde_json::to_string(&StopReason::FirmwareExit).unwrap();
+        assert_eq!(json, "\"firmware_exit\"");
+        let back: StopReason = serde_json::from_str("\"firmware_exit\"").unwrap();
+        assert_eq!(back, StopReason::FirmwareExit);
+    }
+
+    #[test]
+    fn the_assertion_parses_from_a_test_script() {
+        let assertion: labwired_config::TestAssertion =
+            serde_yaml::from_str("firmware_exit: 0").expect("firmware_exit should parse");
+        assert!(matches!(
+            assertion,
+            labwired_config::TestAssertion::FirmwareExit(ref a) if a.firmware_exit == 0
+        ));
+    }
+
+    #[test]
+    fn the_assertion_does_not_swallow_other_assertion_shapes() {
+        // TestAssertion is `untagged`, so a new arm can hijack neighbouring
+        // shapes if its fields are not distinctive. Prove it does not.
+        let uart: labwired_config::TestAssertion =
+            serde_yaml::from_str("uart_contains: \"PASS\"").unwrap();
+        assert!(matches!(
+            uart,
+            labwired_config::TestAssertion::UartContains(_)
+        ));
+        let stop: labwired_config::TestAssertion =
+            serde_yaml::from_str("expected_stop_reason: firmware_exit").unwrap();
+        assert!(matches!(
+            stop,
+            labwired_config::TestAssertion::ExpectedStopReason(_)
+        ));
+    }
+
+    /// The run-result JSON must stay readable by consumers written before this
+    /// field existed — and must not sprout the field on runs that never used
+    /// the device.
+    #[test]
+    fn a_pre_change_result_json_still_deserialises() {
+        let legacy = serde_json::json!({
+            "result_schema_version": "1.0",
+            "status": "pass",
+            "steps_executed": 10,
+            "cycles": 10,
+            "instructions": 10,
+            "stop_reason": "max_steps",
+            "stop_reason_details": {
+                "triggered_stop_condition": "max_steps",
+                "triggered_limit": null,
+                "observed": null
+            },
+            "limits": serde_json::to_value(TestLimits {
+                max_steps: 1,
+                max_cycles: None,
+                max_uart_bytes: None,
+                no_progress_steps: None,
+                wall_time_ms: None,
+                max_vcd_bytes: None,
+                stop_when_assertions_pass: false,
+                stop_when_assertions_pass_settle_steps: 0,
+                stop_when_assertions_pass_min_steps: 0,
+            })
+            .unwrap(),
+            "assertions": [],
+            "firmware_hash": "abc",
+            "config": {"firmware": "f.elf", "system": null, "script": "t.yaml"},
+        });
+        let parsed: Result<crate::artifacts::TestResult, _> = serde_json::from_value(legacy);
+        assert!(
+            parsed.is_ok(),
+            "adding firmware_exit_code broke the existing result contract: {:?}",
+            parsed.err()
+        );
+        assert_eq!(parsed.unwrap().firmware_exit_code, None);
     }
 }

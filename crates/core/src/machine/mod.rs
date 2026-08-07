@@ -166,6 +166,11 @@ pub enum AdvanceStop {
     Breakpoint(u32),
     /// The CPU reported zero forward progress.
     NoProgress,
+    /// The **firmware** ended its own run by writing an exit code to the
+    /// `simctl` device — a structured value rather than a line of serial
+    /// output. `0` is a pass. Only present on a bus that declares a `simctl`
+    /// peripheral; see [`crate::peripherals::simctl`].
+    FirmwareExit { code: u32 },
 }
 
 /// Structured progress and stop accounting for one advance operation.
