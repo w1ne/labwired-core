@@ -5,6 +5,14 @@
 # chip over the wire, not a host model.
 name: "iolink-master"
 chip: "../../../configs/chips/stm32l476.yaml"
+# STM32L476 reset clock: MSI range 6, 4 MHz. This firmware never configures
+# the PLL (no RCC->CR / CFGR / PLLCFGR write, no SystemClock_Config), so the
+# core runs at the MSI reset rate — NOT the part's 80 MHz maximum. The browser's
+# RealtimeGovernor paces to this value: it is a CEILING, so a host that cannot
+# keep up simply never hits it and runs flat-out, while a host that can stops
+# overshooting real time. Core ignores the key (it is not a SystemManifest
+# field); only `parseCpuHzFromSystemYaml` reads it.
+cpu_hz: 4_000_000
 # Console on USART1 only; the IO-Link C/Q ports live on USART2-5, so without this
 # the simulator merges the raw C/Q bus (0x55 wake preamble) into the serial view.
 debug_uart: "uart1"

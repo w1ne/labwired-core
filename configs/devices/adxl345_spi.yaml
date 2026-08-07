@@ -1,9 +1,18 @@
 # Analog Devices ADXL345 3-axis accelerometer — declarative SPI register device.
 # 4-wire SPI: command byte = [R/W(bit7) | MB(bit6) | addr(bits5:0)]; data is
 # little-endian per axis. Modeled in full-resolution mode (256 LSB/g, 3.9 mg/LSB,
-# constant across ranges) — the common driver default. NOT modeled: the MB
-# multi-byte bit (our engine auto-increments unconditionally, which matches a
-# burst read); fixed-10-bit range scaling; interrupts/FIFO.
+# constant across ranges) — the common driver default.
+#
+# The full Table 16 register map is present, so every documented address reads
+# its datasheet reset value and every R/W register stores what a driver writes.
+# NOT modeled — these registers hold their values but nothing acts on them: tap,
+# activity/inactivity and free-fall detection (so ACT_TAP_STATUS and INT_SOURCE
+# never change on their own and no interrupt is raised), the FIFO (FIFO_STATUS
+# always reads its reset), output-data-rate and low-power effects of BW_RATE,
+# the offset trim in OFSX/Y/Z, the measure/sleep bits of POWER_CTL, and the
+# range/justify bits of DATA_FORMAT. Also NOT modeled: the MB multi-byte bit
+# (our engine auto-increments unconditionally, which matches a burst read) and
+# fixed-10-bit range scaling.
 #
 # type is `adxl345_spi`, not `adxl345`: a hand-written I2C ADXL345 kit
 # (components/adxl345.rs) already registers device_type "adxl345" — the
@@ -15,13 +24,53 @@ behavior:
   primitive: spi_device
   spi:
     framing: { command_bytes: 1, rw_bit: 7, rw_read_high: true, addr_mask: 0x3F, auto_increment: true }
+    # Every register in Table 16 of the datasheet (Rev. 0, page 14), with the
+    # reset value that table states. The configuration registers are modelled as
+    # storage: a driver writes them and reads back what it wrote, which is the
+    # register interface behaving correctly. Their *effects* are still not
+    # simulated — see NOT modeled above — so this makes the bus faithful, not
+    # the tap/activity/free-fall detectors.
+    #
+    # Declaring them is not cosmetic. An undeclared address is not served, and
+    # what a driver saw instead depended on where it sat relative to the six
+    # registers that were declared: addresses interleaved below them read 0x00,
+    # and FIFO_CTL/FIFO_STATUS, past the last one, read the engine's unmapped
+    # default of 0xFF. Either way the twin contradicted the datasheet on
+    # BW_RATE (0x00 for a documented 0x0A), INT_SOURCE (0x00 for 0x02) and both
+    # FIFO registers (0xFF for 0x00), and silently discarded every write to the
+    # sixteen R/W configuration registers, so a configure-then-verify sequence
+    # could not pass and read-modify-write on ACT_INACT_CTL operated on a value
+    # the part never produces.
     registers:
-      - { name: DEVID,       addr: 0x00, width: 1, endian: le, access: r,  reset: 0xE5 }
-      - { name: POWER_CTL,   addr: 0x2D, width: 1, endian: le, access: rw, reset: 0x00 }
-      - { name: DATA_FORMAT, addr: 0x31, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: DEVID,          addr: 0x00, width: 1, endian: le, access: r,  reset: 0xE5 }
+      - { name: THRESH_TAP,     addr: 0x1D, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: OFSX,           addr: 0x1E, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: OFSY,           addr: 0x1F, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: OFSZ,           addr: 0x20, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: DUR,            addr: 0x21, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: Latent,         addr: 0x22, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: Window,         addr: 0x23, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: THRESH_ACT,     addr: 0x24, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: THRESH_INACT,   addr: 0x25, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TIME_INACT,     addr: 0x26, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: ACT_INACT_CTL,  addr: 0x27, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: THRESH_FF,      addr: 0x28, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TIME_FF,        addr: 0x29, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TAP_AXES,       addr: 0x2A, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: ACT_TAP_STATUS, addr: 0x2B, width: 1, endian: le, access: r,  reset: 0x00 }
+      - { name: BW_RATE,        addr: 0x2C, width: 1, endian: le, access: rw, reset: 0x0A }
+      - { name: POWER_CTL,      addr: 0x2D, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_ENABLE,     addr: 0x2E, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_MAP,        addr: 0x2F, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_SOURCE,     addr: 0x30, width: 1, endian: le, access: r,  reset: 0x02 }
+      - { name: DATA_FORMAT,    addr: 0x31, width: 1, endian: le, access: rw, reset: 0x00 }
+      # DATAX0/Y0/Z0 are width 2, so they span 0x32-0x37 and cover the DATAX1,
+      # DATAY1 and DATAZ1 high bytes the datasheet names separately.
       - { name: DATAX0, addr: 0x32, width: 2, endian: le, access: r, signed: true, source: accel_x, encode: { scale: 256.0 } }
       - { name: DATAY0, addr: 0x34, width: 2, endian: le, access: r, signed: true, source: accel_y, encode: { scale: 256.0 } }
       - { name: DATAZ0, addr: 0x36, width: 2, endian: le, access: r, signed: true, source: accel_z, encode: { scale: 256.0 } }
+      - { name: FIFO_CTL,       addr: 0x38, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: FIFO_STATUS,    addr: 0x39, width: 1, endian: le, access: r,  reset: 0x00 }
 
 metadata:
   label: "ADXL345 accelerometer"
