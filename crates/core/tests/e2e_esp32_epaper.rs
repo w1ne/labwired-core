@@ -47,7 +47,7 @@ fn ensure_firmware_built() -> PathBuf {
         );
         // Try to build it ourselves on the off-chance the env is set up.
         let _ = Command::new("cargo")
-            .args(["build", "--release"])
+            .args(["build", "--release", "--target-dir", "target"])
             .current_dir(
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/esp32-epaper-lab"),
             )

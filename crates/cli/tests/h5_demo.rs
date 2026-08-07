@@ -14,7 +14,8 @@ fn test_h5_demo_uart_output() {
         .unwrap()
         .to_path_buf();
 
-    let firmware_path = root.join("target/thumbv7em-none-eabihf/release/firmware-h563-demo");
+    let firmware_path = labwired_core::test_support::target_dir()
+        .join("thumbv7em-none-eabihf/release/firmware-h563-demo");
 
     if !firmware_path.exists() {
         panic!(

@@ -12,19 +12,10 @@ fn test_demo_blinky_gpio_toggle() {
         .try_init();
 
     // Load the demo-blinky firmware. The target dir is not always
-    // `<workspace>/target`: a `CARGO_TARGET_DIR` env var or a `[build]
-    // target-dir` in .cargo/config.toml moves it, which is an ordinary thing to
-    // do when the build tree lives on another disk. Ask the environment first
-    // and fall back to the default layout.
-    // `CARGO_TARGET_TMPDIR` is `<target-dir>/tmp`, and cargo sets it for every
-    // integration test — so its parent is the target dir wherever it lives,
-    // including when a `[build] target-dir` in .cargo/config.toml moved it
-    // (which never reaches the test as an env var).
-    let target_dir = std::env::var("CARGO_TARGET_TMPDIR")
-        .ok()
-        .and_then(|tmp| PathBuf::from(tmp).parent().map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
-    let firmware_path = target_dir.join("thumbv7m-none-eabi/release/demo-blinky");
+    // `<workspace>/target` — see `labwired_core::test_support::target_dir`,
+    // which this test used to open-code.
+    let firmware_path =
+        labwired_core::test_support::target_dir().join("thumbv7m-none-eabi/release/demo-blinky");
 
     if !firmware_path.exists() {
         panic!(

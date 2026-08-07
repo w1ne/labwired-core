@@ -890,8 +890,8 @@ mod tests {
         // This test requires the firmware to be built with debug symbols.
         // Build it with: cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
         // (see core-ci.yml "Build test firmware fixture" step).
-        let elf_path =
-            std::path::PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture");
+        let elf_path = labwired_core::test_support::target_dir()
+            .join("thumbv7m-none-eabi/debug/firmware-ci-fixture");
         if !elf_path.exists() {
             // The fast PR gate runs `cargo test --workspace --lib` WITHOUT
             // cross-building firmware, so this fixture is absent there. Skip
@@ -931,12 +931,13 @@ mod tests {
 
     #[test]
     fn test_statement_rows_full_not_deduped() {
-        let elf_path =
-            std::path::PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture");
+        let elf_path = labwired_core::test_support::target_dir()
+            .join("thumbv7m-none-eabi/debug/firmware-ci-fixture");
         if !elf_path.exists() {
-            eprintln!(
-                "skipping test_statement_rows_full_not_deduped: fixture not built \
-                 (cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi)"
+            labwired_core::test_support::skip_or_fail_missing_firmware(
+                "firmware-ci-fixture",
+                "firmware-ci-fixture ELF (test_statement_rows_full_not_deduped)",
+                "cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi",
             );
             return;
         }

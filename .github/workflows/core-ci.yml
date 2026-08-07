@@ -748,6 +748,14 @@ jobs:
           cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
 
       - name: Run Workspace Tests
+        # This job builds the firmware above, so for those artifacts a missing
+        # ELF is a failure, not a skip. Tests that can't find their firmware
+        # otherwise `return` early and report `ok` — passing without testing
+        # anything, which is how a broken cross-build sails through a green
+        # gate. Only the keys built in the step above are listed: requiring an
+        # artifact this job never produces would fail it for the wrong reason.
+        env:
+          LABWIRED_REQUIRE_FIRMWARE: firmware-ci-fixture,firmware-rp2040-pio-onboarding
         run: cargo test --workspace
 
       - name: Feature tests — jit + event-scheduler

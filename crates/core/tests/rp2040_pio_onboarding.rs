@@ -76,13 +76,14 @@ fn rp2040_chip() -> (ChipDescriptor, SystemManifest) {
 
 #[test]
 fn rp2040_pio_onboarding_reaches_pio_ok() {
-    let firmware =
-        workspace_root().join("target/thumbv6m-none-eabi/release/firmware-rp2040-pio-onboarding");
+    let firmware = labwired_core::test_support::target_dir()
+        .join("thumbv6m-none-eabi/release/firmware-rp2040-pio-onboarding");
     if !firmware.exists() {
-        eprintln!(
-            "SKIP rp2040_pio_onboarding_reaches_pio_ok: fixture not built at {firmware:?}. \
-             Build it with: RUSTFLAGS=\"-C link-arg=-Tlink.x\" cargo build \
-             -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi"
+        labwired_core::test_support::skip_or_fail_missing_firmware(
+            "firmware-rp2040-pio-onboarding",
+            &format!("RP2040 PIO onboarding fixture ({})", firmware.display()),
+            "RUSTFLAGS=\"-C link-arg=-Tlink.x\" cargo build -p firmware-rp2040-pio-onboarding \
+             --release --target thumbv6m-none-eabi",
         );
         return;
     }

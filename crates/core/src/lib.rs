@@ -32,6 +32,8 @@ pub mod signals;
 pub mod sim_input;
 pub mod snapshot;
 pub mod system;
+#[doc(hidden)]
+pub mod test_support;
 pub mod trace;
 pub mod vfi;
 pub mod world;

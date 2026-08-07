@@ -12,13 +12,22 @@ fn root() -> PathBuf {
 }
 
 fn target() -> Option<Target> {
-    let elf = root().join("target/thumbv7m-none-eabi/release/firmware-f103-fuzztarget");
+    // Cargo's real target dir, not `<workspace>/target`: a bucketed
+    // CARGO_TARGET_DIR puts the cross-built fuzz target somewhere else
+    // entirely, and this test answers a missing ELF by returning None.
+    let target = labwired_core::test_support::target_dir();
+    let elf = target.join("thumbv7m-none-eabi/release/firmware-f103-fuzztarget");
     let elf = if elf.exists() {
         elf
     } else {
-        root().join("target/thumbv7m-none-eabi/debug/firmware-f103-fuzztarget")
+        target.join("thumbv7m-none-eabi/debug/firmware-f103-fuzztarget")
     };
     if !elf.exists() {
+        labwired_core::test_support::skip_or_fail_missing_firmware(
+            "firmware-f103-fuzztarget",
+            &format!("fuzz target ELF ({})", elf.display()),
+            "cargo build -p firmware-f103-fuzztarget --release --target thumbv7m-none-eabi",
+        );
         return None;
     }
     Target::from_elf(

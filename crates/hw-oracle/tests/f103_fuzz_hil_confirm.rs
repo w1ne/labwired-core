@@ -40,11 +40,13 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 fn elf() -> PathBuf {
-    let r = root().join("target/thumbv7m-none-eabi/release/firmware-f103-fuzztarget");
+    let r = labwired_core::test_support::target_dir()
+        .join("thumbv7m-none-eabi/release/firmware-f103-fuzztarget");
     if r.exists() {
         r
     } else {
-        root().join("target/thumbv7m-none-eabi/debug/firmware-f103-fuzztarget")
+        labwired_core::test_support::target_dir()
+            .join("thumbv7m-none-eabi/debug/firmware-f103-fuzztarget")
     }
 }
 fn packed(input: &[u8]) -> Vec<u32> {
