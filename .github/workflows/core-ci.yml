@@ -574,10 +574,17 @@ jobs:
       # release, so the counter path is observable in this lane and nowhere
       # else. `release_only_cfg_ratchet` (below) keeps the target list honest
       # if a new release-only block is ever added elsewhere.
+      # `world_esp32c3_ble_pong` is release-only for cost, not for behaviour:
+      # two C3 mask-ROM boots plus the advertising rounds the owner's BLE Pong
+      # needs to elect a host is ~180M cycles, seconds in release and tens of
+      # minutes in debug. It is the only lane that runs two ESP32-C3 instances
+      # against each other over the BLE air, which is where "both nodes have the
+      # same address" hid.
       - name: Release-gated tests — cfg(not(debug_assertions))
         run: >
           cargo test --release -p labwired-core --features event-scheduler
           --lib --test event_scheduler --test release_only_cfg_ratchet
+          --test world_esp32c3_ble_pong
 
       # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
       # covered pre-merge as well — do not read this step as their only lane.

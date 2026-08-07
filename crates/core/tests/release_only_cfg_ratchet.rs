@@ -48,6 +48,8 @@ const RELEASE_LANE_TARGETS: &[&str] = &[
     "tests/event_scheduler.rs",
     // `--test release_only_cfg_ratchet` (this file)
     "tests/release_only_cfg_ratchet.rs",
+    // `--test world_esp32c3_ble_pong`
+    "tests/world_esp32c3_ble_pong.rs",
 ];
 
 /// The marker that makes code invisible to a debug build.
