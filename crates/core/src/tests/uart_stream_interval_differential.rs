@@ -22,7 +22,7 @@
 mod uart_stream_interval_tests {
     use crate::bus::SystemBus;
     use crate::peripherals::uart::{Uart, UartRegisterLayout, UartStreamDevice};
-    use crate::{Bus, Peripheral};
+    use crate::Peripheral;
 
     /// Emits an ascending byte on every poll — so the RX contents are a direct
     /// transcript of how many times the UART serviced its streams.

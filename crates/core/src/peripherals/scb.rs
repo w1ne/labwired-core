@@ -221,11 +221,11 @@ impl Scb {
     /// Clears the CPU-visible mirror with it, so the batch loop stops breaking
     /// once the machine has applied the reset.
     pub fn drain_reset_request(&self) -> bool {
-        let latched = self.pending_reset.replace(false);
-        if latched {
-            self.sysreset_signal.store(false, Ordering::Relaxed);
+        if !self.pending_reset.replace(false) {
+            return false;
         }
-        latched
+        self.sysreset_signal.store(false, Ordering::Relaxed);
+        true
     }
 
     /// The CPU-visible SYSRESETREQ mirror, for `configure_cortex_m` to hand to

@@ -303,13 +303,6 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
                 .is_some_and(|f| f.models_ops())
         });
-        // Cache whether an IO-Link master is attached to any UART. The probe is
-        // a nested scan (peripherals → downcast Uart → streams → downcast
-        // IolinkMaster), and `requires_cycle_accurate` asks per batch plan, per
-        // step and per idle-FF check — so it is answered from this bool instead
-        // of walking the bus every time. `attach_uart_stream_by_id` refreshes it
-        // too: it is the only post-build path that appends a UART stream.
-        self.iolink_master_attached = self.scan_iolink_master();
         // Cache the index of a FLASH peripheral whose opt-in H5 program-error
         // gate is on, so the flash-region write path can validate programs
         // without scanning. `None` (gate off) ⇒ that path is unchanged.
@@ -843,13 +836,6 @@ impl SystemBus {
             .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not a UART"))?;
         uart.detach_console_sink();
         uart.attach_stream_device(dev);
-        // This is the one post-build path that appends to a UART's
-        // `attached_streams`, so the `iolink_master_attached` cache that
-        // `requires_cycle_accurate` reads would otherwise go stale here — a
-        // stale `false` would batch a bus that must run cycle-accurate and
-        // silently change IO-Link timing. Re-derive it from the streams we just
-        // mutated. Cheap: attaching is a wiring-time operation, not a hot path.
-        self.iolink_master_attached = self.scan_iolink_master();
         // Stream attach can flip models that force walk when a peer is wired
         // (CanBus-style). Rebuild tick indices and recompute walk-deletion —
         // same seam as `attach_can_bus_by_id`. EspUart under event-scheduler
