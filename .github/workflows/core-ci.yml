@@ -481,7 +481,11 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, not 20: the release-gated step now boots two ESP32-C3 mask ROMs and
+    # plays the BLE Pong election out (~180M cycles, several minutes on a hosted
+    # runner). A timeout that cannot fit the work it names is a gate that fails
+    # for the wrong reason.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
