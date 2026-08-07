@@ -1172,7 +1172,6 @@ pub(crate) fn run_one_c3_wifi(
     use labwired_core::peripherals::esp32c3::{virtual_wifi, wifi_mac::Esp32c3WifiMac};
 
     virtual_wifi::reset();
-    eprintln!("[solo] one C3 on VirtualWifi: STA=02:00:00:00:00:02 (AP hosts DHCP + HTTP)");
 
     // If the manifest declares a `wifi_ap`, host a medium with that config;
     // otherwise the MACs bind the process-global default AP (byte-identical to
@@ -1204,6 +1203,10 @@ pub(crate) fn run_one_c3_wifi(
         Ok(m) => m,
         Err(c) => return c,
     };
+    eprintln!(
+        "[solo] one C3 on VirtualWifi: STA={} (AP hosts DHCP + HTTP)",
+        format_efuse_mac(&m)
+    );
     for p in m.bus.peripherals.iter_mut() {
         let Some(any) = p.dev.as_any_mut() else {
             continue;
