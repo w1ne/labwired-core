@@ -249,7 +249,29 @@ jobs:
   # step here.
   pr-gate:
     name: pr-gate
-    if: github.event_name == 'pull_request'
+    # `workflow_dispatch` too, and this is not a convenience — it is the only
+    # way out of a specific deadlock. `pr-gate` is one of the two REQUIRED
+    # contexts on main, and required contexts are reported against the PR's
+    # head SHA. GitHub keeps at most ONE pending run per concurrency group, so
+    # when a run in `core-ci-<pr>` gets stuck queued (2026-08-06: an Actions
+    # outage left runs queued with zero jobs, un-cancellable — force-cancel
+    # answers "cannot cancel a workflow re-run that has not yet queued"), every
+    # later push to that PR creates NO run at all. The head SHA then carries no
+    # `pr-gate` context, `enforce_admins` is on, and the PR is unmergeable with
+    # nothing anyone can click.
+    #
+    # A dispatch escapes it because `github.ref` is `refs/heads/<branch>`, which
+    # lands in a DIFFERENT concurrency group than the wedged `core-ci-<pr>` one,
+    # and it reports against the branch tip — the same commit as the PR head.
+    # The superproject hit the same wall the same night and fixed it the same
+    # way (w1ne/labwired#1405).
+    #
+    # ⚠️ A dispatch checks out the BRANCH TIP, whereas `pull_request` builds the
+    # merge commit. That difference is real (see the default-members note below
+    # on catching semantic conflicts against the merge result), so a dispatched
+    # pr-gate is only equivalent when the branch is already up to date with
+    # main — which `strict` branch protection requires before merging anyway.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Was 5. The browser-layer steps below (crates/wasm clippy + lib tests) are
     # a real ~1.5 min of additional compile — crates/wasm is a cdylib outside

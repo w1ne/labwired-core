@@ -1462,6 +1462,10 @@ impl Cpu for RiscV {
         }
     }
 
+    fn supports_runtime_snapshot(&self) -> bool {
+        true
+    }
+
     fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
         use crate::runtime_snapshot::RiscVRuntimeSnapshot;
         let snap = RiscVRuntimeSnapshot {

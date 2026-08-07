@@ -3460,6 +3460,10 @@ impl Cpu for XtensaLx7 {
         }
     }
 
+    fn supports_runtime_snapshot(&self) -> bool {
+        true
+    }
+
     fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
         use crate::runtime_snapshot::XtensaLx7RuntimeSnapshot;
         let snap = XtensaLx7RuntimeSnapshot {

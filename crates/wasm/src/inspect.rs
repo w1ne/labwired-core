@@ -206,7 +206,14 @@ impl WasmSimulator {
                 return Ok(found);
             }
         }
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return Err(JsValue::from_str("simulator has no machine loaded"));
+        };
         let binding = self
             .board_io
             .iter()
@@ -300,7 +307,14 @@ impl WasmSimulator {
     /// Uses peripheral snapshot() to read ODR regardless of register layout.
     #[wasm_bindgen]
     pub fn get_board_io_states(&self) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
         for binding in &self.board_io {
@@ -329,7 +343,14 @@ impl WasmSimulator {
             pin: u8,
         }
 
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
             Ok(r) => r,
             Err(_) => return JsValue::NULL,
@@ -385,7 +406,14 @@ impl WasmSimulator {
             Err(_) => return JsValue::NULL,
         };
 
-        let machine = self.machine.as_mut().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_mut() else {
+            return JsValue::NULL;
+        };
         let resolved: Vec<Option<(usize, u8)>> = refs
             .iter()
             .map(|r| {
@@ -434,7 +462,14 @@ impl WasmSimulator {
     /// cycle counts the playground runs to.
     #[wasm_bindgen]
     pub fn read_logic_edges(&mut self, cursor: f64) -> JsValue {
-        let machine = self.machine.as_mut().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_mut() else {
+            return JsValue::NULL;
+        };
         let batch = machine.logic_read_edges(cursor as u64);
         let edges: Vec<serde_json::Value> = batch
             .edges
@@ -477,7 +512,14 @@ impl WasmSimulator {
             pin: u8,
         }
 
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
             Ok(r) => r,
             Err(_) => return JsValue::NULL,
@@ -523,7 +565,14 @@ impl WasmSimulator {
     /// Get a peripheral's full state snapshot as JSON.
     #[wasm_bindgen]
     pub fn get_peripheral_snapshot(&self, name: &str) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         if let Some(idx) = machine.bus.find_peripheral_index_by_name(name) {
             let snapshot = machine.bus.peripherals[idx].dev.snapshot();
             serde_wasm_bindgen::to_value(&snapshot).unwrap_or(JsValue::NULL)
@@ -540,7 +589,14 @@ impl WasmSimulator {
     pub fn get_adc_device_states(&self) -> JsValue {
         use labwired_core::peripherals::adc::Adc;
 
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let bus = &machine.bus;
         let mut states: Vec<serde_json::Value> = Vec::new();
 
@@ -581,7 +637,14 @@ impl WasmSimulator {
     /// Returns analog state for ADC and PWM board_io bindings.
     #[wasm_bindgen]
     pub fn get_board_io_analog_states(&self) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
         for binding in &self.board_io {
@@ -627,7 +690,14 @@ impl WasmSimulator {
     /// straight onto `boardIoStates[partId]`.
     #[wasm_bindgen]
     pub fn get_actuator_states(&self) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
         for servo in &machine.bus.servos {
@@ -774,7 +844,14 @@ impl WasmSimulator {
     /// bus side rather than inside a hardware bus peripheral.
     #[wasm_bindgen]
     pub fn get_tm1637_text(&self, device_id: &str) -> Result<String, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return Err(JsValue::from_str("simulator has no machine loaded"));
+        };
         machine
             .bus
             .tm1637
@@ -806,7 +883,14 @@ impl WasmSimulator {
     /// either way it is wired.
     #[wasm_bindgen]
     pub fn get_seven_segment_text(&self, device_id: &str) -> Result<String, JsValue> {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return Err(JsValue::from_str("simulator has no machine loaded"));
+        };
         machine
             .bus
             .seven_segment
@@ -882,7 +966,14 @@ impl WasmSimulator {
     /// Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
     #[wasm_bindgen]
     pub fn get_spi_device_states(&self) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
         for binding in &self.board_io {
@@ -938,7 +1029,14 @@ impl WasmSimulator {
     /// Returns `[{ id, kind: "neo6m-gps", lat, lon, has_fix }]`.
     #[wasm_bindgen]
     pub fn get_uart_device_states(&self) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
         for binding in &self.board_io {
@@ -984,7 +1082,14 @@ impl WasmSimulator {
     /// List all peripherals: [{ name, base_address }]
     #[wasm_bindgen]
     pub fn get_peripheral_list(&self) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let list: Vec<serde_json::Value> = machine
             .bus
             .peripherals
@@ -1015,7 +1120,14 @@ impl WasmSimulator {
     /// unmodeled-but-named register must render as unknown, not as zero.
     #[wasm_bindgen]
     pub fn inspect(&self, name: Option<String>, include_bytes: bool) -> JsValue {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         let opts = labwired_core::inspect::InspectOpts {
             include_bytes,
             peripheral: None,
@@ -1040,7 +1152,14 @@ impl WasmSimulator {
     /// / the `inspect` payload; this raw byte view is the fast path).
     #[wasm_bindgen]
     pub fn peek(&self, addr: u32, len: u32) -> Box<[u8]> {
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return Vec::new().into_boxed_slice();
+        };
         machine
             .peek(addr as u64, len as usize)
             .to_lossy_bytes()
@@ -1052,7 +1171,14 @@ impl WasmSimulator {
     #[wasm_bindgen]
     pub fn get_iolink_master_state(&self) -> JsValue {
         use labwired_core::peripherals::components::{IolinkLinkState, IolinkMaster};
-        let machine = self.machine.as_ref().unwrap();
+        // A panic here would throw a JS exception straight out of this wasm
+        // frame; JS exceptions do NOT run Rust destructors, so the
+        // wasm-bindgen borrow guard would never drop and EVERY later call
+        // would fail with "recursive use of an object". Never panic in an
+        // accessor — answer neutrally instead.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
         for p in &machine.bus.peripherals {
             let Some(any) = p.dev.as_any() else {
                 continue;
