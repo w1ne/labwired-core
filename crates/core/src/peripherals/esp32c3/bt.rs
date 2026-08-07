@@ -1429,7 +1429,7 @@ impl Esp32c3Bt {
             prog_queue: VecDeque::new(),
             radio: None,
             radio_duration: 0,
-            rx_cursor: 0,
+            rx_cursor: default_ble_air_bus().current_seq(),
             node_id: next_node_id(),
             air: default_ble_air_bus().clone(),
         }
@@ -1439,12 +1439,24 @@ impl Esp32c3Bt {
     /// world share a medium and two worlds do not. Mirrors
     /// [`Nrf52Radio::with_air`](crate::peripherals::nrf52::radio::Nrf52Radio::with_air).
     /// Rebind the shared BLE air (browser multi-chip lab-group isolation).
+    ///
+    /// The cursor joins at the air's CURRENT sequence, never at 0: a radio has
+    /// no history buffer, so frames that crossed before this controller existed
+    /// are gone. A lab reuses its `AirBus` across a simulation restart (the
+    /// playground mints a new one only when the source/diagram hash changes),
+    /// and `next_node_id()` hands the restarted controller a fresh identity —
+    /// so without this join it would neither age out nor recognise the previous
+    /// run's frames, and would replay up to `AIR_DEPTH` of them per channel as
+    /// live peer traffic before ever seeing anything current.
     pub fn set_air(&mut self, air: BleAirBus) {
+        self.rx_cursor = air.current_seq();
         self.air = air;
     }
 
     pub fn with_air(air: BleAirBus) -> Self {
-        Self { air, ..Self::new() }
+        let mut bt = Self::new();
+        bt.set_air(air);
+        bt
     }
 
     /// The air this controller is on (tests, inspection, the air view).
@@ -3780,4 +3792,43 @@ mod tests {
         }
         assert!(last > 0, "CLKN never advanced");
     }
+    /// A simulation RESTART reuses the lab's `AirBus` and builds fresh
+    /// controllers. The previous run's frames are still on that air, and
+    /// `next_node_id()` gives the restarted controller a new identity — so the
+    /// old frames are not filtered out as its own. It must still not see them:
+    /// a radio hears what is transmitted while it is listening, not a backlog.
+    #[test]
+    fn a_controller_built_after_a_restart_skips_the_previous_runs_backlog() {
+        use crate::peripherals::ble_air::{BleAirBus, BleAirFrame};
+        let air = BleAirBus::new();
+
+        // Run 1: two nodes trade advertising frames on the primary channels.
+        for _ in 0..10 {
+            for ch in [37u8, 38, 39] {
+                air.transmit(BleAirFrame {
+                    seq: 0,
+                    source: 1,
+                    channel: ch,
+                    access_address: 0x8E89_BED6,
+                    crc_init: 0x0055_5555,
+                    pdu: vec![0x20, 0x02, 0xE5, 0x02],
+                });
+            }
+        }
+        let backlog = air.current_seq();
+        assert_eq!(backlog, 30, "the previous run left frames on the air");
+
+        // Restart: same air, brand-new controller.
+        let restarted = Esp32c3Bt::with_air(air.clone());
+        assert_eq!(
+            restarted.rx_cursor, backlog,
+            "a restarted controller joins the air where it is now, not at 0",
+        );
+        assert!(
+            air.receive_from(37, 0x8E89_BED6, restarted.rx_cursor, restarted.node_id)
+                .is_none(),
+            "and therefore sees none of the previous run's traffic",
+        );
+    }
+
 }

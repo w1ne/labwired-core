@@ -169,6 +169,19 @@ impl BleAirBus {
 
     /// Drop every channel ring. Keeps the trace, exactly as
     /// `VirtualAirBus::clear` does.
+    /// The sequence number the NEXT transmission will carry.
+    ///
+    /// A controller binding to this air starts its cursor here, so it hears
+    /// only what is sent from that moment on. A radio has no history buffer:
+    /// frames that crossed the air before it powered on are simply gone. This
+    /// matters because a lab REUSES its air across a simulation restart (the
+    /// playground mints a new `AirBus` only when the source/diagram hash
+    /// changes), so without this a restarted node would replay the previous
+    /// run's backlog as live peer traffic.
+    pub fn current_seq(&self) -> u64 {
+        self.inner.lock().map(|a| a.next_seq).unwrap_or(0)
+    }
+
     pub fn clear(&self) {
         if let Ok(mut a) = self.inner.lock() {
             a.channels.clear();
@@ -253,6 +266,28 @@ mod tests {
         let b = BleAirBus::new();
         a.transmit(frame(37, 0x8E89_BED6, &[0x20, 0x00]));
         assert!(b.receive_from(37, 0x8E89_BED6, 0, 2).is_none());
+    }
+
+
+    /// `current_seq` is the join point a fresh controller uses to skip a
+    /// backlog it was not present for.
+    #[test]
+    fn current_seq_tracks_what_has_already_crossed_the_air() {
+        let bus = BleAirBus::new();
+        assert_eq!(bus.current_seq(), 0, "nothing sent yet");
+        for _ in 0..10 {
+            bus.transmit(frame(37, 0x8E89_BED6, &[0x20, 0x01]));
+        }
+        assert_eq!(bus.current_seq(), 10);
+        assert!(
+            bus.receive_from(37, 0x8E89_BED6, bus.current_seq(), 3).is_none(),
+            "a listener joining now hears none of the backlog",
+        );
+        assert!(
+            bus.receive_from(37, 0x8E89_BED6, 0, 3).is_some(),
+            "but the backlog is still there for cursor 0 — which is why the \
+             cursor, not the bus, is what has to be fixed",
+        );
     }
 
     /// The retention window is bounded and drops the oldest.

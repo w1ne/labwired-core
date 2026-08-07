@@ -953,7 +953,17 @@ boards:
     # 2603 core lib tests + xtensa 57 + esp32_ili9341_attach 2/2 green.
     # 2026-08-06: universal I2C kits + external_devices attach path; nRF UARTE RX test style only.
     # No register map / base / reset change on silicon-asserted set. Offline gates unchanged.
-    drift_ack: 2026-08-06
+    # 2026-08-07: BLE receive-cursor initialisation only. A controller binding
+    # to a BleAirBus now joins at the air's current sequence instead of 0, so a
+    # RESTART (which reuses the lab's air) stops replaying the previous run's
+    # frames as live peer traffic. `rx_cursor` is internal twin state — a cursor
+    # into the virtual air — not a hardware register: no register map, base,
+    # reset value, or silicon-asserted behaviour changes, and the reset oracle
+    # is untouched. Byte-identical for a normal run, where nothing has
+    # transmitted before the controllers attach and the join point is 0 anyway.
+    # Evidence: 2700 core lib tests green, 2816 with --features event-scheduler,
+    # workspace clippy --all-targets -D warnings clean.
+    drift_ack: 2026-08-07
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md

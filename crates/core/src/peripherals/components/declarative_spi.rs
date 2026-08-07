@@ -104,6 +104,16 @@ impl GenericSpiDevice {
         self.registers.iter().find(|r| r.addr == addr)
     }
 
+    /// The register whose byte span covers `addr`, which is not always the one
+    /// whose base equals it — see `build_read_buf`.
+    fn find_register_containing(&self, addr: u8) -> Option<&RegisterSpec> {
+        self.registers.iter().find(|r| {
+            let base = u16::from(r.addr);
+            let a = u16::from(addr);
+            a >= base && a < base + u16::from(r.width)
+        })
+    }
+
     fn next_addr_above(&self, addr: u8) -> Option<u8> {
         self.registers
             .iter()
@@ -114,17 +124,43 @@ impl GenericSpiDevice {
 
     /// Concatenated read stream from `start`: every register at addr ≥ start in
     /// ascending order (auto-increment), or just the matched register.
+    /// Bytes a read beginning at `start` streams back.
+    ///
+    /// A read may begin *inside* a multi-byte register, because a datasheet
+    /// numbers every byte of one as its own address: the ADXL345 declares
+    /// DATAX0 at 0x32 and DATAX1 at 0x33 and says the low byte need not be read
+    /// when it is not wanted, so pointing at 0x33 must return the high byte.
+    ///
+    /// Selecting on `addr >= start` did not do that. It skipped the register
+    /// containing `start` and answered from the *next* one, so a firmware that
+    /// read one axis byte on its own got a different register's value —
+    /// 0x37 returned FIFO_CTL — with nothing to distinguish it from real data.
+    /// Matching on the span and dropping the bytes before `start` serves the
+    /// address the caller actually named.
     fn build_read_buf(&self, start: u8) -> Vec<u8> {
         let mut out = Vec::new();
         if self.framing.auto_increment {
-            let mut regs: Vec<&RegisterSpec> =
-                self.registers.iter().filter(|r| r.addr >= start).collect();
+            let mut regs: Vec<&RegisterSpec> = self
+                .registers
+                .iter()
+                .filter(|r| u16::from(r.addr) + u16::from(r.width) > u16::from(start))
+                .collect();
             regs.sort_by_key(|r| r.addr);
             for r in regs {
-                out.extend(register_read_bytes(r, &self.slots, &self.reg_values));
+                let skip = usize::from(start.saturating_sub(r.addr));
+                out.extend(
+                    register_read_bytes(r, &self.slots, &self.reg_values)
+                        .into_iter()
+                        .skip(skip),
+                );
             }
-        } else if let Some(r) = self.find_register(start) {
-            out.extend(register_read_bytes(r, &self.slots, &self.reg_values));
+        } else if let Some(r) = self.find_register_containing(start) {
+            let skip = usize::from(start - r.addr);
+            out.extend(
+                register_read_bytes(r, &self.slots, &self.reg_values)
+                    .into_iter()
+                    .skip(skip),
+            );
         }
         out
     }
