@@ -14,4 +14,5 @@ board_io:
     peripheral: "gpioc"
     pin: 13
     signal: "input"
-    active_high: true
+    # UM1724: B1 is active-low (same as L476 Nucleo-64). Was incorrectly true.
+    active_high: false
