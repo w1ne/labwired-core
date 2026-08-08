@@ -252,6 +252,70 @@ mod spi_edge_sampling_lab_tests {
         }
     }
 
+    /// The SAME part, the SAME mismatch, on a DIFFERENT controller — through a
+    /// real manifest, so the kit → attach → controller chain is exercised, not
+    /// just the engine. The C3 GP-SPI reaches the same bytes as the STM32 bit
+    /// engine because both call one edge model; if they ever fork, this test
+    /// and `edge_sampling_with_a_mode_mismatch_corrupts_the_reading` disagree.
+    #[test]
+    fn the_esp32c3_controller_reaches_the_same_corruption() {
+        use labwired_config::ChipDescriptor;
+
+        fn c3_frame(spi_mode: Option<&str>) -> [u8; 4] {
+            let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+                .expect("load esp32c3.yaml");
+            let manifest: labwired_config::SystemManifest = serde_yaml::from_str(&format!(
+                r#"
+name: c3-max31855-edge
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "tc1"
+    type: "max31855"
+    connection: "spi2"
+    config:
+      cs_pin: "GPIO7"
+{}
+"#,
+                spi_mode
+                    .map(|m| format!("      spi_mode: {m}"))
+                    .unwrap_or_default()
+            ))
+            .expect("parse manifest");
+            let mut bus = SystemBus::from_config(&chip, &manifest).expect("build C3 bus");
+            let idx = bus.find_peripheral_index_by_name("spi2").unwrap();
+            let spi = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<crate::peripherals::esp32c3::spi::Esp32c3Spi>()
+                .unwrap();
+            // Reset MISC/USER already mean mode 0; clock four 8-bit frames
+            // through the W buffer the way the IDF driver does.
+            let mut out = [0u8; 4];
+            for byte in out.iter_mut() {
+                spi.write_u32(0x98, 0).unwrap(); // W0 = MOSI 0x00
+                spi.write_u32(0x1C, 8 - 1).unwrap(); // MS_DLEN
+                spi.write_u32(0x00, 1 << 24).unwrap(); // CMD.USR
+                *byte = (spi.read_u32(0x98).unwrap() & 0xFF) as u8;
+            }
+            out
+        }
+
+        assert_eq!(c3_frame(None), CLEAN, "C3 default path must be untouched");
+        assert_eq!(
+            c3_frame(Some("0")),
+            CLEAN,
+            "C3, matching modes: byte-identical"
+        );
+        assert_eq!(
+            c3_frame(Some("1")),
+            [0x00, 0xC8, 0x0B, 0x00],
+            "C3 mismatch must corrupt exactly as the STM32 engine does"
+        );
+    }
+
     /// A typo in the manifest must fail the build, not silently pick a mode.
     #[test]
     fn an_out_of_range_spi_mode_is_rejected() {
