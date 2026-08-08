@@ -24,6 +24,8 @@ pub mod logic_capture;
 pub mod logic_capture_differential;
 
 #[cfg(test)]
+pub mod bench_spi_engine;
+#[cfg(test)]
 pub mod machine_advance;
 #[cfg(test)]
 pub mod nrf52;
@@ -38,8 +40,6 @@ pub mod rp2040;
 pub mod rp2040_spi_carries_a_byte;
 #[cfg(test)]
 pub mod scb_reset;
-#[cfg(test)]
-pub mod bench_spi_engine;
 #[cfg(test)]
 pub mod spi_byte_level_golden;
 #[cfg(test)]
