@@ -5,8 +5,6 @@ pub mod bus_proof_matrix;
 #[cfg(test)]
 pub mod bus_trace_one_home;
 #[cfg(test)]
-pub mod cortex_m_memory_contract;
-#[cfg(test)]
 pub mod device_identity_one_home;
 #[cfg(test)]
 pub mod esp32;

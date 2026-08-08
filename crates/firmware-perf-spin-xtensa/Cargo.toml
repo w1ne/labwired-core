@@ -20,7 +20,12 @@ esp32s3 = ["esp-hal/esp32s3", "esp-backtrace/esp32s3"]
 
 [dependencies]
 esp-hal = { version = "1.1", features = ["unstable"] }
-esp-backtrace = { version = "0.19", features = ["panic-handler"] }
+# `println` is not optional decoration: esp-backtrace's build script requires
+# exactly one of `defmt` or `println` and fails the build with neither. This
+# fixture was the only consumer in the repo omitting it — the eight examples all
+# pass it — so the perf lane died compiling the fixture instead of measuring
+# anything, on every main commit since at least 41cff595.
+esp-backtrace = { version = "0.19", features = ["panic-handler", "println"] }
 
 [[bin]]
 name = "perf-spin-xtensa"
