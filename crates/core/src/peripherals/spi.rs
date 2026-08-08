@@ -63,10 +63,13 @@ pub trait SpiDevice: Send {
     /// pre-existing frame-boundary contract, so every device model that does
     /// not override this compiles and behaves exactly as before.
     ///
-    /// Honoured by the STM32 classic/FIFO bit engine in this module. The other
-    /// controllers exchange whole bytes; attaching an opt-in device to one of
-    /// them is rejected at config time rather than silently ignored (see
-    /// `SystemBus::attach_spi_device`).
+    /// Honoured by the STM32 classic/FIFO bit engine in this module and by the
+    /// ESP32-C3 GP-SPI controller, which share ONE edge model
+    /// ([`edge_slave_capture`] / [`edge_miso_wire`]). The remaining
+    /// controllers (ESP32 classic, ESP32-S3, nRF52 SPIM, STM32H5 SPIv3,
+    /// Kinetis DSPI) exchange whole bytes; attaching an opt-in device to one of
+    /// them is REJECTED at config time, naming the controller, rather than
+    /// silently ignored (see `SystemBus::attach_spi_device`).
     fn sampling(&self) -> SpiSampling {
         SpiSampling::Byte
     }
@@ -368,6 +371,37 @@ struct FrameTiming {
     lsb_first: bool,
 }
 
+impl FrameTiming {
+    /// The clock-mode view the shared edge model consumes.
+    fn wire(&self) -> WireMode {
+        WireMode {
+            bits: self.bits,
+            cpol: self.cpol,
+            cpha: self.cpha,
+            lsb_first: self.lsb_first,
+        }
+    }
+}
+
+/// The clock mode + frame shape one edge-accurate exchange needs: everything
+/// [`edge_slave_capture`] and [`edge_miso_wire`] read, and nothing else.
+///
+/// Deliberately NOT the STM32-specific [`FrameTiming`]: the ESP32-C3 GP-SPI
+/// controller has no SCK divider or half-period to speak of and still has a
+/// clock mode, so both controllers hand the SAME two functions this, and there
+/// is exactly one implementation of what an edge means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WireMode {
+    /// Frame size in bits.
+    pub bits: u8,
+    /// SCK idle level.
+    pub cpol: bool,
+    /// Sample on the leading (false) or trailing (true) edge.
+    pub cpha: bool,
+    /// Shift direction.
+    pub lsb_first: bool,
+}
+
 /// The frame currently shifting on the wire. Every bit period is two counted
 /// half-periods; the (SCK, MOSI, MISO) levels are a pure function of this
 /// state (see [`Spi::stm32_frame_levels`]).
@@ -390,6 +424,137 @@ struct ActiveFrame {
     second_half: bool,
     /// Peripheral-clock cycles left in the current half-period.
     ticks_left: u32,
+}
+
+// ── Edge-accurate slave sampling (shared by every controller with a clock mode)
+//
+// ONE implementation of what an SCK edge means. The STM32 bit engine below and
+// the ESP32-C3 GP-SPI controller both call these; a second copy would be a
+// second answer to "which edge does a mode-2 slave sample on?".
+
+/// Walk the SCK edges one frame puts on the wire, in order, calling
+/// `visit(half, new_level)`.
+///
+/// `half` is the half-period the edge STARTS (`h = 2*bit + second_half`),
+/// so the line levels in force just BEFORE the edge are those of half
+/// `h-1`; `half == 2*bits` is the trailing edge back to the CPOL idle level
+/// after the last half-period. SCK during half `h` is
+/// `cpol ^ cpha ^ (h odd)` — the same function [`Spi::stm32_frame_levels`]
+/// renders — so at CPHA=0 the frame opens with no edge (the first half
+/// already sits at the idle level) and closes with one, and at CPHA=1 the
+/// reverse. Either way a frame carries exactly `2 × bits` edges.
+pub(crate) fn for_each_edge(t: &WireMode, mut visit: impl FnMut(u32, bool)) {
+    let halves = 2 * u32::from(t.bits);
+    for h in 0..halves {
+        if h == 0 && !t.cpha {
+            continue; // level(0) == CPOL: no transition out of idle
+        }
+        visit(h, t.cpol ^ t.cpha ^ (h & 1 != 0));
+    }
+    if !t.cpha {
+        visit(halves, t.cpol);
+    }
+}
+
+/// Bit `idx` of a frame word in wire order (MSB first unless LSBFIRST).
+pub(crate) fn frame_bit(t: &WireMode, word: u16, idx: u8) -> bool {
+    let shift = if t.lsb_first { idx } else { t.bits - 1 - idx };
+    (word >> shift) & 1 != 0
+}
+
+/// The byte an edge-sampled slave actually latches off MOSI this frame.
+///
+/// The slave samples on the physical edge ITS mode selects — rising iff
+/// `cpol == cpha` (mode 0/3 sample rising, mode 1/2 falling) — and takes
+/// the level the line carried just BEFORE that edge. That pre-edge rule is
+/// the deterministic reading of a coincident edge: the master changes MOSI
+/// at bit boundaries, so a slave whose sample edge lands on a boundary
+/// (a CPHA mismatch) is sampling into the master's transition, which on
+/// silicon resolves through the driver's propagation delay to the OLD bit.
+/// `prev_mosi` is the level the pad already carried when the frame opened,
+/// which is what such a slave latches first.
+pub(crate) fn edge_slave_capture(
+    t: &WireMode,
+    mosi: u16,
+    prev_mosi: bool,
+    s_cpol: bool,
+    s_cpha: bool,
+) -> u16 {
+    let sample_rising = s_cpol == s_cpha;
+    let mut rx = 0u16;
+    let mut n: u8 = 0;
+    for_each_edge(t, |h, level| {
+        if level != sample_rising || n >= t.bits {
+            return;
+        }
+        let before = if h == 0 {
+            prev_mosi
+        } else {
+            frame_bit(t, mosi, ((h - 1) / 2) as u8)
+        };
+        if before {
+            rx |= 1 << if t.lsb_first { n } else { t.bits - 1 - n };
+        }
+        n += 1;
+    });
+    rx
+}
+
+/// Clock the slave's answer out on MISO at the slave's shift edges and
+/// latch it back at the master's sample edges.
+///
+/// Returns `(miso half-period map, word the master captured)`. A CPHA=0
+/// slave presents its first bit as soon as the frame opens (real parts
+/// drive it at CS↓); a CPHA=1 slave presents nothing until its first
+/// leading edge, so a master that samples on that same edge latches
+/// whatever the pad already carried — the classic one-bit shift a CPHA
+/// mismatch produces on real hardware. The master, like the slave, takes
+/// the pre-edge level.
+pub(crate) fn edge_miso_wire(
+    t: &WireMode,
+    resp: u16,
+    prev_miso: bool,
+    s_cpol: bool,
+    s_cpha: bool,
+) -> (u32, u16) {
+    let slave_sample_rising = s_cpol == s_cpha;
+    let master_sample_rising = t.cpol == t.cpha;
+    let halves = 2 * u32::from(t.bits);
+    // Slave output register: CPHA=0 presents bit 0 immediately, CPHA=1
+    // only from its first shift (leading) edge.
+    let mut out_idx: i32 = if s_cpha { -1 } else { 0 };
+    let mut level = if s_cpha {
+        prev_miso
+    } else {
+        frame_bit(t, resp, 0)
+    };
+    let mut map = 0u32;
+    let mut painted = 0u32;
+    let mut rx = 0u16;
+    let mut n: u8 = 0;
+    for_each_edge(t, |h, edge_level| {
+        while painted < h {
+            map |= u32::from(level) << painted;
+            painted += 1;
+        }
+        if edge_level == master_sample_rising && n < t.bits {
+            if level {
+                rx |= 1 << if t.lsb_first { n } else { t.bits - 1 - n };
+            }
+            n += 1;
+        }
+        if edge_level != slave_sample_rising {
+            out_idx += 1;
+            if out_idx >= 0 && (out_idx as u32) < u32::from(t.bits) {
+                level = frame_bit(t, resp, out_idx as u8);
+            }
+        }
+    });
+    while painted < halves {
+        map |= u32::from(level) << painted;
+        painted += 1;
+    }
+    (map, rx)
 }
 
 /// STM32 SPI register file (F1/F4/L0 classic and L4/F7/G4 FIFO share this map;
@@ -1360,131 +1525,6 @@ impl Spi {
         (sck, bit(f.mosi), miso)
     }
 
-    /// Walk the SCK edges one frame puts on the wire, in order, calling
-    /// `visit(half, new_level)`.
-    ///
-    /// `half` is the half-period the edge STARTS (`h = 2*bit + second_half`),
-    /// so the line levels in force just BEFORE the edge are those of half
-    /// `h-1`; `half == 2*bits` is the trailing edge back to the CPOL idle level
-    /// after the last half-period. SCK during half `h` is
-    /// `cpol ^ cpha ^ (h odd)` — the same function [`Self::stm32_frame_levels`]
-    /// renders — so at CPHA=0 the frame opens with no edge (the first half
-    /// already sits at the idle level) and closes with one, and at CPHA=1 the
-    /// reverse. Either way a frame carries exactly `2 × bits` edges.
-    fn for_each_edge(t: &FrameTiming, mut visit: impl FnMut(u32, bool)) {
-        let halves = 2 * u32::from(t.bits);
-        for h in 0..halves {
-            if h == 0 && !t.cpha {
-                continue; // level(0) == CPOL: no transition out of idle
-            }
-            visit(h, t.cpol ^ t.cpha ^ (h & 1 != 0));
-        }
-        if !t.cpha {
-            visit(halves, t.cpol);
-        }
-    }
-
-    /// Bit `idx` of a frame word in wire order (MSB first unless LSBFIRST).
-    fn frame_bit(t: &FrameTiming, word: u16, idx: u8) -> bool {
-        let shift = if t.lsb_first { idx } else { t.bits - 1 - idx };
-        (word >> shift) & 1 != 0
-    }
-
-    /// The byte an edge-sampled slave actually latches off MOSI this frame.
-    ///
-    /// The slave samples on the physical edge ITS mode selects — rising iff
-    /// `cpol == cpha` (mode 0/3 sample rising, mode 1/2 falling) — and takes
-    /// the level the line carried just BEFORE that edge. That pre-edge rule is
-    /// the deterministic reading of a coincident edge: the master changes MOSI
-    /// at bit boundaries, so a slave whose sample edge lands on a boundary
-    /// (a CPHA mismatch) is sampling into the master's transition, which on
-    /// silicon resolves through the driver's propagation delay to the OLD bit.
-    /// `prev_mosi` is the level the pad already carried when the frame opened,
-    /// which is what such a slave latches first.
-    fn edge_slave_capture(
-        t: &FrameTiming,
-        mosi: u16,
-        prev_mosi: bool,
-        s_cpol: bool,
-        s_cpha: bool,
-    ) -> u16 {
-        let sample_rising = s_cpol == s_cpha;
-        let mut rx = 0u16;
-        let mut n: u8 = 0;
-        Self::for_each_edge(t, |h, level| {
-            if level != sample_rising || n >= t.bits {
-                return;
-            }
-            let before = if h == 0 {
-                prev_mosi
-            } else {
-                Self::frame_bit(t, mosi, ((h - 1) / 2) as u8)
-            };
-            if before {
-                rx |= 1 << if t.lsb_first { n } else { t.bits - 1 - n };
-            }
-            n += 1;
-        });
-        rx
-    }
-
-    /// Clock the slave's answer out on MISO at the slave's shift edges and
-    /// latch it back at the master's sample edges.
-    ///
-    /// Returns `(miso half-period map, word the master captured)`. A CPHA=0
-    /// slave presents its first bit as soon as the frame opens (real parts
-    /// drive it at CS↓); a CPHA=1 slave presents nothing until its first
-    /// leading edge, so a master that samples on that same edge latches
-    /// whatever the pad already carried — the classic one-bit shift a CPHA
-    /// mismatch produces on real hardware. The master, like the slave, takes
-    /// the pre-edge level.
-    fn edge_miso_wire(
-        t: &FrameTiming,
-        resp: u16,
-        prev_miso: bool,
-        s_cpol: bool,
-        s_cpha: bool,
-    ) -> (u32, u16) {
-        let slave_sample_rising = s_cpol == s_cpha;
-        let master_sample_rising = t.cpol == t.cpha;
-        let halves = 2 * u32::from(t.bits);
-        // Slave output register: CPHA=0 presents bit 0 immediately, CPHA=1
-        // only from its first shift (leading) edge.
-        let mut out_idx: i32 = if s_cpha { -1 } else { 0 };
-        let mut level = if s_cpha {
-            prev_miso
-        } else {
-            Self::frame_bit(t, resp, 0)
-        };
-        let mut map = 0u32;
-        let mut painted = 0u32;
-        let mut rx = 0u16;
-        let mut n: u8 = 0;
-        Self::for_each_edge(t, |h, edge_level| {
-            while painted < h {
-                map |= u32::from(level) << painted;
-                painted += 1;
-            }
-            if edge_level == master_sample_rising && n < t.bits {
-                if level {
-                    rx |= 1 << if t.lsb_first { n } else { t.bits - 1 - n };
-                }
-                n += 1;
-            }
-            if edge_level != slave_sample_rising {
-                out_idx += 1;
-                if out_idx >= 0 && (out_idx as u32) < u32::from(t.bits) {
-                    level = Self::frame_bit(t, resp, out_idx as u8);
-                }
-            }
-        });
-        while painted < halves {
-            map |= u32::from(level) << painted;
-            painted += 1;
-        }
-        (map, rx)
-    }
-
     /// Publish the current frame-state levels into the shared line cell (the
     /// cell pushes any transition into the logic tap at this exact moment).
     fn stm32_drive_levels(&self) {
@@ -1522,7 +1562,7 @@ impl Spi {
             // really sampled, and its answer is clocked back at its own edges.
             Some((s_cpol, s_cpha)) if !self.attached_devices.is_empty() => {
                 let (prev_mosi, prev_miso) = self.edge_hold;
-                let slave_rx = Self::edge_slave_capture(&t, mosi, prev_mosi, s_cpol, s_cpha);
+                let slave_rx = edge_slave_capture(&t.wire(), mosi, prev_mosi, s_cpol, s_cpha);
                 let mut resp = 0u8;
                 for dev in &mut self.attached_devices {
                     let answer = dev.transfer((slave_rx & 0xFF) as u8);
@@ -1531,9 +1571,9 @@ impl Spi {
                     }
                 }
                 let (halves, master_rx) =
-                    Self::edge_miso_wire(&t, u16::from(resp), prev_miso, s_cpol, s_cpha);
+                    edge_miso_wire(&t.wire(), u16::from(resp), prev_miso, s_cpol, s_cpha);
                 self.edge_hold = (
-                    Self::frame_bit(&t, mosi, t.bits - 1),
+                    frame_bit(&t.wire(), mosi, t.bits - 1),
                     (halves >> (2 * u32::from(t.bits) - 1)) & 1 != 0,
                 );
                 (master_rx, Some(halves))

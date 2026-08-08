@@ -362,9 +362,8 @@ impl SystemBus {
             }
             c.push_device(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32c3::spi::Esp32c3Spi>() {
-            if edge_sampled {
-                return Err(edge_sampling_unsupported(controller, "ESP32-C3 GP-SPI"));
-            }
+            // The C3 GP-SPI honours edge sampling through the same shared edge
+            // model as the STM32 bit engine.
             c.push_device(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>() {
             if edge_sampled {

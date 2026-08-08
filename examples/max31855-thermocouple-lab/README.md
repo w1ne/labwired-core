@@ -46,7 +46,8 @@ in mode 0 against `spi_mode: 1` and the 32-bit frame comes back shifted one bit
 symptom the mismatch produces on real hardware. Omit `spi_mode` and nothing
 about the lab changes: it is the byte-level path, unmodified.
 
-Only a controller with a bit-level engine can honour it (the STM32 classic/FIFO
-SPI). Asking for `spi_mode` on a controller that exchanges whole bytes fails at
-config time with a message naming that controller, rather than silently doing
-nothing.
+Only a controller that models the clock mode can honour it: the STM32
+classic/FIFO SPI and the ESP32-C3 GP-SPI. Asking for `spi_mode` on a controller
+that exchanges whole bytes (ESP32 classic, ESP32-S3, nRF52 SPIM, STM32H5 SPIv3,
+Kinetis DSPI) fails at config time with a message naming that controller, rather
+than silently doing nothing.
