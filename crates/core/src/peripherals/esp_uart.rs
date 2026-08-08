@@ -70,7 +70,7 @@ use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const UART_WAKE_TOKEN: u32 = 1;
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
@@ -236,6 +236,57 @@ const READONLY_REGS: &[(u64, u32)] = &[
     (OFF_NEGPULSE, RESET_NEGPULSE),
 ];
 
+/// Word slots in the config-register file: offsets `0x00 ..= OFF_ID` (0x80),
+/// one `u32` each. `CONFIG_REGS` must stay inside this window — the unit test
+/// `every_config_reg_offset_has_a_slot` fails loudly if a register is ever
+/// added past it, rather than letting the write be dropped silently.
+const REG_WORDS: usize = (OFF_ID as usize / 4) + 1;
+
+/// Flat config-register file indexed by word offset (`off / 4`).
+///
+/// Was a `HashMap<u64, u32>`. Every tick, `int_raw()` → `txfifo_empty_thrhd()`
+/// → `reg(OFF_CONF1)` SipHashed a `u64` just to read a constant threshold;
+/// that chain was ~7.6% of a profiled ESP32-C3 rom-boot run. Semantics are
+/// preserved exactly: the file is zero-initialised, so a slot that was never
+/// written reads 0 — the `unwrap_or(0)` the map lookup used to supply — and an
+/// unaligned or out-of-window offset also reads 0 (the map would simply have
+/// missed).
+struct RegFile([u32; REG_WORDS]);
+
+impl Default for RegFile {
+    fn default() -> Self {
+        Self([0; REG_WORDS])
+    }
+}
+
+impl RegFile {
+    /// Word offset → slot, or `None` for unaligned / out-of-window offsets
+    /// (which read as 0 and swallow writes, exactly as the map did).
+    #[inline]
+    fn slot(off: u64) -> Option<usize> {
+        if off & 3 != 0 {
+            return None;
+        }
+        let i = (off >> 2) as usize;
+        (i < REG_WORDS).then_some(i)
+    }
+
+    #[inline]
+    fn get(&self, off: u64) -> u32 {
+        match Self::slot(off) {
+            Some(i) => self.0[i],
+            None => 0,
+        }
+    }
+
+    #[inline]
+    fn set(&mut self, off: u64, value: u32) {
+        if let Some(i) = Self::slot(off) {
+            self.0[i] = value;
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct EspUart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -249,7 +300,7 @@ pub struct EspUart {
     /// Interrupt-matrix source ID (UART0=27, UART1=28, UART2=29).
     source_id: u32,
     /// Config register storage: keyed by word offset, stores masked value.
-    regs: HashMap<u64, u32>,
+    regs: RegFile,
     /// TX FIFO (≤ FIFO_LEN); shifts out at the baud rate.
     tx_fifo: VecDeque<u8>,
     /// RX FIFO; a FIFO read pops one byte (read side-effect → interior mut).
@@ -312,9 +363,9 @@ impl EspUart {
     /// The ESP32-C3 carries the identical UART IP at 160 MHz, so it builds its
     /// instances through here (see `peripherals::esp32c3::uart`).
     pub fn new_with_cpu_clock(echo_stdout: bool, source_id: u32, cpu_clock_hz: u64) -> Self {
-        let mut regs = HashMap::new();
+        let mut regs = RegFile::default();
         for &(off, reset, _mask) in CONFIG_REGS {
-            regs.insert(off, reset);
+            regs.set(off, reset);
         }
         Self {
             sink: None,
@@ -450,8 +501,9 @@ impl EspUart {
         }
     }
 
+    #[inline]
     fn reg(&self, off: u64) -> u32 {
-        self.regs.get(&off).copied().unwrap_or(0)
+        self.regs.get(off)
     }
 
     /// Look up write mask for a config register offset. Returns None if not a
@@ -628,7 +680,7 @@ impl EspUart {
     fn write_config_reg(&mut self, off: u64, value: u32) {
         if let Some(mask) = Self::config_mask(off) {
             let masked = value & mask;
-            self.regs.insert(off, masked);
+            self.regs.set(off, masked);
             if off == OFF_CONF0 {
                 self.apply_conf0(masked);
             }
@@ -860,6 +912,53 @@ impl Peripheral for EspUart {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The register file is a flat array, not a map: an offset outside its
+    /// window is not stored at all. Every config register must therefore have
+    /// a slot, or its writes would be dropped and its reads would answer 0
+    /// forever — silently. Fails the moment someone adds a register past
+    /// `OFF_ID` without widening `REG_WORDS`.
+    #[test]
+    fn every_config_reg_offset_has_a_slot() {
+        for &(off, reset, mask) in CONFIG_REGS {
+            let slot = RegFile::slot(off)
+                .unwrap_or_else(|| panic!("config reg 0x{off:02X} has no slot in the register file (REG_WORDS={REG_WORDS})"));
+            assert!(slot < REG_WORDS);
+            // And the reset value survives a round trip through the file.
+            let mut f = RegFile::default();
+            f.set(off, reset & mask);
+            assert_eq!(f.get(off), reset & mask, "round trip at 0x{off:02X}");
+        }
+        // Read-only status regs are answered from a constant table, never the
+        // file, but they share the offset window — check it holds for them too.
+        for &(off, _) in READONLY_REGS {
+            assert!(
+                RegFile::slot(off).is_some(),
+                "read-only reg 0x{off:02X} is outside the register-file window"
+            );
+        }
+    }
+
+    /// The map this replaced returned `unwrap_or(0)` for any offset it had
+    /// never seen. Preserve that exactly for never-written, unaligned and
+    /// out-of-window offsets.
+    #[test]
+    fn unwritten_unaligned_and_out_of_window_offsets_read_zero() {
+        let f = RegFile::default();
+        assert_eq!(f.get(OFF_CONF1), 0, "never-written slot reads 0");
+        assert_eq!(f.get(0x22), 0, "unaligned offset reads 0");
+        assert_eq!(f.get(OFF_ID + 4), 0, "past the window reads 0");
+        assert_eq!(f.get(0xFFFF_FFFF_FFFF_FFFC), 0, "far out of range reads 0");
+
+        // Writes to those offsets are swallowed, not panics, and do not
+        // corrupt a neighbouring slot.
+        let mut f = RegFile::default();
+        f.set(0x22, 0xDEAD_BEEF);
+        f.set(OFF_ID + 4, 0xDEAD_BEEF);
+        assert_eq!(f.get(0x20), 0);
+        assert_eq!(f.get(0x24), 0);
+        assert_eq!(f.get(OFF_ID), 0);
+    }
 
     fn drain_all(u: &mut EspUart) {
         for _ in 0..(u.cycles_per_byte() * (FIFO_LEN as u64 + 2)) {
