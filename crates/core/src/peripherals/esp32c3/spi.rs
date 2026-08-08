@@ -238,11 +238,20 @@ impl Esp32c3Spi {
     /// model consumes it.
     ///
     /// CPOL is `SPI_MISC.CK_IDLE_EDGE` verbatim (the SVD calls it "clk line is
-    /// high when idle"). CPHA is not a register bit on this IP: ESP-IDF's
-    /// `spi_ll_master_set_mode` writes the pair
-    /// (idle,out) = (0,0) (0,1) (1,1) (1,0) for modes 0..3, so
-    /// CPHA = CK_OUT_EDGE XOR CK_IDLE_EDGE. Frames are 8 bits — the size this
-    /// controller's W-buffer data path exchanges.
+    /// high when idle"). CPHA is not a register bit on this IP, so it is
+    /// derived from the pair ESP-IDF writes.
+    ///
+    /// Checked against the vendored source rather than recalled — ESP-IDF
+    /// v5.3.1, `components/hal/esp32c3/include/hal/spi_ll.h:566`,
+    /// `spi_ll_master_set_mode` writes (ck_idle_edge, ck_out_edge) =
+    /// (0,0) (0,1) (1,1) (1,0) for modes 0..3. Against CPOL = ck_idle_edge that
+    /// gives CPHA = 0,1,0,1 — i.e. CPHA = CK_OUT_EDGE XOR CK_IDLE_EDGE, exact
+    /// in all four modes. Note mode 3 writes ck_out_edge = 0, so reading
+    /// CK_OUT_EDGE as CPHA directly (the obvious guess) is wrong at modes 2
+    /// and 3.
+    ///
+    /// Frames are 8 bits — the size this controller's W-buffer data path
+    /// exchanges.
     fn wire_mode(&self) -> WireMode {
         let cpol = self.reg(MISC) & MISC_CK_IDLE_EDGE != 0;
         let ck_out = self.reg(USER) & USER_CK_OUT_EDGE != 0;
