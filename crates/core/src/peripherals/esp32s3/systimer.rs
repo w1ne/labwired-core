@@ -573,7 +573,10 @@ impl Systimer {
 
             DATE => self.date,
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.systimer:Systimer", offset, "read");
+                0
+            }
         }
     }
 
@@ -687,7 +690,9 @@ impl Systimer {
             // INT_ST / REAL_TARGETx are read-only; ignore writes.
             DATE => self.date = value,
 
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.systimer:Systimer", offset, "write");
+            }
         }
     }
 }

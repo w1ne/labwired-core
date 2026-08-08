@@ -47,7 +47,10 @@ impl Comp {
         match offset {
             0x00 => self.csr1,
             0x04 => self.csr2,
-            _ => 0,
+            _ => {
+                crate::census_reg!("comp:Comp", offset, "read");
+                0
+            }
         }
     }
 
@@ -81,7 +84,9 @@ impl Comp {
                 }
                 self.csr2 = new;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("comp:Comp", offset, "write");
+            }
         }
     }
 }

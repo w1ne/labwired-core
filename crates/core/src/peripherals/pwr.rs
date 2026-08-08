@@ -104,7 +104,10 @@ impl Pwr {
             0x5C => self.pdcrh,
             0x60 => self.pucri,
             0x64 => self.pdcri,
-            _ => 0,
+            _ => {
+                crate::census_reg!("pwr:Pwr", offset, "read");
+                0
+            }
         }
     }
 
@@ -144,7 +147,9 @@ impl Pwr {
             0x5C => self.pdcrh = value,
             0x60 => self.pucri = value,
             0x64 => self.pdcri = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("pwr:Pwr", offset, "write");
+            }
         }
     }
 }
@@ -235,7 +240,10 @@ impl PwrH5 {
             0x50 => self.ioretr,
             0x100 => self.seccfgr,
             0x104 => self.privcfgr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("pwr:PwrH5", offset, "read");
+                0
+            }
         }
     }
 
@@ -254,7 +262,9 @@ impl PwrH5 {
             0x50 => self.ioretr = value,
             0x100 => self.seccfgr = value,
             0x104 => self.privcfgr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("pwr:PwrH5", offset, "write");
+            }
         }
     }
 }
@@ -330,7 +340,10 @@ impl PwrH7 {
             0x0C => self.cr3,
             // D3CR/SRDCR: stored VOS[15:14] with VOSRDY (bit 13) always ready.
             0x18 => self.d3cr | (1 << 13),
-            _ => 0,
+            _ => {
+                crate::census_reg!("pwr:PwrH7", offset, "read");
+                0
+            }
         }
     }
 
@@ -340,7 +353,9 @@ impl PwrH7 {
             0x08 => self.cr2 = value,
             0x0C => self.cr3 = value,
             0x18 => self.d3cr = value & (0x3 << 14),
-            _ => {}
+            _ => {
+                crate::census_reg!("pwr:PwrH7", offset, "write");
+            }
         }
     }
 }
@@ -396,7 +411,10 @@ impl PwrL0 {
         match offset {
             0x00 => self.cr,
             0x04 => self.csr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("pwr:PwrL0", offset, "read");
+                0
+            }
         }
     }
 
@@ -408,7 +426,9 @@ impl PwrL0 {
             // CSR: status is read-only (WUF/SBF clear via CR.CWUF/CSBF);
             // only the EWUP1..3 enables (bits [10:8]) are writable here.
             0x04 => self.csr = (self.csr & !0x0000_0700) | (value & 0x0000_0700),
-            _ => {}
+            _ => {
+                crate::census_reg!("pwr:PwrL0", offset, "write");
+            }
         }
     }
 }
@@ -547,7 +567,10 @@ impl PwrF4 {
         match offset {
             0x00 => self.cr,
             0x04 => self.csr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("pwr:PwrF4", offset, "read");
+                0
+            }
         }
     }
 
@@ -564,7 +587,9 @@ impl PwrF4 {
             // CSR: EWUP (bit 8) and BRE (bit 9) are the only writable bits;
             // VOSRDY/BRR/PVDO/SBF/WUF are hardware status.
             0x04 => self.csr = (self.csr & !0x0000_0300) | (value & 0x0000_0300),
-            _ => {}
+            _ => {
+                crate::census_reg!("pwr:PwrF4", offset, "write");
+            }
         }
     }
 }

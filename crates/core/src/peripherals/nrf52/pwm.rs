@@ -152,7 +152,10 @@ impl Peripheral for Nrf52Pwm {
                 self.psel_out[((offset - OFF_PSEL_FIRST) / 4) as usize]
             }
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.pwm:Nrf52Pwm", offset, "read");
+                0
+            }
         })
     }
 
@@ -200,7 +203,9 @@ impl Peripheral for Nrf52Pwm {
             OFF_PSEL_FIRST..=OFF_PSEL_LAST if offset.is_multiple_of(4) => {
                 self.psel_out[((offset - OFF_PSEL_FIRST) / 4) as usize] = value;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.pwm:Nrf52Pwm", offset, "write");
+            }
         }
         Ok(())
     }

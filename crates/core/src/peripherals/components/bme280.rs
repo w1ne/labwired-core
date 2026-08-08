@@ -350,7 +350,10 @@ impl Bme280 {
             0xFD => ((self.adc_h >> 8) & 0xFF) as u8,
             0xFE => (self.adc_h & 0xFF) as u8,
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.bme280:Bme280", reg, "read");
+                0
+            }
         }
     }
 
@@ -360,7 +363,9 @@ impl Bme280 {
             0xF4 => self.ctrl_meas = value,
             0xF5 => self.config = value,
             0xE0 => { /* soft reset 0xB6 — ignore */ }
-            _ => {}
+            _ => {
+                crate::census_reg!("components.bme280:Bme280", reg, "write");
+            }
         }
     }
 }

@@ -458,7 +458,10 @@ impl Peripheral for EfuseStub {
             0x044 => 0x0000_0002, // MAC low word: 0x00 00 00 02
             0x048 => 0x0000_0000, // MAC high word: 0x00 00 00 00
             0x05C => 0x0000_0000, // chip_rev = 0
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp_xtensa_common.system_stub:EfuseStub", word_off, "read");
+                0
+            }
         };
         Ok(((word >> byte_off) & 0xFF) as u8)
     }

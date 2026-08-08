@@ -45,7 +45,10 @@ impl Peripheral for Nrf52Bprot {
                 self.config[((offset - OFF_CONFIG0) / 4) as usize]
             }
             OFF_DISABLEINDEBUG => self.disable_in_debug & 1,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.bprot:Nrf52Bprot", offset, "read");
+                0
+            }
         })
     }
 
@@ -56,7 +59,9 @@ impl Peripheral for Nrf52Bprot {
                 self.config[i] |= value;
             }
             OFF_DISABLEINDEBUG => self.disable_in_debug = value & 1,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.bprot:Nrf52Bprot", offset, "write");
+            }
         }
         Ok(())
     }

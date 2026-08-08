@@ -287,7 +287,10 @@ impl Scb {
             // ARMv8-M MPU memory attribute indirection registers (Cortex-M33).
             0xC0 => self.mpu_mair0,
             0xC4 => self.mpu_mair1,
-            _ => 0,
+            _ => {
+                crate::census_reg!("scb:Scb", offset, "read");
+                0
+            }
         }
     }
 
@@ -355,7 +358,9 @@ impl Scb {
             // attribute encodings have no effect since access is not enforced.
             0xC0 => self.mpu_mair0 = value,
             0xC4 => self.mpu_mair1 = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("scb:Scb", offset, "write");
+            }
         }
     }
 }

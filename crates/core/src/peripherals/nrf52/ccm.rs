@@ -424,7 +424,10 @@ impl Peripheral for Nrf52Ccm {
             OFF_SCRATCHPTR => self.scratchptr,
             OFF_MAXPACKETSIZE => self.maxpacketsize & 0xFF,
             OFF_RATEOVERRIDE => self.rateoverride & 0xF,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.ccm:Nrf52Ccm", offset, "read");
+                0
+            }
         })
     }
 
@@ -457,7 +460,9 @@ impl Peripheral for Nrf52Ccm {
             OFF_SCRATCHPTR => self.scratchptr = value,
             OFF_MAXPACKETSIZE => self.maxpacketsize = value & 0xFF,
             OFF_RATEOVERRIDE => self.rateoverride = value & 0xF,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.ccm:Nrf52Ccm", offset, "write");
+            }
         }
         Ok(())
     }

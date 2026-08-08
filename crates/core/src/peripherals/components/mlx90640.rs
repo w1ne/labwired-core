@@ -496,7 +496,10 @@ impl Mlx90640 {
             a if (RAM_BASE..RAM_BASE + RAM_WORDS as u16).contains(&a) => {
                 self.ram[(a - RAM_BASE) as usize]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.mlx90640:Mlx90640", addr, "read");
+                0
+            }
         }
     }
 
@@ -513,7 +516,9 @@ impl Mlx90640 {
             }
             CONTROL1_REG => self.control1 = value,
             // EEPROM/RAM are read-only over I²C in this model.
-            _ => {}
+            _ => {
+                crate::census_reg!("components.mlx90640:Mlx90640", addr, "write");
+            }
         }
     }
 }

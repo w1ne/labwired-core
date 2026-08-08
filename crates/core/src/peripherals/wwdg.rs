@@ -34,7 +34,10 @@ impl Wwdg {
             0x00 => self.cr,
             0x04 => self.cfr,
             0x08 => self.sr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("wwdg:Wwdg", offset, "read");
+                0
+            }
         }
     }
 
@@ -43,7 +46,9 @@ impl Wwdg {
             0x00 => self.cr = value & 0xFF,
             0x04 => self.cfr = value & 0xFFFF,
             0x08 => self.sr = value & 1,
-            _ => {}
+            _ => {
+                crate::census_reg!("wwdg:Wwdg", offset, "write");
+            }
         }
     }
 }

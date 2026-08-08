@@ -208,7 +208,10 @@ impl Peripheral for Rp2040Watchdog {
                     | if self.tick_enable { TICK_ENABLE } else { 0 }
                     | (self.tick_cycles & TICK_CYCLES_MASK)
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.watchdog:Rp2040Watchdog", offset, "read");
+                0
+            }
         })
     }
 
@@ -241,7 +244,9 @@ impl Peripheral for Rp2040Watchdog {
                 self.tick_enable = value & TICK_ENABLE != 0;
                 self.tick_count = 0;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.watchdog:Rp2040Watchdog", offset, "write");
+            }
         }
         Ok(())
     }

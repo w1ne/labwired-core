@@ -161,7 +161,10 @@ impl Peripheral for Nrf52Twis {
             OFF_ADDRESS1 => self.address[1] & ADDRESS_MASK,
             OFF_CONFIG => self.config & CONFIG_MASK,
             OFF_ORC => self.orc & ORC_MASK,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.twis:Nrf52Twis", offset, "read");
+                0
+            }
         })
     }
 
@@ -197,7 +200,9 @@ impl Peripheral for Nrf52Twis {
             OFF_ADDRESS1 => self.address[1] = value & ADDRESS_MASK,
             OFF_CONFIG => self.config = value & CONFIG_MASK,
             OFF_ORC => self.orc = value & ORC_MASK,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.twis:Nrf52Twis", offset, "write");
+            }
         }
         Ok(())
     }

@@ -289,7 +289,10 @@ impl Peripheral for Esp32s3LcdCam {
             REG_LC_DMA_INT_RAW => self.int_raw,
             REG_LC_DMA_INT_ST => self.int_raw & self.int_ena,
             REG_LC_DMA_INT_CLR => 0, // W1C write-only; reads as 0.
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.lcd_cam:Esp32s3LcdCam", offset, "read");
+                0
+            }
         };
         Ok(v)
     }
@@ -317,7 +320,9 @@ impl Peripheral for Esp32s3LcdCam {
             // accept writes (masked) so test fixtures can seed raw bits.
             REG_LC_DMA_INT_RAW => self.int_raw = value & INT_ALL_BITS,
             REG_LC_DMA_INT_CLR => self.int_raw &= !value, // W1C
-            _ => {}                                       // Accept-and-ignore other offsets.
+            _ => {
+                crate::census_reg!("esp32s3.lcd_cam:Esp32s3LcdCam", offset, "write");
+            } // Accept-and-ignore other offsets.
         }
         Ok(())
     }

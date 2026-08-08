@@ -554,6 +554,11 @@ fn run_world(
         fidelity: labwired_core::fidelity::take().to_gaps(),
         config: config.clone(),
     };
+    // Silent-path census (measurement only; empty fn without the
+    // `silent-census` feature). The multi-node environment runner has its own
+    // result-writing path, separate from the single-node `write_outputs`, so it
+    // needs its own dump call or multi-node labs silently produce no census.
+    labwired_core::census::dump_if_requested();
     let snapshot = Snapshot::Environment {
         status: status.to_string(),
         message: result.message.clone(),
@@ -854,6 +859,11 @@ fn write_config_error(
         fidelity: labwired_core::fidelity::take().to_gaps(),
         config: config.clone(),
     };
+    // Silent-path census (measurement only; empty fn without the
+    // `silent-census` feature). The multi-node environment runner has its own
+    // result-writing path, separate from the single-node `write_outputs`, so it
+    // needs its own dump call or multi-node labs silently produce no census.
+    labwired_core::census::dump_if_requested();
     let empty_sinks = config
         .nodes
         .iter()

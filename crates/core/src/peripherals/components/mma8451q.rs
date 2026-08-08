@@ -137,7 +137,10 @@ impl Mma8451q {
             0x0D => WHO_AM_I,
             0x0E => self.xyz_data_cfg,
             0x2A => self.ctrl_reg1,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.mma8451q:Mma8451q", reg, "read");
+                0
+            }
         }
     }
 }

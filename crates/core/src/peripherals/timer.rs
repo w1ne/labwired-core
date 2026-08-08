@@ -651,7 +651,10 @@ impl Timer {
             0x58 if self.advanced => self.ccr5,
             0x5C if self.advanced => self.ccr6,
             0x60 if self.advanced => self.or2,
-            _ => 0,
+            _ => {
+                crate::census_reg!("timer:Timer", offset, "read");
+                0
+            }
         }
     }
 
@@ -759,7 +762,9 @@ impl Timer {
             0x58 if self.advanced => self.ccr5 = value,
             0x5C if self.advanced => self.ccr6 = value,
             0x60 if self.advanced => self.or2 = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("timer:Timer", offset, "write");
+            }
         }
         let phase_mapping_after = (
             self.cr1 & 1,

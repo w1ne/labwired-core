@@ -373,7 +373,10 @@ impl Esp32s3TimerGroup {
             0x80 => self.rtccalicfg2,
             0xF8 => NTIMERS_DATE,
             0xFC => self.regclk,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.timer_group:Esp32s3TimerGroup", offset, "read");
+                0
+            }
         }
     }
 
@@ -466,7 +469,9 @@ impl Esp32s3TimerGroup {
             }
             0xFC => self.regclk = value & REGCLK_WMASK,
             // Unhandled / read-only offsets: ignore (matches systimer).
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.timer_group:Esp32s3TimerGroup", offset, "write");
+            }
         }
     }
 

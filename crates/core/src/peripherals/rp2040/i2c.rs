@@ -252,7 +252,10 @@ impl Peripheral for Rp2040I2c {
             IC_RXFLR => u32::from(self.rx_byte.get().is_some()),
             IC_TX_ABRT_SOURCE => self.tx_abrt_source.get(),
             IC_COMP_TYPE => IC_COMP_TYPE_MAGIC,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.i2c:Rp2040I2c", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -310,7 +313,9 @@ impl Peripheral for Rp2040I2c {
                     }
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.i2c:Rp2040I2c", offset, "write");
+            }
         }
         Ok(())
     }

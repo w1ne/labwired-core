@@ -434,6 +434,11 @@ impl Peripheral for GenericPeripheral {
 
             return Ok(self.apply_stuck_byte(offset, val));
         }
+        // Census (measurement only; no-op without the `silent-census` feature).
+        // No register contains this byte, so the read below fabricates a zero —
+        // the same silent path as a hand-written model's `_ => 0` arm, just
+        // expressed as an `if let` miss instead of a match arm.
+        crate::census::record_undecoded_reg_named(&self.descriptor.peripheral, offset, "read");
         Ok(0)
     }
 
@@ -477,6 +482,10 @@ impl Peripheral for GenericPeripheral {
 
             return Ok(());
         }
+        // Census (measurement only; no-op without the `silent-census` feature).
+        // No register contains this byte, so the value is discarded — the same
+        // silent path as a hand-written model's `_ => {}` arm.
+        crate::census::record_undecoded_reg_named(&self.descriptor.peripheral, offset, "write");
         Ok(())
     }
 

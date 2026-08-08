@@ -112,7 +112,10 @@ impl Peripheral for Nrf52Qdec {
             OFF_LEDPRE => self.ledpre & 0x1FF,
             OFF_ACCDBL => self.accdbl,
             OFF_ACCDBLREAD => self.accdblread,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.qdec:Nrf52Qdec", offset, "read");
+                0
+            }
         })
     }
 
@@ -143,7 +146,9 @@ impl Peripheral for Nrf52Qdec {
             OFF_LEDPRE => self.ledpre = value & 0x1FF,
             OFF_ACCDBL => self.accdbl = value,
             OFF_ACCDBLREAD => {} // RO
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.qdec:Nrf52Qdec", offset, "write");
+            }
         }
         Ok(())
     }

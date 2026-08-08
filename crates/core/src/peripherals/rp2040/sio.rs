@@ -260,7 +260,10 @@ impl Peripheral for Rp2040Sio {
                 let dirty = if self.div_dirty { 1u32 << 1 } else { 0 };
                 ready | dirty
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.sio:Rp2040Sio", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -305,7 +308,9 @@ impl Peripheral for Rp2040Sio {
                 self.div_dirty = true;
                 return Ok(());
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.sio:Rp2040Sio", offset, "write");
+            }
         }
         let v = value & GPIO_MASK;
         let mut_out = matches!(
@@ -331,7 +336,9 @@ impl Peripheral for Rp2040Sio {
             GPIO_OE_SET => self.gpio_oe |= v,
             GPIO_OE_CLR => self.gpio_oe &= !v,
             GPIO_OE_XOR => self.gpio_oe ^= v,
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.sio:Rp2040Sio", offset, "write");
+            }
         }
         if mut_out {
             self.tap_report();

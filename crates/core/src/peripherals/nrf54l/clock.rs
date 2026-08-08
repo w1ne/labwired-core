@@ -171,7 +171,10 @@ impl crate::Peripheral for Nrf54lClock {
 
             // Everything else in the 4 KB window reads as zero rather than
             // faulting the bus (SUBSCRIBE/PUBLISH windows, XO tune block).
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf54l.clock:Nrf54lClock", offset, "read");
+                0
+            }
         })
     }
 
@@ -235,7 +238,9 @@ impl crate::Peripheral for Nrf54lClock {
 
             // STAT/RUN/SRCCOPY are read-only status; writes are ignored, as is
             // everything else in the window.
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf54l.clock:Nrf54lClock", offset, "write");
+            }
         }
         Ok(())
     }

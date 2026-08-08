@@ -7,6 +7,7 @@
 
 pub mod boot;
 pub mod bus;
+pub mod census;
 pub mod config;
 pub mod console;
 pub mod cosim;
@@ -1816,6 +1817,19 @@ impl<C: Cpu> Machine<C> {
             .filter(|(_, p)| p.dev.drives_central_i2c_time())
             .map(|(i, _)| i)
             .collect();
+        // Silent-path census, counter (b2) — measurement only, and an empty
+        // `#[inline(always)]` fn without the `silent-census` feature.
+        //
+        // This is the ONE place the census can honestly ask "what is still a
+        // stub?": `Machine::new` is the single choke every runner (CLI lab
+        // runner, environment runner, wasm, DAP, python, `system::node`) passes
+        // through with a *finished* bus, so `from_config` and every
+        // post-factory replacement pass — `configure_cortex_m`'s NVIC/SCB/DWT
+        // install above all — have already run. Counting stubs at the factory
+        // instead reports peripherals that were replaced by real models before
+        // the first instruction; that error is what this counter exists to
+        // correct. Identity is by `TypeId`, never by name.
+        crate::census::record_live_stubs(&bus);
         Self {
             cpu,
             cpu_secondary: None,

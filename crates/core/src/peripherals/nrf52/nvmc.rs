@@ -115,7 +115,10 @@ impl Peripheral for Nrf52Nvmc {
             OFF_ICACHECNF => self.icachecnf & 0x101,
             OFF_IHIT => self.ihit,
             OFF_IMISS => self.imiss,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.nvmc:Nrf52Nvmc", offset, "read");
+                0
+            }
         })
     }
 
@@ -142,7 +145,9 @@ impl Peripheral for Nrf52Nvmc {
             OFF_ICACHECNF => self.icachecnf = value & 0x101,
             OFF_IHIT => self.ihit = 0,
             OFF_IMISS => self.imiss = 0,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.nvmc:Nrf52Nvmc", offset, "write");
+            }
         }
         Ok(())
     }

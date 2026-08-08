@@ -89,7 +89,10 @@ impl Peripheral for Nrf52Comp {
             OFF_MODE => self.mode & 0x101,
             OFF_HYST => self.hyst & 0x1,
             OFF_ISOURCE => self.isource & 0x3,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.comp:Nrf52Comp", offset, "read");
+                0
+            }
         })
     }
 
@@ -113,7 +116,9 @@ impl Peripheral for Nrf52Comp {
             OFF_MODE => self.mode = value & 0x101,
             OFF_HYST => self.hyst = value & 0x1,
             OFF_ISOURCE => self.isource = value & 0x3,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.comp:Nrf52Comp", offset, "write");
+            }
         }
         Ok(())
     }

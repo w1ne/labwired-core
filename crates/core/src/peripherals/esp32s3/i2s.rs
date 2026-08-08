@@ -348,7 +348,10 @@ impl Peripheral for Esp32s3I2s {
             REG_TX_TIMING => self.tx_timing,
             REG_RXEOF_NUM => self.rxeof_num,
             REG_CONF_SIGLE_DATA => self.conf_sigle_data,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.i2s:Esp32s3I2s", offset, "read");
+                0
+            }
         };
         Ok(v)
     }
@@ -381,7 +384,9 @@ impl Peripheral for Esp32s3I2s {
             REG_TX_TIMING => self.tx_timing = value,
             REG_RXEOF_NUM => self.rxeof_num = value,
             REG_CONF_SIGLE_DATA => self.conf_sigle_data = value,
-            _ => {} // Accept-and-ignore other offsets.
+            _ => {
+                crate::census_reg!("esp32s3.i2s:Esp32s3I2s", offset, "write");
+            } // Accept-and-ignore other offsets.
         }
         Ok(())
     }

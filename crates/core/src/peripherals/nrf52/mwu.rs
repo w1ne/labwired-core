@@ -89,7 +89,10 @@ impl Peripheral for Nrf52Mwu {
             OFF_REGION_FIRST..=OFF_REGION_LAST if offset.is_multiple_of(4) => 0,
             // PREGION: same — read 0
             OFF_PREGION_FIRST..=OFF_PREGION_LAST if offset.is_multiple_of(4) => 0,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.mwu:Nrf52Mwu", offset, "read");
+                0
+            }
         })
     }
 
@@ -114,7 +117,9 @@ impl Peripheral for Nrf52Mwu {
             OFF_REGION_FIRST..=OFF_REGION_LAST if offset.is_multiple_of(4) => {}
             // PREGION: accepted but not stored
             OFF_PREGION_FIRST..=OFF_PREGION_LAST if offset.is_multiple_of(4) => {}
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.mwu:Nrf52Mwu", offset, "write");
+            }
         }
         Ok(())
     }

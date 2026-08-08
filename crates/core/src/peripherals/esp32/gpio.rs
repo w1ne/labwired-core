@@ -190,7 +190,10 @@ impl Esp32Gpio {
                 // bits[16:13] INT_ENA (we model only bit 13 = cpu0 enable)
                 (int_type << 7) | (int_ena << 13)
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32.gpio:Esp32Gpio", word_off, "read");
+                0
+            }
         }
     }
 
@@ -234,7 +237,9 @@ impl Esp32Gpio {
                     self.int_enable &= !(1u32 << pin);
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32.gpio:Esp32Gpio", word_off, "write");
+            }
         }
     }
 }

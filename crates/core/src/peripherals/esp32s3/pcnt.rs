@@ -277,7 +277,10 @@ impl Esp32s3Pcnt {
             }
             0x60 => self.ctrl,
             0xFC => DATE_RESET,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.pcnt:Esp32s3Pcnt", offset, "read");
+                0
+            }
         }
     }
 
@@ -323,7 +326,9 @@ impl Esp32s3Pcnt {
                     }
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.pcnt:Esp32s3Pcnt", offset, "write");
+            }
         }
     }
 

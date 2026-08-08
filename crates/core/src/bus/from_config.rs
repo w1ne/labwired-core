@@ -801,6 +801,12 @@ impl SystemBus {
                     ))
                 }
                 _other => {
+                    // Census (measurement only, no-op unless the `silent-census`
+                    // feature is compiled in): record the `type:` string that
+                    // fell through the whole factory chain. The histogram of
+                    // these strings is what decides whether this arm can become
+                    // a hard error or needs a migration first.
+                    crate::census::record_stub(&p_cfg.r#type);
                     if plugins.is_empty() {
                         tracing::debug!(
                             "Mapping unknown peripheral type '{}' to Stub for id '{}'",

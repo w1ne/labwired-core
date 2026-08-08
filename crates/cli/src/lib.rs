@@ -3159,6 +3159,13 @@ fn write_outputs<C: labwired_core::Cpu>(
     // is the sole call site on the run path.
     let fidelity = labwired_core::fidelity::take().to_gaps();
 
+    // Silent-path census (measurement only). Compiled to an empty function
+    // unless `--features silent-census`, and even then writes nothing unless
+    // LABWIRED_CENSUS_OUT names a path. Sits here because `write_outputs` is
+    // the sole call site on the run path, reached synchronously at the tail of
+    // `execute_test_loop` on the thread that ran the sim.
+    labwired_core::census::dump_if_requested();
+
     // Derive the top-level `message` from the stimulus block rather than taking
     // it as a second parameter, so the human sentence and the structured
     // evidence cannot drift apart — one source of truth. A rejected stimulus is

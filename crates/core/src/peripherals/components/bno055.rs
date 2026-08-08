@@ -108,7 +108,10 @@ impl Bno055 {
             REG_SYS_STATUS => 0x05, // sensor fusion algorithm running
             REG_SYS_ERR => 0x00,
             REG_CALIB_STAT => 0xFF, // fully calibrated
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.bno055:Bno055", reg, "read");
+                0
+            }
         }
     }
 
@@ -122,7 +125,9 @@ impl Bno055 {
                 // soft reset bit 5 — ignore, stay powered
                 let _ = value;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("components.bno055:Bno055", reg, "write");
+            }
         }
     }
 }

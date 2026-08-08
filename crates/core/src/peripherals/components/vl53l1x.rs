@@ -128,7 +128,10 @@ impl Vl53l1x {
             0x0097 => (self.raw_range() & 0xFF) as u8,
 
             // Everything else in the result block (and unmodeled registers) reads 0.
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.vl53l1x:Vl53l1x", reg, "read");
+                0
+            }
         }
     }
 
@@ -138,7 +141,9 @@ impl Vl53l1x {
             REG_SYSTEM_INTERRUPT_CLEAR => { /* IRQ ack — no modeled state */ }
             // The driver's init() writes ~135 config registers; accept and
             // ignore them. The ranging algorithm is not simulated.
-            _ => {}
+            _ => {
+                crate::census_reg!("components.vl53l1x:Vl53l1x", reg, "write");
+            }
         }
     }
 }

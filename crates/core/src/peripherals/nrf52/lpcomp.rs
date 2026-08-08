@@ -81,7 +81,10 @@ impl Peripheral for Nrf52Lpcomp {
             OFF_EXTREFSEL => self.extrefsel & 0x7,
             OFF_ANADETECT => self.anadetect & 0x3,
             OFF_HYST => self.hyst & 0x1,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.lpcomp:Nrf52Lpcomp", offset, "read");
+                0
+            }
         })
     }
 
@@ -101,7 +104,9 @@ impl Peripheral for Nrf52Lpcomp {
             OFF_EXTREFSEL => self.extrefsel = value & 0x7,
             OFF_ANADETECT => self.anadetect = value & 0x3,
             OFF_HYST => self.hyst = value & 0x1,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.lpcomp:Nrf52Lpcomp", offset, "write");
+            }
         }
         Ok(())
     }

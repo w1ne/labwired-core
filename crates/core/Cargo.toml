@@ -55,6 +55,21 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 [features]
 default = []
+# Silent-path census (`crates/core/src/census.rs`) — MEASUREMENT ONLY.
+#
+# Counts three paths on which the simulator can be wrong and still report
+# success: dropped Cortex-M memory errors, `StubPeripheral` factory
+# fallthrough, and undecoded register offsets inside peripheral `_ => {}` /
+# `_ => 0` arms. It records; it never repairs, escalates, or changes control
+# flow — with the feature off every recording site expands back to the exact
+# code it wraps.
+#
+# Deliberately NOT in `default` and NOT implied by any other feature, so it
+# cannot be switched on as a side effect. Enabling the feature alone still
+# writes nothing: a report is emitted only when `LABWIRED_CENSUS_OUT` also
+# names an output path at runtime. Build the measuring binary with
+# `cargo build -p labwired-cli --features silent-census`.
+silent-census = []
 # ESP32 WiFi/lwIP functional-outcome thunks (`peripherals::esp32s3::wifi_thunks`
 # — canned WL_CONNECTED + simulated sockets). Off by default and NOT in the CI
 # feature set (`jit,event-scheduler`), so this fake WiFi state can never compile

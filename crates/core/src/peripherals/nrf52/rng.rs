@@ -106,7 +106,10 @@ impl Peripheral for Nrf52Rng {
             OFF_INTENSET | OFF_INTENCLR => self.inten,
             OFF_CONFIG => self.config,
             OFF_VALUE => self.value,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.rng:Nrf52Rng", offset, "read");
+                0
+            }
         })
     }
 
@@ -124,7 +127,9 @@ impl Peripheral for Nrf52Rng {
             OFF_INTENCLR => self.inten &= !value,
             OFF_CONFIG => self.config = value & 0x1,
             OFF_VALUE => {} // RO
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.rng:Nrf52Rng", offset, "write");
+            }
         }
         Ok(())
     }

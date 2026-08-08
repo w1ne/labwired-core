@@ -81,7 +81,10 @@ impl Ds3231 {
             0x10 => self.aging,
             0x11 => self.temp_msb,
             0x12 => self.temp_lsb,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.ds3231:Ds3231", reg, "read");
+                0
+            }
         }
     }
 
@@ -96,14 +99,18 @@ impl Ds3231 {
                     0x04 => v = v.clamp(1, 31),
                     0x05 => v = (v & 0x1F).clamp(1, 12),
                     0x06 => v = v.min(99),
-                    _ => {}
+                    _ => {
+                        crate::census_reg!("components.ds3231:Ds3231", reg, "write");
+                    }
                 }
                 self.time[reg as usize] = v;
             }
             0x0E => self.control = value,
             0x0F => self.status = value & !0x80, // OSF clearable
             0x10 => self.aging = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("components.ds3231:Ds3231", reg, "write");
+            }
         }
     }
 }
