@@ -598,8 +598,20 @@ fn probe_air_peer_isolation_rounds() {
     isolation("warmup", true, false, 100_000, 96_000_000);
     for slice in [25_000u32, 100_000, 250_000] {
         for round in 0..4 {
-            isolation(&format!("r{round}_pair_{slice}"), true, false, slice, 96_000_000);
-            isolation(&format!("r{round}_solo_{slice}"), false, false, slice, 96_000_000);
+            isolation(
+                &format!("r{round}_pair_{slice}"),
+                true,
+                false,
+                slice,
+                96_000_000,
+            );
+            isolation(
+                &format!("r{round}_solo_{slice}"),
+                false,
+                false,
+                slice,
+                96_000_000,
+            );
         }
     }
 }
