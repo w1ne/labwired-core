@@ -584,21 +584,19 @@ impl Peripheral for UsbSerialJtag {
         let lane_mask = 0xFFu32 << shift;
 
         match word {
-            OFF_EP1 => {
-                // Only the low byte of the word is FIFO data
-                // (`usb_serial_jtag_ll_write_txfifo` stores a byte-wide value);
-                // the upper lanes of the 32-bit store are not.
-                // Silicon IGNORES a store while the endpoint is busy, and
-                // `usb_serial_jtag_ll_write_txfifo` breaks its loop on it.
-                if lane == 0 && self.data_free() {
-                    self.tx_staging.push(value);
-                    self.ep1_bytes_accepted += 1;
-                }
+            // Only the low byte of the word is FIFO data
+            // (`usb_serial_jtag_ll_write_txfifo` stores a byte-wide value); the
+            // upper lanes of the 32-bit store are not. Silicon IGNORES a store
+            // while the endpoint is busy, and `usb_serial_jtag_ll_write_txfifo`
+            // breaks its loop on it. Guard rather than a nested `if`: clippy
+            // 1.95 (what CI pins) reports collapsible_match otherwise. Falling
+            // through to `_ => {}` is the same no-op the nested form performed.
+            OFF_EP1 if lane == 0 && self.data_free() => {
+                self.tx_staging.push(value);
+                self.ep1_bytes_accepted += 1;
             }
-            OFF_EP1_CONF => {
-                if lane == 0 && value as u32 & EP1_CONF_WR_DONE != 0 {
-                    self.commit_packet();
-                }
+            OFF_EP1_CONF if lane == 0 && value as u32 & EP1_CONF_WR_DONE != 0 => {
+                self.commit_packet();
             }
             // INT_RAW is `R/WTC` — a write of 1 clears the latched bit. Nothing
             // in evidence writes it (drivers use INT_CLR), but honour it.
