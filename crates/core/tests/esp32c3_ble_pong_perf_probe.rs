@@ -33,6 +33,55 @@
 //!    `esp32c3::bt` leaks live events and blows out the dedup index. See the
 //!    `arm_seq` doc comment in `peripherals/esp32c3/bt.rs`.
 //!
+//! ## 2026-08-08: is there a fixed per-call cost of `step_batch` on an
+//! ## air-attached chip? NO. Measured, native AND wasm.
+//!
+//! The rows above stop at a 100 k slice, so they could not see a per-call term
+//! at all. `probe_air_step_batch_fixed_cost` sweeps 2 000 → 16 000 000 (a
+//! factor of 8 000, bracketing the 2 000-cycle IO-Link wire bound, the 25 000
+//! background slice and the 100 000-cycle BLE air bound) and fits
+//! `wall/cycle = per_cycle + fixed·(1/slice)`:
+//!
+//! | build                      | per cycle | fixed per call | 25 k slice |
+//! |----------------------------|----------:|---------------:|-----------:|
+//! | native, shared air         |  3.088 ns |         159 ns |   0.077 ms |
+//! | native, isolated air       |  3.053 ns |         119 ns |   0.076 ms |
+//! | wasm, shared air           |  7.813 ns |         722 ns |   0.196 ms |
+//! | wasm, isolated air         |  7.843 ns |         304 ns |   0.196 ms |
+//!
+//! The fixed term is **0.4 % of a 25 000-cycle slice** and Mcyc/s is flat to
+//! within 5 % across the whole sweep — and the 5 % runs the WRONG way for a
+//! per-call cost in half the rows. Nothing in `Machine::advance` or
+//! `WasmSimulator::step_batch` touches the `AirBus` on entry or exit;
+//! `attach_lab_air` is a one-time bind. Air traffic is also SPARSE — measured 3
+//! BLE PDUs per node per 48 M cycles (`shared_air_frames` below) — so
+//! `BleAirBus::receive_from`, O(AIR_DEPTH) under a mutex, is entered a handful
+//! of times per second of guest time and costs nothing measurable: shared air
+//! vs isolated air differs by 0.4 % per cycle.
+//!
+//! What the wasm sweep DOES show is that the axis is batch WIDTH, not call
+//! width. Same lab, same engine, browser start-up policy NOT applied
+//! (`peripheral_tick_interval = 1`, idle FF off — i.e. `mean_batch` 1.00,
+//! 250 000 batches per 250 000 cycles): **906–1 116 ns/cycle, ~1.1 Mcyc/s, and
+//! still flat in slice width.** With the policy applied: 7.8 ns/cycle,
+//! ~127 Mcyc/s. That is a **116x** cliff, and it is entirely per-cycle. A
+//! browser reading of ~0.13 MIPS on an air-attached chip is that cliff, not
+//! call overhead — which is exactly the failure class
+//! `esp32c3_shipped_lab_batch_gate.rs` gates (mean batch width), and the reason
+//! it gates width and not wall time.
+//!
+//! The only per-call work on the browser step path with no native counterpart
+//! is `pumpWifiHostNet` (`packages/ui/src/wasm/simulator-bridge.ts`), measured
+//! against the real wasm module with empty queues at **541–569 ns/call**. It is
+//! now skipped on labs with no `wifi_ap:`, which is every BLE lab.
+//!
+//! ⚠️ **The table at the top of this file is PRE-`arm_seq`-residency-fix and its
+//! wall-clock column is stale.** On this tree `cap_250k`/`cap_16M` at 96 M
+//! cycles/node run in **0.50 s** (was ~2.95 s / ~3.18 s), `rtf_pair` 1.192, and
+//! the heap reads `max_queued=10 LIVE_HWM [bt=7 systimer=4] ceiling_trips=0`
+//! against the `max_queued=792 bt=789 ceiling_trips=3310` recorded below. The
+//! RATIOS the three conclusions rest on still hold; the absolute seconds do not.
+//!
 //! ⚠️ **Never read these numbers off a tree another session is editing.** Three
 //! different `max_queued`/`serial_bytes` readings were recorded here before it
 //! became clear the cause was uncommitted edits landing and vanishing under the
@@ -82,11 +131,24 @@ struct Node {
 }
 
 fn build_node(flash: &[u8], idle_ff: bool) -> Node {
+    build_node_air(flash, idle_ff, None)
+}
+
+/// `private_air`: `Some(node_id)` mints this node its OWN `BleAirBus`, so its
+/// controller transmits into a medium nobody listens to and hears nothing back.
+/// That is the control for "air-attached and TALKING" vs "air-attached and
+/// silent" — same firmware, same peripherals, same `bt` block, only the peer's
+/// frames removed. `None` leaves the process-global air that
+/// `Esp32c3Bt::new()` binds, which is how the two-node probes hear each other.
+fn build_node_air(flash: &[u8], idle_ff: bool, private_air: Option<&str>) -> Node {
     let chip = ChipDescriptor::from_file(root().join("../../configs/chips/esp32c3.yaml")).unwrap();
     let manifest =
         SystemManifest::from_file(root().join("../../configs/systems/esp32c3-ble-pong.yaml"))
             .unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    if let Some(node_id) = private_air {
+        bus.attach_private_lab_air(node_id);
+    }
 
     let irom = std::fs::read(root().join("roms/esp32c3/esp32c3_rom.bin")).unwrap();
     let drom = std::fs::read(root().join("roms/esp32c3/esp32c3_drom.bin")).unwrap();
@@ -297,4 +359,108 @@ fn probe_ble_pong_ff_onset() {
 fn probe_ble_pong_batch_cap() {
     probe("cap_250k", true, 250_000, 96_000_000);
     probe("cap_16M", true, 16_000_000, 96_000_000);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  Fixed per-call cost of `step_batch` on an air-attached chip.
+//
+//  The browser claim under test: a 25 000-cycle slice on a two-C3 BLE lab
+//  costs ~196 ms (~0.13 MIPS) while a chip stepped in large batches on the
+//  same page runs ~15 MIPS, i.e. `step_batch` carries a large FIXED per-call
+//  cost that only air-attached chips pay. The ledger above only ever compared
+//  100k / 250k / 1M / 16M — four widths that are all far above the browser's
+//  interleave granularity, so it could not see a per-call term at all.
+//
+//  Model: wall = fixed·calls + per_cycle·cycles, so
+//         wall/cycle = per_cycle + fixed·(1/slice)
+//  A sweep over 1/slice is therefore a straight line whose SLOPE is the fixed
+//  per-call cost and whose INTERCEPT is the honest per-cycle cost. Fitting it
+//  is what turns "it feels slow at 25k" into a number.
+// ──────────────────────────────────────────────────────────────────────────
+
+/// One (slice, wall) sample: nanoseconds of `Machine::run` per guest cycle.
+fn sweep_point(private_air: bool, slice: u32, budget: u64) -> (u64, f64, f64) {
+    let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin")).unwrap();
+    let (mut a, mut b) = if private_air {
+        (
+            build_node_air(&flash, true, Some("solo-a")),
+            build_node_air(&flash, true, Some("solo-b")),
+        )
+    } else {
+        (build_node(&flash, true), build_node(&flash, true))
+    };
+    a.machine.reset_step_profile();
+    b.machine.reset_step_profile();
+
+    let mut calls = 0u64;
+    let mut fuel = 0u64;
+    let mut inside = std::time::Duration::ZERO;
+    while fuel < budget {
+        let n = slice.min((budget - fuel) as u32);
+        for node in [&mut a, &mut b] {
+            let t = std::time::Instant::now();
+            let _ = node.machine.run(Some(n));
+            inside += t.elapsed();
+            calls += 1;
+        }
+        fuel += u64::from(n);
+    }
+    let cycles = a.machine.total_cycles + b.machine.total_cycles;
+    let wall = inside.as_secs_f64();
+    let ns_per_cycle = wall * 1e9 / cycles as f64;
+    // NON-VACUITY: `air_frames` is the number of BLE PDUs that actually crossed
+    // the shared medium. A zero here means the two nodes never talked and every
+    // "air-attached" number below would be measuring an unused radio.
+    let air_frames = labwired_core::peripherals::ble_air::default_ble_air_bus()
+        .trace_snapshot()
+        .len();
+    eprintln!(
+        "SWEEP private_air={private_air} slice={slice} calls={calls} \
+         cycles={cycles} wall={wall:.3}s ns/cyc={ns_per_cycle:.4} \
+         Mcyc/s={:.2} ff_skipped={} serialA={} serialB={} shared_air_frames={air_frames} \
+         max_queued={}",
+        cycles as f64 / wall / 1e6,
+        a.machine.idle_fast_forward_cycles_skipped + b.machine.idle_fast_forward_cycles_skipped,
+        a.serial.lock().unwrap().len(),
+        b.serial.lock().unwrap().len(),
+        a.machine.sched.stats().max_queued_events,
+    );
+    (calls, wall, ns_per_cycle)
+}
+
+fn fit(label: &str, private_air: bool, budget: u64) {
+    // Widths that BRACKET the browser's real interleave granularity (2 000 wire
+    // bound, 25 000 background slice, 100 000 BLE air bound) as well as the
+    // native regime the ledger already covered.
+    const SLICES: [u32; 6] = [2_000, 25_000, 100_000, 250_000, 1_000_000, 16_000_000];
+    let mut xs = Vec::new();
+    let mut ys = Vec::new();
+    for slice in SLICES {
+        let (_calls, _wall, ns) = sweep_point(private_air, slice, budget);
+        xs.push(1.0 / f64::from(slice));
+        ys.push(ns);
+    }
+    let n = xs.len() as f64;
+    let sx: f64 = xs.iter().sum();
+    let sy: f64 = ys.iter().sum();
+    let sxx: f64 = xs.iter().map(|x| x * x).sum();
+    let sxy: f64 = xs.iter().zip(&ys).map(|(x, y)| x * y).sum();
+    let slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+    let intercept = (sy - slope * sx) / n;
+    eprintln!(
+        "FIT {label} private_air={private_air}: fixed_per_call={:.1} ns  \
+         per_cycle={:.4} ns  (fixed cost of a 25k slice = {:.3} ms of {:.3} ms total)",
+        slope,
+        intercept,
+        slope / 1e6,
+        (slope + intercept * 25_000.0) / 1e6,
+    );
+}
+
+/// The measurement the whole investigation turns on.
+#[test]
+#[ignore = "measurement probe, not a gate"]
+fn probe_air_step_batch_fixed_cost() {
+    fit("shared_air", false, 48_000_000);
+    fit("private_air", true, 48_000_000);
 }
