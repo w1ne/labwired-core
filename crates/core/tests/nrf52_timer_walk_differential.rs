@@ -741,6 +741,9 @@ fn board_io_button_boot_level_is_not_a_gpio_edge() {
         0,
         "no contact moved: the boot level of a board_io button must not present \
          itself as a GPIO edge"
+    );
+}
+
 /// TASKS_DISABLE mid-transmission aborts the packet: DISABLED promptly, and no
 /// EVENTS_END for a packet firmware cancelled.
 ///
