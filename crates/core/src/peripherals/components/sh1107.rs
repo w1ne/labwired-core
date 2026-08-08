@@ -214,6 +214,16 @@ impl I2cDevice for Sh1107 {
         0 // SH1107 is write-only over I²C
     }
 
+    /// A START (or repeated START) begins a new transaction, so the next byte
+    /// is a control byte again. See the SSD1306 model for the failure this
+    /// prevents: a driver issuing several transfers under one STOP loses the
+    /// control byte on every transfer after the first, and a `0x40` data
+    /// prefix turns the framebuffer behind it into a command stream.
+    fn start(&mut self) {
+        self.register_address_written = false;
+        self.control_byte = None;
+    }
+
     fn write(&mut self, data: u8) {
         if !self.register_address_written {
             // First byte of a transaction is the control byte.
