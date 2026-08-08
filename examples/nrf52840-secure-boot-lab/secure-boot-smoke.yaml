@@ -251,4 +251,114 @@ assertions:
       expected_value: 0x242FD799
       size: 4
 
+  # ── The panel ────────────────────────────────────────────────────────────
+  # Until now nothing in this script read the OLED, and the run went green
+  # while the panel painted scrambled output: the SSD1306 model dropped the
+  # control byte on every transfer after the first, so the framebuffer was
+  # parsed as commands and the image landed 49 columns to the right with rows
+  # wrapped into the wrong pages. 45 passing assertions said nothing about it.
+  #
+  # These measure the final frame, which is boot 3's screen:
+  #
+  #   page 0  SECURE BOOT OK     page 4  ROLLBACK REJECTED
+  #   page 1  FW V2 ACTIVE       page 5  FORGED REJECTED
+  #   page 2  ANTI-ROLLBACK ON   page 6  ATTEST + FLASH OK
+  #   page 3  (never painted)    page 7  CRA READY
+  #
+  # Each text row sits near 0.28 ink, so 0.15..0.45 passes the real glyphs and
+  # fails both a blank row and a row of noise. The tail regions are the ones
+  # that matter most: they must be EXACTLY empty, which is what a shifted,
+  # wrapped or overrun image cannot be.
+  #
+  # Coverage limit, stated because a check only covers what it reads: this is
+  # the final frame only. A row that is wrong mid-run and repainted correctly
+  # after a reboot passes here. Catching that needs either a time-scoped
+  # display assertion or a second capped run, and a second run would mean a
+  # third copy of the injected package bytes.
+
+  # Text is present, and starts at the left edge. Under the shifted-image bug
+  # this first character cell was blank.
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 0
+      w: 6
+      h: 8
+      min_ink: 0.10
+      max_ink: 0.60
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 0
+      w: 84
+      h: 8
+      min_ink: 0.15
+      max_ink: 0.45
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 16
+      w: 96
+      h: 8
+      min_ink: 0.15
+      max_ink: 0.45
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 32
+      w: 102
+      h: 8
+      min_ink: 0.15
+      max_ink: 0.45
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 56
+      w: 54
+      h: 8
+      min_ink: 0.15
+      max_ink: 0.45
+
+  # Nothing past the end of a line, and nothing on the row boot 3 never paints.
+  - display_region:
+      id: "oled"
+      x: 90
+      y: 0
+      w: 38
+      h: 8
+      min_ink: 0.0
+      max_ink: 0.0
+  - display_region:
+      id: "oled"
+      x: 102
+      y: 16
+      w: 26
+      h: 8
+      min_ink: 0.0
+      max_ink: 0.0
+  - display_region:
+      id: "oled"
+      x: 0
+      y: 24
+      w: 128
+      h: 8
+      min_ink: 0.0
+      max_ink: 0.0
+  - display_region:
+      id: "oled"
+      x: 108
+      y: 32
+      w: 20
+      h: 8
+      min_ink: 0.0
+      max_ink: 0.0
+  - display_region:
+      id: "oled"
+      x: 60
+      y: 56
+      w: 68
+      h: 8
+      min_ink: 0.0
+      max_ink: 0.0
+
   - expected_stop_reason: max_steps
