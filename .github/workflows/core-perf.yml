@@ -27,7 +27,15 @@ on:
       - "crates/cli/**"
       - "crates/config/**"
       - "configs/chips/**"
+      # All THREE fixture crates, not just the unsuffixed one. This lane builds
+      # firmware-perf-spin-xtensa and -riscv as well, and `firmware-perf-spin/**`
+      # matches neither — so a change to a fixture never re-ran the lane that
+      # consumes it. That is not hypothetical: the xtensa fixture was missing a
+      # required esp-backtrace feature, the lane died compiling it on every main
+      # commit for a day, and the one-line fix could not trigger its own gate.
       - "crates/firmware-perf-spin/**"
+      - "crates/firmware-perf-spin-riscv/**"
+      - "crates/firmware-perf-spin-xtensa/**"
       - "scripts/perf/**"
       - ".github/workflows/core-perf.yml"
   schedule:

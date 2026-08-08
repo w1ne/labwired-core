@@ -1503,6 +1503,16 @@ pub struct Machine<C: Cpu> {
     /// the bus), so the per-cycle drain short-circuits without a peripheral
     /// walk or downcast.
     scb_index: Option<usize>,
+    /// Cached bus index of the nRF52 NVMC peripheral. Resolved once at
+    /// construction; the advance boundary drains a latched erase op every
+    /// instruction and used to walk the whole ~40-entry peripheral list,
+    /// paying a vtable call plus a `TypeId` compare per entry — on every chip,
+    /// including the ones where an nRF52 NVMC cannot exist. `None` for every
+    /// non-nRF52 target, so the drain short-circuits on one `Option` test.
+    /// Same fixed-set assumption as [`Self::scb_index`]: nothing removes or
+    /// reorders `bus.peripherals` after construction (appends are safe — they
+    /// never move an existing index).
+    nvmc_index: Option<usize>,
     /// Phase 2B.3b (issue #192): whether the one-time scheduler bootstrap has
     /// run. On the first `drain_scheduler_events`, peripherals with setup-time
     /// work (e.g. a UART with an RX stream attached before any MMIO write) get
@@ -1800,6 +1810,12 @@ impl<C: Cpu> Machine<C> {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
                 .is_some()
         });
+        let nvmc_index = bus.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>())
+                .is_some()
+        });
         // Central I²C data-ready time drive (Option A): the authoritative µs
         // source is the first peripheral that reports one (ESP32 SYSTIMER); the
         // fan-out targets are the opted-in I²C controllers. Both are stable for
@@ -1834,6 +1850,7 @@ impl<C: Cpu> Machine<C> {
             flash_index,
             simctl_index,
             scb_index,
+            nvmc_index,
             scheduler_bootstrapped: false,
             hcsr04_edge_scratch: Vec::new(),
             tick_irq_scratch: Vec::new(),

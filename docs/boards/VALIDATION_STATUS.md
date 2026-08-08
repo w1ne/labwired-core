@@ -12,12 +12,12 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | `6142ba057c56f787` | ⚠ drift acked 2026-08-08 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | `6142ba057c56f787` | ⚠ drift acked 2026-08-08 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-06-22 | `bec6988944d80986` | ⚠ drift acked 2026-08-08 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | `3d2aa3c843b6c1d3` | ⚠ drift acked 2026-08-08 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | `7a687f785b9f9f85` | ⚠ drift acked 2026-08-09 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | `266bc466735dd241` | ⚠ drift acked 2026-08-08 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | `105c3038e66f7309` | ⚠ drift acked 2026-08-08 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-06-20 | `ba59367c8644427e` | ⚠ drift acked 2026-08-08 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `55e991e05f47a258` | ⚠ drift acked 2026-08-08 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-07-15 | `aaf64e6784616c62` | ⚠ drift acked 2026-08-08 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-07-15 | `b469639d4a4e4dc7` | ⚠ drift acked 2026-08-09 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `a05f2c5a4fa09d07` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `68d7f53b696f44f7` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `8eb946cd8fd728b5` | no silicon capture |
@@ -64,7 +64,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-06-17** on USB-JTAG (built-in, openocd-esp32) — re-verified live — reset oracle re-captured live 2026-06-17: 1123/1123 static registers match committed baseline (13 deltas all in per-chip efuse + live USB-device state, none in the asserted set); esp32c3_reset_values_match_silicon passes
   - offline (CI): esp32c3_reset_conformance::esp32c3_reset_values_match_silicon (87 regs; 366/423 overlap matched silicon)
   - offline (CI): esp32c3_reset_conformance::esp32c3_free_running_counters_are_mapped (2 WiFi MAC counter windows; mapping only, no equality claim)
-- Drift status: **⚠ drift acked 2026-08-08 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-08-09 (re-capture pending)**
 
 ## `nucleo-l476rg` — 🟢 silicon-verified
 
@@ -109,7 +109,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-07-15** on USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5) — Live OpenOCD re-capture on 2026-07-15: connected ESP32-S3 rev 0.2 (MAC 9c:13:9e:f4:40:c0), both Xtensa JTAG taps examined, and reset-state windows captured for UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, and RTC_CNTL.
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **⚠ drift acked 2026-08-08 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-08-09 (re-capture pending)**
 
 ## `stm32f401` — 🟡 smoke-manual
 

@@ -1125,8 +1125,32 @@ boards:
     # world_esp32c3_ble_pong 2/2; the three shipped labs still batching at mean
     # 109-126 against floors of 8/8/40; register-modeling coverage for esp32c3
     # unchanged at 2545 with the baseline file untouched.
-    drift_ack: 2026-08-08
-    drift_ack_digest: 3d2aa3c843b6c1d381e7b8b8a6f0eb48c4c6c0bf4292af4133f33bf6b8d35fca
+    # 2026-08-09: DATA-STRUCTURE ONLY change to the shared Espressif UART twin
+    # (peripherals/esp_uart.rs): its register store moved from
+    # `HashMap<u64, u32>` to a flat `[u32; 33]` indexed by `off/4`. Every
+    # observable stays put by construction — the array is seeded from the same
+    # reset values, and out-of-window/unaligned offsets still read 0 and swallow
+    # writes exactly as the map's `unwrap_or(0)` did. No register was added,
+    # removed, re-addressed or given a new reset value, so nothing in any
+    # asserted capture set can move. Motivation is speed, not behaviour: the C3
+    # ROM-boot workload went 9.31s -> 4.87s CPU (1.91x, with the NVMC index
+    # fix), and the run artifacts are byte-identical pristine vs patched.
+    #
+    # ⚠ Recorded because it is load-bearing for reading this ack: THE TWO
+    # OFFLINE TESTS LISTED ABOVE DO NOT COVER THIS FILE. Both C3 reset-
+    # conformance tests were re-run green here, but that proves nothing about
+    # esp_uart.rs — the asserted set is a hardcoded register list (RTC_CNTL,
+    # SPI0/1, GPIO_SD, RADIO_FE) with NO UART entry, and a deliberate sabotage
+    # (`RegFile::slot` forced to return None, so every UART register reads 0)
+    # left both tests PASSING. The gate that does cover it is the model's own
+    # unit suite: the same sabotage reddens 5 of `--lib esp_uart`'s 17 tests
+    # (every_config_reg_offset_has_a_slot, config_registers_round_trip,
+    # uart_config_register_write_mask, uart_config_registers_reset_values,
+    # txfifo_empty_is_level_below_threshold). That suite is green on this tree,
+    # and so is the C3 ROM-boot end-to-end test, which actually drives the UART.
+    # This ack rests on those, not on the reset oracle. No live re-capture.
+    drift_ack: 2026-08-09
+    drift_ack_digest: 7a687f785b9f9f85722fa2734bd117342b479fb0aa63385a30286ab18e5da23d
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -2012,8 +2036,19 @@ boards:
     # lit_px / batches / interpreted counter exactly, and the CLI BLE gate
     # reports the SAME steps=11707065 cycles=33346436 before and after. No S3
     # board attached; no live re-capture.
-    drift_ack: 2026-08-08
-    drift_ack_digest: aaf64e6784616c622545870c767ce33b44e68b2415ab410360445161f990007c
+    # 2026-08-09: the shared Espressif UART twin (peripherals/esp_uart.rs, which
+    # this board watches alongside esp32c3) swapped its `HashMap<u64, u32>`
+    # register store for a flat `[u32; 33]` indexed by `off/4`. Pure data
+    # structure: same reset seeding, same read-0/swallow-write behaviour for
+    # unaligned and out-of-window offsets, no register added, removed,
+    # re-addressed or re-valued. The 9-register reset-state anchor cannot move,
+    # and esp32s3_reset_values_match_silicon is green on this tree. See the
+    # esp32c3 note of the same date for the measured speedup, the byte-identical
+    # artifact check, and — importantly — the sabotage result showing the reset
+    # oracles do NOT cover this file while `--lib esp_uart` does. No S3 board
+    # attached; no live re-capture.
+    drift_ack: 2026-08-09
+    drift_ack_digest: b469639d4a4e4dc70b08eb7afbf5236171b1e501f8255a90cf4bbf50f9465e9d
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
