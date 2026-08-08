@@ -383,6 +383,13 @@ impl TracingSpiDevice {
 }
 
 impl SpiDevice for TracingSpiDevice {
+    /// Forwarded like everything else here: a decorator that fell through to
+    /// the trait default would silently downgrade an edge-sampling device back
+    /// to the byte-level path — the device would opt in, the engine would never
+    /// hear about it, and the mode mismatch would keep exchanging clean bytes.
+    fn sampling(&self) -> crate::peripherals::spi::SpiSampling {
+        self.inner.sampling()
+    }
     fn cs_select(&mut self) {
         self.inner.cs_select();
     }

@@ -24,7 +24,52 @@ use std::sync::Arc;
 /// to every attached device and the first non-zero MISO byte wins.  This is
 /// correct for single-device labs (MAX31855 alone).  CS-aware routing is noted
 /// as a Phase 2 follow-up.
+/// How an attached slave latches the SPI wire — the opt-in fidelity switch.
+///
+/// [`Byte`](Self::Byte) is the default and the only mode any device had before
+/// edge sampling existed: the engine consults the device ONCE per frame at the
+/// frame boundary and the answer rides MISO bit-by-bit during that frame. The
+/// device never sees a clock edge, so a CPOL/CPHA mismatch between master and
+/// slave exchanges perfectly good bytes — the documented honest limit of the
+/// byte-level contract.
+///
+/// [`Edge`](Self::Edge) opts a device into edge-accurate sampling: it declares
+/// the mode ITS OWN silicon is strapped for, and the bit engine then latches
+/// MOSI into it, and clocks MISO out of it, on the physical SCK edges that mode
+/// selects (see [`Spi::edge_slave_capture`] / [`Spi::edge_miso_wire`]). A
+/// master/slave mode mismatch then corrupts data the way real silicon does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SpiSampling {
+    /// Frame-boundary byte exchange. The default; costs nothing per bit.
+    #[default]
+    Byte,
+    /// Edge-accurate slave, strapped for this CPOL/CPHA.
+    Edge { cpol: bool, cpha: bool },
+}
+
+impl SpiSampling {
+    /// Build an edge-sampling mode from the usual SPI mode number
+    /// (bit 1 = CPOL, bit 0 = CPHA): 0 → (0,0) … 3 → (1,1).
+    pub const fn edge_mode(mode: u8) -> Self {
+        Self::Edge {
+            cpol: mode & 0b10 != 0,
+            cpha: mode & 0b01 != 0,
+        }
+    }
+}
+
 pub trait SpiDevice: Send {
+    /// How this device latches the wire. Default [`SpiSampling::Byte`] — the
+    /// pre-existing frame-boundary contract, so every device model that does
+    /// not override this compiles and behaves exactly as before.
+    ///
+    /// Honoured by the STM32 classic/FIFO bit engine in this module. The other
+    /// controllers exchange whole bytes; attaching an opt-in device to one of
+    /// them is rejected at config time rather than silently ignored (see
+    /// `SystemBus::attach_spi_device`).
+    fn sampling(&self) -> SpiSampling {
+        SpiSampling::Byte
+    }
     /// Called when the CS line goes low (chip is selected).
     fn cs_select(&mut self) {}
     /// Called when the CS line goes high (chip is released — flush state).
@@ -172,13 +217,22 @@ const SPI_NRF52_EASYDMA_TOKEN: u32 = 1;
 // (L4/F7/G4) or CR1.DFF on classic ports (F1/F4) — datasheet reset values
 // apply when firmware never programs them.
 //
-// Slaves stay byte-level ([`SpiDevice`], behind the TracingSpiDevice choke
-// point): the engine consults them once per frame, at the frame boundary
+// Slaves stay byte-level BY DEFAULT ([`SpiDevice`], behind the TracingSpiDevice
+// choke point): the engine consults them once per frame, at the frame boundary
 // where the frame starts clocking, and the byte the device answers is what
 // MISO carries bit-by-bit during that SAME frame — full duplex, like real
 // silicon exchanging shift registers. (Frames wider than 8 bits still
 // exchange one byte with the byte-level device; the wire carries the full
 // programmed frame — an honest limit of the byte-level device contract.)
+//
+// A device may OPT IN to edge-accurate sampling by overriding
+// [`SpiDevice::sampling`] with [`SpiSampling::Edge`], declaring the CPOL/CPHA
+// its own silicon is strapped for. The engine then latches MOSI into it, and
+// clocks MISO out of it, on the physical SCK edges that mode selects, so a
+// master/slave mode mismatch corrupts data instead of being invisible. Nothing
+// on the default path changes: the opt-in is a single `Option` test per frame
+// (`edge_slave`, resolved once at attach time) and zero extra work per bit —
+// pinned byte for byte by `tests::spi_byte_level_golden`.
 
 /// SPI signal roles on the wire, used by the GPIO AF pad routing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -324,6 +378,12 @@ struct ActiveFrame {
     mosi: u16,
     /// The full frame value clocked in on MISO (the slave's byte answer).
     miso: u16,
+    /// Edge-sampled slave only: the level MISO carries in each half-period of
+    /// this frame, bit `h` = half-period `h` (`h = 2*bit_idx + second_half`),
+    /// produced by [`Spi::edge_miso_wire`]. `None` — the default byte-level
+    /// path — renders MISO from `miso` with the MASTER's phase (one value held
+    /// for the whole bit period), exactly as before.
+    miso_halves: Option<u32>,
     /// Bit currently on the wire, 0-based in shift order.
     bit_idx: u8,
     /// Second half of the current bit period.
@@ -774,6 +834,25 @@ pub struct Spi {
     /// 0xFFFF reads back 0xEFFF, so its chip config sets `cr1_mask: 0xEFFF`.
     cr1_mask: Option<u16>,
 
+    /// CPOL/CPHA of the first attached device that opted into edge-accurate
+    /// sampling ([`SpiSampling::Edge`]), resolved ONCE at attach time in
+    /// [`Self::push_device`]. `None` — no device opted in — is the default and
+    /// keeps the byte-level frame path byte for byte as it was; the engine
+    /// tests this `Option` once per frame and never per bit.
+    ///
+    /// One mode per controller: the bus dispatcher broadcasts a frame to every
+    /// attached device (last non-zero MISO wins), so the wire cannot carry two
+    /// different slave phases at once. The first opt-in governs.
+    #[serde(skip)]
+    edge_slave: Option<(bool, bool)>,
+    /// Edge path only: the (MOSI, MISO) levels the pads still carried when the
+    /// last frame ended — what a slave latches if its sample edge lands on the
+    /// very first boundary of the next frame. Held by the engine rather than
+    /// read back from [`Self::lines`] so the edge model gives the same answer
+    /// whether or not this controller's pads happen to be AF-routed.
+    #[serde(skip)]
+    edge_hold: (bool, bool),
+
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
 }
@@ -847,6 +926,13 @@ impl Spi {
     /// device first; nothing else should attach directly (that would bypass the
     /// universal bus trace).
     pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
+        // Resolve the opt-in ONCE, here, so the per-frame path only tests an
+        // `Option` and the default path never calls `sampling()` again.
+        if self.edge_slave.is_none() {
+            if let SpiSampling::Edge { cpol, cpha } = device.sampling() {
+                self.edge_slave = Some((cpol, cpha));
+            }
+        }
         self.attached_devices.push(device);
     }
 
@@ -1259,7 +1345,144 @@ impl Spi {
                 (v >> (f.t.bits - 1 - f.bit_idx)) & 1 != 0
             }
         };
-        (sck, bit(f.mosi), bit(f.miso))
+        // Default: MISO holds the slave's answer bit for the whole bit period,
+        // in the master's phase. An edge-sampled slave drives MISO on ITS OWN
+        // shift edges, which for a mode mismatch lands half a bit period away
+        // from the master's — so the wire (and the logic analyzer sampling it)
+        // shows the real offset instead of a clean byte.
+        let miso = match f.miso_halves {
+            Some(halves) => {
+                let h = 2 * u32::from(f.bit_idx) + u32::from(f.second_half);
+                (halves >> h) & 1 != 0
+            }
+            None => bit(f.miso),
+        };
+        (sck, bit(f.mosi), miso)
+    }
+
+    /// Walk the SCK edges one frame puts on the wire, in order, calling
+    /// `visit(half, new_level)`.
+    ///
+    /// `half` is the half-period the edge STARTS (`h = 2*bit + second_half`),
+    /// so the line levels in force just BEFORE the edge are those of half
+    /// `h-1`; `half == 2*bits` is the trailing edge back to the CPOL idle level
+    /// after the last half-period. SCK during half `h` is
+    /// `cpol ^ cpha ^ (h odd)` — the same function [`Self::stm32_frame_levels`]
+    /// renders — so at CPHA=0 the frame opens with no edge (the first half
+    /// already sits at the idle level) and closes with one, and at CPHA=1 the
+    /// reverse. Either way a frame carries exactly `2 × bits` edges.
+    fn for_each_edge(t: &FrameTiming, mut visit: impl FnMut(u32, bool)) {
+        let halves = 2 * u32::from(t.bits);
+        for h in 0..halves {
+            if h == 0 && !t.cpha {
+                continue; // level(0) == CPOL: no transition out of idle
+            }
+            visit(h, t.cpol ^ t.cpha ^ (h & 1 != 0));
+        }
+        if !t.cpha {
+            visit(halves, t.cpol);
+        }
+    }
+
+    /// Bit `idx` of a frame word in wire order (MSB first unless LSBFIRST).
+    fn frame_bit(t: &FrameTiming, word: u16, idx: u8) -> bool {
+        let shift = if t.lsb_first { idx } else { t.bits - 1 - idx };
+        (word >> shift) & 1 != 0
+    }
+
+    /// The byte an edge-sampled slave actually latches off MOSI this frame.
+    ///
+    /// The slave samples on the physical edge ITS mode selects — rising iff
+    /// `cpol == cpha` (mode 0/3 sample rising, mode 1/2 falling) — and takes
+    /// the level the line carried just BEFORE that edge. That pre-edge rule is
+    /// the deterministic reading of a coincident edge: the master changes MOSI
+    /// at bit boundaries, so a slave whose sample edge lands on a boundary
+    /// (a CPHA mismatch) is sampling into the master's transition, which on
+    /// silicon resolves through the driver's propagation delay to the OLD bit.
+    /// `prev_mosi` is the level the pad already carried when the frame opened,
+    /// which is what such a slave latches first.
+    fn edge_slave_capture(
+        t: &FrameTiming,
+        mosi: u16,
+        prev_mosi: bool,
+        s_cpol: bool,
+        s_cpha: bool,
+    ) -> u16 {
+        let sample_rising = s_cpol == s_cpha;
+        let mut rx = 0u16;
+        let mut n: u8 = 0;
+        Self::for_each_edge(t, |h, level| {
+            if level != sample_rising || n >= t.bits {
+                return;
+            }
+            let before = if h == 0 {
+                prev_mosi
+            } else {
+                Self::frame_bit(t, mosi, ((h - 1) / 2) as u8)
+            };
+            if before {
+                rx |= 1 << if t.lsb_first { n } else { t.bits - 1 - n };
+            }
+            n += 1;
+        });
+        rx
+    }
+
+    /// Clock the slave's answer out on MISO at the slave's shift edges and
+    /// latch it back at the master's sample edges.
+    ///
+    /// Returns `(miso half-period map, word the master captured)`. A CPHA=0
+    /// slave presents its first bit as soon as the frame opens (real parts
+    /// drive it at CS↓); a CPHA=1 slave presents nothing until its first
+    /// leading edge, so a master that samples on that same edge latches
+    /// whatever the pad already carried — the classic one-bit shift a CPHA
+    /// mismatch produces on real hardware. The master, like the slave, takes
+    /// the pre-edge level.
+    fn edge_miso_wire(
+        t: &FrameTiming,
+        resp: u16,
+        prev_miso: bool,
+        s_cpol: bool,
+        s_cpha: bool,
+    ) -> (u32, u16) {
+        let slave_sample_rising = s_cpol == s_cpha;
+        let master_sample_rising = t.cpol == t.cpha;
+        let halves = 2 * u32::from(t.bits);
+        // Slave output register: CPHA=0 presents bit 0 immediately, CPHA=1
+        // only from its first shift (leading) edge.
+        let mut out_idx: i32 = if s_cpha { -1 } else { 0 };
+        let mut level = if s_cpha {
+            prev_miso
+        } else {
+            Self::frame_bit(t, resp, 0)
+        };
+        let mut map = 0u32;
+        let mut painted = 0u32;
+        let mut rx = 0u16;
+        let mut n: u8 = 0;
+        Self::for_each_edge(t, |h, edge_level| {
+            while painted < h {
+                map |= u32::from(level) << painted;
+                painted += 1;
+            }
+            if edge_level == master_sample_rising && n < t.bits {
+                if level {
+                    rx |= 1 << if t.lsb_first { n } else { t.bits - 1 - n };
+                }
+                n += 1;
+            }
+            if edge_level != slave_sample_rising {
+                out_idx += 1;
+                if out_idx >= 0 && (out_idx as u32) < u32::from(t.bits) {
+                    level = Self::frame_bit(t, resp, out_idx as u8);
+                }
+            }
+        });
+        while painted < halves {
+            map |= u32::from(level) << painted;
+            painted += 1;
+        }
+        (map, rx)
     }
 
     /// Publish the current frame-state levels into the shared line cell (the
@@ -1287,25 +1510,59 @@ impl Spi {
             (1u16 << t.bits) - 1
         };
         let mosi = value & mask;
-        let miso = if !self.attached_devices.is_empty() {
-            let mosi_byte = (mosi & 0xFF) as u8;
-            let mut miso_byte = 0u8;
-            for dev in &mut self.attached_devices {
-                let resp = dev.transfer(mosi_byte);
-                if resp != 0 {
-                    miso_byte = resp;
+        let (miso, miso_halves) = match self.edge_slave {
+            // ── Opt-in: edge-accurate slave ──────────────────────────────────
+            // The MOSI waveform this frame will put on the wire is already
+            // fully determined (value + timing), so the bits the slave latches
+            // are simulated edge by edge HERE, before the device is consulted —
+            // which is what keeps the device contract identical: still exactly
+            // one `transfer()` per frame, at the same frame boundary, whose
+            // answer still rides MISO during this same frame. The only
+            // difference is that a mode-mismatched slave is handed the bits it
+            // really sampled, and its answer is clocked back at its own edges.
+            Some((s_cpol, s_cpha)) if !self.attached_devices.is_empty() => {
+                let (prev_mosi, prev_miso) = self.edge_hold;
+                let slave_rx = Self::edge_slave_capture(&t, mosi, prev_mosi, s_cpol, s_cpha);
+                let mut resp = 0u8;
+                for dev in &mut self.attached_devices {
+                    let answer = dev.transfer((slave_rx & 0xFF) as u8);
+                    if answer != 0 {
+                        resp = answer;
+                    }
                 }
+                let (halves, master_rx) =
+                    Self::edge_miso_wire(&t, u16::from(resp), prev_miso, s_cpol, s_cpha);
+                self.edge_hold = (
+                    Self::frame_bit(&t, mosi, t.bits - 1),
+                    (halves >> (2 * u32::from(t.bits) - 1)) & 1 != 0,
+                );
+                (master_rx, Some(halves))
             }
-            miso_byte as u16
-        } else if self.loopback {
-            mosi
-        } else {
-            0
+            // ── Default: byte-level, unchanged ───────────────────────────────
+            _ => {
+                let miso = if !self.attached_devices.is_empty() {
+                    let mosi_byte = (mosi & 0xFF) as u8;
+                    let mut miso_byte = 0u8;
+                    for dev in &mut self.attached_devices {
+                        let resp = dev.transfer(mosi_byte);
+                        if resp != 0 {
+                            miso_byte = resp;
+                        }
+                    }
+                    miso_byte as u16
+                } else if self.loopback {
+                    mosi
+                } else {
+                    0
+                };
+                (miso, None)
+            }
         };
         self.frame = Some(ActiveFrame {
             t,
             mosi,
             miso,
+            miso_halves,
             bit_idx: 0,
             second_half: false,
             ticks_left: t.half_ticks,
@@ -2092,6 +2349,240 @@ mod tests {
         spi.write(0x0C, 0x02).unwrap();
         run_engine(&mut spi);
         assert_eq!(spi.read(0x0C).unwrap(), 0x52, "second frame's answer");
+    }
+
+    // ── Opt-in edge (bit-level) slave sampling ────────────────────────────────
+
+    /// Slave that declares its own CPOL/CPHA and records the bytes the wire
+    /// actually delivered to it. Its answer is a constant, independent of what
+    /// it receives, so a corrupted read can only come from the wire.
+    struct EdgeSlave {
+        mode: u8,
+        answer: u8,
+        rx: Vec<u8>,
+        opt_in: bool,
+    }
+    impl EdgeSlave {
+        fn new(mode: u8, answer: u8) -> Self {
+            Self {
+                mode,
+                answer,
+                rx: Vec::new(),
+                opt_in: true,
+            }
+        }
+        /// Same device, same declared mode, but staying on the default
+        /// byte-level path — the control arm that proves the corruption below
+        /// comes from the opt-in and not from the test rig.
+        fn byte_level(mode: u8, answer: u8) -> Self {
+            Self {
+                opt_in: false,
+                ..Self::new(mode, answer)
+            }
+        }
+    }
+    impl SpiDevice for EdgeSlave {
+        fn sampling(&self) -> super::SpiSampling {
+            if self.opt_in {
+                super::SpiSampling::edge_mode(self.mode)
+            } else {
+                super::SpiSampling::Byte
+            }
+        }
+        fn transfer(&mut self, mosi: u8) -> u8 {
+            self.rx.push(mosi);
+            self.answer
+        }
+        fn cs_pin(&self) -> &str {
+            ""
+        }
+        fn as_any(&self) -> Option<&dyn std::any::Any> {
+            Some(self)
+        }
+    }
+
+    /// Clock `bytes` through a master programmed for `master_mode` against
+    /// `slave`, returning `(bytes the master read back, bytes the slave got)`.
+    fn exchange(slave: EdgeSlave, master_mode: u8, bytes: &[u8]) -> (Vec<u8>, Vec<u8>) {
+        let mut spi = Spi::new();
+        spi.push_device(Box::new(slave));
+        let cpol = u16::from(master_mode & 0b10 != 0);
+        let cpha = u16::from(master_mode & 0b01 != 0);
+        // SPE | BR=1 | CPOL | CPHA
+        spi.write_u16(0x00, (1 << 6) | (1 << 3) | (cpol << 1) | cpha)
+            .unwrap();
+        let mut read = Vec::new();
+        for &b in bytes {
+            spi.write(0x0C, b).unwrap();
+            run_engine(&mut spi);
+            read.push(spi.read(0x0C).unwrap());
+        }
+        let rx = spi.attached_devices[0]
+            .as_any()
+            .unwrap()
+            .downcast_ref::<EdgeSlave>()
+            .unwrap()
+            .rx
+            .clone();
+        (read, rx)
+    }
+
+    /// Matched modes must round-trip EXACTLY — in all four modes, both
+    /// directions. Without this the mismatch tests below would pass vacuously
+    /// (a model that corrupts everything corrupts mismatches too).
+    #[test]
+    fn edge_slave_round_trips_when_modes_match() {
+        for mode in 0..=3u8 {
+            let sent = [0xA5u8, 0x3C, 0xFF, 0x01];
+            let (read, rx) = exchange(EdgeSlave::new(mode, 0xB3), mode, &sent);
+            assert_eq!(
+                rx,
+                sent.to_vec(),
+                "mode {mode}: slave must latch exactly what the master sent"
+            );
+            assert_eq!(
+                read,
+                vec![0xB3; 4],
+                "mode {mode}: master must read exactly what the slave answered"
+            );
+        }
+    }
+
+    /// CPHA mismatch, master leading: the slave presents its first MISO bit on
+    /// the very edge the master latches on, so the master reads the level the
+    /// pad still carried plus the slave's bits shifted down one — the classic
+    /// off-by-one-bit symptom of a mode mismatch on real hardware.
+    #[test]
+    fn edge_slave_cpha_mismatch_shifts_the_read_back() {
+        let (read, rx) = exchange(EdgeSlave::new(1, 0xB3), 0, &[0xA5, 0xA5]);
+        // First frame: MISO idled low, so bit 7 is 0 and 0xB3 arrives >> 1.
+        assert_eq!(read[0], 0xB3 >> 1, "0xB3 sampled half a bit period late");
+        // Second frame: the pad still held the slave's last bit, which is what
+        // the master latches first.
+        assert_eq!(read[1], 0x80 | (0xB3 >> 1));
+        assert_ne!(read[0], 0xB3, "a mode mismatch must NOT read back cleanly");
+        // The MOSI direction survives this particular pairing: the slave's
+        // sample edge lands on the master's bit boundary and latches the level
+        // still on the pad (propagation delay), which is the outgoing bit.
+        assert_eq!(rx, vec![0xA5, 0xA5]);
+    }
+
+    /// The mirror image: with the master at CPHA=1 and the slave at CPHA=0 the
+    /// corruption lands on MOSI — the slave latches one edge early.
+    #[test]
+    fn edge_slave_cpha_mismatch_shifts_what_the_slave_receives() {
+        let (read, rx) = exchange(EdgeSlave::new(0, 0xB3), 1, &[0xA5, 0x3C]);
+        assert_eq!(rx[0], 0xA5 >> 1, "slave latched one edge early");
+        assert_eq!(
+            rx[1],
+            0x80 | (0x3C >> 1),
+            "the bit still on the pad from the previous frame leads"
+        );
+        assert_ne!(rx[0], 0xA5, "a mode mismatch must NOT deliver cleanly");
+        // MISO survives this pairing (mirror of the test above).
+        assert_eq!(read, vec![0xB3, 0xB3]);
+    }
+
+    /// The control arm. The SAME mismatch across the SAME device model, with
+    /// the opt-in switched off, keeps exchanging clean bytes — i.e. the
+    /// corruption above is the opt-in doing its job, not the rig.
+    #[test]
+    fn byte_level_slave_is_untouched_by_a_mode_mismatch() {
+        for master_mode in 0..=3u8 {
+            for slave_mode in 0..=3u8 {
+                let (read, rx) = exchange(
+                    EdgeSlave::byte_level(slave_mode, 0xB3),
+                    master_mode,
+                    &[0xA5],
+                );
+                assert_eq!(read, vec![0xB3], "byte-level read must not change");
+                assert_eq!(rx, vec![0xA5], "byte-level delivery must not change");
+            }
+        }
+    }
+
+    /// The opt-in must not disturb frame timing: an edge-sampled frame takes
+    /// exactly the same number of peripheral-clock cycles as a byte-level one.
+    #[test]
+    fn edge_sampling_does_not_change_frame_wire_time() {
+        fn cycles(opt_in: bool) -> u64 {
+            let mut spi = Spi::new();
+            spi.push_device(Box::new(if opt_in {
+                EdgeSlave::new(0, 0xB3)
+            } else {
+                EdgeSlave::byte_level(0, 0xB3)
+            }));
+            spi.write_u16(0x00, (1 << 6) | (1 << 3)).unwrap();
+            spi.write(0x0C, 0xA5).unwrap();
+            let mut n = 0;
+            while spi.transfer_active() {
+                spi.tick_elapsed(1);
+                n += 1;
+            }
+            n
+        }
+        assert_eq!(cycles(true), cycles(false), "8 bits x 2^(BR+1) either way");
+    }
+
+    /// Cost SHAPE, not wall clock (that lives in `tests::bench_spi_engine`):
+    /// neither path may consult the device more than once per frame. A
+    /// per-bit device call would be the obvious way to make edge sampling
+    /// eat CPU, and this fails the moment one appears.
+    #[test]
+    fn neither_path_consults_the_device_more_than_once_per_frame() {
+        for opt_in in [false, true] {
+            let mut spi = Spi::new();
+            spi.push_device(Box::new(if opt_in {
+                EdgeSlave::new(0, 0xB3)
+            } else {
+                EdgeSlave::byte_level(0, 0xB3)
+            }));
+            spi.write_u16(0x00, (1 << 6) | (1 << 3)).unwrap();
+            for b in 0..4u8 {
+                spi.write(0x0C, b).unwrap();
+                run_engine(&mut spi);
+            }
+            let calls = spi.attached_devices[0]
+                .as_any()
+                .unwrap()
+                .downcast_ref::<EdgeSlave>()
+                .unwrap()
+                .rx
+                .len();
+            assert_eq!(calls, 4, "opt_in={opt_in}: one transfer() per frame");
+        }
+    }
+
+    /// The MISO pad itself carries the slave's phase: with a CPHA mismatch the
+    /// line transitions half a bit period away from where the byte-level path
+    /// would have put them.
+    #[test]
+    fn edge_sampled_miso_transitions_on_the_slave_phase() {
+        fn wire(opt_in: bool) -> Vec<bool> {
+            let mut spi = Spi::new();
+            let lines = spi.line_levels_arc();
+            spi.push_device(Box::new(if opt_in {
+                EdgeSlave::new(1, 0xB3)
+            } else {
+                EdgeSlave::byte_level(1, 0xB3)
+            }));
+            // Mode 0 master, BR=0 -> one cycle per half-period.
+            spi.write_u16(0x00, 1 << 6).unwrap();
+            spi.write(0x0C, 0xA5).unwrap();
+            let mut levels = vec![lines.miso()];
+            while spi.transfer_active() {
+                spi.tick_elapsed(1);
+                levels.push(lines.miso());
+            }
+            levels
+        }
+        let edge = wire(true);
+        let byte = wire(false);
+        assert_eq!(edge.len(), byte.len(), "same frame length");
+        assert_ne!(
+            edge, byte,
+            "the mismatched slave drives MISO on its own edges"
+        );
     }
 
     // ── nRF52 SPIM EasyDMA unit tests ─────────────────────────────────────────
