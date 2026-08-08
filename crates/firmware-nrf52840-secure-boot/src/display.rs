@@ -97,6 +97,19 @@ pub unsafe fn display_init() {
 pub unsafe fn display_text(page: u8, x: usize, s: &str) {
     let fb = &mut *core::ptr::addr_of_mut!(FB);
     let base = page as usize * 128;
+
+    // Blank the rest of the row first.
+    //
+    // The glyph loop below writes the 5 columns a character occupies and
+    // nothing else, so a shorter string used to leave the tail of whatever was
+    // on that row before. Boot 2 painted "ECDSA VERIFY..." on page 4 and then
+    // "SE: SIG OK" over it, and the panel showed "SE: SIG OK" followed by a
+    // leftover "FY...". Clearing only this row keeps the dashboard's other
+    // lines, which the caller expects to survive.
+    for c in x..128 {
+        fb[base + c] = 0;
+    }
+
     for (i, ch) in s.bytes().enumerate() {
         let col = x + i * 6;
         if col + 5 > 128 {
