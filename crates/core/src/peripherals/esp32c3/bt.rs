@@ -495,11 +495,11 @@
 //! with the controller-level trace behind it:
 //!
 //! ```text
-//! [bt] radio RX ch39 aa=0x8e89bed6 rxd=0x1000 et=4 cs=0x0400 label=0
+//! [bt<n>] radio RX ch39 aa=0x8e89bed6 rxd=0x1000 et=4 cs=0x0400 label=0
 //!      pdu=20 0f 04 00 00 00 00 02 02 01 06 05 12 20 00 40 00
-//! [bt] +0x2d8 <= 0x0000103f      ← FIFO popped, head bitmap 0x4
-//! [bt] +0x018 <= 0x00000004      ← bit 2 W1C-acked
-//! [bt] radio: ET 4 end (clkn=7097)
+//! [bt<n>] +0x2d8 <= 0x0000103f      ← FIFO popped, head bitmap 0x4
+//! [bt<n>] +0x018 <= 0x00000004      ← bit 2 W1C-acked
+//! [bt<n>] radio: ET 4 end (clkn=7097)
 //! ```
 //!
 //! `02:00:00:00:00:04` is node A's own BLE address (`04 00 00 00 00 02` LSB
@@ -638,15 +638,75 @@
 //!
 //! **What the advertising stop does NOT do here, stated plainly.**
 //! `r_lld_adv_stop` (`0x4001_898A`), when the activity has an event in flight
-//! (state 1), writes `CS+0x20 = 1` and sets **`RWBLECNTL` bit 25** before
-//! moving the activity to state 2. This model stores that bit and acts on
-//! neither it nor `CS+0x20`: what bit 25 does to an event already programmed —
-//! end it early with `irq_type` 0, or with the abort `irq_type` 1
-//! `r_lld_adv_frm_cbk` also accepts — was **not** determined, and inventing one
-//! would put a fabricated callback path in the middle of the stop sequence. The
-//! measured consequence of not modelling it is bounded and small: the in-flight
-//! event runs to its programmed duration (≤ 2.8 ms of device time) and
-//! `r_lld_adv_frm_isr` then finds state 2 and completes the stop through
+//! (state 1 — set at the tail of `r_lld_adv_evt_start_cbk` `0x4001_696E`, i.e.
+//! the instant the event is handed to `sch_prog_push`), writes `CS+0x20 = 1`
+//! and sets **`RWBLECNTL` bit 25** before moving the activity to state 2.
+//!
+//! Bit 25 is now **cleared** on write, along with bit 24 — they are abort
+//! *requests* the hardware consumes, and latching them made the twin hand the
+//! firmware a control word silicon cannot produce. The ROM sites, the silicon
+//! read-backs and the twin trace that pin that are all at
+//! [`RWBLECNTL_SELF_CLEARING`].
+//!
+//! What is still **not** modelled is the abort's *effect*: ending the event
+//! that is already programmed. Two things about it are now settled that were
+//! not before, and one is still open.
+//!
+//! * Settled — **how silicon reports an aborted event.**
+//!   `r_sch_prog_end_isr` (`0x4003_0AB8`) reads the exchange-table status
+//!   `(ET+0x0 >> 3) & 7`, dispatches 3/4/5, and computes the callback's third
+//!   argument as `seqz(status - 4)` (`0x4003_0B52`) — i.e. **`irq_type = 1`
+//!   exactly when the status is 4**. `r_lld_adv_frm_cbk` (`0x4001_7550`) then
+//!   routes `irq_type` 1 to `lld_adv_frm_isr(act, ts, 1)` and 0 to
+//!   `lld_adv_frm_isr(act, ts, 0)`. So **status 4 is the abort encoding** — one
+//!   of the "status codes 1, 4, 5, 6 are named nowhere that was measured" gaps
+//!   listed below, now closed from the ROM. (For the *stop* path specifically
+//!   the distinction is inert: `lld_adv_frm_isr` branches on state 2 at
+//!   `0x4001_6FF8` before it ever looks at the abort flag.)
+//! * Settled — **what it costs not to do it**, measured rather than argued.
+//!   `LABWIRED_BT_TRACE=1`, two nodes, 150 M cycles/node ≈ CLKN 0..2840
+//!   (0.89 s), the published BLE Pong sketch rebuilt at two cadences.
+//!
+//!   At the sketch's own **~51 ms** — and `PUBLISH_MS` 20 and 40 both land
+//!   there, because one iteration of that `loop()` costs ~51 ms of device time
+//!   in the twin (49 status lines per 400 M cycles) and the SSD1306 repaint is
+//!   nearly all of it — `r_lld_adv_stop` took the state-1 branch **4 times on
+//!   node A and 3 on node B**, roughly one publish in four. Every one was
+//!   followed by the ordinary event end **0–10 CLKN ticks later (0–3.1 ms)**,
+//!   which is the whole of the delay the missing abort adds.
+//!
+//!   With the panel removed the loop runs at 6 ms and the achieved cadence is
+//!   **24 ms** (`pub=103` at `t=2494`). There the branch is taken **zero**
+//!   times, across 212 programmed events per node: each stop lands a few ms
+//!   *before* its activity's next programmed event, so it takes the
+//!   synchronous state-0 path at `0x4001_89E6` and never touches bit 25.
+//!   Republishing faster is not more likely to catch an event in flight — it
+//!   phase-locks the stop ahead of one — which is worth stating because the
+//!   opposite was the working theory.
+//!
+//!   Neither cadence stalls. Air frames stay at 3–5 (51 ms) and 5–6 (24 ms)
+//!   per 20 M cycles per node right to the end of a 400 M-cycle two-node run,
+//!   the host election settles, and at 24 ms both nodes agree on `score=7:6`
+//!   with the guest's ball identical to the host's.
+//! * Open — **whether the core also discards the event's transmission.** In
+//!   this model a legacy advertising event puts its PDU on the air when it
+//!   *starts*, so truncating a `Pending` one throws away a frame silicon has
+//!   already sent. That is not a theory: core#772 tried exactly that and
+//!   silenced both nodes.
+//!
+//! So the abort's effect stays unmodelled **on the measurement**, not on
+//! ignorance: at ≤3.1 ms per stop it changes nothing observable, while
+//! synthesising an event ending has a merged-and-reverted-the-same-day track
+//! record. Two independent defects in that attempt are worth recording so the
+//! next one does not inherit them: it keyed on the 0→1 edge of a bit this model
+//! then latched (so it could fire at most once per boot — see
+//! [`RWBLECNTL_SELF_CLEARING`]), and it shipped `self.rx_cursor = frame.seq`
+//! in `receive_event`, which re-delivers one frame forever and makes every
+//! receiver in the world deaf. Any measurement taken over that tree says
+//! nothing about the abort.
+//!
+//! The in-flight event therefore still runs to its programmed duration and
+//! `r_lld_adv_frm_isr` finds state 2 and completes the stop through
 //! `r_lld_adv_end` → `lld_adv_end_ind_handler` exactly as it does on silicon.
 //! The traces above are of a stop that completes that way, every iteration.
 //!
@@ -1255,7 +1315,55 @@ const RWBLECNTL: u64 = 0x000;
 /// was `+0x000 <= 0x8010_070f`, and the CPU sat on the instruction immediately
 /// after that store while the real part carried straight on into the next
 /// bring-up step.
-const RWBLECNTL_SELF_CLEARING: u32 = 0x8000_0000;
+///
+/// **Bits 25 and 24 are the same kind of bit, and for the same two reasons.**
+/// They are the RW-BLE core's two abort *requests* — bit 25 aborts the
+/// advertising event in flight, bit 24 aborts the scanning one — and firmware
+/// only ever ORs them in, never clears them:
+///
+/// | ROM site | writes |
+/// |---|---|
+/// | `r_lld_adv_stop` `0x4001_8A2C` (state 1 branch) | `(x & 0xFDFF_FFFF) \| 0x0200_0000` |
+/// | `r_lld_per_adv_stop` `0x4002_3E48` | the same, bit 25 |
+/// | `r_lld_scan_end` `0x4002_4634` | `(x & 0xFEFF_FFFF) \| 0x0100_0000`, bit 24, and then parks the scan activity in state 2 exactly as the advertising stop parks its own |
+/// | `r_lld_rpa_renew_evt_start_cbk` `0x4001_FF06`/`0x4001_FF18` | bit 25, then bit 24 — one after the other, aborting both activities so the resolvable private address can be renewed |
+///
+/// Those are **every** site in the mask ROM that touches either bit, and not
+/// one of them ever writes a zero into it: `r_lld_adv_stop`'s
+/// `and 0xFDFF_FFFF` immediately precedes an `or 0x0200_0000`, so it is a
+/// set, not a clear. No ROM site reads either bit back, either (the only
+/// `RWBLECNTL` *read* that is not part of one of those read-modify-writes is
+/// `r_lld_scan_process_pkt_rx_aux_adv_ind` `0x4002_4F92`, which tests bit 10).
+/// A request bit that software only ever sets and never polls has to be
+/// cleared by the hardware, or it latches on the first stop and stays.
+///
+/// And silicon says it is cleared: every dump of the live advertising part
+/// reads `+0x000 = 0x0010_070f` — bits 25 and 24 clear — on a part running
+/// firmware that demonstrably writes them set.
+///
+/// **The twin's own trace shows what latching them costs**, and it is a value
+/// silicon cannot produce. `LABWIRED_BT_TRACE=1`, two-node BLE Pong,
+/// 2026-08-07, both nodes, at CLKN 37:
+///
+/// ```text
+/// [bt1] +0x000 <= 0x0210070f   ← rpa_renew sets bit 25
+/// [bt1] +0x000 <= 0x0310070f   ← ... then ORs bit 24 onto what it read BACK
+/// ```
+///
+/// `r_lld_rpa_renew_evt_start_cbk` computes that second word as
+/// `(read_back & 0xFEFF_FFFF) | 0x0100_0000`. On silicon the read-back is
+/// `0x0010_070f`, so the second store is `0x0110_070f`. `0x0310_070f` only
+/// exists because this model handed the firmware back its own abort request.
+///
+/// The practical trap that follows, recorded because it has already cost one
+/// merged-and-reverted attempt (core#772 → #774): with the bits latched, an
+/// abort model keyed on the 0→1 *edge* of bit 25 can fire **at most once per
+/// boot**. Every later `r_lld_adv_stop` writes the identical word back — the
+/// isolated `+0x000 <= 0x0310070f` entries at CLKN 1576/1723/2161/2747 in that
+/// same trace are real stops landing on a live advertising event, and not one
+/// of them is an edge. Clearing the bits here is what makes any future abort
+/// model observable at all.
+const RWBLECNTL_SELF_CLEARING: u32 = 0x8300_0000;
 
 /// Read-only hardware identity/configuration words, seeded from the silicon
 /// capture of 2026-08-02. These are the ONLY snapshot-seeded values in the
@@ -1642,8 +1750,9 @@ impl Esp32c3Bt {
             fifo.push_back(queued);
         }
         if bt_trace_enabled() {
+            let nid = self.node_id;
             eprintln!(
-                "[bt] IRQ raw|={rising:#010x} stat={:#010x} fifo_cnt={} (clkn={} fine={})",
+                "[bt{nid}] IRQ raw|={rising:#010x} stat={:#010x} fifo_cnt={} (clkn={} fine={})",
                 self.int_raw.get() & self.int_enable(),
                 fifo.len(),
                 Self::clkn_at(elapsed),
@@ -1852,7 +1961,8 @@ impl Esp32c3Bt {
             // is left alone rather than guessed at; the event still ends
             // normally so the controller is never wedged by our ignorance.
             if bt_trace_enabled() {
-                eprintln!("[bt] radio: CS format {format:#06x} not modelled — no TX");
+                let nid = self.node_id;
+                eprintln!("[bt{nid}] radio: CS format {format:#06x} not modelled — no TX");
             }
             return false;
         }
@@ -1908,8 +2018,9 @@ impl Esp32c3Bt {
 
         if bt_trace_enabled() {
             let hex: String = pdu.iter().map(|b| format!("{b:02x} ")).collect();
+            let nid = self.node_id;
             eprintln!(
-                "[bt] radio TX ch{channel} aa={access_address:#010x} crcinit={crc_init:#08x} \
+                "[bt{nid}] radio TX ch{channel} aa={access_address:#010x} crcinit={crc_init:#08x} \
                  et={idx} pdu={hex}"
             );
         }
@@ -1980,8 +2091,9 @@ impl Esp32c3Bt {
         };
         if next_word & RXD_DONE != 0 {
             if bt_trace_enabled() {
+                let nid = self.node_id;
                 eprintln!(
-                    "[bt] radio RX ch{channel}: rxd={rxd:#06x} still RXDONE — no free buffer"
+                    "[bt{nid}] radio RX ch{channel}: rxd={rxd:#06x} still RXDONE — no free buffer"
                 );
             }
             return false;
@@ -2061,8 +2173,9 @@ impl Esp32c3Bt {
 
         if bt_trace_enabled() {
             let hex: String = frame.pdu.iter().map(|b| format!("{b:02x} ")).collect();
+            let nid = self.node_id;
             eprintln!(
-                "[bt] radio RX ch{channel} aa={access_address:#010x} rxd={rxd:#06x} \
+                "[bt{nid}] radio RX ch{channel} aa={access_address:#010x} rxd={rxd:#06x} \
                  et={idx} cs={cs:#06x} label={link_label} pdu={hex}"
             );
         }
@@ -2081,7 +2194,8 @@ impl Esp32c3Bt {
                     // decoded, so it is dropped rather than completed with
                     // invented state. Firmware will stall visibly.
                     if bt_trace_enabled() {
-                        eprintln!("[bt] radio: ET {idx} unreadable (EM unmapped) — dropped");
+                        let nid = self.node_id;
+                        eprintln!("[bt{nid}] radio: ET {idx} unreadable (EM unmapped) — dropped");
                     }
                     continue;
                 };
@@ -2134,8 +2248,9 @@ impl Esp32c3Bt {
                     self.set_et_status(bus, ev.et_idx, ET_STATUS_END);
                     self.raise_irq_bits(INT_SCH_PROG_END);
                     if bt_trace_enabled() {
+                        let nid = self.node_id;
                         eprintln!(
-                            "[bt] radio: ET {} end (clkn={})",
+                            "[bt{nid}] radio: ET {} end (clkn={})",
                             ev.et_idx,
                             Self::clkn_at(elapsed)
                         );
@@ -2315,8 +2430,9 @@ impl Peripheral for Esp32c3Bt {
         // straight off the tail of the log and compared with the OpenOCD write
         // trace this model was built from.
         if bt_trace_enabled() {
+            let nid = self.node_id;
             eprintln!(
-                "[bt] +{offset:#05x} <= {value:#010x}  (clkn={} fine={})",
+                "[bt{nid}] +{offset:#05x} <= {value:#010x}  (clkn={} fine={})",
                 self.clkn(),
                 self.clkn_fine()
             );
@@ -2347,8 +2463,17 @@ impl Peripheral for Esp32c3Bt {
                     *slot = value;
                 }
             }
-            // Consume the self-clearing command bit — the hardware executes it
-            // and drops it, so it must never read back set.
+            // Consume the self-clearing command bits — bit31's kick and the
+            // two abort REQUESTS, bits 25 (advertising) and 24 (scanning). The
+            // hardware takes each one and drops it, so none of them may read
+            // back set; see [`RWBLECNTL_SELF_CLEARING`] for the ROM sites and
+            // the silicon/twin values that pin all three.
+            //
+            // What the core does with an abort request BEYOND clearing it —
+            // ending the event in flight early — is still not modelled, and
+            // that is a measured decision rather than an omission. See the
+            // "What the advertising stop does NOT do here" section of the
+            // module docs for the cost, in CLKN ticks, off the twin's trace.
             RWBLECNTL => {
                 if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
                     *slot = value & !RWBLECNTL_SELF_CLEARING;
@@ -2402,7 +2527,8 @@ impl Peripheral for Esp32c3Bt {
                         *slot = keep | target;
                     }
                     if bt_trace_enabled() {
-                        eprintln!("[bt] rxbuf jump -> {target:#06x}, raising bit 18");
+                        let nid = self.node_id;
+                        eprintln!("[bt{nid}] rxbuf jump -> {target:#06x}, raising bit 18");
                     }
                     self.raise_irq_bits(INT_LLD_UPDATE_RXBUF);
                 }
@@ -2484,6 +2610,75 @@ mod tests {
             0x0010_070f,
             "bit31 must be consumed, not stored — otherwise the controller \
              spins forever waiting for its own kick to clear"
+        );
+    }
+
+    /// **The two abort REQUEST bits read back clear, like bit31.** Silicon
+    /// reads `+0x000 = 0x0010_070f` on a live advertising part whose own
+    /// firmware writes bit 25 (`r_lld_adv_stop` `0x4001_8A2C`,
+    /// `r_lld_per_adv_stop` `0x4002_3E48`, `r_lld_rpa_renew_evt_start_cbk`
+    /// `0x4001_FF06`) and bit 24 (`r_lld_scan_end` `0x4002_4634`,
+    /// `r_lld_rpa_renew_evt_start_cbk` `0x4001_FF18`). No ROM site ever writes
+    /// a zero into either, and none reads either back, so nothing in software
+    /// could clear them.
+    ///
+    /// The values here are the exact ones off the two sides: what the C3's
+    /// firmware stores, and what OpenOCD reads back afterwards.
+    #[test]
+    fn rwblecntl_abort_requests_read_back_clear() {
+        for request in [0x0210_070fu32, 0x0110_070f, 0x0310_070f] {
+            let mut bt = Esp32c3Bt::new();
+            bt.write_u32(RWBLECNTL, 0x0010_070f).unwrap();
+            bt.write_u32(RWBLECNTL, request).unwrap();
+            assert_eq!(
+                bt.read_u32(RWBLECNTL).unwrap(),
+                0x0010_070f,
+                "wrote {request:#010x}; every live dump of an advertising C3 \
+                 reads +0x000 back as 0x0010_070f, abort requests consumed"
+            );
+        }
+    }
+
+    /// **The firmware's OWN next control word proves it**, which is what makes
+    /// this a silicon check rather than a restatement of the line above.
+    ///
+    /// `r_lld_rpa_renew_evt_start_cbk` (`0x4001_FEE0`) aborts both activities
+    /// back to back, and the second store is computed from what the first one
+    /// read BACK:
+    ///
+    /// ```text
+    /// 4001ff06: lw   a5,0(a4)      ; read RWBLECNTL
+    /// 4001ff0e: and  a5,a5,a3      ; a3 = 0xfdffffff
+    /// 4001ff14: or   a5,a5,a3      ; a3 = 0x02000000   -> set bit 25
+    /// 4001ff16: sw   a5,0(a4)
+    /// 4001ff18: lw   a5,0(a4)      ; read it BACK
+    /// 4001ff20: and  a5,a5,a3      ; a3 = 0xfeffffff
+    /// 4001ff26: or   a5,a5,a3      ; a3 = 0x01000000   -> set bit 24
+    /// 4001ff28: sw   a5,0(a4)
+    /// ```
+    ///
+    /// So the second word is `(read_back & 0xFEFF_FFFF) | 0x0100_0000`. On
+    /// silicon the read-back has bit 25 already gone, so that is
+    /// `0x0110_070f`. A model that latches the request makes the same
+    /// firmware compute `0x0310_070f` — which is exactly what the twin's
+    /// trace showed at CLKN 37 on both BLE Pong nodes, and a word the real
+    /// part can never produce.
+    #[test]
+    fn the_rpa_renew_sequence_computes_the_silicon_control_word() {
+        let mut bt = Esp32c3Bt::new();
+        bt.write_u32(RWBLECNTL, 0x0010_070f).unwrap();
+
+        // Replay `r_lld_rpa_renew_evt_start_cbk` instruction for instruction.
+        let first = (bt.read_u32(RWBLECNTL).unwrap() & 0xFDFF_FFFF) | 0x0200_0000;
+        assert_eq!(first, 0x0210_070f, "the abort-advertising store");
+        bt.write_u32(RWBLECNTL, first).unwrap();
+
+        let second = (bt.read_u32(RWBLECNTL).unwrap() & 0xFEFF_FFFF) | 0x0100_0000;
+        assert_eq!(
+            second, 0x0110_070f,
+            "the abort-scanning store the firmware computes from its own \
+             read-back. 0x0310_070f means bit 25 was still there to be read, \
+             which is the twin latching a request the core consumes"
         );
     }
 

@@ -26,6 +26,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # fetch-depth: 0 — verify-release-runner-contract.sh reads the pinned
+      # action's source out of an OLD commit by sha (`git cat-file -e <sha>`,
+      # then `git show <sha>:<path>`). A bounded depth leaves that object
+      # unfetched. Unlike the history-derived gates elsewhere in this file that
+      # is not a silent wrongness: the script calls `fail` with "commit <sha> is
+      # available locally", so the job goes red with the actual reason. Keep the
+      # depth anyway — a red build nobody can explain is not much better.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

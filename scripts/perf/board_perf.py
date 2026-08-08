@@ -73,20 +73,53 @@ HOW THE FIXED COST IS REMOVED
     slope whose denominator is assumed rather than confirmed is not a
     measurement.
 
-WHICH BOARDS ARE COVERED
-    All of them — every chip descriptor in `configs/chips/`, across four
-    memory maps on Cortex-M plus the RISC-V and Xtensa ESP parts.
+WHICH BOARDS ARE MATCHED TO A FIXTURE
+    Every chip descriptor in `configs/chips/` is matched to a linked fixture by
+    (arch, flash base, RAM base) read from the descriptor itself, and to that
+    fixture's modes.
 
-    Coverage is *derived* from the descriptors, not from a hand-kept list,
+    The match is *derived* from the descriptors, not from a hand-kept list,
     because a hand-kept list silently stops covering whatever is added after it
     was last edited — which is how stm32f405, stm32f411ceu6, stm32f767 and
     rp2350 ended up outside the gate without even appearing in its "not
     covered" note. A chip that no fixture matches is a hard error, so adding a
     chip forces a decision rather than a silent gap.
 
-    The Xtensa fixture needs the esp toolchain (espup). Where it is absent the
-    two ESP32 parts are reported as NOT measured rather than quietly dropped,
-    and --require-all (what CI passes) turns that into a failure.
+A MATCHED FIXTURE IS NOT A MEASUREMENT
+    A fixture nothing has ever built produces no number, and a board-mode with
+    no number is not guarded by anything — whatever the matching table says.
+    Reporting "covers N chips" off the match alone is the same class of
+    overstatement this gate exists to catch: a check that reads complete while
+    measuring nothing. So every report here keeps three states apart, and
+    derives all three from state rather than from a second hand-kept list:
+
+      measured this run        a number was produced, here, in this run.
+      skipped this run         no number here — the fixture's toolchain is not
+                               installed on this machine — but a baseline is on
+                               record, so some run somewhere did measure it.
+      never measured anywhere  no baseline exists for this board-mode and this
+                               run did not produce one either. No run has ever
+                               produced a number for it. This is NOT coverage
+                               and is never counted as coverage.
+
+    The unit of all three is the BOARD-MODE, not the board, for the same reason
+    the gate itself is per-mode: `stm32l476` having a `step` baseline says
+    nothing about whether its `batch` loop is measured, and #830 is the standing
+    proof that a per-board count hides exactly that.
+
+    "Has this ever been measured" is answered by baselines.json, for the same
+    reason the match set is answered by configs/chips/: a baseline is the
+    residue of a real measurement, so it cannot claim a run that did not happen
+    and it cannot drift out of date the way a hand-kept "not covered" note does.
+
+    The three Xtensa parts (esp32, esp32s3, esp32s3-zero) sit in that third
+    state today: `crates/firmware-perf-spin-xtensa` needs the esp-rs toolchain
+    (espup) and has not been built by any run — CI's espup step is
+    continue-on-error and baselines.json has no entry for them in any mode. They
+    are named as NEVER measured on every run, and --require-all (what CI passes)
+    fails rather than reporting them green. They were previously in WAIVED,
+    which said so honestly; moving them into FIXTURES made them read as covered,
+    which is what this wording exists to prevent recurring.
 
 WHY A BASELINE THAT IS TOO HIGH ALSO FAILS
     A board that measures far *below* its baseline is not good news, it is a
@@ -224,10 +257,16 @@ FIXTURES = {
     ("xtensa-lx7", 0x42000000, 0x3FC88000): ("esp32s3", SPIN_XTENSA_ESP32S3),
 }
 
-# Chips the gate cannot measure at all, with the reason. Anything here is
+# Chips no fixture can even be LINKED for, with the reason. Anything here is
 # reported on every run; anything neither here nor matched to a fixture aborts
 # the run. Empty is the goal, not merely the current state — a chip belongs
 # here only while there is a concrete reason it cannot be linked or run.
+#
+# This is deliberately NOT where "matched but never actually measured" is
+# recorded. That state is derived from baselines.json (never_measured_board_modes)
+# precisely so it cannot be dropped from here and start reading as coverage —
+# which is what happened when the Xtensa parts were moved out of this dict into
+# FIXTURES and WAIVED was emptied.
 WAIVED: dict[str, str] = {}
 
 # Descriptors that are CI plumbing rather than a modelled part.
@@ -317,6 +356,72 @@ def fixture_spec(name: str) -> Spin:
 def modes_for(fixture: str) -> tuple[str, ...]:
     """Which execution loops this fixture's ISA driver actually has."""
     return fixture_spec(fixture).modes
+
+
+def board_modes(covered: dict[str, str]) -> list[tuple[str, str]]:
+    """Every (board, mode) the fixture table matches.
+
+    The board-mode, not the board, is the unit every count in this file is
+    expressed in. A board is not a unit of measurement here: stm32l476 having a
+    `step` baseline says nothing about whether its `batch` loop has ever been
+    run, and #830 is the standing proof that a per-board tally hides precisely
+    that half.
+
+    Ordered board-alphabetically, then in the fixture's declared mode order, so
+    the summary lists a board-mode in the same place the measurement table above
+    it does — a reader comparing "measured" against "never measured" is reading
+    two views of one list, not two differently-sorted lists.
+    """
+    return [(b, m) for b, f in sorted(covered.items()) for m in modes_for(f)]
+
+
+def has_been_measured(board: str, mode: str, baselines: dict, measured: dict | None = None) -> bool:
+    """Whether a number for this board-mode exists ANYWHERE.
+
+    Two sources, and only two, both of them evidence of a run that actually
+    happened rather than of an intention to run: a recorded baseline (some run,
+    some machine, at some point) and `measured` (this run, just now). A fixture
+    match is deliberately not a source — it is a build recipe, and a recipe
+    nobody has cooked is not a meal.
+    """
+    return mode in baselines.get(board, {}) or mode in (measured or {}).get(board, {})
+
+
+def never_measured_board_modes(
+    covered: dict[str, str], baselines: dict, measured: dict | None = None
+) -> list[tuple[str, str]]:
+    """Matched board-modes for which no number has ever existed, anywhere.
+
+    These are NOT coverage, and are never folded into a coverage count. A
+    board-mode here has a linkable fixture and nothing else: with no baseline
+    there is nothing to compare against, so no regression in it is detectable
+    and nothing about it is being held still.
+    """
+    return [
+        bm for bm in board_modes(covered) if not has_been_measured(*bm, baselines, measured)
+    ]
+
+
+def bm_label(board: str, mode: str) -> str:
+    """How a board-mode is named in output, matching the per-row `[mode]` form."""
+    return f"{board}[{mode}]"
+
+
+def never_measured_note(board: str, mode: str, fixture: str) -> str:
+    """Why this matched board-mode has still never produced a number.
+
+    Derived from the fixture's own build recipe rather than from a written-down
+    reason, so it cannot go stale the way a hand-kept waiver note does — the
+    note stops being emitted the moment a baseline appears, because the
+    board-mode leaves the set.
+    """
+    spec = fixture_spec(fixture)
+    if spec.toolchain:
+        return (
+            f"fixture '{fixture}' needs the `{spec.toolchain}` toolchain "
+            f"({spec.target}), which no run has had; nothing has ever built it"
+        )
+    return f"fixture '{fixture}' ({spec.target}) has never produced a number in this mode"
 
 
 def fixture_origins(name: str) -> tuple[int, int]:
@@ -597,12 +702,49 @@ def main() -> int:
         except CoverageError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        board_modes = sum(len(modes_for(f)) for f in covered.values())
+        try:
+            baselines = load_baselines()
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        matched = board_modes(covered)
+        never = never_measured_board_modes(covered, baselines)
+        gated = [bm for bm in matched if bm not in set(never)]
+        chips_with_a_number = {b for b, _ in gated}
+
+        # This is the line the PR gate prints, and the first number on it is the
+        # only one most people read — so it is the honest one: board-modes with
+        # a baseline, i.e. the ones a regression could actually be detected in.
+        # The old wording ("perf gate covers 25 chips ... (46 board-modes)")
+        # counted three board-modes that have never produced a number anywhere
+        # as covered, and that count is what went into a PR description as
+        # though it meant 25 chips were being measured.
         print(
-            f"perf gate covers {len(covered)} chips across "
-            f"{len(set(covered.values()))} memory maps "
-            f"({board_modes} board-modes); {len(waived)} waived"
+            f"perf gate: {len(gated)} of {len(matched)} board-modes have a measured "
+            f"baseline ({len(chips_with_a_number)} of {len(covered)} chips); "
+            f"{len(never)} NEVER measured anywhere; {len(waived)} waived"
         )
+        print(
+            f"  fixtures matched: {len(covered)} chips / "
+            f"{len(set(covered.values()))} memory maps / {len(matched)} board-modes "
+            "— a matched fixture is a build recipe, not a measurement"
+        )
+        if never:
+            print(
+                f"  NEVER measured anywhere ({len(never)}) — no baseline exists, so "
+                "nothing is being held still for these:"
+            )
+            for board, mode in never:
+                print(f"    {bm_label(board, mode)}: {never_measured_note(board, mode, covered[board])}")
+            starved = sorted({b for b, _ in never} - chips_with_a_number)
+            if starved:
+                # A chip with no measured mode AT ALL is the strongest form of
+                # the overstatement: it appears in the matched-chip count while
+                # nothing anywhere has ever run it.
+                print(
+                    f"  chips with no measured mode at all ({len(starved)}): "
+                    f"{', '.join(starved)}"
+                )
         for board, reason in sorted(waived.items()):
             print(f"  waived: {board}: {reason}")
         return 0
@@ -634,6 +776,10 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Kept before the skip filter below eats into `boards`, so the summary can
+    # tell "this machine could not measure it" apart from "nobody asked for it".
+    requested = list(boards)
 
     firmware, skipped_fixtures = build_fixtures({covered[b] for b in boards})
     try:
@@ -710,24 +856,70 @@ def main() -> int:
                 f"{base:>10.1f} {delta:>+8.1%}  {width}{flag}"
             )
 
+    # ── Summary ───────────────────────────────────────────────────────────
+    # Three states, at board-mode granularity, never collapsed into one
+    # "covered" number. The line that matters is between a board-mode that has
+    # a number (from this run or an earlier one) and a board-mode for which no
+    # number has ever existed: only the first kind can regress detectably, so
+    # only the first kind is coverage. `measured` is passed in, so a board-mode
+    # measured here for the first time counts as measured rather than as never
+    # — but nothing else promotes it.
+    matched = board_modes(covered)
+    never = never_measured_board_modes(covered, baselines, measured)
+    never_set = set(never)
+    # A board-mode not measured here that DOES have a baseline: some machine
+    # with that toolchain measured it, this one could not. Honest middle state.
+    skipped_bms = [
+        (b, m)
+        for b in sorted(skipped_boards)
+        for m in modes_for(covered[b])
+        if (b, m) not in never_set
+    ]
+    measured_bms = sum(len(v) for v in measured.values())
+
     print()
-    print(f"covered: {len(covered)} chips across {len(set(covered.values()))} memory maps")
     print(
-        f"measured this run: {len(measured)} boards, "
-        f"{sum(len(v) for v in measured.values())} board-modes"
+        f"measured this run: {measured_bms} board-modes across {len(measured)} chips / "
+        f"{len({covered[b] for b in measured})} memory maps"
     )
     if unmeasurable:
         print("MODES THAT DID NOT EXECUTE (measured nothing):")
         for note in unmeasurable:
             print(f"  {note.splitlines()[0]}")
-    if skipped_boards:
-        print("NOT measured this run (toolchain missing on this machine):")
-        for board, reason in sorted(skipped_boards.items()):
-            print(f"  {board}: {reason}")
+    if skipped_bms:
+        print(
+            f"skipped this run ({len(skipped_bms)}) — not measured here, but a baseline "
+            "from an earlier run is on record:"
+        )
+        for board, mode in skipped_bms:
+            print(f"  {bm_label(board, mode)}: {skipped_boards[board]}")
+    if never:
+        # Deliberately not folded into any total above. These board-modes have
+        # a fixture recipe and nothing else — no baseline, so no regression in
+        # them is detectable and nothing about them is being held still.
+        print(
+            f"NEVER measured anywhere ({len(never)}) — no baseline exists and this run "
+            "produced none, so these are NOT covered by this gate:"
+        )
+        for board, mode in never:
+            # Prefer this run's concrete reason (toolchain absent, build broke)
+            # over the generic one when there is one.
+            reason = skipped_boards.get(board) or never_measured_note(board, mode, covered[board])
+            print(f"  {bm_label(board, mode)}: {reason}")
     if waived:
-        print("not covered by this gate at all:")
+        print("no fixture can be linked at all (waived):")
         for board, reason in sorted(waived.items()):
             print(f"  {board}: {reason}")
+    not_requested = sorted(set(covered) - set(requested))
+    if not_requested:
+        print(f"not requested this run ({len(not_requested)} chips): {', '.join(not_requested)}")
+    # Last line of the block, so none of the arithmetic above it is mistaken
+    # for coverage: matching is what the fixture table does, measuring is what
+    # the gate does, and they are different numbers.
+    print(
+        f"fixtures matched {len(matched)} board-modes across {len(covered)} chips / "
+        f"{len(set(covered.values()))} memory maps — matching is not measuring"
+    )
 
     # A skipped board is only tolerable on a developer machine that simply
     # lacks an optional toolchain. Asking for it by name, or running under
@@ -743,11 +935,19 @@ def main() -> int:
                     "ok": ok,
                     "regressions": regressions,
                     "stale": stale,
-                    "covered": {
+                    # `matched` is what the fixture table pairs up; it is NOT a
+                    # coverage claim. The CI issue body quotes the report text
+                    # verbatim, so the same three-way split has to exist here or
+                    # a consumer reading the JSON reconstructs the overstatement
+                    # the text no longer makes.
+                    "matched": {
                         b: {"fixture": covered[b], "modes": modes_for(covered[b])}
                         for b in boards
                     },
                     "skipped": skipped_boards,
+                    "never_measured": [
+                        {"board": b, "mode": m, "fixture": covered[b]} for b, m in never
+                    ],
                     "unmeasurable": unmeasurable,
                     "waived": waived,
                     "measured": measured,

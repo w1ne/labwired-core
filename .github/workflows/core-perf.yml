@@ -73,13 +73,15 @@ jobs:
           sudo apt-get update && sudo apt-get install -y valgrind
           python -m pip install --quiet pyyaml
 
-      # Xtensa has no rustup target — the ESP32 and ESP32-S3 need the esp-rs
-      # LLVM fork. Without this the gate still runs and still reports, but it
-      # reports those two chips as NOT measured, which is the whole coverage
-      # hole this job is supposed to have closed. `continue-on-error` keeps a
-      # flaky espup download from taking the other 23 boards down with it; the
-      # skip is loud in the report either way. Same install core-nightly's
-      # esp32s3-fixtures-e2e job already uses.
+      # Xtensa has no rustup target — esp32, esp32s3 and esp32s3-zero need the
+      # esp-rs LLVM fork. This step is `continue-on-error` so a flaky espup
+      # download cannot take the other 22 chips down with it, which means the
+      # hole it is meant to close IS STILL OPEN whenever it fails: those three
+      # chips have no baseline in any mode, so board_perf.py names them under
+      # "NEVER measured anywhere" and excludes them from every coverage count.
+      # Do not read a green run of this job as "25 chips measured" — read the
+      # first line of the report, which is the honest number. Same install
+      # core-nightly's esp32s3-fixtures-e2e job already uses.
       - name: Install Xtensa toolchain (espup)
         continue-on-error: true
         run: |

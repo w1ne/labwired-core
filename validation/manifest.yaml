@@ -982,8 +982,32 @@ boards:
     # transmitted before the controllers attach and the join point is 0 anyway.
     # Evidence: 2700 core lib tests green, 2816 with --features event-scheduler,
     # workspace clippy --all-targets -D warnings clean.
-    drift_ack: 2026-08-07
-    drift_ack_digest: d02aad733e3f69f538345d89fd5722af87a8a9b4c5687497e835ff24acfe12ff
+    # 2026-08-08: RWBLECNTL (+0x000) bits 25 and 24 are now consumed on
+    # write, like bit31 already was. They are the RW-BLE core's advertising and
+    # scanning ABORT REQUESTS. Every mask-ROM site that touches either only ever
+    # ORs it in — r_lld_adv_stop 0x40018A2C, r_lld_per_adv_stop 0x40023E48,
+    # r_lld_scan_end 0x40024634, r_lld_rpa_renew_evt_start_cbk 0x4001FF06 and
+    # 0x4001FF18 — and no ROM site reads either bit back, so nothing in software
+    # can clear them; every OpenOCD dump of the live advertising part reads
+    # +0x000 = 0x0010_070f with both clear. This CORRECTS a divergence rather
+    # than adding behaviour: latching them made the twin hand the firmware a
+    # control word silicon cannot produce (LABWIRED_BT_TRACE, two-node BLE Pong,
+    # both nodes at CLKN 37: 0x0210070f then 0x0310070f, where silicon's
+    # read-modify-write yields 0x0110070f). No register is added, no base or
+    # width changes, and +0x000 is not in the reset-oracle asserted set — the
+    # block reads all-zero at reset either way. The abort's EFFECT (ending the
+    # in-flight event) is still deliberately unmodelled; measured cost is 0-10
+    # CLKN ticks (0-3.1 ms) per stop, 7 stops per 0.89 s across two nodes at the
+    # published sketch's ~51 ms loop-bound cadence and ZERO at a 24 ms cadence
+    # (the stop phase-locks ahead of the next programmed event and takes the
+    # synchronous state-0 path). Neither cadence stalls: air frames sustained
+    # over 400M cycles, host elected, score 7:6 agreed on both nodes at 24 ms.
+    # Evidence: 2707 core lib tests green, two new bt.rs unit
+    # tests derived from the ROM read-modify-write sequences (both watched fail
+    # with the old mask), world_esp32c3_ble_pong 2/2 green, and the two-node air
+    # frame counts identical bucket-for-bucket before and after the change.
+    drift_ack: 2026-08-08
+    drift_ack_digest: a61fe8e5477da163d8b76d7e7895e00c84ce67d0299910733c2000134f7b4679
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
