@@ -39,6 +39,10 @@ pub mod rp2040_spi_carries_a_byte;
 #[cfg(test)]
 pub mod scb_reset;
 #[cfg(test)]
+pub mod bench_spi_engine;
+#[cfg(test)]
+pub mod spi_byte_level_golden;
+#[cfg(test)]
 pub mod stm32_spi_waveform;
 #[cfg(test)]
 pub mod test_cycles;
