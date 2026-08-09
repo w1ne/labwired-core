@@ -378,6 +378,15 @@ pub fn try_build(
             if let Some(cr1_mask) = p_cfg.config.get("cr1_mask").and_then(|v| v.as_u64()) {
                 spi.set_cr1_mask(cr1_mask as u16);
             }
+            // Which datasheet AF map routes this controller's pads. Needed
+            // because the H5 "SPI v3" register file is shared by parts whose
+            // pinouts DISAGREE (H563/H735 put SPI1_SCK on PB3 where the WBA52
+            // puts SPI1_MISO), so the register layout cannot pick the table.
+            // YAML: `config: { pad_map: stm32h5 }`. Absent ⇒ no SPI pad
+            // routing, which is the fail-closed default — see `SpiPadMap`.
+            if let Some(pad_map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                spi.set_pad_map(pad_map.parse::<crate::peripherals::spi::SpiPadMap>()?);
+            }
             // Hand-written SPI devices attach via the PeripheralKit registry
             // pass, so no external-device attach loop is needed here.
             Box::new(spi)

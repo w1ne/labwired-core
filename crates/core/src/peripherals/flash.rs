@@ -471,7 +471,10 @@ impl Flash {
                 0x14 => 0,           // AR write-only
                 0x1C => 0x03FF_FFFC, // OBR — verified on STM32F103C8 silicon.
                 0x20 => 0xFFFF_FFFF, // WRPR — no write protect.
-                _ => 0,
+                _ => {
+                    crate::census_reg!("flash:Flash", offset, "read");
+                    0
+                }
             };
         }
         // ─── F4 layout (isolated; RM0368 §3.8) ──────────────────────────
@@ -485,7 +488,10 @@ impl Flash {
                 0x0C => self.sr,   // SR; BSY (bit 16) is RO, never busy in sim.
                 0x10 => self.cr,   // CR; LOCK at bit 31.
                 0x14 => self.optr, // OPTCR
-                _ => 0,
+                _ => {
+                    crate::census_reg!("flash:Flash", offset, "read");
+                    0
+                }
             };
         }
         // ─── H5 layout (isolated; interface regs only) ──────────────────
@@ -503,7 +509,10 @@ impl Flash {
                 0x30 => 0,         // NSCCR
                 0x50 => self.optr, // OPTSR_CUR
                 h5::OPTSR_PRG_OFF => self.optsr_prg, // OPTSR_PRG
-                _ => 0,
+                _ => {
+                    crate::census_reg!("flash:Flash", offset, "read");
+                    0
+                }
             };
         }
         // ─── L4 layout (untouched) ──────────────────────────────────────
@@ -524,7 +533,10 @@ impl Flash {
             0x48 => self.pcrop2er,
             0x4C => self.wrp2ar,
             0x50 => self.wrp2br,
-            _ => 0,
+            _ => {
+                crate::census_reg!("flash:Flash", offset, "read");
+                0
+            }
         }
     }
 
@@ -601,7 +613,9 @@ impl Flash {
                 {
                     self.pending_op.set(Some(FlashOp::SwapAndReset));
                 }
-                _ => {}
+                _ => {
+                    crate::census_reg!("flash:Flash", offset, "write");
+                }
             }
             return;
         }
@@ -636,7 +650,9 @@ impl Flash {
                 0x0C => self.sr &= !(value & 0x0000_0034),
                 0x10 => self.cr = value,
                 0x14 => {} // AR — accept; sim doesn't program flash pages
-                _ => {}
+                _ => {
+                    crate::census_reg!("flash:Flash", offset, "write");
+                }
             }
             return;
         }
@@ -674,7 +690,9 @@ impl Flash {
                 0x0C => self.sr &= !(value & 0x0000_01F3),
                 0x10 => self.cr = value,
                 0x14 => self.optr = value,
-                _ => {}
+                _ => {
+                    crate::census_reg!("flash:Flash", offset, "write");
+                }
             }
             return;
         }
@@ -726,7 +744,9 @@ impl Flash {
                     self.optr = value;
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("flash:Flash", offset, "write");
+            }
         }
     }
 }

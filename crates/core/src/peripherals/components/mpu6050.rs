@@ -146,7 +146,10 @@ impl Mpu6050 {
 
             0x6B => self.pwr_mgmt_1,
             0x75 => self.who_am_i,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.mpu6050:Mpu6050", reg, "read");
+                0
+            }
         }
     }
 
@@ -155,7 +158,9 @@ impl Mpu6050 {
             0x1B => self.gyro_config = value,
             0x1C => self.accel_config = value,
             0x6B => self.pwr_mgmt_1 = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("components.mpu6050:Mpu6050", reg, "write");
+            }
         }
     }
 

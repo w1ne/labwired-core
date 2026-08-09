@@ -740,7 +740,10 @@ impl Peripheral for Nrf52Twim {
             // Address.
             OFF_ADDRESS => self.address & ADDRESS_MASK,
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.twim:Nrf52Twim", offset, "read");
+                0
+            }
         })
     }
 
@@ -835,7 +838,9 @@ impl Peripheral for Nrf52Twim {
             // ── Address ───────────────────────────────────────────────────────
             OFF_ADDRESS => self.address = value & ADDRESS_MASK,
 
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.twim:Nrf52Twim", offset, "write");
+            }
         }
         Ok(())
     }

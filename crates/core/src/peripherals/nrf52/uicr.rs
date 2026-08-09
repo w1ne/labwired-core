@@ -144,7 +144,9 @@ impl Peripheral for Nrf52Uicr {
             OFF_NFCPINS => Self::flash_write(&mut self.nfcpins, value),
             OFF_DEBUGCTRL => Self::flash_write(&mut self.debugctrl, value),
             OFF_REGOUT0 => Self::flash_write(&mut self.regout0, value),
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.uicr:Nrf52Uicr", offset, "write");
+            }
         }
         Ok(())
     }

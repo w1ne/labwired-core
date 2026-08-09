@@ -504,7 +504,10 @@ impl Max30102 {
             REG_TEMP_CONFIG => self.temp_config,
             REG_REV_ID => REV_ID_VALUE,
             REG_PART_ID => PART_ID_VALUE,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.max30102:Max30102", reg, "read");
+                0
+            }
         }
     }
 
@@ -551,7 +554,9 @@ impl Max30102 {
                     self.intr_status_2 |= INTR2_DIE_TEMP_RDY;
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("components.max30102:Max30102", reg, "write");
+            }
         }
     }
 

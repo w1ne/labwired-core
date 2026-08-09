@@ -174,7 +174,10 @@ impl Peripheral for Nrf52Clock {
             OFF_POWER_DCDCEN => self.power_dcdcen,
             OFF_POWER_DCDCEN0 => self.power_dcdcen0,
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.clock:Nrf52Clock", offset, "read");
+                0
+            }
         })
     }
 
@@ -233,7 +236,9 @@ impl Peripheral for Nrf52Clock {
             OFF_POWER_DCDCEN => self.power_dcdcen = value & 1,
             OFF_POWER_DCDCEN0 => self.power_dcdcen0 = value & 1,
 
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.clock:Nrf52Clock", offset, "write");
+            }
         }
         Ok(())
     }

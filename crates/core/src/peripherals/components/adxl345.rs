@@ -67,7 +67,10 @@ impl Adxl345 {
             0x35 => ((self.sample_y as u16) >> 8) as u8,
             0x36 => self.sample_z as u16 as u8,
             0x37 => ((self.sample_z as u16) >> 8) as u8,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.adxl345:Adxl345", reg, "read");
+                0
+            }
         }
     }
 
@@ -76,7 +79,9 @@ impl Adxl345 {
             0x2C => self.bw_rate = value,
             0x2D => self.power_ctl = value,
             0x31 => self.data_format = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("components.adxl345:Adxl345", reg, "write");
+            }
         }
     }
 }

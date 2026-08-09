@@ -115,7 +115,9 @@ impl Bmp280 {
             }
             0xF4 => self.ctrl_meas = value,
             0xF5 => self.config = value,
-            _ => {} // Calibration block / chip ID / status / data regs are read-only.
+            _ => {
+                crate::census_reg!("components.bmp280:Bmp280", reg, "write");
+            } // Calibration block / chip ID / status / data regs are read-only.
         }
     }
 }

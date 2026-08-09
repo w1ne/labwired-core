@@ -58,7 +58,10 @@ impl Rtc {
             0x1C => self.alrmar,
             0x20 => self.alrmbr,
             0x24 => self.wpr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rtc:Rtc", offset, "read");
+                0
+            }
         }
     }
 
@@ -96,7 +99,9 @@ impl Rtc {
             0x14 => self.wutr = value & 0xFFFF,
             0x1C => self.alrmar = value,
             0x20 => self.alrmbr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("rtc:Rtc", offset, "write");
+            }
         }
     }
 }

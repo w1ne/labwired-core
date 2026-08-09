@@ -374,7 +374,10 @@ impl crate::Peripheral for Nrf54lTwim {
             OFF_DMA_TX_PTR => self.dma_tx_ptr,
             OFF_DMA_TX_MAXCNT => self.dma_tx_maxcnt & MAXCNT_MASK,
             OFF_DMA_TX_AMOUNT => self.dma_tx_amount & MAXCNT_MASK,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf54l.twim:Nrf54lTwim", offset, "read");
+                0
+            }
         })
     }
 
@@ -428,7 +431,9 @@ impl crate::Peripheral for Nrf54lTwim {
             OFF_DMA_RX_MAXCNT => self.dma_rx_maxcnt = value & MAXCNT_MASK,
             OFF_DMA_TX_PTR => self.dma_tx_ptr = value,
             OFF_DMA_TX_MAXCNT => self.dma_tx_maxcnt = value & MAXCNT_MASK,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf54l.twim:Nrf54lTwim", offset, "write");
+            }
         }
         Ok(())
     }

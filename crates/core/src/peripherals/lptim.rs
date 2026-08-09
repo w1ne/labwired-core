@@ -54,7 +54,10 @@ impl Lptim {
             0x1C => self.cnt,
             0x24 => self.cfgr2,
             0x28 => self.or,
-            _ => 0,
+            _ => {
+                crate::census_reg!("lptim:Lptim", offset, "read");
+                0
+            }
         }
     }
 
@@ -85,7 +88,9 @@ impl Lptim {
             0x1C => {} // CNT is read-only
             0x24 => self.cfgr2 = value & 0x33,
             0x28 => self.or = value & 0x03,
-            _ => {}
+            _ => {
+                crate::census_reg!("lptim:Lptim", offset, "write");
+            }
         }
     }
 }

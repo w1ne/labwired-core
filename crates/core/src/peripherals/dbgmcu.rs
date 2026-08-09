@@ -43,7 +43,10 @@ impl Dbgmcu {
             0x04 => self.cr,
             0x08 => self.apb1_fz,
             0x0C => self.apb2_fz,
-            _ => 0,
+            _ => {
+                crate::census_reg!("dbgmcu:Dbgmcu", offset, "read");
+                0
+            }
         }
     }
 
@@ -54,7 +57,9 @@ impl Dbgmcu {
             0x04 => self.cr = value,
             0x08 => self.apb1_fz = value,
             0x0C => self.apb2_fz = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("dbgmcu:Dbgmcu", offset, "write");
+            }
         }
     }
 }

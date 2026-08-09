@@ -80,17 +80,48 @@ static volatile uint32_t g_now_ms;
 
 #define USART3_BASE 0x40004800u
 #define USART3_CR1 REG32(USART3_BASE + 0x00u)
+#define USART3_BRR REG32(USART3_BASE + 0x0Cu)
 #define USART3_ISR REG32(USART3_BASE + 0x1Cu)
 #define USART3_TDR REG32(USART3_BASE + 0x28u)
 #define USART_ISR_TXE (1u << 7)
 #define USART_CR1_UE (1u << 0)
 #define USART_CR1_TE (1u << 3)
 
+/* 115200 8N1. Nothing in this firmware configures the PLL, so the core and APB1
+ * stay on the reset clock: "after reset, the microcontroller restarts by
+ * default with an internal 32 MHz clock (HSI/2)" — STM32H563 datasheet DS14258
+ * Rev 6, section 3.12 "Reset and clock controller", p35. Under the default 16x
+ * oversampling BRR IS USARTDIV (RM0481 40.8.4):
+ *
+ *   USARTDIV = 32 000 000 / 115 200 = 277.8 -> 278 (rounded, as the ST HAL does)
+ *   actual baud = 32 000 000 / 278 = 115 107.9 (-0.08%)
+ *
+ * BRR left at its 0 reset is an invalid divisor rather than a slow one: there
+ * is no bit period at all, so nothing reaches the wire for a probe to show. */
+#define USART3_BRR_115200 278u
+
+/* PD8 = USART3_TX, PD9 = USART3_RX, both AF7 — STM32H563 datasheet DS14258
+ * Rev 6, Table 15 "Alternate functions AF0 to AF7", port D, p109. */
+#define GPIOD_BASE 0x42020C00u
+#define GPIOD_MODER REG32(GPIOD_BASE + 0x00u)
+#define GPIOD_OTYPER REG32(GPIOD_BASE + 0x04u)
+#define GPIOD_OSPEEDR REG32(GPIOD_BASE + 0x08u)
+#define GPIOD_PUPDR REG32(GPIOD_BASE + 0x0Cu)
+#define GPIOD_AFRH REG32(GPIOD_BASE + 0x24u)
+/* PD8/PD9 occupy MODER/OSPEEDR/PUPDR bits [19:16] and AFRH bits [7:0]. */
+#define PD89_PAIR_MASK (0xFu << 16)
+#define PD89_MODE_AF (0xAu << 16)
+#define PD89_AFRH_AF7 0x77u
+
 /* RCC: FDCAN1 hangs off APB1H and is clock-gated out of reset (RM0481 §11.8.38).
  * Its register surface reads 0 / ignores writes until RCC_APB1HENR.FDCAN1EN is
  * set, so the clock MUST be enabled before any FDCAN access — the simulator
  * models this gate (chip YAML `clock: { reg: apb1henr, bit: 9 }`). */
 #define RCC_BASE 0x44020C00u
+#define RCC_AHB2ENR REG32(RCC_BASE + 0x08Cu)
+#define RCC_AHB2ENR_GPIODEN (1u << 3)
+#define RCC_APB1LENR REG32(RCC_BASE + 0x09Cu)
+#define RCC_APB1LENR_USART3EN (1u << 18)
 #define RCC_APB1HENR REG32(RCC_BASE + 0x0A0u)
 #define RCC_APB1HENR_FDCAN1EN (1u << 9)
 
@@ -124,6 +155,21 @@ typedef struct {
 
 static void uart_init(void)
 {
+    /* MODER and AFR are dead until the port is clocked (RM0481 11.8.34), and a
+     * pad left in its reset state is not connected to the USART at all — so
+     * without this the console text arrives perfectly while a logic probe on
+     * PD8 shows the idle GPIO latch. Clock, mux, baud, then enable. */
+    RCC_AHB2ENR |= RCC_AHB2ENR_GPIODEN;
+    RCC_APB1LENR |= RCC_APB1LENR_USART3EN;
+
+    GPIOD_MODER = (GPIOD_MODER & ~PD89_PAIR_MASK) | PD89_MODE_AF;
+    GPIOD_OTYPER &= ~((1u << 8) | (1u << 9));
+    GPIOD_OSPEEDR |= PD89_PAIR_MASK;
+    GPIOD_PUPDR &= ~PD89_PAIR_MASK;
+    GPIOD_AFRH = (GPIOD_AFRH & ~0xFFu) | PD89_AFRH_AF7;
+
+    USART3_CR1 = 0u;
+    USART3_BRR = USART3_BRR_115200;
     USART3_CR1 = USART_CR1_UE | USART_CR1_TE;
 }
 

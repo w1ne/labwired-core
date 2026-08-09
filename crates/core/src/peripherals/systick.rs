@@ -253,7 +253,10 @@ impl Systick {
             0x04 => self.rvr,
             0x08 => self.cvr.get(),
             0x0C => self.calib,
-            _ => 0,
+            _ => {
+                crate::census_reg!("systick:Systick", offset, "read");
+                0
+            }
         }
     }
 
@@ -288,7 +291,9 @@ impl Systick {
                 self.cvr.set(0);
                 self.countflag.set(false);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("systick:Systick", offset, "write");
+            }
         }
     }
 }

@@ -538,7 +538,10 @@ impl Peripheral for Rp2040Usb {
             INTR => self.intr(),
             INTS => self.ints(),
             l if l < 0x100 => self.reg(l),
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.usb:Rp2040Usb", local, "read");
+                0
+            }
         })
     }
 
@@ -575,7 +578,9 @@ impl Peripheral for Rp2040Usb {
             }
             INTR | INTS => {} // read-only
             l if l < 0x100 => self.set_reg(l, value),
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.usb:Rp2040Usb", local, "write");
+            }
         }
         Ok(())
     }

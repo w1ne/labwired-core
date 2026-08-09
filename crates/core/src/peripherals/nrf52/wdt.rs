@@ -118,7 +118,10 @@ impl Peripheral for Nrf52Wdt {
             OFF_RREN => self.rren & 0xFF,
             OFF_CONFIG => self.config & 0x9,
             OFF_RR0..=OFF_RR7 if offset.is_multiple_of(4) => 0, // WO
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.wdt:Nrf52Wdt", offset, "read");
+                0
+            }
         })
     }
 
@@ -161,7 +164,7 @@ impl Peripheral for Nrf52Wdt {
                         }
                     }
                 }
-            _ => {}
+            _ => { crate::census_reg!("nrf52.wdt:Nrf52Wdt", offset, "write"); }
         }
         Ok(())
     }

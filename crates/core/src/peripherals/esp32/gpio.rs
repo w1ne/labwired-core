@@ -83,6 +83,55 @@ const FUNC_OUT_SEL_RESET: u32 = 0x0000_0100;
 const SIG_I2CEXT0_SCL: u32 = 29;
 const SIG_I2CEXT0_SDA: u32 = 30;
 
+/// GPIO-matrix OUTPUT signal indices of the **VSPI** master — the controller the
+/// ESP32 datasheet (v5.3 p61) calls `SPI3` and whose matrix signals are prefixed
+/// `VSPI`, and the one arduino-esp32's `SPIClass SPI(VSPI)` drives
+/// (`libraries/SPI/src/SPI.cpp` :348). esp-idf
+/// `soc/esp32/include/soc/gpio_sig_map.h` :138 / :142 / :148.
+///
+/// ⚠️ Classic carries THREE GP-SPI signal groups and they share NO numbers:
+/// `SPICLK_OUT_IDX` = 0 (:18 — the flash controller SPI0/1), `HSPICLK_OUT_IDX`
+/// = 8 (:34 — SPI2), `VSPICLK_OUT_IDX` = 63 (:138 — SPI3). Index 0 being a live
+/// SPI signal is exactly why [`FUNC_OUT_SEL_RESET`] must be 0x100 and not 0.
+///
+/// ⚠️ 63/65/68 are ALSO the ESP32-C3's `FSPI*` indices. That is a collision of
+/// two per-chip index spaces, not a shared space: on the ESP32-S3 the same three
+/// numbers are not SPI signals at all (`FSPICLK` is 101 there). Borrowing a
+/// sibling's constant fails SILENTLY in both directions — a plain pad decodes as
+/// routed and a routed pad as plain — so every index here is cited to the
+/// CLASSIC header and to nothing else.
+const SIG_VSPICLK: u32 = 63;
+/// `VSPIQ_OUT_IDX` = 64 is VSPI's MISO and is deliberately NOT bound; see
+/// [`crate::peripherals::esp_gpspi_wire`] for why an undriven line stays on the
+/// latch fallback.
+const SIG_VSPID: u32 = 65;
+const SIG_VSPICS0: u32 = 68;
+
+/// GPIO-matrix OUTPUT signal indices of the three UART transmitters — esp-idf
+/// `soc/esp32/include/soc/gpio_sig_map.h` :46 `U0TXD_OUT_IDX`, :52
+/// `U1TXD_OUT_IDX`, :360 `U2TXD_OUT_IDX`.
+///
+/// ⚠️ The IO_MUX verdict differs from BOTH siblings. On the C3 UART1 is
+/// matrix-only and on the S3 UART2 is; on classic **all three** UARTs have an
+/// IO_MUX pad, so none of them is matrix-visible on a stock default-pin
+/// `Serial.begin()`:
+///
+/// | UART | default TX pad | IO_MUX function |
+/// |---|---|---|
+/// | U0TXD | GPIO1 (`uart_pins.h` :23) | 0 (`io_mux_reg.h` :128 `FUNC_U0TXD_U0TXD`) |
+/// | U1TXD | GPIO10 (`uart_pins.h` :28) | 4 (`io_mux_reg.h` :195 `FUNC_SD_DATA3_U1TXD`) |
+/// | U2TXD | GPIO17 (`uart_pins.h` :33) | 4 (`io_mux_reg.h` :256 `FUNC_GPIO17_U2TXD`) |
+///
+/// `uart_set_pin` takes the IO_MUX path for exactly those pads and falls back to
+/// `gpio_matrix_out` for every other pin, and this model does not model IO_MUX
+/// at all — so a default-pin console correctly leaves `FUNCn_OUT_SEL` at the
+/// bypass sentinel and the pad keeps reading its latch. The routes light the
+/// moment firmware remaps TX, which every real WROOM-32 board does for UART1
+/// (GPIO9/GPIO10 are the flash pins) and most do for UART2.
+const SIG_U0TXD: u32 = 14;
+const SIG_U1TXD: u32 = 17;
+const SIG_U2TXD: u32 = 198;
+
 /// Pads that can drive an output at all: `SOC_GPIO_VALID_OUTPUT_GPIO_MASK`
 /// (esp-idf `soc_caps.h`) — the 40 pads minus GPIO24 and GPIO28..31 (absent
 /// from the package) and minus GPIO34..39 (input-only). Binding a peripheral
@@ -106,17 +155,19 @@ fn esp32_out_signal_name(idx: u32) -> Option<&'static str> {
         9 => "HSPIQ",
         10 => "HSPID",
         11 => "HSPICS0",
-        14 => "U0TXD",
-        17 => "U1TXD",
-        29 => "I2CEXT0_SCL",
-        30 => "I2CEXT0_SDA",
-        63 => "VSPICLK",
-        64 => "VSPIQ",
-        65 => "VSPID",
-        68 => "VSPICS0",
+        // The routed signals resolve through their named constants, so this
+        // table and the bindings below cannot drift apart on an index.
+        SIG_U0TXD => "U0TXD",
+        SIG_U1TXD => "U1TXD",
+        SIG_I2CEXT0_SCL => "I2CEXT0_SCL",
+        SIG_I2CEXT0_SDA => "I2CEXT0_SDA",
+        SIG_VSPICLK => "VSPICLK",
+        64 => "VSPIQ", // VSPI MISO — named, never bound (nothing drives it)
+        SIG_VSPID => "VSPID",
+        SIG_VSPICS0 => "VSPICS0",
         95 => "I2CEXT1_SCL",
         96 => "I2CEXT1_SDA",
-        198 => "U2TXD",
+        SIG_U2TXD => "U2TXD",
         _ => return None,
     })
 }
@@ -331,6 +382,69 @@ impl Esp32Gpio {
         }
     }
 
+    /// Bind the VSPI (SPI3) master's SCK/MOSI/CS wire to every output-capable
+    /// pad the matrix can route it to. Which pad is live at any moment is then
+    /// decided by `FUNCn_OUT_SEL`, through the shared seam.
+    ///
+    /// Unlike the RP2040 there is no pad table to transcribe: the ESP32 GPIO
+    /// matrix routes ANY peripheral signal to ANY output-capable pad, so every
+    /// pad is bound to all three signals and the selector picks the live one.
+    ///
+    /// MISO (`VSPIQ`, index 64) is deliberately unbound — see
+    /// [`crate::peripherals::esp_gpspi_wire`]. A bound-but-undriven pad reports
+    /// a confident idle level that looks authoritative, which is worse than the
+    /// latch fallback it would replace.
+    pub(crate) fn bind_spi_lines(&mut self, lines: &Arc<crate::peripherals::pad_lines::PadLines>) {
+        use crate::peripherals::esp_gpspi_wire::{LINE_CS, LINE_MOSI, LINE_SCK};
+        for pin in 0..PAD_COUNT {
+            if VALID_OUTPUT_PADS & (1u64 << pin) == 0 {
+                continue;
+            }
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_VSPICLK), LINE_SCK, "SPI3_SCK");
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_VSPID), LINE_MOSI, "SPI3_MOSI");
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_VSPICS0), LINE_CS, "SPI3_CS");
+        }
+    }
+
+    /// Bind one UART's TX wire to every output-capable pad the matrix can route
+    /// it to.
+    ///
+    /// TX ONLY. Nothing in the engine drives the RX line, so a bound RX pad
+    /// would report a confident constant idle-high — including while an attached
+    /// GPS or modem was actually sending. Same call `wire_rp2040_uart_pads`
+    /// documents. RX joins the table when something drives it, not before.
+    ///
+    /// See [`SIG_U0TXD`] for why a stock default-pin `Serial.begin()` correctly
+    /// leaves every one of these routes dark on this part.
+    pub(crate) fn bind_uart_tx_lines(
+        &mut self,
+        instance: usize,
+        lines: &Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        let (signal, func) = match instance {
+            0 => (SIG_U0TXD, "UART0_TX"),
+            1 => (SIG_U1TXD, "UART1_TX"),
+            // Classic ESP32 has exactly three UARTs (`SOC_UART_NUM` = 3).
+            2 => (SIG_U2TXD, "UART2_TX"),
+            _ => return,
+        };
+        for pin in 0..PAD_COUNT {
+            if VALID_OUTPUT_PADS & (1u64 << pin) == 0 {
+                continue;
+            }
+            self.pad_routes.bind(
+                lines,
+                pin,
+                Some(signal),
+                crate::peripherals::uart::LINE_TX,
+                func,
+            );
+        }
+    }
+
     /// Every signal name bound to this port's pads, live or not — the
     /// bus-visibility reporting seam. See
     /// [`crate::peripherals::pad_routing::PadRoutes::bound_functions`] for why
@@ -477,7 +591,10 @@ impl Esp32Gpio {
             off if Self::out_sel_index(off).is_some() => {
                 self.out_sel[Self::out_sel_index(off).expect("guarded by the match")]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32.gpio:Esp32Gpio", word_off, "read");
+                0
+            }
         }
     }
 
@@ -533,7 +650,9 @@ impl Esp32Gpio {
                 let idx = Self::out_sel_index(off).expect("guarded by the match");
                 self.out_sel[idx] = value & FUNC_OUT_SEL_WMASK;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32.gpio:Esp32Gpio", word_off, "write");
+            }
         }
     }
 }

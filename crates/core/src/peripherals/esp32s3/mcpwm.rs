@@ -485,7 +485,10 @@ impl Esp32s3Mcpwm {
                 TIMER_CFG1 => self.timers[t].cfg1,
                 TIMER_SYNC => self.timers[t].sync,
                 TIMER_STATUS => self.timers[t].status_word(),
-                _ => 0,
+                _ => {
+                    crate::census_reg!("esp32s3.mcpwm:Esp32s3Mcpwm", reg, "read");
+                    0
+                }
             };
         }
         if let Some((op, reg)) = Self::operator_at(offset) {
@@ -536,7 +539,9 @@ impl Esp32s3Mcpwm {
                 }
                 TIMER_SYNC => self.timers[t].sync = value & 0x001F_FFFF,
                 TIMER_STATUS => {} // read-only
-                _ => {}
+                _ => {
+                    crate::census_reg!("esp32s3.mcpwm:Esp32s3Mcpwm", reg, "write");
+                }
             }
             return;
         }

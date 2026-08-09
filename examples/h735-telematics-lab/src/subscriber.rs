@@ -12,14 +12,37 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 
 const RCC_BASE: u32 = 0x5802_4400;
+const RCC_AHB4ENR: u32 = RCC_BASE + 0xE0;
 const RCC_APB1LENR: u32 = RCC_BASE + 0xE8;
 const RCC_APB2ENR: u32 = RCC_BASE + 0xF0;
+
+const GPIOA_BASE: u32 = 0x5802_0000;
+const GPIOB_BASE: u32 = 0x5802_0400;
+
+const GPIO_MODER: u32 = 0x00;
+const GPIO_OTYPER: u32 = 0x04;
+const GPIO_OSPEEDR: u32 = 0x08;
+const GPIO_PUPDR: u32 = 0x0C;
+const GPIO_AFR: u32 = 0x20;
 
 const USART3_BASE: u32 = 0x4000_4800; // console
 const USART1_BASE: u32 = 0x4001_1000; // modem
 
+const USART_CR1: u32 = 0x00;
+const USART_BRR: u32 = 0x0C;
+const CR1_UE: u32 = 1 << 0;
+const CR1_RE: u32 = 1 << 2;
+const CR1_TE: u32 = 1 << 3;
 const ISR_TXE: u32 = 1 << 7;
 const ISR_RXNE: u32 = 1 << 5;
+
+/// 115200 8N1 off the 64 MHz HSI reset clock, exactly as in `main.rs` — see the
+/// arithmetic there. USARTDIV = 64_000_000 / 115_200 = 555.6 → 556.
+const BRR_115200: u32 = 556;
+
+/// PA9/PA10 = USART1_TX/RX and PB10/PB11 = USART3_TX/RX, all AF7 — STM32H735xG
+/// datasheet DS13312 Rev 4, Table 9, port A p97 and port B p99.
+const AF7: u32 = 7;
 
 #[inline(always)]
 fn rd32(addr: u32) -> u32 {
@@ -28,6 +51,52 @@ fn rd32(addr: u32) -> u32 {
 #[inline(always)]
 fn wr32(addr: u32, value: u32) {
     unsafe { write_volatile(addr as *mut u32, value) }
+}
+
+/// Hand one pad to a USART: MODER = 10 (alternate function), push-pull, very
+/// high speed, no pull, and the AF nibble into AFR[pin / 8]. Without the AF
+/// nibble the pin stays a plain GPIO and a logic probe reads the output latch
+/// instead of the serial waveform.
+fn pad_af(gpio_base: u32, pin: u32, af: u32) {
+    let shift = pin * 2;
+    let moder = rd32(gpio_base + GPIO_MODER);
+    wr32(
+        gpio_base + GPIO_MODER,
+        (moder & !(0b11 << shift)) | (0b10 << shift),
+    );
+    wr32(
+        gpio_base + GPIO_OTYPER,
+        rd32(gpio_base + GPIO_OTYPER) & !(1 << pin),
+    );
+    wr32(
+        gpio_base + GPIO_OSPEEDR,
+        rd32(gpio_base + GPIO_OSPEEDR) | (0b11 << shift),
+    );
+    wr32(
+        gpio_base + GPIO_PUPDR,
+        rd32(gpio_base + GPIO_PUPDR) & !(0b11 << shift),
+    );
+    let afr = gpio_base + GPIO_AFR + (pin >> 3) * 4;
+    let nib = (pin & 7) * 4;
+    wr32(afr, (rd32(afr) & !(0xF << nib)) | (af << nib));
+}
+
+/// Mux both UARTs onto their pads and give each one a real bit period. The H7
+/// USART kernel clock needs no selection: RCC_D2CCIP2R resets to rcc_pclk1/2
+/// (RM0468 §9.7.21), the buses this firmware leaves at their reset rate.
+fn uart_pads_init() {
+    wr32(RCC_AHB4ENR, rd32(RCC_AHB4ENR) | (1 << 0) | (1 << 1));
+
+    pad_af(GPIOA_BASE, 9, AF7); // USART1_TX → modem
+    pad_af(GPIOA_BASE, 10, AF7); // USART1_RX → modem
+    pad_af(GPIOB_BASE, 10, AF7); // USART3_TX → console
+    pad_af(GPIOB_BASE, 11, AF7); // USART3_RX → console
+
+    for base in [USART1_BASE, USART3_BASE] {
+        wr32(base + USART_CR1, 0);
+        wr32(base + USART_BRR, BRR_115200);
+        wr32(base + USART_CR1, CR1_UE | CR1_TE | CR1_RE);
+    }
 }
 
 fn console_byte(b: u8) {
@@ -123,6 +192,7 @@ fn send_at(line: &str, buf: &mut [u8], len: &mut usize) {
 fn main() -> ! {
     wr32(RCC_APB1LENR, rd32(RCC_APB1LENR) | (1 << 18));
     wr32(RCC_APB2ENR, rd32(RCC_APB2ENR) | (1 << 4));
+    uart_pads_init();
 
     console_str("LabWired telematics subscriber / H735 + modem\r\n");
     console_str("Collect: QMTSUB telematics/# → wait +QMTRECV from fabric\r\n\r\n");

@@ -91,6 +91,38 @@ pub unsafe fn display_init() {
     oled_cmd(0xA4); // display from RAM
     oled_cmd(0xA6); // non-inverted
     oled_cmd(0xAF); // display on
+    display_clear(); // soft reboot: wipe leftover pages in static RAM
+}
+
+/// Zero the software framebuffer (does not push to the panel).
+pub unsafe fn display_clear() {
+    let fb = &mut *core::ptr::addr_of_mut!(FB);
+    fb.fill(0);
+}
+
+/// Keep the current panel contents stable long enough for the browser twin
+/// (worker batches of ~0.2–0.5M cycles) to sample intermediate stages.
+///
+/// Must **not** use WFI: playground embeds enable idle-fast-forward, which
+/// would skip a WFI hold instantly and collapse every stage into one frame.
+pub fn display_hold() {
+    // Stage-paced worker ~200k/batch. ~700k ≈ a few UI frames; stay under the
+    // 50M CLI step budget with 5 holds + several ECDSA verifies.
+    // Busy-wait only (never WFI) — embed idle-fast-forward would skip WFI.
+    for i in 0..700_000u32 {
+        core::hint::black_box(i);
+        cortex_m::asm::nop();
+    }
+}
+
+/// Clear, paint rows, flush, and hold so the stage is visible on the twin.
+pub unsafe fn display_stage(lines: &[(u8, &str)]) {
+    display_clear();
+    for &(page, text) in lines {
+        display_text(page, 0, text);
+    }
+    display_flush();
+    display_hold();
 }
 
 /// Draw one text row (8 px tall) starting at pixel column `x` (6 px/char).

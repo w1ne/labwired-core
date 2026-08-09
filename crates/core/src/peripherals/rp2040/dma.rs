@@ -305,7 +305,10 @@ impl Rp2040Dma {
             SNIFF_DATA => self.sniff_data,
             FIFO_LEVELS => 0, // no channel FIFO is ever non-empty in this model
             N_CHANNELS => NUM_CHANNELS as u32,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.dma:Rp2040Dma", offset, "read");
+                0
+            }
         }
     }
 
@@ -351,7 +354,9 @@ impl Rp2040Dma {
             }
             SNIFF_CTRL => self.sniff_ctrl = value,
             SNIFF_DATA => self.sniff_data = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.dma:Rp2040Dma", offset, "write");
+            }
         }
     }
 

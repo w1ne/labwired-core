@@ -8,10 +8,41 @@ use crate::bus::{PeripheralEntry, SystemBus};
 use crate::cpu::CortexM;
 use crate::peripherals::dwt::Dwt;
 use crate::peripherals::nvic::{Nvic, NvicState};
-use crate::peripherals::scb::{Scb, SharedScbState};
+use crate::peripherals::scb::{Scb, ScbFaultState, SharedScbState};
 use crate::Peripheral;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
+
+/// Process-wide default for ARMv7-M fault escalation, read once from
+/// `LABWIRED_CORTEXM_FAULTS`.
+///
+/// **False unless the variable is set.** This is the opt-in that lets the lab
+/// corpus be measured both ways without a per-call-site plumbing change to
+/// `configure_cortex_m`, which has ~150 callers. `CortexM::set_faults_enabled`
+/// remains the explicit per-core override, and is what the in-tree guards use.
+///
+/// Flipping the default is deliberately NOT part of this change: it is a second
+/// PR, taken once the measured lab diff has been triaged. When that happens this
+/// function is where it happens.
+///
+/// Hoisted into a `OnceLock` for the same reason `trace_insn_enabled` is: an
+/// `std::env::var` call walks the environment, and `configure_cortex_m` runs on
+/// every machine build.
+///
+/// The notice is not decoration: a blast-radius measurement that compares "flag
+/// off" against "flag on" is vacuous unless the flag demonstrably reached the
+/// engine, and an identical corpus is exactly what a silently-ignored
+/// environment variable also produces.
+fn faults_enabled_default() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        let on = std::env::var("LABWIRED_CORTEXM_FAULTS").is_ok_and(|v| v != "0");
+        if on {
+            eprintln!("[cortex-m] ARMv7-M fault escalation ENABLED (B1.5.14)");
+        }
+        on
+    })
+}
 
 pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let vtor = Arc::new(AtomicU32::new(0));
@@ -25,6 +56,12 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // Without this the plan had to pin the CPU quantum to 1 on every
     // Cortex-M bus just to keep the reset boundary exact.
     let sysreset_signal = Arc::new(AtomicBool::new(false));
+    // Shared ARMv7-M fault register file (SHCSR/CFSR/HFSR/BFAR) + the master
+    // switch for fault escalation. Created DISABLED: with it off the SCB does
+    // not serve those offsets at all and the core keeps #880's abort contract,
+    // so every existing board is byte-identical. `CortexM::set_faults_enabled`
+    // is the one door that flips it.
+    let faults = Arc::new(ScbFaultState::new(faults_enabled_default()));
 
     let mut cpu = CortexM::default();
     cpu.set_shared_vtor(vtor.clone());
@@ -32,6 +69,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     cpu.set_shared_shpr(shpr1.clone(), shpr2.clone(), shpr3.clone());
     cpu.set_shared_nvic_state(nvic_state.clone());
     cpu.set_shared_sysreset_signal(sysreset_signal.clone());
+    cpu.set_shared_faults(faults.clone());
 
     bus.nvic = Some(nvic_state.clone());
 
@@ -43,6 +81,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         shpr2,
         shpr3,
         sysreset_signal,
+        faults,
     });
     // Walk-free plan batch B1: this install path replaces the placeholder dev
     // (or pushes directly) and so bypasses the `add_peripheral`/`push_peripheral`

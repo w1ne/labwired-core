@@ -141,7 +141,10 @@ impl Peripheral for Esp32c3Sha {
             o if (TEXT_BASE..TEXT_BASE + 64).contains(&o) => {
                 self.text[((o - TEXT_BASE) / 4) as usize]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32c3.sha:Esp32c3Sha", offset, "read");
+                0
+            }
         })
     }
 
@@ -160,7 +163,9 @@ impl Peripheral for Esp32c3Sha {
             o if (TEXT_BASE..TEXT_BASE + 64).contains(&o) => {
                 self.text[((o - TEXT_BASE) / 4) as usize] = value;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32c3.sha:Esp32c3Sha", offset, "write");
+            }
         }
         Ok(())
     }

@@ -73,6 +73,8 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "### HIL — ${{ matrix.id }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- runner: \`${{ matrix.runner_label }}\` (+ \`hil\`)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### HIL — ${{ matrix.id }}"
+            echo "- runner: \`${{ matrix.runner_label }}\` (+ \`hil\`)"
+            echo "- result: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

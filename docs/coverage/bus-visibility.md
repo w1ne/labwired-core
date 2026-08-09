@@ -6,12 +6,12 @@ A ✓ means the engine BINDS that bus's controller wire to at least one pad on t
 
 Derived from live `SystemBus::from_config` builds — never hand-edited. Bind a bus by adding a `wire_*_pads` function in `crates/core/src/bus/attach.rs` (reference: `wire_rp2040_uart_pads`) and calling it from `from_config`.
 
-⚠️ SCOPE: this measures the `from_config` path ONLY. The Xtensa chips are also built programmatically by `configure_xtensa_esp32*`, which registers its peripheral bank in Rust and bypasses the chip yaml, so a — here can still mean "routed on the builder a real lab uses". esp32s3 is exactly that today: `configure_xtensa_esp32s3` binds its I²C pads, while this row reads — because `esp32s3.yaml` declares `gpio` as `type: "declarative"` rather than the `esp32s3_gpio` factory type, so `from_config` finds no model to route. Closing that gap is a yaml change with its own register risk, tracked separately — do not close it by editing this board.
+⚠️ SCOPE: this measures the `from_config` path ONLY. The Xtensa chips are also built programmatically by `configure_xtensa_esp32*`, which registers its peripheral bank in Rust and bypasses the chip yaml, so a — here can still mean "routed on the builder a real lab uses". esp32s3 is exactly that today: `configure_xtensa_esp32s3` binds its I²C, GP-SPI2 and UART pads, while every cell in this row reads —. The reason is that `esp32s3.yaml` is an ADDRESS-MAP STUB, not a peripheral list: `gpio` is `type: "declarative"`, `uart0` is the vendor-neutral `uart` type (the STM32 register map), `i2c0` is the generic `i2c`, and there is no `spi2` entry at all. So a `from_config` build of the S3 contains no S3 model for any of the three buses to route — closing it means porting the whole yaml onto the real factory types, with the register risk that carries, not flipping one `type:` field. Tracked separately; do not close it by editing this board.
 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
-| esp32 | ✓ | — | — |
-| esp32c3 | ✓ | — | — |
+| esp32 | ✓ | ✓ | ✓ |
+| esp32c3 | ✓ | ✓ | ✓ |
 | esp32s3 | — | — | — |
 | esp32s3-zero | — | — | — |
 | mkw41z4 | — | — | — |
@@ -29,9 +29,9 @@ Derived from live `SystemBus::from_config` builds — never hand-edited. Bind a 
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
-| stm32h563 | ✓ | — | ✓ |
-| stm32h735 | ✓ | — | ✓ |
+| stm32h563 | ✓ | ✓ | ✓ |
+| stm32h735 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |
 | stm32wb55 | ✓ | ✓ | ✓ |
-| stm32wba52 | ✓ | — | ✓ |
+| stm32wba52 | ✓ | ✓ | ✓ |

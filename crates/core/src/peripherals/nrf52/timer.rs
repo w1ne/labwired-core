@@ -307,7 +307,10 @@ impl Peripheral for Nrf52Timer {
                 }
             }
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.timer:Nrf52Timer", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -374,7 +377,7 @@ impl Peripheral for Nrf52Timer {
                 }
             }
 
-            _ => {}
+            _ => { crate::census_reg!("nrf52.timer:Nrf52Timer", offset, "write"); }
         }
         Ok(())
     }

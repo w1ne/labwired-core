@@ -23,11 +23,11 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f767 | **L0** | ✓ | 36 | — | — | — |
 | rp2350 | **L0** | ✓ | 23 | — | — | — |
 | stm32f407 | **L1** | ✓ | 32 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
-| stm32g474re | **L0** | ✓ | 21 | — | — | — |
+| stm32g474re | **L0** | ✓ | 22 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
-| stm32h735 | **L1** | ✓ | 29 | — | — | tier1::stm32h735 |
+| stm32h735 | **L1** | ✓ | 40 | — | — | tier1::stm32h735 |
 | stm32l073 | **L2** | ✓ | 42 | 55/55 (100%) | 5 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
-| stm32wb55 | **L0** | ✓ | 21 | — | — | — |
-| stm32wba52 | **L0** | ✓ | 20 | — | — | — |
+| stm32wb55 | **L0** | ✓ | 22 | — | — | — |
+| stm32wba52 | **L0** | ✓ | 21 | — | — | — |
 | mkw41z4 | **L1** | ✓ | 20 | — | — | firmware_survival::test_kw41z_smoke_survival |

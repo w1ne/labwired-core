@@ -550,7 +550,10 @@ impl F1I2c {
             }
             0x1C => self.ccr,
             0x20 => self.trise,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c:F1I2c", offset, "read");
+                0
+            }
         }
     }
 
@@ -673,7 +676,9 @@ impl F1I2c {
             // silicon-confirmed on F103.
             0x1C => self.ccr = (value as u32) & 0xCFFF,
             0x20 => self.trise = (value as u32) & 0x3F,
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c:F1I2c", offset, "write");
+            }
         }
     }
 
@@ -1161,7 +1166,10 @@ impl L4I2c {
             0x20 => self.pecr,
             0x24 => self.rxdr,
             0x28 => self.txdr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c:L4I2c", offset, "read");
+                0
+            }
         }
     }
 
@@ -1292,7 +1300,9 @@ impl L4I2c {
                     self.tx_preloaded = true;
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c:L4I2c", offset, "write");
+            }
         }
     }
 
@@ -1627,7 +1637,10 @@ impl KinetisI2c {
             // S2: EMPTY=1 always (double-buffer TX FIFO empty) — the HAL polls
             // this before every D write on parts with double buffering.
             0x0C => 0x01,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c:KinetisI2c", offset, "read");
+                0
+            }
         }
     }
 
@@ -1710,7 +1723,9 @@ impl KinetisI2c {
             0x09 => self.a2 = value,
             0x0A => self.slth = value,
             0x0B => self.sltl = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c:KinetisI2c", offset, "write");
+            }
         }
     }
 

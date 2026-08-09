@@ -96,6 +96,20 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32wb55/hsem.yaml"
+  # CRC (RM0434) @ 0x40023000 — the AHB1 base ST's own stm32wb55.svd gives, the
+  # same address stm32l476/stm32h563 already map. This is the v2 programmable
+  # block (CRC_INIT@0x10, CRC_POL@0x14), and STM32Cube's HAL_CRC_Init writes the
+  # CRC-32 polynomial 0x04C11DB7 to CRC_POL during Arduino core startup; with no
+  # CRC mapped that store landed on unmapped MMIO. IDR is 32-bit here (F0/F1/L0
+  # are the 8-bit parts). Left ungated: RCC_AHB1ENR.CRCEN is not surfaced by the
+  # stm32wb RCC model's enable-register set, matching the dma1 entry below.
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wb55/crc.yaml"
+      idr_width: 32
   # ── Tier-1 peripherals (RM0434). The RCC model is profile stm32wb, so the
   # clock-gate `reg:` names resolve to the real RM0434 §6.4 enable-register
   # offsets (ahb2enr@0x4C, apb1enr1@0x58, apb2enr@0x60); the `bit:` values are

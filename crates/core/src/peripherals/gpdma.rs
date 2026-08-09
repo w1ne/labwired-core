@@ -236,10 +236,16 @@ impl Gpdma {
                     OFF_CTR3 => ch.ctr3,
                     OFF_CBR2 => ch.cbr2,
                     OFF_CLLR => ch.cllr,
-                    _ => 0, // reserved channel offsets read 0
+                    _ => {
+                        crate::census_reg!("gpdma:Gpdma", reg_off, "read");
+                        0
+                    } // reserved channel offsets read 0
                 }
             }
-            _ => 0, // reserved top-level offsets read 0
+            _ => {
+                crate::census_reg!("gpdma:Gpdma", offset, "read");
+                0
+            } // reserved top-level offsets read 0
         }
     }
 
@@ -306,10 +312,14 @@ impl Gpdma {
                     OFF_CTR3 => ch.ctr3 = value,
                     OFF_CBR2 => ch.cbr2 = value,
                     OFF_CLLR => ch.cllr = value, // linked-list link: storage only
-                    _ => {}                      // reserved channel offsets ignore writes
+                    _ => {
+                        crate::census_reg!("gpdma:Gpdma", reg_off, "write");
+                    } // reserved channel offsets ignore writes
                 }
             }
-            _ => {} // reserved top-level offsets ignore writes
+            _ => {
+                crate::census_reg!("gpdma:Gpdma", offset, "write");
+            } // reserved top-level offsets ignore writes
         }
     }
 

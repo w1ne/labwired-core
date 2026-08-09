@@ -148,7 +148,10 @@ impl Peripheral for Nrf52Ficr {
             OFF_NFC_TAGHEADER0..=OFF_NFC_TAGHEADER3 if offset.is_multiple_of(4) => {
                 self.nfc_tagheader[((offset - OFF_NFC_TAGHEADER0) / 4) as usize]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.ficr:Nrf52Ficr", offset, "read");
+                0
+            }
         })
     }
 

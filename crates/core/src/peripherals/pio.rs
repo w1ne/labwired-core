@@ -194,13 +194,19 @@ impl Pio {
                         4 => sm.exec_ctrl,
                         8 => sm.shift_ctrl,
                         12 => sm.pc as u32,
-                        _ => 0,
+                        _ => {
+                            crate::census_reg!("pio:Pio", reg_off, "read");
+                            0
+                        }
                     }
                 } else {
                     0
                 }
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("pio:Pio", offset, "read");
+                0
+            }
         }
     }
 
@@ -243,11 +249,15 @@ impl Pio {
                         4 => self.sm[sm_idx].exec_ctrl = value,
                         8 => self.sm[sm_idx].shift_ctrl = value,
                         12 => self.sm[sm_idx].pc = (value & 0x1F) as u8,
-                        _ => {}
+                        _ => {
+                            crate::census_reg!("pio:Pio", reg_off, "write");
+                        }
                     }
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("pio:Pio", offset, "write");
+            }
         }
     }
 }

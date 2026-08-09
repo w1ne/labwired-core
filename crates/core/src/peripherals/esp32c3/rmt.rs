@@ -165,7 +165,10 @@ impl Peripheral for Esp32c3Rmt {
                 self.mem.get(i).copied().unwrap_or(0)
             }
             o if o < 0x100 && o % 4 == 0 => self.regs.get(o / 4).copied().unwrap_or(0),
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32c3.rmt:Esp32c3Rmt", off, "read");
+                0
+            }
         })
     }
 
@@ -198,7 +201,9 @@ impl Peripheral for Esp32c3Rmt {
                     *r = value;
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32c3.rmt:Esp32c3Rmt", off, "write");
+            }
         }
         Ok(())
     }

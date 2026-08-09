@@ -254,7 +254,10 @@ impl RtcV3 {
             0x60 => self.or_reg,
             0x70 => self.alrabinr,
             0x74 => self.alrbbinr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rtc_v3:RtcV3", offset, "read");
+                0
+            }
         }
     }
 
@@ -316,7 +319,9 @@ impl RtcV3 {
                 self.or_reg = value;
                 return;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rtc_v3:RtcV3", offset, "write");
+            }
         }
 
         if self.wpr != WprState::Unlocked {
@@ -347,7 +352,9 @@ impl RtcV3 {
             0x4C => self.alrmbssr = value,
             0x70 => self.alrabinr = value,
             0x74 => self.alrbbinr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("rtc_v3:RtcV3", offset, "write");
+            }
         }
     }
 

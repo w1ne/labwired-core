@@ -245,7 +245,10 @@ impl Peripheral for Nrf52Ecb {
             OFF_EVENTS_ERRORECB => self.events_errorecb,
             OFF_INTENSET | OFF_INTENCLR => self.inten,
             OFF_ECBDATAPTR => self.ecbdataptr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.ecb:Nrf52Ecb", offset, "read");
+                0
+            }
         })
     }
 
@@ -263,7 +266,9 @@ impl Peripheral for Nrf52Ecb {
             OFF_INTENSET => self.inten |= value,
             OFF_INTENCLR => self.inten &= !value,
             OFF_ECBDATAPTR => self.ecbdataptr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.ecb:Nrf52Ecb", offset, "write");
+            }
         }
         Ok(())
     }

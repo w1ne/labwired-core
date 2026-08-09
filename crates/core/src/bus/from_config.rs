@@ -801,6 +801,12 @@ impl SystemBus {
                     ))
                 }
                 _other => {
+                    // Census (measurement only, no-op unless the `silent-census`
+                    // feature is compiled in): record the `type:` string that
+                    // fell through the whole factory chain. The histogram of
+                    // these strings is what decides whether this arm can become
+                    // a hard error or needs a migration first.
+                    crate::census::record_stub(&p_cfg.r#type);
                     if plugins.is_empty() {
                         tracing::debug!(
                             "Mapping unknown peripheral type '{}' to Stub for id '{}'",
@@ -872,12 +878,26 @@ impl SystemBus {
         // the C3 GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
+        // measurable on the C3 too rather than reading as a flat line. MISO/RX
+        // are deliberately unbound — nothing drives them.
+        bus.wire_esp32c3_spi_pads();
+        bus.wire_esp32c3_uart_pads();
         // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
         // matrix rather than an AF nibble.
         bus.wire_esp32s3_i2c_pads();
+        // …and the S3's GP-SPI2 / UART TX, whose matrix indices are 101/103/110
+        // and 12/15/18 — neither the C3's nor the classic part's.
+        bus.wire_esp32s3_spi_pads();
+        bus.wire_esp32s3_uart_pads();
         // Same for classic ESP32 (LX6), whose matrix indices are 29/30 —
         // neither the C3's 53/54 nor the S3's 89/90.
         bus.wire_esp32_i2c_pads();
+        // …and the classic part's VSPI (SPI3) and UART TX. VSPI's 63/65/68
+        // happen to be the C3's FSPI numbers and are NOT SPI signals on the S3;
+        // the UART indices 14/17/198 are the classic part's alone.
+        bus.wire_esp32_spi_pads();
+        bus.wire_esp32_uart_pads();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on

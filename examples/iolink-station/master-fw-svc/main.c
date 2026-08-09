@@ -84,6 +84,11 @@ volatile uint8_t g_diag_event_pending = 0u;
 static void rcc_init(void) {
     RCC->APB2ENR |= RCC_APB2ENR_USART1EN;   /* debug UART */
     RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN; /* IO-Link C/Q PHY */
+    /* GPIOA carries both of them: PA2/PA3 are the USART2 C/Q pair and PA9 is
+     * the debug console TX. MODER and AFR are dead until the port is clocked
+     * (RM0351 6.4.17), so without this the pads never leave the GPIO block and
+     * a probe on the C/Q line shows the idle latch, not the serial waveform. */
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
 }
 
 int main(void) {

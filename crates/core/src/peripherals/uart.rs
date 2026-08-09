@@ -1055,7 +1055,10 @@ impl Uart {
             0x10 => self.cr2,
             0x14 => self.cr3,
             0x18 => self.gtpr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("uart:Uart", base, "read");
+                0
+            }
         }
     }
 
@@ -1092,7 +1095,9 @@ impl Uart {
                     0x10 => set(&mut self.cr2),
                     0x14 => set(&mut self.cr3),
                     0x18 => set(&mut self.gtpr),
-                    _ => {}
+                    _ => {
+                        crate::census_reg!("uart:Uart", base, "write");
+                    }
                 }
                 return true;
             }

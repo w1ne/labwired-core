@@ -183,13 +183,19 @@ impl Dma1 {
                         0x04 => self.channels[chan_idx].cndtr,
                         0x08 => self.channels[chan_idx].cpar,
                         0x0C => self.channels[chan_idx].cmar,
-                        _ => 0,
+                        _ => {
+                            crate::census_reg!("dma:Dma1", reg_off, "read");
+                            0
+                        }
                     }
                 } else {
                     0
                 }
             }
-            _ => 0, // sub-0x08 offsets other than ISR/IFCR read as 0
+            _ => {
+                crate::census_reg!("dma:Dma1", offset, "read");
+                0
+            } // sub-0x08 offsets other than ISR/IFCR read as 0
         }
     }
 
@@ -228,11 +234,15 @@ impl Dma1 {
                         0x04 => self.channels[chan_idx].cndtr = value & 0xFFFF,
                         0x08 => self.channels[chan_idx].cpar = value,
                         0x0C => self.channels[chan_idx].cmar = value,
-                        _ => {}
+                        _ => {
+                            crate::census_reg!("dma:Dma1", reg_off, "write");
+                        }
                     }
                 }
             }
-            _ => {} // sub-0x08 offsets other than ISR/IFCR: ignore
+            _ => {
+                crate::census_reg!("dma:Dma1", offset, "write");
+            } // sub-0x08 offsets other than ISR/IFCR: ignore
         }
     }
 

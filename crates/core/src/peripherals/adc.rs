@@ -39,12 +39,51 @@ fn l4_adc_code(bits: u32) -> u32 {
     STM32_ADC_REF12 >> (12 - bits)
 }
 
+/// H7 `ADC_CFGR.RES[4:2]` → bit width, per the STM32H735 SVD's own enumerated
+/// values (RM0468 §26.4.24). This is a THREE-bit field with a sparse encoding
+/// and is not the L4's two-bit one at a different offset:
+///
+/// | RES | width |                     | RES | width |
+/// |-----|-------|                     |-----|-------|
+/// | 000 | 16    |                     | 011 | 10    |
+/// | 001 | 14 (legacy, unoptimised)    | 101 | 14    |
+/// | 010 | 12 (legacy, unoptimised)    | 110 | 12    |
+/// |     |       |                     | 111 | 8     |
+///
+/// `100` is NOT defined by the SVD. Silicon behaviour for it is unspecified, so
+/// it falls to the 16-bit reset width rather than being invented.
+fn h7_resolution_bits(cfgr: u32) -> u32 {
+    match (cfgr >> 2) & 0x7 {
+        0b000 => 16,
+        0b001 | 0b101 => 14,
+        0b010 | 0b110 => 12,
+        0b011 => 10,
+        0b111 => 8,
+        _ => 16,
+    }
+}
+
+/// Converted code for the fixed internal source at an H7 width. The reference
+/// constant is a 12-bit count, so widen rather than narrow: the H7's native
+/// 16 bits is the *widest* case here, unlike every other family.
+fn h7_adc_code(bits: u32) -> u32 {
+    if bits >= 12 {
+        (STM32_ADC_REF12 << (bits - 12)) & ((1 << bits) - 1)
+    } else {
+        STM32_ADC_REF12 >> (12 - bits)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AdcRegisterLayout {
     #[default]
     Stm32F1,
     Stm32L4,
+    /// STM32H7 (RM0468). A genuinely different block from the L4 — see
+    /// [`H7AdcRegs`] for what diverges and why the alias that used to point
+    /// `"h7"` at [`Self::Stm32L4`] was wrong.
+    Stm32H7,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -54,11 +93,15 @@ impl FromStr for AdcRegisterLayout {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
-            "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32h7" | "h7" | "stm32g0" | "g0" => {
-                Ok(Self::Stm32L4)
-            }
+            // `stm32h7`/`h7` used to land here. It no longer does: the H7 block
+            // has PCSEL, LTR/HTR watchdog pairs instead of TR1..TR3, CALFACT2,
+            // a 3-bit RES at a different offset with a different encoding, and
+            // a 16-bit DR. Answering an H7 on the L4 map returned plausible
+            // values from the wrong registers.
+            "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32g0" | "g0" => Ok(Self::Stm32L4),
+            "stm32h7" | "h7" => Ok(Self::Stm32H7),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32l4",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32l4, stm32h7",
                 value
             )),
         }
@@ -89,11 +132,65 @@ pub struct L4AdcRegs {
     common_ccr: u32, // 0x308
 }
 
+/// STM32H7 ADC control registers (RM0468 §26.4; offsets and reset values taken
+/// from the vendored `tests/fixtures/real_world/stm32h735.svd`).
+///
+/// What makes this NOT the L4 block, and why the old `"h7" => Stm32L4` alias
+/// was a fidelity bug rather than a shortcut:
+///
+/// * `PCSEL` @ 0x1C — channel preselection. Has no L4 counterpart at all, and
+///   H7 firmware must set a channel's bit before that channel converts.
+/// * `LTR1`/`HTR1` @ 0x20/0x24 as a 26-bit PAIR, where the L4 has `TR1`/`TR2`/
+///   `TR3` packing both thresholds into one word. `HTR1` resets to 0x03FF_FFFF.
+///   Reading an L4 `TR2` at 0x24 returns an H7 `HTR1`.
+/// * `CALFACT2` @ 0xC8 and the linearity-calibration `LINCALRDYWn` bits in
+///   `CR` — H7-only.
+/// * `RES` is `CFGR[4:2]`, three bits, sparsely encoded (see
+///   [`h7_resolution_bits`]). On the L4 it is `CFGR[4:3]`, two bits. The same
+///   firmware write therefore selects a different width on each.
+/// * `DR` is 16-bit. Every other family here is 12-bit.
+///
+/// Reset values that matter for bring-up: `CR` = 0x2000_0000 (`DEEPPWD` set —
+/// the converter is in deep power-down out of reset and firmware MUST clear it
+/// before anything else responds) and `CFGR` = 0x8000_0000 (`JQDIS`).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct H7AdcRegs {
+    isr: u32,      // 0x00
+    ier: u32,      // 0x04
+    cr: u32,       // 0x08  reset 0x2000_0000 (DEEPPWD)
+    cfgr: u32,     // 0x0C  reset 0x8000_0000 (JQDIS)
+    cfgr2: u32,    // 0x10
+    smpr1: u32,    // 0x14
+    smpr2: u32,    // 0x18
+    pcsel: u32,    // 0x1C  H7-only
+    ltr1: u32,     // 0x20
+    htr1: u32,     // 0x24  reset 0x03FF_FFFF
+    sqr1: u32,     // 0x30
+    sqr2: u32,     // 0x34
+    sqr3: u32,     // 0x38
+    sqr4: u32,     // 0x3C
+    jsqr: u32,     // 0x4C
+    ofr: [u32; 4], // 0x60..0x6C
+    jdr: [u32; 4], // 0x80..0x8C
+    awd2cr: u32,   // 0xA0
+    awd3cr: u32,   // 0xA4
+    ltr2: u32,     // 0xB0
+    htr2: u32,     // 0xB4  reset 0x03FF_FFFF
+    ltr3: u32,     // 0xB8
+    htr3: u32,     // 0xBC  reset 0x03FF_FFFF
+    difsel: u32,   // 0xC0
+    calfact: u32,  // 0xC4
+    calfact2: u32, // 0xC8  H7-only
+    /// ADCx_CCR in the common block (+0x300 from the pair's base).
+    common_ccr: u32,
+}
+
 /// Family-isolated ADC control registers.
 #[derive(Debug, serde::Serialize)]
 enum AdcRegs {
     Stm32F1(F1AdcRegs),
     Stm32L4(L4AdcRegs),
+    Stm32H7(H7AdcRegs),
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -135,6 +232,17 @@ impl Adc {
             AdcRegisterLayout::Stm32L4 => AdcRegs::Stm32L4(L4AdcRegs {
                 cr: 0x2000_0000,
                 cfgr: 0x8000_0000,
+                ..Default::default()
+            }),
+            // Same DEEPPWD/JQDIS story as the L4, plus the three analog-watchdog
+            // high thresholds, which reset to the 26-bit all-ones 0x03FF_FFFF
+            // rather than 0.
+            AdcRegisterLayout::Stm32H7 => AdcRegs::Stm32H7(H7AdcRegs {
+                cr: 0x2000_0000,
+                cfgr: 0x8000_0000,
+                htr1: 0x03FF_FFFF,
+                htr2: 0x03FF_FFFF,
+                htr3: 0x03FF_FFFF,
                 ..Default::default()
             }),
         };
@@ -229,7 +337,8 @@ impl Adc {
     fn f1_ctrl(&self) -> (u32, u32) {
         match &self.regs {
             AdcRegs::Stm32F1(r) => (r.cr1, r.cr2),
-            AdcRegs::Stm32L4(_) => (0, 0),
+            // Neither the L4 nor the H7 runs the F1 countdown engine.
+            AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) => (0, 0),
         }
     }
 
@@ -248,7 +357,10 @@ impl Adc {
             0x3C => r.sqr4,
             0x40 => dr,
             0x308 => r.common_ccr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("adc:Adc", reg, "read");
+                0
+            }
         }
     }
 
@@ -261,7 +373,8 @@ impl Adc {
         let adstart = cr & (1 << 2) != 0;
         let (adrdy, cfgr) = match &self.regs {
             AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
-            AdcRegs::Stm32F1(_) => return,
+            // H7 has its own engine (`maybe_start_h7_conversion`).
+            AdcRegs::Stm32F1(_) | AdcRegs::Stm32H7(_) => return,
         };
         if !(aden && adstart && adrdy) {
             return;
@@ -270,6 +383,172 @@ impl Adc {
         if let AdcRegs::Stm32L4(r) = &mut self.regs {
             r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
             r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
+        }
+    }
+
+    fn read_reg_h7(r: &H7AdcRegs, dr: u32, reg: u64) -> u32 {
+        match reg {
+            0x00 => r.isr,
+            0x04 => r.ier,
+            0x08 => r.cr,
+            0x0C => r.cfgr,
+            0x10 => r.cfgr2,
+            0x14 => r.smpr1,
+            0x18 => r.smpr2,
+            0x1C => r.pcsel,
+            0x20 => r.ltr1,
+            0x24 => r.htr1,
+            0x30 => r.sqr1,
+            0x34 => r.sqr2,
+            0x38 => r.sqr3,
+            0x3C => r.sqr4,
+            0x40 => dr,
+            0x4C => r.jsqr,
+            0x60..=0x6C if reg % 4 == 0 => r.ofr[((reg - 0x60) / 4) as usize],
+            0x80..=0x8C if reg % 4 == 0 => r.jdr[((reg - 0x80) / 4) as usize],
+            0xA0 => r.awd2cr,
+            0xA4 => r.awd3cr,
+            0xB0 => r.ltr2,
+            0xB4 => r.htr2,
+            0xB8 => r.ltr3,
+            0xBC => r.htr3,
+            0xC0 => r.difsel,
+            0xC4 => r.calfact,
+            0xC8 => r.calfact2,
+            0x308 => r.common_ccr,
+            _ => 0,
+        }
+    }
+
+    /// H7 power-up and conversion engine.
+    ///
+    /// The order here is the part that matters, and it is the order RM0468
+    /// §26.4.6 imposes on firmware: out of reset `DEEPPWD` is SET, and while it
+    /// is set the analog voltage regulator cannot come up. So
+    ///
+    ///   1. clear `DEEPPWD`, then set `ADVREGEN` -> `ISR.LDORDY` rises;
+    ///   2. `ADCAL` starts a calibration that self-clears when done;
+    ///   3. `ADEN` with the regulator up -> `ISR.ADRDY`;
+    ///   4. `ADSTART` converts, loads `DR`, raises `EOC`|`EOS`, self-clears.
+    ///
+    /// Writing `ADEN` while `DEEPPWD` is still set does NOT make the converter
+    /// ready — that is the whole reason a HAL that skips the wake-up hangs on
+    /// silicon, and modelling it is the difference between reproducing that
+    /// hang and silently succeeding where the real part would stall.
+    fn h7_apply_cr(&mut self, value: u32) {
+        let AdcRegs::Stm32H7(r) = &mut self.regs else {
+            return;
+        };
+        // ADCAL is a self-clearing command: calibration is instantaneous here
+        // (no analog settling to model), so it reads back as already complete
+        // rather than latching set forever.
+        let calibrating = value & (1 << 31) != 0;
+        r.cr = value & !(1 << 31);
+
+        let deeppwd = r.cr & (1 << 29) != 0;
+        let advregen = r.cr & (1 << 28) != 0;
+
+        // Deep power-down overrides everything: the regulator drops and the
+        // converter cannot be ready.
+        if deeppwd {
+            r.isr &= !((1 << 12) | 0x1); // LDORDY | ADRDY
+            r.cr &= !0x1; // ADEN cannot take effect
+            return;
+        }
+        if advregen {
+            r.isr |= 1 << 12; // LDORDY
+        }
+        if calibrating {
+            // A calibration only runs with the regulator up; record a factor so
+            // firmware polling CALFACT sees something coherent.
+            if advregen {
+                r.calfact = 0x0000_2000;
+            }
+        }
+        if r.cr & 0x1 != 0 && advregen {
+            r.isr |= 0x1; // ADRDY
+        }
+        if r.cr & (1 << 1) != 0 {
+            // ADDIS: disable request clears ADEN and readiness.
+            r.cr &= !((1 << 1) | 0x1);
+            r.isr &= !0x1;
+        }
+    }
+
+    /// One H7 regular conversion. Requires `ADEN` + `ADRDY` + `ADSTART`.
+    fn maybe_start_h7_conversion(&mut self) {
+        let AdcRegs::Stm32H7(r) = &self.regs else {
+            return;
+        };
+        if r.cr & 0x1 == 0 || r.isr & 0x1 == 0 || r.cr & (1 << 2) == 0 {
+            return;
+        }
+        let cfgr = r.cfgr;
+        let bits = h7_resolution_bits(cfgr);
+        // SQR1[10:6] is the first conversion in the regular sequence (SQ1).
+        let ch = ((r.sqr1 >> 6) & 0x1F) as usize;
+        let injected = self.channel_inputs.get(ch).copied().unwrap_or(0xFFFF);
+        // Injected stimuli are held as 12-bit counts (set_channel_input), so
+        // rescale to the configured width rather than truncating to 12.
+        let code = if injected != 0xFFFF {
+            let v = injected as u32;
+            if bits >= 12 {
+                (v << (bits - 12)) & ((1 << bits) - 1)
+            } else {
+                v >> (12 - bits)
+            }
+        } else {
+            h7_adc_code(bits)
+        };
+        self.dr = code;
+        let cont = cfgr & (1 << 13) != 0;
+        if let AdcRegs::Stm32H7(r) = &mut self.regs {
+            r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
+            if !cont {
+                r.cr &= !(1 << 2); // ADSTART self-clears after a single conversion
+            }
+        }
+    }
+
+    fn write_reg_h7(&mut self, reg: u64, value: u32) {
+        // CR carries the power-up state machine, so it routes through
+        // `h7_apply_cr` rather than being latched verbatim.
+        if reg == 0x08 {
+            self.h7_apply_cr(value);
+            self.maybe_start_h7_conversion();
+            return;
+        }
+        if let AdcRegs::Stm32H7(r) = &mut self.regs {
+            match reg {
+                0x00 => r.isr &= !value, // rc_w1
+                0x04 => r.ier = value,
+                0x0C => r.cfgr = value,
+                0x10 => r.cfgr2 = value,
+                0x14 => r.smpr1 = value,
+                0x18 => r.smpr2 = value,
+                0x1C => r.pcsel = value,
+                0x20 => r.ltr1 = value,
+                0x24 => r.htr1 = value,
+                0x30 => r.sqr1 = value,
+                0x34 => r.sqr2 = value,
+                0x38 => r.sqr3 = value,
+                0x3C => r.sqr4 = value,
+                0x40 => {} // DR read-only
+                0x4C => r.jsqr = value,
+                0x60..=0x6C if reg % 4 == 0 => r.ofr[((reg - 0x60) / 4) as usize] = value,
+                0x80..=0x8C if reg % 4 == 0 => {} // JDRn read-only
+                0xA0 => r.awd2cr = value,
+                0xA4 => r.awd3cr = value,
+                0xB0 => r.ltr2 = value,
+                0xB4 => r.htr2 = value,
+                0xB8 => r.ltr3 = value,
+                0xBC => r.htr3 = value,
+                0xC0 => r.difsel = value,
+                0xC4 => r.calfact = value,
+                0xC8 => r.calfact2 = value,
+                0x308 => r.common_ccr = value,
+                _ => {}
+            }
         }
     }
 
@@ -301,7 +580,9 @@ impl Adc {
             0x3C => r.sqr4 = value,
             0x40 => {} // DR read-only
             0x308 => r.common_ccr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("adc:Adc", reg, "write");
+            }
         }
     }
 }
@@ -320,9 +601,13 @@ impl Peripheral for Adc {
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
                 0x4C..=0x4F => self.dr,
-                _ => 0,
+                _ => {
+                    crate::census_reg!("adc:Adc", offset, "read");
+                    0
+                }
             },
             AdcRegs::Stm32L4(r) => Self::read_reg_l4(r, self.dr, offset & !3),
+            AdcRegs::Stm32H7(r) => Self::read_reg_h7(r, self.dr, offset & !3),
         };
         let shift = (offset % 4) * 8;
         Ok(((val >> shift) & 0xFF) as u8)
@@ -361,7 +646,9 @@ impl Peripheral for Adc {
                         self.start_conversion();
                     }
                 }
-                _ => {}
+                _ => {
+                    crate::census_reg!("adc:Adc", offset, "write");
+                }
             },
             AdcRegs::Stm32L4(_) => {
                 let reg = offset & !3;
@@ -375,6 +662,20 @@ impl Peripheral for Adc {
                 if reg == 0x08 {
                     self.maybe_start_l4_conversion(full);
                 }
+            }
+            AdcRegs::Stm32H7(_) => {
+                // Same byte-merge discipline as the L4 arm: read the current
+                // word, splice in this byte, write the whole word back, so a
+                // `strb` to one byte of CR cannot clear the rest of the
+                // power-up state.
+                let reg = offset & !3;
+                let dr = self.dr;
+                let full = if let AdcRegs::Stm32H7(r) = &self.regs {
+                    (Self::read_reg_h7(r, dr, reg) & !mask) | val_shifted
+                } else {
+                    0
+                };
+                self.write_reg_h7(reg, full);
             }
         }
         Ok(())
@@ -701,5 +1002,164 @@ mod scheduler_diff {
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);
+    }
+
+    // ── STM32H7 ADC (RM0468) ────────────────────────────────────────────────
+    //
+    // Every expectation below is the SVD's, not mine: offsets, reset values and
+    // the RES encoding all come from tests/fixtures/real_world/stm32h735.svd.
+
+    #[test]
+    fn h7_reset_values_match_the_svd() {
+        let adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        assert_eq!(adc.read_u32(0x08).unwrap(), 0x2000_0000, "CR: DEEPPWD set");
+        assert_eq!(adc.read_u32(0x0C).unwrap(), 0x8000_0000, "CFGR: JQDIS set");
+        // The three analog-watchdog HIGH thresholds reset to 26-bit all-ones.
+        // An L4 answering here would return 0 — this is the cheapest single
+        // discriminator between the two layouts.
+        assert_eq!(adc.read_u32(0x24).unwrap(), 0x03FF_FFFF, "HTR1");
+        assert_eq!(adc.read_u32(0xB4).unwrap(), 0x03FF_FFFF, "HTR2");
+        assert_eq!(adc.read_u32(0xBC).unwrap(), 0x03FF_FFFF, "HTR3");
+        // ...and their LOW counterparts reset to 0.
+        assert_eq!(adc.read_u32(0x20).unwrap(), 0, "LTR1");
+    }
+
+    #[test]
+    fn h7_registers_the_l4_does_not_have_are_addressable() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        // PCSEL @ 0x1C and CALFACT2 @ 0xC8 exist only on the H7. On the L4
+        // layout both are unmapped and read back 0 whatever you write.
+        adc.write_u32(0x1C, 0x000F_FFFF).unwrap();
+        assert_eq!(adc.read_u32(0x1C).unwrap(), 0x000F_FFFF, "PCSEL");
+        adc.write_u32(0xC8, 0xDEAD_BEEF).unwrap();
+        assert_eq!(adc.read_u32(0xC8).unwrap(), 0xDEAD_BEEF, "CALFACT2");
+
+        let mut l4 = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        l4.write_u32(0x1C, 0x000F_FFFF).unwrap();
+        assert_eq!(l4.read_u32(0x1C).unwrap(), 0, "L4 has no PCSEL");
+    }
+
+    #[test]
+    fn h7_deep_power_down_gates_the_whole_bring_up() {
+        // RM0468 §26.4.6: out of reset the converter is in deep power-down.
+        // Writing ADEN without clearing DEEPPWD must NOT make it ready — this
+        // is exactly the stall a HAL that skips the wake-up hits on silicon.
+        let mut cold = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        cold.write_u32(0x08, (1 << 29) | (1 << 28) | 1).unwrap();
+        assert_eq!(cold.read_u32(0x00).unwrap() & 0x1, 0, "no ADRDY in DEEPPWD");
+        assert_eq!(cold.read_u32(0x08).unwrap() & 0x1, 0, "ADEN cannot latch");
+
+        // The documented order: clear DEEPPWD, raise the LDO, then enable.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & (1 << 12),
+            1 << 12,
+            "LDORDY after ADVREGEN"
+        );
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 0, "no ADRDY before ADEN");
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 0x1, "ADRDY after ADEN");
+    }
+
+    #[test]
+    fn h7_adcal_self_clears() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap(); // ADCAL
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & (1 << 31),
+            0,
+            "ADCAL must self-clear; firmware polls it to 0 and would spin forever"
+        );
+        assert_ne!(adc.read_u32(0xC4).unwrap(), 0, "CALFACT populated");
+    }
+
+    #[test]
+    fn h7_converts_at_the_configured_resolution() {
+        // Default RES=000 is SIXTEEN bits on this part. The same CFGR write on
+        // an L4 selects a different width entirely, which is what made the old
+        // alias wrong in a way firmware could observe.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap(); // ADSTART
+
+        let dr16 = adc.read_u32(0x40).unwrap();
+        assert_eq!(dr16, h7_adc_code(16));
+        assert!(dr16 > 0xFFF, "16-bit code must exceed a 12-bit full scale");
+        let isr = adc.read_u32(0x00).unwrap();
+        assert_eq!(isr & (1 << 2), 1 << 2, "EOC");
+        assert_eq!(isr & (1 << 3), 1 << 3, "EOS");
+        assert_eq!(adc.read_u32(0x08).unwrap() & (1 << 2), 0, "ADSTART clears");
+
+        // RES=110 selects 12 bits (NOT the L4's encoding, where 0b10 is 8).
+        adc.write_u32(0x0C, 0x8000_0000 | (0b110 << 2)).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), h7_adc_code(12));
+
+        // RES=111 is 8 bits.
+        adc.write_u32(0x0C, 0x8000_0000 | (0b111 << 2)).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), h7_adc_code(8));
+    }
+
+    #[test]
+    fn h7_res_encoding_follows_the_svd_not_the_l4() {
+        // The two encodings disagree on every value they share, so a firmware
+        // write of RES=0b010 means 12 bits here and 8 bits on an L4.
+        assert_eq!(h7_resolution_bits(0b000 << 2), 16);
+        assert_eq!(h7_resolution_bits(0b001 << 2), 14);
+        assert_eq!(h7_resolution_bits(0b010 << 2), 12);
+        assert_eq!(h7_resolution_bits(0b011 << 2), 10);
+        assert_eq!(h7_resolution_bits(0b101 << 2), 14);
+        assert_eq!(h7_resolution_bits(0b110 << 2), 12);
+        assert_eq!(h7_resolution_bits(0b111 << 2), 8);
+        // 0b100 is undefined in the SVD; fall back to the reset width rather
+        // than inventing a behaviour.
+        assert_eq!(h7_resolution_bits(0b100 << 2), 16);
+    }
+
+    #[test]
+    fn h7_layout_is_selected_by_name() {
+        assert_eq!(
+            "h7".parse::<AdcRegisterLayout>().unwrap(),
+            AdcRegisterLayout::Stm32H7
+        );
+        assert_eq!(
+            "stm32h7".parse::<AdcRegisterLayout>().unwrap(),
+            AdcRegisterLayout::Stm32H7
+        );
+        // Regression guard: these used to resolve to Stm32L4.
+        assert_ne!(
+            "h7".parse::<AdcRegisterLayout>().unwrap(),
+            AdcRegisterLayout::Stm32L4
+        );
+        // The families that genuinely DO share the L4 block still do.
+        for name in ["l4", "stm32l4", "f7", "g0"] {
+            assert_eq!(
+                name.parse::<AdcRegisterLayout>().unwrap(),
+                AdcRegisterLayout::Stm32L4,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn h7_stimulus_channel_scales_to_the_configured_width() {
+        // set_channel_input stores a 12-bit count; a 16-bit conversion must
+        // widen it rather than return a 12-bit value in a 16-bit register.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.set_channel_input(5, 1650); // ~half scale
+        let count12 = adc.channel_input_count(5) as u32;
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        adc.write_u32(0x30, 5 << 6).unwrap(); // SQR1.SQ1 = channel 5
+        adc.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x40).unwrap(), count12 << 4);
     }
 }

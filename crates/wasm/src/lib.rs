@@ -1318,6 +1318,40 @@ impl WasmSimulator {
     /// call constructed via `js_sys::WebAssembly`. Off by default —
     /// callers opt in from JS once they've benchmarked.
     #[wasm_bindgen]
+    /// Wall-clock attribution for the open profiling window, as text, with this
+    /// chip's peripheral names resolved.
+    ///
+    /// The window is per-THREAD, not per-simulator: on a multi-chip lab every
+    /// chip in this worker records into it, and the report says so.
+    pub fn profile_report(&mut self) -> String {
+        self.machine().profile_report().render()
+    }
+
+    /// The same attribution as JSON, for a HUD to render.
+    pub fn profile_report_json(&mut self) -> String {
+        let report = self.machine().profile_report();
+        let rows: Vec<serde_json::Value> = report
+            .rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "ns": r.ns,
+                    "calls": r.calls,
+                    "percent": r.percent,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "clock": format!("{:?}", report.clock),
+            "windowNs": report.window_ns,
+            "machines": report.machines,
+            "unattributedNs": report.unattributed_ns,
+            "rows": rows,
+        })
+        .to_string()
+    }
+
     pub fn set_jit_enabled(&mut self, enabled: bool) {
         self.jit_browser_enabled = enabled;
         if !enabled {
@@ -1553,6 +1587,46 @@ impl WasmSimulator {
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
     fn perf_now() -> f64;
+}
+
+/// Nanosecond clock for [`labwired_core::profile`], from the same
+/// `performance.now()` import above.
+///
+/// ⚠️ **Resolution is much coarser than the spans being timed.** Chrome clamps
+/// `performance.now()` to 100 µs outside a cross-origin-isolated context (5 µs
+/// inside one), while a single peripheral event handler runs in ~100 ns. Any
+/// INDIVIDUAL event therefore measures 0 or one whole clamp step — the per-call
+/// numbers are noise.
+///
+/// The SUMS are still sound: truncation against a clock whose phase is
+/// uncorrelated with the work is unbiased, so over the millions of events in a
+/// real window the totals converge on the truth. Read the browser report as
+/// subsystem shares over a long window, never as the cost of one call, and
+/// sanity-check it against the `unattributed` row.
+fn profile_now_ns() -> u64 {
+    (perf_now() * 1_000_000.0) as u64
+}
+
+/// Start an engine profiling window in the browser, installing the
+/// `performance.now()` clock. Without this the wasm build has no clock at all
+/// and every duration would read zero — see `labwired_core::profile`.
+#[wasm_bindgen]
+pub fn profile_start() {
+    labwired_core::profile::set_clock(profile_now_ns);
+    labwired_core::profile::start();
+}
+
+/// Close the profiling window. The report survives until the next
+/// [`profile_start`].
+#[wasm_bindgen]
+pub fn profile_stop() {
+    labwired_core::profile::stop();
+}
+
+/// Is the engine profiler recording?
+#[wasm_bindgen]
+pub fn profile_enabled() -> bool {
+    labwired_core::profile::enabled()
 }
 
 /// A shared UART cross-link medium, owned by the host. Create one per multi-chip

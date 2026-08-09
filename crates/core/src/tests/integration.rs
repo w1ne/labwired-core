@@ -1588,6 +1588,15 @@ pub mod integration_tests {
     fn test_nvic_external_interrupt() {
         let mut machine: Machine<CortexM> = create_machine();
 
+        // Give the core a real stack. `create_machine` builds the CPU straight from
+        // `CortexM::default()` without a `reset()`, so SP is 0 — and exception entry
+        // stacks an 8-word frame at SP-32 = 0xFFFF_FFE0, which no region covers. On
+        // silicon that is a stacking bus fault at exception entry; the sim now
+        // surfaces it instead of discarding all eight stacking writes. Any machine
+        // that has actually booted has SP loaded from the vector table.
+        machine.cpu.sp = 0x2000_1000;
+        machine.cpu.msp = 0x2000_1000;
+
         // IRQ 0 (Exception 16)
         let irq_num = 16;
         let isr_addr = 0x2000;

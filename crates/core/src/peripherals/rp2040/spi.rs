@@ -459,7 +459,10 @@ impl Peripheral for Rp2040Spi {
             SSPDR => self.pop_dr(), // reading SSPDR drains the RX FIFO
             SSPSR => self.status(),
             SSPCPSR => self.cpsr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.spi:Rp2040Spi", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -487,7 +490,9 @@ impl Peripheral for Rp2040Spi {
                 // room for what came back, so narrate it outside the FIFO guard.
                 self.wire_push(word);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.spi:Rp2040Spi", offset, "write");
+            }
         }
         Ok(())
     }

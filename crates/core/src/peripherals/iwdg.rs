@@ -51,7 +51,10 @@ impl Iwdg {
             0x08 => self.rlr,
             0x0C => self.sr,
             0x10 => self.winr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("iwdg:Iwdg", offset, "read");
+                0
+            }
         }
     }
 
@@ -73,7 +76,9 @@ impl Iwdg {
             0x08 if self.write_access => self.rlr = value & 0xFFF,
             0x0C => {} // SR is read-only
             0x10 => self.winr = value & 0xFFF,
-            _ => {}
+            _ => {
+                crate::census_reg!("iwdg:Iwdg", offset, "write");
+            }
         }
     }
 }

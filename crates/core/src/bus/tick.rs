@@ -1184,6 +1184,16 @@ impl SystemBus {
         &mut self,
         force_scheduler_walk: bool,
     ) -> (Vec<u32>, Vec<PeripheralTickCost>) {
+        let span = crate::profile::span();
+        let out = self.tick_peripherals_fully_inner(force_scheduler_walk);
+        crate::profile::record_tick(span);
+        out
+    }
+
+    fn tick_peripherals_fully_inner(
+        &mut self,
+        force_scheduler_walk: bool,
+    ) -> (Vec<u32>, Vec<PeripheralTickCost>) {
         self.service_motor_models();
         // Walk-free fast path: on a bus whose per-cycle tick has no orchestration
         // work (walk deleted, no bus-tick/GPIO/CAN services, HC-SR04 event-

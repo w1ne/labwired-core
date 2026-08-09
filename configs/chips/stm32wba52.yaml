@@ -86,6 +86,22 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32wba52/icache.yaml"
+  # CRC (RM0493) @ 0x40023000 — the AHB1 base ST's own stm32wba52.svd gives, the
+  # same address stm32l476/stm32h563 already map. (The SVD also derives a
+  # SEC_CRC alias at 0x50023000 for the secure alias region; only the
+  # non-secure view is declared.) This is the v2 programmable block
+  # (CRC_INIT@0x10, CRC_POL@0x14), and STM32Cube's HAL_CRC_Init writes the
+  # CRC-32 polynomial 0x04C11DB7 to CRC_POL during Arduino core startup; with no
+  # CRC mapped that store landed on unmapped MMIO. IDR is 32-bit here (F0/F1/L0
+  # are the 8-bit parts). Left ungated: RCC_AHB1ENR.CRCEN is not surfaced by the
+  # stm32v2 RCC model's enable-register set, matching the gpdma1 entry below.
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32wba52/crc.yaml"
+      idr_width: 32
   # ── Tier-1 peripherals (RM0493). The RCC model is profile stm32v2, so the
   # clock-gate `reg:` names resolve to the V2 enable-register offsets
   # (ahb2enr@0x8C, apb1lenr@0x9C, apb2enr@0xA4); the `bit:` values are the
@@ -131,6 +147,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32wba52/spi1.yaml"
       profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32wba"
     clock: { reg: "apb2enr", bit: 12 }
   # GPDMA1 (AHB1, 8-channel, RM0481/RM0493 fixed layout). RM0493 puts GPDMA1EN
   # on AHB1ENR (bit 0), which the stm32v2 RCC model does not surface, so the
