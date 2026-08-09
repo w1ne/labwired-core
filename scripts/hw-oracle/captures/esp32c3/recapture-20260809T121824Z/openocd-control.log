@@ -1,0 +1,64 @@
+Open On-Chip Debugger v0.12.0-esp32-20260703 (2026-07-03-13:40)
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+Info : esp_usb_jtag: capabilities descriptor set to 0x2000
+Info : esp_usb_jtag: serial (9C:CC:01:D0:98:E0)
+Info : esp_usb_jtag: Device found. Base speed 40000KHz, div range 1 to 255
+Info : clock speed 4000 kHz
+Info : JTAG tap: esp32c3.tap0 tap/device found: 0x00005c25 (mfg: 0x612 (Espressif Systems), part: 0x0005, ver: 0x0)
+Info : [esp32c3] datacount=2 progbufsize=16
+Info : [esp32c3] Examined RISC-V core
+Info : [esp32c3]  XLEN=32, misa=0x40101104
+Info : [esp32c3] Chip revision v0.4
+Info : [esp32c3] Examination succeed
+Info : [esp32c3] starting gdb server on 3333
+Info : Listening on port 3333 for gdb connections
+Info : JTAG tap: esp32c3.tap0 tap/device found: 0x00005c25 (mfg: 0x612 (Espressif Systems), part: 0x0005, ver: 0x0)
+Info : [esp32c3] Register fp is dirty!
+Info : [esp32c3] Discarding values of dirty registers.
+Info : [esp32c3] Reset cause (3) - (Software core reset)
+0x60006000: 06828040 
+0x60008000: 1c00a000 
+0x60008004: 00000000 
+0x60008008: 00000000 
+0x6000800c: 00000000 
+0x60013000: 00000000 
+0x60013004: 0000020b 
+0x60013008: 0000c000 
+0x6001300c: 00000010 
+0x60019000: 00000000 
+0x60019004: 00000000 
+0x60019008: 00000000 
+0x6001900c: 40000000 
+0x6001cc00: 00000000 
+0x60023000: 46000000 
+0x60023004: 00000000 
+0x60023008: 00000000 
+0x6002300c: 00000000 
+0x60024000: 00000000 
+0x60024004: 00000000 
+0x60024008: 003c0000 
+0x6002400c: 80003043 
+0x60026000: 00000001 
+0x60026004: 00010727 
+0x60026008: 000007ff 
+0x6002600c: 00000000 
+0x60033000: 00000000 
+0x60035000: 0000efce 
+0x60035024: 024e01ff 
+0x60035028: b0000000 
+0x6003502c: 00000000 
+0x60035030: 00000064 
+0x6003503c: 00000064 
+0x60035048: 00000064 
+0x60035054: 00000064 
+0x6003507c: 9d2d5c71 
+0x60035080: 000007ff 
+0x60035084: 00003202 
+0x60035094: 00000004 
+0x600c0000: 00000000 
+0x600c0004: 000000c0 
+0x600c0008: 0000000c 
+0x600c000c: 00000001 
+shutdown command invoked

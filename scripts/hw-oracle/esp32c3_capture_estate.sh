@@ -5,6 +5,14 @@
 # Emits one "@@<block> <base>" marker followed by mdw word dumps per block, into
 # openocd.log. State is reset-halt (WARM post-ROM); clock-gated blocks may read
 # back as 0x0/0xffffffff or raise a load fault — that is itself signal.
+#
+# OPENOCD VERSION MATTERS — this is not cosmetic. On a C3 rev v0.4, the build
+# shipped by esp-idf tools as of v0.12.0-esp32-20240318 cannot examine the core:
+# it times out on `abstractcs` busy ("Fatal: Failed to read s0", "Examination
+# failed") no matter the adapter speed, the command timeout, or whether the chip
+# sits in ROM download mode. It looks like a dead board or hostile firmware; it
+# is neither. v0.12.0-esp32-20260703 attaches first try. Get a current build from
+# https://github.com/espressif/openocd-esp32/releases and point OOCD_HOME at it.
 set -uo pipefail
 
 OOCD_HOME="${OOCD_HOME:-/private/tmp/openocd-esp32}"
