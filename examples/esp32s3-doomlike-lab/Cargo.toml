@@ -1,0 +1,38 @@
+[package]
+name = "esp32s3-doomlike-lab"
+version = "0.1.0"
+edition = "2021"
+authors = ["LabWired Team <team@labwired.io>"]
+license = "MIT"
+description = "ESP32-S3 Doom-like community lab: original integer raycaster driving an ILI9341 over SPI with six GPIO buttons."
+
+[lib]
+name = "esp32s3_doomlike_lab"
+path = "src/lib.rs"
+# Host-testable game/render/input model (no esp-hal).
+test = true
+
+[[bin]]
+name = "esp32s3-doomlike-lab"
+path = "src/main.rs"
+test = false
+bench = false
+# Built only when hardware deps are available (device target / explicit feature).
+required-features = ["hw"]
+
+[features]
+default = []
+hw = ["dep:esp-hal", "dep:esp-println", "dep:esp-backtrace", "dep:critical-section"]
+
+[dependencies]
+# Pure no_std game model has zero external deps so host lib tests work on stable.
+esp-hal = { version = "1.1", features = ["esp32s3", "unstable"], optional = true }
+esp-println = { version = "0.17", default-features = false, features = ["esp32s3", "jtag-serial", "colors", "critical-section"], optional = true }
+esp-backtrace = { version = "0.19", features = ["esp32s3", "panic-handler", "println"], optional = true }
+critical-section = { version = "1.2", optional = true }
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+debug = true # keep DWARF so the simulator can resolve symbols

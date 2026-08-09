@@ -97,6 +97,7 @@ exclude = [
     "examples/esp32s3-blinky",
     "examples/esp32s3-hello-world",
     "examples/esp32s3-i2c-tmp102",
+    "examples/esp32s3-doomlike-lab",
     "examples/openai-deck-s3",
     "examples/esp32c3-hello-world",
     "examples/esp32-epaper-lab",
