@@ -273,6 +273,16 @@ fn ball(status: &str) -> (i32, i32) {
     (x.parse().expect("ball x"), y.parse().expect("ball y"))
 }
 
+fn paddle(status: &str) -> i32 {
+    status
+        .split(" me=")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .unwrap_or_else(|| panic!("no me= in {status:?}"))
+        .parse()
+        .unwrap_or_else(|e| panic!("bad me= in {status:?}: {e}"))
+}
+
 /// Cycles per node. The C3 rom-boot path reaches `setup()`'s ROLE banner in
 /// roughly 45M and needs a few advertising rounds after that for the election
 /// to settle and the ball to move.
@@ -371,5 +381,34 @@ fn two_c3_nodes_running_one_ble_pong_image_start_the_game() {
     assert!(
         ball(&sa).0.abs_diff(ball(&sb).0) <= 8,
         "the two nodes are painting different worlds\n  nodeA: {sa}\n  nodeB: {sb}"
+    );
+}
+
+#[test]
+fn shipped_pong_firmware_observes_gp2y_distance_through_gpio1_adc() {
+    let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin"))
+        .expect("read BLE Pong flash image");
+    let mut near = build_node(&flash);
+    let mut far = build_node(&flash);
+    near.machine
+        .set_input_on("vl", "distance", 100.0)
+        .expect("drive near GP2Y distance");
+    far.machine
+        .set_input_on("vl", "distance", 800.0)
+        .expect("drive far GP2Y distance");
+
+    for _ in 0..PONG_CYCLES {
+        near.machine.step().expect("near node steps");
+        far.machine.step().expect("far node steps");
+    }
+
+    let near_status = last_status(&near.console());
+    let far_status = last_status(&far.console());
+    eprintln!("near: {near_status}");
+    eprintln!("far:  {far_status}");
+    assert!(
+        paddle(&near_status) < paddle(&far_status),
+        "near and far stimuli must move the firmware paddle through GPIO1 ADC\n\
+         near: {near_status}\nfar:  {far_status}",
     );
 }
