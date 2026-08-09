@@ -423,19 +423,20 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
             MMU_FMT_C3,
         )),
     );
-    // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
-    // triggers single conversions and polls a data-valid flag (0x44 bit31/
-    // bit30) before reading the result; the declarative stub never asserts
-    // it, so read_cal_channel spins forever after spi_flash init. Model
-    // conversions as instant (valid flags set, mid-scale sample) so the
-    // bounded cal search converges and boot continues.
-    bus.add_peripheral(
-        "apb_saradc",
-        0x6004_0000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
-    );
+    // SAR ADC (APB_SARADC, 0x6004_0000): use the ONE behavioral controller
+    // for both ROM/IDF calibration and application one-shot reads. The old
+    // calibration-only replacement always returned mid-scale and silently
+    // discarded levels attached by GP2Y/pot/NTC models, so real firmware's
+    // analogRead() could never observe a live stimulus after ROM boot.
+    if bus.find_peripheral_index_by_name("apb_saradc").is_none() {
+        bus.add_peripheral(
+            "apb_saradc",
+            0x6004_0000,
+            0x100,
+            None,
+            Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::default()),
+        );
+    }
     // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
     // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
     // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading
