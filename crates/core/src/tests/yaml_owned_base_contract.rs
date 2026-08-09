@@ -337,6 +337,22 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
 /// Ids are stored sorted so the entry does not depend on YAML ordering.
 const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
     (
+        "rp2040.yaml",
+        "clk_rst",
+        "io_bank0",
+        "`clk_rst` is a deliberate catch-all covering CLOCKS/RESETS/PSM/XOSC/\
+         PLL_SYS/PLL_USB as one 160 KB block (0x4000_8000..0x4003_0000), and \
+         IO_BANK0 sits inside it at 0x4001_4000. It cannot simply be narrowed: \
+         XOSC and both PLLs live ABOVE io_bank0 in that same span, so a single \
+         shorter window would drop the registers Zephyr's clock bring-up polls. \
+         The overlap is safe because bus routing is greatest-start-wins and \
+         history-independent (see `overlapping_windows_route_history_\
+         independently`), so io_bank0 deterministically owns its 4 KB whatever \
+         the registration order — which is exactly what makes GPIOn_CTRL.FUNCSEL \
+         reach a model that acts on it instead of being absorbed as inert \
+         storage.",
+    ),
+    (
         "esp32.yaml",
         "rtcio",
         "sens_sar_adc",

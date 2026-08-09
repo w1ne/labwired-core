@@ -16,7 +16,21 @@ use crate::peripherals::i2c::I2cDevice;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::cell::{Cell, RefCell};
 
+/// Line order for this controller's published wire; the FUNCSEL pad table
+/// routes SCL/SDA pads to these indices.
+pub(crate) const I2C_LINES: &[&str] = &["SCL", "SDA"];
+pub(crate) const LINE_SCL: usize = 0;
+pub(crate) const LINE_SDA: usize = 1;
+
 const IC_CON: u64 = 0x00;
+/// Standard-speed SCL high/low counts, in IC_CLK (= clk_sys) periods.
+/// RP2040 datasheet §4.3.17: the SDK's `i2c_set_baudrate` programs these, and
+/// they are the only statement of the bus's bit rate the model can read.
+const IC_SS_SCL_HCNT: u64 = 0x14;
+const IC_SS_SCL_LCNT: u64 = 0x18;
+/// Fast-speed counts, selected by IC_CON.SPEED == 2 (the SDK's default).
+const IC_FS_SCL_HCNT: u64 = 0x1c;
+const IC_FS_SCL_LCNT: u64 = 0x20;
 const IC_TAR: u64 = 0x04;
 const IC_DATA_CMD: u64 = 0x10;
 const IC_INTR_STAT: u64 = 0x2c;
@@ -55,6 +69,15 @@ pub struct Rp2040I2c {
     enable: u32,
     tar: u32,
     con: u32,
+    ss_scl_hcnt: u32,
+    ss_scl_lcnt: u32,
+    fs_scl_hcnt: u32,
+    fs_scl_lcnt: u32,
+    /// Wire levels published to FUNCSEL-routed SCL/SDA pads, so a logic
+    /// analyzer clipped to this bus measures a waveform instead of a flat line.
+    lines: Option<std::sync::Arc<crate::peripherals::pad_lines::PadLines>>,
+    /// Frames of the transfer in flight, narrated as one transaction at STOP.
+    wire_frames: Vec<(u8, bool)>,
     intr_mask: u32,
     raw_intr: Cell<u32>,
     tx_abrt_source: Cell<u32>,
@@ -85,6 +108,63 @@ impl Rp2040I2c {
         // FIFO empty at reset → TX_EMPTY raw bit set (DW default behaviour).
         s.raw_intr.set(INTR_TX_EMPTY);
         s
+    }
+
+    /// The shared pad-line cell for this controller, created on first use at
+    /// bus wiring time. An open-drain bus with pull-ups idles high.
+    pub(crate) fn pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        use crate::peripherals::pad_lines::PadLines;
+        self.lines
+            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .clone()
+    }
+
+    /// Engine cycles in one SCL period, from the controller's own timing
+    /// registers. `IC_CON.SPEED` (bits [2:1]) picks the standard-mode or
+    /// fast-mode count pair; both count `clk_sys` periods, which is the
+    /// engine's cycle axis on this chip. Falls back to a floor when firmware
+    /// has not programmed timing, so a waveform is still shaped.
+    fn bit_time_cycles(&self) -> u64 {
+        let fast = (self.con >> 1) & 0b11 >= 2;
+        let (h, l) = if fast {
+            (self.fs_scl_hcnt, self.fs_scl_lcnt)
+        } else {
+            (self.ss_scl_hcnt, self.ss_scl_lcnt)
+        };
+        u64::from(h + l).max(16)
+    }
+
+    /// Record a frame this transfer put on the wire (published at STOP).
+    fn wire_push(&mut self, byte: u8, acked: bool) {
+        if self.lines.is_some() {
+            self.wire_frames.push((byte, acked));
+        }
+    }
+
+    /// Publish the completed transfer's waveform onto the routed pads. See
+    /// [`crate::peripherals::i2c_waveform`] for what a narrated waveform does
+    /// and does not model; this controller exchanges bytes with no modelled
+    /// wire time, so the narration is anchored to end at the present cycle.
+    fn wire_flush(&mut self) {
+        use crate::peripherals::i2c_waveform::I2cNarrator;
+        let Some(lines) = self.lines.clone() else {
+            self.wire_frames.clear();
+            return;
+        };
+        if self.wire_frames.is_empty() {
+            return;
+        }
+        let mut wave = I2cNarrator::new(LINE_SCL, LINE_SDA, self.bit_time_cycles());
+        wave.start();
+        for &(byte, acked) in &self.wire_frames {
+            wave.frame(byte, acked);
+        }
+        wave.stop();
+        self.wire_frames.clear();
+        let now = lines.tap_clock().unwrap_or(0);
+        let _fit = wave.emit_ending_at(&lines, now);
     }
 
     pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
@@ -218,6 +298,10 @@ impl Peripheral for Rp2040I2c {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
             IC_CON => self.con,
+            IC_SS_SCL_HCNT => self.ss_scl_hcnt,
+            IC_SS_SCL_LCNT => self.ss_scl_lcnt,
+            IC_FS_SCL_HCNT => self.fs_scl_hcnt,
+            IC_FS_SCL_LCNT => self.fs_scl_lcnt,
             IC_TAR => self.tar,
             IC_ENABLE => self.enable,
             IC_INTR_MASK => self.intr_mask,
@@ -260,6 +344,10 @@ impl Peripheral for Rp2040I2c {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             IC_CON => self.con = value,
+            IC_SS_SCL_HCNT => self.ss_scl_hcnt = value & 0xFFFF,
+            IC_SS_SCL_LCNT => self.ss_scl_lcnt = value & 0xFFFF,
+            IC_FS_SCL_HCNT => self.fs_scl_hcnt = value & 0xFFFF,
+            IC_FS_SCL_LCNT => self.fs_scl_lcnt = value & 0xFFFF,
             IC_TAR => self.tar = value & 0x3FF,
             IC_INTR_MASK => self.intr_mask = value,
             IC_ENABLE => {
@@ -276,6 +364,13 @@ impl Peripheral for Rp2040I2c {
                 self.set_raw(INTR_ACTIVITY);
                 // Consuming a command clears TX_EMPTY until the engine finishes.
                 self.clr_raw(INTR_TX_EMPTY);
+                // The address frame goes out either way; whether anyone ACKed
+                // is exactly what an analyzer should show.
+                let addressed = self.device_for(addr7).is_some();
+                let read = value & DATA_CMD_READ != 0;
+                if self.wire_frames.is_empty() {
+                    self.wire_push((addr7 << 1) | u8::from(read), addressed);
+                }
                 match self.device_for(addr7) {
                     None => {
                         self.set_raw(INTR_TX_ABRT);
@@ -296,10 +391,13 @@ impl Peripheral for Rp2040I2c {
                         if value & DATA_CMD_READ != 0 {
                             let b = self.attached_devices[idx].borrow_mut().read();
                             self.rx_byte.set(Some(b));
+                            // The master ACKs the byte it reads; the closing
+                            // NACK is implied by the STOP that follows.
+                            self.wire_push(b, !stop);
                         } else {
-                            self.attached_devices[idx]
-                                .borrow_mut()
-                                .write((value & 0xFF) as u8);
+                            let byte = (value & 0xFF) as u8;
+                            self.attached_devices[idx].borrow_mut().write(byte);
+                            self.wire_push(byte, true);
                         }
                         // Instant complete — FIFO empty again.
                         self.set_raw(INTR_TX_EMPTY);
@@ -308,6 +406,10 @@ impl Peripheral for Rp2040I2c {
                             self.set_raw(INTR_STOP_DET);
                         }
                     }
+                }
+                if stop {
+                    // The transaction closed: put its waveform on the pads.
+                    self.wire_flush();
                 }
             }
             _ => {}

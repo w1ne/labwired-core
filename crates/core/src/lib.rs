@@ -1764,8 +1764,20 @@ impl<C: Cpu> Machine<C> {
         }
         let now = self.total_cycles;
         if self.logic_capture.push_active() {
-            let events = self.bus.logic_tap.take_events();
+            let mut events = self.bus.logic_tap.take_events();
             if !events.is_empty() {
+                // `ingest_push` groups ADJACENT equal-cycle runs, so it needs
+                // ascending stamps. A bit engine pushes in engine order and is
+                // already sorted; a transaction-level controller narrating a
+                // completed phase via `LogicTap::push_at` emits past-stamped
+                // edges that can land after a live push from another
+                // peripheral. Sort only when that actually happened — the
+                // check is one pass over a queue that is empty on almost every
+                // boundary, and a stable sort keeps same-cycle last-wins order
+                // (so an already-sorted queue ingests byte-identically).
+                if events.windows(2).any(|w| w[0].cycle > w[1].cycle) {
+                    events.sort_by_key(|event| event.cycle);
+                }
                 self.logic_capture.ingest_push(&events, boundary, now);
             }
             // Re-arm the provisional stamp at the NEXT boundary so pad writes

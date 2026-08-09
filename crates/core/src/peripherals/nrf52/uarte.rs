@@ -27,6 +27,9 @@
 //!
 //! EVENTS: hardware-generated. SW write-1 is ignored; write-0 clears.
 
+use crate::peripherals::nrf52::pin_select::{NrfPinClaim, NrfPinClaims};
+use crate::peripherals::pad_lines::PadLines;
+use crate::peripherals::uart_waveform::{Parity, UartFraming, UartNarrator};
 use crate::{Bus, Peripheral, SimResult};
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{self, Write};
@@ -93,6 +96,34 @@ const OFF_TXD_AMOUNT: u64 = 0x54C;
 
 // CONFIG: bits [3:0] = hwfc|parity, bit 4 = paritytype; reset = 0
 const OFF_CONFIG: u64 = 0x56C;
+
+// ── CONFIG fields (nRF52840 PS v1.11 §6.34.9.30, p849) ───────────────────────
+// bit 0     HWFC   0 = Disabled, 1 = Enabled
+// bits[3:1] PARITY 0x0 = Excluded, 0x7 = Include EVEN parity bit
+// bit 4     STOP   0 = One stop bit, 1 = Two stop bits
+const CONFIG_PARITY_SHIFT: u32 = 1;
+const CONFIG_PARITY_MASK: u32 = 0x7;
+const CONFIG_PARITY_INCLUDED: u32 = 0x7;
+const CONFIG_STOP_TWO: u32 = 1 << 4;
+
+// ── ENABLE personalities (PS v1.11 §6.34.9.24 / §6.33.10.21) ─────────────────
+// 4 selects the legacy UART, 8 selects UARTE. Both drive TXD through PSEL.TXD,
+// so both make this instance's pin claim live.
+const ENABLE_MASK: u32 = 0xF;
+
+/// Line order for this UARTE's [`PadLines`]. TXD ONLY — see
+/// [`Nrf52Uarte::pad_lines_arc`].
+pub(crate) const UARTE_LINES: &[&str] = &["TXD"];
+pub(crate) const LINE_TXD: usize = 0;
+
+/// nRF52 core / HFCLK frequency. `BAUDRATE` is defined as
+/// `round(baud · 2^32 / 16 MHz)`, so one bit period in core cycles is
+/// `64 MHz · 2^32 / (BAUDRATE · 16 MHz)` = `2^34 / BAUDRATE`.
+const BIT_TIME_NUMERATOR: u64 = 1u64 << 34;
+
+/// Buffered TX bytes past which a transfer's narration is dropped rather than
+/// truncated. `TXD.MAXCNT` is 16 bits, so one EasyDMA transfer can be 64 KiB.
+const WIRE_BYTE_CAP: usize = 2_048;
 
 #[derive(Default)]
 pub struct Nrf52Uarte {
@@ -164,6 +195,31 @@ pub struct Nrf52Uarte {
     /// the shared handle at registration.
     trace: crate::bus::bus_trace::BusTrace,
     trace_name: String,
+    /// Live TXD level published to whichever pad `PSEL.TXD` selects, so a probe
+    /// clipped there measures the serial waveform instead of the GPIO output
+    /// latch. Created lazily by [`Self::pad_lines_arc`] at bus wiring time;
+    /// `None` when no GPIO port routes this UARTE's pad, and then nothing below
+    /// is buffered or narrated at all.
+    lines: Option<Arc<PadLines>>,
+    /// This instance's standing claim on the pad `PSEL.TXD` names. See
+    /// [`crate::peripherals::nrf52::pin_select`].
+    claim_txd: NrfPinClaim,
+    /// Bytes of the EasyDMA transfer in flight, buffered so the whole burst is
+    /// narrated as one contiguous waveform. See [`Self::wire_flush`].
+    wire_bytes: Vec<u8>,
+    /// Set when a transfer blew past [`WIRE_BYTE_CAP`], so its narration is
+    /// dropped whole rather than published truncated.
+    wire_overflow: bool,
+    /// The cycle the previous narration ran to, so the next one cannot reach
+    /// back over cycles it already painted.
+    ///
+    /// A UART is the one bus that really does flush burst after burst — a
+    /// `printk` loop is exactly that — and [`UartNarrator::emit_ending_at`]
+    /// would reach as far back as it liked, re-driving levels the capture layer
+    /// has already recorded and inventing transitions that never happened. The
+    /// I²C and SPI narrators here use the unbounded form because their
+    /// transactions are separated by idle bus; this one is not.
+    wire_cursor: u64,
 }
 
 impl std::fmt::Debug for Nrf52Uarte {
@@ -211,7 +267,137 @@ impl Nrf52Uarte {
         self.rx_source.lock().map(|q| q.len()).unwrap_or(0)
     }
 
+    /// The shared pad-line cell for this UARTE's TXD, created on first use.
+    /// Called at bus wiring time by `wire_nrf52_pads`; an idle serial line
+    /// rests HIGH (mark).
+    ///
+    /// TXD ONLY. `PSEL.RXD`, `PSEL.CTS` and `PSEL.RTS` are tracked registers
+    /// but nothing in this engine DRIVES those wires — RX arrives as queued
+    /// bytes with no timing, and flow control is not modelled at all. A pad
+    /// routed to one of them would report a confident constant idle level right
+    /// through incoming traffic, which is worse than the GPIO-latch fallback it
+    /// replaced because it looks authoritative. Same call as
+    /// `wire_rp2040_uart_pads`. They join the table when something drives them.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| Arc::new(PadLines::new(UARTE_LINES, &[true])))
+            .clone()
+    }
+
+    /// Join the chip's pin-claim table so `PSEL.TXD` decides which pad reads
+    /// this UARTE's wire. Config-build time only.
+    pub(crate) fn install_pin_claims(&mut self, claims: &Arc<NrfPinClaims>, txd_token: u32) {
+        self.claim_txd.install(claims.clone(), txd_token);
+        self.sync_pin_claims();
+    }
+
+    /// Republish the TXD claim from the live registers, after any write that
+    /// can move the pad (`PSEL.TXD`, `ENABLE`).
+    ///
+    /// Live under BOTH personalities. One MMIO window hosts UART0 and UARTE0,
+    /// selected by `ENABLE` (4 = legacy UART, 8 = UARTE), and both of them
+    /// drive the pin `PSEL.TXD` names — so gating on the UARTE value alone
+    /// would leave the Adafruit/Arduino nRF52 core, which uses the legacy path,
+    /// invisible.
+    fn sync_pin_claims(&mut self) {
+        let live = matches!(self.enable & ENABLE_MASK, ENABLE_UART_LEGACY | 8);
+        self.claim_txd.update(self.psel_txd, live);
+    }
+
+    /// One bit period in core cycles, from `BAUDRATE`.
+    ///
+    /// `BAUDRATE` is `round(baud · 2^32 / 16 MHz)` (nRF52840 PS v1.11
+    /// §6.34.9.27, p847 — `Baud115200 = 0x01D60000`, `Baud250000 =
+    /// 0x04000000`, `Baud1M = 0x10000000`), and the core runs at 64 MHz, so one
+    /// bit is `2^34 / BAUDRATE` cycles. At 115200 baud that is 555 cycles,
+    /// which is 64 MHz / 115 200 to within a cycle.
+    fn bit_time_cycles(&self) -> u64 {
+        if self.baudrate == 0 {
+            // A zero BAUDRATE transmits nothing on silicon. Nothing sane can be
+            // narrated from it; fall back to the reset rate rather than divide
+            // by zero or draw a waveform of zero-length bits.
+            return BIT_TIME_NUMERATOR / 0x01D7_E000;
+        }
+        (BIT_TIME_NUMERATOR / u64::from(self.baudrate)).max(2)
+    }
+
+    /// Character framing as `CONFIG` programs it (PS v1.11 §6.34.9.30, p849).
+    /// UARTE is 8 data bits, LSB first, always — the part has no word-length
+    /// field.
+    fn framing(&self) -> UartFraming {
+        let parity = if (self.config >> CONFIG_PARITY_SHIFT) & CONFIG_PARITY_MASK
+            == CONFIG_PARITY_INCLUDED
+        {
+            // "Include EVEN parity bit" — the only parity this part generates.
+            Parity::Even
+        } else {
+            Parity::None
+        };
+        UartFraming {
+            data_bits: 8,
+            parity,
+            stop_bits: if self.config & CONFIG_STOP_TWO != 0 {
+                2
+            } else {
+                1
+            },
+        }
+    }
+
+    /// Publish the buffered transfer's waveform onto the claimed TXD pad.
+    ///
+    /// The EasyDMA model completes a whole buffer in one shot, so the burst is
+    /// narrated as one contiguous run ending at the present cycle — the same
+    /// arrangement, and for the same reason, as every other transaction-level
+    /// narrator in the engine: the capture layer accepts stamps in the PAST
+    /// only, so a character that has not yet had time to cross has nowhere to
+    /// go.
+    fn wire_flush(&mut self) {
+        let overflowed = std::mem::take(&mut self.wire_overflow);
+        let Some(lines) = self.lines.clone() else {
+            self.wire_bytes.clear();
+            return;
+        };
+        if overflowed {
+            // The bytes really went out; we simply cannot draw that many edges.
+            // A truncated character list would decode to a message nobody sent.
+            self.wire_bytes.clear();
+            return;
+        }
+        if self.wire_bytes.is_empty() {
+            return;
+        }
+        let framing = self.framing();
+        let mut wave =
+            UartNarrator::with_lines(LINE_TXD, &[lines.level(LINE_TXD)], self.bit_time_cycles());
+        for byte in std::mem::take(&mut self.wire_bytes) {
+            wave.frame(byte, framing);
+        }
+        let now = lines.tap_clock().unwrap_or(0);
+        // A transfer early in a run has less history behind it than the
+        // waveform needs; the narrator compresses into what IS available rather
+        // than emitting a spike. The characters still decode; only the timebase
+        // gives, so the verdict is deliberately dropped.
+        let _fit = wave.emit_between(&lines, self.wire_cursor, now);
+        self.wire_cursor = now;
+    }
+
+    /// Buffer one transmitted byte for narration. Costs one branch when no pad
+    /// routes to this UARTE.
+    fn wire_push(&mut self, byte: u8) {
+        if self.lines.is_none() || self.wire_overflow {
+            return;
+        }
+        if self.wire_bytes.len() >= WIRE_BYTE_CAP {
+            self.wire_overflow = true;
+            self.wire_bytes.clear();
+            return;
+        }
+        self.wire_bytes.push(byte);
+    }
+
     fn emit_byte(&mut self, byte: u8) {
+        self.wire_push(byte);
         // The one place a TX byte leaves this UARTE, so the one place it is
         // traced. See `attach_bus_trace` for what this model recorded before:
         // nothing, anywhere.
@@ -368,8 +554,12 @@ impl Peripheral for Nrf52Uarte {
             OFF_INTENCLR => self.inten &= !value,
             // ERRORSRC: write-1-clear
             OFF_ERRORSRC => self.errorsrc &= !value,
-            // Enable
-            OFF_ENABLE => self.enable = value & 0xF,
+            // Enable. Moves which pad this instance drives: while disabled the
+            // TXD pin "behaves as a regular GPIO" (PS v1.11 §6.34.8, p836).
+            OFF_ENABLE => {
+                self.enable = value & 0xF;
+                self.sync_pin_claims();
+            }
             // Legacy UART TXD (PS §6.34): writing a byte transmits it through the
             // shift register and, once the shifter is free for the next byte,
             // raises EVENTS_TXDRDY. The Adafruit/Arduino nRF52 Uart::write does
@@ -383,13 +573,19 @@ impl Peripheral for Nrf52Uarte {
             // baud, and TX must have been armed by TASKS_STARTTX.
             OFF_TXD_LEGACY => {
                 self.emit_byte(value as u8);
+                // The legacy path has no burst: one byte per register write, so
+                // it is narrated immediately rather than accumulated.
+                self.wire_flush();
                 self.events_txdrdy = 1;
             }
             // RXD is a read-only receive register; writes are ignored.
             OFF_RXD_LEGACY => {}
             // PSEL
             OFF_PSEL_RTS => self.psel_rts = value,
-            OFF_PSEL_TXD => self.psel_txd = value,
+            OFF_PSEL_TXD => {
+                self.psel_txd = value;
+                self.sync_pin_claims();
+            }
             OFF_PSEL_CTS => self.psel_cts = value,
             OFF_PSEL_RXD => self.psel_rxd = value,
             // BAUDRATE
@@ -529,6 +725,9 @@ impl Nrf52Uarte {
             }
         }
         self.txd_amount = len as u32;
+        // The whole buffer has crossed as far as this model is concerned, so
+        // this is where the burst becomes narratable.
+        self.wire_flush();
 
         // Raise the TX-path events a polling driver waits on. The transfer is
         // modelled as instantaneous (whole buffer in one shot), so all of the

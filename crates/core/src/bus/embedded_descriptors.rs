@@ -651,6 +651,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "rp2040/i2c0.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/i2c0.yaml"
         )),
+        "rp2040/io_bank0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2040/io_bank0.yaml"
+        )),
         "rp2040/pio0.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/pio0.yaml"
         )),

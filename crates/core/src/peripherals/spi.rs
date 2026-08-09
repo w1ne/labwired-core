@@ -15,8 +15,10 @@
 use crate::{Bus, SimResult};
 use std::any::Any;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+use crate::peripherals::pad_lines::PadLines;
+use crate::peripherals::spi_waveform::{SpiFraming, SpiNarrator};
 
 /// Trait implemented by simulated SPI devices (peripherals attached to an SPI bus).
 ///
@@ -188,111 +190,61 @@ pub enum SpiSignal {
     Miso,
 }
 
-/// Push-mode logic-capture registration for the SPI line cell: which watch
-/// channels observe pads currently AF-routed to SCK / MOSI / MISO. Maintained
-/// by the STM32 GPIO model (which owns the routing truth) via
-/// [`SpiLineLevels::install_tap`]; consulted by [`SpiLineLevels::set`] so the
-/// bit engine pushes an edge at the exact moment it drives a line transition
-/// (event-driven capture, same pattern as the C3 `I2cLineLevels`).
-#[derive(Debug, Default)]
-struct SpiLineTapState {
-    tap: Option<crate::logic_capture::LogicTap>,
-    sck_chs: Vec<u32>,
-    mosi_chs: Vec<u32>,
-    miso_chs: Vec<u32>,
-}
-
-/// Live SCK/MOSI/MISO levels of one STM32 SPI controller's wire. The
-/// controller bit engine is the only writer; the STM32 `GpioPort` reads it for
-/// pads whose MODER/AFR (or F1 CRL/CRH CNF) route this SPI's alternate
-/// function, so `read_gpio_pad` — and the in-engine logic analyzer sampling
-/// through it — observes the real waveform on the routed pads. With push-mode
-/// capture armed on a routed pad, [`set`](Self::set) additionally reports each
-/// line transition into the shared logic tap at drive time.
+/// Live SCK/MOSI/MISO levels of one STM32 SPI controller's wire.
+///
+/// A thin, named face over [`PadLines`], the ONE pad-publication mechanism
+/// (see `peripherals::pad_lines`). The controller bit engine is the only
+/// writer; the STM32 `GpioPort` reads it for pads whose MODER/AFR (or F1
+/// CRL/CRH CNF) route this SPI's alternate function, so `read_gpio_pad` — and
+/// the in-engine logic analyzer sampling through it — observes the real
+/// waveform on the routed pads. With push-mode capture armed on a routed pad,
+/// [`set`](Self::set) additionally reports each line transition into the
+/// shared logic tap at drive time.
 #[derive(Debug)]
 pub struct SpiLineLevels {
-    sck: AtomicBool,
-    mosi: AtomicBool,
-    miso: AtomicBool,
-    tap: std::sync::Mutex<SpiLineTapState>,
+    lines: std::sync::Arc<PadLines>,
 }
+
+/// Line order for [`SpiLineLevels`]. The accessors index [`PadLines`] by
+/// `SpiSignal as usize`, so this order IS the enum's discriminant order —
+/// pinned by `spi_line_order_matches_signal_discriminants`.
+const SPI_LINES: &[&str] = &["SCK", "MOSI", "MISO"];
 
 impl SpiLineLevels {
     fn new(sck_idle: bool) -> Self {
         Self {
-            sck: AtomicBool::new(sck_idle),
-            mosi: AtomicBool::new(false),
-            miso: AtomicBool::new(false),
-            tap: std::sync::Mutex::new(SpiLineTapState::default()),
+            // MOSI/MISO idle low; SCK idles at CPOL.
+            lines: std::sync::Arc::new(PadLines::new(SPI_LINES, &[sck_idle, false, false])),
         }
+    }
+
+    /// The underlying pad lines, for a GPIO port to route pads to.
+    ///
+    /// A port routes a pad to a `(PadLines, line)` pair and knows nothing about
+    /// which peripheral owns it — that is what lets one routing mechanism serve
+    /// SPI, I²C and whatever publishes pads next.
+    pub(crate) fn pad_lines(&self) -> &std::sync::Arc<PadLines> {
+        &self.lines
     }
 
     pub fn sck(&self) -> bool {
-        self.sck.load(Ordering::Relaxed)
+        self.lines.level(SpiSignal::Sck as usize)
     }
 
     pub fn mosi(&self) -> bool {
-        self.mosi.load(Ordering::Relaxed)
+        self.lines.level(SpiSignal::Mosi as usize)
     }
 
     pub fn miso(&self) -> bool {
-        self.miso.load(Ordering::Relaxed)
+        self.lines.level(SpiSignal::Miso as usize)
     }
 
     pub fn level(&self, signal: SpiSignal) -> bool {
-        match signal {
-            SpiSignal::Sck => self.sck(),
-            SpiSignal::Mosi => self.mosi(),
-            SpiSignal::Miso => self.miso(),
-        }
+        self.lines.level(signal as usize)
     }
 
     fn set(&self, sck: bool, mosi: bool, miso: bool) {
-        let old_sck = self.sck.swap(sck, Ordering::Relaxed);
-        let old_mosi = self.mosi.swap(mosi, Ordering::Relaxed);
-        let old_miso = self.miso.swap(miso, Ordering::Relaxed);
-        if old_sck == sck && old_mosi == mosi && old_miso == miso {
-            return;
-        }
-        // A line actually transitioned: report it to any watch channels whose
-        // pads the GPIO AF routing currently maps here. Lock taken only on
-        // transitions (segment-boundary rate, not per engine cycle).
-        let t = self.tap.lock().unwrap();
-        if let Some(tap) = &t.tap {
-            if old_sck != sck {
-                for &ch in &t.sck_chs {
-                    tap.push(ch, sck);
-                }
-            }
-            if old_mosi != mosi {
-                for &ch in &t.mosi_chs {
-                    tap.push(ch, mosi);
-                }
-            }
-            if old_miso != miso {
-                for &ch in &t.miso_chs {
-                    tap.push(ch, miso);
-                }
-            }
-        }
-    }
-
-    /// Install (or clear, with `tap = None`) the push-capture registration.
-    /// Called by the STM32 GPIO model at watch install time and whenever a
-    /// write changes the routing of a watched pad, so the channel lists always
-    /// mirror the live MODER/AFR state.
-    pub(crate) fn install_tap(
-        &self,
-        tap: Option<crate::logic_capture::LogicTap>,
-        sck_chs: Vec<u32>,
-        mosi_chs: Vec<u32>,
-        miso_chs: Vec<u32>,
-    ) {
-        let mut t = self.tap.lock().unwrap();
-        t.tap = tap;
-        t.sck_chs = sck_chs;
-        t.mosi_chs = mosi_chs;
-        t.miso_chs = miso_chs;
+        self.lines.set(&[sck, mosi, miso]);
     }
 }
 
@@ -550,6 +502,17 @@ struct Nrf52SpiRegs {
     orc: u32,
 }
 
+/// `ENABLE` value that selects the SPIM personality on the shared
+/// SPIM/SPIS/SPI/TWIM/TWI/TWIS window (nRF52840 PS v1.11 §6.25.6.17, p733).
+const NRF52_ENABLE_SPIM: u32 = 7;
+/// `CONFIG` fields (nRF52840 PS v1.11 §6.25.6.22, p737).
+const NRF52_CONFIG_ORDER_LSB: u32 = 1 << 0;
+const NRF52_CONFIG_CPHA: u32 = 1 << 1;
+const NRF52_CONFIG_CPOL: u32 = 1 << 2;
+/// Buffered MOSI bytes past which a transfer's narration is dropped rather than
+/// truncated. See [`Spi::nrf52_wire_flush`].
+const NRF52_WIRE_BYTE_CAP: usize = 2_048;
+
 /// INTEN bit positions (PS §6.30 INTEN register).
 /// STOPPED=1, ENDRX=4, END=6, ENDTX=8.
 const INTEN_STOPPED: u32 = 1 << 1;
@@ -762,6 +725,16 @@ pub struct Spi {
     #[serde(skip)]
     nrf52_pending_start: bool,
 
+    /// nRF52 SPIM ONLY: this instance's standing claims on the pads
+    /// `PSEL.SCK` / `PSEL.MOSI` name. Nordic muxes at the peripheral, so THIS
+    /// is what decides which pad reads the wire published into `lines` — there
+    /// is no AF nibble at the port to ask. See
+    /// [`crate::peripherals::nrf52::pin_select`].
+    #[serde(skip)]
+    nrf52_claim_sck: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+    #[serde(skip)]
+    nrf52_claim_mosi: crate::peripherals::nrf52::pin_select::NrfPinClaim,
+
     /// Classic-SPI CR2 writable mask — a per-part delta on the shared classic
     /// layout. F1 implements 0xE7; F4 adds bit 4 (FRF, TI-mode) → 0xF7,
     /// silicon-confirmed on the bench F103 (0xE7) and F407 (0xF7). Set from the
@@ -852,6 +825,153 @@ impl Spi {
 
     fn is_nrf(&self) -> bool {
         matches!(self.regs, SpiRegs::Nrf52(_))
+    }
+
+    /// `true` when this instance carries the Nordic SPIM register file — the
+    /// layout whose pads are selected by `PSEL` rather than by an AF nibble.
+    /// Read by `SystemBus::wire_nrf52_pads` to pick the right wiring seam.
+    pub(crate) fn is_nrf_wire_layout(&self) -> bool {
+        self.is_nrf()
+    }
+
+    /// Join the chip's pin-claim table so `PSEL.SCK`/`PSEL.MOSI` decide which
+    /// pads read this SPIM's wire. Config-build time only; no-op on any layout
+    /// but the Nordic one.
+    pub(crate) fn install_nrf_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        sck_token: u32,
+        mosi_token: u32,
+    ) {
+        if !self.is_nrf() {
+            return;
+        }
+        self.nrf52_claim_sck.install(claims.clone(), sck_token);
+        self.nrf52_claim_mosi.install(claims.clone(), mosi_token);
+        self.sync_nrf_pin_claims();
+    }
+
+    /// Republish both claims from the live registers, after any write that can
+    /// move a pad — `PSEL.SCK`, `PSEL.MOSI` and `ENABLE`.
+    ///
+    /// The gate is `ENABLE == 7` (SPIM), not merely "nonzero": SPIM0/TWIM0
+    /// share one MMIO window and `ENABLE` picks which of them owns the pins
+    /// (nRF52840 PS v1.11 §6.25.6.17, p733 — Enabled = 7). With `ENABLE = 6`
+    /// the TWIM half is driving, and this half must not claim its pads.
+    fn sync_nrf_pin_claims(&mut self) {
+        let (enable, psel_sck, psel_mosi) = match &self.regs {
+            SpiRegs::Nrf52(r) => (r.enable & 0xF, r.psel_sck, r.psel_mosi),
+            _ => return,
+        };
+        let live = enable == NRF52_ENABLE_SPIM;
+        self.nrf52_claim_sck.update(psel_sck, live);
+        self.nrf52_claim_mosi.update(psel_mosi, live);
+    }
+
+    /// One SCK period in engine cycles, from `FREQUENCY`.
+    ///
+    /// `FREQUENCY` is an ENUMERATED field, not a divisor: nRF52840 PS v1.11
+    /// §6.25.6.19 (p734) lists K125 = 0x02000000 … M8 = 0x80000000, and then
+    /// breaks any formula you might have inferred with M16 = 0x0A000000 and
+    /// M32 = 0x14000000. So the table is transcribed, and an unrecognised value
+    /// falls back to the RESET value (K250) rather than being arithmetic'd into
+    /// a bit rate the part cannot produce.
+    fn nrf52_sck_bit_cycles(&self) -> u64 {
+        const CORE_HZ: u64 = 64_000_000;
+        let frequency = match &self.regs {
+            SpiRegs::Nrf52(r) => r.frequency,
+            _ => return 2,
+        };
+        let bps: u64 = match frequency {
+            0x0200_0000 => 125_000,
+            0x0400_0000 => 250_000,
+            0x0800_0000 => 500_000,
+            0x1000_0000 => 1_000_000,
+            0x2000_0000 => 2_000_000,
+            0x4000_0000 => 4_000_000,
+            0x8000_0000 => 8_000_000,
+            0x0A00_0000 => 16_000_000,
+            0x1400_0000 => 32_000_000,
+            // Reset value, and the honest answer for anything unlisted.
+            _ => 250_000,
+        };
+        (CORE_HZ / bps).max(2)
+    }
+
+    /// Frame shape from `CONFIG` (nRF52840 PS v1.11 §6.25.6.22, p737): bit 0
+    /// ORDER (0 = MsbFirst), bit 1 CPHA (0 = Leading), bit 2 CPOL
+    /// (0 = ActiveHigh). SPIM has no word-length field — frames are 8 bits.
+    ///
+    /// Returns `None` when `ORDER` selects LsbFirst. [`SpiNarrator`] draws
+    /// MSB-first only, and narrating an LSB-first transfer through it would
+    /// produce a trace that looks entirely plausible and decodes to the
+    /// bit-reversed byte — the single most damaging way to get a waveform
+    /// wrong. A gap is honest; a reversed byte is not. LsbFirst joins the
+    /// narrator when the narrator can draw it.
+    fn nrf52_framing(&self) -> Option<SpiFraming> {
+        let config = match &self.regs {
+            SpiRegs::Nrf52(r) => r.config,
+            _ => return None,
+        };
+        if config & NRF52_CONFIG_ORDER_LSB != 0 {
+            return None;
+        }
+        Some(SpiFraming {
+            cpol: config & NRF52_CONFIG_CPOL != 0,
+            cpha: config & NRF52_CONFIG_CPHA != 0,
+            bits: 8,
+        })
+    }
+
+    /// Publish a completed EasyDMA transfer's waveform onto the claimed pads.
+    ///
+    /// The transfer moves its whole buffer inside one `do_nrf52_easydma` call,
+    /// so the burst is narrated as ONE contiguous run ending at the present
+    /// cycle — the same arrangement as every other transaction-level narrator
+    /// here, and forced by the same constraint: `LogicCapture::ingest_push`
+    /// accepts stamps in the PAST only, so a byte that has not yet had time to
+    /// clock out has nowhere on the timeline to go.
+    fn nrf52_wire_flush(&mut self, mosi: &[u8]) {
+        if mosi.is_empty() {
+            return;
+        }
+        let Some(lines) = self.lines.clone() else {
+            return;
+        };
+        let Some(framing) = self.nrf52_framing() else {
+            return;
+        };
+        if mosi.len() > NRF52_WIRE_BYTE_CAP {
+            // TXD.MAXCNT is 16 bits — one transfer can be 64 KiB, and a
+            // full-frame display flush really is kilobytes. Drawing that many
+            // edges would allocate for a waveform no analyzer window can show,
+            // and truncating would decode to a transfer nobody performed.
+            return;
+        }
+        let pads = lines.pad_lines();
+        let mut wave = SpiNarrator::with_lines(
+            SpiSignal::Sck as usize,
+            SpiSignal::Mosi as usize,
+            // SPIM0/1/2 have no hardware CSN — firmware drives chip select from
+            // a plain GPIO — so there is no CSN wire to narrate. (SPIM3 does;
+            // no chip config maps it, so it is out of scope rather than
+            // assumed.) PS v1.11 §6.25.3, p726.
+            None,
+            &[
+                pads.level(SpiSignal::Sck as usize),
+                pads.level(SpiSignal::Mosi as usize),
+                pads.level(SpiSignal::Miso as usize),
+            ],
+            self.nrf52_sck_bit_cycles(),
+        );
+        for &byte in mosi {
+            wave.frame(u16::from(byte), framing);
+        }
+        let now = pads.tap_clock().unwrap_or(0);
+        // A transfer early in a run has less history behind it than the
+        // waveform needs; the narrator compresses to fit rather than emitting a
+        // spike. The bytes still decode; only the timebase gives.
+        let _fit = wave.emit_ending_at(pads, now);
     }
 
     /// STM32 register write with transfer-engine side effects. Only called on
@@ -1210,7 +1330,16 @@ impl Spi {
     /// `Arc` to the STM32 GPIO ports carrying this SPI's AF pads).
     pub(crate) fn line_levels_arc(&mut self) -> Arc<SpiLineLevels> {
         if self.lines.is_none() {
-            let cpol = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr1 & (1 << 1) != 0);
+            // SCK idles at the programmed polarity, and every layout spells
+            // that differently: STM32 CR1.CPOL (bit 1), nRF52 CONFIG.CPOL
+            // (bit 2, PS v1.11 §6.25.6.22 p737). Reading only the STM32 bit
+            // here would park an nRF52 SPIM's clock at the wrong rest level and
+            // make every mode-2/3 trace start with a phantom edge.
+            let cpol = match &self.regs {
+                SpiRegs::Stm32(r) => r.cr1 & (1 << 1) != 0,
+                SpiRegs::Nrf52(r) => r.config & NRF52_CONFIG_CPOL != 0,
+                _ => false,
+            };
             self.lines = Some(Arc::new(SpiLineLevels::new(cpol)));
         }
         self.lines.as_ref().unwrap().clone()
@@ -1457,6 +1586,11 @@ impl crate::Peripheral for Spi {
             if start_triggered {
                 self.nrf52_pending_start = true;
             }
+            // ENABLE (0x500) and PSEL.SCK/MOSI (0x508/0x50C) all move which pad
+            // this controller's wire reaches. Republishing on every nRF write
+            // rather than only on those three offsets keeps the ONE call site:
+            // `update` is two comparisons when nothing moved.
+            self.sync_nrf_pin_claims();
             return Ok(());
         }
 
@@ -1520,6 +1654,8 @@ impl crate::Peripheral for Spi {
             if start_triggered {
                 self.nrf52_pending_start = true;
             }
+            // See the byte-write path: one call site for every pad-moving write.
+            self.sync_nrf_pin_claims();
             return Ok(());
         }
         // STM32H5: 32-bit registers must be written atomically — a word write
@@ -1803,6 +1939,14 @@ impl Spi {
 
         let mut txd_amount: u32 = 0;
         let mut rxd_amount: u32 = 0;
+        // MOSI bytes as they leave, for the pad narration below. Collected only
+        // when a GPIO port routes this controller's pads and the burst is short
+        // enough to draw — see `nrf52_wire_flush`.
+        let mut mosi_wire: Vec<u8> = if self.lines.is_some() && n_clocks <= NRF52_WIRE_BYTE_CAP {
+            Vec::with_capacity(n_clocks)
+        } else {
+            Vec::new()
+        };
 
         for i in 0..n_clocks {
             // Read MOSI byte: TX buffer while available, else ORC.
@@ -1814,6 +1958,12 @@ impl Spi {
 
             if i < txd_maxcnt {
                 txd_amount += 1;
+            }
+            if mosi_wire.capacity() > 0 {
+                // ORC padding is on the wire too: the clock keeps running past
+                // TXD.MAXCNT to shift the extra RX bytes in, and the over-read
+                // character is what MOSI carries while it does.
+                mosi_wire.push(mosi);
             }
 
             // Clock the byte through the attached device (or loopback /
@@ -1849,11 +1999,26 @@ impl Spi {
             r.events_endrx = 1;
             r.events_end = 1;
         }
+        // The whole buffer has clocked out as far as this model is concerned,
+        // so this is where the burst becomes narratable.
+        self.nrf52_wire_flush(&mosi_wire);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    /// The named accessors index `PadLines` by `SpiSignal as usize`. Reordering
+    /// either the enum or `SPI_LINES` alone would silently publish MOSI's level
+    /// on the SCK lane — a waveform that looks plausible and is wrong.
+    #[test]
+    fn spi_line_order_matches_signal_discriminants() {
+        use super::{SpiSignal, SPI_LINES};
+        assert_eq!(SPI_LINES[SpiSignal::Sck as usize], "SCK");
+        assert_eq!(SPI_LINES[SpiSignal::Mosi as usize], "MOSI");
+        assert_eq!(SPI_LINES[SpiSignal::Miso as usize], "MISO");
+        assert_eq!(SPI_LINES.len(), 3);
+    }
+
     use super::{Spi, SpiDevice, SpiRegisterLayout};
     use crate::Peripheral;
 

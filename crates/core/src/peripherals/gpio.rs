@@ -504,23 +504,6 @@ struct PortTap {
     tap: crate::logic_capture::LogicTap,
     watched: Vec<(u8, u32)>,
     scratch: Vec<Option<bool>>,
-    line_chs: Vec<[Vec<u32>; 3]>,
-}
-
-/// One AF-routed SPI pad on this port, installed at config-build time by
-/// [`crate::bus::SystemBus::wire_stm32_spi_pads`] from the per-family static
-/// AF table (datasheet AF maps). `af` is the AFR nibble the pad must select
-/// (STM32 V2 ports); `None` on F1 ports, whose pin→signal mapping is fixed
-/// (default, no AFIO remap — remap is not modeled).
-#[derive(Debug, Clone)]
-pub(crate) struct SpiPadRoute {
-    pin: u8,
-    af: Option<u8>,
-    signal: crate::peripherals::spi::SpiSignal,
-    /// Signal name surfaced through `gpio_routing().func` (e.g. "SPI1_SCK").
-    func: &'static str,
-    /// Index into [`GpioPort::spi_cells`].
-    cell: usize,
 }
 
 /// GPIO port — a per-family register model (see [`GpioFamily`]) plus optional
@@ -535,11 +518,10 @@ pub struct GpioPort {
     /// watched pad-level changes into the tap. Not snapshot state — the watch
     /// is re-armed by the frontend after a resume.
     tap: Option<PortTap>,
-    /// SPI line-level cells wired to this port (deduplicated), plus the pads
-    /// routed to them. Installed once at config-build time; empty on buses
-    /// without a wired STM32 SPI.
-    spi_cells: Vec<std::sync::Arc<crate::peripherals::spi::SpiLineLevels>>,
-    spi_routes: Vec<SpiPadRoute>,
+    /// Peripheral pad-line cells wired to this port (deduplicated), plus the
+    /// pads routed to them. Installed once at config-build time; empty on buses
+    /// with no AF-routed peripheral.
+    pad_routes: crate::peripherals::pad_routing::PadRoutes,
     /// Offset of this port's MMIO window inside the family's register space,
     /// i.e. the SVD `addressBlock.offset`. Zero for every port whose window
     /// starts where its register map starts, which is all of them except the
@@ -557,6 +539,20 @@ pub struct GpioPort {
     /// the model how far in it starts is the only arrangement in which both
     /// ports are addressable at once.
     window_offset: u64,
+    /// nRF52 ONLY: the shared peripheral-side pin-claim table (see
+    /// [`crate::peripherals::nrf52::pin_select`]) and this port's `PSEL.PORT`
+    /// number.
+    ///
+    /// Every other family answers "who drives pad N" from its own registers, so
+    /// this is `None` on them and costs one branch. Nordic has no such register
+    /// — the peripherals name the pins — so the answer has to come from
+    /// somewhere the port can reach, and this is it. Installed once at bus
+    /// wiring time by `SystemBus::wire_nrf52_pads`; a port that never gets one
+    /// simply has no routes bound either, and behaves exactly as before.
+    nrf_claims: Option<(
+        std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        u8,
+    )>,
 }
 
 impl Default for GpioPort {
@@ -570,9 +566,9 @@ impl GpioPort {
         Self {
             family,
             tap: None,
-            spi_cells: Vec::new(),
-            spi_routes: Vec::new(),
+            pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
             window_offset: 0,
+            nrf_claims: None,
         }
     }
 
@@ -657,6 +653,30 @@ impl GpioPort {
 
     /// Register layout of this port (used by the SPI pad-wiring helper to
     /// select the matching AF table).
+    /// How far into its register map this port's MMIO window starts. See
+    /// [`GpioPort::window_offset`].
+    ///
+    /// Read by `SystemBus::wire_nrf52_pads` as the structural marker of the
+    /// nRF53/nRF54 GPIO generation: those parts base a port at `OUT` and
+    /// declare `reg_offset: 0x500`, the nRF52 parts start at the block base and
+    /// declare nothing. The PSEL field layout this engine decodes is verified
+    /// on the nRF52840 only, so a port with an offset window is left unwired
+    /// rather than routed on an assumption.
+    pub(crate) fn window_offset(&self) -> u64 {
+        self.window_offset
+    }
+
+    /// Hand this port the shared nRF52 pin-claim table and tell it which
+    /// `PSEL.PORT` number it is. Config-build time only; see
+    /// [`GpioPort::nrf_claims`].
+    pub(crate) fn set_nrf_pin_claims(
+        &mut self,
+        claims: std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        port: u8,
+    ) {
+        self.nrf_claims = Some((claims, port));
+    }
+
     pub(crate) fn register_layout(&self) -> GpioRegisterLayout {
         match &self.family {
             GpioFamily::Stm32F1(_) => GpioRegisterLayout::Stm32F1,
@@ -666,86 +686,116 @@ impl GpioPort {
         }
     }
 
-    /// Install one SPI AF pad route (config-build time; see
-    /// [`crate::bus::SystemBus::wire_stm32_spi_pads`]). Cells are deduplicated
-    /// by identity so several pads of one controller share one entry.
-    pub(crate) fn add_spi_pad_route(
+    /// Install one AF pad route (config-build time; see
+    /// [`crate::bus::SystemBus::wire_stm32_spi_pads`]).
+    ///
+    /// `line` indexes `cell`'s lines — for SPI that is `SpiSignal as usize`,
+    /// for I²C the SCL/SDA order the controller declared. `af` is the AFR
+    /// nibble the pad must select on V2 ports, or `None` on F1 whose mapping is
+    /// fixed. Everything past this call is the shared seam's
+    /// ([`crate::peripherals::pad_routing`]).
+    pub(crate) fn add_pad_route(
         &mut self,
-        cell: &std::sync::Arc<crate::peripherals::spi::SpiLineLevels>,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         pin: u8,
         af: Option<u8>,
-        signal: crate::peripherals::spi::SpiSignal,
+        line: usize,
         func: &'static str,
     ) {
-        let cell_idx = match self
-            .spi_cells
-            .iter()
-            .position(|c| std::sync::Arc::ptr_eq(c, cell))
-        {
-            Some(i) => i,
-            None => {
-                self.spi_cells.push(cell.clone());
-                self.spi_cells.len() - 1
-            }
-        };
-        self.spi_routes.push(SpiPadRoute {
-            pin,
-            af,
-            signal,
-            func,
-            cell: cell_idx,
-        });
+        self.add_pad_route_selector(cell, pin, af.map(u32::from), line, func);
     }
 
-    /// The active SPI route for `pin`, if the family registers currently hand
-    /// the pad to that SPI signal: V2 = MODER selects AF and the AFR nibble
-    /// selects the route's AF number; F1 = the pin is an AF output (MODE!=0,
-    /// CNF 10/11) on the fixed default mapping. F1 MISO (an input-mode pad on
-    /// real silicon) is intentionally NOT routed — an honest limit, so a plain
-    /// GPIO input on that pin never silently reads the SPI wire.
-    fn active_spi_route<'a>(
-        family: &GpioFamily,
-        routes: &'a [SpiPadRoute],
+    /// Install one pad route against a full-width selector.
+    ///
+    /// [`add_pad_route`](Self::add_pad_route) narrows to an AF NIBBLE because
+    /// that is all an STM32 pad can select. The nRF52 selector is not a
+    /// register field at all — it is a claim token minted by
+    /// `SystemBus::wire_nrf52_pads`, one per (peripheral instance, signal), so
+    /// it needs the whole `u32`. Both land in the same
+    /// [`PadRoutes`](crate::peripherals::pad_routing) binding; only the width
+    /// of the value differs.
+    pub(crate) fn add_pad_route_selector(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
         pin: u8,
-    ) -> Option<&'a SpiPadRoute> {
-        routes.iter().find(|r| {
-            if r.pin != pin {
-                return false;
+        selector: Option<u32>,
+        line: usize,
+        func: &'static str,
+    ) {
+        self.pad_routes.bind(cell, pin, selector, line, func);
+    }
+
+    /// Every signal name bound to this port's pads, live or not — the
+    /// bus-visibility reporting seam. See
+    /// [`crate::peripherals::pad_routing::PadRoutes::bound_functions`] for why
+    /// this is the static question and `func()` is the live one.
+    pub(crate) fn bound_pad_functions(&self) -> Vec<&'static str> {
+        self.pad_routes.bound_functions()
+    }
+
+    /// The alternate function `pin` currently selects, decoded from this
+    /// family's own registers — the selector the shared routing seam resolves
+    /// bindings against.
+    ///
+    /// V2: `MODER` must select AF, and the answer is the `AFRL`/`AFRH` nibble.
+    /// F1: the pad is an AF output when `MODE != 0` and `CNF >= 0b10`; the
+    /// mapping is fixed (no AFIO remap modelled) so the value carries no
+    /// information and any bound route matches. F1 MISO — an input-mode pad on
+    /// real silicon — is intentionally NOT routed, so a plain GPIO input on
+    /// that pin never silently reads the SPI wire.
+    ///
+    /// nRF52: the port HAS no such register — Nordic muxes at the peripheral,
+    /// which names its pin in `PSEL.*`. The answer therefore comes from the
+    /// shared claim table the peripherals publish into
+    /// ([`crate::peripherals::nrf52::pin_select`]), and the "selector" is a
+    /// claim token rather than a decoded register field. Same shape, opposite
+    /// direction; [`PadRoutes`](crate::peripherals::pad_routing) cannot tell.
+    fn selected_function(
+        family: &GpioFamily,
+        nrf_claims: Option<&(
+            std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+            u8,
+        )>,
+        pin: u8,
+    ) -> Option<u32> {
+        match family {
+            GpioFamily::Nrf52(_) => {
+                let (claims, port) = nrf_claims?;
+                claims.selector(*port, pin)
             }
-            match (family, r.af) {
-                (GpioFamily::Stm32V2(g), Some(af)) => {
-                    if (g.read_reg(0x00) >> (pin * 2)) & 0b11 != 0b10 {
-                        return false;
-                    }
-                    let (afr_off, sh) = if pin < 8 {
-                        (0x20, (pin * 4) as u32)
-                    } else {
-                        (0x24, ((pin - 8) * 4) as u32)
-                    };
-                    ((g.read_reg(afr_off) >> sh) & 0xF) as u8 == af
+            GpioFamily::Stm32V2(g) => {
+                if (g.read_reg(0x00) >> (pin * 2)) & 0b11 != 0b10 {
+                    return None;
                 }
-                (GpioFamily::Stm32F1(g), None) => {
-                    let cr = g.read_reg(if pin < 8 { 0x00 } else { 0x04 });
-                    let shift = ((pin % 8) * 4) as u32;
-                    let mode = (cr >> shift) & 0b11;
-                    let cnf = (cr >> (shift + 2)) & 0b11;
-                    mode != 0 && cnf >= 0b10
-                }
-                _ => false,
+                let (afr_off, sh) = if pin < 8 {
+                    (0x20, (pin * 4) as u32)
+                } else {
+                    (0x24, ((pin - 8) * 4) as u32)
+                };
+                Some((g.read_reg(afr_off) >> sh) & 0xF)
             }
-        })
+            GpioFamily::Stm32F1(g) => {
+                let cr = g.read_reg(if pin < 8 { 0x00 } else { 0x04 });
+                let shift = ((pin % 8) * 4) as u32;
+                let mode = (cr >> shift) & 0b11;
+                let cnf = (cr >> (shift + 2)) & 0b11;
+                (mode != 0 && cnf >= 0b10).then_some(0)
+            }
+            _ => None,
+        }
     }
 
     /// Direction-aware pad level — the single truth `read_gpio_pad` and the
     /// push-capture tap both read. Pads whose MODER/AFR (or F1 CNF) route an
-    /// SPI alternate function report the live wire level from the shared
-    /// [`SpiLineLevels`](crate::peripherals::spi::SpiLineLevels) cell; every
-    /// other pad falls back to the family register truth.
+    /// alternate function report the live wire level from the shared
+    /// [`PadLines`](crate::peripherals::pad_lines::PadLines) cell the owning
+    /// peripheral publishes into; every other pad falls back to the family
+    /// register truth.
     fn pad_level(&self, pin: u8) -> Option<bool> {
-        if !self.spi_routes.is_empty() {
-            if let Some(r) = Self::active_spi_route(&self.family, &self.spi_routes, pin) {
-                return Some(self.spi_cells[r.cell].level(r.signal));
-            }
+        if let Some(level) = self.pad_routes.level(pin, |p| {
+            Self::selected_function(&self.family, self.nrf_claims.as_ref(), p)
+        }) {
+            return Some(level);
         }
         self.family.pad_level(pin)
     }
@@ -782,55 +832,26 @@ impl GpioPort {
             }
         }
         self.tap = Some(t);
-        self.sync_spi_line_taps();
+        self.sync_pad_line_taps();
     }
 
-    /// Per-cell channel lists for watched pads currently routed to that
-    /// cell's SCK/MOSI/MISO — the pads whose level changes are driven by the
-    /// SPI bit engine rather than GPIO writes.
-    fn routed_spi_channels(&self) -> Vec<[Vec<u32>; 3]> {
-        use crate::peripherals::spi::SpiSignal;
-        let mut per_cell: Vec<[Vec<u32>; 3]> = self
-            .spi_cells
-            .iter()
-            .map(|_| [Vec::new(), Vec::new(), Vec::new()])
-            .collect();
-        if let Some(t) = &self.tap {
-            for &(pin, ch) in &t.watched {
-                if let Some(r) = Self::active_spi_route(&self.family, &self.spi_routes, pin) {
-                    let slot = match r.signal {
-                        SpiSignal::Sck => 0,
-                        SpiSignal::Mosi => 1,
-                        SpiSignal::Miso => 2,
-                    };
-                    per_cell[r.cell][slot].push(ch);
-                }
-            }
-        }
-        per_cell
-    }
-
-    /// Push the current routed-channel lists into the shared SPI line cells,
-    /// but only where they changed (avoids mutex traffic on unrelated writes).
-    fn sync_spi_line_taps(&mut self) {
-        if self.spi_cells.is_empty() {
+    /// Re-register watched pads with the wires that drive them, so a pad that
+    /// changed hands keeps pushing edges from the correct source.
+    fn sync_pad_line_taps(&mut self) {
+        if self.pad_routes.is_empty() {
             return;
         }
-        let per_cell = self.routed_spi_channels();
-        let Some(t) = &mut self.tap else {
+        let Some(t) = self.tap.take() else {
             return;
         };
-        for (i, chs) in per_cell.into_iter().enumerate() {
-            if t.line_chs[i] != chs {
-                self.spi_cells[i].install_tap(
-                    Some(t.tap.clone()),
-                    chs[0].clone(),
-                    chs[1].clone(),
-                    chs[2].clone(),
-                );
-                t.line_chs[i] = chs;
-            }
-        }
+        // `family` is borrowed by the closure while `pad_routes` is borrowed
+        // mutably; split the borrow by moving the routes out for the call.
+        let mut routes = std::mem::take(&mut self.pad_routes);
+        routes.sync_taps(&t.tap, &t.watched, |pin| {
+            Self::selected_function(&self.family, self.nrf_claims.as_ref(), pin)
+        });
+        self.pad_routes = routes;
+        self.tap = Some(t);
     }
 }
 
@@ -942,11 +963,18 @@ impl crate::Peripheral for GpioPort {
                     _ => GpioMode::Analog,
                 }
             }
-            // nRF52 / Kinetis: a plain DIR register (nRF DIR @0x514, Kinetis PDDR
-            // @0x14) — bit set = output, clear = input. No AF concept at the GPIO
-            // port (peripheral routing is elsewhere), so func stays None.
+            // nRF52: a plain DIR register (@0x514) — bit set = output, clear =
+            // input — and no AF field anywhere at the port. The alternate
+            // function is nonetheless REAL here: a peripheral whose `PSEL.*`
+            // names this pad owns it, and the port's DIR/OUT are not what drives
+            // it. So the AF verdict comes from the claim table, exactly as
+            // `pad_level` reads its level from there. nRF52840 PS v1.11 §6.31.6
+            // (p790): while the peripheral is disabled "the pins will behave as
+            // regular GPIOs" — which is the `None` branch below.
             GpioFamily::Nrf52(g) => {
-                if (g.read_reg(0x514) & (1u32 << pin)) != 0 {
+                if Self::selected_function(&self.family, self.nrf_claims.as_ref(), pin).is_some() {
+                    GpioMode::Af
+                } else if (g.read_reg(0x514) & (1u32 << pin)) != 0 {
                     GpioMode::Output
                 } else {
                     GpioMode::Input
@@ -960,13 +988,15 @@ impl crate::Peripheral for GpioPort {
                 }
             }
         };
-        // func: a pad whose AF routing resolves to a wired SPI signal names it
-        // ("SPI1_SCK"); otherwise STM32 V2 exposes the raw AFR nibble → "AF<n>"
-        // (no full AF→signal table; that is out of scope). Everything else:
-        // None — null over a guess.
+        // func: a pad whose AF routing resolves to a wired peripheral signal
+        // names it ("SPI1_SCK", "I2C1_SDA"); otherwise STM32 V2 exposes the raw
+        // AFR nibble → "AF<n>" (no full AF→signal table; that is out of scope).
+        // Everything else: None — null over a guess.
         let func = if mode == GpioMode::Af {
-            if let Some(r) = Self::active_spi_route(&self.family, &self.spi_routes, pin) {
-                Some(r.func.to_string())
+            if let Some(func) = self.pad_routes.func(pin, |p| {
+                Self::selected_function(&self.family, self.nrf_claims.as_ref(), p)
+            }) {
+                Some(func.to_string())
             } else if let GpioFamily::Stm32V2(g) = &self.family {
                 let (afr_off, sh) = if pin < 8 {
                     (0x20, (pin * 4) as u32)
@@ -1005,23 +1035,17 @@ impl crate::Peripheral for GpioPort {
     ) -> bool {
         if watched.is_empty() {
             self.tap = None;
-            for cell in &self.spi_cells {
-                cell.install_tap(None, Vec::new(), Vec::new(), Vec::new());
-            }
+            self.pad_routes.clear_taps();
         } else {
             self.tap = Some(PortTap {
                 tap: tap.clone(),
                 watched: watched.to_vec(),
                 scratch: vec![None; watched.len()],
-                // Seeded stale so the sync below always installs the current
-                // routing into every wired line cell.
-                line_chs: self
-                    .spi_cells
-                    .iter()
-                    .map(|_| [vec![u32::MAX], vec![u32::MAX], vec![u32::MAX]])
-                    .collect(),
             });
-            self.sync_spi_line_taps();
+            // Seeded stale so the sync below always installs the current
+            // routing into every wired line cell.
+            self.pad_routes.invalidate_registrations();
+            self.sync_pad_line_taps();
         }
         true
     }

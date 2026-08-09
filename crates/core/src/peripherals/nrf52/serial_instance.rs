@@ -25,6 +25,12 @@ const OFF_ENABLE: u64 = 0x500;
 const ENABLE_TWIM: u32 = 6;
 const ENABLE_SPIM: u32 = 7;
 const ENABLE_MASK: u32 = 0xF;
+/// The PSEL block: 0x508 and 0x50C are TWIM's SCL/SDA and SPIM's SCK/MOSI —
+/// the SAME two words on silicon — and 0x510/0x514 continue it (SPIM MISO,
+/// SPIM CSN). One register file, personality-selected: nRF52840 PS v1.11
+/// §6.31.7 (TWIM, p791) against §6.25.6 (SPIM, p727).
+const OFF_PSEL_FIRST: u64 = 0x508;
+const OFF_PSEL_LAST: u64 = 0x514;
 
 /// Unified SPIM0/TWIM0 serial instance at a single MMIO base.
 ///
@@ -68,6 +74,43 @@ impl Nrf52SerialInstance {
     /// The SPIM sub-peripheral's attached SPI devices, in attach order.
     pub fn attached_spi_devices_mut(&mut self) -> &mut [Box<dyn SpiDevice>] {
         &mut self.spim.attached_devices
+    }
+
+    /// The TWIM half's SCL/SDA pad-line cell (bus wiring time only).
+    pub(crate) fn twim_pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        self.twim.pad_lines_arc()
+    }
+
+    /// The SPIM half's SCK/MOSI/MISO pad-line cell (bus wiring time only).
+    pub(crate) fn spim_pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        self.spim.line_levels_arc().pad_lines().clone()
+    }
+
+    /// Give the TWIM half its pin claims. Its `sync_pin_claims` gates on
+    /// `ENABLE == 6`, so the two halves of this window can never both hold the
+    /// same pad.
+    pub(crate) fn install_twim_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        scl_token: u32,
+        sda_token: u32,
+    ) {
+        self.twim.install_pin_claims(claims, scl_token, sda_token);
+    }
+
+    /// Give the SPIM half its pin claims; gated on `ENABLE == 7`.
+    pub(crate) fn install_spim_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        sck_token: u32,
+        mosi_token: u32,
+    ) {
+        self.spim
+            .install_nrf_pin_claims(claims, sck_token, mosi_token);
     }
 
     fn active(&self) -> u32 {
@@ -137,7 +180,22 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.write_u32(offset, value),
             ENABLE_SPIM => self.spim.write_u32(offset, value),
-            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to
+            // TWIM — and, for the PSEL block ONLY, to SPIM as well.
+            //
+            // On silicon there is one register file behind this window and
+            // ENABLE selects a personality, so 0x508/0x50C ARE the same two
+            // words whether you call them PSEL.SCL/SDA or PSEL.SCK/MOSI. The
+            // TWIM-only shadow was enough while the values were merely read
+            // back, but they now ROUTE: nrfx and Zephyr pinctrl both program
+            // PSEL while the instance is disabled and set ENABLE afterwards, so
+            // a SPIM0 whose PSEL never reached the SPIM half would enable onto
+            // two Disconnected pins and its waveform would reach no pad at all —
+            // silently, with every register read still correct.
+            _ if (OFF_PSEL_FIRST..=OFF_PSEL_LAST).contains(&offset) => {
+                self.twim.write_u32(offset, value)?;
+                self.spim.write_u32(offset, value)
+            }
             _ => self.twim.write_u32(offset, value),
         }
     }

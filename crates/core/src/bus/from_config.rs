@@ -872,10 +872,37 @@ impl SystemBus {
         // the C3 GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
+        // matrix rather than an AF nibble.
+        bus.wire_esp32s3_i2c_pads();
+        // Same for classic ESP32 (LX6), whose matrix indices are 29/30 —
+        // neither the C3's 53/54 nor the S3's 89/90.
+        bus.wire_esp32_i2c_pads();
+        // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
+        bus.wire_rp2040_i2c_pads();
+        // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
+        // the routed pad and not just console text.
+        bus.wire_rp2040_uart_pads();
+        // And the RP2040 SPI controllers' SCK/MOSI/CSn, so a probe on an SPI pad
+        // measures the shifted bytes rather than the SIO output latch. MISO is
+        // deliberately unrouted — nothing drives it.
+        bus.wire_rp2040_spi_pads();
         // STM32: share each classic/FIFO SPI bit engine's live SCK/MOSI/MISO
         // line levels with the STM32 GPIO ports so AF-routed pads carry the
         // real waveform. No-op for every other chip.
         bus.wire_stm32_spi_pads();
+        // Same for each STM32 I²C controller's SCL/SDA, so that bus is
+        // measurable too rather than reading as a flat line.
+        bus.wire_stm32_i2c_pads();
+        // And each USART's TX/RX, so serial output is a waveform on the routed
+        // AF pad rather than the idle GPIO latch.
+        bus.wire_stm32_uart_pads();
+        // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
+        // name. Unlike the four above this is not a datasheet AF table — the
+        // pad has no function register on this family, so the peripherals
+        // publish which pin they claim and the port reads it. No-op for every
+        // other chip.
+        bus.wire_nrf52_pads();
         // Resolve declared per-peripheral RCC clock-gates now that every
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.

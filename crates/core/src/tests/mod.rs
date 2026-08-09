@@ -24,6 +24,10 @@ pub mod logic_capture;
 pub mod logic_capture_differential;
 
 #[cfg(test)]
+pub mod esp32_i2c_waveform;
+#[cfg(test)]
+pub mod esp32s3_i2c_waveform;
+#[cfg(test)]
 pub mod machine_advance;
 #[cfg(test)]
 pub mod nrf52;
@@ -35,7 +39,13 @@ pub mod pre_merge_lane_covers_browser;
 #[cfg(test)]
 pub mod rp2040;
 #[cfg(test)]
+pub mod rp2040_i2c_waveform;
+#[cfg(test)]
 pub mod rp2040_spi_carries_a_byte;
+#[cfg(test)]
+pub mod rp2040_spi_waveform;
+#[cfg(test)]
+pub mod rp2040_uart_waveform;
 #[cfg(test)]
 pub mod scb_reset;
 #[cfg(test)]
@@ -43,7 +53,13 @@ pub mod scheduler_lane_coverage;
 #[cfg(test)]
 pub mod simctl_machine;
 #[cfg(test)]
+pub mod stm32_i2c_waveform;
+#[cfg(test)]
+pub mod stm32_legacy_i2c_waveform;
+#[cfg(test)]
 pub mod stm32_spi_waveform;
+#[cfg(test)]
+pub mod stm32_uart_waveform;
 #[cfg(test)]
 pub mod test_cycles;
 #[cfg(test)]

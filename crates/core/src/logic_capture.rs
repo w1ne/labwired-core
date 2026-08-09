@@ -190,6 +190,14 @@ impl LogicTap {
         self.shared.clock.store(cycle, Ordering::Relaxed);
     }
 
+    /// The current provisional stamp — "now" as far as pad pushes are
+    /// concerned. A narrator anchoring a completed phase reads this to place
+    /// its edges in the cycles leading up to the present.
+    #[inline]
+    pub fn clock(&self) -> u64 {
+        self.shared.clock.load(Ordering::Relaxed)
+    }
+
     /// Record a pad level for watched channel `ch`, stamped with the current
     /// provisional clock. Called by instrumented peripherals from their pad
     /// write sites; transitions-only dedup happens at ingest, so reporting an
@@ -197,6 +205,28 @@ impl LogicTap {
     /// small).
     pub fn push(&self, ch: u32, value: bool) {
         let cycle = self.shared.clock.load(Ordering::Relaxed);
+        self.push_at(ch, value, cycle);
+    }
+
+    /// Record a pad level stamped with an explicit engine cycle, for a
+    /// peripheral that knows when the transition happened rather than only
+    /// that it has happened.
+    ///
+    /// A bit engine drives the wire as the engine advances, so the provisional
+    /// clock in [`push`](Self::push) is already the right answer. A
+    /// transaction-level controller instead completes a whole phase and only
+    /// then knows the waveform that phase put on the wire: nine SCL periods of
+    /// it, spread across the cycles it was counting down. Pushing those with
+    /// the provisional clock would pile every edge onto the single cycle the
+    /// phase retired at, which is not a waveform — it is a spike. `push_at`
+    /// lets that controller narrate each edge at the cycle it truly occurred
+    /// (see [`crate::peripherals::i2c_waveform`]).
+    ///
+    /// Stamps must be in the past relative to the provisional clock, and a
+    /// caller emitting a run of edges should emit them in ascending cycle
+    /// order; [`LogicCapture::ingest_push`] preserves a past stamp verbatim
+    /// and finalises only those at or beyond the drain boundary.
+    pub fn push_at(&self, ch: u32, value: bool, cycle: u64) {
         self.shared
             .queue
             .lock()

@@ -88,6 +88,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_adc",
     "rp2040_rtc",
     "rp2040_watchdog",
+    "rp2040_io_bank0",
     "rp2040_sio",
     "rp2040_clkrst",
     "rp2040_xip_ssi",
@@ -451,6 +452,7 @@ pub fn try_build(
         }
         "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
+        "rp2040_io_bank0" => Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new()),
         "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),

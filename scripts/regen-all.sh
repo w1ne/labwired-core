@@ -59,6 +59,16 @@ run python3 scripts/gen_esp_systimer_regs.py
 echo "==> UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance"
 UPDATE_CONFORMANCE_BASELINE=1 cargo test -q -p labwired-core --test chip_conformance >/dev/null
 
+# Same arrangement for the bus-visibility board (which chips' I2C/SPI/UART the
+# logic analyzer can actually see).
+#
+# ⚠️ Both of these lines re-record a RATCHET baseline. Running this script turns
+# a regression — a chip that LOST a bus, a reg-match count that fell — into a
+# quiet diff instead of a red test. Read the resulting `git diff` on
+# docs/coverage/ before committing; a ✓ that became a — is never routine.
+echo "==> UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus_visibility"
+UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -q -p labwired-core --test bus_visibility >/dev/null
+
 echo
 echo "All generated artifacts refreshed."
 echo "If 'git status' is not clean, a committed artifact was stale — commit the result."

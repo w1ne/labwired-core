@@ -188,6 +188,16 @@ peripherals:
   # level (GPIO_OUT & GPIO_OE), a real set-drive-readback round-trip. CPUID
   # reads 0 (core 0). No atomic aliases on this block (it sits at 0xD0000000,
   # outside the APB/AHB window).
+  # IO_BANK0: the pad function mux (datasheet §2.19.2). GPIOn_CTRL.FUNCSEL
+  # decides which peripheral drives each pad — without it the engine cannot
+  # answer "who is driving GP4?", so a bus clipped to a pad reads the SIO latch
+  # instead of the wire and a logic analyzer shows a flat line.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40014000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/io_bank0.yaml"
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000

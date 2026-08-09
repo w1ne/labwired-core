@@ -55,6 +55,8 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use crate::peripherals::i2c::I2cDevice;
+use crate::peripherals::i2c_waveform::I2cNarrator;
+use crate::peripherals::pad_lines::PadLines;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 /// Read once per process — this sits on the I2C command path. See
@@ -109,6 +111,28 @@ const NUM_CMDS: usize = 16;
 /// SOC_I2C_FIFO_LEN on the classic chip.
 const FIFO_CAPACITY: usize = 32;
 
+/// Line order for this controller's [`PadLines`]; the classic GPIO matrix routes
+/// `I2CEXT0_SCL` (signal 29) / `I2CEXT0_SDA` (signal 30) to these indices.
+pub(crate) const I2C_LINES: &[&str] = &["SCL", "SDA"];
+pub(crate) const LINE_SCL: usize = 0;
+pub(crate) const LINE_SDA: usize = 1;
+
+/// Timing registers the narration reads to shape the waveform. Both are 14-bit
+/// APB-cycle counts: `I2C_SCL_LOW_PERIOD_REG` at 0x00 and
+/// `I2C_SCL_HIGH_PERIOD_REG` at 0x38, fields [13:0] (esp-idf
+/// `soc/esp32/include/soc/i2c_reg.h`). They already round-trip through the
+/// generic `other` store — the command-list engine has simply never read them,
+/// which is why "classic ESP32 has no SCL period registers" was wrong.
+const REG_SCL_LOW_PERIOD: u64 = 0x00;
+const REG_SCL_HIGH_PERIOD: u64 = 0x38;
+const SCL_PERIOD_MASK: u32 = 0x3FFF;
+
+/// CPU cycles per APB cycle. The I²C timing registers count APB periods
+/// (TRM v4.6 §11) while the engine's cycle axis is CPU cycles; the classic
+/// ESP32's default CPU_CLK/APB_CLK split is 240 MHz / 80 MHz = 3, the same
+/// ratio and the same reason as the S3 model.
+const CORE_PER_APB: u64 = 3;
+
 pub struct Esp32I2c {
     ctr: u32,
     sr: u32,
@@ -137,6 +161,14 @@ pub struct Esp32I2c {
     intr_source_id: u32,
     /// Round-trip backing for timing / config registers the engine ignores.
     other: BTreeMap<u64, u32>,
+    /// Wire levels published to matrix-routed SCL/SDA pads, so an analyzer
+    /// clipped to this bus measures a real waveform instead of a flat line.
+    /// Created lazily at bus wiring time; `None` on any bus where nothing
+    /// routes these pads, and then every wire call below costs one check.
+    lines: Option<std::sync::Arc<PadLines>>,
+    /// Frames of the command list currently executing, `(byte, acked)`,
+    /// narrated onto the pads as ONE transaction when the list finishes.
+    wire_frames: Vec<(u8, bool)>,
 }
 
 /// AHB-bus TX FIFO alias (`I2C0` at `0x6001_301c`). esp-idf `i2c_ll_write_txfifo`
@@ -170,6 +202,8 @@ impl Esp32I2c {
             active_slave: None,
             expects_addr: true,
             intr_source_id: I2C0_INTR_SOURCE_ID,
+            lines: None,
+            wire_frames: Vec::new(),
             other: BTreeMap::new(),
         }
     }
@@ -188,6 +222,87 @@ impl Esp32I2c {
         Esp32I2cAhbFifo {
             tx_fifo: std::sync::Arc::clone(&self.tx_fifo),
         }
+    }
+
+    /// The shared pad-line cell for this controller, created on first use.
+    /// Called at bus wiring time; an open-drain bus with pull-ups idles high.
+    pub(crate) fn pad_lines_arc(&mut self) -> std::sync::Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .clone()
+    }
+
+    /// Engine cycles in one SCL period, from this controller's OWN timing
+    /// registers: `SCL_LOW_PERIOD + SCL_HIGH_PERIOD` APB cycles (TRM v4.6 §11)
+    /// times [`CORE_PER_APB`].
+    ///
+    /// Read back through `decode_word` rather than mirrored into new fields, so
+    /// there is exactly ONE place a value for offset 0x00 / 0x38 comes from and
+    /// a debugger cannot disagree with the narrator. At the register reset —
+    /// both zero, firmware has not programmed timing yet — this falls to a
+    /// floor so a waveform is still shaped rather than degenerate.
+    fn bit_time_cycles(&self) -> u64 {
+        let low = self.decode_word(REG_SCL_LOW_PERIOD) & SCL_PERIOD_MASK;
+        let high = self.decode_word(REG_SCL_HIGH_PERIOD) & SCL_PERIOD_MASK;
+        (u64::from(low + high) * CORE_PER_APB).max(16)
+    }
+
+    /// Record a frame this transaction put on the wire. Buffered, not published
+    /// — see [`Self::wire_flush`]. Free when no pad routes this controller.
+    fn wire_push(&mut self, byte: u8, acked: bool) {
+        if self.lines.is_some() {
+            self.wire_frames.push((byte, acked));
+        }
+    }
+
+    /// Undo the last recorded frame.
+    ///
+    /// The executor can only tell which shape a WRITE has once it has looked at
+    /// the first FIFO byte: in the ESP-IDF/Arduino shape that byte is payload
+    /// and the address lives in `SLAVE_ADDR`, so a frame provisionally recorded
+    /// as the address has to be taken back and re-recorded as data.
+    fn wire_pop_last_addr(&mut self) {
+        self.wire_frames.pop();
+    }
+
+    /// The address byte as it appears on the wire when the address comes from
+    /// the `SLAVE_ADDR` register rather than the TX FIFO: 7-bit address in bits
+    /// [6:0], shifted up with a write direction bit.
+    fn slave_addr_byte(&self) -> u8 {
+        ((self.slave_addr & 0x7F) as u8) << 1
+    }
+
+    /// Publish the finished command list's waveform onto the routed pads.
+    ///
+    /// This controller executes its whole command list synchronously on the
+    /// `TRANS_START` write and charges no wire time at all, so the narration is
+    /// anchored to END at the present cycle: it occupies the cycles just before
+    /// the write, which the bus genuinely spent idle. Every stamp is therefore
+    /// in the past, where the capture layer keeps it verbatim — which is also
+    /// exactly why the classic GPIO port must accept a PUSH tap, since a poll
+    /// sampler cannot observe a past cycle. See
+    /// [`crate::peripherals::i2c_waveform`] for what a narrated waveform does
+    /// and does not model.
+    fn wire_flush(&mut self) {
+        let Some(lines) = self.lines.clone() else {
+            self.wire_frames.clear();
+            return;
+        };
+        if self.wire_frames.is_empty() {
+            return;
+        }
+        let mut wave = I2cNarrator::new(LINE_SCL, LINE_SDA, self.bit_time_cycles());
+        wave.start();
+        for &(byte, acked) in &self.wire_frames {
+            wave.frame(byte, acked);
+        }
+        wave.stop();
+        self.wire_frames.clear();
+        let now = lines.tap_clock().unwrap_or(0);
+        // A transaction fired before the run has accumulated its own duration is
+        // compressed to fit, not spiked: the bytes survive, the measured rate
+        // does not. See `NarrationFit`.
+        let _fit = wave.emit_ending_at(&lines, now);
     }
 
     /// Raw slave push — does NOT wrap for tracing. The only production caller is
@@ -510,6 +625,9 @@ impl Esp32I2c {
                     // matrix L3 ACK succeeds (mirrors ESP32-S3 engine).
                     if expects_addr && byte_num == 0 {
                         active = self.find_slave_from_slave_addr_register();
+                        // The address frame crossed the wire either way; whether
+                        // it was ACKed is what the analyzer shows.
+                        self.wire_push(self.slave_addr_byte(), active.is_some());
                         if let Some(slave_idx) = active {
                             self.slaves[slave_idx].start();
                             self.sr |= SR_ACK_REC;
@@ -525,14 +643,21 @@ impl Esp32I2c {
                             // First byte of a WRITE following RSTART is addr+R/W.
                             let addr = b >> 1;
                             active = self.find_slave_by_address(addr);
+                            self.wire_push(b, active.is_some());
                             if active.is_none() {
                                 // Fallback: address only in SLAVE_ADDR, payload in FIFO.
                                 active = self.find_slave_from_slave_addr_register();
+                                // The address came from SLAVE_ADDR, so the wire
+                                // carried THAT frame, not the FIFO byte we had
+                                // provisionally recorded as an address.
+                                self.wire_pop_last_addr();
+                                self.wire_push(self.slave_addr_byte(), active.is_some());
                                 if let Some(slave_idx) = active {
                                     self.slaves[slave_idx].start();
                                     self.sr |= SR_ACK_REC;
                                     // First FIFO byte is data when SLAVE_ADDR holds target.
                                     self.slaves[slave_idx].write(b);
+                                    self.wire_push(b, true);
                                     expects_addr = false;
                                     continue;
                                 }
@@ -546,6 +671,7 @@ impl Esp32I2c {
                         }
                         if let Some(slave_idx) = active {
                             self.slaves[slave_idx].write(b);
+                            self.wire_push(b, true);
                             self.sr |= SR_ACK_REC;
                         }
                     }
@@ -558,6 +684,11 @@ impl Esp32I2c {
                         } else {
                             0
                         };
+                        if active.is_some() {
+                            // The master ACKs each byte it reads; the final NACK
+                            // is modelled by the STOP that follows.
+                            self.wire_push(b, true);
+                        }
                         let mut rx = self.rx_fifo.borrow_mut();
                         if rx.len() < FIFO_CAPACITY {
                             rx.push_back(b);
@@ -593,6 +724,12 @@ impl Esp32I2c {
             self.expects_addr = expects_addr;
             self.int_raw |= INT_END_DETECT;
         } else {
+            // STOP (or a list that ran out) completes the transaction: NOW the
+            // whole thing goes on the wire as one narrated waveform. END keeps
+            // the frames buffered on purpose — the legacy IDF driver splits one
+            // logical transfer across several bursts, and narrating each burst
+            // separately would put three STARTs on the trace for one transfer.
+            self.wire_flush();
             self.active_slave = None;
             self.expects_addr = true;
             self.int_raw |= INT_TRANS_COMPLETE;

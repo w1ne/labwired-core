@@ -133,6 +133,18 @@ const SIG_GPIO_OUT: u32 = 256;
 /// the RMT in/out share one matrix index per channel). A timed RMT channel
 /// finds the pad it drives by calling
 /// [`Esp32s3Gpio::pads_for_output_signal`] with its channel's index.
+/// GPIO-matrix OUTPUT signal indices of the I²C0 controller, from esp-idf
+/// `soc/esp32s3/include/soc/gpio_sig_map.h` (`I2CEXT0_SCL_OUT_IDX` /
+/// `I2CEXT0_SDA_OUT_IDX`). These are S3 numbers and differ from the C3's
+/// 53/54 — the matrix index space is per-chip, so a pad routed by index alone
+/// must never be assumed portable between ESP families.
+const SIG_I2CEXT0_SCL: u32 = 89;
+const SIG_I2CEXT0_SDA: u32 = 90;
+
+/// Line indices within the I²C controller's published pad lines.
+const I2C_LINE_SCL: usize = super::i2c::LINE_SCL;
+const I2C_LINE_SDA: usize = super::i2c::LINE_SDA;
+
 pub const RMT_SIG_OUT0: u32 = 81;
 pub const RMT_SIG_OUT1: u32 = 82;
 pub const RMT_SIG_OUT2: u32 = 83;
@@ -143,6 +155,8 @@ pub const RMT_SIG_OUT3: u32 = 84;
 /// guess), matching the C3 `c3_out_signal_name` convention.
 fn s3_out_signal_name(idx: u32) -> Option<&'static str> {
     Some(match idx {
+        SIG_I2CEXT0_SCL => "I2CEXT0_SCL",
+        SIG_I2CEXT0_SDA => "I2CEXT0_SDA",
         RMT_SIG_OUT0 => "RMT_SIG_OUT0",
         RMT_SIG_OUT1 => "RMT_SIG_OUT1",
         RMT_SIG_OUT2 => "RMT_SIG_OUT2",
@@ -190,6 +204,17 @@ pub trait GpioObserver: Send + Sync + std::fmt::Debug {
 }
 
 /// ESP32-S3 GPIO peripheral. Mapped at 0x6000_4000.
+/// Push-capture state for one S3 GPIO port. `scratch` caches each watched
+/// pad's level across a register write so only real transitions are reported;
+/// `line_chs` caches the per-line channel lists last pushed into the I²C wire,
+/// so unrelated writes cost no mutex traffic.
+#[derive(Debug)]
+struct S3PortTap {
+    tap: crate::logic_capture::LogicTap,
+    watched: Vec<(u8, u32)>,
+    scratch: Vec<Option<bool>>,
+}
+
 pub struct Esp32s3Gpio {
     /// Register file for the architected map (word-indexed; holes stay 0 and
     /// are never read back — `spec()` gates both directions). OUT, ENABLE and
@@ -202,6 +227,19 @@ pub struct Esp32s3Gpio {
     /// observers on bank-1 pad transitions (e.g. the onboard NeoPixel on GPIO48).
     out1: u32,
     in_data: u32,
+    /// Live I²C0 wire levels shared with the I²C controller, installed at bus
+    /// wiring time (`SystemBus::wire_esp32s3_i2c_pads`). Pads whose output
+    /// matrix routes `I2CEXT0_SCL`/`SDA` read the wire here instead of the
+    /// GPIO_OUT latch.
+    /// Pads bound to peripheral wires, resolved against this port's live
+    /// output matrix. Empty until `SystemBus::wire_esp32s3_i2c_pads` binds them.
+    pad_routes: crate::peripherals::pad_routing::PadRoutes,
+    /// `Some` while the logic analyzer watches pads on this port in push mode.
+    /// Every register write then reports watched pad-level changes into the
+    /// tap, and matrix-routed pads are registered with the I²C wire so IT
+    /// reports their transitions at the cycles they occurred. Not snapshot
+    /// state — the watch is re-armed by the frontend after a resume.
+    tap: Option<S3PortTap>,
     int_enable: u32,
     int_type: [u8; 32],
     cycle: u64,
@@ -230,6 +268,8 @@ impl Esp32s3Gpio {
             out: 0,
             out1: 0,
             in_data: 0,
+            pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
+            tap: None,
             int_enable: 0,
             int_type: [0; 32],
             cycle: 0,
@@ -302,6 +342,92 @@ impl Esp32s3Gpio {
     ///
     /// Passing [`SIG_GPIO_OUT`] (256) would match every pad still at its reset
     /// selector — callers resolving a *peripheral* signal never do that.
+    /// Snapshot every watched pad's level before a mutation. One branch while
+    /// no tap is installed.
+    #[inline]
+    fn tap_snapshot(&mut self) {
+        let Some(mut t) = self.tap.take() else {
+            return;
+        };
+        for (k, &(pin, _)) in t.watched.iter().enumerate() {
+            t.scratch[k] = self.pad_level_for_tap(pin);
+        }
+        self.tap = Some(t);
+    }
+
+    /// Report watched pads whose level changed since the matching
+    /// [`tap_snapshot`](Self::tap_snapshot), then re-sync the I²C wire
+    /// registration in case the write re-routed a watched pad.
+    #[inline]
+    fn tap_report(&mut self) {
+        let Some(t) = self.tap.take() else {
+            return;
+        };
+        for (k, &(pin, ch)) in t.watched.iter().enumerate() {
+            if let Some(level) = self.pad_level_for_tap(pin) {
+                if t.scratch[k] != Some(level) {
+                    t.tap.push(ch, level);
+                }
+            }
+        }
+        self.tap = Some(t);
+        self.sync_i2c_line_taps();
+    }
+
+    /// The level a watched pad currently reads, through the same truth
+    /// `read_gpio_pad` uses.
+    fn pad_level_for_tap(&self, pin: u8) -> Option<bool> {
+        <Self as Peripheral>::read_gpio_pad(self, pin)
+    }
+
+    /// Re-register watched pads with the wires that drive them, so a pad the
+    /// matrix hands over (or takes back) follows its new source.
+    fn sync_i2c_line_taps(&mut self) {
+        if self.pad_routes.is_empty() {
+            return;
+        }
+        let Some(t) = self.tap.take() else {
+            return;
+        };
+        let mut routes = std::mem::take(&mut self.pad_routes);
+        routes.sync_taps(&t.tap, &t.watched, |pin| self.out_sel(pin));
+        self.pad_routes = routes;
+        self.tap = Some(t);
+    }
+
+    /// Bind an I²C controller's wire to the pads the output matrix can route it
+    /// to. Called once at bus wiring time; which pad is live at any moment is
+    /// then decided by `FUNCn_OUT_SEL`, through the shared routing seam.
+    pub(crate) fn set_i2c_lines(
+        &mut self,
+        lines: std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        for pin in 0..PAD_COUNT {
+            self.pad_routes.bind(
+                &lines,
+                pin,
+                Some(SIG_I2CEXT0_SCL),
+                I2C_LINE_SCL,
+                "I2CEXT0_SCL",
+            );
+            self.pad_routes.bind(
+                &lines,
+                pin,
+                Some(SIG_I2CEXT0_SDA),
+                I2C_LINE_SDA,
+                "I2CEXT0_SDA",
+            );
+        }
+    }
+
+    /// Every signal name bound to this port's pads, live or not — the
+    /// bus-visibility reporting seam. See
+    /// [`crate::peripherals::pad_routing::PadRoutes::bound_functions`] for why
+    /// this is the static question and `func()` is the live one.
+    pub(crate) fn bound_pad_functions(&self) -> Vec<&'static str> {
+        self.pad_routes.bound_functions()
+    }
+
     pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
         let want = signal_idx & OUT_SEL_MASK;
         (0..PAD_COUNT)
@@ -451,6 +577,26 @@ impl Esp32s3Gpio {
             off => self.set_reg_masked(off, value),
         }
     }
+
+    fn write_inner(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        // For W1TS, the existing word in the peripheral is read through
+        // `read_word` which returns the primary register's value — so an
+        // R-M-W byte write to OUT_W1TS at offset 0x08 byte 0 with value 0x04
+        // becomes: word = OUT, word.byte0 = 0x04, then write_word(0x08, word)
+        // sets bit 2 of OUT (OR-ing the current value back in is idempotent).
+        // W1TC must merge against 0 instead: folding the current register
+        // value into the unwritten bytes would clear every bit set there.
+        let mut word = match word_off {
+            OUT_W1TC | OUT1_W1TC | ENABLE_W1TC | ENABLE1_W1TC | STATUS_W1TC | STATUS1_W1TC => 0,
+            off => self.read_word(off),
+        };
+        word &= !(0xFFu32 << byte_off);
+        word |= (value as u32) << byte_off;
+        self.write_word(word_off, word);
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for Esp32s3Gpio {
@@ -494,23 +640,32 @@ impl Peripheral for Esp32s3Gpio {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        let word_off = offset & !3;
-        let byte_off = (offset & 3) * 8;
-        // For W1TS, the existing word in the peripheral is read through
-        // `read_word` which returns the primary register's value — so an
-        // R-M-W byte write to OUT_W1TS at offset 0x08 byte 0 with value 0x04
-        // becomes: word = OUT, word.byte0 = 0x04, then write_word(0x08, word)
-        // sets bit 2 of OUT (OR-ing the current value back in is idempotent).
-        // W1TC must merge against 0 instead: folding the current register
-        // value into the unwritten bytes would clear every bit set there.
-        let mut word = match word_off {
-            OUT_W1TC | OUT1_W1TC | ENABLE_W1TC | ENABLE1_W1TC | STATUS_W1TC | STATUS1_W1TC => 0,
-            off => self.read_word(off),
-        };
-        word &= !(0xFFu32 << byte_off);
-        word |= (value as u32) << byte_off;
-        self.write_word(word_off, word);
-        Ok(())
+        self.tap_snapshot();
+        let result = self.write_inner(offset, value);
+        self.tap_report();
+        result
+    }
+
+    fn install_logic_tap(
+        &mut self,
+        tap: &crate::logic_capture::LogicTap,
+        watched: &[(u8, u32)],
+    ) -> bool {
+        if watched.is_empty() {
+            self.tap = None;
+            self.pad_routes.clear_taps();
+        } else {
+            self.tap = Some(S3PortTap {
+                tap: tap.clone(),
+                watched: watched.to_vec(),
+                scratch: vec![None; watched.len()],
+            });
+            // Seeded stale so the sync below always installs the current
+            // routing into the wire.
+            self.pad_routes.invalidate_registrations();
+            self.sync_i2c_line_taps();
+        }
+        true
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -535,6 +690,14 @@ impl Peripheral for Esp32s3Gpio {
     fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
         if pin >= 32 {
             return None;
+        }
+        // A pad the output matrix hands to the I²C controller is driven by
+        // that controller's wire, not by the GPIO_OUT latch — read the level
+        // it publishes (see `crate::peripherals::pad_lines`). Without this the
+        // pad reports the idle latch and an analyzer clipped here sees a flat
+        // line while the bus is busy.
+        if let Some(level) = self.pad_routes.level(pin, |p| self.out_sel(p)) {
+            return Some(level);
         }
         let mask = 1u32 << pin;
         // ENABLE is the output driver: enabled pins show the OUT latch,

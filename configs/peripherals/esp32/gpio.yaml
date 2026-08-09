@@ -509,7 +509,12 @@ registers:
   address_offset: 1328
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  # 256 = SIG_GPIO_OUT_IDX, the "nothing routed / driven by the GPIO_OUT latch"
+  # sentinel. The 0 here was the SVD ingestor's default, not a measurement: the
+  # vendored esp32.svd carries no resetValue for this register and gpio_reg.h
+  # records the field default as `x`. A schema reporting 0 would tell a debugger
+  # every pad boots routed to SPICLK (signal index 0) and contradict the model.
+  reset_value: 256
   fields:
   - name: OUT_SEL
     bit_range:

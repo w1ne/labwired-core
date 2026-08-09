@@ -234,7 +234,7 @@ boards:
     # WITHOUT a live re-capture (no bench board); an RNG live diff is owed and is
     # NOT evidenced by this entry.
     drift_ack: 2026-08-09
-    drift_ack_digest: 1069454e8c736b0eec67e6865e16dfca371f905fab39d1a9aadf8ea2c0e4bbb5
+    drift_ack_digest: 8875af363a7912479611b4d043c2dfb79e29895b5e4557b0889610cf8de93535
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -346,7 +346,7 @@ boards:
     # See the nrf52840 drift_ack note for why it is behavioural and what it does
     # not touch. No RNG live re-capture is evidenced by this entry.
     drift_ack: 2026-08-09
-    drift_ack_digest: 1069454e8c736b0eec67e6865e16dfca371f905fab39d1a9aadf8ea2c0e4bbb5
+    drift_ack_digest: 8875af363a7912479611b4d043c2dfb79e29895b5e4557b0889610cf8de93535
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -521,8 +521,8 @@ boards:
     # address, reset value or access in any board's asserted set changes.
     # Owner-authorised ack WITHOUT a live re-capture; no board was attached for
     # this change and each board's outstanding live diff remains owed.
-    drift_ack: 2026-08-08
-    drift_ack_digest: bec6988944d80986326ba71c7b4df39d286b676f4c8d04548fd6bf9a6a5d02b2
+    drift_ack: 2026-08-09
+    drift_ack_digest: 73f1b40b62b56eedbf2db3a8404c7ccc55a1f1a6d678babe010dbde53839c4b0
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1170,9 +1170,20 @@ boards:
     # This ack rests on those, not on the reset oracle. No live re-capture.
     #
     # 2026-08-09: the live re-capture the ack was standing in for HAS NOW RUN
-    # (see silicon.result above), so the ack is removed rather than re-dated.
-    # A drift_ack is a promise to re-capture; keeping one past the capture it
-    # promised would let the next model change ride on a paid-off debt.
+    # (see silicon.result above). The ack that stood here was discharged by it.
+    # Whether a NEW ack is needed depends on whether the pad-routing work that
+    # landed the same day touched a listed model after the capture — the
+    # generator decides that, not this comment. It reads FRESH.
+    #
+    # KNOWN LIMIT, stated rather than relied on: the pad-routing merge (#892)
+    # DID move this board's model digest (7a687f78 -> c5064550) on the same
+    # calendar day as the capture, and the gate compares DATES, not timestamps
+    # — so a model edit made hours after the capture still reads as "not
+    # newer". Two things make that acceptable rather than a hole: the capture
+    # corroborates the RESET_VALUES table against real silicon, and CI
+    # re-checks the MODEL against that table every run
+    # (esp32c3_reset_values_match_silicon). A pad-routing change that broke a
+    # reset value would go red there, not hide here.
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -1323,8 +1334,8 @@ boards:
     # address, reset value or access in any board's asserted set changes.
     # Owner-authorised ack WITHOUT a live re-capture; no board was attached for
     # this change and each board's outstanding live diff remains owed.
-    drift_ack: 2026-08-08
-    drift_ack_digest: 266bc466735dd2411b8596937edd651fb00b942f714fbae12ccdff2412e85d4b
+    drift_ack: 2026-08-09
+    drift_ack_digest: d6a6dc51ae8604b5597bf52ba36125945d839a37ef399b6a4e25a45a5a6cf20c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1469,8 +1480,8 @@ boards:
     # address, reset value or access in any board's asserted set changes.
     # Owner-authorised ack WITHOUT a live re-capture; no board was attached for
     # this change and each board's outstanding live diff remains owed.
-    drift_ack: 2026-08-08
-    drift_ack_digest: 105c3038e66f7309d1269d7ed1f981b81d83f19f8ab3c2233498fc92646066dd
+    drift_ack: 2026-08-09
+    drift_ack_digest: a31e3c89d55f6f0554d0149c62569fee1424c4633083d8a4043562110f14ebed
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1634,8 +1645,8 @@ boards:
     # address, reset value or access in any board's asserted set changes.
     # Owner-authorised ack WITHOUT a live re-capture; no board was attached for
     # this change and each board's outstanding live diff remains owed.
-    drift_ack: 2026-08-08
-    drift_ack_digest: ba59367c8644427e05b8899a40f9576ec3b5b9d57bafbb2933efb97ca163eca4
+    drift_ack: 2026-08-09
+    drift_ack_digest: dae60c05ea1fff30733f86e227a39e196d4c423d39a71133574ca51e220b4429
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1791,8 +1802,8 @@ boards:
     # address, reset value or access in any board's asserted set changes.
     # Owner-authorised ack WITHOUT a live re-capture; no board was attached for
     # this change and each board's outstanding live diff remains owed.
-    drift_ack: 2026-08-08
-    drift_ack_digest: 55e991e05f47a258e5dc68029774c8a506c14e6f6c2221e2dad573cf891d8169
+    drift_ack: 2026-08-09
+    drift_ack_digest: 3fb85d313f232481f2de6453d7de1c090bff78cbb983228e57e41f10a6d47260
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -2070,7 +2081,7 @@ boards:
     # oracles do NOT cover this file while `--lib esp_uart` does. No S3 board
     # attached; no live re-capture.
     drift_ack: 2026-08-09
-    drift_ack_digest: b469639d4a4e4dc70b08eb7afbf5236171b1e501f8255a90cf4bbf50f9465e9d
+    drift_ack_digest: 44e598a3f266aa9f1227f06e0d63a5de82aa8d71c6e710233c1bff076f0c8be7
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
@@ -2120,7 +2131,7 @@ boards:
     # RP2350 address map; RP2040 default path is unit-tested unchanged
     # (rp2350_clkrst_profile::rp2040_profile_is_unchanged).
     drift_ack: 2026-08-05
-    drift_ack_digest: c103296ae72395af02e314b115b6953260da3bf2a2d4ad2973d414764112bf4a
+    drift_ack_digest: 0824ac80739595c3c33ff7bcaf9018b8441344a7b1e4422c85001fe3cd2d36de
     models:
       - configs/chips/rp2040.yaml
       - crates/core/src/peripherals/rp2040
@@ -2175,7 +2186,7 @@ boards:
     # pass unchanged. No live re-capture this session; re-capturing IDR readback
     # and SPI RX behaviour is tracked.
     drift_ack: 2026-07-28
-    drift_ack_digest: 53fd2ce53e11a3350aa24b4ad663b7cd079aa73f581ec1a7e484528952ef2171
+    drift_ack_digest: d699995e74ab8178eac840dc9a546aeb1af472293a4b88b9c409cf6a7005ba7f
     models:
       - configs/chips/stm32h735.yaml
       - crates/core/src/peripherals/rcc.rs
@@ -2210,7 +2221,7 @@ boards:
     # pass unchanged. No live re-capture this session; re-capturing IDR readback
     # and SPI RX behaviour is tracked.
     drift_ack: 2026-07-28
-    drift_ack_digest: 9c285292b9bd9476437bda18255b6224bfea04969a4287e02d3df1baac62e613
+    drift_ack_digest: db08485de89ab513adebcd04635fe705d7037073696a77ace176eee17e8004f2
     models:
       - configs/chips/stm32f411ceu6.yaml
       - crates/core/src/peripherals/rcc.rs
@@ -2256,7 +2267,7 @@ boards:
     # pass unchanged. No live re-capture this session; re-capturing IDR readback
     # and SPI RX behaviour is tracked.
     drift_ack: 2026-07-28
-    drift_ack_digest: c8bb472c66892eb3aac0087cc41038f4c038b3669f7962c6466625c2448b26b0
+    drift_ack_digest: 1ed82ce698a7099388fd9d42d44e629df0890d103822e93d101b4187480f9f06
     models:
       - configs/chips/mkw41z4.yaml
       - crates/core/src/peripherals/i2c.rs
