@@ -5,5 +5,7 @@
 
 #![cfg_attr(not(test), no_std)]
 
+pub mod assets;
 pub mod game;
 pub mod level;
+pub mod render;
