@@ -17,7 +17,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | `a31e3c89d55f6f05` | ⚠ drift acked 2026-08-09 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-06-20 | `dae60c05ea1fff30` | ⚠ drift acked 2026-08-09 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `3fb85d313f232481` | ⚠ drift acked 2026-08-09 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-07-15 | `44e598a3f266aa9f` | ⚠ drift acked 2026-08-09 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `44e598a3f266aa9f` | ✅ fresh |
 | `stm32f401` | 🟡 smoke-manual | — | `a05f2c5a4fa09d07` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `2ed9be6ebb57d524` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `8eb946cd8fd728b5` | no silicon capture |
@@ -106,10 +106,10 @@ The models column is a content digest over everything that board's `models` list
 
 - Doc: [`docs/boards/esp32s3.md`](esp32s3.md)  ·  Chip: `configs/chips/esp32s3.yaml`
 - Note: Deep model: 35 peripheral models + full Xtensa LX7 JIT; boots real firmware in sim (green e2e i2c_tmp102/hello_world/xtensa_exec/e-paper). Silicon anchor is reset-state (9 regs) on the firmware-path bus. KNOWN GAPS: (1) broader register + behavioural silicon diff still future work; (2) declarative from_config path falls back to generic ARM peripherals for type:i2c — the coded S3 models only wire via configure_xtensa_esp32s3; (3) full-firmware bring-up rides ~60 boot/ROM/WiFi thunks (FIDELITY.md).
-- Silicon: **2026-07-15** on USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5) — Live OpenOCD re-capture on 2026-07-15: connected ESP32-S3 rev 0.2 (MAC 9c:13:9e:f4:40:c0), both Xtensa JTAG taps examined, and reset-state windows captured for UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, and RTC_CNTL.
+- Silicon: **2026-08-09** on USB-JTAG built-in (USB 303a:1001, openocd-esp32 v0.12.0-esp32-20260703, both Tensilica taps 0x120034e5), board MAC 3c:0f:02:df:f3:c8 (QFN56 rev v0.2) — re-captured live 2026-08-09 on a SECOND physical S3 (MAC 3c:0f:02:df:f3:c8, QFN56 rev v0.2; the 2026-07-15 baseline came from an ESP32-S3-Zero, MAC 9c:13:9e:f4:40:c0, same rev) — cross-board corroboration, not a re-read of the same part. Both Xtensa taps (tap0+tap1) examined. 384 registers read across 10 windows (UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, RTC_CNTL): 9/9 RESET_VALUES matched, 0 mismatched. Scope is unchanged and still thin — this is a 9-register reset-state anchor, NOT a broad register or behavioural diff; see the KNOWN GAPS in `note`. Artifacts: scripts/hw-oracle/captures/esp32s3/recapture-20260809T130700Z/.
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **⚠ drift acked 2026-08-09 (re-capture pending)**
+- Drift status: **✅ fresh**
 
 ## `stm32f401` — 🟡 smoke-manual
 

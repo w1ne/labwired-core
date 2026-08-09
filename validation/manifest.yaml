@@ -1825,9 +1825,9 @@ boards:
       - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
       - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
     silicon:
-      last_capture: 2026-07-15
-      probe: "USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5)"
-      result: "Live OpenOCD re-capture on 2026-07-15: connected ESP32-S3 rev 0.2 (MAC 9c:13:9e:f4:40:c0), both Xtensa JTAG taps examined, and reset-state windows captured for UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, and RTC_CNTL."
+      last_capture: 2026-08-09
+      probe: "USB-JTAG built-in (USB 303a:1001, openocd-esp32 v0.12.0-esp32-20260703, both Tensilica taps 0x120034e5), board MAC 3c:0f:02:df:f3:c8 (QFN56 rev v0.2)"
+      result: "re-captured live 2026-08-09 on a SECOND physical S3 (MAC 3c:0f:02:df:f3:c8, QFN56 rev v0.2; the 2026-07-15 baseline came from an ESP32-S3-Zero, MAC 9c:13:9e:f4:40:c0, same rev) — cross-board corroboration, not a re-read of the same part. Both Xtensa taps (tap0+tap1) examined. 384 registers read across 10 windows (UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, RTC_CNTL): 9/9 RESET_VALUES matched, 0 mismatched. Scope is unchanged and still thin — this is a 9-register reset-state anchor, NOT a broad register or behavioural diff; see the KNOWN GAPS in `note`. Artifacts: scripts/hw-oracle/captures/esp32s3/recapture-20260809T130700Z/."
     # SPIMEM1 flash-command model fix: SPI_MEM_ADDR_REG is read right-justified
     # (was wrongly >>8) and the dual/quad fast-read opcodes (0x3B/0xBB/0x6B/0xEB)
     # are now decoded, so a 2nd-stage bootloader (MCUboot) reads slot0 and
@@ -2080,8 +2080,12 @@ boards:
     # artifact check, and — importantly — the sabotage result showing the reset
     # oracles do NOT cover this file while `--lib esp_uart` does. No S3 board
     # attached; no live re-capture.
-    drift_ack: 2026-08-09
-    drift_ack_digest: 44e598a3f266aa9f1227f06e0d63a5de82aa8d71c6e710233c1bff076f0c8be7
+    #
+    # 2026-08-09 (later the same day): an S3 WAS attached and the live
+    # re-capture ran — 9/9 on a second physical board, see silicon.result. The
+    # ack above said "no S3 board attached"; that is no longer true, so the ack
+    # is discharged rather than carried. Same rule as the C3: an ack is a
+    # promise to re-capture, and it ends when the capture happens.
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
