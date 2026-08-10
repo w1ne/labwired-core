@@ -2,10 +2,10 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::inspect::InspectOpts;
-use labwired_core::Bus;
 use labwired_core::system::xtensa::{
     attach_esp32_external_devices, configure_xtensa_esp32s3, Esp32s3Opts,
 };
+use labwired_core::Bus;
 
 const SYSTEM: &str = r#"
 name: esp32s3-doomlike-attach
@@ -109,11 +109,19 @@ fn esp32s3_production_spi_and_gpio_paint_the_attached_ili9341() {
     let framebuffer = devices
         .iter()
         .find(|device| device.id == "tft")
-        .and_then(|device| device.artifacts.iter().find(|artifact| artifact.kind == "framebuffer"))
+        .and_then(|device| {
+            device
+                .artifacts
+                .iter()
+                .find(|artifact| artifact.kind == "framebuffer")
+        })
         .expect("attached TFT exposes a framebuffer");
 
     assert_eq!(framebuffer.meta["display_on"], true);
     assert_eq!(framebuffer.meta["painted_bytes"], 1);
-    let bytes = framebuffer.bytes.as_ref().expect("framebuffer bytes requested");
+    let bytes = framebuffer
+        .bytes
+        .as_ref()
+        .expect("framebuffer bytes requested");
     assert_eq!(&bytes[..2], &[0xf8, 0x00]);
 }

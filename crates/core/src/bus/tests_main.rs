@@ -16,14 +16,25 @@ fn esp32s3_spi_latches_display_dc_from_gpio_output() {
     use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
     use crate::peripherals::esp32s3::gpspi::Esp32s3Spi;
     use crate::peripherals::spi::SpiDevice;
-    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
 
     struct DcSpy(Arc<AtomicBool>);
     impl SpiDevice for DcSpy {
-        fn transfer(&mut self, _mosi: u8) -> u8 { 0 }
-        fn cs_pin(&self) -> &str { "GPIO10" }
-        fn dc_source(&self) -> Option<(u64, u8)> { Some((0x6000_4004, 11)) }
-        fn set_dc_level(&mut self, level: bool) { self.0.store(level, Ordering::SeqCst); }
+        fn transfer(&mut self, _mosi: u8) -> u8 {
+            0
+        }
+        fn cs_pin(&self) -> &str {
+            "GPIO10"
+        }
+        fn dc_source(&self) -> Option<(u64, u8)> {
+            Some((0x6000_4004, 11))
+        }
+        fn set_dc_level(&mut self, level: bool) {
+            self.0.store(level, Ordering::SeqCst);
+        }
     }
 
     let observed = Arc::new(AtomicBool::new(false));
@@ -31,7 +42,13 @@ fn esp32s3_spi_latches_display_dc_from_gpio_output() {
     spi.push_device(Box::new(DcSpy(observed.clone())));
 
     let mut bus = SystemBus::new();
-    bus.add_peripheral("gpio", 0x6000_4000, 0x1000, None, Box::new(Esp32s3Gpio::new()));
+    bus.add_peripheral(
+        "gpio",
+        0x6000_4000,
+        0x1000,
+        None,
+        Box::new(Esp32s3Gpio::new()),
+    );
     bus.add_peripheral("spi2_s3", 0x6002_4000, 0x1000, None, Box::new(spi));
     bus.refresh_peripheral_index();
     crate::Bus::write_u32(&mut bus, 0x6000_4004, 1 << 11).unwrap();
