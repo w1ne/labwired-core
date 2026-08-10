@@ -2638,7 +2638,30 @@ impl CortexM {
                 }
                 Instruction::MovReg { rd, rm } => {
                     let val = self.read_reg(rm);
-                    self.write_reg(rd, val);
+                    if rd == 15 {
+                        // ARMv7-M: writing PC through MOV is BXWritePC, i.e. a
+                        // BRANCH — bit 0 selects the instruction set and is not
+                        // part of the address, and no sequential PC advance
+                        // follows. Falling through to `write_reg` alone left the
+                        // Thumb bit in PC and then added `pc_increment` on top,
+                        // landing 2 bytes past the target.
+                        //
+                        // rustc emits exactly this for a dense `match` over
+                        // bytes: `ADR Rn, table` / `ADD Rd, Rn, idx LSL #2` /
+                        // `MOV PC, Rd` into a table of 4-byte `B.W` entries.
+                        // Two bytes late is the middle of an entry, so the
+                        // second halfword of that branch executed as a stray
+                        // 16-bit instruction and control fell through to the
+                        // NEXT entry — every arm ran its successor's code. The
+                        // nRF52840 OBD-II scanner painted its OLED that way:
+                        // "RPM 3000" came out "S N 3000" (R->S, P->Q which is
+                        // absent so blank, M->N), while digits, dispatched by
+                        // arithmetic rather than by this table, stayed exact.
+                        self.pc = val & !1;
+                        pc_increment = 0;
+                    } else {
+                        self.write_reg(rd, val);
+                    }
                 }
                 // Logic
                 Instruction::And { rd, rm } => {
@@ -3879,6 +3902,41 @@ mod tests {
             bus.write_u16(pc as u64, instr_bin as u16).unwrap();
         }
         cpu.step_internal(bus, &[], &bus.config.clone()).unwrap();
+    }
+
+    /// `MOV PC, Rm` is a branch (BXWritePC), not a register write.
+    ///
+    /// rustc lowers a dense byte `match` to `ADR`/`ADD Rd, Rn, idx LSL #2`/
+    /// `MOV PC, Rd` over a table of 4-byte `B.W` entries. Advancing PC after
+    /// the write lands 2 bytes into the selected entry, so its second halfword
+    /// runs as a stray instruction and control falls through to the NEXT
+    /// entry — every match arm silently executes its successor's.
+    #[test]
+    fn armv7m_mov_to_pc_branches_instead_of_advancing() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x451A;
+        cpu.r5 = 0x45B0; // a 4-aligned jump-table entry, as ADD LSL #2 produces
+        run_test_instr(&mut cpu, &mut bus, 0x46AF, false); // MOV pc, r5
+        assert_eq!(cpu.pc, 0x45B0, "MOV PC, Rm must branch to Rm exactly");
+
+        // Thumb bit is the instruction-set selector, never part of the address.
+        cpu.pc = 0x451A;
+        cpu.r5 = 0x45B1;
+        run_test_instr(&mut cpu, &mut bus, 0x46AF, false);
+        assert_eq!(cpu.pc, 0x45B0, "MOV PC, Rm must clear the Thumb bit");
+    }
+
+    /// A non-PC destination keeps plain register-move semantics.
+    #[test]
+    fn armv7m_mov_reg_still_moves_and_advances_for_normal_registers() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x451A;
+        cpu.r5 = 0x45B1;
+        run_test_instr(&mut cpu, &mut bus, 0x462F, false); // MOV r7, r5
+        assert_eq!(cpu.r7, 0x45B1);
+        assert_eq!(cpu.pc, 0x451C, "a normal MOV advances one halfword");
     }
 
     #[test]
