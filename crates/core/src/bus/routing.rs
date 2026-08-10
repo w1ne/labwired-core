@@ -75,13 +75,10 @@ impl SystemBus {
                 }
             }
         }
-        // ESP32: "GPIO17" → the single "gpio" peripheral, GPIO_OUT_REG at
-        // base + 0x04 (TRM §4.10, bit = pin number for GPIO0..31).
-        if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
-            let idx = bus.find_peripheral_index_by_name("gpio")?;
-            let is_esp32 = bus.peripherals[idx]
-                .dev
-                .as_any()
+        // ESP32-family GPIO labels resolve against the single `gpio` block.
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            let any = bus.peripherals[idx].dev.as_any();
+            let is_classic_or_c3 = any
                 .map(|a| {
                     a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
                         .is_some()
@@ -89,17 +86,24 @@ impl SystemBus {
                             .is_some()
                 })
                 .unwrap_or(false);
-            if is_esp32 {
-                // Low bank in GPIO_OUT (base + 0x04), high bank in GPIO_OUT1
-                // (base + 0x10) with bit = pad - 32. The C3 has only one bank,
-                // and `parse_esp32_gpio_pin` never yields >= 32 for it because
-                // its pads stop at 21.
-                const GPIO_OUT_REG_OFFSET: u64 = 0x04;
-                const GPIO_OUT1_REG_OFFSET: u64 = 0x10;
+            let is_s3 = any
+                .map(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                        .is_some()
+                })
+                .unwrap_or(false);
+            let bit = if is_s3 {
+                Self::parse_esp32s3_gpio_pin(pin)
+            } else if is_classic_or_c3 {
+                Self::parse_esp32_gpio_pin(pin)
+            } else {
+                None
+            };
+            if let Some(bit) = bit {
                 let (offset, bit) = if bit >= 32 {
-                    (GPIO_OUT1_REG_OFFSET, bit - 32)
+                    (0x10, bit - 32)
                 } else {
-                    (GPIO_OUT_REG_OFFSET, bit)
+                    (0x04, bit)
                 };
                 return Some((bus.peripherals[idx].base + offset, bit));
             }

@@ -22,7 +22,9 @@ chip: "../../configs/chips/esp32s3.yaml"
 external_devices:
   - id: "tft"
     type: "ili9341"
-    connection: "spi2"
+    # Production ESP32-S3 GP-SPI2 is registered as `spi2_s3` (0x6002_4000),
+    # not the classic-ESP32 name `spi2`.
+    connection: "spi2_s3"
     config:
       cs_pin: "GPIO10"
       dc_pin: "GPIO11"

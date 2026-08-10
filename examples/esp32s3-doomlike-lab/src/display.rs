@@ -98,23 +98,20 @@ impl<B: Ili9341Bus> PixelSink for Ili9341Display<B> {
         self.set_window(0, 0, 319, 239)?;
         self.cmd(RAMWR)?;
 
-        // Stream without allocating a 320×240 buffer: each source pixel is
-        // emitted twice horizontally; each source row is emitted twice.
-        // RGB565 is sent big-endian (high byte first) per ILI9341.
-        let mut pair = [0u8; 4];
+        // Expand one scanline at a time, retaining the no-heap/full-frame
+        // constraint while avoiding a separate SPI transaction per pixel.
+        let mut scanline = [0u8; 320 * 2];
         for row in 0..HEIGHT {
-            for _dup_row in 0..2 {
-                for col in 0..WIDTH {
-                    let px = frame[row * WIDTH + col];
-                    let hi = (px >> 8) as u8;
-                    let lo = px as u8;
-                    pair[0] = hi;
-                    pair[1] = lo;
-                    pair[2] = hi;
-                    pair[3] = lo;
-                    self.bus.write_data(&pair)?;
-                }
+            for col in 0..WIDTH {
+                let px = frame[row * WIDTH + col];
+                let offset = col * 4;
+                scanline[offset] = (px >> 8) as u8;
+                scanline[offset + 1] = px as u8;
+                scanline[offset + 2] = (px >> 8) as u8;
+                scanline[offset + 3] = px as u8;
             }
+            self.bus.write_data(&scanline)?;
+            self.bus.write_data(&scanline)?;
         }
         Ok(())
     }
@@ -164,10 +161,16 @@ mod tests {
         }
         pub struct PixelLog {
             pub count: usize,
+            pub write_lengths: [usize; crate::render::HEIGHT * 2],
+            pub writes: usize,
         }
         impl PixelLog {
             pub fn new() -> Self {
-                Self { count: 0 }
+                Self {
+                    count: 0,
+                    write_lengths: [0; crate::render::HEIGHT * 2],
+                    writes: 0,
+                }
             }
         }
     }
@@ -183,6 +186,10 @@ mod tests {
             if self.in_ramwr {
                 // Each pixel is 2 bytes.
                 self.pixels.count += data.len() / 2;
+                if self.pixels.writes < self.pixels.write_lengths.len() {
+                    self.pixels.write_lengths[self.pixels.writes] = data.len();
+                }
+                self.pixels.writes += 1;
             }
             Ok(())
         }
@@ -222,5 +229,26 @@ mod tests {
         d.present_2x(&frame).unwrap();
         // 160×120 source → 320×240 = 76800 pixels.
         assert_eq!(d.bus.pixels.count, 320 * 240);
+    }
+
+    #[test]
+    fn present_2x_batches_each_expanded_scanline() {
+        let bus = RecordingBus {
+            commands: heapless_cmds::CmdLog::new(),
+            pixels: heapless_cmds::PixelLog::new(),
+            in_ramwr: false,
+        };
+        let mut display = Ili9341Display::new(bus);
+        let frame = [0x1234; WIDTH * HEIGHT];
+
+        display.present_2x(&frame).unwrap();
+
+        assert_eq!(display.bus.pixels.writes, HEIGHT * 2);
+        assert!(display
+            .bus
+            .pixels
+            .write_lengths
+            .iter()
+            .all(|&length| length == 320 * 2));
     }
 }
