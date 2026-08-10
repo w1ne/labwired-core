@@ -431,7 +431,27 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
     for ph in elf.program_headers {
         if ph.p_type == PT_LOAD {
             // We only care about loadable segments
-            let start_addr = ph.p_paddr; // Physical address (LMA) is usually what we want for flash programming
+            let start_addr = if arch == labwired_core::Arch::Avr {
+                let v = if ph.p_vaddr != 0 {
+                    ph.p_vaddr
+                } else {
+                    ph.p_paddr
+                };
+                let (space, addr) = labwired_core::cpu::avr::classify_avr_vma(v);
+                match space {
+                    labwired_core::cpu::avr::AvrLoadSpace::Flash => {
+                        if ph.p_paddr != 0 {
+                            ph.p_paddr
+                        } else {
+                            addr
+                        }
+                    }
+                    labwired_core::cpu::avr::AvrLoadSpace::Data
+                    | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => addr,
+                }
+            } else {
+                ph.p_paddr
+            };
             let size = ph.p_filesz as usize;
             let offset = ph.p_offset as usize;
 

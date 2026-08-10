@@ -89,6 +89,10 @@ pub fn build_node_with_plugins(
         MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, plugins),
         MachineFamily::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
         MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware),
+        MachineFamily::Avr => anyhow::bail!(
+            "node '{id}': chip '{}' AVR path lands in a later commit on this branch",
+            chip.name
+        ),
     }
 }
 
