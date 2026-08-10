@@ -647,8 +647,22 @@ boards:
     # longer stands in for a missing capture; see silicon.last_capture. Note the
     # scope caveat recorded there: the register diff was re-run, the FLASH
     # program-behaviour live-diff was not.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-08-10
-    drift_ack_digest: 1a723b165e42c49b19f54091b7254eadd3c16ac53d1ed2f28b3565f40432ae06
+    drift_ack_digest: 95328e5886aca5ff326e7983a71f977da4d9843615559079b7f8da89b7e16708
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -693,8 +707,19 @@ boards:
     # code path was altered. Checked rather than argued: esp32c3_reset_conformance (2 passed) and
     # esp32s3_reset_conformance (1 passed) were executed on this branch. The source digest moved;
     # the model did not.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. Same change as the
+    # STM32 boards, plus this board's own engine: esp32c3/spi.rs (+228/-3) gains
+    # the GP-SPI bit-level path. OPT-IN and OFF by default — reached only when a
+    # device sets `opt_in` for its SPI mode ("Omit for the default byte-level
+    # frame exchange"); every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # No live re-capture is claimed. A lab that DOES opt in is outside every
+    # capture this board has.
     drift_ack: 2026-08-10
-    drift_ack_digest: 078c92aa3ef810a70d957c90e4b31a8db82e534a62c68b496fe4b242c5e0b312
+    drift_ack_digest: f11036a0bfe185b56cbeaf8db7da8df559f3f7f728af98c2ab6f7aeb49c09f97
     models:
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
@@ -1531,8 +1556,22 @@ boards:
     # Merged 2026-08-10: the discharge recorded above applies to the tree as it
     # stood at that live capture. The acks below cover model changes that
     # postdate it and are NOT evidenced by that capture.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-08-10
-    drift_ack_digest: fe9aeec8dda6854ca6ba421e77bebbc1a10b5239429a8b3abc47303cac5e1f67
+    drift_ack_digest: 36f845a4b201474b75a1aa7b0fcff238868c333fb35bb545ba649eac098ee0f5
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1718,8 +1757,22 @@ boards:
     # Merged 2026-08-10: the discharge recorded above applies to the tree as it
     # stood at that live capture. The acks below cover model changes that
     # postdate it and are NOT evidenced by that capture.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-08-10
-    drift_ack_digest: 5c0c39f903efb56360220aa0c3b6c5a473e0f8176fee2211782f41c0f8552d41
+    drift_ack_digest: ae246458ef18a7d15f7ada671a5b6b880bc5aa4dbe1a4d7bb52a7ca72d51302e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1944,8 +1997,22 @@ boards:
     # Merged 2026-08-10: the discharge recorded above applies to the tree as it
     # stood at that live capture. The acks below cover model changes that
     # postdate it and are NOT evidenced by that capture.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-08-10
-    drift_ack_digest: bf4bc6823001078d05c619850a228c985c16420a53de4df0afbc44317fba2529
+    drift_ack_digest: b95219feac714e5ace6eda9bc09bd2b144e852afce2c24cb36c1d4b74af96a57
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -2144,8 +2211,22 @@ boards:
     # failed, cargo fmt clean. Acked WITHOUT a live re-capture for this board:
     # it was not attached. Its own live diff remains owed and is NOT evidenced
     # by this entry.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-08-10
-    drift_ack_digest: 11ff9229d7ed39dc14174aba1c3cdf90761b36fa7f61e0a268f9100e58be6701
+    drift_ack_digest: 8f9b39f2484f95f3e510e6fece954095e9f59a74b2459862b9055b26e44f1494
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -2567,8 +2648,22 @@ boards:
     # use. Recorded explicitly because `--write-ack-digests` re-stamps EVERY
     # ack, which would otherwise have widened this one to cover a change
     # nobody had written down.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-07-28
-    drift_ack_digest: 304051ade8b9ff6fde81189ec89a4d25adb26ddb9b3764c586d4179575e3697a
+    drift_ack_digest: 1edd5388607f05ddebf43fde658e2529a4b1a4817557bc95711107e2daafeb33
     models:
       - configs/chips/stm32h735.yaml
       - crates/core/src/peripherals/rcc.rs
@@ -2616,8 +2711,22 @@ boards:
     # use. Recorded explicitly because `--write-ack-digests` re-stamps EVERY
     # ack, which would otherwise have widened this one to cover a change
     # nobody had written down.
+    # 2026-08-10 opt-in SPI edge-accurate slave sampling. The touched models are
+    # peripherals/spi.rs (STM32 bit engine) and the shared bus files, so this
+    # board's digest moved. The new bit-level path is OPT-IN and OFF by default:
+    # it is reached only when a device sets `opt_in` for its SPI mode, and the
+    # declarative doc says so — "Omit for the default byte-level frame
+    # exchange". Every existing lab omits it.
+    #
+    # EVIDENCE, run on this branch rather than taken on trust:
+    #   cargo test -p labwired-core --lib spi_byte_level_golden
+    #   tests::spi_byte_level_golden::default_byte_level_path_is_byte_identical ... ok
+    # That test exists precisely to pin the default exchange the 2026-06/08
+    # captures were taken against. No live re-capture is claimed here, and none
+    # is needed while the default path is byte-identical — but the moment a lab
+    # opts in, that lab's timing is NOT covered by any capture on this board.
     drift_ack: 2026-07-28
-    drift_ack_digest: 0d7b1c221e916cebed6f697e7f40e05ae3e0ec340e2c7df93e19625e4a61da55
+    drift_ack_digest: c44e33bbb2a54d9d3f4f56f571f1028c90eeb6fb3dc9963190cfcf970ef57f3d
     models:
       - configs/chips/stm32f411ceu6.yaml
       - crates/core/src/peripherals/rcc.rs
