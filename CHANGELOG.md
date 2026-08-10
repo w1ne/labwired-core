@@ -7,7 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`labwired run --batched`** drives ARM through
+  `Machine::advance(AdvanceRequest::run(..))` — the call the browser makes from
+  `Sim::step_batch` — instead of the one-instruction-per-call `Machine::step()`
+  loop. It is an assertion, not a hint: the run fails rather than falling back on
+  any chip family or option combination that cannot take the batched path
+  (Xtensa has no `Machine`-driven loop; RISC-V's per-instruction instrumentation
+  turns batching off), and it prints a `[batched] instructions=.. batches=..
+  steps_per_batch=..` line so a caller can prove which loop executed. The default
+  `labwired run` for ARM is unchanged.
+
 ### Fixed
+- **Two I²C parts powered up in a state silicon never powers up in.** Firmware
+  that relies on the documented power-on state worked in simulation and would
+  have failed on hardware — the exact class of bug this twin exists to catch.
+  - **VEML7700 booted RUNNING; silicon boots SHUT DOWN.** `ALS_CONF` (0x00) reset
+    was `0x0000`; the datasheet (Rev. 1.8 p7) says *"Command code 0 default value
+    is 01 = devices is shut down"*, bit 0 `ALS_SD`. Reset is now `0x0001`, and
+    the behaviour behind it is modelled too: `ALS` / `WHITE` are gated on
+    `ALS_SD` via a new declarative `zero_when` primitive, so a shut-down part
+    reports `0x0000` instead of a plausible light level. Known gaps (no ~2.5 ms
+    startup latency; mid-flight shutdown is an unspecified guess; `PSM`,
+    `ALS_WH`/`ALS_WL` and `ALS_INT` remain storage-only) are documented in
+    `configs/devices/veml7700.yaml`.
+  - **PCA9685 powered up all-zero.** Only MODE1 (`0x11`) had a reset value. Added
+    the rest from the datasheet (Rev. 4): MODE2 `0x04`, SUBADR1/2/3
+    `0xE2`/`0xE4`/`0xE8`, ALLCALLADR `0xE0`, all sixteen `LEDn_OFF_H` `0x10`
+    ("full OFF"), PRE_SCALE `0x1E`. These make the registers READ BACK like
+    silicon; none of the functions they select are implemented (no output drive,
+    no All-Call/subaddress bus response, no full-OFF gating, no PWM frequency) —
+    the gap list is in `configs/devices/pca9685.yaml`. `ALL_LED_ON_H` (0xFB) and
+    `ALL_LED_OFF_H` (0xFD) are deliberately left at `0x00`: the datasheet
+    contradicts itself (p25 Table 8 vs p13 Table 4) and we do not resolve that
+    for the vendor.
+  - Both hand-written byte-parity oracles moved with their descriptors, and the
+    power-on state is now asserted **absolutely against the datasheet on each
+    model independently** — parity alone would stay green if both sides carried
+    the same defect, which is exactly how these two survived.
+- **The per-board throughput gate was blind on the path users actually run.**
+  `scripts/perf/board_perf.py` drove ARM through `Machine::step()` while the
+  browser drives `Machine::advance` — so #830, worth 9-16x on the batched path,
+  measured +0.2-0.4% across all 22 ARM boards, and a regression in ARM batch
+  orchestration was invisible. The gate now measures every board in every
+  execution mode its CLI driver has (`step` and/or `batch`), derived from the
+  fixture rather than hand-listed, and refuses to record a `batch` number
+  without the CLI's proof-of-path line. Measured on the browser feature set:
+  stm32l476 1944.1 Ir/step stepped vs 203.6 batched (9.6x), nrf5340 3223.5 vs
+  205.2 (15.7x), rp2040 1166.6 vs 201.2 (5.8x). Three boards barely move,
+  correctly: stm32h563/stm32h735 model FLASH ops (`requires_cycle_accurate`)
+  and nrf54l15's bus reports `max_safe_tick_interval() == 1`, so their batches
+  are one instruction wide — on nrf54l15 the batched path is 1.5% *dearer* per
+  step than single-stepping, which is now visible rather than unmeasured.
+  `scripts/perf/baselines.json` is now `{board: {mode: Ir/step}}`.
+
+### Known issues
+- **The batched ARM path diverges from single-stepping on nrf52832, nrf52840
+  and rp2040.** All three report `TIER1 timer FAIL code=timer-not-advancing`
+  under `--batched`: firmware polling a free-running counter in a tight loop
+  sees it frozen, because inside a multi-instruction CPU batch the peripheral
+  read-side clock only resyncs at the batch boundary. This predates the flag —
+  the browser has run this path since #830 — and is now pinned by
+  `crates/cli/tests/arm_batched_path.rs`, which fails both when a new board
+  starts diverging and when a listed one stops.
+  `crates/core/tests/nrf52_timer_walk_differential.rs` does not catch it: it
+  widens the tick interval while holding the CPU quantum at 1.
 - **ESP32-C3 drift gate was watching the wrong files.** The C3's tier is a
   reset-state oracle asserted against the declarative descriptors in
   `configs/peripherals/esp32c3/`, and none of the 29 the chip yaml wires were in
@@ -23,6 +87,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `seeed-xiao-nrf52840-sense` now correctly read `✖ DRIFT` (model 2026-07-30 >
   capture 2026-06-17, past the 2026-07-27 ack) instead of claiming an ack that
   no longer covers them.
+
+### Added
+- **`zero_when` register power-gate** for the declarative device DSL: while any
+  masked bit of a named register is set, the gated register reads all-zero
+  instead of reporting its measurement. Shared by the I²C and SPI engines, with
+  validation that rejects a dangling reference, an empty mask, a self-gate, or a
+  gate bit firmware could never clear. The VEML7700's `ALS_SD` shutdown bit is
+  its first user.
 
 ## [0.21.0] - 2026-07-27
 

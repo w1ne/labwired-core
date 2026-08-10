@@ -83,6 +83,20 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32g474re/pwr.yaml"
+  # CRC (RM0440) @ 0x40023000 — the AHB1 base ST's own stm32g474.svd gives, the
+  # same address stm32l476/stm32h563 already map. This is the v2 programmable
+  # block (CRC_INIT@0x10, CRC_POL@0x14), and STM32Cube's HAL_CRC_Init writes the
+  # CRC-32 polynomial 0x04C11DB7 to CRC_POL during Arduino core startup; with no
+  # CRC mapped that store landed on unmapped MMIO. IDR is 32-bit here (F0/F1/L0
+  # are the 8-bit parts). Left ungated: RCC_AHB1ENR.CRCEN is not surfaced by the
+  # stm32g4 RCC model's enable-register set, matching the dma1 entry below.
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/crc.yaml"
+      idr_width: 32
   # ── Tier-1 peripherals (RM0440). The RCC model is profile stm32g4, so the
   # clock-gate `reg:` names resolve to the RM0440 enable-register offsets
   # (ahb2enr@0x4C, apb1enr1@0x58, apb2enr@0x60 — the same offsets ST's CMSIS
@@ -176,3 +190,23 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32g474re/nvic.yaml"
+  # DBGMCU (RM0440 §46.6) @ 0xE0042000 — the Cortex-M3/M4 private-peripheral
+  # location, confirmed against ST's own stm32g474.svd. Zephyr's SoC init calls
+  # LL_DBGMCU_EnableDBGSleepMode(), a read-modify-write of DBGMCU_CR at
+  # 0xE0042004; with no DBGMCU mapped that access had nowhere to land.
+  # DBG_SLEEP/STOP/STANDBY are plain R/W bits on silicon with no effect unless
+  # a debug probe is attached, which is exactly what the latching model gives.
+  #
+  # idcode: DEV_ID 0x469 is the RM0440 §46.6.1 value for the category-3 parts
+  # (STM32G473/G474/G483/G484). REV_ID is deliberately left 0: unlike
+  # stm32h563 and stm32f407, whose REV_IDs were read off real dies, no
+  # NUCLEO-G474RE capture exists. A zero revision is visibly a placeholder
+  # rather than a plausible-looking wrong answer; fill it in from a bench
+  # probe when one is available.
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE0042000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32g474re/dbgmcu.yaml"
+      idcode: 0x00000469

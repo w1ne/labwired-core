@@ -61,6 +61,11 @@ const BT_INT_TIMER_HS: u32 = 1 << 10;
 /// The pinner set, computed with the EXACT predicate
 /// `SystemBus::derive_walk_deletable` negates (and the exact one
 /// `oled_lab_walk_pinners_after_rtc_migration` uses).
+// The non-minimal form is the point: it is `derive_walk_deletable`'s `.all()`
+// predicate verbatim under a `!`, so the two can be diffed by eye against
+// bus/tick.rs. Clippy's `!uses_scheduler() && needs_legacy_walk()` is equivalent
+// but no longer mirrors the source it is supposed to track.
+#[allow(clippy::nonminimal_bool)]
 fn walk_pinners(bus: &SystemBus) -> Vec<String> {
     bus.peripherals
         .iter()

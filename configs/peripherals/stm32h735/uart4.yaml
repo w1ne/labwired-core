@@ -1,0 +1,834 @@
+peripheral: UART4
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UE
+    bit_range:
+    - 0
+    - 0
+    description: USART enable
+  - name: UESM
+    bit_range:
+    - 1
+    - 1
+    description: USART enable in Stop mode
+  - name: RE
+    bit_range:
+    - 2
+    - 2
+    description: Receiver enable
+  - name: TE
+    bit_range:
+    - 3
+    - 3
+    description: Transmitter enable
+  - name: IDLEIE
+    bit_range:
+    - 4
+    - 4
+    description: IDLE interrupt enable
+  - name: RXNEIE
+    bit_range:
+    - 5
+    - 5
+    description: RXNE interrupt enable
+  - name: TCIE
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Transmission complete interrupt
+                    enable
+  - name: TXEIE
+    bit_range:
+    - 7
+    - 7
+    description: interrupt enable
+  - name: PEIE
+    bit_range:
+    - 8
+    - 8
+    description: PE interrupt enable
+  - name: PS
+    bit_range:
+    - 9
+    - 9
+    description: Parity selection
+  - name: PCE
+    bit_range:
+    - 10
+    - 10
+    description: Parity control enable
+  - name: WAKE
+    bit_range:
+    - 11
+    - 11
+    description: Receiver wakeup method
+  - name: M0
+    bit_range:
+    - 12
+    - 12
+    description: Word length
+  - name: MME
+    bit_range:
+    - 13
+    - 13
+    description: Mute mode enable
+  - name: CMIE
+    bit_range:
+    - 14
+    - 14
+    description: |-
+      Character match interrupt
+                    enable
+  - name: OVER8
+    bit_range:
+    - 15
+    - 15
+    description: Oversampling mode
+  - name: DEDT0
+    bit_range:
+    - 16
+    - 16
+    description: DEDT0
+  - name: DEDT1
+    bit_range:
+    - 17
+    - 17
+    description: DEDT1
+  - name: DEDT2
+    bit_range:
+    - 18
+    - 18
+    description: DEDT2
+  - name: DEDT3
+    bit_range:
+    - 19
+    - 19
+    description: DEDT3
+  - name: DEDT4
+    bit_range:
+    - 20
+    - 20
+    description: |-
+      Driver Enable de-assertion
+                    time
+  - name: DEAT0
+    bit_range:
+    - 21
+    - 21
+    description: DEAT0
+  - name: DEAT1
+    bit_range:
+    - 22
+    - 22
+    description: DEAT1
+  - name: DEAT2
+    bit_range:
+    - 23
+    - 23
+    description: DEAT2
+  - name: DEAT3
+    bit_range:
+    - 24
+    - 24
+    description: DEAT3
+  - name: DEAT4
+    bit_range:
+    - 25
+    - 25
+    description: |-
+      Driver Enable assertion
+                    time
+  - name: RTOIE
+    bit_range:
+    - 26
+    - 26
+    description: |-
+      Receiver timeout interrupt
+                    enable
+  - name: EOBIE
+    bit_range:
+    - 27
+    - 27
+    description: |-
+      End of Block interrupt
+                    enable
+  - name: M1
+    bit_range:
+    - 28
+    - 28
+    description: Word length
+  - name: FIFOEN
+    bit_range:
+    - 29
+    - 29
+    description: FIFO mode enable
+  - name: TXFEIE
+    bit_range:
+    - 30
+    - 30
+    description: |-
+      TXFIFO empty interrupt
+                    enable
+  - name: RXFFIE
+    bit_range:
+    - 31
+    - 31
+    description: |-
+      RXFIFO Full interrupt
+                    enable
+  side_effects: null
+- id: CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SLVEN
+    bit_range:
+    - 0
+    - 0
+    description: |-
+      Synchronous Slave mode
+                    enable
+  - name: DIS_NSS
+    bit_range:
+    - 3
+    - 3
+    description: |-
+      When the DSI_NSS bit is set, the NSS pin
+                    input is ignored
+  - name: ADDM7
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      7-bit Address Detection/4-bit Address
+                    Detection
+  - name: LBDL
+    bit_range:
+    - 5
+    - 5
+    description: LIN break detection length
+  - name: LBDIE
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      LIN break detection interrupt
+                    enable
+  - name: LBCL
+    bit_range:
+    - 8
+    - 8
+    description: Last bit clock pulse
+  - name: CPHA
+    bit_range:
+    - 9
+    - 9
+    description: Clock phase
+  - name: CPOL
+    bit_range:
+    - 10
+    - 10
+    description: Clock polarity
+  - name: CLKEN
+    bit_range:
+    - 11
+    - 11
+    description: Clock enable
+  - name: STOP
+    bit_range:
+    - 13
+    - 12
+    description: STOP bits
+  - name: LINEN
+    bit_range:
+    - 14
+    - 14
+    description: LIN mode enable
+  - name: SWAP
+    bit_range:
+    - 15
+    - 15
+    description: Swap TX/RX pins
+  - name: RXINV
+    bit_range:
+    - 16
+    - 16
+    description: |-
+      RX pin active level
+                    inversion
+  - name: TXINV
+    bit_range:
+    - 17
+    - 17
+    description: |-
+      TX pin active level
+                    inversion
+  - name: TAINV
+    bit_range:
+    - 18
+    - 18
+    description: Binary data inversion
+  - name: MSBFIRST
+    bit_range:
+    - 19
+    - 19
+    description: Most significant bit first
+  - name: ABREN
+    bit_range:
+    - 20
+    - 20
+    description: Auto baud rate enable
+  - name: ABRMOD0
+    bit_range:
+    - 21
+    - 21
+    description: ABRMOD0
+  - name: ABRMOD1
+    bit_range:
+    - 22
+    - 22
+    description: Auto baud rate mode
+  - name: RTOEN
+    bit_range:
+    - 23
+    - 23
+    description: Receiver timeout enable
+  - name: ADD0_3
+    bit_range:
+    - 27
+    - 24
+    description: Address of the USART node
+  - name: ADD4_7
+    bit_range:
+    - 31
+    - 28
+    description: Address of the USART node
+  side_effects: null
+- id: CR3
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EIE
+    bit_range:
+    - 0
+    - 0
+    description: Error interrupt enable
+  - name: IREN
+    bit_range:
+    - 1
+    - 1
+    description: Ir mode enable
+  - name: IRLP
+    bit_range:
+    - 2
+    - 2
+    description: Ir low-power
+  - name: HDSEL
+    bit_range:
+    - 3
+    - 3
+    description: Half-duplex selection
+  - name: NACK
+    bit_range:
+    - 4
+    - 4
+    description: Smartcard NACK enable
+  - name: SCEN
+    bit_range:
+    - 5
+    - 5
+    description: Smartcard mode enable
+  - name: DMAR
+    bit_range:
+    - 6
+    - 6
+    description: DMA enable receiver
+  - name: DMAT
+    bit_range:
+    - 7
+    - 7
+    description: DMA enable transmitter
+  - name: RTSE
+    bit_range:
+    - 8
+    - 8
+    description: RTS enable
+  - name: CTSE
+    bit_range:
+    - 9
+    - 9
+    description: CTS enable
+  - name: CTSIE
+    bit_range:
+    - 10
+    - 10
+    description: CTS interrupt enable
+  - name: ONEBIT
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      One sample bit method
+                    enable
+  - name: OVRDIS
+    bit_range:
+    - 12
+    - 12
+    description: Overrun Disable
+  - name: DDRE
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      DMA Disable on Reception
+                    Error
+  - name: DEM
+    bit_range:
+    - 14
+    - 14
+    description: Driver enable mode
+  - name: DEP
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Driver enable polarity
+                    selection
+  - name: SCARCNT
+    bit_range:
+    - 19
+    - 17
+    description: Smartcard auto-retry count
+  - name: WUS
+    bit_range:
+    - 21
+    - 20
+    description: |-
+      Wakeup from Stop mode interrupt flag
+                    selection
+  - name: WUFIE
+    bit_range:
+    - 22
+    - 22
+    description: |-
+      Wakeup from Stop mode interrupt
+                    enable
+  - name: TXFTIE
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      TXFIFO threshold interrupt
+                    enable
+  - name: TCBGTIE
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      Transmission Complete before guard time,
+                    interrupt enable
+  - name: RXFTCFG
+    bit_range:
+    - 27
+    - 25
+    description: |-
+      Receive FIFO threshold
+                    configuration
+  - name: RXFTIE
+    bit_range:
+    - 28
+    - 28
+    description: |-
+      RXFIFO threshold interrupt
+                    enable
+  - name: TXFTCFG
+    bit_range:
+    - 31
+    - 29
+    description: |-
+      TXFIFO threshold
+                    configuration
+  side_effects: null
+- id: BRR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BRR_0_3
+    bit_range:
+    - 3
+    - 0
+    description: DIV_Fraction
+  - name: BRR_4_15
+    bit_range:
+    - 15
+    - 4
+    description: DIV_Mantissa
+  side_effects: null
+- id: GTPR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PSC
+    bit_range:
+    - 7
+    - 0
+    description: Prescaler value
+  - name: GT
+    bit_range:
+    - 15
+    - 8
+    description: Guard time value
+  side_effects: null
+- id: RTOR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RTO
+    bit_range:
+    - 23
+    - 0
+    description: Receiver timeout value
+  - name: BLEN
+    bit_range:
+    - 31
+    - 24
+    description: Block Length
+  side_effects: null
+- id: RQR
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: ABRRQ
+    bit_range:
+    - 0
+    - 0
+    description: Auto baud rate request
+  - name: SBKRQ
+    bit_range:
+    - 1
+    - 1
+    description: Send break request
+  - name: MMRQ
+    bit_range:
+    - 2
+    - 2
+    description: Mute mode request
+  - name: RXFRQ
+    bit_range:
+    - 3
+    - 3
+    description: Receive data flush request
+  - name: TXFRQ
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Transmit data flush
+                    request
+  side_effects: null
+- id: ISR
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 192
+  fields:
+  - name: PE
+    bit_range:
+    - 0
+    - 0
+    description: PE
+  - name: FE
+    bit_range:
+    - 1
+    - 1
+    description: FE
+  - name: NF
+    bit_range:
+    - 2
+    - 2
+    description: NF
+  - name: ORE
+    bit_range:
+    - 3
+    - 3
+    description: ORE
+  - name: IDLE
+    bit_range:
+    - 4
+    - 4
+    description: IDLE
+  - name: RXNE
+    bit_range:
+    - 5
+    - 5
+    description: RXNE
+  - name: TC
+    bit_range:
+    - 6
+    - 6
+    description: TC
+  - name: TXE
+    bit_range:
+    - 7
+    - 7
+    description: TXE
+  - name: LBDF
+    bit_range:
+    - 8
+    - 8
+    description: LBDF
+  - name: CTSIF
+    bit_range:
+    - 9
+    - 9
+    description: CTSIF
+  - name: CTS
+    bit_range:
+    - 10
+    - 10
+    description: CTS
+  - name: RTOF
+    bit_range:
+    - 11
+    - 11
+    description: RTOF
+  - name: EOBF
+    bit_range:
+    - 12
+    - 12
+    description: EOBF
+  - name: UDR
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      SPI slave underrun error
+                    flag
+  - name: ABRE
+    bit_range:
+    - 14
+    - 14
+    description: ABRE
+  - name: ABRF
+    bit_range:
+    - 15
+    - 15
+    description: ABRF
+  - name: BUSY
+    bit_range:
+    - 16
+    - 16
+    description: BUSY
+  - name: CMF
+    bit_range:
+    - 17
+    - 17
+    description: CMF
+  - name: SBKF
+    bit_range:
+    - 18
+    - 18
+    description: SBKF
+  - name: RWU
+    bit_range:
+    - 19
+    - 19
+    description: RWU
+  - name: WUF
+    bit_range:
+    - 20
+    - 20
+    description: WUF
+  - name: TEACK
+    bit_range:
+    - 21
+    - 21
+    description: TEACK
+  - name: REACK
+    bit_range:
+    - 22
+    - 22
+    description: REACK
+  - name: TXFE
+    bit_range:
+    - 23
+    - 23
+    description: TXFIFO Empty
+  - name: RXFF
+    bit_range:
+    - 24
+    - 24
+    description: RXFIFO Full
+  - name: TCBGT
+    bit_range:
+    - 25
+    - 25
+    description: |-
+      Transmission complete before guard time
+                    flag
+  - name: RXFT
+    bit_range:
+    - 26
+    - 26
+    description: RXFIFO threshold flag
+  - name: TXFT
+    bit_range:
+    - 27
+    - 27
+    description: TXFIFO threshold flag
+  side_effects: null
+- id: ICR
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: PECF
+    bit_range:
+    - 0
+    - 0
+    description: Parity error clear flag
+  - name: FECF
+    bit_range:
+    - 1
+    - 1
+    description: Framing error clear flag
+  - name: NCF
+    bit_range:
+    - 2
+    - 2
+    description: Noise detected clear flag
+  - name: ORECF
+    bit_range:
+    - 3
+    - 3
+    description: Overrun error clear flag
+  - name: IDLECF
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Idle line detected clear
+                    flag
+  - name: TXFECF
+    bit_range:
+    - 5
+    - 5
+    description: TXFIFO empty clear flag
+  - name: TCCF
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Transmission complete clear
+                    flag
+  - name: TCBGTC
+    bit_range:
+    - 7
+    - 7
+    description: |-
+      Transmission complete before Guard time
+                    clear flag
+  - name: LBDCF
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      LIN break detection clear
+                    flag
+  - name: CTSCF
+    bit_range:
+    - 9
+    - 9
+    description: CTS clear flag
+  - name: RTOCF
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      Receiver timeout clear
+                    flag
+  - name: EOBCF
+    bit_range:
+    - 12
+    - 12
+    description: End of block clear flag
+  - name: UDRCF
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      SPI slave underrun clear
+                    flag
+  - name: CMCF
+    bit_range:
+    - 17
+    - 17
+    description: Character match clear flag
+  - name: WUCF
+    bit_range:
+    - 20
+    - 20
+    description: |-
+      Wakeup from Stop mode clear
+                    flag
+  side_effects: null
+- id: RDR
+  address_offset: 36
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RDR
+    bit_range:
+    - 8
+    - 0
+    description: Receive data value
+  side_effects: null
+- id: TDR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TDR
+    bit_range:
+    - 8
+    - 0
+    description: Transmit data value
+  side_effects: null
+- id: PRESC
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRESCALER
+    bit_range:
+    - 3
+    - 0
+    description: Clock prescaler
+  side_effects: null
+interrupts:
+  USART1: 37
+  UART4: 52
+timing: null

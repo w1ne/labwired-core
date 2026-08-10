@@ -66,7 +66,8 @@
 //! [`MAX_LIVE_EVENTS_PER_PERIPHERAL`].
 
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
+use std::hash::BuildHasherDefault;
 
 pub type SimCycle = u64;
 
@@ -99,6 +100,200 @@ pub const MAX_LIVE_EVENTS_PER_PERIPHERAL: u32 = 8;
 /// peripherals, so 4096 is far above any real bus and far below a `u32`
 /// sentinel. Debug-asserted in [`EventScheduler::schedule`].
 const MAX_TRACKED_PERIPHERAL_SLOTS: usize = 4096;
+
+/// The de-duplication key: `(peripheral_idx, event_token, deadline)`.
+type DedupKey = (u32, u32, SimCycle);
+
+/// Hash set over [`DedupKey`] using the crate's multiply-xor [`crate::FastHasher`]
+/// — the FxHash construction, no new dependency.
+///
+/// NEVER std's default SipHash here. SipHash over this exact 16-byte key was
+/// measured (`sample`, 2026-07-26) as the top non-idle leaf frame in the whole
+/// simulator, above the RISC-V interpreter, at 27% of total run time. Replacing
+/// it is what bought 1.87x. The hybrid below exists to fix the *scan*, not to
+/// re-open that door.
+type DedupSet = HashSet<DedupKey, BuildHasherDefault<crate::FastHasher>>;
+
+/// Length at which [`DedupIndex`] promotes from the linear `Vec` to the hash
+/// set. Below it the scan wins; above it the scan is quadratic against the
+/// drain loop.
+///
+/// **Chosen by measurement, not taste.** Swept 2026-08-08 on the two-node BLE
+/// Pong lab, `esp32c3_ble_pong_perf_probe -- probe_ble_pong_profile` (400M
+/// guest cycles — the regime the original `sample` profile was taken in, where
+/// the `esp32c3::bt` residency leak has grown `max_queued_events` to ~4370).
+/// Six binaries, interleaved one round each, 8 rounds; wall seconds:
+///
+/// | promote threshold | min  | median | vs linear (min) |
+/// |-------------------|------|--------|-----------------|
+/// | linear (baseline) | 7.27 | 12.06  | 1.00x           |
+/// | 8                 | 2.59 | 3.50   | 2.81x           |
+/// | 16                | 2.58 | 2.87   | 2.82x           |
+/// | **32**            | 2.60 | 3.43   | **2.80x**       |
+/// | 64                | 2.64 | 3.81   | 2.75x           |
+/// | 256               | 2.69 | 3.31   | 2.70x           |
+///
+/// The curve is FLAT across two orders of magnitude: 8 through 256 span 4% on
+/// the minimum, which is inside the noise. That is the expected shape and the
+/// reason the exact value does not matter much — a lab either lives far below
+/// the threshold (every shipped lab: high-water mark 3) or runs away far above
+/// it (BLE Pong: 4370). Almost nothing lives near it.
+///
+/// So 32 is picked from the middle of the flat region on structural grounds:
+/// comfortably above [`MAX_LIVE_EVENTS_PER_PERIPHERAL`] × a handful of
+/// simultaneously-armed peripherals, so every well-behaved lab stays linear
+/// forever and the scan-beats-hash finding is preserved intact; and far below
+/// the length at which the scan starts to cost real time.
+///
+/// Note the same sweep at 96M cycles (`probe_ble_pong_batch_cap`, where the
+/// leak has only reached ~792) shows just 1.2x, below the noise bar. The win
+/// grows with run length because the leak does — which is the signature of the
+/// quadratic this removes.
+const DEDUP_HASH_PROMOTE_LEN: usize = 32;
+
+/// Length at which [`DedupIndex`] demotes back to the linear `Vec`.
+///
+/// Half the promote threshold, deliberately: the gap is hysteresis. A set
+/// oscillating around a single threshold would rebuild itself on every other
+/// operation, which is worse than either representation. With this gap a
+/// transition costs O(len) and cannot recur for at least
+/// `DEDUP_HASH_PROMOTE_LEN / 2` operations, so its amortised cost is O(1).
+const DEDUP_HASH_DEMOTE_LEN: usize = DEDUP_HASH_PROMOTE_LEN / 2;
+
+/// Membership index for identical-event de-duplication that degrades
+/// gracefully with size.
+///
+/// # Why this is a hybrid and not one structure
+///
+/// The set it indexes is tiny on every lab the platform shipped against: the
+/// ESP32-C3 OLED lab's high-water mark is **3**
+/// ([`SchedulerStats::max_queued_events`]), and the cancellation contract in
+/// this module's docs bounds it structurally at
+/// [`MAX_LIVE_EVENTS_PER_PERIPHERAL`] per scheduler-driven peripheral. At that
+/// size a scan of contiguous 16-byte keys beats any hash: a few compares
+/// against data already in L1, with no hash to compute and no table to probe.
+/// That reasoning was correct and is preserved — [`Self::Linear`] is still the
+/// default and still what every shipped lab uses end to end.
+///
+/// But the bound is a *contract*, not an invariant the scheduler can enforce,
+/// and the two-node BLE Pong lab breaks it: `esp32c3::bt` holds ~790
+/// simultaneously-live events against a ceiling of 8. At that length the scan
+/// is catastrophic — `schedule()` walks the whole vector on every arm and the
+/// drain path walks it again per event, so the scheduler cost 4.7x the RISC-V
+/// interpreter (`sample`, 400M guest cycles: `drain_due_into` 4014 samples,
+/// `schedule` 2384, `RiscV::step` 1094).
+///
+/// So: keep the scan where it is measurably faster, and switch above
+/// [`DEDUP_HASH_PROMOTE_LEN`], falling back below [`DEDUP_HASH_DEMOTE_LEN`].
+/// A misbehaving peripheral now degrades the scheduler gracefully instead of
+/// quadratically, without taxing the labs that behave.
+///
+/// # Semantics
+///
+/// Exactly identical in both representations, and identical to the plain `Vec`
+/// this replaces: exact-key membership, no iteration, no order dependence.
+/// Both arms hold a SET — [`EventScheduler::schedule`] never inserts a key that
+/// is already present, so there are no duplicates for `swap_remove` to pick
+/// between. Nothing reads the order of either arm, which is what makes
+/// [`Self::demote`] (whose `Vec` comes out in `HashSet` iteration order) safe:
+/// the order is unobservable, so it cannot reach event ordering, which is
+/// decided solely by the heap's `(deadline asc, event_id asc)`.
+#[derive(Debug)]
+enum DedupIndex {
+    /// Linearly-scanned. The default, and what every shipped lab uses.
+    Linear(Vec<DedupKey>),
+    /// Hash-indexed. Only reached by a peripheral that breaches the residency
+    /// ceiling — see [`SchedulerStats::live_event_ceiling_trips`].
+    Hashed(DedupSet),
+}
+
+impl Default for DedupIndex {
+    fn default() -> Self {
+        Self::Linear(Vec::new())
+    }
+}
+
+impl DedupIndex {
+    /// Insert `key` if absent. Returns `true` when it was inserted, `false`
+    /// when an identical key was already present (i.e. the caller must drop
+    /// the duplicate wake).
+    ///
+    /// One lookup, not two: the hashed arm fuses the membership test into
+    /// `HashSet::insert`.
+    #[inline]
+    fn insert_if_absent(&mut self, key: DedupKey) -> bool {
+        match self {
+            Self::Linear(v) => {
+                if v.contains(&key) {
+                    return false;
+                }
+                v.push(key);
+                let outgrown = v.len() >= DEDUP_HASH_PROMOTE_LEN;
+                if outgrown {
+                    self.promote();
+                }
+                true
+            }
+            Self::Hashed(s) => s.insert(key),
+        }
+    }
+
+    /// Remove `key` if present. Tolerates absence, as the `Vec` did.
+    #[inline]
+    fn remove(&mut self, key: &DedupKey) {
+        match self {
+            Self::Linear(v) => {
+                if let Some(pos) = v.iter().position(|k| k == key) {
+                    v.swap_remove(pos);
+                }
+            }
+            Self::Hashed(s) => {
+                s.remove(key);
+                let shrunk = s.len() <= DEDUP_HASH_DEMOTE_LEN;
+                if shrunk {
+                    self.demote();
+                }
+            }
+        }
+    }
+
+    /// Number of live keys. Equal to the heap length by construction.
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        match self {
+            Self::Linear(v) => v.len(),
+            Self::Hashed(s) => s.len(),
+        }
+    }
+
+    #[cfg(test)]
+    fn is_hashed(&self) -> bool {
+        matches!(self, Self::Hashed(_))
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn promote(&mut self) {
+        if let Self::Linear(v) = self {
+            let keys = std::mem::take(v);
+            let mut set = DedupSet::with_capacity_and_hasher(keys.len() * 2, Default::default());
+            set.extend(keys);
+            *self = Self::Hashed(set);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn demote(&mut self) {
+        if let Self::Hashed(s) = self {
+            // `HashSet` iteration order is arbitrary. That is fine and load
+            // bearing only in the negative: nothing reads this vector's order,
+            // it backs membership alone. See the type-level docs.
+            let keys: Vec<DedupKey> = s.iter().copied().collect();
+            *self = Self::Linear(keys);
+        }
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct SchedulerStats {
@@ -200,10 +395,13 @@ pub struct EventScheduler {
     /// or a period rollover) is still enqueued and still fires at its exact
     /// cycle. Only exact duplicates of an already-queued wake are dropped.
     ///
-    /// A LINEARLY-SCANNED `Vec`, not a hash set. The set it indexes is tiny:
-    /// its length equals the heap length, whose high-water mark on the shipped
-    /// ESP32-C3 OLED lab is **3** (`SchedulerStats::max_queued_events`), and
-    /// which the cancellation contract bounds structurally at
+    /// A [`DedupIndex`]: linearly-scanned below [`DEDUP_HASH_PROMOTE_LEN`],
+    /// hash-indexed above it, falling back below [`DEDUP_HASH_DEMOTE_LEN`].
+    ///
+    /// The linear arm is the one that matters and the one every shipped lab
+    /// uses: its length equals the heap length, whose high-water mark on the
+    /// shipped ESP32-C3 OLED lab is **3** (`SchedulerStats::max_queued_events`),
+    /// and which the cancellation contract bounds structurally at
     /// [`MAX_LIVE_EVENTS_PER_PERIPHERAL`] per scheduler-driven peripheral. At
     /// that size a scan of contiguous 16-byte keys beats any hash: it is a few
     /// compares against data already in L1, where hashing was measured at 27%
@@ -212,12 +410,11 @@ pub struct EventScheduler {
     /// above the RISC-V interpreter — with hashbrown's table probe a further
     /// ~10% on top of that.
     ///
-    /// Semantics are identical to the `HashSet` this replaces: exact-key
-    /// membership, no iteration, no order dependence (removal is
-    /// `swap_remove`). `max_queued_events` makes the sizing assumption
-    /// observable — if some future peripheral pushes it into the hundreds, this
-    /// is the field that says so.
-    queued: Vec<(u32, u32, SimCycle)>,
+    /// The hashed arm exists because that bound is a contract a peripheral can
+    /// breach, and one does: see [`DedupIndex`]. `max_queued_events` is what
+    /// makes the breach observable, and it still reads the true set size in
+    /// either representation.
+    queued: DedupIndex,
     /// Live event count per `peripheral_idx`, kept in lockstep with `heap`.
     /// Backs the [`MAX_LIVE_EVENTS_PER_PERIPHERAL`] invariant.
     ///
@@ -275,11 +472,10 @@ impl EventScheduler {
         // `queued` field). The retained entry fires at the identical cycle, so
         // delivery is unchanged; only the redundant copies are dropped.
         let key = (peripheral_idx, event_token, clamped);
-        if self.queued.contains(&key) {
+        if !self.queued.insert_if_absent(key) {
             // Already queued — return the id the caller ignores anyway.
             return self.next_event_id;
         }
-        self.queued.push(key);
         // Track live events per peripheral and enforce the residency ceiling.
         // A peripheral past the ceiling is re-arming at ever-changing deadlines
         // without superseding its old wakes — the #570 unbounded-heap class.
@@ -384,9 +580,7 @@ impl EventScheduler {
             // Keep the dedup index in lockstep with the heap: this key leaves the
             // heap now, so an identical wake may be re-armed after it fires.
             let key = (ev.peripheral_idx, ev.event_token, ev.deadline);
-            if let Some(pos) = self.queued.iter().position(|k| *k == key) {
-                self.queued.swap_remove(pos);
-            }
+            self.queued.remove(&key);
             if ev.peripheral_idx != SUBSYSTEM_PERIPHERAL_IDX {
                 if let Some(live) = self.live_per_peripheral.get_mut(ev.peripheral_idx as usize) {
                     *live = live.saturating_sub(1);
@@ -464,6 +658,235 @@ mod dedup_tests {
     }
 }
 
+/// The hybrid dedup index is a DATA-STRUCTURE SWAP: both arms must answer
+/// every membership question identically, and the representation in use must
+/// never be observable in scheduler output. These tests exist to prove that,
+/// because the swap is only safe if it is invisible.
+#[cfg(test)]
+mod dedup_index_tests {
+    use super::*;
+
+    /// A dependency-free xorshift so the differential test drives a long,
+    /// reproducible, non-adversarial op sequence.
+    fn xorshift(state: &mut u64) -> u64 {
+        let mut x = *state;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        *state = x;
+        x
+    }
+
+    #[test]
+    fn it_starts_linear_and_stays_linear_for_a_well_behaved_lab() {
+        // The shipped ESP32-C3 OLED lab's high-water mark is 3. Nothing near
+        // the threshold, so the scan — which is faster there — must be what
+        // actually runs. A hybrid that promoted eagerly would silently undo
+        // the 1.87x that removing SipHash bought.
+        let mut idx = DedupIndex::default();
+        assert!(!idx.is_hashed());
+        for slot in 0..3u32 {
+            assert!(idx.insert_if_absent((slot, 0, 100)));
+        }
+        assert!(!idx.is_hashed(), "a 3-entry index must never hash");
+        assert_eq!(idx.len(), 3);
+    }
+
+    #[test]
+    fn it_promotes_above_the_threshold_and_demotes_back_below_it() {
+        let mut idx = DedupIndex::default();
+        for n in 0..DEDUP_HASH_PROMOTE_LEN as u64 {
+            assert!(idx.insert_if_absent((0, 0, n)));
+        }
+        assert!(idx.is_hashed(), "must promote at the threshold");
+        assert_eq!(idx.len(), DEDUP_HASH_PROMOTE_LEN);
+
+        // Shrink back down. Hysteresis: it must NOT flip back the instant it
+        // drops below the promote threshold, only at the demote threshold.
+        for n in 0..(DEDUP_HASH_PROMOTE_LEN - DEDUP_HASH_DEMOTE_LEN) as u64 - 1 {
+            idx.remove(&(0, 0, n));
+            assert!(idx.is_hashed(), "demoted too eagerly at len {}", idx.len());
+        }
+        idx.remove(&(
+            0,
+            0,
+            (DEDUP_HASH_PROMOTE_LEN - DEDUP_HASH_DEMOTE_LEN) as u64 - 1,
+        ));
+        assert!(!idx.is_hashed(), "must demote at the demote threshold");
+        assert_eq!(idx.len(), DEDUP_HASH_DEMOTE_LEN);
+    }
+
+    #[test]
+    fn membership_survives_a_promote_demote_round_trip() {
+        // Keys inserted while linear must still be found after promotion, and
+        // keys inserted while hashed must still be found after demotion. A
+        // transition that dropped or duplicated a key would let a duplicate
+        // wake reach the heap, or suppress a genuine one.
+        let mut idx = DedupIndex::default();
+        for n in 0..DEDUP_HASH_PROMOTE_LEN as u64 {
+            assert!(idx.insert_if_absent((7, 1, n)));
+        }
+        assert!(idx.is_hashed());
+        // Every pre-promotion key must still be rejected as a duplicate.
+        for n in 0..DEDUP_HASH_PROMOTE_LEN as u64 {
+            assert!(
+                !idx.insert_if_absent((7, 1, n)),
+                "key {n} was lost across promotion"
+            );
+        }
+        // Drain to force demotion, then re-check the survivors.
+        for n in 0..(DEDUP_HASH_PROMOTE_LEN - DEDUP_HASH_DEMOTE_LEN) as u64 {
+            idx.remove(&(7, 1, n));
+        }
+        assert!(!idx.is_hashed());
+        assert_eq!(idx.len(), DEDUP_HASH_DEMOTE_LEN);
+        for n in
+            (DEDUP_HASH_PROMOTE_LEN - DEDUP_HASH_DEMOTE_LEN) as u64..DEDUP_HASH_PROMOTE_LEN as u64
+        {
+            assert!(
+                !idx.insert_if_absent((7, 1, n)),
+                "key {n} was lost across demotion"
+            );
+        }
+    }
+
+    /// The gate that would actually catch a broken swap: drive a long random
+    /// op sequence that crosses both thresholds repeatedly and assert the
+    /// hybrid agrees with a plain `HashSet` on EVERY answer.
+    #[test]
+    fn it_answers_identically_to_a_reference_hash_set() {
+        let mut idx = DedupIndex::default();
+        let mut reference: std::collections::HashSet<DedupKey> = std::collections::HashSet::new();
+        let mut state = 0x2545_F491_4F6C_DD1Du64;
+        let mut crossed_up = 0u32;
+        let mut crossed_down = 0u32;
+        let mut was_hashed = false;
+
+        // Alternating grow-biased and shrink-biased phases. A uniform op mix
+        // saturates the key space and parks the index on one side of the
+        // threshold; phases make it sweep back and forth across BOTH, which is
+        // where a transition bug would live. Keys stay random within a phase.
+        for phase in 0..200 {
+            let grow = phase % 2 == 0;
+            for _ in 0..1_000 {
+                let r = xorshift(&mut state);
+                // A key space small enough that collisions (and therefore real
+                // dedup decisions) are frequent, and wide enough to straddle
+                // the promote threshold.
+                let key: DedupKey = ((r % 3) as u32, ((r >> 8) % 2) as u32, (r >> 16) % 20);
+                let removing = if grow { r % 5 == 0 } else { r % 5 != 0 };
+                if removing {
+                    idx.remove(&key);
+                    reference.remove(&key);
+                } else {
+                    assert_eq!(
+                        idx.insert_if_absent(key),
+                        reference.insert(key),
+                        "hybrid and reference disagreed on {key:?} at len {}",
+                        idx.len()
+                    );
+                }
+                assert_eq!(idx.len(), reference.len());
+                if idx.is_hashed() != was_hashed {
+                    if idx.is_hashed() {
+                        crossed_up += 1;
+                    } else {
+                        crossed_down += 1;
+                    }
+                    was_hashed = idx.is_hashed();
+                }
+            }
+        }
+        // Prove the sequence actually exercised both arms, so a green result
+        // means something. Without this the test could pass while never
+        // promoting once.
+        assert!(
+            crossed_up > 10,
+            "only promoted {crossed_up}x — the test barely proved anything"
+        );
+        assert!(
+            crossed_down > 10,
+            "only demoted {crossed_down}x — the fallback path was barely tested"
+        );
+    }
+
+    /// End-to-end through the scheduler: a peripheral population large enough
+    /// to force the hashed arm must still drain in exactly
+    /// `(deadline asc, event_id asc)` order, which is the only ordering
+    /// contract the scheduler makes.
+    #[test]
+    fn event_order_is_unchanged_when_the_index_is_hashed() {
+        let mut s = EventScheduler::new();
+        // Spread over distinct peripheral slots so the per-peripheral
+        // residency ceiling is not tripped (that debug_asserts).
+        let n = (DEDUP_HASH_PROMOTE_LEN * 4) as u32;
+        for slot in 0..n {
+            // Deliberately non-monotonic deadlines: insertion order must not
+            // be able to leak into drain order.
+            s.schedule(u64::from((slot * 7919) % n) + 1, slot, 0);
+        }
+        assert!(s.queued.is_hashed(), "this test must exercise the hash arm");
+        assert_eq!(s.queued.len(), s.heap.len());
+
+        s.advance_to(u64::from(n) + 1);
+        let due = s.drain_due();
+        assert_eq!(
+            due.len(),
+            n as usize,
+            "every queued event must be delivered"
+        );
+        for pair in due.windows(2) {
+            assert!(
+                (pair[0].deadline, pair[0].event_id) < (pair[1].deadline, pair[1].event_id),
+                "drain order broke: {:?} then {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
+        // Fully drained: the index must have emptied and fallen back.
+        assert_eq!(s.queued.len(), 0);
+        assert!(!s.queued.is_hashed());
+        assert!(s.is_empty());
+    }
+
+    /// The index length must equal the heap length at every point — that is
+    /// the "kept in exact sync with `heap`" invariant the dedup contract rests
+    /// on, and it must hold across representation changes too.
+    #[test]
+    fn index_length_tracks_heap_length_across_transitions() {
+        let mut s = EventScheduler::new();
+        let n = (DEDUP_HASH_PROMOTE_LEN * 3) as u32;
+        for slot in 0..n {
+            s.schedule(u64::from(slot) + 1, slot, 0);
+            assert_eq!(s.queued.len(), s.heap.len());
+        }
+        for cycle in 1..=u64::from(n) {
+            s.advance_to(cycle);
+            s.drain_due();
+            assert_eq!(s.queued.len(), s.heap.len());
+        }
+        assert!(s.is_empty());
+        assert_eq!(s.queued.len(), 0);
+    }
+
+    /// `max_queued_events` is the field that made this whole problem visible.
+    /// It must keep reading the true high-water mark once the index is hashed.
+    #[test]
+    fn max_queued_events_still_reads_true_above_the_threshold() {
+        let mut s = EventScheduler::new();
+        let n = (DEDUP_HASH_PROMOTE_LEN * 5) as u32;
+        for slot in 0..n {
+            s.schedule(1000, slot, 0);
+        }
+        assert!(s.queued.is_hashed());
+        assert_eq!(s.stats().max_queued_events, n);
+        // And it is a high-WATER mark: draining must not walk it back.
+        s.advance_to(1000);
+        s.drain_due();
+        assert_eq!(s.stats().max_queued_events, n);
+    }
+}
+
 #[cfg(test)]
 mod residency_invariant_tests {
     use super::*;
@@ -538,5 +961,13 @@ mod residency_invariant_tests {
         }
         assert_eq!(s.stats().live_event_ceiling_trips, 0);
         assert_eq!(s.stats().max_live_events_per_peripheral, 0);
+    }
+}
+
+#[cfg(feature = "quantum-trace")]
+impl EventScheduler {
+    /// Every live event, unordered. Diagnostics only (`quantum-trace`).
+    pub fn pending_events(&self) -> Vec<ScheduledEvent> {
+        self.heap.iter().map(|Reverse(e)| e.clone()).collect()
     }
 }

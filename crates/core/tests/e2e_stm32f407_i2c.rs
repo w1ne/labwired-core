@@ -232,10 +232,10 @@ fn replay_engine_handles_minimal_write_and_tick() {
 
 // ── End-to-end firmware-driven test ───────────────────────────────────
 
-const F407_FIRMWARE_ELF: &str = "../../target/thumbv7em-none-eabi/release/nucleo-f407-i2c";
+const F407_FIRMWARE_ELF: &str = "thumbv7em-none-eabi/release/nucleo-f407-i2c";
 
 fn ensure_f407_firmware_built() -> PathBuf {
-    let elf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(F407_FIRMWARE_ELF);
+    let elf = labwired_core::test_support::target_dir().join(F407_FIRMWARE_ELF);
     if elf.exists() {
         return elf;
     }

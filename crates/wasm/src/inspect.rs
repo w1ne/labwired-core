@@ -11,6 +11,28 @@ use labwired_core::inspect::artifact_format as F;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+/// One logic-analyzer channel reference as JS sends it — the FLAT surface
+/// shared by [`WasmSimulator::watch_logic_signals`] and
+/// [`WasmSimulator::sample_logic_signals`]. One definition, so the two calls
+/// cannot drift into accepting different shapes.
+///
+/// ⚠️ `pin` and `line` are BOTH `#[serde(default)]`, and that is load-bearing.
+/// A wire ref carries no `pin` and a pad ref carries no `line`; serde fails the
+/// deserialize of the WHOLE `Vec` on one missing required field, so making
+/// either mandatory turns a single wire lane into a null answer for every
+/// channel beside it. `logic_ref_deserialize_tests` pins this down.
+#[derive(serde::Deserialize)]
+pub(crate) struct LogicRef {
+    pub(crate) kind: String,
+    pub(crate) peripheral: String,
+    /// Pad refs only; a wire ref omits it.
+    #[serde(default)]
+    pub(crate) pin: u8,
+    /// Wire refs only, by datasheet role name.
+    #[serde(default)]
+    pub(crate) line: Option<String>,
+}
+
 pub(crate) fn motor_states_json(
     snapshots: Vec<labwired_core::bus::MotorSnapshot>,
 ) -> Vec<serde_json::Value> {
@@ -328,21 +350,25 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
-    /// Sample the pad level of GPIO pins for the logic analyzer.
-    /// Input: `[{ kind: "gpio", peripheral, pin }]`.
-    /// Output: the same refs each extended with `value: bool | null` —
-    /// `null` when the pin's wire state is unknown (missing peripheral,
-    /// out-of-range pin, or a pad handed to a bus controller the GPIO
-    /// model doesn't track). Cheap enough to call every UI frame.
+    /// Sample the live level of logic-analyzer channels — the per-frame
+    /// readout beside [`watch_logic_signals`]'s captured waveform. It takes
+    /// the SAME flat ref surface, both kinds:
+    ///
+    /// * `{ kind: "gpio", peripheral, pin }` — the chip pad.
+    /// * `{ kind: "wire", peripheral, line }` — the peripheral's own line.
+    ///
+    /// ⚠️ `pin` is `#[serde(default)]` for a reason a test pins down: a wire
+    /// ref legitimately carries no `pin`, and a required field made
+    /// `from_value` fail for the WHOLE array, so one wire lane silently
+    /// blanked the live readout of every pad lane beside it.
+    ///
+    /// Output mirrors each ref, extended with `value: bool | null` — `null`
+    /// when the level is unknown (missing peripheral, out-of-range pin,
+    /// unknown line, or a pad handed to a bus controller the GPIO model does
+    /// not track) — plus an `error` string on a wire ref that could not
+    /// resolve, so a blank lane says why. Cheap enough to call every frame.
     #[wasm_bindgen]
     pub fn sample_logic_signals(&self, refs: JsValue) -> JsValue {
-        #[derive(serde::Deserialize)]
-        struct Ref {
-            kind: String,
-            peripheral: String,
-            pin: u8,
-        }
-
         // A panic here would throw a JS exception straight out of this wasm
         // frame; JS exceptions do NOT run Rust destructors, so the
         // wasm-bindgen borrow guard would never drop and EVERY later call
@@ -351,7 +377,7 @@ impl WasmSimulator {
         let Some(machine) = self.machine.as_ref() else {
             return JsValue::NULL;
         };
-        let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
+        let refs: Vec<LogicRef> = match serde_wasm_bindgen::from_value(refs) {
             Ok(r) => r,
             Err(_) => return JsValue::NULL,
         };
@@ -359,6 +385,26 @@ impl WasmSimulator {
         let samples: Vec<serde_json::Value> = refs
             .iter()
             .map(|r| {
+                if r.kind == "wire" {
+                    let line = r.line.as_deref().unwrap_or("");
+                    // Resolve through the same door the watch path uses, so a
+                    // live readout and a captured lane cannot disagree.
+                    return match machine.resolve_wire_source(&r.peripheral, line) {
+                        Ok(source) => serde_json::json!({
+                            "kind": "wire",
+                            "peripheral": r.peripheral,
+                            "line": line,
+                            "value": machine.read_logic_level(source),
+                        }),
+                        Err(err) => serde_json::json!({
+                            "kind": "wire",
+                            "peripheral": r.peripheral,
+                            "line": line,
+                            "value": serde_json::Value::Null,
+                            "error": err.to_string(),
+                        }),
+                    };
+                }
                 let value = if r.kind == "gpio" {
                     machine
                         .bus
@@ -379,29 +425,65 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&samples).unwrap_or(JsValue::NULL)
     }
 
-    /// Arm deterministic, in-engine logic-analyzer capture for a set of GPIO
-    /// pads. Same ref shape as [`sample_logic_signals`]:
-    /// `[{ kind: "gpio", peripheral, pin }]`.
+    /// The whole probeable WIRE surface of this chip: every peripheral that
+    /// publishes wire lines, with the exact line names it publishes.
     ///
-    /// Each ref is resolved ONCE here (to a peripheral index + pin) so the
-    /// in-loop sampling path never does a string lookup. Unresolvable refs
-    /// (unknown peripheral / non-gpio kind) get `value: null` and are never
-    /// sampled. Installing a watch set resets the capture ring and cursor.
+    /// Returns `[{ peripheral, lines: ["TX", "RX"] }]`, bus order.
+    ///
+    /// This exists so a probe menu is built from engine truth instead of a
+    /// second, hand-maintained copy of the vocabulary. The spellings are not
+    /// uniform and are not derivable from the protocol — generic STM32 SPI
+    /// publishes `SCK/MOSI/MISO` and NO chip select, RP2040 SPI spells it
+    /// `CSn`, ESP GPSPI spells it `CS`. Anything that guesses `"CS"` offers a
+    /// lane that cannot resolve on two of those three.
+    #[wasm_bindgen]
+    pub fn logic_wire_surface(&self) -> JsValue {
+        // Never panic in an accessor — see `sample_logic_signals`.
+        let Some(machine) = self.machine.as_ref() else {
+            return JsValue::NULL;
+        };
+        let surface: Vec<serde_json::Value> = machine
+            .wire_surface()
+            .into_iter()
+            .map(|(peripheral, lines)| {
+                serde_json::json!({ "peripheral": peripheral, "lines": lines })
+            })
+            .collect();
+        serde_wasm_bindgen::to_value(&surface).unwrap_or(JsValue::NULL)
+    }
+
+    /// Arm deterministic, in-engine logic-analyzer capture. TWO channel kinds,
+    /// one capture layer — same ring, same cursor, same [`read_logic_edges`],
+    /// same decoders. The ref surface is FLAT:
+    ///
+    /// * `{ kind: "gpio", peripheral, pin }` — a chip PAD. Reads what a probe
+    ///   clipped to that pin would see and nothing else. An unmuxed pad reads
+    ///   the GPIO output latch and draws a flat line; it NEVER falls back to
+    ///   the owning peripheral's wire, because a pad probe that quietly showed
+    ///   bus traffic on a pin no bus reaches would hide the commonest serial
+    ///   bring-up bug there is.
+    /// * `{ kind: "wire", peripheral, line }` — a peripheral's OWN line, by
+    ///   name: `{ kind: "wire", peripheral: "usart2", line: "TX" }`. Line names
+    ///   are the datasheet role labels (`"TX"`/`"RX"`, `"SCL"`/`"SDA"`,
+    ///   `"SCK"`/`"MOSI"`/…), matched ignoring case. Independent of pad muxing,
+    ///   of alternate-function tables, and of which instances a family's pad
+    ///   table happens to cover.
+    ///
+    /// Each ref is resolved ONCE here (to a peripheral index plus a pin or a
+    /// line index) so the in-loop sampling path never does a string lookup.
+    /// An unresolvable ref gets `value: null`, an `error` string saying why,
+    /// and is never sampled — it is not silently dropped and never falls
+    /// through to channel zero. Installing a watch set resets the capture ring
+    /// and cursor.
     ///
     /// Returns the initial state as `[{ ...ref, ch, value }]` where `ch` is the
     /// channel index used in edge records (the ref's position) and `value` is
-    /// the current pad level (`bool | null`). Poll new edges with
-    /// [`read_logic_edges`]. Pass an empty array to disarm capture.
+    /// the current level (`bool | null`). A `gpio` row carries `pin`, a `wire`
+    /// row carries `line`. Poll new edges with [`read_logic_edges`]. Pass an
+    /// empty array to disarm capture.
     #[wasm_bindgen]
     pub fn watch_logic_signals(&mut self, refs: JsValue) -> JsValue {
-        #[derive(serde::Deserialize)]
-        struct Ref {
-            kind: String,
-            peripheral: String,
-            pin: u8,
-        }
-
-        let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
+        let refs: Vec<LogicRef> = match serde_wasm_bindgen::from_value(refs) {
             Ok(r) => r,
             Err(_) => return JsValue::NULL,
         };
@@ -414,19 +496,46 @@ impl WasmSimulator {
         let Some(machine) = self.machine.as_mut() else {
             return JsValue::NULL;
         };
-        let resolved: Vec<Option<(usize, u8)>> = refs
-            .iter()
-            .map(|r| {
-                if r.kind == "gpio" {
-                    machine
-                        .bus
-                        .find_peripheral_index_by_name(&r.peripheral)
-                        .map(|idx| (idx, r.pin))
-                } else {
+        let mut errors: Vec<Option<String>> = vec![None; refs.len()];
+        let mut resolved: Vec<Option<labwired_core::logic_capture::LogicSource>> =
+            Vec::with_capacity(refs.len());
+        for (ch, r) in refs.iter().enumerate() {
+            let source = match r.kind.as_str() {
+                "gpio" => match machine.bus.find_peripheral_index_by_name(&r.peripheral) {
+                    Some(idx) => Some(labwired_core::logic_capture::LogicSource::pad(idx, r.pin)),
+                    None => {
+                        errors[ch] = Some(
+                            labwired_core::logic_capture::LogicRefError::UnknownPeripheral {
+                                peripheral: r.peripheral.clone(),
+                            }
+                            .to_string(),
+                        );
+                        None
+                    }
+                },
+                "wire" => {
+                    match machine
+                        .resolve_wire_source(&r.peripheral, r.line.as_deref().unwrap_or(""))
+                    {
+                        Ok(source) => Some(source),
+                        Err(err) => {
+                            errors[ch] = Some(err.to_string());
+                            None
+                        }
+                    }
+                }
+                other => {
+                    errors[ch] = Some(
+                        labwired_core::logic_capture::LogicRefError::UnknownKind {
+                            kind: other.to_string(),
+                        }
+                        .to_string(),
+                    );
                     None
                 }
-            })
-            .collect();
+            };
+            resolved.push(source);
+        }
 
         let initial = machine.logic_watch(&resolved);
 
@@ -435,13 +544,23 @@ impl WasmSimulator {
             .zip(initial)
             .enumerate()
             .map(|(ch, (r, value))| {
-                serde_json::json!({
-                    "kind": r.kind,
-                    "peripheral": r.peripheral,
-                    "pin": r.pin,
-                    "ch": ch,
-                    "value": value,
-                })
+                // A gpio row keeps the EXACT shape it has always had, key for
+                // key, so nothing that already reads this surface has to know
+                // wire channels exist.
+                let mut row = serde_json::Map::new();
+                row.insert("kind".into(), serde_json::json!(r.kind));
+                row.insert("peripheral".into(), serde_json::json!(r.peripheral));
+                if r.kind == "wire" {
+                    row.insert("line".into(), serde_json::json!(r.line));
+                } else {
+                    row.insert("pin".into(), serde_json::json!(r.pin));
+                }
+                row.insert("ch".into(), serde_json::json!(ch));
+                row.insert("value".into(), serde_json::json!(value));
+                if let Some(error) = &errors[ch] {
+                    row.insert("error".into(), serde_json::json!(error));
+                }
+                serde_json::Value::Object(row)
             })
             .collect();
 
@@ -1256,5 +1375,46 @@ mod motor_state_tests {
         );
         assert_eq!(states[1]["commutation_sector"], 4);
         assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
+    }
+}
+
+/// The regression that made this module's shared [`LogicRef`] necessary.
+///
+/// The analyzer sends ONE array holding every armed channel. Before this,
+/// `sample_logic_signals` declared its own copy of the ref struct with `pin`
+/// REQUIRED, so the moment a user switched one lane to a wire probe the array
+/// failed to deserialize, `sample_logic_signals` returned `null`, and the live
+/// level column went blank on every pad lane too. Nothing threw; the readout
+/// just stopped. These deserialize the real type, not a mirror of it.
+#[cfg(test)]
+mod logic_ref_deserialize_tests {
+    use super::LogicRef;
+
+    #[test]
+    fn a_wire_ref_beside_a_pad_ref_does_not_null_the_whole_array() {
+        let refs: Vec<LogicRef> = serde_json::from_str(
+            r#"[{"kind":"gpio","peripheral":"gpioa","pin":5},
+                {"kind":"wire","peripheral":"usart2","line":"TX"}]"#,
+        )
+        .expect("a mixed pad/wire watch set must deserialize as one array");
+
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].pin, 5);
+        assert_eq!(refs[0].line, None);
+        assert_eq!(refs[1].line.as_deref(), Some("TX"));
+        // A wire ref has no pad. `0` here is serde's default filling an absent
+        // field, never a claim that the wire sits on pin 0 — the `kind` is what
+        // the read path branches on.
+        assert_eq!(refs[1].pin, 0);
+    }
+
+    #[test]
+    fn a_pad_ref_needs_no_line_field() {
+        let refs: Vec<LogicRef> =
+            serde_json::from_str(r#"[{"kind":"gpio","peripheral":"gpiob","pin":3}]"#)
+                .expect("the pad shape that predates wire channels must still parse");
+        assert_eq!(refs[0].kind, "gpio");
+        assert_eq!(refs[0].peripheral, "gpiob");
+        assert_eq!(refs[0].line, None);
     }
 }

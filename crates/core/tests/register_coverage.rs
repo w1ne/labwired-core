@@ -229,6 +229,13 @@ fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
             let cpu = system::riscv::configure_riscv(&mut bus);
             let mut m = Machine::new(cpu, bus);
             m.bus.set_clock_gating_bypass(true);
+            // Same reasoning as the clock-gate bypass above, for the ESP32-C3
+            // PMS: this probe writes 0xFFFF_FFFF to every register in ascending
+            // offset order, which SETS the PMS lock bits and then scores the 13
+            // registers behind them (and the hardware-owned violation-status
+            // words) unresponsive. That would report a coverage regression for
+            // registers that became MORE modelled, not less.
+            m.bus.set_pms_write_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::Xtensa => {

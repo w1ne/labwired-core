@@ -34,7 +34,7 @@ svd-parser = "0.14"
 anyhow = { workspace = true }
 clap = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
 serde_json = { workspace = true }
@@ -44,6 +44,11 @@ ureq = { workspace = true }
 
 [features]
 default = []
+# Silent-path census — pass-through to labwired-core's `silent-census`.
+# Measurement only; see the note on that feature. Build the measuring binary
+# with `cargo build -p labwired-cli --features silent-census` and point
+# `LABWIRED_CENSUS_OUT` at a JSON path to get a report. Both are required.
+silent-census = ["labwired-core/silent-census"]
 # Phase 3.2 JIT pilot (issue #124) — pass-through to labwired-core's `jit`
 # feature. Build with `cargo build --release -p labwired-cli --features
 # jit-core` to enable the wasmtime-backed RV32IMC JIT.
@@ -57,12 +62,58 @@ default = []
 # JIT-on vs JIT-off differential is byte-identical either way (both arms tick
 # peripherals identically), so the scheduler is not required for this path.
 jit-core = ["labwired-core/jit"]
-# Opt-in event scheduler + walk-delete / idle-FF infrastructure used by the
-# Arduino matrix speed path (`LABWIRED_MATRIX_SPEED=1`). Build:
+# Event scheduler + walk-delete / idle-FF infrastructure. Build:
 #   cargo build -p labwired-cli --release --features event-scheduler
-# Do NOT combine with `jit-core` for general CLI use (see note above).
+#
+# This feature is what makes CPU idle fast-forward EXIST: without it
+# `Machine::try_idle_fast_forward` is `#[cfg(not(feature = "event-scheduler"))]
+# { 0 }`, so `labwired test` interprets every instruction of every idle
+# FreeRTOS task and `idle_fast_forward_enabled` cannot do anything. On an
+# ESP32-C3 BLE bring-up that is 4x the interpreted instructions — measured, see
+# `apply_run_speed_opts` in `commands/test.rs`.
+#
+# ⚠️ HISTORY — the Xtensa blocker that used to gate this, and what it was.
+# Turning this feature on used to move ELEVEN ESP32-classic / ESP32-S3 tier-1
+# cells from `pass` to `blocked`, while no esp32c3 cell moved. It was NOT
+# missing Xtensa scheduler coverage. The two Xtensa `labwired run` paths in
+# `commands/run.rs` were hand-rolled `cpu.step()` +
+# `bus.tick_peripherals_with_costs()` loops that never published the bus cycle
+# clock and had no event scheduler at all (the heap is a `Machine` field). With
+# the feature on, the per-cycle walk SKIPS every `uses_scheduler()` peripheral,
+# so those were the only two mechanisms left — `esp32::timg` stayed frozen at
+# cycle 0 and the shared `EspUart` TX FIFO never drained, spinning the S3 boot
+# ROM inside `uart_tx_one_char_uart`. ARM and RISC-V `run`, and `labwired test`
+# for every arch, already went through `Machine`, which is exactly why only
+# Xtensa `run` moved. Both loops now drive `Machine`; the ratchet
+#   cargo test --release -p labwired-cli --test tier1_matrix_ratchet \
+#     --features event-scheduler
+# is green, and `tests/lifecycle_single_source.rs` fails if a CLI run path ever
+# forks the lifecycle again.
+#
+# Still NOT in `default`, and still not to be combined with `jit-core` for
+# general CLI use (see the note above).
 event-scheduler = ["labwired-core/event-scheduler"]
 # Swap the built-in fuzzing loop for the LibAFL engine (havoc/splice mutators,
 # map-feedback scheduler, crash objectives). Heavy dependency tree, so opt-in:
 # `cargo build --release -p labwired-cli --features fuzz-libafl`.
 fuzz-libafl = ["labwired-fuzz/libafl"]
+
+# ── ZERO-TEST TARGETS CANNOT REPORT GREEN ────────────────────────────────────
+# Every target below is an integration test whose ENTIRE body sits behind an
+# inner `#![cfg(feature = "...")]`. Built without the feature the file compiles
+# to an EMPTY libtest binary, which prints `test result: ok. 0 passed` and exits
+# 0 — indistinguishable, to CI and to a human, from a suite that ran and passed.
+# `required-features` makes cargo SKIP the target instead of reporting it green,
+# and makes an explicit `--test <name>` without the feature a hard error.
+# Adding a new `#![cfg(feature = ...)]` test file without a block here fails
+# `crates/core/src/tests/no_vacuous_test_targets.rs`.
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "e2e_esp32c3_ble_adv_republish"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "e2e_esp32c3_ble_two_node"
+required-features = ["event-scheduler"]

@@ -619,7 +619,10 @@ impl Esp32s3Rmt {
             // with no functional branch in any driver).
             0xCC => 0x0210_1181,
             // REF_CNT_RST (WT) — not separately modeled; read back as 0.
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.rmt:Esp32s3Rmt", offset, "read");
+                0
+            }
         }
     }
 
@@ -702,7 +705,9 @@ impl Esp32s3Rmt {
             // REF_CNT_RST (0xC8, write-trigger) / DATE (0xCC, RO) — no mutable
             // state to update here; ignore. (CHnDATA, STATUS, CARRIER_DUTY and
             // RX_CARRIER_RM are handled by the early returns above.)
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.rmt:Esp32s3Rmt", offset, "write");
+            }
         }
     }
 }

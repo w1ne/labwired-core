@@ -1,0 +1,195 @@
+peripheral: DBGMCU
+version: 0.1.0
+registers:
+- id: IDCODE
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DEV_ID
+    bit_range:
+    - 11
+    - 0
+    description: Device Identifier
+  - name: REV_ID
+    bit_range:
+    - 31
+    - 16
+    description: Revision Identifier
+  side_effects: null
+- id: CR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_SLEEP
+    bit_range:
+    - 0
+    - 0
+    description: Debug Sleep Mode
+  - name: DBG_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Debug Stop Mode
+  - name: DBG_STANDBY
+    bit_range:
+    - 2
+    - 2
+    description: Debug Standby Mode
+  - name: TRACE_IOEN
+    bit_range:
+    - 5
+    - 5
+    description: Trace pin assignment control
+  - name: TRACE_MODE
+    bit_range:
+    - 7
+    - 6
+    description: Trace pin assignment control
+  side_effects: null
+- id: APB1L_FZ
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIMER2_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Debug Timer 2 stopped when Core is halted
+  - name: DBG_TIM3_STOP
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 counter stopped when core is halted
+  - name: DBG_TIM4_STOP
+    bit_range:
+    - 2
+    - 2
+    description: TIM4 counter stopped when core is halted
+  - name: DBG_TIM5_STOP
+    bit_range:
+    - 3
+    - 3
+    description: TIM5 counter stopped when core is halted
+  - name: DBG_TIMER6_STOP
+    bit_range:
+    - 4
+    - 4
+    description: Debug Timer 6 stopped when Core is halted
+  - name: DBG_TIM7_STOP
+    bit_range:
+    - 5
+    - 5
+    description: TIM7 counter stopped when core is halted
+  - name: DBG_RTC_STOP
+    bit_range:
+    - 10
+    - 10
+    description: Debug RTC stopped when Core is halted
+  - name: DBG_WWDG_STOP
+    bit_range:
+    - 11
+    - 11
+    description: Debug Window Wachdog stopped when Core is halted
+  - name: DBG_IWDG_STOP
+    bit_range:
+    - 12
+    - 12
+    description: Debug Independent Wachdog stopped when Core is halted
+  - name: DBG_I2C1_STOP
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 SMBUS timeout mode stopped when core is halted
+  - name: DBG_I2C2_STOP
+    bit_range:
+    - 22
+    - 22
+    description: I2C2 SMBUS timeout mode stopped when core is halted
+  - name: DBG_I2C3_STOP
+    bit_range:
+    - 30
+    - 30
+    description: I2C3 SMBUS timeout mode stopped when core is halted
+  - name: DBG_LPTIMER_STOP
+    bit_range:
+    - 31
+    - 31
+    description: LPTIM1 counter stopped when core is halted
+  side_effects: null
+- id: APB1H_FZ
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_I2C4_STOP
+    bit_range:
+    - 1
+    - 1
+    description: DBG_I2C4_STOP
+  side_effects: null
+- id: APB2_FZ
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM1_STOP
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 counter stopped when core is halted
+  - name: DBG_TIM8_STOP
+    bit_range:
+    - 13
+    - 13
+    description: TIM8 counter stopped when core is halted
+  - name: DBG_TIM15_STOP
+    bit_range:
+    - 16
+    - 16
+    description: TIM15 counter stopped when core is halted
+  - name: DBG_TIM16_STOP
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 counter stopped when core is halted
+  - name: DBG_TIM17_STOP
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 counter stopped when core is halted
+  - name: DBG_TIM20_STOP
+    bit_range:
+    - 20
+    - 20
+    description: TIM20counter stopped when core is halted
+  - name: DBG_HRTIM0_STOP
+    bit_range:
+    - 26
+    - 26
+    description: DBG_HRTIM0_STOP
+  - name: DBG_HRTIM1_STOP
+    bit_range:
+    - 27
+    - 27
+    description: DBG_HRTIM0_STOP
+  - name: DBG_HRTIM2_STOP
+    bit_range:
+    - 28
+    - 28
+    description: DBG_HRTIM0_STOP
+  - name: DBG_HRTIM3_STOP
+    bit_range:
+    - 29
+    - 29
+    description: DBG_HRTIM0_STOP
+  side_effects: null
+interrupts: null
+timing: null

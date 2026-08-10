@@ -87,14 +87,156 @@ pub struct LogicEdge {
     pub value: bool,
 }
 
-/// One resolved watch channel. Resolution (peripheral index + pin) happens once
-/// at `watch` time so the sampling hot path never does a string lookup.
+/// What ONE analyzer channel is clipped to.
+///
+/// Two kinds over one capture layer: the same ring, the same cursor, the same
+/// [`LogicCapture::read_edges`] and the same decoders serve both. They differ
+/// only in what is read.
+///
+/// # Why two kinds and not one
+///
+/// The distinction is silicon truth, not convenience.
+///
+/// [`Pad`](Self::Pad) is a probe clipped to a physical pin. It reads
+/// [`Peripheral::read_gpio_pad`](crate::Peripheral::read_gpio_pad) and NOTHING
+/// else. If firmware never muxed the pad, the pad really is driven by the GPIO
+/// output latch and the honest trace is a flat line — the same flat line a
+/// scope on that pin would draw. Falling back to the owning peripheral's wire
+/// there would make the instrument lie about the one thing a pad probe exists
+/// to answer, and would hide exactly the class of firmware bug ("you forgot to
+/// call `gpio_set_function`") this engine is for.
+///
+/// [`Wire`](Self::Wire) is the other question, and it is a different question:
+/// "what is this peripheral putting on its own line?" That is independent of
+/// pad muxing, of alternate-function tables, and of whether any pad on this
+/// package can carry the signal at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogicSource {
+    /// A chip pad: bus index of the owning GPIO peripheral plus the pin.
+    Pad {
+        /// Bus index of the peripheral that owns the pad.
+        peripheral: usize,
+        /// Pin within that peripheral's port.
+        pin: u8,
+    },
+    /// A peripheral's own wire line: bus index of the peripheral plus an index
+    /// into its [`Peripheral::line_names`](crate::Peripheral::line_names).
+    Wire {
+        /// Bus index of the peripheral that publishes the wire.
+        peripheral: usize,
+        /// Line index, in `line_names` order.
+        line: usize,
+    },
+}
+
+impl LogicSource {
+    /// A pad channel.
+    pub fn pad(peripheral: usize, pin: u8) -> Self {
+        Self::Pad { peripheral, pin }
+    }
+
+    /// A wire channel, by line INDEX. Prefer resolving a name through
+    /// [`Machine::resolve_wire_source`](crate::Machine::resolve_wire_source):
+    /// an index chosen by hand cannot be checked, and a wrong one draws a
+    /// confident waveform of the wrong signal.
+    pub fn wire(peripheral: usize, line: usize) -> Self {
+        Self::Wire { peripheral, line }
+    }
+
+    /// Bus index of the peripheral this channel reads, whichever kind it is.
+    pub fn peripheral(&self) -> usize {
+        match *self {
+            Self::Pad { peripheral, .. } | Self::Wire { peripheral, .. } => peripheral,
+        }
+    }
+}
+
+/// Why a `{kind, peripheral, pin|line}` reference could not be resolved to a
+/// [`LogicSource`].
+///
+/// Every arm names what was asked for, because the alternative — answering
+/// channel zero, or silently dropping the channel — is how a probe ends up
+/// drawing the wrong signal with no way to tell.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogicRefError {
+    /// No peripheral on the bus carries this name.
+    UnknownPeripheral {
+        /// The name that was asked for.
+        peripheral: String,
+    },
+    /// The peripheral exists but publishes no wire at all — either it owns no
+    /// narration cell, or no lab has wired its pads yet so the cell does not
+    /// exist.
+    NoWireLines {
+        /// The peripheral that was asked.
+        peripheral: String,
+    },
+    /// The peripheral publishes a wire, but not under this line name.
+    UnknownLine {
+        /// The peripheral that was asked.
+        peripheral: String,
+        /// The line name that was asked for.
+        line: String,
+        /// The names it does publish, in line order.
+        available: Vec<&'static str>,
+    },
+    /// A `kind` this engine has no channel for.
+    UnknownKind {
+        /// The kind that was asked for.
+        kind: String,
+    },
+}
+
+impl std::fmt::Display for LogicRefError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownPeripheral { peripheral } => {
+                write!(f, "no peripheral named {peripheral:?} on this bus")
+            }
+            Self::NoWireLines { peripheral } => write!(
+                f,
+                "peripheral {peripheral:?} publishes no wire lines to probe",
+            ),
+            Self::UnknownLine {
+                peripheral,
+                line,
+                available,
+            } => write!(
+                f,
+                "peripheral {peripheral:?} has no line {line:?}; it publishes {available:?}",
+            ),
+            Self::UnknownKind { kind } => write!(
+                f,
+                "unknown logic channel kind {kind:?}; want \"gpio\" or \"wire\"",
+            ),
+        }
+    }
+}
+
+impl std::error::Error for LogicRefError {}
+
+/// Resolve a wire line NAME to its index in `names`, ignoring ASCII case.
+///
+/// Case-insensitive because these are datasheet role labels and every engineer
+/// types them differently: `TX`, `tx` and `Tx` are one line. What it must never
+/// do is guess — an unrecognised spelling returns `None` so the caller can
+/// report it, rather than falling through to channel zero and drawing a
+/// confident waveform of a signal nobody asked for.
+pub fn line_index_of(names: &[&'static str], name: &str) -> Option<usize> {
+    names
+        .iter()
+        .position(|candidate| candidate.eq_ignore_ascii_case(name))
+}
+
+/// One resolved watch channel. Resolution (peripheral index + pin, or
+/// peripheral index + line) happens once at `watch` time so the sampling hot
+/// path never does a string lookup.
 #[derive(Debug, Clone, Copy)]
 struct LogicChannel {
-    /// `Some((peripheral_index, pin))` for a resolvable GPIO ref, `None` for an
-    /// unresolvable ref (unknown peripheral / non-gpio kind). Unresolvable
-    /// channels are never sampled and never emit edges.
-    resolved: Option<(usize, u8)>,
+    /// `Some(source)` for a resolvable ref, `None` for an unresolvable one
+    /// (unknown peripheral, unknown line, unknown kind). Unresolvable channels
+    /// are never sampled and never emit edges.
+    resolved: Option<LogicSource>,
     /// Last known pad level, or `None` if never known (initial, or the pad has
     /// only ever read back as unknown). A transition is emitted when a `Some(v)`
     /// read differs from this.
@@ -190,6 +332,14 @@ impl LogicTap {
         self.shared.clock.store(cycle, Ordering::Relaxed);
     }
 
+    /// The current provisional stamp — "now" as far as pad pushes are
+    /// concerned. A narrator anchoring a completed phase reads this to place
+    /// its edges in the cycles leading up to the present.
+    #[inline]
+    pub fn clock(&self) -> u64 {
+        self.shared.clock.load(Ordering::Relaxed)
+    }
+
     /// Record a pad level for watched channel `ch`, stamped with the current
     /// provisional clock. Called by instrumented peripherals from their pad
     /// write sites; transitions-only dedup happens at ingest, so reporting an
@@ -197,6 +347,28 @@ impl LogicTap {
     /// small).
     pub fn push(&self, ch: u32, value: bool) {
         let cycle = self.shared.clock.load(Ordering::Relaxed);
+        self.push_at(ch, value, cycle);
+    }
+
+    /// Record a pad level stamped with an explicit engine cycle, for a
+    /// peripheral that knows when the transition happened rather than only
+    /// that it has happened.
+    ///
+    /// A bit engine drives the wire as the engine advances, so the provisional
+    /// clock in [`push`](Self::push) is already the right answer. A
+    /// transaction-level controller instead completes a whole phase and only
+    /// then knows the waveform that phase put on the wire: nine SCL periods of
+    /// it, spread across the cycles it was counting down. Pushing those with
+    /// the provisional clock would pile every edge onto the single cycle the
+    /// phase retired at, which is not a waveform — it is a spike. `push_at`
+    /// lets that controller narrate each edge at the cycle it truly occurred
+    /// (see [`crate::peripherals::i2c_waveform`]).
+    ///
+    /// Stamps must be in the past relative to the provisional clock, and a
+    /// caller emitting a run of edges should emit them in ascending cycle
+    /// order; [`LogicCapture::ingest_push`] preserves a past stamp verbatim
+    /// and finalises only those at or beyond the drain boundary.
+    pub fn push_at(&self, ch: u32, value: bool, cycle: u64) {
         self.shared
             .queue
             .lock()
@@ -391,7 +563,7 @@ impl LogicCapture {
     /// they must be the same length.
     pub fn install(
         &mut self,
-        resolved: &[Option<(usize, u8)>],
+        resolved: &[Option<LogicSource>],
         initial: &[Option<bool>],
         push: &[bool],
     ) {
@@ -412,25 +584,26 @@ impl LogicCapture {
         self.dropped = 0;
     }
 
-    /// Sample every watched pad at engine cycle `now`, recording a transition
-    /// for any channel whose known level changed. `read` maps a resolved
-    /// `(peripheral_index, pin)` to the direction-aware pad level (the same
-    /// truth as `Peripheral::read_gpio_pad`); a `None` read records nothing.
+    /// Sample every watched channel at engine cycle `now`, recording a
+    /// transition for any whose known level changed. `read` maps a resolved
+    /// [`LogicSource`] to its level — the direction-aware pad level for a
+    /// `Pad` (the same truth as `Peripheral::read_gpio_pad`), the published
+    /// wire level for a `Wire`; a `None` read records nothing.
     ///
     /// Caller guarantees this is only invoked when [`is_active`](Self::is_active).
     /// Every call is a real sample — the step loop invokes this at every cycle
     /// boundary while armed, so no transition that persists across a boundary
     /// is ever missed. Re-sampling the same cycle is harmless: capture is
     /// transitions-only, so an unchanged pad records nothing.
-    pub fn sample(&mut self, now: u64, read: impl Fn(usize, u8) -> Option<bool>) {
+    pub fn sample(&mut self, now: u64, read: impl Fn(LogicSource) -> Option<bool>) {
         for i in 0..self.channels.len() {
             if self.channels[i].push {
                 continue; // event-driven channel: its peripheral pushes edges
             }
-            let Some((idx, pin)) = self.channels[i].resolved else {
+            let Some(source) = self.channels[i].resolved else {
                 continue;
             };
-            let Some(level) = read(idx, pin) else {
+            let Some(level) = read(source) else {
                 continue;
             };
             if self.channels[i].last != Some(level) {

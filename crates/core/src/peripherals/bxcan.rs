@@ -188,6 +188,19 @@ impl BxCan {
         dev
     }
 
+    pub fn attach_bus(
+        &mut self,
+        tx: Sender<CanFrame>,
+        rx: Receiver<CanFrame>,
+    ) -> anyhow::Result<()> {
+        if self.bus_tx.is_some() || self.bus_rx.is_some() {
+            anyhow::bail!("bxCAN is already attached to a CAN bus");
+        }
+        self.bus_tx = Some(tx);
+        self.bus_rx = Some(rx);
+        Ok(())
+    }
+
     /// Frame-level trace for the logic analyzer; mirrors the FDCAN shape so the
     /// shared CAN/UDS decoder works for both controllers.
     pub fn trace_snapshot(&self, peripheral: &str) -> Vec<FdcanTraceFrame> {

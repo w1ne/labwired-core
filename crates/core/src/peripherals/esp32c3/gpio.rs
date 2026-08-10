@@ -30,6 +30,29 @@ const SIG_GPIO_OUT: u32 = 128;
 /// `soc/esp32c3/include/soc/gpio_sig_map.h`).
 const SIG_I2CEXT0_SCL: u32 = 53;
 const SIG_I2CEXT0_SDA: u32 = 54;
+/// GPIO-matrix OUTPUT signal indices of GP-SPI2 (FSPI) — the controller
+/// arduino-esp32's `SPIClass SPI(FSPI)` drives. esp-idf
+/// `soc/esp32c3/include/soc/gpio_sig_map.h`: `FSPICLK_OUT_IDX` :104,
+/// `FSPID_OUT_IDX` :108, `FSPICS0_OUT_IDX` :114.
+///
+/// ⚠️ These are C3 numbers. The S3 spells the same three signals 101/103/110
+/// and the classic ESP32's VSPI is 63/65/68 — the index space is PER CHIP, and
+/// borrowing a sibling's constant fails silently in BOTH directions: a plain
+/// pad decodes as routed and a routed pad as plain.
+const SIG_FSPICLK: u32 = 63;
+const SIG_FSPID: u32 = 65;
+const SIG_FSPICS0: u32 = 68;
+/// GPIO-matrix OUTPUT signal indices of the UART transmitters (esp-idf
+/// `gpio_sig_map.h` :29 `U0TXD_OUT_IDX`, :35 `U1TXD_OUT_IDX`).
+///
+/// ⚠️ The DEFAULT `U0TXD` pad (GPIO21) reaches the pin through IO_MUX
+/// function 0 (`io_mux_reg.h` :267), NOT through this matrix, so a stock
+/// `Serial.begin()` leaves these routes dark and the pad rightly keeps reading
+/// the GPIO latch. The route lights up when firmware remaps TX to any other pin
+/// — `uart_set_pin` falls back to `gpio_matrix_out` for a non-IO_MUX pad, and
+/// UART1 has no IO_MUX route on the C3 at all, so it is matrix-only.
+const SIG_U0TXD: u32 = 6;
+const SIG_U1TXD: u32 = 9;
 
 /// ESP32-C3 GPIO-matrix OUTPUT signal index → signal name, for the I²C / SPI /
 /// UART signals the logic analyzer cares about (from esp-idf
@@ -80,8 +103,6 @@ struct C3Tap {
     tap: crate::logic_capture::LogicTap,
     watched: Vec<(u8, u32)>,
     scratch: Vec<Option<bool>>,
-    line_scl_chs: Vec<u32>,
-    line_sda_chs: Vec<u32>,
 }
 
 #[derive(Debug)]
@@ -118,6 +139,10 @@ pub struct Esp32c3Gpio {
     /// matrix routes I2CEXT0_SCL/SDA read the wire here instead of the
     /// GPIO_OUT latch.
     i2c_lines: Option<std::sync::Arc<super::i2c::I2cLineLevels>>,
+    /// Pads bound to peripheral wires, resolved against this port's live output
+    /// matrix through the shared seam. The `i2c_lines` handle above stays for
+    /// the C3's bidirectional matrix/ACK logic, which reads the wire by role.
+    pad_routes: crate::peripherals::pad_routing::PadRoutes,
     /// `Some` while the logic analyzer watches pads on this port in push mode
     /// (installed via `install_logic_tap`). Not snapshot state — the watch is
     /// re-armed by the frontend after a resume.
@@ -145,6 +170,7 @@ impl Esp32c3Gpio {
             )),
             pad_controls: None,
             i2c_lines: None,
+            pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
             tap: None,
             cycle: 0,
             anchor_tick: 0,
@@ -154,7 +180,89 @@ impl Esp32c3Gpio {
     /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit
     /// engine drives) so matrix-routed pads carry the real waveform.
     pub(crate) fn set_i2c_lines(&mut self, lines: std::sync::Arc<super::i2c::I2cLineLevels>) {
+        // Bind every pad to both I²C signals through the shared routing seam;
+        // which one is live at any moment is decided by the output matrix.
+        let wire = lines.pad_lines().clone();
+        for pin in 0..PIN_COUNT {
+            self.pad_routes
+                .bind(&wire, pin, Some(SIG_I2CEXT0_SCL), 0, "I2CEXT0_SCL");
+            self.pad_routes
+                .bind(&wire, pin, Some(SIG_I2CEXT0_SDA), 1, "I2CEXT0_SDA");
+        }
         self.i2c_lines = Some(lines);
+    }
+
+    /// Bind GP-SPI2's SCK/MOSI/CS wire to every pad the output matrix can route
+    /// it to. Which pad is live at any moment is then decided by
+    /// `FUNCn_OUT_SEL_CFG`, through the shared routing seam — exactly as for
+    /// I²C above. MISO is deliberately not bound; see
+    /// [`crate::peripherals::esp_gpspi_wire`].
+    pub(crate) fn bind_spi_lines(
+        &mut self,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        use crate::peripherals::esp_gpspi_wire::{LINE_CS, LINE_MOSI, LINE_SCK};
+        for pin in 0..PIN_COUNT {
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_FSPICLK), LINE_SCK, "SPI2_SCK");
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_FSPID), LINE_MOSI, "SPI2_MOSI");
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_FSPICS0), LINE_CS, "SPI2_CS");
+        }
+    }
+
+    /// Bind one UART's TX wire to every pad the output matrix can route it to.
+    ///
+    /// TX ONLY. Nothing in the engine drives the RX line, so a bound RX pad
+    /// would report a confident constant idle-high — including while an attached
+    /// GPS or modem was actually sending. That is worse than the GPIO-latch
+    /// fallback it would replace, because it looks authoritative. Same call as
+    /// `wire_rp2040_uart_pads` documents. RX joins the table when something
+    /// drives it, not before.
+    pub(crate) fn bind_uart_tx_lines(
+        &mut self,
+        instance: usize,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        let (signal, func) = match instance {
+            0 => (SIG_U0TXD, "UART0_TX"),
+            1 => (SIG_U1TXD, "UART1_TX"),
+            // The C3 has two UARTs (`SOC_UART_NUM` = 2) and no U2 signal exists
+            // in its matrix at all, so there is nothing to bind.
+            _ => return,
+        };
+        for pin in 0..PIN_COUNT {
+            self.pad_routes.bind(
+                lines,
+                pin,
+                Some(signal),
+                crate::peripherals::uart::LINE_TX,
+                func,
+            );
+        }
+    }
+
+    /// Every signal name bound to this port's pads, live or not — the
+    /// bus-visibility reporting seam. See
+    /// [`crate::peripherals::pad_routing::PadRoutes::bound_functions`] for why
+    /// this is the static question and `func()` is the live one.
+    pub(crate) fn bound_pad_functions(&self) -> Vec<&'static str> {
+        self.pad_routes.bound_functions()
+    }
+
+    /// The output-matrix signal `pin` currently carries — the selector the
+    /// shared routing seam resolves bindings against.
+    ///
+    /// `None` unless the pad's output driver is enabled, because a pad that is
+    /// not driving is showing its input level, not the peripheral's wire. That
+    /// condition is part of the selector rather than the binding so one rule
+    /// covers pad reads and push-capture registration alike.
+    fn matrix_signal(&self, pin: u8) -> Option<u32> {
+        if pin >= PIN_COUNT || (self.enable & (1u32 << pin)) == 0 {
+            return None;
+        }
+        Some(self.out_sel[pin as usize] & 0x1FF)
     }
 
     /// Clone the live GPIO-matrix route cell for the C3 I²C controller. It is
@@ -210,12 +318,8 @@ impl Esp32c3Gpio {
         if (self.enable & mask) != 0 {
             // Output matrix: pads routed to the I²C0 controller carry the live
             // SDA/SCL wire the bit engine drives, not the GPIO_OUT latch.
-            if let Some(lines) = &self.i2c_lines {
-                match self.out_sel[pin as usize] & 0x1FF {
-                    SIG_I2CEXT0_SCL => return Some(lines.scl()),
-                    SIG_I2CEXT0_SDA => return Some(lines.sda()),
-                    _ => {}
-                }
+            if let Some(level) = self.pad_routes.level(pin, |p| self.matrix_signal(p)) {
+                return Some(level);
             }
             return Some((self.out & mask) != 0);
         }
@@ -257,42 +361,19 @@ impl Esp32c3Gpio {
         self.sync_line_tap();
     }
 
-    /// Channels whose watched pads currently route to the I²C0 SCL / SDA
-    /// output-matrix signals (and are output-enabled) — the pads whose level
-    /// changes are driven by the I²C bit engine rather than GPIO writes.
-    fn routed_line_channels(&self) -> (Vec<u32>, Vec<u32>) {
-        let mut scl = Vec::new();
-        let mut sda = Vec::new();
-        if let Some(t) = &self.tap {
-            for &(pin, ch) in &t.watched {
-                if pin >= PIN_COUNT || (self.enable & (1u32 << pin)) == 0 {
-                    continue;
-                }
-                match self.out_sel[pin as usize] & 0x1FF {
-                    SIG_I2CEXT0_SCL => scl.push(ch),
-                    SIG_I2CEXT0_SDA => sda.push(ch),
-                    _ => {}
-                }
-            }
-        }
-        (scl, sda)
-    }
-
-    /// Push the current routed-channel lists into the shared I²C line cell,
-    /// but only when they changed (avoids mutex traffic on unrelated writes).
+    /// Re-register watched pads with the wires that drive them, so a pad the
+    /// matrix hands over (or takes back) follows its new source.
     fn sync_line_tap(&mut self) {
-        let Some(lines) = self.i2c_lines.clone() else {
+        if self.pad_routes.is_empty() {
             return;
-        };
-        let (scl, sda) = self.routed_line_channels();
-        let Some(t) = &mut self.tap else {
-            return;
-        };
-        if t.line_scl_chs != scl || t.line_sda_chs != sda {
-            t.line_scl_chs = scl.clone();
-            t.line_sda_chs = sda.clone();
-            lines.install_tap(Some(t.tap.clone()), scl, sda);
         }
+        let Some(t) = self.tap.take() else {
+            return;
+        };
+        let mut routes = std::mem::take(&mut self.pad_routes);
+        routes.sync_taps(&t.tap, &t.watched, |pin| self.matrix_signal(pin));
+        self.pad_routes = routes;
+        self.tap = Some(t);
     }
 
     fn out_sel_index(off: u64) -> Option<usize> {
@@ -607,19 +688,16 @@ impl Peripheral for Esp32c3Gpio {
     ) -> bool {
         if watched.is_empty() {
             self.tap = None;
-            if let Some(lines) = &self.i2c_lines {
-                lines.install_tap(None, Vec::new(), Vec::new());
-            }
+            self.pad_routes.clear_taps();
         } else {
             self.tap = Some(C3Tap {
                 tap: tap.clone(),
                 watched: watched.to_vec(),
                 scratch: vec![None; watched.len()],
-                // Seeded stale so the sync below always installs the current
-                // routing into the line cell.
-                line_scl_chs: vec![u32::MAX],
-                line_sda_chs: vec![u32::MAX],
             });
+            // Seeded stale so the sync below always installs the current
+            // routing into the line cell.
+            self.pad_routes.invalidate_registrations();
             self.sync_line_tap();
         }
         true

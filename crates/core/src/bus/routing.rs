@@ -329,6 +329,10 @@ impl SystemBus {
             .iter()
             .position(|p| p.name == "interrupt_core0" && p.base == 0x600C_2000);
         self.rebuild_esp32c3_irq_cache();
+        // The C3 permission-control unit lives in the SENSITIVE block; its
+        // model is a derived cache of that block's registers, so it is rebuilt
+        // whenever the peripheral list changes.
+        self.rebuild_esp32c3_pms();
         self.esp32s3_intmatrix_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
@@ -845,13 +849,100 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Attach one endpoint of a shared `CanBus` to the named FDCAN peripheral.
+    /// Attach one endpoint of a shared `CanBus` to an on-chip CAN controller or
+    /// a CAN-capable device nested below an SPI controller.
     ///
     /// This is deliberately a post-build seam: system manifests build each
     /// node in isolation, while an environment manifest supplies the topology
     /// only after all of those buses exist. It rejects a missing identifier and
     /// any non-FDCAN device rather than silently routing a topology edge to a
     /// wrong peripheral.
+    pub fn attach_can_endpoint_by_id(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        if can_id.trim().is_empty() {
+            anyhow::bail!("CAN endpoint id must not be blank");
+        }
+        let mut channels = Some((tx, rx));
+        let mut nested_owner = None;
+        let named_peripheral = self.find_peripheral_index_by_name(can_id);
+        if let Some(idx) = named_peripheral {
+            let any = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not a CAN controller"))?;
+            if let Some(fdcan) = any.downcast_mut::<crate::peripherals::fdcan::Fdcan>() {
+                let (tx, rx) = channels.take().expect("CAN channels are available");
+                fdcan.attach_bus(tx, rx)?;
+            } else if let Some(bxcan) = any.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                let (tx, rx) = channels.take().expect("CAN channels are available");
+                bxcan.attach_bus(tx, rx)?;
+            }
+        }
+        if channels.is_some() {
+            let mut matched = false;
+            for (peripheral_index, peripheral) in self.peripherals.iter_mut().enumerate() {
+                let Some(any) = peripheral.dev.as_any_mut() else {
+                    continue;
+                };
+                let devices: Option<&mut [Box<dyn crate::peripherals::spi::SpiDevice>]> =
+                    if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+                        Some(&mut spi.attached_devices)
+                    } else if let Some(spi) = any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>() {
+                        Some(&mut spi.attached_devices)
+                    } else if let Some(spi) = any.downcast_mut::<crate::peripherals::esp32c3::spi::Esp32c3Spi>() {
+                        Some(spi.attached_devices_mut())
+                    } else if let Some(spi) = any.downcast_mut::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>() {
+                        Some(spi.attached_devices_mut())
+                    } else if let Some(serial) = any.downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>() {
+                        Some(serial.attached_spi_devices_mut())
+                    } else {
+                        None
+                    };
+                let Some(devices) = devices else { continue };
+                if let Some(device) = devices
+                    .iter_mut()
+                    .find(|device| device.component_id() == Some(can_id))
+                {
+                    matched = true;
+                    let (tx, rx) = channels
+                        .take()
+                        .expect("CAN endpoint ids are unique per system");
+                    device.attach_can_bus(tx, rx).map_err(|error| {
+                        anyhow::anyhow!(
+                            "SPI device '{can_id}' cannot attach as CAN endpoint: {error}"
+                        )
+                    })?;
+                    nested_owner = Some(peripheral_index);
+                    break;
+                }
+            }
+            if !matched {
+                if named_peripheral.is_some() {
+                    anyhow::bail!("peripheral '{can_id}' is not a CAN controller");
+                }
+                anyhow::bail!("no CAN endpoint '{can_id}'");
+            }
+        }
+        // FDCAN is walk-free under `event-scheduler` until a CanBus endpoint is
+        // attached (`scheduler_mode` is `event-scheduler && bus_rx.is_none()`).
+        // from_config latches `legacy_walk_disabled` over the pre-attach set, so
+        // without a recompute the multi-node bus stays walk-deleted and mpsc RX
+        // never drains — world_can_bus / CanBus paths under cargo test --workspace
+        // (feature-unified event-scheduler) receive zero frames.
+        self.rebuild_peripheral_ranges();
+        self.recompute_walk_deletable();
+        if let Some(owner) = nested_owner {
+            self.refresh_legacy_tick_index(owner);
+            #[cfg(feature = "event-scheduler")]
+            self.collect_scheduled_events(owner);
+        }
+        Ok(())
+    }
+
     pub fn attach_can_bus_by_id(
         &mut self,
         can_id: &str,
@@ -869,12 +960,6 @@ impl SystemBus {
             .downcast_mut::<crate::peripherals::fdcan::Fdcan>()
             .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
         fdcan.attach_bus(tx, rx)?;
-        // FDCAN is walk-free under `event-scheduler` until a CanBus endpoint is
-        // attached (`scheduler_mode` is `event-scheduler && bus_rx.is_none()`).
-        // from_config latches `legacy_walk_disabled` over the pre-attach set, so
-        // without a recompute the multi-node bus stays walk-deleted and mpsc RX
-        // never drains — world_can_bus / CanBus paths under cargo test --workspace
-        // (feature-unified event-scheduler) receive zero frames.
         self.rebuild_peripheral_ranges();
         self.recompute_walk_deletable();
         Ok(())

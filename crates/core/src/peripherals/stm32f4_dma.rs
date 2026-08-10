@@ -276,10 +276,16 @@ impl StreamDma {
                     0x0C => st.m0ar,
                     0x10 => st.m1ar,
                     0x14 => st.fcr,
-                    _ => 0,
+                    _ => {
+                        crate::census_reg!("stm32f4_dma:StreamDma", reg, "read");
+                        0
+                    }
                 }
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("stm32f4_dma:StreamDma", offset, "read");
+                0
+            }
         }
     }
 
@@ -311,10 +317,14 @@ impl StreamDma {
                     0x0C => self.streams[s].m0ar = value,
                     0x10 => self.streams[s].m1ar = value,
                     0x14 => self.streams[s].fcr = value & 0xBF, // FEIE|DMDIS|FTH; FS is RO
-                    _ => {}
+                    _ => {
+                        crate::census_reg!("stm32f4_dma:StreamDma", reg, "write");
+                    }
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("stm32f4_dma:StreamDma", offset, "write");
+            }
         }
     }
 

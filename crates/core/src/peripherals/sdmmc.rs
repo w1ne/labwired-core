@@ -97,7 +97,10 @@ impl Sdmmc {
             0x3C => self.mask,
             0x48 => self.fifocnt,
             0x80 => self.fifo,
-            _ => 0,
+            _ => {
+                crate::census_reg!("sdmmc:Sdmmc", offset, "read");
+                0
+            }
         }
     }
 
@@ -155,7 +158,9 @@ impl Sdmmc {
             }
             0x3C => self.mask = value,
             0x80 => self.fifo = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("sdmmc:Sdmmc", offset, "write");
+            }
         }
     }
 }

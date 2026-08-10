@@ -1,0 +1,27 @@
+Open On-Chip Debugger v0.12.0-esp32-20260703 (2026-07-03-13:40)
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+Info : esp_usb_jtag: capabilities descriptor set to 0x2000
+Info : esp_usb_jtag: serial (9C:CC:01:D0:98:E0)
+Info : esp_usb_jtag: Device found. Base speed 40000KHz, div range 1 to 255
+Info : clock speed 4000 kHz
+Info : JTAG tap: esp32c3.tap0 tap/device found: 0x00005c25 (mfg: 0x612 (Espressif Systems), part: 0x0005, ver: 0x0)
+Info : [esp32c3] datacount=2 progbufsize=16
+Info : [esp32c3] Examined RISC-V core
+Info : [esp32c3]  XLEN=32, misa=0x40101104
+Info : [esp32c3] Chip revision v0.4
+Info : [esp32c3] Examination succeed
+Info : [esp32c3] starting gdb server on 3333
+Info : Listening on port 3333 for gdb connections
+Info : JTAG tap: esp32c3.tap0 tap/device found: 0x00005c25 (mfg: 0x612 (Espressif Systems), part: 0x0005, ver: 0x0)
+Info : [esp32c3] Reset cause (3) - (Software core reset)
+0x60006000: 00000000 
+0x6001cc00: 00000000 
+0x60033000: 00000000 
+0x60035000: 0000919f 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
+0x60035020: 00000000 024e01ff b0000000 00000002 00000064 00000000 00000000 00000064 
+0x60035040: 00000000 00000000 00000064 00000000 00000000 00000064 00000000 00000000 
+0x60035060: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 a3479f8e 
+0x60035080: 000007ff 00003202 00000000 00000000 00000000 00000004 00000000 00000000 
+shutdown command invoked

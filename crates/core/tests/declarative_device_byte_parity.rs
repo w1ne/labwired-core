@@ -150,11 +150,16 @@ const TMP102_GOLDEN: &[u8] = &[
 fn veml7700_transcript_is_unchanged() {
     let mut d = i2c_device("veml7700");
     let mut t = Vec::new();
-    // Power-on ALS/WHITE at the default 450 lux, gain 1×, IT 100 ms.
+    // Power-on ALS/WHITE. The part boots SHUT DOWN (ALS_CONF resets to 0x0001,
+    // ALS_SD set — datasheet Rev. 1.8 p7), so both read 0x0000 despite the
+    // default 450 lux scene. The four bytes below used to be 0x85,0x1E /
+    // 0x18,0x23 — a light reading from a sensor that had never been powered on.
     t.extend(read_reg(&mut d, 0x04, 2));
     t.extend(read_reg(&mut d, 0x05, 2));
     // Program every rw register and read each back — the write path this
-    // change touched. ALS_CONF = gain ×2 (bits 12:11 = 01), IT 200 ms.
+    // change touched. ALS_CONF = gain ×2 (bits 12:11 = 01), IT 200 ms. Bit 0
+    // (ALS_SD) is clear in 0x0840, so this write also POWERS THE PART ON, which
+    // is why every byte from here on is unchanged by the shutdown gate.
     write_reg(&mut d, 0x00, &[0x40, 0x08]);
     write_reg(&mut d, 0x01, &[0x34, 0x12]);
     write_reg(&mut d, 0x02, &[0x78, 0x56]);
@@ -175,8 +180,19 @@ fn veml7700_transcript_is_unchanged() {
     check("veml7700", &t, VEML7700_GOLDEN);
 }
 
+/// Regenerated (via this file's own `--nocapture` self-print, never hand-typed)
+/// when the VEML7700 gained its documented power-on shutdown state.
+///
+/// EXACTLY four bytes moved, all in the leading power-on read:
+///   `0x85, 0x1E` → `0x00, 0x00`   ALS   at power-on
+///   `0x18, 0x23` → `0x00, 0x00`   WHITE at power-on
+/// The remaining 20 bytes are byte-identical, because the script's first write
+/// (ALS_CONF = 0x0840) clears ALS_SD and powers the part on.
+///
+/// Those four bytes were a bug, not a behaviour change: the model was reporting
+/// 450 lx from a sensor whose shutdown bit had never been cleared.
 const VEML7700_GOLDEN: &[u8] = &[
-    0x85, 0x1E, 0x18, 0x23, 0x40, 0x08, 0x34, 0x12, 0x78, 0x56, 0x03, 0x00, 0x12, 0x7A, 0x62, 0x8C,
+    0x00, 0x00, 0x00, 0x00, 0x40, 0x08, 0x34, 0x12, 0x78, 0x56, 0x03, 0x00, 0x12, 0x7A, 0x62, 0x8C,
     0x00, 0x00, 0x00, 0x00, 0xAA, 0x03, 0x36, 0x04,
 ];
 
@@ -253,6 +269,24 @@ fn pca9685_transcript_is_unchanged() {
     t.push(d.read());
     t.push(d.read());
     d.stop();
+    // The rest of the documented power-on state (datasheet Rev. 4), still with
+    // auto-increment off so each read re-selects its pointer. Pinned here so a
+    // shared-engine change that drops the register-file `reset` map shows up in
+    // this transcript, not just in the PCA9685-specific parity file.
+    for reg in [
+        0x01u8, // MODE2      0x04  OUTDRV
+        0x02,   // SUBADR1    0xE2
+        0x05,   // ALLCALLADR 0xE0
+        0x09,   // LED0_OFF_H 0x10  full OFF
+        0xFB,   // ALL_LED_ON_H  — 0x00 on purpose (vendor contradicts itself)
+        0xFE,   // PRE_SCALE  0x1E  200 Hz
+    ] {
+        d.start();
+        d.write(reg);
+        d.start();
+        t.push(d.read());
+        d.stop();
+    }
     // Enable AI, then block-write channel 0's four LED registers in one frame.
     write_reg(&mut d, 0x00, &[0x21]);
     write_reg(&mut d, 0x06, &[0x00, 0x00, 0x29, 0x01]);
@@ -274,7 +308,25 @@ fn pca9685_transcript_is_unchanged() {
     );
 }
 
-const PCA9685_GOLDEN: &[u8] = &[0x11, 0x11, 0x00, 0x00, 0x29, 0x01];
+/// Regenerated (via this file's own `--nocapture` self-print, never hand-typed)
+/// when the PCA9685 gained its documented power-on register values.
+///
+/// The OLD golden was `[0x11, 0x11, 0x00, 0x00, 0x29, 0x01]`. Note what did and
+/// did not move:
+///   * `0x11, 0x11` — MODE1 read twice, pointer parked. UNCHANGED.
+///   * `0x04, 0xE2, 0xE0, 0x10, 0x00, 0x1E` — SIX NEW BYTES, from six reads
+///     added to the script above, not from any byte changing value. They pin
+///     MODE2 / SUBADR1 / ALLCALLADR / LED0_OFF_H / ALL_LED_ON_H / PRE_SCALE.
+///   * `0x00, 0x00, 0x29, 0x01` — the channel-0 block read back after the
+///     script writes it. UNCHANGED, and it could not have changed: the script
+///     writes all four of those registers (0x06..0x09) before reading them, so
+///     LED0_OFF_H's new 0x10 reset is overwritten by 0x01 first.
+///
+/// That last point is why the old transcript was blind to this bug, and why the
+/// six reads were added rather than the golden simply re-blessed.
+const PCA9685_GOLDEN: &[u8] = &[
+    0x11, 0x11, 0x04, 0xE2, 0xE0, 0x10, 0x00, 0x1E, 0x00, 0x00, 0x29, 0x01,
+];
 
 // ─── ADXL345 (SPI): rw registers, burst auto-increment, signed words ───────
 

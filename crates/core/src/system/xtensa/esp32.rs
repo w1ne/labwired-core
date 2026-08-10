@@ -557,6 +557,24 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::components::Bmp280::new(0x76)),
     )
     .expect("i2c0 just registered as Esp32I2c");
+    // Bind I2C0's SCL/SDA wire to the classic GPIO output matrix, so a pad the
+    // firmware routes to I2CEXT0_SCL/SDA (signals 29/30) carries the real
+    // waveform for `read_gpio_pad` and the in-engine logic analyzer. Must come
+    // AFTER both the GPIO registration and the i2c0 registration above:
+    // `pad_lines_arc` CREATES the wire cell, and a controller owning a cell no
+    // route reaches narrates into nothing.
+    bus.wire_esp32_i2c_pads();
+    // Same for VSPI (the `spi3` instance at 0x3FF6_5000 — the controller
+    // arduino-esp32's `SPI` object drives) and each UART's TX, so those buses
+    // are measurable on this part rather than reading as a flat line. Must come
+    // AFTER `register_esp32_peripherals` above, which is what puts spi3 and
+    // uart0/1/2 on the bus; `pad_lines_arc` CREATES the wire cell, and a
+    // controller owning a cell no route reaches narrates into nothing.
+    //
+    // ⚠️ Unlike I²C these are the ONLY call sites that matter for a real lab:
+    // `configs/chips/esp32.yaml` is not what a classic lab is built from.
+    bus.wire_esp32_spi_pads();
+    bus.wire_esp32_uart_pads();
     // AHB TX FIFO alias registered after wifi_mac_phy (see below).
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,

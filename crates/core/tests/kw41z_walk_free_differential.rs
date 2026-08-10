@@ -21,13 +21,21 @@
 //!    exactly what the walk would have produced" proof (the CYCCNT reads land at
 //!    arbitrary unaligned cycles and every one is exact).
 //!
-//! 2. `dwt_cyccnt_reads_are_bounded_and_live_at_interval_64` — the same firmware
-//!    with the scheduler lane batched at tick interval 64 vs the walk-on
-//!    interval-1 golden reference. A bare Cortex-M + DWT fixture avoids the SCB
+//! 2. `dwt_cyccnt_reads_are_exact_at_interval_64` — the same firmware with the
+//!    scheduler lane batched at tick interval 64 vs the walk-on interval-1
+//!    golden reference. A bare Cortex-M + DWT fixture avoids the SCB
 //!    reset-fidelity clamp, and the step profile proves that wide batches really
-//!    formed. Mid-batch CYCCNT reads quantise to the batch-start grid, so every
-//!    read stays within one interval of the walk reference and the trace stays
-//!    live. `total_cycles` remains identical.
+//!    formed. Every mid-batch CYCCNT read equals the walk reference exactly, and
+//!    `total_cycles` remains identical.
+//!
+//!    This gate used to assert the opposite — that reads *quantise* to the
+//!    batch-start grid, staying merely within one interval of the reference. It
+//!    was describing issue #842 rather than catching it: `CortexM::step_batch`
+//!    left the published cycle pinned to batch start, so firmware polling any
+//!    lazily-advanced counter watched it stop for a whole quantum. Fixed by
+//!    advancing the cycle per retired instruction, which `RiscV::step_batch`
+//!    always did. The tolerance is gone because there is nothing left to
+//!    tolerate.
 //!
 //! 3. `mcg_tick_is_a_genuine_no_op` / `rsim_tick_is_a_genuine_no_op` — the two
 //!    combinational Kinetis models are driven through their real boot register
@@ -256,11 +264,16 @@ fn dwt_cyccnt_is_byte_identical_at_interval_1() {
 /// as a SINGLE batched call each. Both lanes use the bare Cortex-M + DWT fixture
 /// so SCB reset fidelity cannot clamp them to one instruction. The scheduler
 /// step profile proves wide batches formed (`cpu_batches` is nonzero and
-/// strictly less than `cpu_instructions`); its CYCCNT staircase independently
-/// shows batch-start quantisation. Every sample stays within one interval of the
-/// walk reference, the trace stays live, and `total_cycles` stays identical.
+/// strictly less than `cpu_instructions`), so the samples really are being taken
+/// from inside multi-instruction batches — which is the only place the #842
+/// defect existed. All 800 samples equal the walk reference exactly, and
+/// `total_cycles` stays identical.
+///
+/// This is the strongest of the #842 gates: real `CortexM`, real hand-assembled
+/// Thumb firmware, and the concrete-`SystemBus` batch arm — the hot path a
+/// synthetic `Cpu` test cannot reach.
 #[test]
-fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
+fn dwt_cyccnt_reads_are_exact_at_interval_64() {
     const STEPS: u64 = 4_000;
     const INTERVAL: u64 = 64;
     // Well under the ~999 samples STEPS produces (loop is 4 instructions), so
@@ -305,7 +318,6 @@ fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
     let w = read_buf(&walk);
     let s = read_buf(&sched);
 
-    let mut saw_plateau = false;
     for i in 0..N_SAMPLES as usize {
         // Both traces are monotone non-decreasing (CYCCNT never rewinds).
         if i > 0 {
@@ -315,25 +327,23 @@ fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
                 w[i] > w[i - 1],
                 "walk CYCCNT must strictly advance at sample {i}"
             );
-            if s[i] == s[i - 1] {
-                saw_plateau = true;
-            }
+            // The scheduler lane must advance just as strictly. A plateau here
+            // IS the #842 defect: consecutive polls reading the same value is
+            // firmware watching the clock stop.
+            assert!(
+                s[i] > s[i - 1],
+                "scheduler CYCCNT plateaued at sample {i} (both {}) — mid-batch \
+                 reads are quantised to the batch-start grid again",
+                s[i]
+            );
         }
-        let diff = (w[i] as i64 - s[i] as i64).unsigned_abs();
-        assert!(
-            diff < INTERVAL,
-            "sample {i}: |walk {} - sched {}| = {} exceeds interval {}",
-            w[i],
-            s[i],
-            diff,
-            INTERVAL
+        assert_eq!(
+            w[i], s[i],
+            "sample {i}: walk {} != sched {} — a mid-batch CYCCNT read is not \
+             what the per-cycle walk would have produced",
+            w[i], s[i]
         );
     }
-
-    assert!(
-        saw_plateau,
-        "interval-64 CYCCNT must show batch-start quantisation"
-    );
     // Live, not frozen: the scheduler counter climbs well past zero.
     assert!(
         *s.last().unwrap() > 1_000,

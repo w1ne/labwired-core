@@ -5,9 +5,15 @@ name: Core Perf (simulator throughput)
 # The gate measures host instructions retired per simulated CPU step, per
 # board, under callgrind — see scripts/perf/board_perf.py for why that metric
 # and not wall clock. It is NOT a merge-blocking gate on PRs by default: it
-# runs on push to main and nightly, and opens/updates an issue when a board
-# regresses, so a slowdown is noticed the day it lands rather than months later
-# when someone reports "the blinky looks frozen".
+# runs on push to main and nightly, and tracks a regression in a single issue,
+# so a slowdown is noticed the day it lands rather than months later when
+# someone reports "the blinky looks frozen".
+#
+# The issue is a live status page, not a log: each run rewrites its body with
+# the current state and only comments when the set of failing boards actually
+# changes, so a regression that sits unfixed for a week is one issue with one
+# body — not one comment per push to main. When the gate goes green the issue
+# is closed automatically, which is also the only thing that ever closed it.
 #
 # Run it on a PR by hand with workflow_dispatch when touching the CPU step
 # path, the machine-advance loop, or the peripheral tick walk.
@@ -21,7 +27,15 @@ on:
       - "crates/cli/**"
       - "crates/config/**"
       - "configs/chips/**"
+      # All THREE fixture crates, not just the unsuffixed one. This lane builds
+      # firmware-perf-spin-xtensa and -riscv as well, and `firmware-perf-spin/**`
+      # matches neither — so a change to a fixture never re-ran the lane that
+      # consumes it. That is not hypothetical: the xtensa fixture was missing a
+      # required esp-backtrace feature, the lane died compiling it on every main
+      # commit for a day, and the one-line fix could not trigger its own gate.
       - "crates/firmware-perf-spin/**"
+      - "crates/firmware-perf-spin-riscv/**"
+      - "crates/firmware-perf-spin-xtensa/**"
       - "scripts/perf/**"
       - ".github/workflows/core-perf.yml"
   schedule:
@@ -41,14 +55,14 @@ jobs:
   board-throughput:
     name: board-throughput
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi
+          targets: thumbv6m-none-eabi,riscv32imc-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -62,8 +76,39 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install valgrind
-        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Install valgrind + PyYAML
+        run: |
+          sudo apt-get update && sudo apt-get install -y valgrind
+          python -m pip install --quiet pyyaml
+
+      # Xtensa has no rustup target — esp32, esp32s3 and esp32s3-zero need the
+      # esp-rs LLVM fork. This step is `continue-on-error` so a flaky espup
+      # download cannot take the other 22 chips down with it, which means the
+      # hole it is meant to close IS STILL OPEN whenever it fails: those three
+      # chips have no baseline in any mode, so board_perf.py names them under
+      # "NEVER measured anywhere" and excludes them from every coverage count.
+      # Do not read a green run of this job as "25 chips measured" — read the
+      # first line of the report, which is the honest number. Same install
+      # core-nightly's esp32s3-fixtures-e2e job already uses.
+      - name: Install Xtensa toolchain (espup)
+        continue-on-error: true
+        run: |
+          cargo install espup --locked
+          espup install
+          # NOTHING gets added to PATH here, deliberately. Putting
+          # ~/.rustup/toolchains/esp/bin on PATH makes every later `cargo`
+          # resolve to the esp fork's binary directly instead of the rustup
+          # shim, and that fork carries no std for thumbv6m or riscv32imc — so
+          # the FIRST fixture build dies with "can't find crate for `core`"
+          # before a single board is measured (issue #843, run 31183553289).
+          # board_perf.py already asks for this toolchain the correct way, with
+          # `cargo +esp build`, which the shim resolves without help.
+          rustup toolchain list
+
+      # Fails in seconds if a chip descriptor exists that no fixture covers and
+      # no waiver names, rather than after a 40-minute build and measure.
+      - name: Check every chip is covered or waived
+        run: python3 scripts/perf/board_perf.py --check-coverage
 
       # The browser ships labwired-core with `event-scheduler` (see
       # crates/wasm/Cargo.toml). Measuring without it would gate a build
@@ -71,63 +116,147 @@ jobs:
       - name: Build simulator CLI (browser feature set)
         run: cargo build --release -p labwired-cli --features event-scheduler
 
-      - name: Build perf fixture firmware
-        run: cargo build -p firmware-perf-spin --release --target thumbv6m-none-eabi
-
+      # The fixture firmware is linked by board_perf.py itself, once per memory
+      # map in the matrix (STM32 / nRF / Kinetis / RP2xxx), so a chip on a new
+      # memory map is covered by adding it to FIXTURES rather than by editing a
+      # build step here.
       - name: Measure per-board throughput
         id: perf
         run: |
           set -o pipefail
-          python3 scripts/perf/board_perf.py 2>&1 | tee perf-report.txt
+          python3 scripts/perf/board_perf.py --require-all \
+            --status-json perf-status.json 2>&1 | tee perf-report.txt
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: board-throughput-report
-          path: perf-report.txt
+          path: |
+            perf-report.txt
+            perf-status.json
 
       # A regression is a real product defect (every extra host instruction per
       # simulated step slows the browser twin by the same proportion), so it
-      # gets a tracked issue rather than a red X someone scrolls past.
-      - name: Open/refresh regression issue
+      # gets a tracked, assigned issue rather than a red X someone scrolls past.
+      - name: Track regression in an issue
         if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('perf-report.txt', 'utf8');
-            const title = 'Simulator throughput regression (per-board perf gate)';
+
+            // No status file means the gate died before it measured anything
+            // (build break, missing valgrind, an unclassified chip). That is a
+            // failure of the gate, not of a board, and it must not be filed as
+            // a throughput regression against whatever the last signature was.
+            let status = null;
+            try {
+              status = JSON.parse(fs.readFileSync('perf-status.json', 'utf8'));
+            } catch (e) {
+              core.warning('no perf-status.json — the gate failed before measuring');
+            }
+
+            const { owner, repo } = context.repo;
+            const LABEL = 'perf-regression';
+
+            // The signature is what makes this a status page instead of a
+            // firehose: same failing boards at the same magnitude => the body
+            // is refreshed silently, and nobody is notified a second time.
+            // The mode is part of the signature: stm32l476 regressing on the
+            // batched path the browser runs and on the single-step path are
+            // different findings, and collapsing them would refresh the issue
+            // body silently instead of notifying about the new one.
+            const sig = status
+              ? [
+                  ...status.regressions.map(
+                    (r) => `R:${r.board}/${r.mode}:${(r.delta * 100).toFixed(0)}`
+                  ),
+                  ...status.stale.map(
+                    (s) => `S:${s.board}/${s.mode}:${(s.delta * 100).toFixed(0)}`
+                  ),
+                ].sort().join(',')
+              : 'gate-error';
+
+            const title = status && status.regressions.length
+              ? 'Simulator throughput regression (per-board perf gate)'
+              : status
+                ? 'Simulator perf baselines are stale (per-board perf gate)'
+                : 'Simulator perf gate is failing to run';
+
             const body = [
-              `Commit: ${context.sha}`,
-              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `<!-- perf-gate-signature: ${sig} -->`,
+              `**Last run:** ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              `**Commit:** ${context.sha}`,
+              '',
+              'This issue is rewritten by every run of the perf gate — it always',
+              'shows the current state, and closes itself when the gate is green.',
               '',
               '```',
               report.slice(-8000),
               '```',
               '',
-              'Re-baseline with `python3 scripts/perf/board_perf.py --update` if the cost is intentional.',
+              'Re-baseline with `python3 scripts/perf/board_perf.py --update` if the',
+              'cost is intentional (or to lock in an improvement).',
             ].join('\n');
-            const existing = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'perf-regression',
+
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: LABEL,
             });
-            const hit = existing.data.find((i) => i.title === title);
-            if (hit) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: hit.number,
-                body,
+            const hit = open.data[0];
+
+            if (!hit) {
+              const created = await github.rest.issues.create({
+                owner, repo, title, body, labels: [LABEL],
               });
-            } else {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title,
-                body,
-                labels: ['perf-regression'],
+              // Unassigned issues are how "we don't act on regressions"
+              // happens. Put it on someone the moment it opens.
+              try {
+                await github.rest.issues.addAssignees({
+                  owner, repo, issue_number: created.data.number,
+                  assignees: [owner],
+                });
+              } catch (e) {
+                core.warning(`could not assign #${created.data.number}: ${e.message}`);
+              }
+              return;
+            }
+
+            const prevSig = (hit.body || '').match(/perf-gate-signature: (.*?) -->/);
+            const changed = !prevSig || prevSig[1] !== sig;
+
+            await github.rest.issues.update({
+              owner, repo, issue_number: hit.number, title, body,
+            });
+            // Only a change in what is failing is worth a notification; an
+            // unchanged failure is already fully described by the body above.
+            if (changed) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: hit.number,
+                body: `Failing set changed as of ${context.sha.slice(0, 8)} — see the issue body for the current report.`,
+              });
+            }
+
+      # Nothing closed these issues before, so an old regression stayed "open"
+      # long after it was re-baselined away and the next one looked like more of
+      # the same. Green closes it.
+      - name: Close the regression issue when green
+        if: success() && github.event_name != 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const open = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: 'perf-regression',
+            });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `Perf gate is green as of ${context.sha.slice(0, 8)} (${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) — closing.`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: issue.number,
+                state: 'closed', state_reason: 'completed',
               });
             }

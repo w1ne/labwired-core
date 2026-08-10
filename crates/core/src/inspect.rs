@@ -593,6 +593,135 @@ pub fn artifact_bytes(buf: &[u8], opts: &InspectOpts) -> Option<Vec<u8>> {
     opts.include_bytes.then(|| buf.to_vec())
 }
 
+/// A rectangle of a panel, in the panel's own pixel coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PixelRegion {
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
+}
+
+/// How much of `region` a display actually painted: `(lit_pixels, total_pixels)`.
+///
+/// "Lit" means the pixel differs from the panel's unpainted ground — non-black
+/// for an emissive RGB565/OLED panel, non-white for e-paper, which is the SAME
+/// definition each model's own `painted_bytes` / `ink_bytes` metadata already
+/// uses. Decoding lives here, next to [`artifact_format`], because the format
+/// string and the unpacking rule for it are one fact: a reader that unpacked
+/// pixels itself would be a second, silently-diverging copy of the packing the
+/// model wrote.
+///
+/// **Unknown formats are an error, never zero.** A panel whose packing this
+/// function has not been taught cannot be reported as "nothing painted" — that
+/// is the exact shape of a gate that passes because it measured nothing. The
+/// caller gets a message naming the format so the gap is visible.
+///
+/// `meta` supplies geometry (`w`, `h`) and, for the two-plane e-paper formats,
+/// the `plane_bytes` split.
+pub fn artifact_region_ink(
+    format: &str,
+    meta: &serde_json::Value,
+    bytes: &[u8],
+    region: PixelRegion,
+) -> Result<(usize, usize), String> {
+    let dim = |k: &str| -> Result<usize, String> {
+        meta.get(k)
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .ok_or_else(|| format!("framebuffer artifact has no numeric `meta.{k}`"))
+    };
+    let (pw, ph) = (dim("w")?, dim("h")?);
+    if region.w == 0 || region.h == 0 {
+        return Err(format!(
+            "region {}x{} at ({},{}) is empty — an empty region can only ever be vacuously true",
+            region.w, region.h, region.x, region.y
+        ));
+    }
+    if region.x + region.w > pw || region.y + region.h > ph {
+        return Err(format!(
+            "region ({},{}) {}x{} falls outside the {pw}x{ph} panel",
+            region.x, region.y, region.w, region.h
+        ));
+    }
+
+    // Per-format "is pixel (x, y) lit?".
+    let lit: Box<dyn Fn(usize, usize) -> bool> = match format {
+        // 2 bytes per pixel, row-major, big-endian. Ground is black (0x0000).
+        artifact_format::RGB565_BE => {
+            let need = pw * ph * 2;
+            if bytes.len() < need {
+                return Err(format!(
+                    "rgb565_be payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| {
+                let i = (y * pw + x) * 2;
+                bytes[i] != 0 || bytes[i + 1] != 0
+            })
+        }
+        // Page-addressed 1bpp: byte (page * width + column), bit = row within
+        // the page, LSB = topmost row. Ground is unlit (bit clear).
+        artifact_format::SSD1306_PAGE | artifact_format::SH1107_PAGE => {
+            let need = pw * ph.div_ceil(8);
+            if bytes.len() < need {
+                return Err(format!(
+                    "{format} payload is {} bytes, expected {need} for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| {
+                let i = (y / 8) * pw + x;
+                (bytes[i] >> (y % 8)) & 1 != 0
+            })
+        }
+        // Black plane then red plane, each 1bpp row-major, MSB = leftmost
+        // pixel. Ground is WHITE, so a set bit is blank and a CLEAR bit is ink;
+        // a pixel counts as lit if either plane inks it.
+        artifact_format::EPAPER_TRICOLOR_PLANES => {
+            let row_bytes = pw.div_ceil(8);
+            let plane = meta
+                .get("plane_bytes")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
+                .ok_or_else(|| "e-paper artifact has no numeric `meta.plane_bytes`".to_string())?;
+            if bytes.len() < plane * 2 || plane < row_bytes * ph {
+                return Err(format!(
+                    "epaper payload is {} bytes with plane_bytes={plane}, too small for {pw}x{ph}",
+                    bytes.len()
+                ));
+            }
+            Box::new(move |x, y| {
+                let i = y * row_bytes + x / 8;
+                let mask = 0x80u8 >> (x % 8);
+                (bytes[i] & mask == 0) || (bytes[plane + i] & mask == 0)
+            })
+        }
+        other => {
+            return Err(format!(
+                "display format `{other}` has no pixel decoder here, so this region cannot be \
+                 measured. Reporting it as unpainted would make the assertion pass or fail on a \
+                 measurement that was never taken. Supported: {}, {}, {}, {}",
+                artifact_format::RGB565_BE,
+                artifact_format::SSD1306_PAGE,
+                artifact_format::SH1107_PAGE,
+                artifact_format::EPAPER_TRICOLOR_PLANES,
+            ))
+        }
+    };
+
+    let mut ink = 0usize;
+    for y in region.y..region.y + region.h {
+        for x in region.x..region.x + region.w {
+            if lit(x, y) {
+                ink += 1;
+            }
+        }
+    }
+    Ok((ink, region.w * region.h))
+}
+
 /// Visit one I²C slave, then everything wired behind it if it is a bus switch.
 ///
 /// Every I²C controller's `for_each_attached_device` funnels through this, so
@@ -853,6 +982,164 @@ mod tests {
             peek_word(&HalfSpoken, 0, 32),
             None,
             "half from the model and half invented is not a value"
+        );
+    }
+
+    // ── artifact_region_ink ────────────────────────────────────────────────
+
+    fn meta(w: usize, h: usize) -> serde_json::Value {
+        serde_json::json!({ "w": w, "h": h })
+    }
+
+    /// The two failures this decoder exists to tell apart, on the same panel
+    /// geometry: nothing painted, versus painted-but-full-of-holes. A count of
+    /// lit pixels separates the first from a good frame and NOT the second, so
+    /// both are measured over the same bounded region here.
+    #[test]
+    fn rgb565_region_separates_blank_from_holed() {
+        use artifact_format::RGB565_BE;
+        let (w, h) = (8usize, 4usize);
+        let region = PixelRegion {
+            x: 0,
+            y: 0,
+            w: 8,
+            h: 2,
+        };
+
+        let blank = vec![0u8; w * h * 2];
+        assert_eq!(
+            artifact_region_ink(RGB565_BE, &meta(w, h), &blank, region).unwrap(),
+            (0, 16),
+            "a panel nobody wrote is zero ink, not an error"
+        );
+
+        // Solid navy 0x0010 over the whole band — what a fill_rect produces.
+        let mut solid = vec![0u8; w * h * 2];
+        for y in 0..2 {
+            for x in 0..w {
+                solid[(y * w + x) * 2 + 1] = 0x10;
+            }
+        }
+        assert_eq!(
+            artifact_region_ink(RGB565_BE, &meta(w, h), &solid, region).unwrap(),
+            (16, 16),
+            "a solid fill inks every pixel of the band"
+        );
+
+        // Same band, same colour, every other pixel missing: the signature of a
+        // desynchronised command stream. Identical "did it paint?" verdict,
+        // different ink fraction — which is the whole point.
+        let mut holed = solid.clone();
+        for i in (0..16).step_by(2) {
+            holed[i * 2 + 1] = 0;
+        }
+        assert_eq!(
+            artifact_region_ink(RGB565_BE, &meta(w, h), &holed, region).unwrap(),
+            (8, 16),
+            "noise inks the band only partially"
+        );
+    }
+
+    #[test]
+    fn page_format_reads_the_bit_the_model_wrote() {
+        use artifact_format::SSD1306_PAGE;
+        let (w, h) = (128usize, 32usize);
+        let mut fb = vec![0u8; w * h / 8];
+        // Page 1 (rows 8..15), column 5, bit 2 => pixel (5, 10).
+        let page = 1;
+        fb[page * w + 5] = 1 << 2;
+        let at = |x, y| {
+            artifact_region_ink(
+                SSD1306_PAGE,
+                &meta(w, h),
+                &fb,
+                PixelRegion { x, y, w: 1, h: 1 },
+            )
+            .unwrap()
+        };
+        assert_eq!(at(5, 10), (1, 1), "the written pixel is lit");
+        assert_eq!(at(5, 11), (0, 1), "its neighbour in the same page is not");
+        assert_eq!(at(6, 10), (0, 1), "nor the next column");
+    }
+
+    #[test]
+    fn epaper_counts_cleared_bits_as_ink() {
+        use artifact_format::EPAPER_TRICOLOR_PLANES;
+        let (w, h) = (128usize, 8usize);
+        let row_bytes = w / 8;
+        let plane = row_bytes * h;
+        // Both planes start white (0xFF = no ink).
+        let mut fb = vec![0xFFu8; plane * 2];
+        let m = serde_json::json!({ "w": w, "h": h, "plane_bytes": plane });
+        let full = PixelRegion { x: 0, y: 0, w, h };
+        assert_eq!(
+            artifact_region_ink(EPAPER_TRICOLOR_PLANES, &m, &fb, full)
+                .unwrap()
+                .0,
+            0,
+            "an unrefreshed panel is white, and white is not ink"
+        );
+        // Clear the MSB of row 0 in the black plane => pixel (0, 0) inked.
+        fb[0] = 0x7F;
+        // And one pixel in the RED plane only, at (8, 1).
+        fb[plane + row_bytes + 1] = 0x7F;
+        assert_eq!(
+            artifact_region_ink(EPAPER_TRICOLOR_PLANES, &m, &fb, full)
+                .unwrap()
+                .0,
+            2,
+            "either plane inking a pixel counts once"
+        );
+    }
+
+    /// A format with no decoder must be an error. Returning "0 ink" would let a
+    /// min_ink gate fail for the wrong reason and a max_ink gate PASS on a
+    /// measurement that was never taken.
+    #[test]
+    fn unknown_format_is_an_error_not_an_empty_measurement() {
+        let err = artifact_region_ink(
+            artifact_format::WS2812_GRB,
+            &meta(8, 8),
+            &[0u8; 64],
+            PixelRegion {
+                x: 0,
+                y: 0,
+                w: 8,
+                h: 8,
+            },
+        )
+        .unwrap_err();
+        assert!(err.contains("ws2812_grb"), "the gap names itself: {err}");
+    }
+
+    #[test]
+    fn region_outside_the_panel_is_rejected() {
+        assert!(artifact_region_ink(
+            artifact_format::RGB565_BE,
+            &meta(8, 4),
+            &[0u8; 64],
+            PixelRegion {
+                x: 0,
+                y: 0,
+                w: 8,
+                h: 5
+            },
+        )
+        .is_err());
+        assert!(
+            artifact_region_ink(
+                artifact_format::RGB565_BE,
+                &meta(8, 4),
+                &[0u8; 64],
+                PixelRegion {
+                    x: 0,
+                    y: 0,
+                    w: 0,
+                    h: 4
+                },
+            )
+            .is_err(),
+            "an empty region could only ever pass vacuously"
         );
     }
 }

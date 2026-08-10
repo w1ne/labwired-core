@@ -35,6 +35,16 @@ static void rcc_init(void) {
     RCC->APB2ENR |= RCC_APB2ENR_USART1EN; /* debug UART */
     RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN | RCC_APB1ENR1_USART3EN |
                      RCC_APB1ENR1_UART4EN | RCC_APB1ENR1_UART5EN; /* IO-Link ports */
+    /* The GPIO ports carrying those USART pads (RM0351 §6.4.17). A pad only
+     * leaves the GPIO block and reaches the USART once MODER selects alternate
+     * function AND the AFR nibble names the peripheral — and both of those
+     * registers are dead until the port is clocked. Without this a scope on the
+     * C/Q pad shows the idle GPIO latch while the bus decodes traffic fine.
+     *   A: PA0/PA1 UART4, PA2/PA3 USART2, PA9/PA10 USART1 (debug)
+     *   B: PB10/PB11 USART3
+     *   C: PC12 UART5_TX      D: PD2 UART5_RX */
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN | RCC_AHB2ENR_GPIOBEN |
+                    RCC_AHB2ENR_GPIOCEN | RCC_AHB2ENR_GPIODEN;
 }
 
 int main(void) {

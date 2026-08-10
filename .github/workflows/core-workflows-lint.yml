@@ -1,0 +1,109 @@
+name: Core workflows lint
+
+# Meta-guard for this repo's CI definitions and shell.
+#
+# A workflow file that GitHub cannot parse does not fail loudly: GitHub emits a
+# 0-second failure stub on every push and the workflow's jobs silently never
+# run. actionlint applies GitHub's real workflow grammar (context availability,
+# expression types, runner labels) that a plain YAML parser does not check, and
+# with shellcheck wired in it also lints every `run:` block — the shell that CI
+# actually executes and that nothing else in this repo looked at.
+#
+# Deliberately NOT path-filtered: a path-filtered workflow emits no check at
+# all on PRs that miss the filter, which makes it useless as a required check
+# and easy to forget. Both jobs finish in seconds on a hosted runner.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-workflows-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    name: "actionlint (+ shellcheck on run: blocks)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Both tools are pinned by version AND sha256. Hosted images ship their
+      # own shellcheck, but the version drifts with the image; an unpinned
+      # linter can turn main red without a single commit to this repo.
+      - name: Install pinned actionlint + shellcheck
+        run: |
+          set -euo pipefail
+          actionlint_version=1.7.12
+          actionlint_sha=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          shellcheck_version=0.11.0
+          shellcheck_sha=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+
+          curl -fsSL --connect-timeout 20 --retry 5 --retry-delay 3 \
+            "https://github.com/rhysd/actionlint/releases/download/v${actionlint_version}/actionlint_${actionlint_version}_linux_amd64.tar.gz" \
+            -o /tmp/actionlint.tgz
+          echo "${actionlint_sha}  /tmp/actionlint.tgz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
+
+          curl -fsSL --connect-timeout 20 --retry 5 --retry-delay 3 \
+            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/shellcheck-v${shellcheck_version}.linux.x86_64.tar.xz" \
+            -o /tmp/shellcheck.tar.xz
+          echo "${shellcheck_sha}  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${shellcheck_version}/shellcheck"
+          mv "/tmp/shellcheck-v${shellcheck_version}/shellcheck" /tmp/shellcheck
+
+          /tmp/actionlint -version
+          /tmp/shellcheck --version
+
+      # shellcheck IS enabled here — that is the point of this job. Custom
+      # runner labels live in .github/actionlint.yaml. Findings are fixed at
+      # the source, or suppressed per-line with `# shellcheck disable=SCxxxx`
+      # and a written reason; never with a blanket flag.
+      - name: actionlint over .github/workflows
+        run: |
+          set -euo pipefail
+          /tmp/actionlint -shellcheck=/tmp/shellcheck -pyflakes= .github/workflows/*.yml
+
+  shellcheck-scripts:
+    name: shellcheck (tracked *.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned shellcheck
+        run: |
+          set -euo pipefail
+          shellcheck_version=0.11.0
+          shellcheck_sha=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+          curl -fsSL --connect-timeout 20 --retry 5 --retry-delay 3 \
+            "https://github.com/koalaman/shellcheck/releases/download/v${shellcheck_version}/shellcheck-v${shellcheck_version}.linux.x86_64.tar.xz" \
+            -o /tmp/shellcheck.tar.xz
+          echo "${shellcheck_sha}  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${shellcheck_version}/shellcheck"
+          mv "/tmp/shellcheck-v${shellcheck_version}/shellcheck" /tmp/shellcheck
+          /tmp/shellcheck --version
+
+      # third_party/ is vendored upstream code with its own pre-commit config;
+      # linting it here would only report defects this repo cannot fix.
+      #
+      # --severity=warning is the enforced floor, and it is a real floor: the
+      # tree is clean at it today (SC2164 `cd` without `|| exit` was found and
+      # fixed to get there). `style`/`info` findings remain (73 at the time of
+      # writing, mostly SC2086/SC2012 in one-shot dev scripts); raising the
+      # floor is a follow-up, not a reason to leave the gate off entirely.
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          files=$(git ls-files '*.sh' | grep -v '^third_party/')
+          test -n "$files"
+          echo "$files" | wc -l
+          # shellcheck disable=SC2086  # $files is a newline-separated list that
+          # must word-split into separate arguments.
+          /tmp/shellcheck --severity=warning -f gcc $files

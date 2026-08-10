@@ -1128,6 +1128,51 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
             }
         }
     }
+    // `zero_when` power-gates. A mistake here is the silent-stall class the
+    // `data_ready` validation exists for: the gate would never fire (or could
+    // never be lifted), and the model would look faithful while behaving like
+    // the un-gated part it replaced.
+    for reg in spec.registers.iter().filter(|r| r.zero_when.is_some()) {
+        let z = reg.zero_when.as_ref().expect("filtered");
+        let gate = match spec.registers.iter().find(|r| r.name == z.register) {
+            Some(g) => g,
+            None => bail!(
+                "register '{}' zero_when register '{}' is not a declared register",
+                reg.name,
+                z.register
+            ),
+        };
+        if z.mask == 0 {
+            bail!(
+                "register '{}' zero_when mask is 0 — the gate could never fire",
+                reg.name
+            );
+        }
+        if z.register == reg.name {
+            bail!(
+                "register '{}' zero_when gates itself — the gate would erase the very bits \
+                 that control it",
+                reg.name
+            );
+        }
+        // Firmware must be able to LIFT the gate, or the register is dead: a
+        // read-only (or write-masked) gate bit no driver can clear is a part
+        // that can never report a measurement.
+        let writable = match (gate.access, gate.write_mask) {
+            (labwired_config::RegisterAccess::R, _) => 0,
+            (labwired_config::RegisterAccess::Rw, Some(mask)) => mask,
+            (labwired_config::RegisterAccess::Rw, None) => u32::MAX,
+        };
+        if z.mask & !writable != 0 {
+            bail!(
+                "register '{}' zero_when mask {:#x} includes bits firmware cannot write in '{}' \
+                 — the part could never be powered on",
+                reg.name,
+                z.mask,
+                z.register
+            );
+        }
+    }
     for t in &spec.indexed_tables {
         for (role, name) in [
             ("index_register", &t.index_register),

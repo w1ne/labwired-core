@@ -14,7 +14,9 @@ CLM-style telematics story for demos (e.g. Proemion):
 
 | Piece | Reality |
 |-------|---------|
-| MCU | LabWired’s H735 model (first M7) — swap when customer names exact H7 |
+| MCU | LabWired’s H735 model (first M7) — swap when customer names exact H7. **Sim-derived**: every reset value comes from RM0468/DS13312, there is no H735 bench part and no silicon diff (`🔵 sim-validated` in VALIDATION_STATUS.md) |
+| **CAN** | **NOT MODELLED.** The chip yaml wires no FDCAN — see its own note, “RTC / FDCAN / OCTOSPI / Ethernet: not yet wired”. This demo carries telematics data over the **modem**, not the vehicle bus. For a CAN story use `examples/canmod-gps-sim` or `examples/f103-j1939-monitor`, which decode real frames against a real DBC |
+| Other MCU gaps | No ADC, DMA, RTC, OCTOSPI or Ethernet model. The H735 pin table advertises `adc1`, `fdcan1/2`, `i2c3`, `spi3`, `tim4`, `tim8`, `uart2/4/6` as pin functions, but the chip models **none** of them — wiring a part to those pins gets you a labelled pin attached to nothing. Modelled and usable: `usart1`, `usart3`, `lpuart1`, `i2c1`, `i2c2`, `spi1`, `spi2`, `tim1_pwm`, `tim2`, `tim3` |
 | Modem | **BG770A AT stand-in**, not production telematics module |
 | GPS | Simulator default coordinates from `+QGPSLOC` |
 | MQTT | Happy-path Quectel AT model, not a real broker |
@@ -60,6 +62,21 @@ cargo run -q -p labwired-cli -- test \
 ```
 
 `ue_a` runs the publisher; `ue_b` runs `h735-telematics-subscriber` (`QMTSUB` → `+QMTRECV` / `location received` in `uart.log`).
+
+⚠ That env script **asserts nothing** — the environment runner only accepts node-qualified `memory_value`, so it exits 0 regardless. The receive path is gated in CI by grepping `uart.log` for `+QMTRECV` and `location received`; do the same locally before believing a green run.
+
+## What CI actually gates
+
+Both scripts run in **`core-coverage-matrix-smoke.yml`** (cell `h735-telematics-lab`) on nightly, main tip, and manual dispatch — *not* on PRs, matching the repo's heavy-gate policy.
+
+| Check | Where | Proves |
+|-------|-------|--------|
+| `io-smoke.yaml`, 11 assertions | matrix cell | AT transcript, `mqtt_fabric` collect, and **four `display_region` boxes** — the panel really painted |
+| Dual-UE marker grep | matrix cell | `ue_b` genuinely received a `+QMTRECV` |
+| Unsupported-instruction audit | matrix cell | 100% instruction support over 20k instructions |
+| Playground lab-smoke | `pages-deploy.yml` | the lab starts and the **cycle counter advances**. It does *not* check the screen — `lab-smoke.mjs` states "display motion is REPORTED, never asserted" |
+
+The display assertions are non-vacuous: re-point `dc_pin` from `PA3` to an unconnected pin and the run drops from 11/11 to 7/11 with all three ink regions at 0.0%, while every UART assertion still passes.
 
 ## Playground
 

@@ -233,7 +233,10 @@ impl Cap1188 {
             REG_PRODUCT_ID => PRODUCT_ID_VALUE,
             REG_MANUFACTURER_ID => MANUFACTURER_ID_VALUE,
             REG_REVISION => REVISION_VALUE,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.cap1188:Cap1188", reg, "read");
+                0
+            }
         }
     }
 
@@ -252,7 +255,9 @@ impl Cap1188 {
             REG_INTERRUPT_ENABLE => self.interrupt_enable = value,
             REG_CONFIGURATION_2 => self.configuration_2 = value,
             // Status, delta counts and the ID registers are read-only.
-            _ => {}
+            _ => {
+                crate::census_reg!("components.cap1188:Cap1188", reg, "write");
+            }
         }
     }
 }

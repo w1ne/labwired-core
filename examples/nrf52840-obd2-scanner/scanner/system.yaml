@@ -1,0 +1,17 @@
+name: "nrf52840-obd2-scanner"
+chip: "../../../configs/chips/nrf52840.yaml"
+external_devices:
+  - id: "mcp2515"
+    type: "mcp2515"
+    connection: "spi2"
+    config:
+      cs_pin: "P0.12"
+      irq_pin: "P0.11"
+      oscillator_hz: 16000000
+      bitrate: 500000
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x3C
+board_io: []

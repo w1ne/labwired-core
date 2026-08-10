@@ -390,6 +390,22 @@ impl SpiDevice for TracingSpiDevice {
     fn sampling(&self) -> crate::peripherals::spi::SpiSampling {
         self.inner.sampling()
     }
+    fn needs_external_bus_poll(&self) -> bool {
+        self.inner.needs_external_bus_poll()
+    }
+    fn component_id(&self) -> Option<&str> {
+        self.inner.component_id()
+    }
+    fn attach_can_bus(
+        &mut self,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        self.inner.attach_can_bus(tx, rx)
+    }
+    fn poll_external_bus(&mut self) {
+        self.inner.poll_external_bus();
+    }
     fn cs_select(&mut self) {
         self.inner.cs_select();
     }

@@ -443,6 +443,22 @@ pub struct Nrf52Radio {
     /// When `Some(0)`, the next tick fires EVENTS_END. When `None`,
     /// no transmission is in flight.
     tx_or_rx_cycles_remaining: Option<u32>,
+    /// Scheduler mode only: the ABSOLUTE cycle at which the packet currently
+    /// on the air stops being on the air. `None` whenever no countdown is
+    /// armed; re-derived from `tx_or_rx_cycles_remaining` on the first wake
+    /// after each arming (see `arm_air_countdown`).
+    ///
+    /// `on_event` is not a private channel. `take_scheduled_events()` is a
+    /// QUERY of live state, not a one-shot take, and the bus runs it after
+    /// every MMIO write to this peripheral — so a second wake for a packet
+    /// already in flight is ordinary, not exotic. The countdown used to be
+    /// pinned to `Some(1)` between wakes, which made the FIRST wake to arrive
+    /// raise ADDRESS/PAYLOAD/END regardless of how much packet was left: one
+    /// `NRF_RADIO->EVENTS_READY = 0` in a READY handler cut a 90-cycle BLE
+    /// 1 Mbit packet to 6 cycles. Air time is what a radio simulates; the
+    /// deadline decides when the packet is off the air, not the arrival of a
+    /// wake.
+    air_end_cycle: Option<u64>,
     /// Logical address (0..7) the current RX is listening for. RXADDRESSES
     /// bits map to BASE0/PREFIX0[0] for bit 0, BASE1/PREFIX0[1..3] for
     /// bits 1..3, BASE1/PREFIX1[0..3] for bits 4..7.
@@ -582,6 +598,21 @@ impl Nrf52Radio {
         self.pending_ready = true;
     }
 
+    /// Arm the bit-rate countdown for a packet going on the air. Single door:
+    /// the absolute air-time deadline is invalidated here so the next
+    /// scheduler wake re-derives it from THIS count instead of inheriting the
+    /// previous packet's.
+    fn arm_air_countdown(&mut self, cycles: u32) {
+        self.tx_or_rx_cycles_remaining = Some(cycles);
+        self.air_end_cycle = None;
+    }
+
+    /// Disarm the countdown — nothing is on the air.
+    fn disarm_air_countdown(&mut self) {
+        self.tx_or_rx_cycles_remaining = None;
+        self.air_end_cycle = None;
+    }
+
     fn start_packet(&mut self) {
         if self.state == STATE_TXIDLE {
             self.state = STATE_TX;
@@ -596,7 +627,7 @@ impl Nrf52Radio {
         // (state-machine tests, firmware that never sees the bus DMA)
         // still get EVENTS_ADDRESS/PAYLOAD/END quickly. tick_with_bus
         // overwrites this with a proper bit-rate count when it runs.
-        self.tx_or_rx_cycles_remaining = Some(1);
+        self.arm_air_countdown(1);
     }
 
     /// Look up the (BASE, PREFIX) tuple for logical address N per
@@ -702,6 +733,14 @@ impl Nrf52Radio {
             }
             _ => {}
         }
+        // TASKS_DISABLE aborts whatever is on the air. Silicon ramps down and
+        // gives you DISABLED — not END for a packet firmware just cancelled.
+        // Dropping the countdown here is also what keeps the abort reachable:
+        // `take_scheduled_events` hands out nothing while an air-time deadline
+        // is committed (the wake for it is already queued and cannot be
+        // cancelled), so leaving the deadline armed would defer EVENTS_DISABLED
+        // to the aborted packet's original air-end.
+        self.disarm_air_countdown();
         self.pending_disabled = true;
     }
 
@@ -880,7 +919,10 @@ impl Peripheral for Nrf52Radio {
             OFF_CCACTRL => self.ccactrl,
             OFF_POWER => 1, // peripheral powered
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.radio:Nrf52Radio", offset, "read");
+                0
+            }
         })
     }
 
@@ -982,7 +1024,7 @@ impl Peripheral for Nrf52Radio {
             OFF_CCACTRL => self.ccactrl = value,
             OFF_POWER => {} // RW but we ignore power state
 
-            _ => {}
+            _ => { crate::census_reg!("nrf52.radio:Nrf52Radio", offset, "write"); }
         }
         Ok(())
     }
@@ -995,7 +1037,7 @@ impl Peripheral for Nrf52Radio {
         // the radio still transmitting / receiving.
         if let Some(n) = self.tx_or_rx_cycles_remaining {
             if n <= 1 {
-                self.tx_or_rx_cycles_remaining = None;
+                self.disarm_air_countdown();
                 self.pending_address = true;
                 self.pending_payload = true;
                 self.pending_end = true;
@@ -1102,6 +1144,19 @@ impl Peripheral for Nrf52Radio {
         if self.pending_tx_dma || self.pending_rx_dma {
             return vec![(0, 1)]; // DMA then countdown
         }
+        // A committed air-time deadline ALREADY has a wake queued for it —
+        // `on_event` sets `air_end_cycle` only on the path that returns a
+        // `reschedule_delay`, and clears it on the path that completes the
+        // packet. There is no scheduler-side cancel, so handing out a second
+        // wake here cannot supersede the first; it can only pile up. The bus
+        // builds the deadline as `current_cycle + 1 + delay`, and
+        // `current_cycle` moves between polls, so those copies are not
+        // byte-identical and the scheduler's dedup cannot collapse them:
+        // firmware polling a RADIO register while a packet is on the air blew
+        // through MAX_LIVE_EVENTS_PER_PERIPHERAL (8) in nine cycles.
+        if self.air_end_cycle.is_some() {
+            return Vec::new();
+        }
         if let Some(n) = self.tx_or_rx_cycles_remaining {
             return vec![((n as u64).saturating_sub(1), 2)];
         }
@@ -1119,7 +1174,7 @@ impl Peripheral for Nrf52Radio {
     fn on_event(
         &mut self,
         event_token: u32,
-        _sched: &mut crate::sched::EventScheduler,
+        sched: &mut crate::sched::EventScheduler,
         bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         // EasyDMA path (token 1, or any event that still has a pending DMA).
@@ -1130,20 +1185,39 @@ impl Peripheral for Nrf52Radio {
             self.tick_with_bus(bus);
         }
 
-        // Multi-cycle bit-rate air time: commit the END deadline and return.
-        // Pin remaining to 1 so the delayed wake fires ADDRESS/PAYLOAD/END
-        // via `tick()` without re-arming another (n-1) forever. Collapsing
-        // on this same event used to make END fire immediately and hide
-        // MODE/length timing under the scheduler.
-        if let Some(n) = self.tx_or_rx_cycles_remaining {
-            if n > 1 {
-                self.tx_or_rx_cycles_remaining = Some(1);
+        // Multi-cycle bit-rate air time. The packet leaves the air at an
+        // ABSOLUTE cycle, committed on the first wake after the countdown was
+        // armed and honoured by every wake after it.
+        //
+        // This used to pin `tx_or_rx_cycles_remaining` to `Some(1)` and lean
+        // on the rescheduled wake being the only one that could arrive. It is
+        // not: `take_scheduled_events()` is a QUERY of live state, and the bus
+        // runs it after every MMIO write to this peripheral, so a second wake
+        // for a packet already in flight is the ordinary case. That second
+        // wake found `remaining == 1`, called `tick()`, and raised
+        // ADDRESS/PAYLOAD/END on the spot — a single
+        // `NRF_RADIO->EVENTS_READY = 0` in a READY handler cut a 90-cycle BLE
+        // 1 Mbit packet to 6 cycles, and a phantom GPIO edge at boot
+        // (core#823) cut it to 2. Air time is the thing this model exists to
+        // simulate, so the deadline decides, not whoever knocks first.
+        let now = sched.now();
+        if let Some(n) = self.tx_or_rx_cycles_remaining.filter(|n| *n > 1) {
+            let end = *self
+                .air_end_cycle
+                .get_or_insert_with(|| now + u64::from(n) - 1);
+            if now < end {
+                // Still on the air. Re-arm at the real deadline and leave the
+                // countdown untouched: an early wake must not shorten it.
                 return crate::sched::EventResult {
-                    reschedule_delay: Some((n as u64).saturating_sub(1)),
+                    reschedule_delay: Some(end - now),
                     ..Default::default()
                 };
             }
+            // Deadline reached: this is the packet's last air cycle, so let
+            // `tick()` below raise ADDRESS/PAYLOAD/END.
+            self.tx_or_rx_cycles_remaining = Some(1);
         }
+        self.air_end_cycle = None;
 
         // remaining is None or 1: drain READY / DISABLED / final air tick.
         let res = self.tick();
@@ -1278,8 +1352,7 @@ impl Peripheral for Nrf52Radio {
 
             // Bit-rate countdown until EVENTS_END. cycles_for_packet returns
             // bytes × cycles-per-byte for the MODE; +3 for the CRC bytes.
-            self.tx_or_rx_cycles_remaining =
-                Some(Self::cycles_for_packet(self.mode, length as u32 + 3));
+            self.arm_air_countdown(Self::cycles_for_packet(self.mode, length as u32 + 3));
         }
 
         // ── RX Easy DMA ──────────────────────────────────────────────────
@@ -1291,7 +1364,7 @@ impl Peripheral for Nrf52Radio {
             // Cancel any default 1-tick countdown that start_packet
             // seeded; we only want EVENTS_END to fire when we actually
             // dequeue a frame.
-            self.tx_or_rx_cycles_remaining = None;
+            self.disarm_air_countdown();
 
             // First, try the global virtual air at FREQUENCY. Only consume
             // a frame whose MODE matches ours AND whose sender's address
@@ -1394,8 +1467,7 @@ impl Peripheral for Nrf52Radio {
 
                 // Set bit-rate countdown for the actual received packet
                 // length (including the 3 CRC bytes we stripped above).
-                self.tx_or_rx_cycles_remaining =
-                    Some(Self::cycles_for_packet(self.mode, pkt.len() as u32 + 3));
+                self.arm_air_countdown(Self::cycles_for_packet(self.mode, pkt.len() as u32 + 3));
             }
         }
     }

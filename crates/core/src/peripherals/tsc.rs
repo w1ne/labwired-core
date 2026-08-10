@@ -70,7 +70,10 @@ impl Tsc {
             0x48 => self.iog[5],
             0x4C => self.iog[6],
             0x50 => self.iog[7],
-            _ => 0,
+            _ => {
+                crate::census_reg!("tsc:Tsc", offset, "read");
+                0
+            }
         }
     }
 
@@ -112,7 +115,9 @@ impl Tsc {
                 self.iogcsr = (self.iogcsr & 0xFFFF_0000) | (value & 0xFF);
             }
             // IOGxCR are read-only acquisition counters
-            _ => {}
+            _ => {
+                crate::census_reg!("tsc:Tsc", offset, "write");
+            }
         }
     }
 }

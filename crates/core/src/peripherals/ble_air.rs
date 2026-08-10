@@ -268,7 +268,6 @@ mod tests {
         assert!(b.receive_from(37, 0x8E89_BED6, 0, 2).is_none());
     }
 
-
     /// `current_seq` is the join point a fresh controller uses to skip a
     /// backlog it was not present for.
     #[test]
@@ -280,7 +279,8 @@ mod tests {
         }
         assert_eq!(bus.current_seq(), 10);
         assert!(
-            bus.receive_from(37, 0x8E89_BED6, bus.current_seq(), 3).is_none(),
+            bus.receive_from(37, 0x8E89_BED6, bus.current_seq(), 3)
+                .is_none(),
             "a listener joining now hears none of the backlog",
         );
         assert!(

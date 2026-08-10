@@ -269,6 +269,22 @@ impl I2cDevice for Ssd1306 {
         0 // SSD1306 is write-only over I²C
     }
 
+    /// A START (or repeated START) begins a new transaction, so the next byte
+    /// is a control byte again.
+    ///
+    /// Resetting only in `stop()` was wrong: a driver that issues several
+    /// transfers and one trailing STOP — which is what the nRF52 TWIM does,
+    /// one STARTTX per transfer — kept `register_address_written` set across
+    /// the whole burst. Every transfer after the first then lost its leading
+    /// control byte into `handle_command`, and a `0x40` data-stream prefix
+    /// silently became "set display start line". The 1 KiB framebuffer behind
+    /// it was parsed as commands, which is a garbled panel and not a NACK.
+    /// Real silicon re-reads the control byte after every START.
+    fn start(&mut self) {
+        self.register_address_written = false;
+        self.control_byte = None;
+    }
+
     fn write(&mut self, data: u8) {
         if !self.register_address_written {
             // First byte of a transaction is the control byte.
@@ -417,6 +433,60 @@ mod tests {
             dev.framebuffer()[39],
             0,
             "init command parameters must not be misread as column-nibble commands"
+        );
+    }
+
+    /// Every transfer is its own START, and the driver sends ONE STOP at the
+    /// end of the frame. That is what the nRF52 TWIM does: one STARTTX per
+    /// transfer, `TASKS_STOP` only after the framebuffer burst.
+    ///
+    /// The model used to reset its control-byte state in `stop()` alone, so
+    /// each transfer after the first fed its leading control byte to
+    /// `handle_command`. The `0x40` in front of the framebuffer became "set
+    /// display start line" and all 1024 pixel bytes were parsed as commands:
+    /// on the secure-boot lab the panel came out shifted 49 columns with rows
+    /// wrapped into the wrong pages. Painting nothing would have been easier
+    /// to spot than painting the wrong thing convincingly.
+    #[test]
+    fn transfers_under_one_stop_keep_their_control_bytes() {
+        let mut dev = Ssd1306::new(0x3c);
+
+        // Init burst: START + [control, cmd, ...params] per transfer, no STOP.
+        for transfer in [
+            [0x00u8, 0xAE, 0x00].as_slice(),
+            &[0x00, 0xD5, 0x80],
+            &[0x00, 0x20, 0x00],
+            &[0x00, 0xA1],
+            &[0x00, 0xAF],
+        ] {
+            dev.start();
+            for &b in transfer {
+                dev.write(b);
+            }
+        }
+
+        // Window, then the data burst — still no STOP until the very end.
+        dev.start();
+        for &b in &[0x00u8, 0x21, 0x00, 0x7F] {
+            dev.write(b);
+        }
+        dev.start();
+        for &b in &[0x00u8, 0x22, 0x00, 0x07] {
+            dev.write(b);
+        }
+        dev.start();
+        dev.write(0x40); // data stream
+        for i in 0..8u32 {
+            dev.write(0x80 | i as u8);
+        }
+        dev.stop();
+
+        let fb = dev.framebuffer();
+        assert_eq!(
+            &fb[..8],
+            &[0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87],
+            "data must land at column 0 of page 0, not wherever a mis-parsed \
+             control byte moved the cursor"
         );
     }
 

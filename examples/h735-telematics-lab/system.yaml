@@ -18,6 +18,10 @@ external_devices:
     connection: "spi1"
     config:
       cs_pin: "PA4"
+      # D/C is how an ILI9341 tells a command from data — see the framing note
+      # in src/main.rs. The firmware drives PA3 low before each command byte and
+      # high before its parameters/pixels.
+      dc_pin: "PA3"
 board_io:
   - id: "led_pa5"
     kind: "led"

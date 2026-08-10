@@ -417,3 +417,24 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/nrf54l15/global_uicr_s.yaml"
+
+  # ICACHE — the CPU-local instruction cache controller. Unlike every other
+  # nRF54L peripheral this does NOT live in the 0x5000_0000 window: it sits in
+  # the Cortex-M33 external private peripheral bus at 0xE008_2000, which is
+  # where Nordic's own nrf54l15.svd places ICACHE_S (alongside CPUC_S at
+  # 0xE008_0000).
+  #
+  # Zephyr's `cache_instr_enable` is two instructions — store 1 to ENABLE at
+  # offset 0x404, return. It never polls STATUS and never reads ENABLE back, so
+  # the read-as-zero `icache` stub is sufficient and is the same treatment the
+  # STM32 H5/WBA cache controllers already get (see generic_factory.rs). No
+  # cache behaviour is modelled and none is claimed: this simulator has flat
+  # memory, so a cache is transparent apart from timing, and reporting STATUS
+  # as "not enabled" is the honest answer for a machine that has no cache to
+  # enable.
+  - id: "icache"
+    type: "icache"
+    base_address: 0xE0082000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/nrf54l15/icache_s.yaml"

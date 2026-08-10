@@ -36,6 +36,34 @@
 #
 # The illuminance is an externally driven input (channel `lux`); config only
 # seeds its initial value. Default address 0x10 (fixed on the VEML7700).
+#
+# ── POWER-ON STATE: THE PART BOOTS SHUT DOWN ──────────────────────────────────
+# Datasheet Rev. 1.8 p7: "Command code 0 default value is 01 = devices is shut
+# down"; Table 1 defines ALS_CONF bit 0 (ALS_SD) as "0 = ALS power on, 1 = ALS
+# shut down". ALS_CONF therefore resets to 0x0001, and ALS / WHITE are gated on
+# that bit (`zero_when`) so a shut-down part reports nothing — as on silicon.
+#
+# ── MODELLED SCOPE OF THE SHUTDOWN GATE — READ THIS BEFORE TRUSTING IT ────────
+# WHAT IS MODELLED:
+#   * ALS_CONF reads back 0x0001 out of reset.
+#   * While ALS_SD is set, ALS and WHITE read 0x0000 instead of a light count.
+#     At power-on this is exact: the part has never run a conversion.
+#   * Clearing ALS_SD immediately restores the measurement.
+#
+# WHAT IS *NOT* MODELLED (gaps, stated so nobody grades this register faithful
+# by mistake):
+#   * NO STARTUP LATENCY. The datasheet requires waiting ~2.5 ms after powering
+#     the ALS on before the first result is valid; this model reports a correct
+#     count on the very next read. Firmware that omits that wait passes here and
+#     may read a stale/invalid word on silicon.
+#   * SHUTTING DOWN A *RUNNING* PART is a guess. The datasheet does not say what
+#     ALS / WHITE hold once ALS_SD is re-asserted mid-operation; this model
+#     returns 0x0000. Silicon may retain the last conversion. Do not rely on the
+#     zero in that direction.
+#   * PSM (0x03) power-saving mode is plain storage: its PSM_EN / PSM[1:0]
+#     fields change the refresh period on silicon and change NOTHING here.
+#   * ALS_WH / ALS_WL are storage only — no threshold comparison is performed,
+#     and ALS_INT (0x06) never latches an interrupt flag (it is hardwired to 0).
 type: veml7700
 
 behavior:
@@ -45,12 +73,20 @@ behavior:
     registers:
       # Config: firmware writes it; its gain [12:11] and IT [9:6] fields drive
       # the ALS/WHITE resolution via their scale_from references below.
+      #
+      # RESET = 0x0001, NOT 0x0000. Datasheet Rev. 1.8 p7: "Command code 0
+      # default value is 01 = devices is shut down", and Table 1 defines bit 0
+      # ALS_SD as "0 = ALS power on, 1 = ALS shut down". A VEML7700 therefore
+      # powers up SHUT DOWN and stays that way until a driver clears bit 0.
+      # Firmware that assumes the part is live out of reset reads zeros on
+      # silicon; the `zero_when` gates on ALS / WHITE below make it read zeros
+      # here too, which is the whole point of this twin.
       - name: ALS_CONF
         addr: 0x00
         width: 2
         endian: le
         access: rw
-        reset: 0x0000
+        reset: 0x0001
       # Interrupt threshold windows — plain rw storage, echoed back on read.
       - name: ALS_WH
         addr: 0x01
@@ -72,12 +108,19 @@ behavior:
         access: rw
         reset: 0x0000
       # Ambient-light count = round(lux / resolution), little-endian.
+      #
+      # `zero_when` is the ALS_SD shutdown gate: while ALS_CONF bit 0 is set the
+      # part is not converting, so this register reads 0x0000 rather than a
+      # plausible light level. At power-on (ALS_CONF = 0x0001) that is exact —
+      # no conversion has ever run. See the MODELLED SCOPE note in this file's
+      # header for what the gate does NOT cover.
       - name: ALS
         addr: 0x04
         width: 2
         endian: le
         access: r
         source: lux
+        zero_when: { register: ALS_CONF, mask: 0x0001 }
         resolution: 0.0576
         scale_from:
           # Integration-time field → (100 ms / IT) resolution ratio.
@@ -98,6 +141,7 @@ behavior:
         access: r
         source: lux
         source_scale: 1.15
+        zero_when: { register: ALS_CONF, mask: 0x0001 }   # ALS_SD, as for ALS
         resolution: 0.0576
         scale_from:
           - register: ALS_CONF

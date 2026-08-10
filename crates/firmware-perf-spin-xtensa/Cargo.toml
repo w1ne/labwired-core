@@ -1,0 +1,45 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Standalone crate, excluded from the workspace: it needs the `esp` toolchain
+# (espup) and a build-std .cargo/config.toml that only applies when cargo runs
+# inside this directory. Built by scripts/perf/board_perf.py, one target per
+# Xtensa part.
+
+[package]
+name = "perf-spin-xtensa"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Xtensa throughput fixture for the per-board perf gate: a bare ALU spin loop."
+
+[features]
+esp32 = ["esp-hal/esp32"]
+esp32s3 = ["esp-hal/esp32s3"]
+
+[dependencies]
+esp-hal = { version = "1.1", features = ["unstable"] }
+# Same panic handler as the RISC-V twin, and for the same reason: this fixture
+# is a bare ALU spin loop that prints nothing, so it has no business carrying a
+# print backend.
+#
+# It used to take its handler from esp-backtrace, which requires exactly one of
+# `defmt`/`println`. Supplying `println` (#882) satisfied that and immediately
+# hit the next assertion down the chain — esp-println demands exactly one of
+# `jtag-serial`/`uart`/`auto`/`no-op` — because the fix was pulling a printing
+# stack into a fixture with nothing to print. panic-halt ends the chain instead
+# of extending it.
+panic-halt = "0.2"
+
+[[bin]]
+name = "perf-spin-xtensa"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+debug = true # keep DWARF so the simulator can resolve symbols

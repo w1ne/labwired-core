@@ -13,7 +13,19 @@
 #define LED3_PIN 4U
 #define BTN_PIN 13U
 
-#define USART3_BRR_115200_AT_64MHZ 556U
+/* BRR = f_ck / baud at the default 16x oversampling.
+ *
+ * This was USART3_BRR_115200_AT_64MHZ = 556, and 64 MHz is the WRONG clock:
+ * "after reset, the microcontroller restarts by default with an internal
+ * 32 MHz clock (HSI/2)" — DS14258 Rev 6, section 3.12, p.35. This firmware
+ * never reprograms RCC, so f_ck is 32 MHz, and 556 is exactly 2x too large:
+ * the reference board firmware was actually talking at 57600, not the 115200
+ * every consumer of it assumed.
+ *
+ * 32000000 / 115200 = 277.78 -> 278, which is 115107 baud (0.08% slow). Its
+ * sibling examples/nucleo-h563zi/silicon-smoke/src/main.rs already computed
+ * from 32 MHz and was right all along. */
+#define USART3_BRR_115200_AT_32MHZ 278U
 
 void __libc_init_array(void) {}
 
@@ -62,7 +74,7 @@ static void uart3_init(void) {
   USART3->CR1 = 0U;
   USART3->CR2 = 0U;
   USART3->CR3 = 0U;
-  USART3->BRR = USART3_BRR_115200_AT_64MHZ;
+  USART3->BRR = USART3_BRR_115200_AT_32MHZ;
   USART3->CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
 }
 

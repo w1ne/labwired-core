@@ -66,11 +66,15 @@
 //! read back byte-identical to real ESP32-S3 silicon. The C3 shares the IP but
 //! its config-register reset values are not separately silicon-pinned.
 
+use crate::peripherals::pad_lines::PadLines;
+use crate::peripherals::uart::{LINE_RX, LINE_TX, UART_LINES};
+use crate::peripherals::uart_waveform::{UartFraming, UartNarrator};
+use crate::peripherals::wave_plan::NarrationFit;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const UART_WAKE_TOKEN: u32 = 1;
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 
@@ -136,6 +140,23 @@ const UART_SCLK_HZ: u64 = 80_000_000;
 /// that family passes its own rate via [`EspUart::new_with_cpu_clock`];
 /// otherwise every byte would take 1.5× too long to shift out.
 const CPU_CLOCK_HZ: u64 = 240_000_000;
+
+/// Bit periods one 10-bit 8N1 character occupies — the divisor between
+/// [`EspUart::cycles_per_byte`] (which paces the shift register) and the bit
+/// period the narration is drawn at. Named rather than inlined so the two can
+/// never disagree about what "one character" means; it is `frame_bits()` of
+/// [`UartFraming::default`], asserted against it in the tests below.
+const FRAME_BITS: u64 = 10;
+
+/// Characters a narration may hold before it is published anyway, compressed.
+///
+/// Unreachable in the common case — this model shifts bytes out at the real
+/// baud rate, so a flush follows each drain and holds at most the handful of
+/// characters one elapsed window completed. It exists for the pathological
+/// caller that drives `tick()` with no cycle axis at all (the GDMA UART-TX
+/// descriptor tests), where `now` never moves and a held burst could otherwise
+/// grow without bound. Mirrors `peripherals::uart::WIRE_BURST_CAP`.
+const WIRE_BURST_CAP: usize = 256;
 
 // SVD reset values for config registers.
 const RESET_CLKDIV: u32 = 0x0000_02B6; // 694 decimal
@@ -236,6 +257,57 @@ const READONLY_REGS: &[(u64, u32)] = &[
     (OFF_NEGPULSE, RESET_NEGPULSE),
 ];
 
+/// Word slots in the config-register file: offsets `0x00 ..= OFF_ID` (0x80),
+/// one `u32` each. `CONFIG_REGS` must stay inside this window — the unit test
+/// `every_config_reg_offset_has_a_slot` fails loudly if a register is ever
+/// added past it, rather than letting the write be dropped silently.
+const REG_WORDS: usize = (OFF_ID as usize / 4) + 1;
+
+/// Flat config-register file indexed by word offset (`off / 4`).
+///
+/// Was a `HashMap<u64, u32>`. Every tick, `int_raw()` → `txfifo_empty_thrhd()`
+/// → `reg(OFF_CONF1)` SipHashed a `u64` just to read a constant threshold;
+/// that chain was ~7.6% of a profiled ESP32-C3 rom-boot run. Semantics are
+/// preserved exactly: the file is zero-initialised, so a slot that was never
+/// written reads 0 — the `unwrap_or(0)` the map lookup used to supply — and an
+/// unaligned or out-of-window offset also reads 0 (the map would simply have
+/// missed).
+struct RegFile([u32; REG_WORDS]);
+
+impl Default for RegFile {
+    fn default() -> Self {
+        Self([0; REG_WORDS])
+    }
+}
+
+impl RegFile {
+    /// Word offset → slot, or `None` for unaligned / out-of-window offsets
+    /// (which read as 0 and swallow writes, exactly as the map did).
+    #[inline]
+    fn slot(off: u64) -> Option<usize> {
+        if off & 3 != 0 {
+            return None;
+        }
+        let i = (off >> 2) as usize;
+        (i < REG_WORDS).then_some(i)
+    }
+
+    #[inline]
+    fn get(&self, off: u64) -> u32 {
+        match Self::slot(off) {
+            Some(i) => self.0[i],
+            None => 0,
+        }
+    }
+
+    #[inline]
+    fn set(&mut self, off: u64, value: u32) {
+        if let Some(i) = Self::slot(off) {
+            self.0[i] = value;
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct EspUart {
     sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -249,7 +321,7 @@ pub struct EspUart {
     /// Interrupt-matrix source ID (UART0=27, UART1=28, UART2=29).
     source_id: u32,
     /// Config register storage: keyed by word offset, stores masked value.
-    regs: HashMap<u64, u32>,
+    regs: RegFile,
     /// TX FIFO (≤ FIFO_LEN); shifts out at the baud rate.
     tx_fifo: VecDeque<u8>,
     /// RX FIFO; a FIFO read pops one byte (read side-effect → interior mut).
@@ -285,6 +357,18 @@ pub struct EspUart {
     /// touches it is guarded on non-empty, so an unlinked UART behaves exactly
     /// as it did before this existed.
     attached_streams: Vec<Box<dyn crate::peripherals::uart::UartStreamDevice>>,
+    /// Wire levels published to matrix-routed TX pads, so a logic analyzer
+    /// clipped to `U0TXD` measures a serial waveform instead of the GPIO output
+    /// latch. `None` — the common case, no lab routed the pad — costs one
+    /// branch per shifted byte and publishes nothing.
+    lines: Option<Arc<PadLines>>,
+    /// Characters that have LEFT the shift register but are not yet painted.
+    /// Non-empty only between a drain and the flush that follows it in the same
+    /// call, or while the flush had no cycles to draw in.
+    wire_chars: Vec<u8>,
+    /// Cycle the last narration ran to — the floor the next one may not reach
+    /// back past, or two bursts splice into characters neither one sent.
+    wave_cursor: u64,
 }
 
 impl std::fmt::Debug for EspUart {
@@ -312,9 +396,9 @@ impl EspUart {
     /// The ESP32-C3 carries the identical UART IP at 160 MHz, so it builds its
     /// instances through here (see `peripherals::esp32c3::uart`).
     pub fn new_with_cpu_clock(echo_stdout: bool, source_id: u32, cpu_clock_hz: u64) -> Self {
-        let mut regs = HashMap::new();
+        let mut regs = RegFile::default();
         for &(off, reset, _mask) in CONFIG_REGS {
-            regs.insert(off, reset);
+            regs.set(off, reset);
         }
         Self {
             sink: None,
@@ -335,7 +419,109 @@ impl EspUart {
             scheduled: false,
             cpu_clock_hz,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
+            lines: None,
+            wire_chars: Vec::new(),
+            wave_cursor: 0,
         }
+    }
+
+    /// The shared pad-line cell for this UART's TX/RX pair, created on first use
+    /// at bus wiring time. A serial line idles HIGH (mark) in both directions,
+    /// so a start bit is always a falling edge.
+    ///
+    /// ⚠️ Creating the cell is what turns narration ON. Resolve the GPIO port
+    /// FIRST, as `SystemBus::wire_esp32c3_uart_pads` does: a controller that
+    /// owns a cell no route reaches still buffers and narrates on every
+    /// transmitted byte, into a wire nothing reads.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| Arc::new(PadLines::new(UART_LINES, &[true, true])))
+            .clone()
+    }
+
+    /// Engine cycles in one bit period.
+    ///
+    /// Derived FROM [`Self::cycles_per_byte`] rather than recomputed from
+    /// `CLKDIV`, so the rate the trace measures can never disagree with the rate
+    /// the shift register actually drained at — the two would otherwise differ
+    /// by integer rounding, and a waveform that is a cycle per bit off from the
+    /// model that produced it is exactly the kind of wrong that looks right.
+    ///
+    /// `None` below two cycles per bit: [`crate::peripherals::wave_plan::WavePlan`]
+    /// cannot keep a period's halves distinct there, so nothing honest can be
+    /// drawn. Unreachable at any real baud rate — `CLKDIV` resets to 694
+    /// (115200 baud at the 80 MHz APB source), which is 2082 CPU cycles per bit
+    /// on the C3.
+    fn wire_bit_time(&self) -> Option<u64> {
+        let bit = self.cycles_per_byte() / FRAME_BITS;
+        (bit >= 2).then_some(bit)
+    }
+
+    /// Queue a character that has just left the shift register. Buffered, not
+    /// published — see [`Self::wire_flush`].
+    fn wire_push(&mut self, byte: u8) {
+        if self.lines.is_some() && self.wire_bit_time().is_some() {
+            self.wire_chars.push(byte);
+        }
+    }
+
+    /// Paint the characters this drain shifted out onto the routed TX pads.
+    ///
+    /// Unlike the STM32/PL011 `Uart`, this model does NOT need to hold a burst
+    /// waiting for the wire: it already shifts at the programmed baud rate, and
+    /// [`Self::drain_cycles`] only pops a character once a full frame time has
+    /// elapsed for it. So by the moment this runs, every buffered character has
+    /// genuinely had its wire time — which is why it narrates unconditionally
+    /// instead of pacing against a deadline.
+    ///
+    /// What it still must respect is the capture layer: `LogicTap::push_at` →
+    /// `LogicCapture::ingest_push` accepts stamps in the PAST only and keeps one
+    /// level per channel per cycle. So the burst is drawn as one waveform ENDING
+    /// at `now` and reaching no further back than the previous flush, exactly as
+    /// the I²C and SPI narrators publish.
+    fn wire_flush(&mut self) {
+        if self.wire_chars.is_empty() {
+            return;
+        }
+        let (Some(lines), Some(clock)) = (self.lines.clone(), self.clock.clone()) else {
+            // No cycle axis (a hand-built bus, a caller ticking us directly):
+            // there is nowhere to place a waveform, so drop rather than grow.
+            self.wire_chars.clear();
+            return;
+        };
+        let Some(bit_time) = self.wire_bit_time() else {
+            self.wire_chars.clear();
+            return;
+        };
+        let now = clock.now();
+        let mut narrator = UartNarrator::with_lines(
+            LINE_TX,
+            &[lines.level(LINE_TX), lines.level(LINE_RX)],
+            bit_time,
+        );
+        for &byte in &self.wire_chars {
+            narrator.frame(byte, UartFraming::default());
+        }
+        if let NarrationFit::LevelsOnly { .. } =
+            narrator.emit_between(&lines, self.wave_cursor, now)
+        {
+            // Fewer cycles exist than the waveform has transitions, so nothing
+            // was drawn. KEEP the characters and the cursor: `now` only grows,
+            // so a later drain will have the room. Clearing here would delete
+            // bytes that really crossed the wire and advance the cursor past
+            // cycles nothing painted — silent, unrecoverable loss, and the
+            // reason `emit_between` is `#[must_use]`.
+            if self.wire_chars.len() > WIRE_BURST_CAP {
+                // …except when the caller advances no cycles at all, where
+                // "later" never comes. Give up on the timeline rather than the
+                // memory; the levels above were already applied.
+                self.wire_chars.clear();
+                self.wave_cursor = now;
+            }
+            return;
+        }
+        self.wave_cursor = now;
+        self.wire_chars.clear();
     }
 
     /// Shared handle to the external RX queue. Bytes pushed into it are
@@ -450,8 +636,9 @@ impl EspUart {
         }
     }
 
+    #[inline]
     fn reg(&self, off: u64) -> u32 {
-        self.regs.get(&off).copied().unwrap_or(0)
+        self.regs.get(off)
     }
 
     /// Look up write mask for a config register offset. Returns None if not a
@@ -573,6 +760,10 @@ impl EspUart {
     fn drain_cycles(&mut self, cycles: u64) {
         if self.tx_fifo.is_empty() {
             self.drain_accum = 0;
+            // Still retry a narration the last drain could not place: `now` has
+            // moved on, so cycles that did not exist then may exist now. An
+            // empty buffer makes this one `is_empty` check.
+            self.wire_flush();
             return;
         }
         self.drain_accum += cycles;
@@ -580,8 +771,10 @@ impl EspUart {
         while self.drain_accum >= per_byte && !self.tx_fifo.is_empty() {
             self.drain_accum -= per_byte;
             if let Some(byte) = self.tx_fifo.pop_front() {
-                // Same choke point as the sink, for the same reason: a byte
-                // leaves the shift register exactly once.
+                // The wire sees the byte at the SAME choke point the sink does,
+                // for the same reason: a byte leaves the shift register exactly
+                // once, and this is that once.
+                self.wire_push(byte);
                 self.trace.push(
                     &self.trace_name,
                     crate::bus::bus_trace::BusPayload::Uart {
@@ -610,6 +803,10 @@ impl EspUart {
                 self.tx_active = false;
             }
         }
+        // Paint whatever this window shifted out. Inert (one `is_empty`) on
+        // every bus that has not routed a TX pad, which is every ESP lab that
+        // existed before this.
+        self.wire_flush();
     }
 
     /// Apply a CONF0 write: the RXFIFO_RST/TXFIFO_RST pulse bits flush a FIFO.
@@ -628,7 +825,7 @@ impl EspUart {
     fn write_config_reg(&mut self, off: u64, value: u32) {
         if let Some(mask) = Self::config_mask(off) {
             let masked = value & mask;
-            self.regs.insert(off, masked);
+            self.regs.set(off, masked);
             if off == OFF_CONF0 {
                 self.apply_conf0(masked);
             }
@@ -655,6 +852,14 @@ impl crate::peripherals::uart::UartStreamHost for EspUart {
 }
 
 impl Peripheral for EspUart {
+    fn line_names(&self) -> &'static [&'static str] {
+        UART_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.trace.clone())
     }
@@ -860,6 +1065,53 @@ impl Peripheral for EspUart {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The register file is a flat array, not a map: an offset outside its
+    /// window is not stored at all. Every config register must therefore have
+    /// a slot, or its writes would be dropped and its reads would answer 0
+    /// forever — silently. Fails the moment someone adds a register past
+    /// `OFF_ID` without widening `REG_WORDS`.
+    #[test]
+    fn every_config_reg_offset_has_a_slot() {
+        for &(off, reset, mask) in CONFIG_REGS {
+            let slot = RegFile::slot(off)
+                .unwrap_or_else(|| panic!("config reg 0x{off:02X} has no slot in the register file (REG_WORDS={REG_WORDS})"));
+            assert!(slot < REG_WORDS);
+            // And the reset value survives a round trip through the file.
+            let mut f = RegFile::default();
+            f.set(off, reset & mask);
+            assert_eq!(f.get(off), reset & mask, "round trip at 0x{off:02X}");
+        }
+        // Read-only status regs are answered from a constant table, never the
+        // file, but they share the offset window — check it holds for them too.
+        for &(off, _) in READONLY_REGS {
+            assert!(
+                RegFile::slot(off).is_some(),
+                "read-only reg 0x{off:02X} is outside the register-file window"
+            );
+        }
+    }
+
+    /// The map this replaced returned `unwrap_or(0)` for any offset it had
+    /// never seen. Preserve that exactly for never-written, unaligned and
+    /// out-of-window offsets.
+    #[test]
+    fn unwritten_unaligned_and_out_of_window_offsets_read_zero() {
+        let f = RegFile::default();
+        assert_eq!(f.get(OFF_CONF1), 0, "never-written slot reads 0");
+        assert_eq!(f.get(0x22), 0, "unaligned offset reads 0");
+        assert_eq!(f.get(OFF_ID + 4), 0, "past the window reads 0");
+        assert_eq!(f.get(0xFFFF_FFFF_FFFF_FFFC), 0, "far out of range reads 0");
+
+        // Writes to those offsets are swallowed, not panics, and do not
+        // corrupt a neighbouring slot.
+        let mut f = RegFile::default();
+        f.set(0x22, 0xDEAD_BEEF);
+        f.set(OFF_ID + 4, 0xDEAD_BEEF);
+        assert_eq!(f.get(0x20), 0);
+        assert_eq!(f.get(0x24), 0);
+        assert_eq!(f.get(OFF_ID), 0);
+    }
 
     fn drain_all(u: &mut EspUart) {
         for _ in 0..(u.cycles_per_byte() * (FIFO_LEN as u64 + 2)) {

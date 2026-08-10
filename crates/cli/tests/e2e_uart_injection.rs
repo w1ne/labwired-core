@@ -27,7 +27,8 @@ fn repo_root() -> PathBuf {
 /// binary isn't already sitting in `target/` (mirrors what
 /// `examples/ci-fixture-arm/ci/build.sh` does for the sibling CI fixture).
 fn ensure_fixture_built(root: &std::path::Path) -> PathBuf {
-    let bin = root.join("target/thumbv6m-none-eabi/release/firmware-uart-echo-fixture");
+    let bin = labwired_core::test_support::target_dir()
+        .join("thumbv6m-none-eabi/release/firmware-uart-echo-fixture");
     if bin.exists() {
         return bin;
     }

@@ -68,4 +68,25 @@ impl crate::Peripheral for StubPeripheral {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
+
+    /// Census hook — **measurement only**, and only when the `silent-census`
+    /// feature is compiled in (off by default, see `crate::census`).
+    ///
+    /// The post-construction stub sweep must answer "is this `dyn Peripheral`
+    /// a stub?" by *type*, not by the entry's `name`: the post-factory
+    /// replacement passes (`system::cortex_m::configure_cortex_m`,
+    /// `SystemBus::replace_or_add_peripheral`) rewrite names, so a name proves
+    /// nothing about what the machine is actually holding. Exposing the
+    /// concrete type here makes `dyn Any::is::<StubPeripheral>()` an exact
+    /// `TypeId` test.
+    ///
+    /// Feature-gated because it is the census's only production-type change.
+    /// With the feature off this override does not exist and `StubPeripheral`
+    /// is unchanged. With it on, every existing `Peripheral::as_any` consumer
+    /// immediately `downcast_ref`s to a concrete model type that a stub is not,
+    /// so `Some(stub)` is indistinguishable from the previous `None`.
+    #[cfg(feature = "silent-census")]
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
 }

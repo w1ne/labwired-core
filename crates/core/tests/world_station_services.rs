@@ -22,21 +22,16 @@ fn station_root() -> PathBuf {
 // See world_multichip.rs for the rationale: a missing ELF skips by default so the
 // toolchain-less workspace gate stays green, but hard-fails when
 // LABWIRED_REQUIRE_IOLINK_ELFS is set (the dedicated CI job builds the ELFs).
-fn require_iolink_elfs() -> bool {
-    std::env::var_os("LABWIRED_REQUIRE_IOLINK_ELFS").is_some()
-}
-
-// Returns true if the caller should `return` (skip). Panics — failing the test —
-// when ELFs are required but absent.
+// Thin wrapper over the shared helper so the skip/fail policy lives in ONE
+// place. This decision was previously copy-pasted here and into the sibling
+// world test; two copies of a policy is one copy too many, and only one of
+// them would have been updated.
 fn skip_or_fail_missing_elfs(build_hint: &str) -> bool {
-    if require_iolink_elfs() {
-        panic!(
-            "required IO-Link station ELF(s) missing while LABWIRED_REQUIRE_IOLINK_ELFS \
-             is set; build them: {build_hint}"
-        );
-    }
-    eprintln!("SKIP: IO-Link station ELF(s) not built; build them: {build_hint}");
-    true
+    labwired_core::test_support::skip_or_fail_missing_firmware(
+        "iolink",
+        "IO-Link station ELF(s)",
+        build_hint,
+    )
 }
 
 fn sym(elf_bytes: &[u8], name: &str) -> u64 {

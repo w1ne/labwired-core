@@ -188,7 +188,10 @@ impl Peripheral for Nrf52Saadc {
             OFF_RESULT_PTR => self.result_ptr,
             OFF_RESULT_MAXCNT => self.result_maxcnt & 0x7FFF,
             OFF_RESULT_AMOUNT => self.result_amount & 0x7FFF,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.saadc:Nrf52Saadc", offset, "read");
+                0
+            }
         })
     }
 
@@ -233,7 +236,9 @@ impl Peripheral for Nrf52Saadc {
             OFF_RESULT_PTR => self.result_ptr = value,
             OFF_RESULT_MAXCNT => self.result_maxcnt = value & 0x7FFF,
             OFF_RESULT_AMOUNT => {} // RO
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.saadc:Nrf52Saadc", offset, "write");
+            }
         }
         Ok(())
     }

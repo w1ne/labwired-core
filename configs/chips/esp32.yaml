@@ -67,7 +67,15 @@ peripherals:
     # gpio_esp32 remains accepted as an alias in bus::profiles.
     type: "esp32_gpio"
     base_address: 0x3FF44000
-    size: "1KB"
+    # 4KB, not 1KB: GPIO_FUNC0..39_OUT_SEL_CFG — the output matrix the pad
+    # routing resolves against — lives at 0x530..0x5CC, which a 1KB window ends
+    # 304 bytes short of. The programmatic bank in system/xtensa/esp32.rs has
+    # always mapped 0x1000 and is what real classic-ESP32 labs get, so this was
+    # inert until `from_config` gained a `wire_esp32_i2c_pads()` call; on that
+    # path the matrix writes would have landed nowhere and the bus stayed
+    # invisible with nothing to report it. Next peripheral up is rtc_cntl at
+    # 0x3FF48000, so there is no collision.
+    size: "4KB"
     config:
       debug_schema: "../peripherals/esp32/gpio.yaml"
   - id: "timg0"

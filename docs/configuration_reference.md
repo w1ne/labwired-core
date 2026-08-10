@@ -76,6 +76,40 @@ connectors:
     endpoint: "host_console"  # Pipes UART output to simulator stdout
 ```
 
+### `debug_uart` — which console the board's USB socket is wired to
+
+```yaml
+debug_uart: "usb_serial_jtag"   # ESP32-C3 SuperMini, ESP32-S3 Zero
+debug_uart: "uart0"             # CP210x/CH34x bridge boards
+debug_uart: "uart1"             # a board that routes its console elsewhere
+```
+
+An ESP32-C3 or -S3 has two consoles in silicon: UART0 and the chip's own
+USB-Serial-JTAG block. Which one carries `Serial` to the developer's cable is
+neither a chip fact nor a firmware fact — it is a BOARD fact, decided by what
+the USB socket is soldered to:
+
+| board's USB socket | console        | `Serial` build flag        |
+|--------------------|----------------|----------------------------|
+| native USB         | USB-Serial-JTAG| `ARDUINO_USB_CDC_ON_BOOT=1`|
+| USB-UART bridge IC | UART0          | `ARDUINO_USB_CDC_ON_BOOT=0`|
+
+The build flags and this key must come from the SAME board fact. If they
+disagree, firmware built for one console runs against a twin listening on the
+other and the Serial pane stays empty — which is exactly what a real board does
+when the flags are wrong, and exactly what shipped: a hosted build flashed to a
+real ESP32-C3 SuperMini printed the ROM and bootloader banners and then nothing,
+because `Serial` was on UART0 and a SuperMini's USB-C is not.
+
+The engine taps ONE console, the declared one, because a real board gives you
+one cable. It records the other and reports what the firmware said there
+(`WasmSimulator::console_mismatch`) so a silent pane has a reason. A declared
+console the bus does not have is refused at construction rather than silently
+substituted — see `crates/core/src/console.rs`.
+
+Omit the key to keep each path's historical default (UART0 on the ESP32-C3
+merged-flash paths; every console-capable UART elsewhere).
+
 For an `inputs.env` CI world, each `nodes[].system` value points to this
 same System Manifest format used by the Playground. The environment manifest
 adds node IDs, firmware paths, and explicit interconnects; it does not create a

@@ -90,10 +90,15 @@ pub struct Nrf52Timer {
     clock: Option<CycleClock>,
     /// CPU cycle of the last `sync_to` / advance.
     anchor: u64,
-    /// Bumped each arm so stale compare events die on arrival.
+    /// Bumped when the armed instant CHANGES, so stale compare events die on
+    /// arrival. Deliberately NOT bumped on a re-arm that targets the cycle
+    /// already in flight — see `take_scheduled_events`.
     arm_seq: u32,
     /// True while a compare event is live in the scheduler.
     scheduled: bool,
+    /// Absolute CPU cycle the live wake targets, or `None` when nothing is
+    /// armed. Paired with `arm_seq` to recognise a redundant re-arm.
+    armed_target: Option<u64>,
 }
 
 impl Default for Nrf52Timer {
@@ -114,6 +119,7 @@ impl Default for Nrf52Timer {
             anchor: 0,
             arm_seq: 0,
             scheduled: false,
+            armed_target: None,
         }
     }
 }
@@ -301,7 +307,10 @@ impl Peripheral for Nrf52Timer {
                 }
             }
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.timer:Nrf52Timer", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -368,7 +377,7 @@ impl Peripheral for Nrf52Timer {
                 }
             }
 
-            _ => {}
+            _ => { crate::census_reg!("nrf52.timer:Nrf52Timer", offset, "write"); }
         }
         Ok(())
     }
@@ -405,16 +414,37 @@ impl Peripheral for Nrf52Timer {
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() || !self.running || self.mode != MODE_TIMER {
             self.scheduled = false;
+            self.armed_target = None;
             return Vec::new();
         }
         let Some(d) = self.cycles_until_next_compare() else {
             self.scheduled = false;
+            self.armed_target = None;
             return Vec::new();
         };
-        // Always re-arm with a fresh token so a CC rewrite invalidates the
-        // previous deadline. Dedup is not required for correctness.
-        self.arm_seq = self.arm_seq.wrapping_add(1);
+        // `d` counts from `anchor`, so this is the absolute cycle the compare
+        // lands on — the same instant the scheduler derives as its deadline.
+        let target = self.anchor.saturating_add(d);
+
+        // Re-arm with a FRESH token only when the instant actually moved (a CC
+        // rewrite, a prescaler change, a restart); a stale wake must then die on
+        // arrival, which is what the token check in `on_event` is for.
+        //
+        // Re-arming the instant already in flight must reuse the token instead.
+        // This drain runs after EVERY MMIO write to the peripheral, and reading
+        // the nRF52 counter is defined as a write (strobe `TASKS_CAPTURE[i]`,
+        // then read `CC[i]` — there is no COUNTER register). A fresh token every
+        // time makes the scheduler's dedup key `(peripheral_idx, event_token,
+        // deadline)` unique on every poll, so dedup can never fire and each poll
+        // leaves another live wake behind. With a far compare those never drain
+        // and the peripheral walks into `MAX_LIVE_EVENTS_PER_PERIPHERAL` — the
+        // unbounded-heap class the scheduler docs describe. Holding the token
+        // steady keeps the key identical, so layer-1 dedup collapses the repeat.
+        if !(self.scheduled && self.armed_target == Some(target)) {
+            self.arm_seq = self.arm_seq.wrapping_add(1);
+        }
         self.scheduled = true;
+        self.armed_target = Some(target);
         vec![(d.saturating_sub(1), self.arm_seq)]
     }
 
@@ -440,6 +470,15 @@ impl Peripheral for Nrf52Timer {
         };
         self.scheduled = self.running && self.mode == MODE_TIMER;
         let next = self.cycles_until_next_compare();
+        // `reschedule_delay` re-arms under the SAME token, so record the instant
+        // it targets. Without this, `armed_target` would still name the compare
+        // that just fired and the next drain would count as a change, bumping
+        // the token and killing the reschedule it had just handed back.
+        self.armed_target = if self.scheduled {
+            next.map(|d| now.saturating_add(d))
+        } else {
+            None
+        };
         crate::sched::EventResult {
             raise_own_irq: res.irq,
             fired_events: res.fired_events,

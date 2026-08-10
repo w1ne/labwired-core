@@ -296,6 +296,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32h563/spi1.yaml"
       profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
     # SPI1 is clocked from RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset
     # (RM0481 §11.8.39) — CFG1 reads 0 until the bus clock is enabled.
     clock: { reg: "apb2enr", bit: 12 }
@@ -307,6 +311,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32h563/spi2.yaml"
       profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
   - id: "spi3"
     type: "spi"
     base_address: 0x40003C00
@@ -315,6 +323,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32h563/spi3.yaml"
       profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
   # 1KB window covers ADC1 (0x000) and the common block (0x300). ADC2 at
   # 0x100 is not separately modeled — see the divergence note up top.
   - id: "adc1"

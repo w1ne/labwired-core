@@ -19,8 +19,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn firmware_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/thumbv7m-none-eabi/release/epaper-tricolor-lab")
+    labwired_core::test_support::target_dir().join("thumbv7m-none-eabi/release/epaper-tricolor-lab")
 }
 
 fn ensure_firmware_built() -> PathBuf {

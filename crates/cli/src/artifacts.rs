@@ -92,6 +92,14 @@ pub(crate) struct TestResult {
     pub(crate) instructions: u64,
     pub(crate) stop_reason: StopReason,
     pub(crate) stop_reason_details: StopReasonDetails,
+    /// The exit code the firmware itself reported through the `simctl` device.
+    ///
+    /// Present only when `stop_reason` is `firmware_exit` **and** the firmware
+    /// named a code: `EXIT n` gives `n`, `ABRT` gives 1, and a bare `STOP` —
+    /// which makes no pass/fail claim — omits the field entirely rather than
+    /// reporting 0, so "the firmware stopped" can never be read as a pass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) firmware_exit_code: Option<u32>,
     pub(crate) limits: TestLimits,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) message: Option<String>,

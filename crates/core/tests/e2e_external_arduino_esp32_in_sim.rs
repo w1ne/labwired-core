@@ -774,8 +774,7 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
             ppm.extend_from_slice(&[r, g, b]);
         }
     }
-    let out_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/arduino-esp32_panel.ppm");
+    let out_path = labwired_core::test_support::target_dir().join("arduino-esp32_panel.ppm");
     if let Some(parent) = out_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

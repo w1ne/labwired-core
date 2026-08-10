@@ -22,8 +22,8 @@ type Cm = Machine<CortexM>;
 const W: usize = 84;
 
 fn ensure_firmware_built() -> PathBuf {
-    let elf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/thumbv7em-none-eabihf/release/nokia5110-invaders-lab");
+    let elf = labwired_core::test_support::target_dir()
+        .join("thumbv7em-none-eabihf/release/nokia5110-invaders-lab");
     let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/nokia5110-invaders-lab/src/main.rs");
     if let (Ok(e), Ok(s)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {

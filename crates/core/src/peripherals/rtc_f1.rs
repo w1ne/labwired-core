@@ -62,7 +62,10 @@ impl RtcF1 {
             0x1C => self.cnt & 0xFFFF,         // CNTL
             0x20 => 0,                         // ALRH — write-only
             0x24 => 0,                         // ALRL — write-only
-            _ => 0,
+            _ => {
+                crate::census_reg!("rtc_f1:RtcF1", offset, "read");
+                0
+            }
         }
     }
 
@@ -80,7 +83,9 @@ impl RtcF1 {
             0x1C => self.cnt = (self.cnt & 0xFFFF_0000) | (value & 0xFFFF),      // CNTL
             0x20 => self.alr = (self.alr & 0x0000_FFFF) | ((value & 0xFFFF) << 16), // ALRH
             0x24 => self.alr = (self.alr & 0xFFFF_0000) | (value & 0xFFFF),      // ALRL
-            _ => {}
+            _ => {
+                crate::census_reg!("rtc_f1:RtcF1", offset, "write");
+            }
         }
     }
 }

@@ -1,0 +1,22 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# The dogfood: this script asserts the FIRMWARE passed, not that some bytes
+# appeared on a serial line.
+#
+#   - uart_contains: "PASS"   proves the string "PASS" was printed.
+#   - firmware_exit: 0        proves main() reached its success path and said so.
+#
+# The firmware (examples/simctl-selftest/main.c) exits with a distinct code per
+# check, so a failure names which check failed instead of just "no match".
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/simctl-selftest-thumbv7m.elf"
+  system: "../../configs/systems/simctl-selftest.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - firmware_exit: 0

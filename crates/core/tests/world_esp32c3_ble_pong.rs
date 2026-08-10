@@ -1,10 +1,28 @@
 //! Two ESP32-C3 nodes running ONE image must start the owner's BLE Pong game.
 //!
 //! This is the end-to-end proof for connectionless BLE between two instances in
-//! one lab, and it deliberately uses the owner's published lab
-//! (api.labwired.com project `c477f82961e86f601e7b908ae7e12311`, "BLE Pong —
-//! two ESP32-C3s") rather than a purpose-built fixture, because the whole point
-//! is that a real user's real sketch works.
+//! one lab. The sketch is the owner's published lab (api.labwired.com project
+//! `c477f82961e86f601e7b908ae7e12311`, "BLE Pong — two ESP32-C3s") rather than
+//! a purpose-built one, because the whole point is that a real user's real
+//! sketch works.
+//!
+//! IT IS A FROZEN COPY, NOT A LIVE FETCH. CI has no network, so this test runs
+//! a COMMITTED flash image (`fixtures/esp32c3-ble-pong-flash.bin`) built from a
+//! COMMITTED copy of the sketch (`fixtures/esp32c3-ble-pong.ino`). Nothing here
+//! contacts api.labwired.com. Two separate mechanisms keep that copy honest,
+//! and neither is optional:
+//!
+//! * `tests/fixture_ble_pong_provenance.rs` pins the sha256 of BOTH files, so
+//!   editing the `.ino` without rebuilding the `.bin` — or swapping the `.bin`
+//!   without recording which source it came from — fails there instead of
+//!   silently testing firmware nobody runs. It is not `cfg`-gated, so unlike
+//!   this file it also runs on PRs. That is exactly how this file rotted once
+//!   already: the fixture was frozen at the #828 build while the published
+//!   sketch moved on repeatedly, and the test stayed green against firmware
+//!   that no longer existed — while the lab was visibly broken in the browser.
+//! * `scripts/ci/check-published-lab-drift.sh` runs in a networked lane and fails if
+//!   the OWNER edits the live project so it no longer matches the committed
+//!   `.ino`. A hash pinned in-tree cannot notice that on its own.
 //!
 //! The sketch elects its host over the air: each node publishes its state in
 //! the manufacturer data of its advertisement, and in its scan callback
@@ -25,15 +43,35 @@
 //!    and both stay GUEST forever with the ball frozen at spawn.
 //! 2. **Delivery.** An advertising report transmitted by one controller has to
 //!    reach the other's scan.
+//! 3. **Both panels show the same game.** The guest's ball has to track the
+//!    host's. This is the one that caught a real regression, and it is why the
+//!    last assertion compares the two nodes rather than checking each alone.
 //!
-//! Both are observed the way a user observes them: from the serial the sketch
-//! prints. Nothing here reads engine internals.
+//! All three are observed the way a user observes them: from the serial the
+//! sketch prints. Nothing here reads engine internals.
 //!
-//! The image is the flash the hosted PlatformIO toolchain builds from that
-//! project's `src/main.ino` (`fixtures/esp32c3-ble-pong-flash.bin`). Reproduce
-//! with `labwired_compile`, board `esp32-c3-supermini`, language `arduino`,
-//! lib_deps `adafruit/Adafruit SSD1306` + `adafruit/Adafruit GFX Library`, then
-//! concatenate the returned flash images at their offsets.
+//! # What property 3 caught (2026-08-07)
+//!
+//! A published revision set `PUBLISH_MS` to 700 while the game loop ran at
+//! 50 Hz. The host's world snapshot then went out 1.4 times a second, and the
+//! host's FIRST advertisement is emitted at the end of `setup()` while `isHost`
+//! is still false — a 5-byte guest-shaped frame with no world state at all. So
+//! for the whole first 700 ms the guest had nothing to draw: `haveHostFrame`
+//! stayed false and it painted the static fallback. That is the "dead panel"
+//! users saw. Given longer, the guest did receive frames — and repainted ONE
+//! stale snapshot ~15 frames running, drifting up to 70 px from the host.
+//!
+//! The fix was not a faster radio: the host now advertises its VELOCITY and the
+//! guest dead-reckons between packets, so motion is smooth at the loop rate
+//! regardless of cadence. Cadence still matters for a different reason — see
+//! the note on `PONG_CYCLES` about what this test's budget can and cannot see.
+//!
+//! The image is the flash the hosted PlatformIO toolchain builds from
+//! `fixtures/esp32c3-ble-pong.ino`. Reproduce with `labwired_compile`, board
+//! `esp32-c3-supermini`, language `arduino`, lib_deps
+//! `adafruit/Adafruit SSD1306` + `adafruit/Adafruit GFX Library`, then
+//! concatenate the returned flash images at their offsets (pad the gaps with
+//! `0xFF`).
 
 // RELEASE-ONLY. Two C3 mask-ROM boots plus enough advertising rounds for the
 // election to settle is ~180M cycles; that is seconds in release and tens of
@@ -219,6 +257,12 @@ fn last_status(console: &str) -> String {
         .to_string()
 }
 
+/// The last `n` non-empty serial lines, oldest first.
+fn tail(console: &str, n: usize) -> String {
+    let lines: Vec<&str> = console.lines().filter(|l| !l.trim().is_empty()).collect();
+    lines[lines.len().saturating_sub(n)..].join("\n")
+}
+
 fn ball(status: &str) -> (i32, i32) {
     let f = status
         .split(" ball=")
@@ -229,9 +273,37 @@ fn ball(status: &str) -> (i32, i32) {
     (x.parse().expect("ball x"), y.parse().expect("ball y"))
 }
 
+fn paddle(status: &str) -> i32 {
+    status
+        .split(" me=")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .unwrap_or_else(|| panic!("no me= in {status:?}"))
+        .parse()
+        .unwrap_or_else(|e| panic!("bad me= in {status:?}: {e}"))
+}
+
 /// Cycles per node. The C3 rom-boot path reaches `setup()`'s ROLE banner in
 /// roughly 45M and needs a few advertising rounds after that for the election
 /// to settle and the ball to move.
+///
+/// ⚠ KNOW WHAT THIS BUDGET CANNOT SEE. 90M cycles at 160 MHz is ~560 ms of
+/// simulated time, and ~45M of it is ROM boot — so the sketch's `loop()` only
+/// gets ~140 ms, about seven iterations at `delay(20)`. Any firmware behaviour
+/// whose period is longer than that is INVISIBLE here, and will read as a pass
+/// or as a spurious failure depending on which side of the assertion it falls.
+/// That is not hypothetical: with `PUBLISH_MS` at 700 the host's second
+/// advertisement simply never happened inside the window, so what the test
+/// reported was "no host frame ever arrived" — true, but it could not
+/// distinguish "the cadence is too slow" from "delivery is broken".
+///
+/// Raising it is expensive (the run is the whole cost of this test), so the
+/// budget stays where the gate needs it and the long window lives in its own
+/// lane instead: `esp32c3-ble-pong-soak` in `.github/workflows/core-nightly.yml`
+/// runs this same file with `PONG_SOAK_CYCLES=480000000`, ~30 republish
+/// periods. No gate that has to be fast ever sets the variable, so the constant
+/// below is still what gates a merge — do not raise it to buy coverage the
+/// nightly already has.
 const PONG_CYCLES: usize = 90_000_000;
 
 /// ONE two-node run, shared by both tests. The run is the expensive part and
@@ -241,7 +313,18 @@ const PONG_CYCLES: usize = 90_000_000;
 fn consoles() -> &'static (String, String) {
     static RUN: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
     RUN.get_or_init(|| {
-        let (a, b) = run_pong(PONG_CYCLES);
+        // Soak override — see the note on PONG_CYCLES. Set ONLY by the nightly
+        // `esp32c3-ble-pong-soak` job and by hand during characterisation; every
+        // gate that has to be fast leaves it unset and runs the constant.
+        // It exists because answering "does this advertising cadence stall the
+        // twin's RW-BLE controller?" needs tens of republish periods, and
+        // hand-editing the constant to find out is how the edited value gets
+        // committed by accident.
+        let budget = std::env::var("PONG_SOAK_CYCLES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(PONG_CYCLES);
+        let (a, b) = run_pong(budget);
         (a.console(), b.console())
     })
 }
@@ -272,6 +355,12 @@ fn two_c3_nodes_running_one_ble_pong_image_start_the_game() {
     // fail: what each node decided it was, and what it was painting.
     eprintln!("nodeA tag={} {sa}", ble_tag(ca));
     eprintln!("nodeB tag={} {sb}", ble_tag(cb));
+    // On failure the LAST line is rarely enough — "the guest is repainting one
+    // stale snapshot" and "the guest never received anything" have identical
+    // final lines and completely different causes. The tail distinguishes them
+    // without a second run, which on this test costs two mask-ROM boots.
+    eprintln!("--- nodeA tail ---\n{}", tail(ca, 8));
+    eprintln!("--- nodeB tail ---\n{}", tail(cb, 8));
 
     let hosts = [&sa, &sb].iter().filter(|s| s.starts_with("H ")).count();
     assert_eq!(
@@ -292,5 +381,34 @@ fn two_c3_nodes_running_one_ble_pong_image_start_the_game() {
     assert!(
         ball(&sa).0.abs_diff(ball(&sb).0) <= 8,
         "the two nodes are painting different worlds\n  nodeA: {sa}\n  nodeB: {sb}"
+    );
+}
+
+#[test]
+fn shipped_pong_firmware_observes_gp2y_distance_through_gpio1_adc() {
+    let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin"))
+        .expect("read BLE Pong flash image");
+    let mut near = build_node(&flash);
+    let mut far = build_node(&flash);
+    near.machine
+        .set_input_on("vl", "distance", 100.0)
+        .expect("drive near GP2Y distance");
+    far.machine
+        .set_input_on("vl", "distance", 800.0)
+        .expect("drive far GP2Y distance");
+
+    for _ in 0..PONG_CYCLES {
+        near.machine.step().expect("near node steps");
+        far.machine.step().expect("far node steps");
+    }
+
+    let near_status = last_status(&near.console());
+    let far_status = last_status(&far.console());
+    eprintln!("near: {near_status}");
+    eprintln!("far:  {far_status}");
+    assert!(
+        paddle(&near_status) < paddle(&far_status),
+        "near and far stimuli must move the firmware paddle through GPIO1 ADC\n\
+         near: {near_status}\nfar:  {far_status}",
     );
 }

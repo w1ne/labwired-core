@@ -784,6 +784,10 @@ board_io:
             machine: Some(machine),
             board_io: manifest.board_io,
             uart_sink: Arc::new(Mutex::new(Vec::new())),
+            console: labwired_core::console::ConsoleCapture::new(
+                labwired_core::console::HostConsole::Undeclared,
+                labwired_core::console::HostConsole::UsbSerialJtag,
+            ),
             uart_rx_bufs: Vec::new(),
             arch: Arch::RiscV,
             esp32_ipi: None,

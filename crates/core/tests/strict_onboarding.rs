@@ -262,12 +262,29 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
     let package = parts[target_idx + 3].clone();
     let needs_thumbv6m_link_arg = target == "thumbv6m-none-eabi";
 
+    // The io-smoke YAML declares `firmware: ../../target/...` — a literal
+    // path, which the CLI later resolves relative to the script. That
+    // contract only holds if the firmware actually lands in
+    // `<project_root>/target`, and a child `cargo build` does NOT: it
+    // inherits `CARGO_TARGET_DIR` (this repo buckets one target dir per
+    // worktree) and writes the artifact into the bucket instead. The build
+    // then succeeds, the declared path stays empty, and every chip fails
+    // downstream with a bare "io-smoke test failed" that names no path.
+    //
+    // Pin the child build to the directory the YAML promises. Under the
+    // default layout this is where cargo was going to put it anyway, so
+    // nothing changes; under a bucketed run it is what makes the declared
+    // path true.
+    let declared_target_dir = project_root.join("target");
+
     let mut args = vec![
         "build".to_string(),
         "-p".to_string(),
         package.clone(),
         "--target".to_string(),
         target,
+        "--target-dir".to_string(),
+        declared_target_dir.to_string_lossy().into_owned(),
     ];
     if profile == "release" {
         args.push("--release".to_string());
@@ -295,8 +312,22 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
     }
 
     let status = command.status()?;
+    if !status.success() {
+        return Ok(false);
+    }
 
-    Ok(status.success())
+    // A successful build is not the same as the artifact being where the
+    // YAML says. Check the declared path itself, so a mismatch reports here
+    // — naming the path — instead of as an unexplained smoke-test failure.
+    if !firmware_path.exists() {
+        println!(
+            "  [FAIL] build succeeded but no artifact at the path io-smoke declares: {}",
+            firmware_path.display()
+        );
+        return Ok(false);
+    }
+
+    Ok(true)
 }
 
 fn firmware_path_from_smoke(smoke_test: &Path) -> anyhow::Result<Option<PathBuf>> {

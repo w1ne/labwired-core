@@ -233,7 +233,10 @@ impl Peripheral for Rp2040Timer {
             INTE => self.inte as u32,
             INTF => self.intf as u32,
             INTS => self.ints() as u32,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.timer:Rp2040Timer", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -272,7 +275,9 @@ impl Peripheral for Rp2040Timer {
             INTR => self.intr &= !(value as u8),
             INTE => self.inte = (value & 0xf) as u8,
             INTF => self.intf = (value & 0xf) as u8,
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.timer:Rp2040Timer", offset, "write");
+            }
         }
         Ok(())
     }

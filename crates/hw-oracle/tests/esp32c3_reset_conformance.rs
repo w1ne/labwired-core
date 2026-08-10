@@ -35,6 +35,16 @@
 //! values. This oracle therefore asserts only the **ROM-untouched, static**
 //! reset values where descriptor and silicon agree.
 //!
+//! ## 2026-08-08: two entries were NOT reset values at all
+//!
+//! Repeat-reads on live silicon retired the equality claim on `WIFI_MAC`
+//! `0x60035000` and `0x6003507C`: both change on every read. They moved to
+//! [`FREE_RUNNING_COUNTERS`], which asserts only that the window maps. Two
+//! further entries (`RADIO_FE 0x60006000`, `WIFI_MAC 0x6003502C`) mismatched
+//! live but were stable, which is the signature of a powered PHY rather than a
+//! wrong descriptor; they stay asserted and are annotated in the table with what
+//! a capture would have to do to confirm them.
+//!
 //! ## Running
 //!
 //! Sim-only (normal CI):
@@ -160,12 +170,26 @@ const RESET_VALUES: &[(&str, u64, u32)] = &[
     // --- Radio (WiFi/BT) register-backed model, REVERSE-ENGINEERED from live
     // --- silicon (docs/esp32c3_radio_reverse_engineering.md), not SVD. These
     // --- windows reset cold (pre-phy_enable); assert they map + return cold
-    // --- state. The WiFi MAC carries 12 non-zero hardware reset defaults.
+    // --- state. The WiFi MAC carries 10 non-zero hardware reset defaults here;
+    // --- two more used to be listed and are now in FREE_RUNNING_COUNTERS below.
+    //
+    // ⚠️ TWO OF THESE NEED A COLD POWER-CYCLE CAPTURE TO VALIDATE, and a live
+    // read on 2026-08-08 could not supply one. Both boards were running a BLE
+    // sketch, and openocd `reset halt` on the C3 is a SOFTWARE core reset that
+    // leaves the PHY powered, so the radio estate is read post-`phy_enable`:
+    //
+    //   RADIO_FE 0x60006000  asserted 0x00000000, live 0x06828040
+    //   WIFI_MAC 0x6003502C  asserted 0x00000002, live 0x00000000
+    //
+    // Unlike FREE_RUNNING_COUNTERS these were STABLE across repeat reads, which
+    // is what says "powered-up state", not "counter". The cold values are still
+    // the right thing for the descriptor to model, so the assertions stay. To
+    // confirm them against silicon, capture with the board freshly power-cycled
+    // into a firmware that never calls `phy_enable` — not via `reset halt`.
     ("RADIO_FE (cold)", 0x6000_6000, 0x0000_0000),
     ("RADIO_NRX (cold)", 0x6001_CC00, 0x0000_0000),
     ("WIFI_MAC base (cold)", 0x6003_3000, 0x0000_0000),
     // WiFi MAC non-zero cold-reset defaults (silicon-corroborated)
-    ("WIFI_MAC 0x60035000", 0x6003_5000, 0x000C_9858),
     ("WIFI_MAC 0x60035024", 0x6003_5024, 0x024E_01FF),
     ("WIFI_MAC 0x60035028", 0x6003_5028, 0xB000_0000),
     ("WIFI_MAC 0x6003502C", 0x6003_502C, 0x0000_0002),
@@ -173,10 +197,46 @@ const RESET_VALUES: &[(&str, u64, u32)] = &[
     ("WIFI_MAC 0x6003503C", 0x6003_503C, 0x0000_0064),
     ("WIFI_MAC 0x60035048", 0x6003_5048, 0x0000_0064),
     ("WIFI_MAC 0x60035054", 0x6003_5054, 0x0000_0064),
-    ("WIFI_MAC 0x6003507C", 0x6003_507C, 0x7D9A_D8A3),
     ("WIFI_MAC 0x60035080", 0x6003_5080, 0x0000_07FF),
     ("WIFI_MAC 0x60035084", 0x6003_5084, 0x0000_3202),
     ("WIFI_MAC 0x60035094", 0x6003_5094, 0x0000_0004),
+];
+
+/// FREE-RUNNING COUNTERS — mapped, but deliberately NOT equality-asserted.
+///
+/// These two addresses were in [`RESET_VALUES`] with fixed expected words. They
+/// cannot be. Triple repeat-reads inside ONE halted openocd session on a live
+/// ESP32-C3 (2026-08-08, reproduced on both attached boards):
+///
+/// ```text
+/// 0x60035000  asserted 0x000C9858   live: 0x00006E8E -> 0x0000A438 -> 0x0000D62B
+/// 0x6003507C  asserted 0x7D9AD8A3   live: 0x53327C00 -> 0x1E028FBF -> 0x6F48DDB5
+/// ```
+///
+/// The value changes on EVERY read while the core is halted, so no capture from
+/// any silicon can ever equal a constant, and the committed "silicon-corroborated
+/// reset default" was a single sample of a counter mistaken for a reset value.
+/// 0x60035000 advances monotonically at a fixed rate (a free-running timer);
+/// 0x6003507C is unordered between reads (a counter fed by the PHY/PRNG side of
+/// the MAC). Neither is documented in the SVD — this window is
+/// reverse-engineered, see `docs/esp32c3_radio_reverse_engineering.md`.
+///
+/// The offline test passed only because the simulator returns a frozen word: an
+/// oracle that could never fail against the sim and could never pass against
+/// hardware. That is a vacuous gate, so the equality claim is withdrawn.
+///
+/// They are kept HERE, not deleted, for two reasons: the next person must be
+/// able to see that they were considered and excluded on evidence rather than
+/// quietly dropped; and the property that DOES hold — the window is mapped and
+/// reads without a bus fault, which is what proves the radio estate is wired —
+/// is still worth asserting. [`esp32c3_free_running_counters_are_mapped`] does
+/// exactly that and nothing more.
+///
+/// To turn either back into an equality assertion you need a model of what the
+/// counter counts, and then the assertion is about its RATE, not its value.
+const FREE_RUNNING_COUNTERS: &[(&str, u64)] = &[
+    ("WIFI_MAC 0x60035000 (free-running counter)", 0x6003_5000),
+    ("WIFI_MAC 0x6003507C (free-running counter)", 0x6003_507C),
 ];
 
 fn build_sim_bus() -> SystemBus {
@@ -224,6 +284,30 @@ fn esp32c3_reset_values_match_silicon() {
         "ESP32-C3 reset-state model diverged from silicon in {} of {} register(s):\n{}",
         failures.len(),
         RESET_VALUES.len(),
+        failures.join("\n")
+    );
+}
+
+/// The two [`FREE_RUNNING_COUNTERS`] windows must still MAP — a read must not
+/// bus-fault — which is the part of the old claim that survives contact with
+/// silicon. Their VALUE is not asserted, and must not be: see the table's docs
+/// for the live read sequences that retired the equality claim.
+#[test]
+fn esp32c3_free_running_counters_are_mapped() {
+    let sim = build_sim_bus();
+    let mut failures = Vec::new();
+
+    for &(label, addr) in FREE_RUNNING_COUNTERS {
+        if let Err(e) = sim.read_u32(addr) {
+            failures.push(format!("  [FAULT] {label} 0x{addr:08X}: {e:?}"));
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "{} of {} free-running WiFi MAC window(s) failed to map:\n{}",
+        failures.len(),
+        FREE_RUNNING_COUNTERS.len(),
         failures.join("\n")
     );
 }

@@ -214,7 +214,10 @@ impl Esp32s3Aes {
             // INT_CLEAR is W1C; reads as 0.
             INT_ENA_REG => self.int_ena as u32,
             DATE_REG => AES_DATE_VALUE,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.aes:Esp32s3Aes", offset, "read");
+                0
+            }
         }
     }
 
@@ -247,7 +250,7 @@ impl Esp32s3Aes {
                 }
             INT_ENA_REG => self.int_ena = value & 1 != 0,
             DMA_EXIT_REG => { /* release DMA: no persistent state to clear */ }
-            _ => {}
+            _ => { crate::census_reg!("esp32s3.aes:Esp32s3Aes", offset, "write"); }
         }
     }
 

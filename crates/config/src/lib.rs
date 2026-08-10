@@ -9,11 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-/// Canonical device config v1 — the single JSON shape the agent builds and both
-/// engines load directly (Phase 1: parse + structural validation; resolve() is
-/// a documented Phase 2 stub).
-pub mod canonical;
-
 fn deserialize_u64_lax<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -83,21 +78,60 @@ pub struct NamedMemoryRange {
     pub image_env: Option<String>,
 }
 
-/// Optional RCC clock-gate declaration for a peripheral. When present, the bus
-/// models silicon clock-gating: a CPU access to the peripheral only takes effect
-/// while `bit` is set in the RCC peripheral's `reg` enable register. Peripherals
-/// without a `clock:` field are never gated (safe default — existing configs and
-/// firmware that don't enable a clock keep working unchanged).
+/// One RCC bit a peripheral's clock depends on.
 ///
-/// `reg` is the symbolic enable-register name (e.g. "apb1enr", "apb2enr",
-/// "ahbenr", "ahb2enr"); the bus maps it to the chip family's actual RCC offset
-/// at build time, so the same name resolves correctly on F1 vs L4.
+/// `reg` is a symbolic RCC register name — either a peripheral-enable register
+/// ("apb1enr", "apb2enr", "ahbenr", "ahb2enr", …) or a clock-source register
+/// ("cr", "crrcr", …). The bus maps it to the chip family's actual RCC offset at
+/// build time, so the same name resolves correctly on F1 vs L4 vs L0. A name the
+/// active family does not expose is a hard build error, never a silent
+/// "never gate".
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClockGate {
-    /// Symbolic RCC enable-register name, e.g. "apb1enr" / "apb2enr" / "ahbenr".
+    /// Symbolic RCC register name, e.g. "apb1enr" / "apb2enr" / "ahbenr" / "crrcr".
     pub reg: String,
-    /// Enable-bit position within that register.
+    /// Bit position within that register that must be **set** for the
+    /// peripheral to be clocked.
     pub bit: u8,
+}
+
+/// A peripheral's `clock:` declaration: **every** listed RCC bit must be set for
+/// the peripheral to answer the CPU.
+///
+/// One key, one mechanism. Silicon can withhold a peripheral's clock for more
+/// than one reason — the bus-enable bit in an `xxxENR` register is the common
+/// one, but a peripheral with its own *kernel* clock (the STM32L0 RNG runs off
+/// HSI48) is equally dead when that source was never started. Both are "an RCC
+/// bit that must be set", so both are entries in this one list rather than a
+/// second config key and a second check somewhere else in the engine. See
+/// [`crate::PeripheralConfig::clock`].
+///
+/// Accepts either shape in yaml, so every config written against the original
+/// single-gate form keeps working verbatim:
+///
+/// ```yaml
+/// clock: { reg: "apb1enr", bit: 21 }              # one bit
+/// clock:                                          # several, all required
+///   - { reg: "ahbenr", bit: 20 }
+///   - { reg: "crrcr",  bit: 1  }
+/// ```
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum ClockGates {
+    /// A single required bit — the original `clock: { reg, bit }` form.
+    One(ClockGate),
+    /// Several required bits, ANDed together.
+    All(Vec<ClockGate>),
+}
+
+impl ClockGates {
+    /// Every bit this declaration requires, in declaration order.
+    pub fn as_slice(&self) -> &[ClockGate] {
+        match self {
+            Self::One(gate) => std::slice::from_ref(gate),
+            Self::All(gates) => gates.as_slice(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -110,9 +144,12 @@ pub struct PeripheralConfig {
     pub size: Option<String>,
     #[serde(default)]
     pub irq: Option<u32>,
-    /// Optional RCC clock-gate. `None` → the peripheral is never gated.
+    /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
+    /// peripheral to answer the CPU. `None` → the peripheral is never gated
+    /// (the safe default — existing configs and firmware that never enable a
+    /// clock keep working unchanged).
     #[serde(default)]
-    pub clock: Option<ClockGate>,
+    pub clock: Option<ClockGates>,
     #[serde(default)]
     pub config: HashMap<String, serde_yaml::Value>,
 }
@@ -972,16 +1009,21 @@ fn validate_environment_interconnect_config(
                 index,
                 kind,
                 &interconnect.config,
-                &["peripheral"],
+                &["peripheral", "endpoints"],
             )?;
-            if interconnect
+            let has_peripheral = interconnect
                 .config
                 .get("peripheral")
                 .and_then(serde_yaml::Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .is_none()
-            {
+                .is_some();
+            let has_endpoints = interconnect
+                .config
+                .get("endpoints")
+                .and_then(serde_yaml::Value::as_mapping)
+                .is_some();
+            if !has_peripheral && !has_endpoints {
                 anyhow::bail!("can_bus: missing nonblank config.peripheral");
             }
         }
@@ -1536,9 +1578,9 @@ pub struct DeviceDescriptor {
     /// its abstract pin roles bind to `config:` keys.
     pub behavior: DeviceBehavior,
     /// How the canvas compiler emits this device's `external_devices` (and any
-    /// auxiliary `board_io`) block. When present, BOTH engines (the Rust
-    /// `canonical.rs` emitter and the TypeScript `compile()` emitter) derive the
-    /// block from this single spec instead of a hand-mirrored pair.
+    /// auxiliary `board_io`) block. When present, the canvas compiler
+    /// (the TypeScript `compile()` emitter) derives the block from this single
+    /// spec instead of a hand-mirrored pair.
     #[serde(default)]
     pub emit: Option<DeviceEmit>,
     /// Display + runtime metadata. `metadata.inputs` is load-bearing: it defines
@@ -1907,6 +1949,37 @@ pub struct PopcountSource {
     pub registers: Vec<String>,
     /// Value contributed by each set bit.
     pub per_bit: u32,
+}
+
+/// A **power-gate**: while a bit is set in another register, this register
+/// stops reporting a measurement and reads all-zero.
+///
+/// This is the datasheet shape for a sensor that can be *shut down* while it
+/// stays addressable on the bus. The Vishay VEML7700 is the case that motivated
+/// it: command code 0 (`ALS_CONF`) powers up at `0x0001`, and bit 0 (`ALS_SD`)
+/// is documented as *"0 = ALS power on, 1 = ALS shut down"* — so a part that has
+/// never had that bit cleared has never run a conversion, and its `ALS` /
+/// `WHITE` result registers cannot hold light data. Without this gate the model
+/// would hand a shut-down sensor a plausible reading, and firmware that forgets
+/// to power the part on would pass in simulation and read zeros on silicon.
+///
+/// It is deliberately expressed as data over one shared behaviour rather than a
+/// per-device Rust branch: a second part adopts it by naming its own register
+/// and mask in YAML.
+///
+/// **Modelled scope, stated plainly.** The gate makes the register read zero
+/// while the bit is set. It does not model conversion restart latency after the
+/// bit is cleared (the datasheet's power-on settling time), and it says nothing
+/// about what silicon retains in the result register if firmware shuts a
+/// *running* part down mid-flight — the datasheet does not specify that, and
+/// this model returns zero there too. The power-on case, which is the one
+/// firmware actually trips over, is exact.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ZeroWhen {
+    /// Register holding the gating bit(s).
+    pub register: String,
+    /// Bits that, when ANY is set, force this register's read to zero.
+    pub mask: u32,
 }
 
 /// One **data-ready** rule: a write-triggered, time-gated status bit.
@@ -2359,6 +2432,11 @@ pub struct RegisterSpec {
     /// than from storage or a measurement channel. See [`PopcountSource`].
     #[serde(default)]
     pub popcount: Option<PopcountSource>,
+    /// Power-gate: while any masked bit of the named register is set, a read of
+    /// THIS register returns an all-zero word instead of its measurement. See
+    /// [`ZeroWhen`] — the VEML7700 `ALS_SD` shutdown bit is the motivating case.
+    #[serde(default)]
+    pub zero_when: Option<ZeroWhen>,
 }
 
 /// One sourced bit-field within a composite register word (see
@@ -2634,10 +2712,10 @@ impl DeviceDescriptor {
 
     /// Look up and parse the embedded descriptor for a device `type:` string
     /// (accepts either spelling for the encoder). Returns `Ok(None)` for a type
-    /// with no declarative descriptor. This is the SINGLE embed point — both the
-    /// runtime attach path (`core`'s `bus/declarative_device.rs`) and the canvas
-    /// emitter (`canonical.rs`) resolve descriptors through here, so there is one
-    /// source of truth for the `configs/devices/*.yaml` set.
+    /// with no declarative descriptor. This is the SINGLE embed point — the
+    /// runtime attach path (`core`'s `bus/declarative_device.rs`) resolves
+    /// descriptors through here, so there is one source of truth for the
+    /// `configs/devices/*.yaml` set.
     pub fn embedded(device_type: &str) -> Result<Option<Self>> {
         match embedded_device_yaml(device_type) {
             Some(yaml) => Ok(Some(Self::from_yaml(yaml).with_context(|| {
@@ -3016,6 +3094,13 @@ pub enum StopReason {
     DecodeError,
     Halt,
     Exception,
+    /// The **firmware** ended its own run by writing to the `simctl` device.
+    ///
+    /// Deliberately distinct from [`Self::Halt`]: a halt is the machine
+    /// stopping, this is the firmware reporting a result. The exit code travels
+    /// beside it in the run result's `firmware_exit_code`; a run that ends this
+    /// way passed only if that code is `0`.
+    FirmwareExit,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -3093,6 +3178,23 @@ pub struct ShutdownLatencyAssertion {
 #[serde(deny_unknown_fields)]
 pub struct StopReasonAssertion {
     pub expected_stop_reason: StopReason,
+}
+
+/// Assert the firmware ended its own run with a specific exit code.
+///
+/// ```yaml
+/// assertions:
+///   - firmware_exit: 0
+/// ```
+///
+/// This is the assertion the `simctl` device exists for. `uart_contains: "PASS"`
+/// proves some bytes reached a serial line; this proves the firmware reached
+/// its own success path and said so. A run that ends any other way — timeout,
+/// halt, fault — fails this assertion rather than passing by silence.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FirmwareExitAssertion {
+    pub firmware_exit: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -3242,6 +3344,64 @@ pub struct MqttFabricAssertion {
     pub mqtt_fabric: MqttFabricDetails,
 }
 
+/// Assert what a display device actually PAINTED, over a bounded region of its
+/// own pixel grid.
+///
+/// One primitive for every panel — ILI9341, SSD1306, SH1107, tri-color e-paper,
+/// the parallel ILI9341 — because it is keyed by the `external_devices:` id and
+/// reads the framebuffer artifact the model already publishes, never a
+/// per-model accessor.
+///
+/// **Why a region plus an ink RANGE, and not a lit-pixel count.** Two real
+/// failures had to be distinguishable, and a count only separates one of them:
+///
+/// * A panel that paints NOTHING (a declared-but-undriven D/C line latches low,
+///   every byte frames as a command, not one pixel lands) has zero ink.
+/// * A panel that paints the wrong thing — a desynchronised command stream
+///   writing command bytes into frame memory as pixels — has plenty of ink, in
+///   roughly the right place, and sails past any "did it paint?" threshold.
+///
+/// Bounding the region and bounding the ink from BOTH sides is what tells those
+/// apart: a header band the firmware fills solid must come back essentially
+/// fully inked, and noise in that band does not. `max_ink` is the half that
+/// makes the second case fail, so it is not optional decoration — a region with
+/// `min_ink: 0.0` and no `max_ink` asserts nothing at all and
+/// [`TestScript::validate`] rejects it.
+///
+/// A digest of the whole framebuffer would also catch both, exactly, and was
+/// rejected: it fails on any legitimate change, says nothing about WHERE the
+/// picture went wrong, and cannot be written by hand from a datasheet or a
+/// photograph of the real panel.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayRegionDetails {
+    /// `external_devices:` id of the display (e.g. `"tft"`).
+    pub id: String,
+    /// Region origin, in the panel's own pixel coordinates. Defaults to (0, 0).
+    #[serde(default)]
+    pub x: usize,
+    #[serde(default)]
+    pub y: usize,
+    /// Region size. Defaults to the rest of the panel from (`x`, `y`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub w: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub h: Option<usize>,
+    /// Lower bound on the fraction (0.0..=1.0) of the region's pixels that must
+    /// carry ink — non-black on an emissive panel, non-white on e-paper.
+    pub min_ink: f64,
+    /// Upper bound on the same fraction. Absent means 1.0 (no upper bound),
+    /// which is only allowed when `min_ink` is itself above zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_ink: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayRegionAssertion {
+    pub display_region: DisplayRegionDetails,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
@@ -3252,9 +3412,11 @@ pub enum TestAssertion {
     MotorState(MotorStateAssertion),
     ShutdownLatency(ShutdownLatencyAssertion),
     ExpectedStopReason(StopReasonAssertion),
+    FirmwareExit(FirmwareExitAssertion),
     MemoryValue(MemoryValueAssertion),
     UdsTester(UdsTesterAssertion),
     MqttFabric(MqttFabricAssertion),
+    DisplayRegion(DisplayRegionAssertion),
 }
 
 /// Where a fault is applied. Either a peripheral (by `id`, optionally narrowed
@@ -3481,6 +3643,44 @@ pub struct TestScript {
     pub uart_injections: Vec<UartInjectionSpec>,
 }
 
+/// Structural guard for a `display_region` assertion.
+///
+/// The interesting clause is the last one. `min_ink: 0.0` with no `max_ink`
+/// accepts every possible framebuffer, including one that was never written —
+/// a gate that cannot fail, which is worse than no gate because it reads as
+/// coverage. Both other clauses are ordinary range checks.
+fn validate_display_region(index: usize, d: &DisplayRegionDetails) -> Result<()> {
+    if d.id.trim().is_empty() {
+        anyhow::bail!("assertions[{index}]: display_region.id cannot be empty");
+    }
+    for (name, v) in [("min_ink", Some(d.min_ink)), ("max_ink", d.max_ink)] {
+        if let Some(v) = v {
+            if !v.is_finite() || !(0.0..=1.0).contains(&v) {
+                anyhow::bail!(
+                    "assertions[{index}]: display_region.{name} must be a fraction in 0.0..=1.0 (got {v})"
+                );
+            }
+        }
+    }
+    if let Some(max) = d.max_ink {
+        if max < d.min_ink {
+            anyhow::bail!(
+                "assertions[{index}]: display_region.max_ink ({max}) is below min_ink ({})",
+                d.min_ink
+            );
+        }
+    }
+    if d.min_ink == 0.0 && d.max_ink.is_none() {
+        anyhow::bail!(
+            "assertions[{index}]: display_region with min_ink 0.0 and no max_ink accepts every \
+             possible framebuffer, including one the firmware never wrote. Give it a floor \
+             (min_ink) to prove the region was painted, or a ceiling (max_ink) to prove it was \
+             left clear."
+        );
+    }
+    Ok(())
+}
+
 fn reject_explicit_memory_nodes(assertions: &[TestAssertion], script_kind: &str) -> Result<()> {
     for (index, assertion) in assertions.iter().enumerate() {
         if let TestAssertion::MemoryValue(memory) = assertion {
@@ -3605,6 +3805,9 @@ impl TestScript {
                         available
                     );
                 }
+            }
+            if let TestAssertion::DisplayRegion(assertion) = assertion {
+                validate_display_region(index, &assertion.display_region)?;
             }
         }
 
@@ -4577,6 +4780,86 @@ limits:
         let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
         s.validate().unwrap();
         assert!(s.uart_injections.is_empty());
+    }
+
+    fn display_script(body: &str) -> TestScript {
+        serde_yaml::from_str(&script("1.0", body)).expect("display_region must parse")
+    }
+
+    #[test]
+    fn display_region_parses_flat_with_defaults() {
+        let s = display_script(
+            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.5\n",
+        );
+        s.validate().unwrap();
+        let TestAssertion::DisplayRegion(a) = &s.assertions[0] else {
+            panic!(
+                "expected a display_region assertion, got {:?}",
+                s.assertions[0]
+            );
+        };
+        let d = &a.display_region;
+        assert_eq!(d.id, "tft");
+        assert_eq!((d.x, d.y), (0, 0), "origin defaults to the top-left");
+        assert_eq!(
+            (d.w, d.h),
+            (None, None),
+            "an absent size means the rest of the panel, decided against real geometry"
+        );
+        assert_eq!(d.max_ink, None);
+    }
+
+    /// The guard that stops this assertion from becoming decoration. `min_ink:
+    /// 0.0` with no ceiling admits every framebuffer, including one the firmware
+    /// never wrote — it would read as display coverage while proving nothing.
+    #[test]
+    fn display_region_without_a_bound_is_rejected_as_vacuous() {
+        let s = display_script(
+            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.0\n",
+        );
+        let err = s.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("accepts every possible framebuffer"),
+            "unexpected error: {err}"
+        );
+
+        // The same region WITH a ceiling is a real claim ("this stayed clear").
+        let ok = display_script(
+            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.0\n      max_ink: 0.0\n",
+        );
+        ok.validate().unwrap();
+    }
+
+    #[test]
+    fn display_region_rejects_impossible_bounds() {
+        for (body, needle) in [
+            (
+                "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 1.5\n",
+                "fraction in 0.0..=1.0",
+            ),
+            (
+                "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.9\n      max_ink: 0.2\n",
+                "is below min_ink",
+            ),
+            (
+                "assertions:\n  - display_region:\n      id: \"\"\n      min_ink: 0.5\n",
+                "id cannot be empty",
+            ),
+        ] {
+            let err = display_script(body).validate().unwrap_err().to_string();
+            assert!(err.contains(needle), "expected {needle:?}, got: {err}");
+        }
+    }
+
+    /// `deny_unknown_fields` plus the untagged enum means a typo'd key does not
+    /// quietly become some other assertion variant.
+    #[test]
+    fn display_region_typo_does_not_parse_as_something_else() {
+        let yaml = script(
+            "1.0",
+            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.5\n      mn_ink: 0.9\n",
+        );
+        assert!(serde_yaml::from_str::<TestScript>(&yaml).is_err());
     }
 }
 
@@ -5929,6 +6212,7 @@ metadata:
             page: None,
             self_clearing: None,
             popcount: None,
+            zero_when: None,
         };
     }
 }

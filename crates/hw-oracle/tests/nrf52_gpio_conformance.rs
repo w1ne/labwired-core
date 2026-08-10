@@ -50,7 +50,13 @@
 #![cfg(feature = "hw-oracle-nrf52")]
 
 use labwired_config::{ChipDescriptor, SystemManifest};
+// `Bus` carries read_u32/write_u32; `SystemBus` alone does not. SystemBus used
+// to have inherent shadows of both; the 2026-07-18 refactor removed them and
+// this import went missing. The file only builds under `hw-oracle-nrf52`, a
+// feature no CI lane enables (there is no board on a runner), so nothing
+// compiled it for as long as it was broken.
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use labwired_hw_oracle::openocd::OpenOcd;
 use std::path::PathBuf;
 use std::sync::Mutex;

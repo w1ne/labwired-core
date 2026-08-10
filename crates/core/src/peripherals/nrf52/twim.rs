@@ -46,8 +46,12 @@
 //! W1C: writing 1 to a bit clears it.
 
 use crate::peripherals::i2c::I2cDevice;
+use crate::peripherals::i2c_waveform::I2cNarrator;
+use crate::peripherals::nrf52::pin_select::{NrfPinClaim, NrfPinClaims};
+use crate::peripherals::pad_lines::PadLines;
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use std::cell::RefCell;
+use std::sync::Arc;
 
 // ── Task offsets ──────────────────────────────────────────────────────────────
 const OFF_TASKS_STARTRX: u64 = 0x000;
@@ -119,6 +123,9 @@ const ERRORSRC_MASK: u32 = ERRORSRC_ANACK | ERRORSRC_DNACK;
 
 // ── Misc masks ────────────────────────────────────────────────────────────────
 const ENABLE_MASK: u32 = 0xF;
+/// `ENABLE` value that selects the TWIM master personality on the shared
+/// SPIM/SPIS/SPI/TWIM/TWI/TWIS window (nRF52840 PS v1.11 §6.31.7.18, p798).
+const ENABLE_TWIM: u32 = 6;
 // nRF52840 TWIM MAXCNT is 16 bits (PS §6.31: TXD.MAXCNT/RXD.MAXCNT are
 // 0xFFFF-wide) — the slave peripherals (SPIS/TWIS) are 8-bit, the master is
 // not. Capping this at 0xFF truncated >255-byte EasyDMA transfers (e.g. a
@@ -141,6 +148,37 @@ const PENDING_TX: u8 = 1;
 const PENDING_RX: u8 = 2;
 /// TASKS_STOP was written.
 const PENDING_STOP: u8 = 3;
+
+/// Line order for this controller's [`PadLines`]; the pad routing binds SCL and
+/// SDA pads to these indices.
+pub(crate) const TWIM_LINES: &[&str] = &["SCL", "SDA"];
+pub(crate) const LINE_SCL: usize = 0;
+pub(crate) const LINE_SDA: usize = 1;
+
+/// One element of a TWIM transaction's narration, in wire order.
+///
+/// A repeated START is a real, observable edge pattern and firmware relies on
+/// it: the LASTTX→STARTRX shortcut is how nrfx does every register read, and
+/// the address byte is clocked out a SECOND time with the R/W bit flipped. A
+/// flat list of bytes could not express that, so the START markers are recorded
+/// alongside the frames and replayed in order.
+#[derive(Debug, Clone, Copy)]
+enum WireEvent {
+    /// A START or repeated-START condition.
+    Start,
+    /// One clocked byte and whether the receiver ACKed it.
+    Frame(u8, bool),
+}
+
+/// Cap on buffered narration events for a single transaction, after which the
+/// transfer is narrated no further.
+///
+/// EasyDMA MAXCNT is 16 bits, so one `TASKS_STARTTX` can legitimately move
+/// 65 535 bytes (a full-frame SSD1306 flush is 1 KiB). Narrating all of them
+/// would allocate megabytes of edges for a waveform no analyzer window can
+/// show. The cap drops the narration for that transfer rather than truncating
+/// it into a lie about how many bytes crossed.
+const WIRE_EVENT_CAP: usize = 2_048;
 
 /// Nordic nRF52 TWIM (I²C Master) peripheral — register surface with EasyDMA.
 ///
@@ -192,6 +230,24 @@ pub struct Nrf52Twim {
     /// I2C devices attached to this master bus.  Keyed by 7-bit address.
     #[allow(dead_code)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+
+    /// Wire levels published to the pads `PSEL.SCL`/`PSEL.SDA` select, so a
+    /// logic analyzer clipped to this bus measures a real waveform instead of
+    /// the GPIO output latch. Created lazily by [`Self::pad_lines_arc`] at bus
+    /// wiring time; `None` when no GPIO port routes this controller's pads, and
+    /// then nothing below is buffered or narrated at all.
+    lines: Option<Arc<PadLines>>,
+    /// This controller's standing claim on the pads `PSEL.SCL`/`PSEL.SDA` name.
+    /// See [`crate::peripherals::nrf52::pin_select`].
+    claim_scl: NrfPinClaim,
+    claim_sda: NrfPinClaim,
+    /// The transaction in flight, buffered so the whole thing — including a
+    /// repeated START — is narrated onto the pads as ONE contiguous waveform
+    /// when it retires. See [`Self::wire_flush`].
+    wire_events: Vec<WireEvent>,
+    /// Set when a transaction blew past [`WIRE_EVENT_CAP`], so its narration is
+    /// dropped whole rather than published truncated.
+    wire_overflow: bool,
 }
 
 impl std::fmt::Debug for Nrf52Twim {
@@ -233,6 +289,11 @@ impl Default for Nrf52Twim {
             pending: PENDING_NONE,
             busy_cycles: 0,
             attached_devices: Vec::new(),
+            lines: None,
+            claim_scl: NrfPinClaim::default(),
+            claim_sda: NrfPinClaim::default(),
+            wire_events: Vec::new(),
+            wire_overflow: false,
         }
     }
 }
@@ -255,6 +316,127 @@ impl Nrf52Twim {
     /// a device by a path independent of the sim-input walk.
     pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
         &self.attached_devices
+    }
+
+    /// The shared pad-line cell for this controller, created on first use.
+    /// Called at bus wiring time by `wire_nrf52_pads`; an open-drain bus with
+    /// pull-ups idles high on both lines.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| Arc::new(PadLines::new(TWIM_LINES, &[true, true])))
+            .clone()
+    }
+
+    /// Join the chip's pin-claim table so this controller's `PSEL.SCL`/
+    /// `PSEL.SDA` decide which pads read its wire. Config-build time only.
+    pub(crate) fn install_pin_claims(
+        &mut self,
+        claims: &Arc<NrfPinClaims>,
+        scl_token: u32,
+        sda_token: u32,
+    ) {
+        self.claim_scl.install(claims.clone(), scl_token);
+        self.claim_sda.install(claims.clone(), sda_token);
+        // Publish the state the registers ALREADY hold. Reset leaves both PSELs
+        // Disconnected and ENABLE 0, so this claims nothing today — but wiring
+        // that only ever took effect on a later write would be a silent
+        // ordering dependency the moment a factory pre-programmed a PSEL.
+        self.sync_pin_claims();
+    }
+
+    /// Republish both claims from the live registers. Called after every write
+    /// that can move a pad — `PSEL.SCL`, `PSEL.SDA` and `ENABLE`.
+    ///
+    /// The gate is `ENABLE == 6` (TWIM master), not merely "nonzero": the
+    /// window at 0x40003000 hosts SPIM0/SPIS0/SPI0/TWIM0/TWI0/TWIS0 and ENABLE
+    /// picks which one owns it (nRF52840 PS v1.11 §6.31.7.18, p798). With
+    /// ENABLE = 7 the SPIM half is driving those pins and this controller must
+    /// not claim them.
+    fn sync_pin_claims(&mut self) {
+        let live = self.enable & ENABLE_MASK == ENABLE_TWIM;
+        self.claim_scl.update(self.psel_scl, live);
+        self.claim_sda.update(self.psel_sda, live);
+    }
+
+    /// Engine cycles in one SCL bit period, from `FREQUENCY` — the same
+    /// derivation [`Self::transfer_cycles`] charges nine of per byte, so the
+    /// narrated waveform runs at exactly the rate the transfer was billed at.
+    fn scl_bit_cycles(&self) -> u64 {
+        const CORE_HZ: u32 = 64_000_000;
+        let scl_hz: u32 = match self.frequency {
+            f if f >= 0x0640_0000 => 400_000,
+            f if f >= 0x0400_0000 => 250_000,
+            _ => 100_000,
+        };
+        u64::from(CORE_HZ / scl_hz).max(2)
+    }
+
+    /// Record one wire event of the transaction in flight. Buffered, not
+    /// published: see [`Self::wire_flush`]. Costs one branch when no pad routes
+    /// to this controller.
+    fn wire_record(&mut self, event: WireEvent) {
+        if self.lines.is_none() || self.wire_overflow {
+            return;
+        }
+        if self.wire_events.len() >= WIRE_EVENT_CAP {
+            self.wire_overflow = true;
+            self.wire_events.clear();
+            return;
+        }
+        self.wire_events.push(event);
+    }
+
+    /// Record the addressed START of a phase: the START condition itself and
+    /// the address byte with its R/W bit, exactly as the master clocks them.
+    fn wire_address(&mut self, addr7: u8, reading: bool, acked: bool) {
+        self.wire_record(WireEvent::Start);
+        self.wire_record(WireEvent::Frame((addr7 << 1) | u8::from(reading), acked));
+    }
+
+    /// Publish the completed transaction's waveform onto the claimed pads.
+    ///
+    /// The EasyDMA model has already moved the bytes; this narrates the wire
+    /// activity they imply (see [`crate::peripherals::i2c_waveform`] for what
+    /// that does and does not model).
+    ///
+    /// Emitted as ONE contiguous run ending at the present cycle rather than
+    /// phase by phase, for the same reason the STM32 controllers do it: this
+    /// model charges `transfer_cycles` of wire time to the phase as a whole and
+    /// then moves every byte inside a single `tick_with_bus`, so there is no
+    /// per-byte position on the timeline to place a frame at. A run anchored at
+    /// completion has the right shape, the right bit rate and the right
+    /// contents; narrating byte by byte would stamp later frames in the future,
+    /// where the capture layer collapses them onto one cycle.
+    fn wire_flush(&mut self) {
+        let overflowed = std::mem::take(&mut self.wire_overflow);
+        let Some(lines) = self.lines.clone() else {
+            self.wire_events.clear();
+            return;
+        };
+        if overflowed {
+            // The bytes really crossed; we simply cannot draw that many edges.
+            // Publishing a truncated frame list would decode to a transfer that
+            // never happened, which is worse than a gap.
+            self.wire_events.clear();
+            return;
+        }
+        if self.wire_events.is_empty() {
+            return;
+        }
+        let mut wave = I2cNarrator::new(LINE_SCL, LINE_SDA, self.scl_bit_cycles());
+        for event in std::mem::take(&mut self.wire_events) {
+            match event {
+                WireEvent::Start => wave.start(),
+                WireEvent::Frame(byte, acked) => wave.frame(byte, acked),
+            }
+        }
+        wave.stop();
+        let now = lines.tap_clock().unwrap_or(0);
+        // A transfer this early in a run has less history behind it than the
+        // waveform needs; the narrator compresses to fit rather than emitting a
+        // spike, and says so. Nothing here can act on that — the trace still
+        // decodes to the right bytes — so the verdict is deliberately dropped.
+        let _fit = wave.emit_ending_at(&lines, now);
     }
 
     /// Find the attached device that answers to `addr7` and tell it which
@@ -325,7 +507,10 @@ impl Nrf52Twim {
         self.events_txstarted = 1;
 
         if dev_idx.is_none() {
-            // No device → ANACK.
+            // No device → ANACK. The wire still carries the START and the
+            // address byte — that is precisely how a lab SEES an absent slave,
+            // so the narration must show the unanswered address, not silence.
+            self.wire_address(addr7, false, false);
             self.errorsrc |= ERRORSRC_ANACK;
             self.events_error = 1;
             // Still complete the EasyDMA bookkeeping with AMOUNT = 0.
@@ -336,11 +521,15 @@ impl Nrf52Twim {
 
         let idx = dev_idx.unwrap();
         self.attached_devices[idx].borrow_mut().start();
+        self.wire_address(addr7, false, true);
 
         let mut amount: u32 = 0;
         for i in 0..txd_maxcnt {
             let byte = bus.read_u8(txd_ptr + i as u64).unwrap_or(0);
             self.attached_devices[idx].borrow_mut().write(byte);
+            // A slave that accepted the address ACKs its data; this model has
+            // no per-byte NACK to report, and says so by never inventing one.
+            self.wire_record(WireEvent::Frame(byte, true));
             amount += 1;
         }
 
@@ -365,7 +554,9 @@ impl Nrf52Twim {
         self.events_rxstarted = 1;
 
         if dev_idx.is_none() {
-            // No device → ANACK.
+            // No device → ANACK. See `do_tx`: the addressed START is real wire
+            // activity and stays visible.
+            self.wire_address(addr7, true, false);
             self.errorsrc |= ERRORSRC_ANACK;
             self.events_error = 1;
             // Fill RX buffer with 0xFF (bus release / NACK default).
@@ -379,11 +570,16 @@ impl Nrf52Twim {
 
         let idx = dev_idx.unwrap();
         self.attached_devices[idx].borrow_mut().start();
+        self.wire_address(addr7, true, true);
 
         let mut amount: u32 = 0;
         for i in 0..rxd_maxcnt {
             let byte = self.attached_devices[idx].borrow_mut().read();
             let _ = bus.write_u8(rxd_ptr + i as u64, byte);
+            // On a read the MASTER acknowledges, and it NACKs the last byte to
+            // tell the slave to release SDA. A decoder that never sees that
+            // NACK reads the transfer as still running.
+            self.wire_record(WireEvent::Frame(byte, i + 1 < rxd_maxcnt));
             amount += 1;
         }
 
@@ -480,10 +676,26 @@ impl Nrf52Twim {
             }
             _ => {}
         }
+        // The transaction is over exactly when nothing further is chained —
+        // a plain TX/RX with no shortcut, the STOP task, or the tail of a
+        // repeated-START chain. Publishing here is what keeps a write-then-read
+        // ONE waveform with a repeated START in the middle, which is what the
+        // wire really carries and what a decoder needs to see.
+        if self.pending == PENDING_NONE {
+            self.wire_flush();
+        }
     }
 }
 
 impl Peripheral for Nrf52Twim {
+    fn line_names(&self) -> &'static [&'static str] {
+        TWIM_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     // Byte-granularity read/write are required to satisfy the Peripheral trait,
     // but nRF52 firmware always uses 32-bit STR/LDR for peripheral access.
     // We satisfy the trait minimally and rely on read_u32 / write_u32.
@@ -536,7 +748,10 @@ impl Peripheral for Nrf52Twim {
             // Address.
             OFF_ADDRESS => self.address & ADDRESS_MASK,
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.twim:Nrf52Twim", offset, "read");
+                0
+            }
         })
     }
 
@@ -604,9 +819,20 @@ impl Peripheral for Nrf52Twim {
             OFF_ERRORSRC => self.errorsrc &= !(value & ERRORSRC_MASK),
 
             // ── Config ────────────────────────────────────────────────────────
-            OFF_ENABLE => self.enable = value & ENABLE_MASK,
-            OFF_PSEL_SCL => self.psel_scl = value,
-            OFF_PSEL_SDA => self.psel_sda = value,
+            // ENABLE and PSEL both move which pad this controller's wire
+            // reaches, so both re-publish the claim. See `sync_pin_claims`.
+            OFF_ENABLE => {
+                self.enable = value & ENABLE_MASK;
+                self.sync_pin_claims();
+            }
+            OFF_PSEL_SCL => {
+                self.psel_scl = value;
+                self.sync_pin_claims();
+            }
+            OFF_PSEL_SDA => {
+                self.psel_sda = value;
+                self.sync_pin_claims();
+            }
             OFF_FREQUENCY => self.frequency = value,
 
             // ── EasyDMA (AMOUNT is HW-written; firmware writes accepted) ──────
@@ -620,7 +846,9 @@ impl Peripheral for Nrf52Twim {
             // ── Address ───────────────────────────────────────────────────────
             OFF_ADDRESS => self.address = value & ADDRESS_MASK,
 
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.twim:Nrf52Twim", offset, "write");
+            }
         }
         Ok(())
     }

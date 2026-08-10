@@ -70,7 +70,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
-            last_gpio_in: [0; 2],
+            last_gpio_in: None,
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
@@ -103,6 +103,10 @@ impl SystemBus {
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
             esp32c3_sched_asserted_sources: [0; 2],
+            esp32c3_sensitive_idx: None,
+            esp32c3_pms: None,
+            pms_write_bypass: false,
+            esp32c3_pms_armed: false,
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             esp32s3_asserted_sources: [0; 2],
@@ -151,7 +155,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
-            last_gpio_in: [0; 2],
+            last_gpio_in: None,
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
@@ -184,6 +188,10 @@ impl SystemBus {
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
             esp32c3_sched_asserted_sources: [0; 2],
+            esp32c3_sensitive_idx: None,
+            esp32c3_pms: None,
+            pms_write_bypass: false,
+            esp32c3_pms_armed: false,
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             esp32s3_asserted_sources: [0; 2],
@@ -499,6 +507,76 @@ impl SystemBus {
         }
     }
 
+    /// Attach the console capture sink to the console the board's USB socket is
+    /// actually wired to — see [`crate::console`] for why that is a board fact
+    /// and not a chip or firmware one.
+    ///
+    /// REFUSES rather than substitutes. The previous call sites all did
+    /// `if !attach_uart_tx_sink_named(name) { attach_uart_tx_sink(any) }`, so a
+    /// manifest naming a console this bus does not have quietly got a different
+    /// console instead. That is the worst possible answer for a twin: the pane
+    /// fills with plausible text while claiming `Serial` is on pins the board
+    /// does not use. A board that declares a console it cannot have is a config
+    /// error, and it says so.
+    pub fn attach_host_console(
+        &mut self,
+        console: &crate::console::HostConsole,
+        sink: Arc<Mutex<Vec<u8>>>,
+    ) -> Result<(), String> {
+        use crate::console::{HostConsole, USB_SERIAL_JTAG};
+        match console {
+            HostConsole::Undeclared => {
+                self.attach_uart_tx_sink(sink, false);
+                Ok(())
+            }
+            HostConsole::Uart(name) => {
+                if self.attach_uart_tx_sink_named(name, sink, false) {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "run manifest declares the board console `debug_uart: {name}`, but this \
+                         bus has no such UART. Fix the board's console declaration rather than \
+                         letting the twin show a different console than the hardware."
+                    ))
+                }
+            }
+            HostConsole::UsbSerialJtag => {
+                if self.attach_usb_serial_jtag_sink(sink) {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "run manifest declares the board console `debug_uart: {USB_SERIAL_JTAG}`, \
+                         but this chip has no USB-Serial-JTAG block. Only the ESP32-C3 and -S3 \
+                         have one; a classic ESP32 or a Cortex-M board must name its UART."
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Route the ESP32-C3/S3 USB-Serial-JTAG block's TX into `sink`.
+    /// Returns false when this bus carries no such block.
+    pub fn attach_usb_serial_jtag_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) -> bool {
+        use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+        for p in &mut self.peripherals {
+            if p.name != crate::console::USB_SERIAL_JTAG {
+                continue;
+            }
+            let Some(any) = p.dev.as_any_mut() else {
+                return false;
+            };
+            if let Some(jtag) = any.downcast_mut::<UsbSerialJtag>() {
+                jtag.set_sink(Some(sink), false);
+                return true;
+            }
+            // A declarative register stub answering at 0x6004_3000 is NOT the
+            // console — it never drains a byte. Saying "attached" here would be
+            // the same silent lie the fallback used to tell.
+            return false;
+        }
+        false
+    }
+
     /// Attach a UART TX capture sink to one named UART peripheral.
     /// Returns false when no matching UART peripheral exists.
     pub fn attach_uart_tx_sink_named(
@@ -710,16 +788,19 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Resolve every peripheral's optional `clock: { reg, bit }` declaration into
-    /// a concrete [`ResolvedClockGate`] (RCC register offset + bit). Run as a
-    /// post-pass by `from_config` after all peripherals — crucially the RCC —
-    /// are on the bus, so the symbolic `reg` name can be mapped to the active
-    /// chip family's RCC offset via [`Rcc::enable_reg_offset`] regardless of the
-    /// order peripherals appear in the config.
+    /// Resolve every peripheral's optional `clock:` declaration into a concrete
+    /// [`ResolvedClockGate`] — the list of live RCC (register offset, bit) pairs
+    /// that must all be set. Run as a post-pass by `from_config` after all
+    /// peripherals — crucially the RCC — are on the bus, so the symbolic `reg`
+    /// name can be mapped to the active chip family's RCC offset via
+    /// [`Rcc::rcc_reg_offset`] regardless of the order peripherals appear in the
+    /// config.
     ///
     /// A peripheral with no `clock` field is left ungated. A declared gate whose
     /// `reg` name the family doesn't recognise is a hard config error (a silent
-    /// "never gate" would mask a typo that lets unclocked firmware falsely pass).
+    /// "never gate" would mask a typo that lets unclocked firmware falsely pass),
+    /// and so is an empty list (a `clock: []` that gates nothing reads as a gate
+    /// but is a false pass waiting to happen).
     pub(crate) fn resolve_clock_gates(
         &mut self,
         peripherals: &[labwired_config::PeripheralConfig],
@@ -731,26 +812,39 @@ impl SystemBus {
                 .dev
                 .as_any()
                 .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
-                .and_then(|rcc| rcc.enable_reg_offset(reg))
+                .and_then(|rcc| rcc.rcc_reg_offset(reg))
         };
         for p_cfg in peripherals {
-            let Some(gate) = &p_cfg.clock else { continue };
+            let Some(gates) = &p_cfg.clock else { continue };
             let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
                 continue;
             };
-            let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+            let declared = gates.as_slice();
+            if declared.is_empty() {
                 return Err(anyhow::anyhow!(
-                    "peripheral '{}' declares clock gate reg '{}' which the chip's \
-                     RCC model does not expose (no such enable register, or no RCC \
-                     peripheral is registered)",
-                    p_cfg.id,
-                    gate.reg
+                    "peripheral '{}' declares an empty clock gate; a gate that \
+                     requires nothing gates nothing — drop the `clock:` key or \
+                     list the RCC bits the peripheral really needs",
+                    p_cfg.id
                 ));
-            };
-            self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
-                reg_offset,
-                bit: gate.bit,
-            });
+            }
+            let mut requires = Vec::with_capacity(declared.len());
+            for gate in declared {
+                let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+                    return Err(anyhow::anyhow!(
+                        "peripheral '{}' declares clock gate reg '{}' which the chip's \
+                         RCC model does not expose (no such register on this family, \
+                         or no RCC peripheral is registered)",
+                        p_cfg.id,
+                        gate.reg
+                    ));
+                };
+                requires.push(RccClockBit {
+                    reg_offset,
+                    bit: gate.bit,
+                });
+            }
+            self.peripherals[idx].clock_gate = Some(ResolvedClockGate { requires });
         }
         Ok(())
     }

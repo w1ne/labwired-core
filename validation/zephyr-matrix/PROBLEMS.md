@@ -32,6 +32,7 @@ Pilot green earlier: F103, L476, nRF52840 L0–L2. Full run: all 13 boards L0+L2
 
 ### Soft notes
 - **STM32G474** L1: DBGMCU `0xE0042004` bus r/w faults logged (non-fatal; still prints OK). Optional: map DBGMCU IDCODE as RO.
+  - **RESOLVED**: `configs/chips/stm32g474re.yaml` now maps DBGMCU at `0xE0042000` (per RM0440 §46.6 / ST's `stm32g474.svd`), so `LL_DBGMCU_EnableDBGSleepMode` lands in a real register instead of nowhere. STM32WB55 had the identical gap and is mapped too; STM32WBA52's DBGMCU is at `0xE0044000`, **not** `0xE0042000`, and is mapped at that address. These faults stopped being "non-fatal" the moment the Cortex-M bus began propagating memory violations — they are what took five `firmware_survival` labs red.
 - **nRF52832/40**: new vs old survival suite — full L0–L2 green.
 - **STM32WBA52**: Zephyr L0–L2 green (Arduino still has no PIO board).
 

@@ -21,6 +21,17 @@ impl<C: Cpu> Machine<C> {
         mode: ExecutionMode,
         count: u32,
     ) -> SimResult<CoreProgress> {
+        let span = crate::profile::span();
+        let progress = self.execute_cpu_window_inner(mode, count);
+        crate::profile::record_cpu(span);
+        progress
+    }
+
+    fn execute_cpu_window_inner(
+        &mut self,
+        mode: ExecutionMode,
+        count: u32,
+    ) -> SimResult<CoreProgress> {
         match mode {
             ExecutionMode::SingleDirect | ExecutionMode::RunDual => {
                 debug_assert_eq!(count, 1);
@@ -280,9 +291,18 @@ impl<C: Cpu> Machine<C> {
         // reset above): ERASEPAGE/ERASEALL/ERASEUICR latched during this
         // instruction are applied here, so no observer sees a half-erased
         // page. Erase latency is not modelled (READY always reads 1).
+        //
+        // Uses the cached `nvmc_index` resolved at construction, exactly like
+        // the SCB drain above. The previous form walked every peripheral and
+        // downcast each one on EVERY boundary, on every chip — ~40 vtable
+        // calls plus 40 `TypeId` compares per instruction hunting for an
+        // nRF52 peripheral that cannot exist on, say, an ESP32-C3.
         {
-            let op = self.bus.peripherals.iter_mut().find_map(|p| {
-                p.dev
+            let op = self.nvmc_index.and_then(|idx| {
+                self.bus
+                    .peripherals
+                    .get_mut(idx)?
+                    .dev
                     .as_any_mut()?
                     .downcast_mut::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>()?
                     .take_pending_op()

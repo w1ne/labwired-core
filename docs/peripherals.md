@@ -33,8 +33,24 @@ handles, automatically:
   `WriteValue` on a named register) that can also raise an interrupt.
 
 Clock gating is expressed at the chip level, not in the descriptor: a `clock:`
-field on the peripheral entry in `configs/chips/<chip>.yaml` binds it to an RCC
-enable bit, so an unclocked peripheral reads 0 / drops writes exactly like silicon.
+field on the peripheral entry in `configs/chips/<chip>.yaml` binds it to the RCC
+bits that must ALL be set for the block to answer, so an unclocked peripheral
+reads 0 / drops writes exactly like silicon. Take one bit, or several:
+
+```yaml
+clock: { reg: "apb1enr", bit: 21 }   # I2C1EN — the bus clock
+clock:                                # STM32L0 RNG: bus clock AND kernel clock
+  - { reg: "ahbenr", bit: 20 }        #   RCC_AHBENR.RNGEN
+  - { reg: "crrcr",  bit: 1  }        #   RCC_CRRCR.HSI48RDY — HSI48 running
+```
+
+`reg` is a symbolic RCC register name resolved against the chip family's own map
+at bus-build time (`Rcc::rcc_reg_offset`), so `crrcr` means `0x08` on an L0 and
+`0x98` on a WB. A name the family does not have is a hard build error, never a
+gate that silently never fires. The gate is evaluated in exactly ONE place —
+`SystemBus::is_peripheral_clocked` — against the live RCC registers. **A
+peripheral model must never grow a clock check of its own:** a new gating reason
+is a line of yaml, not a second mechanism in `crates/core/src/peripherals/`.
 
 The full register schema is documented in
 [`declarative_registers.md`](declarative_registers.md). Generate a starting point:

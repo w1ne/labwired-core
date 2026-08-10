@@ -454,7 +454,9 @@ impl Sha {
                 SHA_CONTINUE_OFFSET => self.run_block(ty, true),
                 SHA_LOAD_OFFSET => self.run_load(ty),
                 // BUSY is read-only; writes are ignored.
-                _ => {}
+                _ => {
+                    crate::census_reg!("esp32.sha:Sha", within, "write");
+                }
             }
         }
     }

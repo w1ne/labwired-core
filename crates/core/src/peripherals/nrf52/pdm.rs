@@ -88,7 +88,10 @@ impl Peripheral for Nrf52Pdm {
             OFF_PSEL_DIN => self.psel_din,
             OFF_SAMPLE_PTR => self.sample_ptr,
             OFF_SAMPLE_MAXCNT => self.sample_maxcnt & 0x7FFF,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.pdm:Nrf52Pdm", offset, "read");
+                0
+            }
         })
     }
 
@@ -112,7 +115,9 @@ impl Peripheral for Nrf52Pdm {
             OFF_PSEL_DIN => self.psel_din = value,
             OFF_SAMPLE_PTR => self.sample_ptr = value,
             OFF_SAMPLE_MAXCNT => self.sample_maxcnt = value & 0x7FFF,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.pdm:Nrf52Pdm", offset, "write");
+            }
         }
         Ok(())
     }

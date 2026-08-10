@@ -19,4 +19,49 @@ assertions:
   - mqtt_fabric:
       topic: "telematics/location"
       payload_contains: "\"src\":\"qgpsloc\""
+  # Paint path: the UART says "location published", but nothing above says the
+  # TFT ever showed it. These measure the panel.
+  #
+  # `tft_init_compact` fills a solid 240x16 navy header, and the "GPS" label is
+  # drawn on a navy background, so every pixel of that band is non-black. A
+  # desynchronised command stream still deposits plenty of ink here — it just
+  # deposits it in the wrong places, leaving holes — which is precisely what the
+  # 100% floor rejects and a bare "did it paint?" count does not.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 0
+      w: 240
+      h: 16
+      min_ink: 1.0
+  # The MQTT status band (0,48) 240x14, filled 0x0320 with white text on the
+  # same background: also solid. It is painted only after the publish, so it is
+  # evidence the paint followed the event rather than preceding it.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 48
+      w: 240
+      h: 14
+      min_ink: 1.0
+  # The lat/lon rows are cleared to black and then written in cyan 5x7 glyphs.
+  # Text is sparse: some ink proves the glyphs landed, and the ceiling proves
+  # they are glyphs and not a flood over the cleared rows.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 20
+      w: 240
+      h: 28
+      min_ink: 0.005
+      max_ink: 0.20
+  # Nothing below row 62 is ever addressed.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 62
+      w: 240
+      h: 258
+      min_ink: 0.0
+      max_ink: 0.0
   - expected_stop_reason: assertions_passed

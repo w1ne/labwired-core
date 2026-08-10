@@ -1,5 +1,6 @@
 use labwired_config::{EnvironmentManifest, NodeConfig};
-use labwired_core::world::World;
+use labwired_core::system::node::NodeFirmware;
+use labwired_core::world::{ResolvedWorldNode, World};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -123,6 +124,34 @@ fn world_rejects_a_direct_manifest_that_bypasses_file_validation() {
     };
 
     assert!(error.contains("schema_version '2.0'"), "{error}");
+}
+
+#[test]
+fn world_builds_from_browser_resolved_node_bytes_without_filesystem_access() {
+    let (dir, manifest) = temporary_arm_world(Some("cortex-m3"), 0x0800_0001);
+    let system: labwired_config::SystemManifest =
+        serde_yaml::from_str(&std::fs::read_to_string(dir.path().join("system.yaml")).unwrap())
+            .unwrap();
+    let chip: labwired_config::ChipDescriptor =
+        serde_yaml::from_str(&std::fs::read_to_string(dir.path().join("chip.yaml")).unwrap())
+            .unwrap();
+    let firmware =
+        NodeFirmware::from_bytes(std::fs::read(dir.path().join("firmware.elf")).unwrap());
+    drop(dir);
+
+    let mut world = World::from_resolved(
+        manifest,
+        vec![ResolvedWorldNode {
+            id: "node".into(),
+            system,
+            chip,
+            firmware,
+        }],
+    )
+    .expect("resolved browser world");
+
+    assert_eq!(world.machines.len(), 1);
+    assert_eq!(world.step_all().len(), 1);
 }
 
 /// A world node's architecture comes from its own chip descriptor, so a RISC-V

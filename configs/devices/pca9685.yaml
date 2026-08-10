@@ -16,6 +16,35 @@
 # pulse width; the `servo_angle` observable exposes the commanded angle in degrees
 # by linearising the firmware's `off → µs → degree` map. A channel that has never
 # been written (raw OFF = 0) reports no angle.
+#
+# ── WHAT IS NOT MODELLED — the reset values below READ BACK, they do not ACT ──
+# Every value in the `reset:` map below is the value silicon powers up with, so
+# firmware that reads it back (or read-modify-writes it) behaves as on hardware.
+# That is ALL it means. None of the functions these registers select are
+# implemented, and this file is the record of that:
+#
+#   * MODE2 = 0x04 (OUTDRV). No output-drive, INVRT, OCH or OUTNE behaviour
+#     exists. Nothing downstream consumes MODE2 at all.
+#   * SUBADR1/2/3 = 0xE2/0xE4/0xE8 and ALLCALLADR = 0xE0. The model answers on
+#     ONE address (`default_address`). It does NOT respond to the LED All Call
+#     address 0x70 (0xE0 >> 1) that silicon answers out of reset, nor to any
+#     subaddress — even though MODE1's ALLCALL bit reads back set. Firmware that
+#     broadcasts to All Call gets a NACK here and works on hardware. This is the
+#     largest remaining gap in this part.
+#   * LEDn_OFF_H bit 4 = "LEDn full OFF". Nothing honours it. It happens not to
+#     matter at reset — `servo_angle` composes its 12-bit count with
+#     `hi_mask: 0x0F`, which masks bit 4 away, so an unwritten channel still
+#     composes raw 0 and `none_when_raw_zero` still reports no angle. But that
+#     is the mask coinciding with the right answer, NOT full-OFF being honoured:
+#     write OFF_H = 0x12 (full OFF set *and* a nonzero count) and this model
+#     reports an angle while silicon holds the output fully off.
+#   * PRE_SCALE = 0x1E (200 Hz). There is no PWM frequency, no output waveform
+#     and no oscillator in this model — `servo_angle` reads the OFF count
+#     directly. Changing PRE_SCALE changes nothing here; on silicon it rescales
+#     every pulse width. Note the datasheet also forbids writing PRE_SCALE
+#     unless MODE1 SLEEP is set; that rule is not enforced either.
+#   * MODE1 RESTART / EXTCLK / SLEEP / AI. Only AI has behaviour (the pointer
+#     auto-increment below). SLEEP reads back set at reset but gates nothing.
 type: pca9685
 
 behavior:
@@ -24,8 +53,50 @@ behavior:
     default_address: 0x40
     register_file:
       size: 256
+      # Power-on reset values from the NXP PCA9685 datasheet Rev. 4 (16 April
+      # 2015). Every offset NOT listed here resets to 0x00, which the datasheet
+      # confirms for the LEDn_ON_L/H, LEDn_OFF_L and ALL_LED_* data registers.
+      #
+      # ⚠ A reset value here makes the register READ BACK correctly. It does not
+      # by itself mean the behaviour behind it is modelled — see the
+      # "WHAT IS NOT MODELLED" block in this file's header before treating any
+      # of these as a faithful implementation of the function they select.
       reset:
-        0x00: 0x11   # MODE1 power-on: SLEEP | ALLCALL
+        0x00: 0x11   # MODE1        SLEEP | ALLCALL                    (p16)
+        0x01: 0x04   # MODE2        OUTDRV = totem-pole outputs        (p16)
+        0x02: 0xE2   # SUBADR1      I2C-bus subaddress 1               (p26)
+        0x03: 0xE4   # SUBADR2      I2C-bus subaddress 2               (p26)
+        0x04: 0xE8   # SUBADR3      I2C-bus subaddress 3               (p26)
+        0x05: 0xE0   # ALLCALLADR   LED All Call address           (p8, p26)
+        # LEDn_OFF_H (0x09 + 4n, n = 0..15) powers up with bit 4 set — the
+        # "LEDn full OFF" bit — so no channel drives an output out of reset
+        # (p21, p25; the 0x09/0x0D/…/0x45 addresses come from the register
+        # summary, Table 4, p13, where LED15_OFF_H is 0x45).
+        0x09: 0x10   # LED0_OFF_H
+        0x0D: 0x10   # LED1_OFF_H
+        0x11: 0x10   # LED2_OFF_H
+        0x15: 0x10   # LED3_OFF_H
+        0x19: 0x10   # LED4_OFF_H
+        0x1D: 0x10   # LED5_OFF_H
+        0x21: 0x10   # LED6_OFF_H
+        0x25: 0x10   # LED7_OFF_H
+        0x29: 0x10   # LED8_OFF_H
+        0x2D: 0x10   # LED9_OFF_H
+        0x31: 0x10   # LED10_OFF_H
+        0x35: 0x10   # LED11_OFF_H
+        0x39: 0x10   # LED12_OFF_H
+        0x3D: 0x10   # LED13_OFF_H
+        0x41: 0x10   # LED14_OFF_H
+        0x45: 0x10   # LED15_OFF_H
+        # ── DELIBERATELY ABSENT: ALL_LED_ON_H (0xFB) and ALL_LED_OFF_H (0xFD).
+        # The datasheet contradicts itself about these two. Table 8 (p25) gives
+        # them a starred default with bit 4 set, exactly like the per-channel
+        # LEDn_OFF_H above; the register summary Table 4 (p13) types the very
+        # same registers "write/read zero". We do NOT resolve a contradiction
+        # the vendor has not resolved: they stay at 0x00, and this comment is
+        # the record of why. If NXP clarifies, change it here with the citation.
+        0xFE: 0x1E   # PRE_SCALE    200 Hz refresh at the internal 25 MHz
+                     #              oscillator (p25 Table 8; 200 Hz stated p2)
       auto_increment:
         when_field_set: { addr: 0x00, mask: 0x20 }   # MODE1.AI
     observables:

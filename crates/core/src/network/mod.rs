@@ -5,7 +5,10 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::SimResult;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::{
+    collections::VecDeque,
+    sync::mpsc::{channel, Receiver, Sender},
+};
 
 pub mod candump;
 pub mod egress;
@@ -71,6 +74,8 @@ struct CanBusEndpoint {
 
 pub struct CanBus {
     endpoints: Vec<CanBusEndpoint>,
+    trace: VecDeque<CanFrame>,
+    trace_dropped: u64,
 }
 
 impl Default for CanBus {
@@ -83,6 +88,8 @@ impl CanBus {
     pub fn new() -> Self {
         Self {
             endpoints: Vec::new(),
+            trace: VecDeque::new(),
+            trace_dropped: 0,
         }
     }
 
@@ -95,6 +102,21 @@ impl CanBus {
         });
         (outbound_tx, inbound_rx)
     }
+
+    /// Frames accepted by this shared medium, in deterministic delivery order.
+    pub fn trace_snapshot(&self) -> Vec<CanFrame> {
+        self.trace.iter().cloned().collect()
+    }
+
+    /// Maximum number of most-recent frames retained by [`Self::trace_snapshot`].
+    pub const fn trace_capacity(&self) -> usize {
+        4096
+    }
+
+    /// Number of oldest frames evicted since this bus was created.
+    pub const fn trace_dropped(&self) -> u64 {
+        self.trace_dropped
+    }
 }
 
 impl Interconnect for CanBus {
@@ -104,6 +126,11 @@ impl Interconnect for CanBus {
         // preserving CAN's shared-medium fan-out to every *other* endpoint.
         for source_idx in 0..self.endpoints.len() {
             while let Ok(frame) = self.endpoints[source_idx].outbound.try_recv() {
+                if self.trace.len() == self.trace_capacity() {
+                    self.trace.pop_front();
+                    self.trace_dropped += 1;
+                }
+                self.trace.push_back(frame.clone());
                 for (target_idx, target) in self.endpoints.iter().enumerate() {
                     if target_idx != source_idx {
                         let _ = target.inbound.send(frame.clone());
@@ -112,6 +139,10 @@ impl Interconnect for CanBus {
             }
         }
         Ok(())
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }
 
@@ -159,5 +190,25 @@ impl Interconnect for WirelessBus {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_trace_reports_bounded_history_drops() {
+        let mut bus = CanBus::new();
+        let (tx, _rx) = bus.attach();
+        let (_peer_tx, _peer_rx) = bus.attach();
+        for id in 0..=bus.trace_capacity() {
+            tx.send(CanFrame::classic(id as u32, vec![])).unwrap();
+        }
+        bus.tick().unwrap();
+        let trace = bus.trace_snapshot();
+        assert_eq!(trace.len(), bus.trace_capacity());
+        assert_eq!(bus.trace_dropped(), 1);
+        assert_eq!(trace.first().unwrap().id, 1);
     }
 }

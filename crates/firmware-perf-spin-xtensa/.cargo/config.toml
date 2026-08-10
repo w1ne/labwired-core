@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Same shape as examples/tier1-fixture/esp32*/.cargo/config.toml — the Xtensa
+# targets have no precompiled core, so build-std is mandatory, and esp-hal
+# placement comes from linkall.x. The perf gate passes --target explicitly (one
+# per Xtensa part), so no [build] target is pinned here.
+
+[target.xtensa-esp32-none-elf]
+rustflags = [
+  "-C", "link-arg=-Tlinkall.x",
+  "-C", "link-arg=-nostartfiles",
+]
+
+[target.xtensa-esp32s3-none-elf]
+rustflags = [
+  "-C", "link-arg=-Tlinkall.x",
+  "-C", "link-arg=-nostartfiles",
+]
+
+[unstable]
+build-std = ["alloc", "core"]

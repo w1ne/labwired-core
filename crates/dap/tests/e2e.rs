@@ -1,11 +1,10 @@
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 #[test]
 fn test_dap_e2e_launch_and_uart() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let firmware_path = root.join("../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture");
+    let firmware_path = labwired_core::test_support::target_dir()
+        .join("thumbv7m-none-eabi/debug/firmware-ci-fixture");
 
     if !firmware_path.exists() {
         panic!(

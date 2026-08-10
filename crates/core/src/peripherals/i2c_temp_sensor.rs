@@ -39,7 +39,10 @@ impl Tmp102 {
             0x04 => self.config,
             0x08 => self.t_low as u16,
             0x0C => self.t_high as u16,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c_temp_sensor:Tmp102", offset, "read");
+                0
+            }
         }
     }
 
@@ -48,7 +51,9 @@ impl Tmp102 {
             0x04 => self.config = value,
             0x08 => self.t_low = value as i16,
             0x0C => self.t_high = value as i16,
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c_temp_sensor:Tmp102", offset, "write");
+            }
         }
     }
 }

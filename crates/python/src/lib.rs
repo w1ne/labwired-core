@@ -38,6 +38,13 @@ impl From<StopReason> for PyStopReason {
                 kind: "manual_stop".to_string(),
                 pc: None,
             },
+            // Firmware ended its own run via the `simctl` device. The code is
+            // flattened into `kind` so the Python surface stays two plain
+            // fields: "firmware_exit:<code>".
+            StopReason::FirmwareExit(code) => PyStopReason {
+                kind: format!("firmware_exit:{code}"),
+                pc: None,
+            },
         }
     }
 }

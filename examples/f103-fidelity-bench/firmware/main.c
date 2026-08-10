@@ -58,21 +58,54 @@
 #define RCC_APB2ENR_USART1EN (1u << 14)
 #define RCC_APB2ENR_IOPAEN (1u << 2)
 
-/* --- GPIOA (F1 layout: CRL @ 0x00, ODR @ 0x0C) --- */
+/* --- GPIOA (F1 layout: CRL @ 0x00, CRH @ 0x04, ODR @ 0x0C). The F1 pad mux is
+ * four bits per pin — MODE[1:0] then CNF[1:0]. There is no MODER and no AFR on
+ * this family, so there is no AF number to write. --- */
 #define GPIOA_BASE 0x40010800u
 #define GPIOA_CRL REG32(GPIOA_BASE + 0x00u)
+#define GPIOA_CRH REG32(GPIOA_BASE + 0x04u)
 #define GPIOA_ODR REG32(GPIOA_BASE + 0x0Cu)
+/* PA9 carries USART1_TX in the **Default** alternate-function column
+ * (DS5319 Rev 20, Table 5, p.31), so no AFIO remap is involved. Its CRH nibble
+ * is bits [7:4]; 0xB is MODE 0b11 (output, 50 MHz) + CNF 0b10 (alternate
+ * function, push-pull). */
+#define GPIOA_CRH_PA9_SHIFT 4u
+#define CRH_AF_PUSH_PULL_50MHZ 0xBu
 
-/* --- USART1 (F1 layout: SR @ 0x00, DR @ 0x04, CR1 @ 0x0C) --- */
+/* --- USART1 (F1 layout: SR @ 0x00, DR @ 0x04, BRR @ 0x08, CR1 @ 0x0C) --- */
 #define USART1_BASE 0x40013800u
 #define U1_SR REG32(USART1_BASE + 0x00u)
 #define U1_DR REG32(USART1_BASE + 0x04u)
+#define U1_BRR REG32(USART1_BASE + 0x08u)
 #define U1_CR1 REG32(USART1_BASE + 0x0Cu)
 #define SR_TXE (1u << 7)
 #define CR1_UE (1u << 13)
 #define CR1_TE (1u << 3)
 
-static void uart_init(void) { U1_CR1 = CR1_UE | CR1_TE; }
+/* BRR = f_PCLK2 / baud at the default 16x oversampling. This firmware never
+ * touches the PLL, so the part runs on the 8 MHz HSI it selects at reset
+ * (DS5319 Rev 20 section 2.3.7, p.15): 8000000 / 115200 = 69.44 -> 69 = 0x45. */
+#define U1_BRR_115200_AT_8MHZ 69u
+
+/* Mux PA9 and program the divisor, THEN enable the transmitter.
+ *
+ * `U1_CR1 = CR1_UE | CR1_TE` was the whole of this. That transmits on
+ * LabWired's permissive USART model and nowhere else: PA9 stays the floating
+ * input it is after reset, so the pad route never goes live and a logic
+ * analyzer on PA9 reads the GPIO output latch instead of the serial waveform.
+ * A zero BRR is the other half — no divisor means no bit period, so there is
+ * nothing to narrate even once a route exists.
+ *
+ * Under GPIO_CLOCK_BUG the CRH write below is DROPPED, because that variant
+ * deliberately never enables RCC_APB2ENR.IOPAEN. That is the bench working as
+ * designed, not a regression: an unclocked port must swallow the write. */
+static void uart_init(void)
+{
+    GPIOA_CRH = (GPIOA_CRH & ~(0xFu << GPIOA_CRH_PA9_SHIFT))
+                | (CRH_AF_PUSH_PULL_50MHZ << GPIOA_CRH_PA9_SHIFT);
+    U1_BRR = U1_BRR_115200_AT_8MHZ;
+    U1_CR1 = CR1_UE | CR1_TE;
+}
 
 static void uart_putc(char c)
 {
@@ -93,6 +126,12 @@ int main(void)
 {
 #ifndef SKIP_UART_CLOCK
     RCC_APB2ENR |= RCC_APB2ENR_USART1EN; /* clockbug omits exactly this line */
+#endif
+#ifndef GPIO_CLOCK_BUG
+    /* PA9 must be clocked before uart_init() can mux it onto USART1_TX.
+     * gpiobug omits exactly this line, and must keep omitting it: an UNCLOCKED
+     * GPIOA is the whole point of that variant. */
+    RCC_APB2ENR |= RCC_APB2ENR_IOPAEN;
 #endif
     uart_init();
 

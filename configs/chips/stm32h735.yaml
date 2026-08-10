@@ -23,6 +23,18 @@
 #   - spi     profile stm32h5  ("SPI v2" CFG1/CFG2 — H7/H5 shared)
 #   - i2c     profile h5       ("I2C v2" TIMINGR/ISR — F7/H7/L4/H5 shared)
 #   - timer   generic          (TIMx CR1/PSC/ARR/CNT — architecture-stable)
+#   - adc     profile h7   (RM0468 §26.4 — REAL H7 block as of 2026-08-09, not
+#                            the L4 alias: PCSEL, LTR/HTR pairs, CALFACT2,
+#                            3-bit sparse RES, 16-bit DR, DEEPPWD bring-up)
+#   - fdcan   generic          (Bosch M_CAN — the licensed CAN FD core ST wraps
+#                               as "FDCAN"; same register map across vendors,
+#                               which is why ENDN reads Bosch's 0x87654321
+#                               endianness word. ⚠ UNVERIFIED HERE: the model's
+#                               CREL reports M_CAN 3.2.1, a value captured from
+#                               OTHER silicon — this SVD declares no reset value
+#                               for CREL/ENDN and there is no H735 bench part,
+#                               so the release this part actually integrates is
+#                               assumed, not measured.)
 #
 # HAL bring-up: unmodified stm32h7xx-hal firmware boots end to end on this
 # model — PWR voltage scaling (h7 profile: VOSRDY/ACTVOSRDY), the PLL1 clock
@@ -35,10 +47,20 @@
 # Known omissions (H7 blocks whose IP diverges from the reused models; each
 # reads as an unmapped hole until modelled — documented, not hidden):
 #   - DMA: H7 uses DMA1/2 + BDMA + DMAMUX, NOT the H5 GPDMA1 — different model.
-#   - ADC: H7 ADC3 (16-bit, oversampling) differs from the L4 ADC layout.
-#   - RTC / FDCAN / OCTOSPI / Ethernet: not yet wired.
+#   - RTC / OCTOSPI / Ethernet: not yet wired.
+#   - ADC3 (the 12-bit converter) is not declared; only the two 16-bit ADCs are.
+#     Note the two have DIFFERENT conversion timing per DS13312: 16-bit
+#     tCONV = tS + 0.5 + N/2, 12-bit tCONV = tS + 0.5 + N (Tables 84 / 87).
+#   - ADC12 common block (ADC12_CCR @ 0x4002_2300) is outside both instance
+#     windows and unmodelled, so dual/interleaved modes are not available.
+#   - ADC oversampling (CFGR2 OVSR/OVSS), injected conversions (JSQR/JDRn) and
+#     the analog watchdogs latch their registers but do not act.
 #   - FLASH bank-2 / program-error semantics use the H5 layout (only ACR latency
 #     is exercised); not H7-silicon-faithful.
+#
+# FDCAN1/FDCAN2 were in that omissions list until 2026-08-09 and are now wired
+# (shared peripherals/fdcan.rs). See the instance block below for why the rest
+# of the pin table's peripherals were added at the same time.
 
 name: "stm32h735vg"
 arch: "arm"
@@ -243,6 +265,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32h735/spi1.yaml"
       profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
     # SPI1 clocked from RCC_APB2ENR.SPI1EN (bit 12).
     clock: { reg: "apb2enr", bit: 12 }
   - id: "spi2"
@@ -253,6 +279,167 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32h735/spi2.yaml"
       profile: "stm32h5"
+      # AF pad map for the logic analyzer. The H5 "SPI v3" register file is
+      # shared by parts with DIFFERENT pinouts (H563/H735 put SPI1_SCK on PB3,
+      # the WBA52 puts SPI1_MISO there), so the profile cannot pick the table.
+      pad_map: "stm32h5"
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32h735/spi3.yaml"
+      profile: "stm32h5"
+      # Same table as spi1/spi2 above, which already carries SPI3 rows keyed on
+      # this part (PB3/PB4 on AF6, PB2/PB5 on AF7). Without this key an
+      # H5-layout SPI routes NOTHING onto the pads -- see
+      # `an_h5_spi_with_no_declared_pad_map_routes_nothing` -- so the controller
+      # would exist on the bus and stay invisible to the logic analyzer.
+      pad_map: "stm32h5"
+    # SPI3 clocked from RCC_APB1LENR.SPI3EN (bit 15).
+    clock: { reg: "apb1lenr", bit: 15 }
+  # ---------------------------------------------------------------------------
+  # Instances added 2026-08-09 so the LQFP-100 pin table stops advertising
+  # peripherals the chip does not have.
+  #
+  # `packages/board-config` publishes an H735 alternate-function table derived
+  # from ST's own device database (stm32duino PeripheralPins.c). It listed
+  # USART2, UART4, USART6, I2C3, SPI3, TIM4 and TIM8 as pin functions while this
+  # file modelled none of them, so `labwired_describe stm32h735` advertised
+  # eleven peripherals of which ten did not exist: wiring a part to PA2 gave you
+  # a pin labelled `uart2.tx` attached to nothing, and the failure was silent.
+  #
+  # Every one of these is another instance of IP this chip ALREADY runs
+  # (uart stm32v2, i2c h5, spi stm32h5, timer), so these are declarations, not
+  # new models. Base address, IRQ number and RCC enable bit are each read out of
+  # the vendored tests/fixtures/real_world/stm32h735.svd rather than recalled --
+  # the `svd_conformance` gate re-derives them from that same file, so a wrong
+  # value fails CI rather than sitting here looking plausible.
+  # ---------------------------------------------------------------------------
+  # USART2 (APB1) — PA2/PA3 on this package. NOT "uart2": ST names it USART2.
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 38
+    config:
+      debug_schema: "../peripherals/stm32h735/usart2.yaml"
+      profile: "stm32v2"
+    # RCC_APB1LENR.USART2EN (bit 17).
+    clock: { reg: "apb1lenr", bit: 17 }
+  # UART4 (APB1) — PA11/PA12 and PB8/PB9. A true UART (no synchronous mode), so
+  # unlike USART2/6 the `uart4` spelling here IS ST's name.
+  - id: "uart4"
+    type: "uart"
+    base_address: 0x40004C00
+    size: "1KB"
+    irq: 52
+    config:
+      debug_schema: "../peripherals/stm32h735/uart4.yaml"
+      profile: "stm32v2"
+    # RCC_APB1LENR.UART4EN (bit 19).
+    clock: { reg: "apb1lenr", bit: 19 }
+  # USART6 (APB2) — PC6/PC7. Again USART, not "uart6".
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+    config:
+      debug_schema: "../peripherals/stm32h735/usart6.yaml"
+      profile: "stm32v2"
+    # RCC_APB2ENR.USART6EN (bit 5).
+    clock: { reg: "apb2enr", bit: 5 }
+  # I2C3 (APB1) — PA8 (SCL) / PC9 (SDA).
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+    config:
+      debug_schema: "../peripherals/stm32h735/i2c3.yaml"
+      profile: "h5"
+    # RCC_APB1LENR.I2C3EN (bit 23).
+    clock: { reg: "apb1lenr", bit: 23 }
+  # TIM4 (APB1) — general-purpose, PB6..PB9.
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+    config:
+      debug_schema: "../peripherals/stm32h735/tim4.yaml"
+    # RCC_APB1LENR.TIM4EN (bit 2).
+    clock: { reg: "apb1lenr", bit: 2 }
+  # TIM8 (APB2) — the second advanced-control timer, PC6..PC9. `_pwm` suffix
+  # declares the tier1 pwm class, matching tim1_pwm above. IRQ 46 is TIM8_CC,
+  # the same capture/compare line tim1_pwm uses (27 = TIM1_CC); the BRK/UP/
+  # TRG_COM lines (43/44/45) are not separately routed.
+  - id: "tim8_pwm"
+    type: "timer"
+    base_address: 0x40010400
+    size: "1KB"
+    irq: 46
+    config:
+      debug_schema: "../peripherals/stm32h735/tim8.yaml"
+      advanced: true
+    # RCC_APB2ENR.TIM8EN (bit 1).
+    clock: { reg: "apb2enr", bit: 1 }
+  # FDCAN1/FDCAN2 (APB1) — the vehicle bus, and the reason this chip is in a
+  # telematics demo at all. Shared `fdcan` model (peripherals/fdcan.rs), the
+  # same one stm32h563 wires.
+  #
+  # Both instances share ONE clock-enable bit: RCC_APB1HENR.FDCANEN (bit 8)
+  # gates the whole FDCAN block, unlike the per-instance EN bits every other
+  # peripheral here uses. The message RAM is at 0x4000AC00 on H7 (a separate
+  # 10 KB window), NOT inside either instance's 1 KB register page.
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x4000A000
+    size: "1KB"
+    irq: 19  # FDCAN1_IT0; IT1 (21) and FDCAN_CAL (63) are not separately routed
+    config:
+      debug_schema: "../peripherals/stm32h735/fdcan1.yaml"
+    clock: { reg: "apb1henr", bit: 8 }
+  - id: "fdcan2"
+    type: "fdcan"
+    base_address: 0x4000A400
+    size: "1KB"
+    irq: 20  # FDCAN2_IT0; IT1 (22) not separately routed
+    config:
+      debug_schema: "../peripherals/stm32h735/fdcan2.yaml"
+    clock: { reg: "apb1henr", bit: 8 }
+  # ADC1/ADC2 — the 16-bit converters (DS13312: "2×16-bit ADC, up to 3.6 MSPS
+  # in 16-bit: up to 22 channels"). Added 2026-08-09 with a REAL H7 layout
+  # (peripherals/adc.rs `Stm32H7`), not the L4 alias `profile: "h7"` used to
+  # resolve to — that alias answered PCSEL/LTR/HTR/CALFACT2 as unmapped zeros
+  # and decoded CFGR.RES with the wrong field width AND the wrong encoding.
+  #
+  # ⚠ SIZE IS 256B, NOT THE USUAL 1KB. ADC2 sits 0x100 above ADC1, so a 1 KB
+  # window on ADC1 would cover ADC2's entire register page and shadow it. Each
+  # instance really is 0x100 wide on this part; the ADC12 common block
+  # (ADC12_CCR) lives at 0x4002_2300, outside both, and is NOT modelled — the
+  # `common_ccr` slot in the model is unreachable here by construction.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40022000
+    size: "256B"
+    irq: 18  # ADC1_2 — shared by both instances
+    config:
+      debug_schema: "../peripherals/stm32h735/adc1.yaml"
+      profile: "h7"
+    # RCC_AHB1ENR.ADC12EN (bit 5) gates BOTH converters.
+    clock: { reg: "ahb1enr", bit: 5 }
+  - id: "adc2"
+    type: "adc"
+    base_address: 0x40022100
+    size: "256B"
+    irq: 18
+    config:
+      debug_schema: "../peripherals/stm32h735/adc2.yaml"
+      profile: "h7"
+    clock: { reg: "ahb1enr", bit: 5 }
   # SYSCFG (D2, APB4) — system config (EXTI source select, boost/compensation
   # cell the H7 HAL touches during rcc.freeze). Modeled as a stub (read/store).
   - id: "syscfg"

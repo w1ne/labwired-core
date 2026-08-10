@@ -13,19 +13,61 @@ const RCC_BASE: u32 = 0x4002_1000;
 const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
 const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
 
-/// Enable USART1 (APB2 bit 14) and I2C1 (APB1 bit 21). Required now that
-/// stm32f103.yaml clocks those peripherals — unclocked MMIO is dropped.
+/// GPIOA CRH — the F1 pad mux for PA8..PA15. Four bits per pin, MODE[1:0] then
+/// CNF[1:0]. This family has no `MODER` and no `AFR`, so there is no AF number
+/// to write: the alternate function of a pin is fixed by the pin.
+const GPIOA_CRH: *mut u32 = (0x4001_0800 + 0x04) as *mut u32;
+
+/// Enable AFIO (APB2 bit 0), GPIOA (bit 2), USART1 (bit 14) and I2C1 (APB1
+/// bit 21). Required now that stm32f103.yaml clocks those peripherals —
+/// unclocked MMIO is dropped.
+///
+/// AFIOEN and IOPAEN were missing. Without IOPAEN the GPIO port is held in
+/// reset, so `usart1_init`'s `CRH` write would be swallowed and PA9 would stay
+/// the floating input it is after reset.
 fn enable_peripheral_clocks() {
     unsafe {
         let apb2 = core::ptr::read_volatile(RCC_APB2ENR);
-        core::ptr::write_volatile(RCC_APB2ENR, apb2 | (1 << 14)); // USART1EN
+        // AFIOEN | IOPAEN | USART1EN
+        core::ptr::write_volatile(RCC_APB2ENR, apb2 | (1 << 0) | (1 << 2) | (1 << 14));
         let apb1 = core::ptr::read_volatile(RCC_APB1ENR);
         core::ptr::write_volatile(RCC_APB1ENR, apb1 | (1 << 21)); // I2C1EN
     }
 }
 
+/// Mux PA9 to `USART1_TX` and give the transmitter a baud divisor.
+///
+/// Clocking USART1 and writing `DR` is all this lab used to do, and it is
+/// enough for LabWired's permissive USART model. It is not enough for silicon
+/// and it is not enough for a probe: PA9 stays a floating input until `CRH`
+/// selects an alternate-function output, so the pad route never goes live and a
+/// logic analyzer on PA9 reads the GPIO latch — a flat line — while the
+/// transaction-level bus monitor decodes the same traffic fine. A zero `BRR` is
+/// the other half: with no divisor there is no bit period, so there is nothing
+/// to narrate even once the route exists.
+///
+/// * PA9 = `USART1_TX` in the **Default** alternate-function column
+///   (DS5319 Rev 20, Table 5, p.31), so no AFIO remap is involved.
+/// * The `CRH` nibble for PA9 is bits [7:4]. `0xB` = MODE `0b11` (output,
+///   50 MHz) + CNF `0b10` (alternate-function push-pull).
+/// * `BRR` = f_PCLK2 / baud at the default 16× oversampling. This firmware
+///   never touches the PLL, so the part runs on the 8 MHz HSI it selects at
+///   reset (DS5319 Rev 20 §2.3.7, p.15): 8_000_000 / 115_200 = 69.44 → 69,
+///   i.e. 0x45, which is 115 942 baud (0.6% fast, well inside a UART's budget).
+/// * `CR1` = UE (bit 13) | TE (bit 3): transmit only, no interrupts.
+fn usart1_init() {
+    unsafe {
+        let crh = core::ptr::read_volatile(GPIOA_CRH);
+        core::ptr::write_volatile(GPIOA_CRH, (crh & !(0xF << 4)) | (0xB << 4));
+        core::ptr::write_volatile(UART1_BRR, 0x45);
+        core::ptr::write_volatile(UART1_CR1, (1 << 13) | (1 << 3));
+    }
+}
+
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
+const UART1_BRR: *mut u32 = (0x4001_3800 + 0x08) as *mut u32;
+const UART1_CR1: *mut u32 = (0x4001_3800 + 0x0C) as *mut u32;
 
 const I2C1_CR1: *mut u32 = (I2C1_BASE + 0x00) as *mut u32;
 const I2C1_DR: *mut u32 = (I2C1_BASE + 0x10) as *mut u32;
@@ -144,6 +186,7 @@ fn vl_read_register16(reg: u16) -> u16 {
 #[entry]
 fn main() -> ! {
     enable_peripheral_clocks();
+    usart1_init();
     uart_str("VL53L1X ToF Lab\n");
 
     // init(): identity check — readReg16Bit(MODEL_ID) must equal 0xEACC.

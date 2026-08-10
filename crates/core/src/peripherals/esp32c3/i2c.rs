@@ -76,10 +76,10 @@
 //! All other offsets accept writes silently and read 0.
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::peripherals::i2c::I2cDevice;
+use crate::peripherals::pad_lines::PadLines;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const I2C0_BASE: u32 = 0x6001_3000;
@@ -291,88 +291,52 @@ const CPU_CLK_HZ: u64 = 160_000_000;
 const XTAL_CLK_HZ: u64 = 40_000_000;
 const RC_FAST_CLK_HZ: u64 = 17_500_000;
 
-/// Push-mode logic-capture registration for the I²C line cell: which watch
-/// channels observe pads currently matrix-routed to SCL / SDA. Maintained by
-/// the C3 GPIO model (which owns the routing truth) via
-/// [`I2cLineLevels::install_tap`]; consulted by [`I2cLineLevels::set`] so the
-/// bit engine pushes an edge at the exact moment it drives a line transition.
-#[derive(Debug, Default)]
-struct LineTapState {
-    tap: Option<crate::logic_capture::LogicTap>,
-    scl_chs: Vec<u32>,
-    sda_chs: Vec<u32>,
-}
-
 /// Live SDA/SCL levels of the I²C0 bus (wired-AND of controller + slave drive,
-/// idle high — open-drain with pull-ups). The controller bit engine is the only
+/// idle high — open-drain with pull-ups).
+///
+/// A thin, named face over [`PadLines`], the ONE pad-publication mechanism
+/// (see `crate::peripherals::pad_lines`). The controller bit engine is the only
 /// writer; the C3 GPIO model reads it for pads whose GPIO output matrix
 /// (`FUNCn_OUT_SEL_CFG`) routes `I2CEXT0_SCL` / `I2CEXT0_SDA`, so
 /// `read_gpio_pad` — and the in-engine logic analyzer sampling through it —
-/// observes the real waveform on the routed pads. With push-mode capture
-/// armed on a routed pad, [`set`](Self::set) additionally reports each line
-/// transition into the shared logic tap (event-driven capture — no polling).
+/// observes the real waveform on the routed pads. With push-mode capture armed
+/// on a routed pad, [`set`](Self::set) additionally reports each line
+/// transition into the shared logic tap at drive time.
 #[derive(Debug)]
 pub struct I2cLineLevels {
-    scl: AtomicBool,
-    sda: AtomicBool,
-    tap: std::sync::Mutex<LineTapState>,
+    lines: std::sync::Arc<PadLines>,
 }
 
+/// Line order for [`I2cLineLevels`]; the accessors index by these constants.
+const I2C_LINES: &[&str] = &["SCL", "SDA"];
+const LINE_SCL: usize = 0;
+const LINE_SDA: usize = 1;
+
 impl I2cLineLevels {
+    /// The underlying pad lines, for a GPIO port to bind pad routes to.
+    /// The C3 keeps the named face because its matrix/ACK logic reads the
+    /// wire by role; routing goes through the shared seam like every family.
+    pub(crate) fn pad_lines(&self) -> &std::sync::Arc<PadLines> {
+        &self.lines
+    }
+
     fn new() -> Self {
         Self {
-            scl: AtomicBool::new(true),
-            sda: AtomicBool::new(true),
-            tap: std::sync::Mutex::new(LineTapState::default()),
+            // Open-drain with pull-ups: both lines rest high.
+            lines: std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])),
         }
     }
 
     pub fn scl(&self) -> bool {
-        self.scl.load(Ordering::Relaxed)
+        self.lines.level(LINE_SCL)
     }
 
     pub fn sda(&self) -> bool {
-        self.sda.load(Ordering::Relaxed)
+        self.lines.level(LINE_SDA)
     }
 
     fn set(&self, scl: bool, sda: bool) {
-        let old_scl = self.scl.swap(scl, Ordering::Relaxed);
-        let old_sda = self.sda.swap(sda, Ordering::Relaxed);
-        if old_scl == scl && old_sda == sda {
-            return;
-        }
-        // A line actually transitioned: report it to any watch channels whose
-        // pads the GPIO matrix currently routes here. Lock taken only on
-        // transitions (module-tick rate, not per engine cycle).
-        let t = self.tap.lock().unwrap();
-        if let Some(tap) = &t.tap {
-            if old_scl != scl {
-                for &ch in &t.scl_chs {
-                    tap.push(ch, scl);
-                }
-            }
-            if old_sda != sda {
-                for &ch in &t.sda_chs {
-                    tap.push(ch, sda);
-                }
-            }
-        }
-    }
-
-    /// Install (or clear, with `tap = None`) the push-capture registration.
-    /// Called by the C3 GPIO model at watch install time and whenever a write
-    /// changes the routing of a watched pad, so the channel lists always
-    /// mirror the live GPIO matrix state.
-    pub(crate) fn install_tap(
-        &self,
-        tap: Option<crate::logic_capture::LogicTap>,
-        scl_chs: Vec<u32>,
-        sda_chs: Vec<u32>,
-    ) {
-        let mut t = self.tap.lock().unwrap();
-        t.tap = tap;
-        t.scl_chs = scl_chs;
-        t.sda_chs = sda_chs;
+        self.lines.set(&[scl, sda]);
     }
 }
 
@@ -781,6 +745,14 @@ impl std::fmt::Debug for Esp32c3I2c {
 }
 
 impl Peripheral for Esp32c3I2c {
+    fn line_names(&self) -> &'static [&'static str] {
+        I2C_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_ref().map(|levels| &**levels.pad_lines())
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         // Byte reads aren't used by esp-hal's I2C driver; route everything
         // through read_u32. Returning 0 for stray byte reads is harmless.
@@ -822,7 +794,10 @@ impl Peripheral for Esp32c3I2c {
             // Read-only FIFO-RAM windows: peek the head byte, never consume.
             REG_TXFIFO_START => self.tx_fifo.front().copied().unwrap_or(0) as u32,
             REG_RXFIFO_START => self.rx_fifo.borrow().front().copied().unwrap_or(0) as u32,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32c3.i2c:Esp32c3I2c", offset, "read");
+                0
+            }
         };
         if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
             eprintln!("C3 I2C R [0x{offset:02x}] = 0x{v:08x}");
@@ -914,7 +889,9 @@ impl Peripheral for Esp32c3I2c {
                 masked_write(&mut self.reg_scl_stretch_conf, value, 0x0000_3FFF)
             }
             REG_DATE => self.reg_date = value, // fully writable (mask = 0xFFFF_FFFF)
-            _ => {}                            // Accept-and-ignore (unmapped offsets)
+            _ => {
+                crate::census_reg!("esp32c3.i2c:Esp32c3I2c", offset, "write");
+            } // Accept-and-ignore (unmapped offsets)
         }
         Ok(())
     }
@@ -2041,6 +2018,105 @@ mod tests {
             );
         }
     }
+
+    /// ABSOLUTE golden for the pad-publication layer.
+    ///
+    /// The neighbouring walk-vs-scheduler gate is DIFFERENTIAL: both paths
+    /// publish through the same cell, so a change to the publication layer that
+    /// shifted every level identically would pass it. This pins the actual
+    /// waveform — the exact per-cycle SCL/SDA the pads see for one fixed
+    /// transaction — so refactoring how levels reach the pad cannot silently
+    /// move an edge. Register offsets are spelled from the TRM rather than the
+    /// module's own constants, so the expectation is independent of them.
+    #[test]
+    fn published_scl_sda_waveform_is_byte_identical() {
+        const REG_SCL_LOW: u64 = 0x00;
+        const REG_CTR_: u64 = 0x04;
+        const REG_DATA_: u64 = 0x1C;
+        const REG_SDA_HOLD_: u64 = 0x30;
+        const REG_SDA_SAMPLE_: u64 = 0x34;
+        const REG_SCL_HIGH: u64 = 0x38;
+        const REG_RSTART_SETUP: u64 = 0x44;
+        const REG_STOP_HOLD: u64 = 0x48;
+        const REG_STOP_SETUP: u64 = 0x4C;
+        const REG_CMD0_: u64 = 0x58;
+        const TRANS_START: u32 = 1 << 5;
+        let enc = |opcode: u32, bytes: u32| (opcode << 11) | bytes;
+
+        let mut i2c = Esp32c3I2c::new();
+        let lines = i2c.line_levels_arc();
+        assert!(
+            lines.scl() && lines.sda(),
+            "an idle open-drain bus rests high before anything drives it",
+        );
+        for (offset, value) in [
+            (REG_SCL_LOW, 200),
+            (REG_SCL_HIGH, 200),
+            (REG_SDA_HOLD_, 40),
+            (REG_SDA_SAMPLE_, 40),
+            (REG_RSTART_SETUP, 200),
+            (REG_STOP_SETUP, 200),
+            (REG_STOP_HOLD, 200),
+            (REG_CMD0_, enc(6, 0)),     // RSTART
+            (REG_CMD0_ + 4, enc(1, 2)), // WRITE 2
+            (REG_CMD0_ + 8, enc(2, 0)), // STOP
+            (REG_DATA_, 0x3C << 1),
+            (REG_DATA_, 0xA5),
+        ] {
+            i2c.write_u32(offset, value).unwrap();
+        }
+        i2c.write_u32(REG_CTR_, TRANS_START).unwrap();
+
+        // Transitions only, stamped with the cycle they happened on: this is
+        // exactly what the logic analyzer records off these pads.
+        let mut edges: Vec<(u32, char, bool)> = Vec::new();
+        // Sampled from wherever the START left the wire, not from idle: the
+        // TRANS_START write itself drives the first edge.
+        let (mut scl, mut sda) = (lines.scl(), lines.sda());
+        for cycle in 1..=40_000u32 {
+            i2c.tick_elapsed(1);
+            let (next_scl, next_sda) = (lines.scl(), lines.sda());
+            if next_scl != scl {
+                edges.push((cycle, 'C', next_scl));
+                scl = next_scl;
+            }
+            if next_sda != sda {
+                edges.push((cycle, 'D', next_sda));
+                sda = next_sda;
+            }
+        }
+
+        // FNV-1a over the whole edge stream — one number that moves if any
+        // edge moves, appears, or disappears.
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for (cycle, line, level) in &edges {
+            for byte in cycle
+                .to_le_bytes()
+                .iter()
+                .chain([*line as u8, *level as u8].iter())
+            {
+                hash ^= u64::from(*byte);
+                hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        println!("GOLDEN edges={} hash={hash:#018x}", edges.len());
+        assert!(
+            edges.len() > 40,
+            "only {} edges — the transaction never clocked, so this gate is \
+             vacuous",
+            edges.len()
+        );
+        assert_eq!(
+            (edges.len(), hash),
+            (EXPECTED_EDGES, EXPECTED_HASH),
+            "the published SCL/SDA waveform changed"
+        );
+    }
+    /// Captured from the pre-`PadLines` implementation and re-verified against
+    /// it after the port (see the module doc on `pad_lines`): 49 transitions,
+    /// FNV-1a over (cycle, line, level).
+    const EXPECTED_EDGES: usize = 49;
+    const EXPECTED_HASH: u64 = 0x5ac4_2643_150f_4e32;
 
     /// Encode a 14-bit command word: opcode | byte_num.
     fn cmd(opcode: u8, byte_num: u8) -> u32 {

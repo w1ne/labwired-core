@@ -101,6 +101,11 @@ pub struct RiscV {
 /// Bytes of guest code held in the interpreter fetch window (power of two).
 const FETCH_WINDOW_BYTES: usize = 256;
 
+/// `addi x0, x0, 0` — retired in place of a fetch a memory-protection unit
+/// blocked, so the raised interrupt is taken at the next instruction boundary
+/// instead of the core executing bytes the hardware never delivered.
+const NOP_OPCODE: u32 = 0x0000_0013;
+
 impl Default for RiscV {
     fn default() -> Self {
         Self::new_for(RiscVCoreProfile::Esp32C3)
@@ -149,6 +154,29 @@ impl RiscV {
                 self.fetch_bytes[i + 2],
                 self.fetch_bytes[i + 3],
             ]));
+        }
+        // Window miss: this is the one place a fetch can enter a region the
+        // window has not already vetted, so the memory-protection check goes
+        // here. Splits are 512-byte aligned and the window is 256-byte aligned
+        // and at most 256 bytes long, so one check per refill covers every
+        // fetch the window then serves.
+        match bus.check_fetch_permission(pc as u64) {
+            crate::FetchPermission::Allowed => {}
+            crate::FetchPermission::DeniedFaultRaised => {
+                // Silicon blocks the fetch and raises the violation through the
+                // interrupt matrix; the trap lands at the next instruction
+                // boundary. Retire a NOP so the interrupt check at the tail of
+                // `step` takes it — reproducing the PC skid that makes real IDF
+                // read the faulting address out of the PMS status registers.
+                self.fetch_len = 0;
+                return Ok(NOP_OPCODE);
+            }
+            crate::FetchPermission::DeniedUndeliverable => {
+                // Nothing routes the violation to the firmware, so executing
+                // whatever bytes are there would be a silent lie. Fail loud.
+                self.fetch_len = 0;
+                return Err(crate::SimulationError::MemoryViolation(pc as u64));
+            }
         }
         self.refill_fetch_window(bus, pc);
         let off = pc.wrapping_sub(self.fetch_base);

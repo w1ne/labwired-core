@@ -56,6 +56,161 @@ fn drive_both(oracle: &mut dyn I2cDevice, decl: &mut dyn I2cDevice, ops: &[Op]) 
     }
 }
 
+// ─── PCA9685 power-on state (ABSOLUTE, not a parity mirror) ─────────────────
+
+/// Point at `addr` and read one byte, with auto-increment off so the pointer
+/// does not walk. Works on either model.
+fn read_reg8(d: &mut dyn I2cDevice, addr: u8) -> u8 {
+    d.start();
+    d.write(addr);
+    d.start();
+    let b = d.read();
+    d.stop();
+    b
+}
+
+/// **This is not a parity test.** `drive_both` only proves the two models
+/// agree, and they agreed for months on an all-zero power-up that no PCA9685
+/// has ever had. So this asserts the values the DOCUMENT gives, against each
+/// model independently — if either regresses, this fails, even though parity
+/// would stay green if both regressed together.
+///
+/// NXP PCA9685 datasheet Rev. 4 (16 April 2015); page cited per row.
+#[test]
+fn pca9685_power_on_registers_match_the_datasheet_on_both_models() {
+    // (addr, value, what it is / where the datasheet says so)
+    let mut expected: Vec<(u8, u8, &str)> = vec![
+        (0x00, 0x11, "MODE1 SLEEP|ALLCALL (p16)"),
+        (0x01, 0x04, "MODE2 OUTDRV (p16)"),
+        (0x02, 0xE2, "SUBADR1 (p26)"),
+        (0x03, 0xE4, "SUBADR2 (p26)"),
+        (0x04, 0xE8, "SUBADR3 (p26)"),
+        (0x05, 0xE0, "ALLCALLADR (p8, p26)"),
+        (0xFE, 0x1E, "PRE_SCALE 200 Hz @ 25 MHz (p25 Table 8, p2)"),
+    ];
+    // LEDn_OFF_H = 0x09 + 4n, n = 0..15 — bit 4 is "LEDn full OFF" (p21, p25).
+    // LED15_OFF_H lands on 0x45, matching the register summary (Table 4, p13).
+    for n in 0..16u8 {
+        expected.push((0x09 + 4 * n, 0x10, "LEDn_OFF_H full OFF (p21, p25)"));
+    }
+    assert_eq!(
+        expected
+            .iter()
+            .find(|(a, ..)| *a == 0x45)
+            .map(|(_, v, _)| *v),
+        Some(0x10),
+        "LED15_OFF_H must be 0x45 (register summary Table 4, p13)"
+    );
+
+    let mut oracle = Pca9685::new();
+    let mut decl = declarative("pca9685");
+    for (addr, want, why) in &expected {
+        assert_eq!(
+            read_reg8(&mut oracle, *addr),
+            *want,
+            "oracle: reg {addr:#04x} power-on must be {want:#04x} — {why}"
+        );
+        assert_eq!(
+            read_reg8(&mut decl, *addr),
+            *want,
+            "declarative: reg {addr:#04x} power-on must be {want:#04x} — {why}"
+        );
+    }
+
+    // ALL_LED_ON_H (0xFB) / ALL_LED_OFF_H (0xFD) stay 0x00 ON PURPOSE. Table 8
+    // (p25) star-marks them with bit 4 set; the register summary Table 4 (p13)
+    // types the same registers "write/read zero". The vendor contradicts
+    // itself; we do not resolve it for them. This asserts the CHOICE so a
+    // future edit has to argue with it rather than drift past it.
+    for addr in [0xFBu8, 0xFD] {
+        assert_eq!(
+            read_reg8(&mut oracle, addr),
+            0x00,
+            "oracle: reg {addr:#04x} is a documented contradiction — left at 0"
+        );
+        assert_eq!(
+            read_reg8(&mut decl, addr),
+            0x00,
+            "declarative: reg {addr:#04x} is a documented contradiction — left at 0"
+        );
+    }
+
+    // Everything else powers up zero. Sweeping the rest keeps a stray reset
+    // entry from being added without a datasheet citation.
+    let claimed: std::collections::BTreeSet<u8> = expected.iter().map(|(a, ..)| *a).collect();
+    for addr in 0..=0xFFu8 {
+        if claimed.contains(&addr) {
+            continue;
+        }
+        assert_eq!(
+            read_reg8(&mut oracle, addr),
+            0x00,
+            "oracle: reg {addr:#04x} has an undocumented non-zero reset"
+        );
+        assert_eq!(
+            read_reg8(&mut decl, addr),
+            0x00,
+            "declarative: reg {addr:#04x} has an undocumented non-zero reset"
+        );
+    }
+}
+
+/// The `LEDn_OFF_H = 0x10` reset must NOT make an untouched channel look like a
+/// commanded servo position. The observable composes its 12-bit count with
+/// `hi_mask: 0x0F`, so bit 4 is masked away and the raw count is still 0 —
+/// `none_when_raw_zero` then reports no angle. Confirmed here rather than
+/// assumed, on both models.
+///
+/// This is the mask coinciding with the right answer, NOT full-OFF being
+/// honoured: the second half of this test pins the gap. A channel whose OFF_H
+/// carries the full-OFF bit *and* a nonzero count still reports an angle, which
+/// silicon would not do. If someone implements full-OFF gating, this assertion
+/// is the one that must change — deliberately.
+#[test]
+fn pca9685_full_off_reset_reports_no_angle_but_is_not_actually_honoured() {
+    let oracle = Pca9685::new();
+    let decl = declarative("pca9685");
+    for ch in 0..16u8 {
+        assert_eq!(
+            oracle.channel_angle_deg(ch),
+            None,
+            "oracle ch {ch}: untouched channel must report no angle despite OFF_H = 0x10"
+        );
+        assert_eq!(
+            decl.observable("servo_angle", ch),
+            None,
+            "declarative ch {ch}: untouched channel must report no angle despite OFF_H = 0x10"
+        );
+    }
+
+    // KNOWN GAP, pinned rather than hidden: full OFF (OFF_H bit 4) is not
+    // honoured by the observable path. Write channel 0 with the full-OFF bit
+    // set AND a nonzero 12-bit count; silicon holds the output fully off, both
+    // models report an angle.
+    let mut oracle = Pca9685::new();
+    let mut decl = declarative("pca9685");
+    let ops = vec![
+        Op::Start,
+        Op::Write(0x00),
+        Op::Write(0xA1), // AI on
+        Op::Start,
+        Op::Write(0x06), // LED0_ON_L
+        Op::Write(0x00), // ON_L
+        Op::Write(0x00), // ON_H
+        Op::Write(0x29), // OFF_L
+        Op::Write(0x11), // OFF_H: full OFF (bit 4) + count high nibble 0x1
+    ];
+    drive_both(&mut oracle, &mut decl, &ops);
+    assert_observables_equal(&oracle, &decl);
+    let angle = decl
+        .observable("servo_angle", 0)
+        .expect("GAP: full OFF is ignored, so an angle is still reported");
+    assert!(
+        (angle - 90.0).abs() < 0.5,
+        "GAP marker: full-OFF bit is masked away, angle still computed: {angle}"
+    );
+}
+
 // ─── PCA9685 ────────────────────────────────────────────────────────────────
 
 fn set_angle_ops(ops: &mut Vec<Op>, ch: u8, deg: f64) {
@@ -154,8 +309,8 @@ fn pca9685_b2_ai_enable_timing_is_byte_equivalent() {
         Op::Start,
         Op::Write(0x00), // pointer = MODE1
         Op::Write(0xA1), // stores 0xA1 into regs[0]; AI now visible → pointer → 1
-        Op::Read,        // reads regs[1] = 0x00 (MODE2 reset); pointer → 2
-        Op::Read,        // reads regs[2]; pointer → 3
+        Op::Read,        // reads regs[1] = 0x04 (MODE2 reset, OUTDRV); pointer → 2
+        Op::Read,        // reads regs[2] = 0xE2 (SUBADR1 reset); pointer → 3
     ];
     drive_both(&mut Pca9685::new(), &mut declarative("pca9685"), &ops);
 }
@@ -234,19 +389,63 @@ fn tmp102_config_tlow_thigh_read_back_identically() {
 }
 
 #[test]
-fn tmp102_config_write_is_absorbed_identically() {
-    // Write pointer 0x01 (config), then a data byte (0x55) — absorbed/ignored by
-    // both models; read back config and assert byte equality (proves absorb, not
-    // just by-construction).
+fn tmp102_short_config_write_is_absorbed_identically() {
+    // Write pointer 0x01 (config), then ONE data byte (0x55).
+    //
+    // KNOWN GAP, pinned here rather than hidden: the datasheet's "Data
+    // Transfer" note says the TMP102 "can also be used for single byte
+    // updates. To update only the MS byte, terminate the communication by
+    // issuing a START or STOP", so on silicon this WOULD land 0x55 in
+    // config byte 1. Neither model implements it — the declarative engine
+    // stores a register write only when the master supplies the register's
+    // full width, and the oracle likewise waits for both bytes. This test
+    // asserts only that the two models agree; closing the gap needs a
+    // partial-width write in the shared engine, which is a separate change.
     let ops = vec![
         Op::Start,
         Op::Write(0x01), // pointer → config
-        Op::Write(0x55), // absorbed by both
+        Op::Write(0x55), // half a word: absorbed by both
         Op::Start,
         Op::Write(0x01),
         Op::Read, // config MSB
         Op::Read, // config LSB
     ];
+    drive_both(&mut Tmp102::new(), &mut declarative("tmp102"), &ops);
+}
+
+#[test]
+fn tmp102_full_width_config_and_limit_writes_are_byte_equivalent() {
+    // Table 6-7 marks config / TLOW / THIGH Read/Write, and both models
+    // implement them with the same datasheet-derived read-only bits (CONFIG
+    // R1:R0 + AL + unused D3:D0; limits' unused D2:D0). A complete two-byte
+    // write must therefore read back identically on both.
+    let mut ops = Vec::new();
+    let program = |ops: &mut Vec<Op>, ptr: u8, msb: u8, lsb: u8| {
+        ops.push(Op::Start);
+        ops.push(Op::Write(ptr));
+        ops.push(Op::Write(msb));
+        ops.push(Op::Write(lsb));
+    };
+    let readback = |ops: &mut Vec<Op>, ptr: u8| {
+        ops.push(Op::Start);
+        ops.push(Op::Write(ptr));
+        ops.push(Op::Read);
+        ops.push(Op::Read);
+    };
+    // Shutdown + one-shot, 1 Hz, extended mode; R1:R0 and AL written as 0.
+    program(&mut ops, 0x01, 0x81, 0x50);
+    // Thermostat window 25 °C … 30 °C, with stray unused low bits set.
+    program(&mut ops, 0x02, 0x19, 0x07);
+    program(&mut ops, 0x03, 0x1E, 0x05);
+    for ptr in 1..=3u8 {
+        readback(&mut ops, ptr);
+    }
+    // Clear every firmware-owned bit and read back again.
+    program(&mut ops, 0x01, 0x00, 0x00);
+    readback(&mut ops, 0x01);
+    // A write to the Read Only temperature register must still be dropped.
+    program(&mut ops, 0x00, 0xDE, 0xAD);
+    readback(&mut ops, 0x00);
     drive_both(&mut Tmp102::new(), &mut declarative("tmp102"), &ops);
 }
 

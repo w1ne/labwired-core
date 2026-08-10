@@ -80,6 +80,8 @@ jobs:
           APT: ${{ matrix.apt }}
         run: |
           sudo apt-get update -qq
+          # shellcheck disable=SC2086  # APT is a space-separated package list
+          # from the board matrix; the word splitting is the point.
           sudo apt-get install -y --no-install-recommends $APT
 
       - name: Add rust targets
@@ -98,12 +100,14 @@ jobs:
       - name: Build firmware
         env:
           BOARD_PATH: ${{ matrix.path }}
-        run: "$BOARD_PATH/ci/build.sh"
+        run: |
+          "$BOARD_PATH/ci/build.sh"
 
       - name: Run tests
         env:
           BOARD_PATH: ${{ matrix.path }}
-        run: "$BOARD_PATH/ci/test.sh"
+        run: |
+          "$BOARD_PATH/ci/test.sh"
 
       - name: Upload board artifacts
         if: always()

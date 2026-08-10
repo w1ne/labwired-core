@@ -16,6 +16,7 @@ mod stm32_spi_waveform_tests {
     use crate::bus::bus_trace::BusPayload;
     use crate::cpu::CortexM;
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
     use crate::peripherals::spi::{Spi, SpiDevice, SpiRegisterLayout};
     #[cfg(feature = "event-scheduler")]
@@ -148,8 +149,10 @@ mod stm32_spi_waveform_tests {
             .bus
             .find_peripheral_index_by_name("gpioa")
             .expect("gpioa registered");
-        let initial =
-            machine.logic_watch(&[Some((gpioa_idx, MOSI_PIN)), Some((gpioa_idx, SCK_PIN))]);
+        let initial = machine.logic_watch(&[
+            Some(LogicSource::pad(gpioa_idx, MOSI_PIN)),
+            Some(LogicSource::pad(gpioa_idx, SCK_PIN)),
+        ]);
         assert_eq!(
             initial,
             vec![Some(false), Some(false)],
@@ -316,7 +319,10 @@ mod stm32_spi_waveform_tests {
             machine.config.peripheral_tick_interval = interval;
             machine.bus.config.peripheral_tick_interval = interval;
             let gpioa_idx = machine.bus.find_peripheral_index_by_name("gpioa").unwrap();
-            machine.logic_watch(&[Some((gpioa_idx, MOSI_PIN)), Some((gpioa_idx, SCK_PIN))]);
+            machine.logic_watch(&[
+                Some(LogicSource::pad(gpioa_idx, MOSI_PIN)),
+                Some(LogicSource::pad(gpioa_idx, SCK_PIN)),
+            ]);
             for b in WIRE_BYTES {
                 spi_write(&mut machine, b);
             }
@@ -373,7 +379,10 @@ mod stm32_spi_waveform_tests {
             let mut machine = machine();
             configure(&mut machine);
             let gpioa_idx = machine.bus.find_peripheral_index_by_name("gpioa").unwrap();
-            machine.logic_watch(&[Some((gpioa_idx, MOSI_PIN)), Some((gpioa_idx, SCK_PIN))]);
+            machine.logic_watch(&[
+                Some(LogicSource::pad(gpioa_idx, MOSI_PIN)),
+                Some(LogicSource::pad(gpioa_idx, SCK_PIN)),
+            ]);
             for b in WIRE_BYTES {
                 spi_write(&mut machine, b);
             }

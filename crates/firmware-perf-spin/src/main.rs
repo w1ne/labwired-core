@@ -16,9 +16,12 @@
 //! the matrix (M0+ through M33) with an identical instruction mix — a per-board
 //! number is then comparable to every other board's, not just to its own past.
 //!
-//! `memory.x` deliberately claims only 32K flash / 8K RAM so the image fits the
-//! smallest STM32 in the matrix; a larger claim would put the reset stack
-//! pointer past the end of modelled RAM and fault before `main`.
+//! It is linked once per *memory map*, not once: `build.rs` takes the flash and
+//! RAM origins from the environment, so the same spin loop also covers the
+//! chips that put flash at 0x00000000 (nRF, Kinetis) or 0x10000000 (RP2xxx).
+//! The linked image claims only 32K flash / 8K RAM so it fits the smallest
+//! board in the matrix; a larger claim would put the reset stack pointer past
+//! the end of modelled RAM and fault before `main`.
 
 #![no_std]
 #![no_main]

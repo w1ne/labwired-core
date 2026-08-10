@@ -26,6 +26,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # fetch-depth: 0 — verify-release-runner-contract.sh reads the pinned
+      # action's source out of an OLD commit by sha (`git cat-file -e <sha>`,
+      # then `git show <sha>:<path>`). A bounded depth leaves that object
+      # unfetched. Unlike the history-derived gates elsewhere in this file that
+      # is not a silent wrongness: the script calls `fail` with "commit <sha> is
+      # available locally", so the job goes red with the actual reason. Keep the
+      # depth anyway — a red build nobody can explain is not much better.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -236,6 +243,59 @@ jobs:
             echo "::notice title=fmt-autofix push skipped::${BRANCH} moved while this job was running, so the fixup was not pushed. The newer commit has its own fmt-autofix run."
           fi
 
+      # ── FALLBACK when the fixup CANNOT be pushed (fork PR / no PAT) ───────
+      #
+      # WHY THIS EXISTS. The green-skip above was meant to keep a job that has
+      # nothing to do from going red. What it actually did was report SUCCESS
+      # while formatting went unchecked, so unformatted code merged and
+      # `core-integrity` — which runs on push-to-main only — turned main red
+      # instead. On 2026-08-07 `CI_FMT_PAT` was unset and main was red on
+      # `Check Formatting` for seven consecutive pushes; every one of those PRs
+      # showed a green fmt-autofix.
+      #
+      # So the skip is now narrowed to what it always claimed to be: green when
+      # there is genuinely NOTHING TO DO. A PR whose tree is already formatted
+      # still passes with no PAT and no push. Only a PR that is actually
+      # unformatted, on a run that cannot fix it, goes red — and it says which
+      # files and what to type. That is a signal, not noise, so it cannot train
+      # anyone to ignore it.
+      #
+      # Configure `CI_FMT_PAT` (contents:write) and this path stops running at
+      # all: the push branch above handles it silently, as designed.
+      - name: Checkout for the read-only formatting check
+        if: steps.gate.outputs.ok != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust (pinned — must match pr-gate)
+        if: steps.gate.outputs.ok != 'true'
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt
+
+      - name: Verify formatting (cannot push the fixup)
+        if: steps.gate.outputs.ok != 'true'
+        run: |
+          set -euo pipefail
+          cargo fmt --version
+
+          if cargo fmt --all -- --check; then
+            echo "Already formatted — nothing to push, and nothing to fix."
+            echo "### Formatting: clean (checked, not applied)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error title=Unformatted code, and this run cannot fix it::This PR is not rustfmt-clean and the autofix could not be pushed (fork PR, or CI_FMT_PAT is unset). Run 'cargo fmt --all' with the pinned 1.95.0 toolchain and push. Merging as-is turns main red on core-integrity."
+          {
+            echo "### Formatting: FAILED"
+            echo
+            # shellcheck disable=SC2016  # backticks here are Markdown code
+            # spans for the step summary, not command substitution.
+            echo 'Run `cargo +1.95.0 fmt --all` and push. The autofix job could not do it for you on this run.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
   # ── PR merge gate (REQUIRED) — target wall clock under ~1 minute ───────────
   # focused clippy/tests only. No firmware builds, no feature-variant
   # recompiles, no coverage/onboarding/arduino matrices (those are nightly).
@@ -283,11 +343,29 @@ jobs:
     # 10 buys headroom on a shared runner without hiding a real slowdown: if
     # this job starts approaching 10 it has genuinely grown and the browser
     # steps should move to their own job, the way pr-scheduler-observable did.
-    timeout-minutes: 10
+    #
+    # ⚠️ IT HAS GROWN, AND THAT IS ALREADY TRUE WITHOUT THE FIRMWARE-SURVIVAL
+    # STEP ADDED BELOW. Three consecutive green runs on 2026-08-08 measured
+    # 8m20s, 9m09s and 9m11s against this 10-minute wall — 49-100s of headroom,
+    # i.e. the condition the paragraph above says to act on. The growth is in
+    # steps that predate this change: `Unit tests (default-members lib)` alone
+    # is 173-192s and `Generated artifacts — regenerate and assert no drift` is
+    # 107-117s. So 12, not because the new step is expensive (it is ~10s of
+    # local wall-clock; see its own note) but because shipping a gate into a
+    # job that is already at 92% of its timeout is how you get a red lane that
+    # means nothing — the same mis-read this comment's first paragraph is about.
+    #
+    # 12 is a stay of execution, not a fix. The lasting answer is still the one
+    # named above: move the browser layer (~100s) to its own job. Do that before
+    # bumping this number a third time.
+    timeout-minutes: 12
     steps:
       # Full history required: generate_validation_status.py uses
       # `git log -1 --format=%cI -- <model>` for drift. Shallow checkout
       # makes every path resolve to HEAD's date → false DRIFT failures.
+      # The generator now refuses to run at all on a truncated history rather
+      # than emitting wrong dates, so lowering this turns the whole job red with
+      # an explanation instead of quietly producing a bad document.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -315,6 +393,32 @@ jobs:
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
           python3 scripts/generate_firmware_exercise_matrix.py --check
+
+      # The perf gate measures whatever chip descriptors it can link a fixture
+      # against. Adding a chip on an unhandled memory map used to drop it out of
+      # the gate silently — this asserts, on the PR that adds it, that it is
+      # either covered or waived with a reason. Pure Python, seconds.
+      #
+      # The pytest run alongside it covers the same property from the other
+      # side (a stale baseline for a deleted chip, a fixture that shares a
+      # memory map it must not). scripts/ has carried unit tests for a while
+      # with nothing executing them — scripts/ci/test_board_matrix.py has never
+      # been run by any workflow — so this step names the files it runs rather
+      # than discovering them, and grows a line when a suite is added.
+      #
+      # ADDING A TEST FILE UNDER scripts/? Add it to the pytest line below or it
+      # will never run. test_generate_validation_status.py covers the
+      # incomplete-history guard, which is precisely a "this ran and told you
+      # nothing" bug; a test for it that nothing executes would be the same bug
+      # one level up. It needs pyyaml, installed by the step above.
+      - name: Perf gate — every chip covered or waived
+        run: |
+          python -m pip install --quiet pytest
+          python3 scripts/perf/board_perf.py --check-coverage
+          python3 -m pytest -q \
+            scripts/perf/test_board_perf.py \
+            scripts/ci/test_board_matrix.py \
+            scripts/test_generate_validation_status.py
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
@@ -380,6 +484,12 @@ jobs:
       - name: Clippy + build the browser layer (crates/wasm)
         run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
 
+      # playground_repro drives the secure-boot lab through the same entry
+      # points simulator-bridge.ts uses, so it needs that lab's firmware. It
+      # builds the ELF itself (ensure_firmware_built) and needs the target to
+      # do it. ~10s once, cached with the rest of the toolchain.
+      - name: Add ARM target (secure-boot lab firmware for the browser repro)
+        run: rustup target add thumbv7em-none-eabi
       - name: Unit tests (browser layer)
         run: cargo test -p labwired-wasm --lib
 
@@ -398,8 +508,104 @@ jobs:
       # the CLI and livelocked in the browser for as long as nobody ran a
       # browser-configuration lane. A gate nobody runs on PRs is a gate this
       # class walks back through.
+      #
+      # Run through `cargo-test-nonvacuous.sh`: under DEFAULT features this file
+      # is down to ONE test, and "one" and "zero" print the same colour. The
+      # wrapper asks the built binary how many tests it holds and fails on zero,
+      # so if a `#[cfg]` ever empties the structural arm this step says so
+      # instead of reporting `0 passed` as a pass.
       - name: Walk-deletion derivation (PR-fast structural arm)
-        run: cargo test -p labwired-core --test esp32_classic_walk_differential
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --test esp32_classic_walk_differential
+
+      # THE SHARED-MODEL NET THAT NEVER GATED A MERGE.
+      #
+      # `firmware_survival` boots ~50 committed ELFs — every Cortex-M and
+      # RISC-V chip this engine claims, across Zephyr, Arduino, CubeMX HAL and
+      # bare-metal toolchains — and asserts each one survives its boot and
+      # emits the UART trace real silicon does. It is the broadest regression
+      # net in the repo for a change to the shared CPU or bus models, and until
+      # now NOTHING ran it before a merge: it lives in `core-integrity`, which
+      # is `push`/`schedule`/`dispatch`-only and skipped on every pull request.
+      #
+      # #880 is what that cost. "propagate bus memory violations from every
+      # load and store" was green on all four checks its PR ran, merged, and
+      # faulted five chips at boot on main:
+      #
+      #   nrf52832  step 1     0x2003fffc   RAM top
+      #   nrf54l15  step 6460  0xe000e500   upper NVIC window
+      #   stm32g474 step 4302  0xe0042004   DBGMCU
+      #   stm32wb55 step 4214  0xe0042004   DBGMCU
+      #   stm32wba52 step 4003 0x20020000   RAM top
+      #
+      # The change was right in intent — those accesses had been silently
+      # swallowed — but the models do not decode those regions, so real
+      # firmware faulted. Reverted in #881. Every one of those five is a test
+      # in this file, and every one of them would have gone red on the PR if
+      # this step had existed. (Verified, not assumed: applying #880 to a clean
+      # tree reproduces exactly those five failures and nothing else.)
+      #
+      # The note on the equivalent step in `core-integrity` already made this
+      # argument once — the suite was pulled out of the nightly `core-full` job
+      # because "a shared-model rework could land on main silently". It was
+      # never carried the last step, to PRs. This is that step.
+      #
+      # ── WHY A STEP IN `pr-gate`, NOT A NEW JOB, AND NOT `paths:`-FILTERED ──
+      #
+      # A new required job filtered to `crates/core/src/cpu/**` would be worse
+      # than no gate at all. `main` requires exactly two contexts (`pr-gate`,
+      # `release-runner-contract`) with `enforce_admins` ON, and required
+      # contexts are resolved against the PR's HEAD SHA. A path-filtered job
+      # emits NO context on a PR that does not match the filter, so that PR's
+      # head would carry an unreported required check and could never be merged
+      # by anyone, the owner included — the identical deadlock the PAT note at
+      # the top of this file describes and that stranded #1207/#1208/#1195 in
+      # the superproject. `pr-gate` is already required and already reports on
+      # every PR, so a step inside it adds a GATE without adding a CONTEXT.
+      # That is the whole reason this is eleven lines of YAML and not a job.
+      #
+      # ── COST, MEASURED ──
+      #
+      # No toolchain, no target, no cross-build: the ~50 ELFs are committed
+      # under `tests/fixtures/` and read straight off disk, and every
+      # dev-dependency (labwired-loader, svd-ingestor, svd-parser) is already
+      # built by the `--test esp32_classic_walk_differential` step above, which
+      # costs 0-1s here for exactly that reason. Locally: 1.3s to compile and
+      # link the test binary, 6.5s to run it (9.7s pinned to 4 threads, which
+      # is the hosted runner's core count).
+      #
+      # It deliberately does NOT bring `--test e2e_stm32f407_i2c` along, which
+      # `core-integrity` runs beside it. That one cross-builds the AHT20/BMP280
+      # firmware from source and needs `rustup target add thumbv7em-none-eabi`
+      # — a toolchain install and a firmware build this lane needs for nothing
+      # else. #880 is the regression that escaped; this is the suite that
+      # catches it.
+      - name: Firmware survival (committed ELF fixtures, ~50 chips)
+        run: cargo test -p labwired-core --test firmware_survival
+
+      # The BLE Pong fixture is a COMMITTED copy of a published community lab,
+      # and `world_esp32c3_ble_pong` (release-only, push-to-main) is the only
+      # thing that boots it. This hashes the committed .ino/.bin pair, so
+      # neither can move without the other. It is pure in-tree consistency:
+      # no network, and a PR that touches the sketch is told before the merge.
+      - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
+        run: cargo test -p labwired-core --test fixture_ble_pong_provenance
+
+      # The LIVE-published-lab drift check deliberately does NOT run here.
+      #
+      # It asks api.labwired.com whether the owner has since edited the live
+      # project. That is a useful thing to know, but it is not a property of
+      # the pull request: a published lab is a living product artifact and is
+      # SUPPOSED to change. Asserting it as a required merge gate meant one
+      # ordinary lab edit blocked every PR in the repo — which is exactly what
+      # happened, blocking four unrelated PRs at once — and it also put a
+      # third-party network call on the critical path of every merge.
+      #
+      # It still runs on push-to-main and on the nightly cron (see
+      # `core-integrity`), where a lab edit reports a finding instead of
+      # halting the repo. That lane is what catches the case no PR causes:
+      # the owner editing the live project between merges.
 
   # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
   #
@@ -470,8 +676,64 @@ jobs:
       # "was skipped" is the failure mode this job was added to remove.
       - name: Observable arm — classic-ESP32 serial reaches the sink (browser policy)
         run: >
-          cargo test -p labwired-core --features event-scheduler
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --features event-scheduler
           --test esp32_classic_walk_differential -- --nocapture
+
+      # SCHEDULER-ONLY FIDELITY LANES — the tests that no PR job could run.
+      #
+      # `crates/core/tests/` holds 22 integration files gated
+      # `#![cfg(feature = "event-scheduler")]`. A plain `cargo test --test X`
+      # on one of them silently runs ZERO tests and reports green, so the only
+      # way they execute is a lane that passes the feature — and until this
+      # step, seventeen of the twenty-two ran ONLY in the nightly/dispatch
+      # `core-full` job. That is not a hypothetical: core#823 added `board_io`
+      # to `configs/systems/nrf52840-dk.yaml`, the button's boot level
+      # presented itself as a GPIO edge, the per-edge scheduler harvest handed
+      # the RADIO a duplicate wake, and BLE 1 Mbit air time collapsed from 32
+      # cycles to 2 — a faithful twin that stopped simulating transmission
+      # time at all. Every required check was green, because the file that
+      # asserts that invariant had no pre-merge lane.
+      #
+      # The list is the sub-2s half of the uncovered set (measured; the whole
+      # step adds ~3s of test runtime to a job that already builds this exact
+      # crate + feature). The expensive remainder stays nightly, named and
+      # reasoned in `scheduler_lane_coverage`'s NIGHTLY_ONLY table — that
+      # ratchet is what keeps this list from silently rotting again: a new
+      # scheduler-gated test file must be added here or given a written reason.
+      # `esp32c3_bt_event_residency_gate` is here and not in `core-integrity`
+      # BECAUSE OF THE FEATURE MATRIX, not because it is cheap (it is: 4.5s).
+      # The property it defends — `esp32c3::bt` stays inside
+      # MAX_LIVE_EVENTS_PER_PERIPHERAL — has an in-engine backstop, the
+      # `debug_assert!` behind `live_event_ceiling_trips`, and NEITHER standing
+      # lane can reach it: `cargo test -p labwired-core` runs debug but without
+      # `event-scheduler`, so no scheduler runs at all, and `core-integrity`'s
+      # scheduler lane is `--release`, which compiles `debug_assert!` out. Debug
+      # + `--features event-scheduler` is this job, and only this job. The fix
+      # that took `live_event_ceiling_trips` from 3310 to 0 merged with nothing
+      # asserting that number anywhere.
+      #
+      # `cargo-test-nonvacuous.sh`, not bare `cargo test`: every file below is
+      # `#![cfg(feature = "event-scheduler")]`, which is the exact shape that
+      # prints `test result: ok. 0 passed` and exits 0 when the feature is
+      # missing. The manifests now carry `required-features`, so cargo would
+      # refuse rather than fake it — the wrapper is the second lock, and it also
+      # catches the emptying this step could still suffer silently: a per-item
+      # `#[cfg]` or a deleted test leaving a binary with nothing in it.
+      - name: Scheduler-only fidelity lanes (walk≡scheduler timing gates)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --features event-scheduler
+          --test esp32c3_bt_event_residency_gate
+          --test nrf52_timer_walk_differential
+          --test nrf52_easydma_tick512_fidelity
+          --test nrf52840_timer_machine_gate
+          --test nrf54l15_grtc_walk_differential
+          --test rp2040_timer_machine_gate
+          --test rp2040_i2c_irq_delivery
+          --test stm32f103_dma_walk_differential
+          --test systick_walk_differential
+          --test board_batch_width
 
   # ── Main-branch integrity (push to main) — fuller than PR, still no matrices ─
   integrity:
@@ -527,6 +789,15 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
+
+      # Before the --lib run, not just before the fixture suites below. The
+      # playground secure-boot repro in crates/wasm builds
+      # firmware-nrf52840-secure-boot on demand for thumbv7em, and it is a
+      # #[cfg(test)] module in src/, so `--workspace --lib` runs it. With the
+      # target added ten lines further down, those three tests died on
+      # "secure-boot firmware build failed" and took main red.
+      - name: Install ARM target for firmware builds under test
+        run: rustup target add thumbv7em-none-eabi
 
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
@@ -584,11 +855,38 @@ jobs:
       # minutes in debug. It is the only lane that runs two ESP32-C3 instances
       # against each other over the BLE air, which is where "both nodes have the
       # same address" hid.
+      # Run the drift check BEFORE the release-gated world test below, so a red
+      # lane says "the published lab moved" rather than leaving someone to infer
+      # it from a two-node BLE failure. This is now the ONLY lane that runs it —
+      # `pr-gate` deliberately does not, because a published lab is supposed to
+      # change and one edit there blocked every PR in the repo. Here it is a
+      # monitor rather than a merge gate, and it covers the case nobody's PR
+      # causes: the owner editing the live project between merges. On
+      # push-to-main and on the nightly cron this is the only lane that looks
+      # at production at all.
+      - name: BLE Pong fixture drift (committed .ino ↔ LIVE published lab)
+        run: scripts/ci/check-published-lab-drift.sh
+
+      # `esp32c3_usb_cdc_console` is here for COST, not because it is
+      # release-only: same reason as `world_esp32c3_ble_pong` above. It boots
+      # the C3 mask ROM, which is 335s in debug (measured) and seconds in
+      # release, and this step already has the release + event-scheduler build
+      # warm — a separate debug step would pay a whole second build to run the
+      # same assertions far slower.
+      #
+      # It has to run SOMEWHERE with the feature on: the file is
+      # `#![cfg(feature = "event-scheduler")]`, so a plain
+      # `cargo test --test esp32c3_usb_cdc_console` executes ZERO tests and
+      # reports green. #860's `scheduler_lane_coverage` caught that #832 shipped
+      # its own headline behaviour — CDC-on-boot builds actually printing — with
+      # no lane running the test that proves it.
       - name: Release-gated tests — cfg(not(debug_assertions))
         run: >
           cargo test --release -p labwired-core --features event-scheduler
           --lib --test event_scheduler --test release_only_cfg_ratchet
           --test world_esp32c3_ble_pong
+          --test esp32c3_usb_cdc_console
+          --test esp32c3_pms_shipped_firmware
 
       # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
       # covered pre-merge as well — do not read this step as their only lane.
@@ -605,6 +903,12 @@ jobs:
       # the browser's own feature set BEFORE THE MERGE — a push-to-main lane
       # reports that after the fact. See the comment on
       # `pr-scheduler-observable`.
+      # The nRF52 / nRF54 / RP2040 / SysTick / F103 entries below are the same
+      # set `pr-scheduler-observable` runs pre-merge, kept here as the
+      # push-to-main backstop for anything that reaches main outside the PR
+      # flow. Both lanes are held honest by the `scheduler_lane_coverage`
+      # ratchet; see the comment on that PR step for what shipped through the
+      # hole they close.
       - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
         run: >
           cargo test -p labwired-core --features jit,event-scheduler
@@ -615,6 +919,15 @@ jobs:
           --test stm32_timer_walk_differential
           --test stm32_dma_walk_differential
           --test kw41z_walk_free_differential
+          --test nrf52_timer_walk_differential
+          --test nrf52_easydma_tick512_fidelity
+          --test nrf52840_timer_machine_gate
+          --test nrf54l15_grtc_walk_differential
+          --test rp2040_timer_machine_gate
+          --test rp2040_i2c_irq_delivery
+          --test stm32f103_dma_walk_differential
+          --test systick_walk_differential
+          --test board_batch_width
           --lib
 
       # HARDWARE ORACLE UNDER THE SCHEDULER FEATURE — the configuration that
@@ -638,6 +951,32 @@ jobs:
         run: >
           cargo test -p labwired-hw-oracle
           --features labwired-core/event-scheduler
+
+      # HARDWARE-ONLY HARNESSES — COMPILED HERE, DELIBERATELY NOT RUN.
+      #
+      # `hw-oracle-nrf52` and `hw-oracle-stm32` gate ten integration files that
+      # drive a PHYSICAL nRF52840 / STM32F103 over ST-Link SWD (`OpenOcd`,
+      # `LABWIRED_STLINK_SERIAL`). No hosted runner has a board on it, so
+      # running them is not a throughput decision, it is impossible — that is
+      # the written reason this step is `--no-run`.
+      #
+      # Compiling them is NOT optional, and this is what it cost to learn:
+      # because no lane anywhere enabled either feature, rustc had never seen
+      # these files, and FIVE of them had rotted into a hard compile error —
+      # `no method named write_u32 found for &mut SystemBus`, a lost
+      # `use labwired_core::Bus`, in nrf52_mmio_diff, nrf52_gpio_conformance,
+      # nrf52_onboarding_diff, nrf52_power_conformance,
+      # nrf52_full_register_conformance and nrf52_timer_rtc_conformance. The
+      # bring-up harness for a whole chip family was unbuildable and nothing
+      # said so, exactly as `crates/core/tests/event_scheduler.rs` rotted behind
+      # `cfg(not(debug_assertions))` until the release lane above existed.
+      #
+      # The crate is small and its dependency graph is already warm from the
+      # step above, so this is seconds.
+      - name: Compile-only — hardware-oracle harnesses (nRF52 / STM32 over SWD)
+        run: >
+          cargo test -p labwired-hw-oracle
+          --features hw-oracle-nrf52,hw-oracle-stm32 --no-run
 
   # ── CI runner OCI smoke (NOT a PR required check) ──────────────────────────
   ci-runner-image:
@@ -669,7 +1008,16 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-ci]'))
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 was the budget for a job that never finished: `Run Workspace Tests`
+    # was cancelled at exactly 45:00 on every run, including the nightly, so
+    # the two steps after it never ran at all. With `opt-level = 1` the job
+    # completes in 44m32s — which cleared the old limit by 28 SECONDS while
+    # now doing strictly more work, since those two steps execute. That is a
+    # coin flip, not a margin. 75 leaves room for runner variance and a cold
+    # cache without hiding a real regression: if this job starts approaching
+    # 75 minutes, something has genuinely got slower and should be measured,
+    # not accommodated again.
+    timeout-minutes: 75
     steps:
       # fetch-depth: 0 — the Tier-1 baseline ratchet resolves its baseline from
       # `git merge-base HEAD origin/main`. On a shallow checkout that cannot be
@@ -719,6 +1067,14 @@ jobs:
           cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
 
       - name: Run Workspace Tests
+        # This job builds the firmware above, so for those artifacts a missing
+        # ELF is a failure, not a skip. Tests that can't find their firmware
+        # otherwise `return` early and report `ok` — passing without testing
+        # anything, which is how a broken cross-build sails through a green
+        # gate. Only the keys built in the step above are listed: requiring an
+        # artifact this job never produces would fail it for the wrong reason.
+        env:
+          LABWIRED_REQUIRE_FIRMWARE: firmware-ci-fixture,firmware-rp2040-pio-onboarding
         run: cargo test --workspace
 
       - name: Feature tests — jit + event-scheduler

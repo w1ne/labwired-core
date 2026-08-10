@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "firmware-perf-spin-riscv"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+
+[dependencies]
+riscv-rt = "0.12"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-perf-spin-riscv"
+path = "src/main.rs"
+test = false
+bench = false

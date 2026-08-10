@@ -5,6 +5,14 @@ on:
     # Nightly 02:00 UTC (was Sunday-only). Slow coverage / validation lives here.
     - cron: "0 2 * * *"
   workflow_dispatch:
+    inputs:
+      pong_soak_cycles:
+        description: >-
+          Cycles per node for the BLE Pong cadence soak. The default covers
+          ~30 advertising republish periods; raise it to characterise a
+          slower cadence, lower it to get a quick answer.
+        required: false
+        default: "480000000"
 
 permissions:
   contents: write
@@ -146,6 +154,8 @@ jobs:
         # rust-toolchain.toml apply (--manifest-path from the repo root skips
         # them — that's what broke the first run with E0463).
         run: |
+          # shellcheck disable=SC1090  # export-esp.sh is generated at runtime
+          # by `espup install`; there is no file to follow at lint time.
           source ~/export-esp.sh
           (cd examples/esp32s3-blinky && cargo build --release)
           (cd examples/esp32s3-hello-world && cargo build --release)
@@ -184,6 +194,19 @@ jobs:
         # leak into lib unit tests (it makes provision_rom_images() return
         # None by design, breaking the ROM-provisioning tests).
         run: cargo test --release -p labwired-core --features esp32s3-fixtures --test e2e_blinky --test e2e_hello_world --test e2e_i2c_tmp102
+
+      # WHY `openai_deck_s3_boot` IS NOT IN EITHER LINE ABOVE.
+      #
+      # It is the fifth `#![cfg(feature = "esp32s3-fixtures")]` file, and it is
+      # the only one no lane names — so before `required-features` landed on
+      # these targets it was one `--test openai_deck_s3_boot` away from
+      # reporting `test result: ok. 0 passed` at anyone who went looking for it.
+      # It is left OFF on purpose, not by oversight: `examples/openai-deck-s3`
+      # is quarantined over a REAL ESP32-S3 hang in the deck firmware, and a
+      # lane here would be measuring the quarantine. Reproduce it by hand with
+      #   cargo test -p labwired-core --features esp32s3-fixtures --release \
+      #     --test openai_deck_s3_boot -- --nocapture
+      # Turn this into a step when the S3 hang is fixed, not before.
 
   # ── ESP32-C3 BLE baseband: the only gate that runs a real BLE stack ────────
   #
@@ -283,6 +306,86 @@ jobs:
           cargo test --release -p labwired-cli --features event-scheduler
           --test e2e_esp32c3_ble_adv_republish -- --ignored --nocapture
 
+  # ── BLE Pong advertising-cadence soak ─────────────────────────────────────
+  #
+  # `crates/core/tests/world_esp32c3_ble_pong.rs` is release-gated and runs on
+  # push-to-main at `PONG_CYCLES` = 90M cycles per node. Roughly 45M of that is
+  # the C3 mask-ROM boot, so the sketch's `loop()` gets ~140 ms — about ONE
+  # advertising republish period at `PUBLISH_MS` 100. That window is why the
+  # 700 ms cadence regression was reported as "no host frame ever arrived"
+  # instead of being named: it did not fit in the window at all. A cadence that
+  # merely doubled or quadrupled would have fitted, and would have passed.
+  #
+  # This lane is the same test at `PONG_SOAK_CYCLES` = 480M, ~30 republish
+  # periods, which is the length the twin's RW-BLE controller has to survive
+  # for `stop() / setAdvertisementData() / start()` repetition to be under
+  # test at all. ~366 s of run on top of a release build, so it belongs here
+  # and NOT in the merge gate — the constant in the test file stays at 90M on
+  # purpose, because the gate's job is to be fast.
+  #
+  # Its own job rather than a step on `esp32c3-ble-e2e`: a soak that overruns
+  # must not take the three pinned-image BLE gates down with it.
+  esp32c3-ble-pong-soak:
+    name: ESP32-C3 BLE Pong Cadence Soak
+    runs-on: ubuntu-latest
+    # The run is ~6 min; the release build of labwired-core on a cold cache is
+    # the rest. Generous so a slow runner reports the SOAK's verdict rather
+    # than being measured by its own timeout.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly-esp32c3-ble
+          workspaces: |
+            . -> target
+
+      # Everything this needs is committed: the flash image
+      # (crates/core/tests/fixtures/esp32c3-ble-pong-flash.bin), the C3 mask ROM
+      # blobs, and configs/systems/esp32c3-ble-pong.yaml. No fetch step, and no
+      # network — unlike the pinned-image BLE gates above.
+      #
+      # `--release` and `--features event-scheduler` are BOTH load-bearing. The
+      # test file is `#![cfg(all(feature = "event-scheduler",
+      # not(debug_assertions)))]`; drop either and this compiles to an empty
+      # binary that reports "ok. 0 passed" — green while proving nothing. The
+      # step after this one is what makes that impossible to miss.
+      - name: BLE Pong two-node soak (~30 advertising republish periods)
+        env:
+          PONG_SOAK_CYCLES: ${{ inputs.pong_soak_cycles || '480000000' }}
+        run: >
+          cargo test --release -p labwired-core --features event-scheduler
+          --test world_esp32c3_ble_pong -- --nocapture
+          | tee "$RUNNER_TEMP/pong-soak.log"
+
+      # An empty test binary and a passing one both exit 0. Assert the two
+      # properties actually ran, so a cfg/feature slip is a red lane rather
+      # than a soak that silently stops soaking.
+      - name: Assert the soak was not vacuous
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/pong-soak.log"
+          grep -q 'two_c3_nodes_in_one_lab_do_not_share_a_bluetooth_address' "$log" \
+            || { echo "::error::identity property did not run — release/feature gate slipped"; exit 1; }
+          grep -q 'two_c3_nodes_running_one_ble_pong_image_start_the_game' "$log" \
+            || { echo "::error::game-start property did not run — release/feature gate slipped"; exit 1; }
+
+      # The test eprintln!s both nodes' role, last status line and 8-line tail
+      # on PASS as well as on fail. At soak length that tail is the cadence
+      # evidence a human reads, so keep it even when the lane is green.
+      - name: Upload soak console
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32c3-ble-pong-soak-log
+          path: ${{ runner.temp }}/pong-soak.log
+          if-no-files-found: warn
+
   tier1-fixture-drift:
     name: Tier-1 Fixture Drift Check
     runs-on: ubuntu-latest
@@ -339,6 +442,8 @@ jobs:
           # overwrites MANIFEST.json with hashes of the fresh build, and
           # comparing the rebuild against itself would always pass.
           git show HEAD:tests/fixtures/tier1/MANIFEST.json > /tmp/committed-manifest.json
+          # shellcheck disable=SC1090  # export-esp.sh is generated at runtime
+          # by `espup install`; there is no file to follow at lint time.
           source ~/export-esp.sh
           ./scripts/build_tier1_fixtures.sh
 
@@ -380,3 +485,110 @@ jobs:
 
           print(f"All {len(committed)} fixture blobs match committed manifest hashes.")
           EOF
+
+  # ── THE FEATURES NO WORKFLOW EVER TURNED ON ────────────────────────────────
+  #
+  # A `#![cfg(feature = "x")]` integration test built without `x` compiles to an
+  # EMPTY libtest binary: `test result: ok. 0 passed`, exit 0, green tick. Until
+  # this job existed, SEVEN of this repo's features were named by no workflow at
+  # all — `silent-census`, `net-tests`, `wifi-thunks`, `jit-framework`,
+  # `mlx90640-decode-test`, `hw-oracle-nrf52`, `hw-oracle-stm32` — so twenty-two
+  # test targets were not "skipped", they were reported as PASSING, forever.
+  #
+  # `required-features` in the manifests now stops those targets from faking a
+  # pass. It does not make them RUN. This job does, for the ones a hosted runner
+  # can run; the two `hw-oracle-*` features need a physical board over SWD and
+  # are compile-checked in `core-integrity` instead, with the reason written
+  # there.
+  #
+  # Nightly rather than pre-merge on cost: each step below is a distinct feature
+  # variant of `labwired-core`, i.e. a full recompile of the crate, for a few
+  # seconds of test runtime. Put a step here first; promote it into `core-ci` if
+  # it ever catches something a PR should have caught.
+  never-run-features:
+    name: never-run-feature-lanes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly-never-run-features
+          workspaces: |
+            . -> target
+
+      # `silent-census` counts the three paths on which the simulator can be
+      # wrong and still report success; `net-tests` opens real localhost
+      # sockets for the egress bridge. Both measured green locally on this
+      # tree (census_probe 3/3, egress_e2e 1/1) — the only thing that was ever
+      # wrong with them is that nothing ran them.
+      #
+      # Through the wrapper, because that is the whole point: if a future
+      # feature rename empties one of these binaries, the step must go RED
+      # rather than back to the `0 passed` it spent its whole life reporting.
+      - name: Census probe + egress bridge (silent-census, net-tests)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --features silent-census,net-tests,wifi-thunks
+          --test census_probe --test egress_e2e
+
+      # `wifi-thunks` gates ONE test and it is `#[ignore]`d, so a plain lane
+      # would run zero of it and report green — a vacuous gate is worse than
+      # none. `-- --ignored` is what actually executes it. Same feature set as
+      # the step above so it is a cache hit, not a second compile.
+      - name: WiFi thunk bring-up harness (wifi-thunks, #[ignore]d)
+        run: >
+          cargo test -p labwired-core
+          --features silent-census,net-tests,wifi-thunks
+          --test e2e_labwired_wifi -- --ignored
+
+      # Compiles the REAL vendored Melexis MLX90640 driver (third_party/) and
+      # asserts it decodes per-pixel °C out of the LabWired device model. Needs
+      # a C compiler, which ubuntu-latest has. 3/3 locally.
+      - name: MLX90640 round-trip through the real vendor driver
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --features mlx90640-decode-test
+          --test mlx90640_decode
+
+      # ⚠️ THIS STEP IS RED TODAY, AND THAT IS THE FINDING.
+      #
+      # These files assert the universal-dispatch JIT is BYTE-IDENTICAL to the
+      # interpreter — the property that makes a JIT admissible in a simulator
+      # sold as an oracle. `jit-framework` was named by no workflow, so they had
+      # never executed. Run on this tree (debug, macOS aarch64, and identically
+      # with and without `event-scheduler`, so it is not a feature interaction):
+      #
+      #   riscv_jit_lockstep            1/1  ok
+      #   riscv_jit_alu_lockstep        2/2  ok (1 ignored)
+      #   riscv_jit_branch_lockstep     1 FAILED  "no block ever crossed the hot
+      #                                            threshold / compiled"
+      #   riscv_jit_mem_lockstep        2 FAILED  "no block compiled",
+      #                                           "no memory block compiled"
+      #   riscv_jit_combined_lockstep   2 FAILED  "no block compiled",
+      #                                           "no combined block compiled"
+      #
+      # Every failure is the same shape: the frontend never compiles a block, so
+      # the lockstep never happens. The tests are not wrong — they REFUSE to
+      # pass on a JIT that never engaged, which is the anti-vacuity this repo
+      # runs on. Leaving the step out to keep the tick green would re-create
+      # exactly the silence that hid it.
+      #
+      # `--no-fail-fast` so one red target does not hide the other four.
+      # `riscv_jit_combined_bench` and `riscv_jit_c3_oled_differential` are
+      # excluded: every test in them is `#[ignore]`d (a micro-benchmark and a
+      # ~30M-step release-only differential), so a step naming them would report
+      # a green tick for zero executed tests.
+      - name: RISC-V JIT lockstep (jit-framework) — KNOWN RED, see comment
+        run: >
+          cargo test --no-fail-fast -p labwired-core --features jit,jit-framework
+          --test riscv_jit_lockstep
+          --test riscv_jit_alu_lockstep
+          --test riscv_jit_branch_lockstep
+          --test riscv_jit_mem_lockstep
+          --test riscv_jit_combined_lockstep

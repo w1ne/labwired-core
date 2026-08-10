@@ -1,0 +1,390 @@
+peripheral: DBGMCU
+version: 0.1.0
+registers:
+- id: DBGMCU_IDCODER
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 25746
+  fields:
+  - name: DEV_ID
+    bit_range:
+    - 11
+    - 0
+    description: Device ID
+  - name: REV_ID
+    bit_range:
+    - 31
+    - 16
+    description: Revision ID
+  side_effects: null
+- id: DBGMCU_SCR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Allows debug in Stop mode Write access can be protected by PWR_SECCFGR.LPMSEC. The CPU debug and DBGMCU clocks remain active and the HSI16 oscillators is used as system clock during Stop debug mode, allowing CPU debug capability. On exit from Stop mode, the clock settings are set to the Stop mode exit state.
+  - name: DBG_STANDBY
+    bit_range:
+    - 2
+    - 2
+    description: Allows debug in Standby mode Write access can be protected by PWR_SECCFGR.LPMSEC. The CPU debug and DBGMCU clocks remain active and the HSI16 oscillator is used as system clock, the supply and SRAM memory content is maintained during Standby debug mode, allowing CPU debug capability. On exit from Standby mode, a standby reset is performed.
+  - name: LPMS
+    bit_range:
+    - 18
+    - 16
+    description: Device low power mode selected 10x: Standby mode others reserved
+  - name: STOPF
+    bit_range:
+    - 19
+    - 19
+    description: Device Stop flag
+  - name: SBF
+    bit_range:
+    - 20
+    - 20
+    description: Device Standby flag
+  - name: CS
+    bit_range:
+    - 24
+    - 24
+    description: CPU Sleep
+  - name: CDS
+    bit_range:
+    - 25
+    - 25
+    description: CPU DeepSleep
+  side_effects: null
+- id: DBGMCU_APB1LFZR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM2_STOP
+    bit_range:
+    - 0
+    - 0
+    description: TIM2 stop in CPU debug Write access can be protected by GTZC_TZSC.TIM2SEC.
+  - name: DBG_TIM3_STOP
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 stop in CPU debug Write access can be protected by GTZC_TZSC.TIM3SEC.
+  - name: DBG_WWDG_STOP
+    bit_range:
+    - 11
+    - 11
+    description: WWDG stop in CPU debug Write access can be protected by GTZC_TZSC.WWDGSEC
+  - name: DBG_IWDG_STOP
+    bit_range:
+    - 12
+    - 12
+    description: IWDG stop in CPU debug Write access can be protected by GTZC_TZSC.IWDGSEC.
+  - name: DBG_I2C1_STOP
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 SMBUS timeout stop in CPU debug Write access can be protected by GTZC_TZSC.I2C1SEC.
+  side_effects: null
+- id: DBGMCU_APB1HFZR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_LPTIM2_STOP
+    bit_range:
+    - 5
+    - 5
+    description: LPTIM2 stop in CPU debug Write access can be protected by GTZC_TZSC.LPTIM2SEC.
+  side_effects: null
+- id: DBGMCU_APB2FZR
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM1_STOP
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 stop in CPU debug Write access can be protected by GTZC_TZSC.TIM1SEC.
+  - name: DBG_TIM16_STOP
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 stop in CPU debug Write access can be protected by GTZC_TZSC.TIM16SEC.
+  - name: DBG_TIM17_STOP
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 stop in CPU debug Write access can be protected by GTZC_TZSC.TIM17SEC.
+  side_effects: null
+- id: DBGMCU_APB7FZR
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_I2C3_STOP
+    bit_range:
+    - 10
+    - 10
+    description: I2C3 stop in CPU debug Access can be protected by GTZC_TZSC.I2C3SEC.
+  - name: DBG_LPTIM1_STOP
+    bit_range:
+    - 17
+    - 17
+    description: LPTIM1 stop in CPU debug Access can be protected by GTZC_TZSC.LPTIM1SEC.
+  - name: DBG_RTC_STOP
+    bit_range:
+    - 30
+    - 30
+    description: RTC stop in CPU debug Access can be protected by GTZC_TZSC.TIM17SEC. Can only be accessed secure when one or more features in the RTC or TAMP is/are secure.
+  side_effects: null
+- id: DBGMCU_AHB1FZR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_GPDMA1_CH0_STOP
+    bit_range:
+    - 0
+    - 0
+    description: GPDMA 1 channel 0 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC0.
+  - name: DBG_GPDMA1_CH1_STOP
+    bit_range:
+    - 1
+    - 1
+    description: GPDMA 1 channel 1 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC1.
+  - name: DBG_GPDMA1_CH2_STOP
+    bit_range:
+    - 2
+    - 2
+    description: GPDMA 1 channel 2 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC2.
+  - name: DBG_GPDMA1_CH3_STOP
+    bit_range:
+    - 3
+    - 3
+    description: GPDMA 1 channel 3 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC3.
+  - name: DBG_GPDMA1_CH4_STOP
+    bit_range:
+    - 4
+    - 4
+    description: GPDMA 1 channel 4 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC4.
+  - name: DBG_GPDMA1_CH5_STOP
+    bit_range:
+    - 5
+    - 5
+    description: GPDMA 1 channel 5 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC5.
+  - name: DBG_GPDMA1_CH6_STOP
+    bit_range:
+    - 6
+    - 6
+    description: GPDMA 1 channel 6 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC6.
+  - name: DBG_GPDMA1_CH7_STOP
+    bit_range:
+    - 7
+    - 7
+    description: GPDMA 1 channel 7 stop in CPU debug Write access can be protected by GPDMA_SECCFGR.SEC7.
+  side_effects: null
+- id: DBGMCU_SR
+  address_offset: 252
+  size: 32
+  access: READ_ONLY
+  reset_value: 3
+  fields:
+  - name: AP_PRESENT
+    bit_range:
+    - 15
+    - 0
+    description: Bit n identifies whether access port APn is present in device Bit n = 0: APn absent Bit n = 1: APn present
+  - name: AP_ENABLED
+    bit_range:
+    - 31
+    - 16
+    description: Bit n identifies whether access port APn is open (can be accessed via the debug port) or locked (debug access to the APn is blocked, except for DBGMCU access) Bit n = 0: APn locked (except for access to DBGMCU) Bit n = 1: APn enabled
+  side_effects: null
+- id: DBGMCU_DBG_AUTH_HOST
+  address_offset: 256
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: AUTH_KEY
+    bit_range:
+    - 31
+    - 0
+    description: Device authentication key The device specific 64-bit authentication key (OEMn key) must be written to this register (in two successive 32-bit writes, least significant word first) to permit RDP regression. Writing a wrong key locks access to the device and prevent code execution from the Flash memory.
+  side_effects: null
+- id: DBGMCU_DBG_AUTH_DEVICE
+  address_offset: 260
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: AUTH_ID
+    bit_range:
+    - 31
+    - 0
+    description: Device specific ID Device specific ID used for RDP regression.
+  side_effects: null
+- id: DBGMCU_PNCR
+  address_offset: 2012
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CODIFICATION
+    bit_range:
+    - 31
+    - 0
+    description: Part number codification
+  side_effects: null
+- id: DBGMCU_PIDR4
+  address_offset: 4048
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: JEP106CON
+    bit_range:
+    - 3
+    - 0
+    description: JEP106 continuation code
+  - name: F4KCOUNT
+    bit_range:
+    - 7
+    - 4
+    description: Register file size
+  side_effects: null
+- id: DBGMCU_PIDR0
+  address_offset: 4064
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PARTNUM
+    bit_range:
+    - 7
+    - 0
+    description: Part number bits [7:0]
+  side_effects: null
+- id: DBGMCU_PIDR1
+  address_offset: 4068
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PARTNUM
+    bit_range:
+    - 3
+    - 0
+    description: Part number bits [11:8]
+  - name: JEP106ID
+    bit_range:
+    - 7
+    - 4
+    description: JEP106 identity code bits [3:0]
+  side_effects: null
+- id: DBGMCU_PIDR2
+  address_offset: 4072
+  size: 32
+  access: READ_ONLY
+  reset_value: 10
+  fields:
+  - name: JEP106ID
+    bit_range:
+    - 2
+    - 0
+    description: JEP106 identity code bits [6:4]
+  - name: JEDEC
+    bit_range:
+    - 3
+    - 3
+    description: JEDEC assigned value
+  - name: REVISION
+    bit_range:
+    - 7
+    - 4
+    description: Component revision number
+  side_effects: null
+- id: DBGMCU_PIDR3
+  address_offset: 4076
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CMOD
+    bit_range:
+    - 3
+    - 0
+    description: Customer modified
+  - name: REVAND
+    bit_range:
+    - 7
+    - 4
+    description: Metal fix version
+  side_effects: null
+- id: DBGMCU_CIDR0
+  address_offset: 4080
+  size: 32
+  access: READ_ONLY
+  reset_value: 13
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 7
+    - 0
+    description: Component ID bits [7:0]
+  side_effects: null
+- id: DBGMCU_CIDR1
+  address_offset: 4084
+  size: 32
+  access: READ_ONLY
+  reset_value: 240
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 3
+    - 0
+    description: Component ID bits [11:8]
+  - name: CLASS
+    bit_range:
+    - 7
+    - 4
+    description: Component ID bits [15:12] - component class
+  side_effects: null
+- id: DBGMCU_CIDR2
+  address_offset: 4088
+  size: 32
+  access: READ_ONLY
+  reset_value: 5
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 7
+    - 0
+    description: Component ID bits [23:16]
+  side_effects: null
+- id: DBGMCU_CIDR3
+  address_offset: 4092
+  size: 32
+  access: READ_ONLY
+  reset_value: 177
+  fields:
+  - name: PREAMBLE
+    bit_range:
+    - 7
+    - 0
+    description: Component ID bits [31:24]
+  side_effects: null
+interrupts: null
+timing: null

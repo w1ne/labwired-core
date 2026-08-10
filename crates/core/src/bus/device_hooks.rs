@@ -511,14 +511,28 @@ impl SystemBus {
         }
     }
 
-    /// Whether peripheral `idx` is currently clocked. `true` (always-on) for any
-    /// peripheral without a declared clock-gate — the safe default that keeps
-    /// every existing config/firmware working. For a gated peripheral, reads the
-    /// RCC enable register the gate points at and returns whether the gate bit is
-    /// set. If no RCC peripheral is registered, or its register read fails, the
+    /// Whether peripheral `idx` is currently clocked — **the one place in the
+    /// engine that answers that question.**
+    ///
+    /// `true` (always-on) for any peripheral without a declared clock-gate — the
+    /// safe default that keeps every existing config/firmware working. For a
+    /// gated peripheral, reads the *live* RCC register map: every bit the gate
+    /// requires must be set right now. That is deliberately a read of the RCC
+    /// model rather than a value latched at build time, so firmware that turns a
+    /// clock back off silences the peripheral again mid-run, the way silicon
+    /// does.
+    ///
+    /// A gate may require more than one bit because silicon can withhold a clock
+    /// for more than one reason: the bus-enable bit in an `xxxENR` register, and
+    /// — for a peripheral fed by its own kernel clock, e.g. the STM32L0 RNG on
+    /// HSI48 — the source's ready bit. Both are entries in the same list, so a
+    /// peripheral model never needs (and must never grow) a clock check of its
+    /// own; see [`crate::bus::ResolvedClockGate`].
+    ///
+    /// If no RCC peripheral is registered, or its register read fails, the
     /// peripheral is treated as clocked (fail-open: never wedge a chip that has
-    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path a
-    /// single cached-index RCC register read.
+    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path
+    /// one cached-index RCC register read per required bit.
     pub(crate) fn is_peripheral_clocked(&self, idx: usize) -> bool {
         // missing_clock fault: force the peripheral unclocked and count the
         // suppressed access as the runtime fired-observation. Checked before the
@@ -540,9 +554,11 @@ impl SystemBus {
         let Some(rcc_idx) = self.rcc_idx else {
             return true; // no RCC modelled → don't gate
         };
-        match self.peripherals[rcc_idx].dev.read_u32(gate.reg_offset) {
-            Ok(reg) => (reg >> gate.bit) & 1 != 0,
-            Err(_) => true,
-        }
+        gate.requires.iter().all(|req| {
+            match self.peripherals[rcc_idx].dev.read_u32(req.reg_offset) {
+                Ok(reg) => (reg >> req.bit) & 1 != 0,
+                Err(_) => true, // unreadable RCC register → fail open
+            }
+        })
     }
 }

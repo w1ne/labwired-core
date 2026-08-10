@@ -1355,8 +1355,14 @@ mod tests {
 
     #[test]
     fn test_adapter_breakpoints() {
-        let elf_path = PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware");
+        let elf_path =
+            labwired_core::test_support::target_dir().join("thumbv7m-none-eabi/debug/firmware");
         if !elf_path.exists() {
+            labwired_core::test_support::skip_or_fail_missing_firmware(
+                "dap-firmware",
+                &format!("DAP test firmware ({})", elf_path.display()),
+                "cargo build -p firmware --target thumbv7m-none-eabi",
+            );
             return;
         }
 
@@ -1373,8 +1379,14 @@ mod tests {
 
     #[test]
     fn test_adapter_read_memory() {
-        let elf_path = PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware");
+        let elf_path =
+            labwired_core::test_support::target_dir().join("thumbv7m-none-eabi/debug/firmware");
         if !elf_path.exists() {
+            labwired_core::test_support::skip_or_fail_missing_firmware(
+                "dap-firmware",
+                &format!("DAP test firmware ({})", elf_path.display()),
+                "cargo build -p firmware --target thumbv7m-none-eabi",
+            );
             return;
         }
 
@@ -1390,9 +1402,14 @@ mod tests {
 
     #[test]
     fn test_adapter_uart_capture() {
-        let elf_path = PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture");
+        let elf_path = labwired_core::test_support::target_dir()
+            .join("thumbv7m-none-eabi/debug/firmware-ci-fixture");
         if !elf_path.exists() {
-            // Try to find it in the current directory or parent if running from different scope
+            labwired_core::test_support::skip_or_fail_missing_firmware(
+                "firmware-ci-fixture",
+                &format!("firmware-ci-fixture ELF ({})", elf_path.display()),
+                "cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi",
+            );
             return;
         }
 

@@ -1,0 +1,5 @@
+# The Xtensa targets need the esp-rs LLVM fork; espup installs it as `esp`.
+# Pinned here so a bare `cargo build` in this directory picks it up too, not
+# only the perf gate's explicit `cargo +esp`.
+[toolchain]
+channel = "esp"

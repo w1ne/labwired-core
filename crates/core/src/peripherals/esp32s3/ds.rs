@@ -398,7 +398,10 @@ impl Esp32s3Ds {
             OFF_DATE => self.date,
             // Operand / result memory windows.
             o if o < MEM_REGION_END => self.block_word(o).unwrap_or(0),
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.ds:Esp32s3Ds", offset, "read");
+                0
+            }
         }
     }
 
@@ -438,7 +441,7 @@ impl Esp32s3Ds {
                     vec[word] = value;
                 }
             }
-            _ => {}
+            _ => { crate::census_reg!("esp32s3.ds:Esp32s3Ds", offset, "write"); }
         }
     }
 

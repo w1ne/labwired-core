@@ -109,7 +109,10 @@ impl Ina219 {
             REG_POWER => self.power_register(),
             REG_CURRENT => self.current_register_value(),
             REG_CAL => self.calibration,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.ina219:Ina219", reg, "read");
+                0
+            }
         }
     }
 
@@ -117,7 +120,9 @@ impl Ina219 {
         match reg {
             REG_CONFIG => self.config = value,
             REG_CAL => self.calibration = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("components.ina219:Ina219", reg, "write");
+            }
         }
     }
 }

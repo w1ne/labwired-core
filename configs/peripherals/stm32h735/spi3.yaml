@@ -1,0 +1,625 @@
+peripheral: SPI3
+version: 0.1.0
+registers:
+- id: CR1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPE
+    bit_range:
+    - 0
+    - 0
+    description: Serial Peripheral Enable
+  - name: MASRX
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      Master automatic SUSP in Receive
+                    mode
+  - name: CSTART
+    bit_range:
+    - 9
+    - 9
+    description: Master transfer start
+  - name: CSUSP
+    bit_range:
+    - 10
+    - 10
+    description: Master SUSPend request
+  - name: HDDIR
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      Rx/Tx direction at Half-duplex
+                    mode
+  - name: SSI
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      Internal SS signal input
+                    level
+  - name: CRC33_17
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      32-bit CRC polynomial
+                    configuration
+  - name: RCRCI
+    bit_range:
+    - 14
+    - 14
+    description: |-
+      CRC calculation initialization pattern
+                    control for receiver
+  - name: TCRCI
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      CRC calculation initialization pattern
+                    control for transmitter
+  - name: IOLOCK
+    bit_range:
+    - 16
+    - 16
+    description: |-
+      Locking the AF configuration of
+                    associated IOs
+  side_effects: null
+- id: CR2
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSIZE
+    bit_range:
+    - 15
+    - 0
+    description: |-
+      Number of data at current
+                    transfer
+  - name: TSER
+    bit_range:
+    - 31
+    - 16
+    description: |-
+      Number of data transfer extension to be
+                    reload into TSIZE just when a previous
+  side_effects: null
+- id: CFG1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 458759
+  fields:
+  - name: DSIZE
+    bit_range:
+    - 4
+    - 0
+    description: |-
+      Number of bits in at single SPI data
+                    frame
+  - name: FTHVL
+    bit_range:
+    - 8
+    - 5
+    description: threshold level
+  - name: UDRCFG
+    bit_range:
+    - 10
+    - 9
+    description: |-
+      Behavior of slave transmitter at
+                    underrun condition
+  - name: UDRDET
+    bit_range:
+    - 12
+    - 11
+    description: |-
+      Detection of underrun condition at slave
+                    transmitter
+  - name: RXDMAEN
+    bit_range:
+    - 14
+    - 14
+    description: Rx DMA stream enable
+  - name: TXDMAEN
+    bit_range:
+    - 15
+    - 15
+    description: Tx DMA stream enable
+  - name: CRCSIZE
+    bit_range:
+    - 20
+    - 16
+    description: |-
+      Length of CRC frame to be transacted and
+                    compared
+  - name: CRCEN
+    bit_range:
+    - 22
+    - 22
+    description: |-
+      Hardware CRC computation
+                    enable
+  - name: MBR
+    bit_range:
+    - 30
+    - 28
+    description: Master baud rate
+  side_effects: null
+- id: CFG2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MSSI
+    bit_range:
+    - 3
+    - 0
+    description: Master SS Idleness
+  - name: MIDI
+    bit_range:
+    - 7
+    - 4
+    description: Master Inter-Data Idleness
+  - name: IOSWP
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Swap functionality of MISO and MOSI
+                    pins
+  - name: COMM
+    bit_range:
+    - 18
+    - 17
+    description: SPI Communication Mode
+  - name: SP
+    bit_range:
+    - 21
+    - 19
+    description: Serial Protocol
+  - name: MASTER
+    bit_range:
+    - 22
+    - 22
+    description: SPI Master
+  - name: LSBFRST
+    bit_range:
+    - 23
+    - 23
+    description: Data frame format
+  - name: CPHA
+    bit_range:
+    - 24
+    - 24
+    description: Clock phase
+  - name: CPOL
+    bit_range:
+    - 25
+    - 25
+    description: Clock polarity
+  - name: SSM
+    bit_range:
+    - 26
+    - 26
+    description: |-
+      Software management of SS signal
+                    input
+  - name: SSIOP
+    bit_range:
+    - 28
+    - 28
+    description: SS input/output polarity
+  - name: SSOE
+    bit_range:
+    - 29
+    - 29
+    description: SS output enable
+  - name: SSOM
+    bit_range:
+    - 30
+    - 30
+    description: |-
+      SS output management in master
+                    mode
+  - name: AFCNTR
+    bit_range:
+    - 31
+    - 31
+    description: |-
+      Alternate function GPIOs
+                    control
+  side_effects: null
+- id: IER
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXPIE
+    bit_range:
+    - 0
+    - 0
+    description: RXP Interrupt Enable
+  - name: TXPIE
+    bit_range:
+    - 1
+    - 1
+    description: TXP interrupt enable
+  - name: DPXPIE
+    bit_range:
+    - 2
+    - 2
+    description: DXP interrupt enabled
+  - name: EOTIE
+    bit_range:
+    - 3
+    - 3
+    description: |-
+      EOT, SUSP and TXC interrupt
+                    enable
+  - name: TXTFIE
+    bit_range:
+    - 4
+    - 4
+    description: TXTFIE interrupt enable
+  - name: UDRIE
+    bit_range:
+    - 5
+    - 5
+    description: UDR interrupt enable
+  - name: OVRIE
+    bit_range:
+    - 6
+    - 6
+    description: OVR interrupt enable
+  - name: CRCEIE
+    bit_range:
+    - 7
+    - 7
+    description: CRC Interrupt enable
+  - name: TIFREIE
+    bit_range:
+    - 8
+    - 8
+    description: TIFRE interrupt enable
+  - name: MODFIE
+    bit_range:
+    - 9
+    - 9
+    description: |-
+      Mode Fault interrupt
+                    enable
+  - name: TSERFIE
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Additional number of transactions reload
+                    interrupt enable
+  side_effects: null
+- id: SR
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 4098
+  fields:
+  - name: RXP
+    bit_range:
+    - 0
+    - 0
+    description: Rx-Packet available
+  - name: TXP
+    bit_range:
+    - 1
+    - 1
+    description: Tx-Packet space available
+  - name: DXP
+    bit_range:
+    - 2
+    - 2
+    description: Duplex Packet
+  - name: EOT
+    bit_range:
+    - 3
+    - 3
+    description: End Of Transfer
+  - name: TXTF
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Transmission Transfer
+                    Filled
+  - name: UDR
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Underrun at slave transmission
+                    mode
+  - name: OVR
+    bit_range:
+    - 6
+    - 6
+    description: Overrun
+  - name: CRCE
+    bit_range:
+    - 7
+    - 7
+    description: CRC Error
+  - name: TIFRE
+    bit_range:
+    - 8
+    - 8
+    description: TI frame format error
+  - name: MODF
+    bit_range:
+    - 9
+    - 9
+    description: Mode Fault
+  - name: TSERF
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Additional number of SPI data to be
+                    transacted was reload
+  - name: SUSP
+    bit_range:
+    - 11
+    - 11
+    description: SUSPend
+  - name: TXC
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      TxFIFO transmission
+                    complete
+  - name: RXPLVL
+    bit_range:
+    - 14
+    - 13
+    description: RxFIFO Packing LeVeL
+  - name: RXWNE
+    bit_range:
+    - 15
+    - 15
+    description: RxFIFO Word Not Empty
+  - name: CTSIZE
+    bit_range:
+    - 31
+    - 16
+    description: |-
+      Number of data frames remaining in
+                    current TSIZE session
+  side_effects: null
+- id: IFCR
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: EOTC
+    bit_range:
+    - 3
+    - 3
+    description: End Of Transfer flag clear
+  - name: TXTFC
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Transmission Transfer Filled flag
+                    clear
+  - name: UDRC
+    bit_range:
+    - 5
+    - 5
+    description: Underrun flag clear
+  - name: OVRC
+    bit_range:
+    - 6
+    - 6
+    description: Overrun flag clear
+  - name: CRCEC
+    bit_range:
+    - 7
+    - 7
+    description: CRC Error flag clear
+  - name: TIFREC
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      TI frame format error flag
+                    clear
+  - name: MODFC
+    bit_range:
+    - 9
+    - 9
+    description: Mode Fault flag clear
+  - name: TSERFC
+    bit_range:
+    - 10
+    - 10
+    description: TSERFC flag clear
+  - name: SUSPC
+    bit_range:
+    - 11
+    - 11
+    description: SUSPend flag clear
+  side_effects: null
+- id: TXDR
+  address_offset: 32
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: TXDR
+    bit_range:
+    - 31
+    - 0
+    description: Transmit data register
+  side_effects: null
+- id: RXDR
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDR
+    bit_range:
+    - 31
+    - 0
+    description: Receive data register
+  side_effects: null
+- id: CRCPOLY
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 263
+  fields:
+  - name: CRCPOLY
+    bit_range:
+    - 31
+    - 0
+    description: CRC polynomial register
+  side_effects: null
+- id: TXCRC
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXCRC
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      CRC register for
+                    transmitter
+  side_effects: null
+- id: RXCRC
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RXCRC
+    bit_range:
+    - 31
+    - 0
+    description: CRC register for receiver
+  side_effects: null
+- id: UDRDR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: UDRDR
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Data at slave underrun
+                    condition
+  side_effects: null
+- id: I2SCFGR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2SMOD
+    bit_range:
+    - 0
+    - 0
+    description: I2S mode selection
+  - name: I2SCFG
+    bit_range:
+    - 3
+    - 1
+    description: I2S configuration mode
+  - name: I2SSTD
+    bit_range:
+    - 5
+    - 4
+    description: I2S standard selection
+  - name: PCMSYNC
+    bit_range:
+    - 7
+    - 7
+    description: PCM frame synchronization
+  - name: DATLEN
+    bit_range:
+    - 9
+    - 8
+    description: |-
+      Data length to be
+                    transferred
+  - name: CHLEN
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Channel length (number of bits per audio
+                    channel)
+  - name: CKPOL
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      Serial audio clock
+                    polarity
+  - name: FIXCH
+    bit_range:
+    - 12
+    - 12
+    description: Word select inversion
+  - name: WSINV
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Fixed channel length in
+                    SLAVE
+  - name: DATFMT
+    bit_range:
+    - 14
+    - 14
+    description: Data format
+  - name: I2SDIV
+    bit_range:
+    - 23
+    - 16
+    description: I2S linear prescaler
+  - name: ODD
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      Odd factor for the
+                    prescaler
+  - name: MCKOE
+    bit_range:
+    - 25
+    - 25
+    description: Master clock output enable
+  side_effects: null
+interrupts:
+  SPI1: 35
+  SPI3: 51
+timing: null

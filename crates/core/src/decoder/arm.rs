@@ -447,6 +447,28 @@ pub enum Instruction {
         rm: u8,
         op: u8, // 0=SADD8 1=UADD8 2=SSUB8 3=USUB8
     },
+    /// Parallel HALFWORD add/subtract (ARMv7-M A5.3.9, Cortex-M4/M7 DSP).
+    ///
+    /// The sibling of [`Instruction::SimdAddSub8`], and omitted for the same
+    /// reason it once was: nothing looked like it needed them. `UQADD16` is what
+    /// LLVM emits for Rust's `u16::saturating_add` on `thumbv7em`, so a plain
+    /// `x.saturating_add(w - 1)` in ordinary firmware decoded to nothing,
+    /// skipped 4 bytes, and left Rd holding a stale operand — the addition just
+    /// did not happen. It surfaced as an ILI9341 window whose end coordinate was
+    /// the rectangle's WIDTH instead of its right edge, i.e. a display that
+    /// painted one row of a fourteen-row band. No fault, no diagnostic: the
+    /// arithmetic was simply wrong.
+    ///
+    /// `op` is the h2[7:4] variant selector, shared by both groups:
+    /// 0=S 1=Q (signed saturating) 2=SH (signed halving) 4=U 5=UQ (unsigned
+    /// saturating) 6=UH (unsigned halving). `sub` picks SUB16 over ADD16.
+    SimdAddSub16 {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        op: u8,
+        sub: bool,
+    },
     Sel {
         rd: u8,
         rn: u8,
@@ -2134,6 +2156,22 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
         if (h1 & 0xFFF0) == 0xFAA0 && h2op == 0x8 {
             return Instruction::Sel { rd, rn, rm };
+        }
+        // Parallel halfword add/sub: h1 = FA9n (ADD16) / FADn (SUB16), with
+        // h2[7:4] selecting the signed/saturating/halving variant. The FA9n
+        // REV/RBIT block above claims h2[7:4] = 8..B and returns before this,
+        // so the remaining selectors are unambiguous.
+        let group16 = h1 & 0xFFF0;
+        if (group16 == 0xFA90 || group16 == 0xFAD0)
+            && matches!(h2op, 0x0 | 0x1 | 0x2 | 0x4 | 0x5 | 0x6)
+        {
+            return Instruction::SimdAddSub16 {
+                rd,
+                rn,
+                rm,
+                op: h2op as u8,
+                sub: group16 == 0xFAD0,
+            };
         }
     }
 

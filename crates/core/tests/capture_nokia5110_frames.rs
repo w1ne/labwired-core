@@ -36,8 +36,8 @@ const NEAR_CM: f32 = 8.0;
 const FAR_CM: f32 = 250.0;
 
 fn ensure_firmware_built() -> PathBuf {
-    let elf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/thumbv7em-none-eabihf/release/nokia5110-invaders-lab");
+    let elf = labwired_core::test_support::target_dir()
+        .join("thumbv7em-none-eabihf/release/nokia5110-invaders-lab");
     let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/nokia5110-invaders-lab/src/main.rs");
     if let (Ok(e), Ok(s)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {
@@ -225,8 +225,8 @@ fn write_frames_bin() {
     let frames = collect_frames();
     let bin = pack(&frames);
     let out = std::env::var("INVADERS_FRAMES_OUT").unwrap_or_else(|_| {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/invaders-frames.bin")
+        labwired_core::test_support::target_dir()
+            .join("invaders-frames.bin")
             .to_string_lossy()
             .into_owned()
     });

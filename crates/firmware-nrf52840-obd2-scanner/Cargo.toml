@@ -1,0 +1,19 @@
+[package]
+name = "firmware-nrf52840-obd2-scanner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-nrf52840-obd2-scanner"
+path = "src/main.rs"
+test = false
+bench = false

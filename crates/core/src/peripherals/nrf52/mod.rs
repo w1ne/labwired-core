@@ -27,6 +27,7 @@ pub mod mwu;
 pub mod nfct;
 pub mod nvmc;
 pub mod pdm;
+pub mod pin_select;
 pub mod ppi;
 pub mod pwm;
 pub mod qdec;

@@ -9,4 +9,39 @@ assertions:
   - uart_contains: "ILI9341 TFT Lab"
   - uart_contains: "TFT init done"
   - uart_contains: "frame done"
+  # The firmware says "frame done" whether or not a single pixel reached the
+  # panel, so the UART lines above are a claim about the firmware, not about the
+  # display. These three measure the picture itself.
+  #
+  # Rows 16..63 are three solid 240x16 bands (red, green, blue). Solid means
+  # every pixel non-black, so anything short of 100% is a band that did not
+  # fully land.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 16
+      w: 240
+      h: 48
+      min_ink: 1.0
+  # Rows 0..15 are the eight EBU colour bars, and the eighth bar is BLACK — so
+  # exactly 7/8 = 87.5% of that band is inked. A floor alone would pass on a
+  # solid flood; the ceiling is what says "the black bar is still black".
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 0
+      w: 240
+      h: 16
+      min_ink: 0.87
+      max_ink: 0.88
+  # Nothing below row 64 is ever addressed, so any ink there is a window or
+  # framing fault smearing pixels outside their CASET/PASET rectangle.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 64
+      w: 240
+      h: 256
+      min_ink: 0.0
+      max_ink: 0.0
   - expected_stop_reason: max_steps

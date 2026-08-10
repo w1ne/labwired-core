@@ -122,6 +122,141 @@ const IT_FIELDS: &[u16] = &[
 /// All four gain fields (the field is 2 bits, so every value is defined).
 const GAIN_FIELDS: &[u16] = &[0x0, 0x1, 0x2, 0x3];
 
+// ─── the datasheet power-on state (ABSOLUTE, not a parity mirror) ───────────
+
+/// **This is not a parity test.** Parity only proves the two models agree; it
+/// cannot tell agreement-on-the-truth from agreement-on-the-same-bug. Both
+/// models previously reset ALS_CONF to `0x0000` — a VEML7700 that powers up
+/// running — and parity was perfectly green the whole time.
+///
+/// So this asserts the value the DOCUMENT gives, on each model independently.
+/// Vishay VEML7700 datasheet Rev. 1.8, p7: *"Command code 0 default value is
+/// 01 = devices is shut down"*, with Table 1 defining bit 0 `ALS_SD` as
+/// *"0 = ALS power on, 1 = ALS shut down"*. Reset is therefore `0x0001`.
+///
+/// If either side regresses to `0x0000`, this fails — even though parity would
+/// still pass if both regressed together.
+#[test]
+fn power_on_als_conf_is_0x0001_shut_down_on_both_models() {
+    for (which, bytes) in [
+        ("oracle", read_reg(&mut oracle(), REG_ALS_CONF)),
+        ("declarative", read_reg(&mut declarative(), REG_ALS_CONF)),
+    ] {
+        let word = (bytes[0] as u16) | ((bytes[1] as u16) << 8);
+        assert_eq!(
+            word, 0x0001,
+            "{which}: VEML7700 powers up SHUT DOWN — datasheet Rev. 1.8 p7 gives \
+             command code 0 default = 01 (ALS_SD set), got {word:#06x}"
+        );
+        assert_eq!(word & 0x0001, 1, "{which}: ALS_SD (bit 0) must be set");
+    }
+}
+
+/// The behaviour behind the bit, asserted absolutely on each model: a shut-down
+/// VEML7700 has run no conversion, so ALS and WHITE report nothing — even
+/// though the scene is a bright 450 lx. Clearing `ALS_SD` (what every real
+/// driver does; the Leo lab's `veml7700_init()` writes ALS_CONF = 0x0000) must
+/// bring the light back.
+///
+/// Without this, fixing only the reset VALUE would leave the model handing a
+/// shut-down part a plausible reading — the register would read truthfully
+/// while the behaviour stayed wrong.
+#[test]
+fn a_shut_down_part_reports_no_light_on_both_models() {
+    let mut o = oracle();
+    let mut g = declarative();
+    for reg in [REG_ALS, REG_WHITE] {
+        assert_eq!(
+            read_reg(&mut o, reg),
+            vec![0, 0],
+            "oracle: reg {reg:#04x} must read zero while ALS_SD is set"
+        );
+        assert_eq!(
+            read_reg(&mut g, reg),
+            vec![0, 0],
+            "declarative: reg {reg:#04x} must read zero while ALS_SD is set"
+        );
+    }
+    // Power the ALS on (ALS_SD = 0, gain ×1, IT 100 ms) — light appears.
+    write_reg(&mut o, REG_ALS_CONF, 0x0000);
+    write_reg(&mut g, REG_ALS_CONF, 0x0000);
+    for reg in [REG_ALS, REG_WHITE] {
+        let bytes = assert_reg_equal(&mut o, &mut g, reg, "after clearing ALS_SD");
+        assert_ne!(
+            bytes,
+            vec![0, 0],
+            "reg {reg:#04x} must report light once ALS_SD is cleared"
+        );
+    }
+    // Re-asserting ALS_SD silences it again (with the rest of ALS_CONF intact).
+    write_reg(&mut o, REG_ALS_CONF, 0x0001);
+    write_reg(&mut g, REG_ALS_CONF, 0x0001);
+    for reg in [REG_ALS, REG_WHITE] {
+        assert_eq!(
+            assert_reg_equal(&mut o, &mut g, reg, "after re-asserting ALS_SD"),
+            vec![0, 0],
+            "reg {reg:#04x} must go quiet again when ALS_SD is set"
+        );
+    }
+}
+
+/// The gate must key on `ALS_SD` ALONE, not on "ALS_CONF is nonzero". A driver
+/// that programs gain / integration time while leaving ALS_SD clear has a
+/// running part, and a driver that sets ALS_SD alongside them has a shut-down
+/// one. Getting this wrong would silence a correctly-configured sensor.
+#[test]
+fn only_bit0_gates_the_light_not_the_rest_of_als_conf() {
+    for it in IT_FIELDS {
+        for gain in GAIN_FIELDS {
+            let conf = als_conf(*gain, *it);
+            let mut o = oracle();
+            let mut g = declarative();
+            // ALS_SD clear + arbitrary gain/IT ⇒ light flows.
+            write_reg(&mut o, REG_ALS_CONF, conf);
+            write_reg(&mut g, REG_ALS_CONF, conf);
+            let ctx = format!("gain={gain:#x} it={it:#x} sd=0");
+            let bytes = assert_reg_equal(&mut o, &mut g, REG_ALS, &ctx);
+            assert_ne!(bytes, vec![0, 0], "{ctx}: ALS_SD clear must report light");
+            // Same gain/IT with ALS_SD set ⇒ silence.
+            write_reg(&mut o, REG_ALS_CONF, conf | 0x0001);
+            write_reg(&mut g, REG_ALS_CONF, conf | 0x0001);
+            let ctx = format!("gain={gain:#x} it={it:#x} sd=1");
+            assert_eq!(
+                assert_reg_equal(&mut o, &mut g, REG_ALS, &ctx),
+                vec![0, 0],
+                "{ctx}: ALS_SD set must silence the part"
+            );
+        }
+    }
+}
+
+/// The gate covers the measurement registers ONLY. The config/threshold
+/// registers stay readable while the part is shut down — they are storage, and
+/// a driver must be able to read back what it programmed before powering the
+/// ALS on. A gate accidentally applied to ALS_CONF would erase the very bit
+/// that controls it.
+#[test]
+fn shutdown_does_not_gate_the_storage_registers() {
+    let mut o = oracle();
+    let mut g = declarative();
+    // Program the windows while still shut down (ALS_SD stays set).
+    write_reg(&mut o, REG_ALS_WH, 0xBEEF);
+    write_reg(&mut g, REG_ALS_WH, 0xBEEF);
+    write_reg(&mut o, REG_ALS_WL, 0x1234);
+    write_reg(&mut g, REG_ALS_WL, 0x1234);
+    for (reg, want) in [(REG_ALS_WH, 0xBEEFu16), (REG_ALS_WL, 0x1234)] {
+        let bytes = assert_reg_equal(&mut o, &mut g, reg, "storage while shut down");
+        assert_eq!(
+            (bytes[0] as u16) | ((bytes[1] as u16) << 8),
+            want,
+            "reg {reg:#04x} is storage — shutdown must not gate it"
+        );
+    }
+    // ALS_CONF itself still reads back its (shutdown) value.
+    let bytes = assert_reg_equal(&mut o, &mut g, REG_ALS_CONF, "ALS_CONF while shut down");
+    assert_eq!((bytes[0] as u16) | ((bytes[1] as u16) << 8), 0x0001);
+}
+
 // ─── power-on defaults ──────────────────────────────────────────────────────
 
 #[test]
@@ -283,6 +418,10 @@ fn unknown_input_channel_is_rejected_on_both() {
 fn over_read_past_the_word_yields_ff_on_both() {
     let mut o = oracle();
     let mut g = declarative();
+    // Power the ALS on so the over-read runs past a REAL measurement word, not
+    // past the zeros a shut-down part reports.
+    write_reg(&mut o, REG_ALS_CONF, 0x0000);
+    write_reg(&mut g, REG_ALS_CONF, 0x0000);
     // A third byte past the 16-bit word reads 0xFF on both.
     let ob = read_reg_n(&mut o, REG_ALS, 3);
     let gb = read_reg_n(&mut g, REG_ALS, 3);
@@ -321,9 +460,15 @@ fn repeated_reads_are_stable_and_identical() {
     // same bytes on both devices (no self-running scene).
     let mut o = oracle();
     let mut g = declarative();
+    // Power the ALS on first. Without this the part is shut down and every read
+    // is 0x0000 on both models — the test would still pass, but it would be
+    // comparing zeros and would no longer exercise the lux path it exists for.
+    write_reg(&mut o, REG_ALS_CONF, 0x0000);
+    write_reg(&mut g, REG_ALS_CONF, 0x0000);
     set_lux(&mut o, 333.0).unwrap();
     set_lux(&mut g, 333.0).unwrap();
     let first = read_reg(&mut o, REG_ALS);
+    assert_ne!(first, vec![0, 0], "powered on, so this is a real reading");
     for _ in 0..16 {
         assert_eq!(read_reg(&mut o, REG_ALS), first, "oracle stable");
         assert_eq!(

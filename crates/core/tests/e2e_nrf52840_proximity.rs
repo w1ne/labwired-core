@@ -21,8 +21,8 @@ const GPIO0_OUT: u64 = 0x5000_0504;
 const ALARM: u32 = 1 << 6; // P0.06
 
 fn ensure_firmware_built() -> PathBuf {
-    let elf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/thumbv7em-none-eabi/release/firmware-nrf52840-proximity");
+    let elf = labwired_core::test_support::target_dir()
+        .join("thumbv7em-none-eabi/release/firmware-nrf52840-proximity");
     let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/firmware-nrf52840-proximity/src/main.rs");
     if let (Ok(e), Ok(s)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {

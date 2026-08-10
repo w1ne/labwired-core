@@ -1,0 +1,201 @@
+peripheral: DBGMCU
+version: 0.1.0
+registers:
+- id: IDCODE
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DEV_ID
+    bit_range:
+    - 11
+    - 0
+    description: Device Identifier
+  - name: REV_ID
+    bit_range:
+    - 31
+    - 16
+    description: Revision Identifier
+  side_effects: null
+- id: CR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_SLEEP
+    bit_range:
+    - 0
+    - 0
+    description: Debug Sleep Mode
+  - name: DBG_STOP
+    bit_range:
+    - 1
+    - 1
+    description: Debug Stop Mode
+  - name: DBG_STANDBY
+    bit_range:
+    - 2
+    - 2
+    description: Debug Standby Mode
+  - name: TRACE_IOEN
+    bit_range:
+    - 5
+    - 5
+    description: Trace port and clock enable
+  - name: TRGOEN
+    bit_range:
+    - 28
+    - 28
+    description: External trigger output enable
+  side_effects: null
+- id: APB1FZR1
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIMER2_STOP
+    bit_range:
+    - 0
+    - 0
+    description: Debug Timer 2 stopped when Core is halted
+  - name: DBG_RTC_STOP
+    bit_range:
+    - 10
+    - 10
+    description: RTC counter stopped when core is halted
+  - name: DBG_WWDG_STOP
+    bit_range:
+    - 11
+    - 11
+    description: WWDG counter stopped when core is halted
+  - name: DBG_IWDG_STOP
+    bit_range:
+    - 12
+    - 12
+    description: IWDG counter stopped when core is halted
+  - name: DBG_I2C1_STOP
+    bit_range:
+    - 21
+    - 21
+    description: Debug I2C1 SMBUS timeout stopped when Core is halted
+  - name: DBG_I2C3_STOP
+    bit_range:
+    - 23
+    - 23
+    description: Debug I2C3 SMBUS timeout stopped when core is halted
+  - name: DBG_LPTIM1_STOP
+    bit_range:
+    - 31
+    - 31
+    description: Debug LPTIM1 stopped when Core is halted
+  side_effects: null
+- id: C2APB1FZR1
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_LPTIM2_STOP
+    bit_range:
+    - 0
+    - 0
+    description: LPTIM2 counter stopped when core is halted
+  - name: DBG_RTC_STOP
+    bit_range:
+    - 10
+    - 10
+    description: RTC counter stopped when core is halted
+  - name: DBG_IWDG_STOP
+    bit_range:
+    - 12
+    - 12
+    description: IWDG stopped when core is halted
+  - name: DBG_I2C1_STOP
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 SMBUS timeout stopped when core is halted
+  - name: DBG_I2C3_STOP
+    bit_range:
+    - 23
+    - 23
+    description: I2C3 SMBUS timeout stopped when core is halted
+  - name: DBG_LPTIM1_STOP
+    bit_range:
+    - 31
+    - 31
+    description: LPTIM1 counter stopped when core is halted
+  side_effects: null
+- id: APB1FZR2
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_LPTIM2_STOP
+    bit_range:
+    - 5
+    - 5
+    description: LPTIM2 counter stopped when core is halted
+  side_effects: null
+- id: C2APB1FZR2
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_LPTIM2_STOP
+    bit_range:
+    - 5
+    - 5
+    description: LPTIM2 counter stopped when core is halted
+  side_effects: null
+- id: APB2FZR
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM1_STOP
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 counter stopped when core is halted
+  - name: DBG_TIM16_STOP
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 counter stopped when core is halted
+  - name: DBG_TIM17_STOP
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 counter stopped when core is halted
+  side_effects: null
+- id: C2APB2FZR
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM1_STOP
+    bit_range:
+    - 11
+    - 11
+    description: TIM1 counter stopped when core is halted
+  - name: DBG_TIM16_STOP
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 counter stopped when core is halted
+  - name: DBG_TIM17_STOP
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 counter stopped when core is halted
+  side_effects: null
+interrupts: null
+timing: null

@@ -14,7 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # Full history, because the tier1 ratchet resolves its baseline from
+      # `origin/main` and refuses to run without one:
+      #
+      #   tier1 ratchet: this is a SHALLOW clone, so the baseline cannot be
+      #   established. Refusing to run: a gate that cannot find its baseline
+      #   must not pass.
+      #
+      # That refusal is correct, and it took the whole job down with it. This
+      # lane has failed on every run it has ever had -- 2026-07-26, 08-02 and
+      # 08-09 -- so the coverage gate has never once produced a coverage number.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0

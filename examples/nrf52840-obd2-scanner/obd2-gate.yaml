@@ -1,0 +1,7 @@
+# The CLI gate boots the same two real ELFs as the Rust e2e test. The Rust gate
+# additionally performs the interactive Mode 04 write and inspects CAN history.
+schema_version: "1.0"
+inputs:
+  env: "./env.yaml"
+limits:
+  max_steps: 12000000

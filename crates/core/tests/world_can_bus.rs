@@ -52,6 +52,26 @@ fn can_bus(nodes: &[&str], peripheral: Option<&str>) -> InterconnectConfig {
     }
 }
 
+fn can_bus_with_endpoints(nodes: &[&str], endpoints: &[(&str, &str)]) -> InterconnectConfig {
+    let endpoints = endpoints
+        .iter()
+        .map(|(node, endpoint)| {
+            (
+                serde_yaml::Value::String((*node).to_string()),
+                serde_yaml::Value::String((*endpoint).to_string()),
+            )
+        })
+        .collect();
+    InterconnectConfig {
+        r#type: "can_bus".to_string(),
+        nodes: nodes.iter().map(|node| (*node).to_string()).collect(),
+        config: HashMap::from([(
+            "endpoints".to_string(),
+            serde_yaml::Value::Mapping(endpoints),
+        )]),
+    }
+}
+
 fn interconnect(
     interconnect_type: &str,
     nodes: &[&str],
@@ -150,6 +170,64 @@ fn from_manifest_wires_can_bus_to_each_named_fdcan_and_configures_cortex_m() {
             "{id} gets the normal Cortex-M system wiring"
         );
     }
+}
+
+#[test]
+fn can_bus_accepts_mcu_and_nested_spi_endpoints() {
+    let fixture_dir = std::env::temp_dir().join(format!(
+        "labwired-mixed-can-endpoints-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&fixture_dir).unwrap();
+    let scanner_system = fixture_dir.join("scanner-system.yaml");
+    let chip = repo_root().join("configs/chips/stm32h563.yaml");
+    std::fs::write(
+        &scanner_system,
+        format!(
+            r#"name: mixed-can-scanner
+chip: "{}"
+external_devices:
+  - id: mcp2515
+    type: mcp2515
+    connection: spi1
+    config:
+      cs_pin: P0.04
+"#,
+            chip.display()
+        ),
+    )
+    .unwrap();
+
+    let firmware = repo_root().join("examples/h563-uds-ecu/firmware/h563_uds_ecu.elf");
+    let manifest = EnvironmentManifest {
+        schema_version: "1.0".to_string(),
+        name: "mixed-mcu-and-spi-can".to_string(),
+        nodes: vec![
+            NodeConfig {
+                id: "scanner".to_string(),
+                system: scanner_system.to_string_lossy().into_owned(),
+                firmware: firmware.to_string_lossy().into_owned(),
+                config_overrides: HashMap::new(),
+            },
+            NodeConfig {
+                id: "ecu".to_string(),
+                system: "examples/f103-j1939-monitor/system.yaml".to_string(),
+                firmware: "examples/f103-fidelity-bench/firmware/build/gpiobug.elf".to_string(),
+                config_overrides: HashMap::new(),
+            },
+        ],
+        interconnects: vec![can_bus_with_endpoints(
+            &["scanner", "ecu"],
+            &[("scanner", "mcp2515"), ("ecu", "bxcan1")],
+        )],
+        rf: None,
+    };
+
+    let serialized = serde_yaml::to_string(&manifest).unwrap();
+    let parsed: EnvironmentManifest = serde_yaml::from_str(&serialized).unwrap();
+    let world = World::from_manifest(parsed, &repo_root())
+        .expect("mixed MCU and nested SPI CAN endpoints should build");
+    assert_eq!(world.interconnects.len(), 1);
 }
 
 #[test]
@@ -342,13 +420,13 @@ fn can_bus_reports_unknown_node_and_missing_or_non_fdcan_peripheral() {
         Some("missing_fdcan"),
     )));
     assert!(
-        missing.contains("can_bus node 'ecu': no peripheral 'missing_fdcan'"),
+        missing.contains("can_bus node 'ecu': no CAN endpoint 'missing_fdcan'"),
         "{missing}"
     );
 
     let wrong_kind = world_error(environment(can_bus(&["tester", "ecu"], Some("rcc"))));
     assert!(
-        wrong_kind.contains("can_bus node 'ecu': peripheral 'rcc' is not an FDCAN"),
+        wrong_kind.contains("can_bus node 'ecu': peripheral 'rcc' is not a CAN controller"),
         "{wrong_kind}"
     );
 }

@@ -306,13 +306,19 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // and the USB CDC port — `usb_uart_tx_one_char` busy-polls EP1_CONF
     // (offset 0x04) for SERIAL_IN_EP_DATA_FREE. The declarative usb_device
     // stub reads 0 there, wedging boot_prepare's very first ets_printf line
-    // (observed: banner, then a uart/usb tx ping-pong, then ret-to-0). The C3
-    // block is the same IP as the S3's, so the S3 behavioral model (EP1_CONF
-    // always WR_DONE|DATA_FREE, bytes appended/echoed) drops in unchanged.
+    // (observed: banner, then a uart/usb tx ping-pong, then ret-to-0).
+    //
+    // The C3 and S3 blocks are the same IP and their register maps are
+    // byte-identical, so ONE behavioural model serves both — but the matrix
+    // source id is NOT shared (C3 = 26, S3 = 96), so the chip must be named
+    // rather than defaulted. `new_esp32c3()` is what lets an interrupt-driven
+    // HWCDC build (`ARDUINO_USB_CDC_ON_BOOT=1`, the ESP32-C3 SuperMini's real
+    // configuration) actually take its ISR; see the model's module docs.
+    //
     // Native leaves the sink `None` (the same console bytes reach stdout via
     // UART0; a second echo doubles every character); the browser widget passes
     // a sink so its Serial tab shows esp-hal / jtag-serial output.
-    let mut usb_serial = crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new();
+    let mut usb_serial = crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c3();
     usb_serial.set_sink(opts.usb_serial_sink.clone(), false);
     bus.add_peripheral(
         "usb_serial_jtag",
@@ -417,19 +423,20 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
             MMU_FMT_C3,
         )),
     );
-    // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
-    // triggers single conversions and polls a data-valid flag (0x44 bit31/
-    // bit30) before reading the result; the declarative stub never asserts
-    // it, so read_cal_channel spins forever after spi_flash init. Model
-    // conversions as instant (valid flags set, mid-scale sample) so the
-    // bounded cal search converges and boot continues.
-    bus.add_peripheral(
-        "apb_saradc",
-        0x6004_0000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
-    );
+    // SAR ADC (APB_SARADC, 0x6004_0000): use the ONE behavioral controller
+    // for both ROM/IDF calibration and application one-shot reads. The old
+    // calibration-only replacement always returned mid-scale and silently
+    // discarded levels attached by GP2Y/pot/NTC models, so real firmware's
+    // analogRead() could never observe a live stimulus after ROM boot.
+    if bus.find_peripheral_index_by_name("apb_saradc").is_none() {
+        bus.add_peripheral(
+            "apb_saradc",
+            0x6004_0000,
+            0x100,
+            None,
+            Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::default()),
+        );
+    }
     // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
     // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
     // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading

@@ -46,7 +46,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 fn firmware_elf() -> Option<PathBuf> {
-    let base = repo_root().join("target/thumbv7m-none-eabi");
+    let base = labwired_core::test_support::target_dir().join("thumbv7m-none-eabi");
     ["release", "debug"]
         .iter()
         .map(|p| base.join(p).join("firmware-f103-fuzztarget"))

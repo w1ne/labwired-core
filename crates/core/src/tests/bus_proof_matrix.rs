@@ -61,9 +61,21 @@
 //!    in the same commit. Under CI this is fatal if the baseline cannot be
 //!    resolved — a ratchet that shrugs and passes is the bug it exists to stop.
 //!
+//!    "Cannot be resolved" is not the only way to get no gate, though, and the
+//!    other way is quieter: a merge base resolved over a TRUNCATED or REWRITTEN
+//!    parent chain (shallow clone, grafts, `refs/replace/*`, a blob-filtered
+//!    partial clone) is not an error, it is a wrong commit — and when the matrix
+//!    file is absent at that commit the arm below prints "new file" and returns
+//!    green, in CI as well as locally. So `history_defect()` runs first and
+//!    refuses, the same way `require_full_history()` does in
+//!    scripts/generate_validation_status.py, where the identical defect rendered
+//!    board dates four months wrong on a 112-commit shallow clone.
+//!
 //! `cell_ordering_detects_a_downgrade` proves the comparator is not vacuous by
 //! watching it reject each downgrade direction, the way
-//! `walk_starvation_contract::rule_c_detector_is_not_vacuous` does.
+//! `walk_starvation_contract::rule_c_detector_is_not_vacuous` does; the
+//! `history_guard` module does the same for the history check, by watching it
+//! fire on each condition in a synthetic repo.
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -408,6 +420,140 @@ fn merge_base_with_trunk() -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
+/// stdout of a read-only git command in `root`, or `None` on a nonzero exit.
+/// Empty output and "git failed" are different answers: the callers below rely
+/// on telling them apart.
+///
+/// `root` is a parameter rather than always `workspace_root()` so the guard
+/// below can be pointed at a synthetic checkout and PROVEN to fire. A detector
+/// that has never been observed detecting is the same kind of unearned
+/// confidence as a `proven` cell nobody ran.
+fn git_out(root: &std::path::Path, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+}
+
+/// Why this checkout cannot be trusted to resolve a ratchet baseline, or `None`.
+///
+/// WHY THIS EXISTS AT ALL
+///     The ratchet's whole claim is that the baseline comes from OUTSIDE the
+///     change under test. That claim rests on `git merge-base HEAD origin/main`
+///     naming the real branch point, and every condition below is a way for the
+///     commit walk to answer from a rewritten or truncated graph instead —
+///     confidently, with no error.
+///
+///     The damage is not a red build. Look at the arm below: when
+///     `git show <base>:<matrix>` comes back empty the test PRINTS "new file"
+///     and returns green, and that path is not gated on `CI` the way the
+///     unresolvable-merge-base path is. So a merge base resolved against a
+///     rewritten parent chain — one that predates this file, or that never had
+///     it — turns the ratchet into a silent pass in CI. A downgrade from
+///     `proven` to `none` would merge with the gate reporting nothing at all.
+///     That skip is only honest once the history behind it is known-good, which
+///     is what this function establishes.
+///
+/// WHY IT IS DUPLICATED RATHER THAN SHARED
+///     `history_defect()` in scripts/generate_validation_status.py is the same
+///     check for the same reason (its board dates read the graft boundary
+///     instead of the real last-touch commit — `ci-fixture-riscv` came out four
+///     months wrong), and crates/cli/src/tier1.rs guards its own merge-base
+///     ratchet likewise. Three call sites, three languages/crates, and no home
+///     that all three can import: labwired-core is the engine and compiles to
+///     wasm, so `std::process::Command` plumbing must not leave `cfg(test)`
+///     here. Duplicating ~20 lines of plumbing beats a crate whose only job is
+///     to hold them.
+fn history_defect(root: &std::path::Path) -> Option<String> {
+    // Not a repository at all: `merge-base` fails, which the caller already
+    // handles — but say so precisely rather than as "no origin/main".
+    if git_out(root, &["rev-parse", "--is-inside-work-tree"]).as_deref() != Some("true") {
+        return Some("not a git checkout — there is no history to resolve a baseline in".into());
+    }
+
+    // The common case, and the one CI can create by lowering fetch-depth.
+    if git_out(root, &["rev-parse", "--is-shallow-repository"]).as_deref() == Some("true") {
+        return Some("shallow clone — history is truncated at the graft boundary".into());
+    }
+
+    // `git replace` refs and the legacy .git/info/grafts file rewrite the parent
+    // chain the merge-base walk follows, so it can terminate at a synthetic
+    // boundary exactly as a shallow clone does — except that `--is-shallow-
+    // repository` says false and merge-base SUCCEEDS, returning a commit that is
+    // a common ancestor of a graph nobody pushed. Rare; the wrongness is silent.
+    if let Some(grafts) = git_out(root, &["rev-parse", "--git-path", "info/grafts"]) {
+        // --git-path answers relative to git's cwd, i.e. the workspace root;
+        // joining is a no-op when it comes back absolute (linked worktrees).
+        if root.join(&grafts).exists() {
+            return Some(format!(
+                "grafted history (`{grafts}` exists) — the parent chain is rewritten"
+            ));
+        }
+    }
+    if git_out(
+        root,
+        &["for-each-ref", "--format=%(refname)", "refs/replace/"],
+    )
+    .is_some_and(|s| !s.is_empty())
+    {
+        return Some(
+            "replace refs present (refs/replace/*) — the parent chain is rewritten".into(),
+        );
+    }
+
+    // Partial clones. Note this is STRICTER than the identically-named check in
+    // generate_validation_status.py, deliberately: that script only walks commits
+    // and diffs trees, so `blob:none` leaves its answers exact and is allowed.
+    // This one reads a BLOB — `git show <rev>:validation/bus_proof_matrix.json` —
+    // so `blob:none` is precisely the filter that bites. Offline, or against an
+    // unreachable promisor, the read returns nothing and the arm takes the "new
+    // file" skip above. Any filter is unusable here.
+    let configured = git_out(
+        root,
+        &["config", "--get-regexp", r"^remote\..*\.partialclonefilter"],
+    );
+    if let Some(text) = configured {
+        let filters: Vec<&str> = text
+            .lines()
+            // `remote.origin.partialclonefilter blob:none` — key, space, spec.
+            .filter_map(|l| l.split_once(' ').map(|(_, spec)| spec.trim()))
+            .collect();
+        if !filters.is_empty() {
+            return Some(format!(
+                "partial clone ({}) — the baseline matrix blob is not local",
+                filters.join(", ")
+            ));
+        }
+    }
+    None
+}
+
+/// Refuse to draw a ratchet verdict from a history that cannot answer, and say
+/// which condition it was. Returns `true` when the caller should stop.
+///
+/// Fatal under `CI` for the same reason an unresolvable merge base is: a ratchet
+/// that shrugs and passes is the bug it exists to stop. Locally it degrades to a
+/// loud skip, because a contributor on a `--depth` clone should still get the
+/// structural arm rather than a failure they cannot act on.
+fn history_is_unusable(what: &str) -> bool {
+    let Some(defect) = history_defect(&workspace_root()) else {
+        return false;
+    };
+    assert!(
+        std::env::var("CI").is_err(),
+        "bus-proof ratchet: {what} cannot be trusted — {defect}. The lane needs \
+         `actions/checkout` with `fetch-depth: 0` and an `origin/main` ref. A bounded \
+         `--depth=<n>` is not a fix: it only moves the boundary, and merge-base then \
+         answers from a graph nobody pushed. Refusing to pass without a real baseline."
+    );
+    eprintln!("SKIP(baseline): {defect}. The structural arm still ran; the ratchet arm did not.");
+    true
+}
+
 #[test]
 fn bus_proof_matrix_never_regresses() {
     let live = load_committed().cells();
@@ -415,6 +561,13 @@ fn bus_proof_matrix_never_regresses() {
     // `CI` is set by GitHub Actions. There, an unresolvable baseline is fatal:
     // the whole point is that the author cannot move it.
     let required = std::env::var("CI").is_ok();
+
+    // BEFORE resolving anything: a merge base computed over a truncated or
+    // rewritten parent chain is not "no baseline", it is a WRONG baseline, and
+    // the "new file" skip below would then pass this arm in silence.
+    if history_is_unusable("the merge base with origin/main") {
+        return;
+    }
 
     let Some(base_rev) = merge_base_with_trunk() else {
         assert!(
@@ -432,7 +585,10 @@ fn bus_proof_matrix_never_regresses() {
 
     let Some(text) = git_show(&base_rev, MATRIX_PATH) else {
         // The very first commit that adds the file has no baseline, by
-        // construction. Every later one does.
+        // construction. Every later one does — and this skip is trustworthy
+        // ONLY because history_is_unusable() ran above: without it, "absent at
+        // the merge base" and "absent because the merge base is fiction" are
+        // the same observation, and this line returns green for both.
         eprintln!("SKIP(baseline): {MATRIX_PATH} does not exist at {base_rev} (new file).");
         return;
     };
@@ -512,6 +668,9 @@ fn cell_ordering_detects_a_downgrade() {
 /// merge base and reading a file that has been there all along.
 #[test]
 fn baseline_plumbing_can_read_the_merge_base() {
+    if history_is_unusable("the merge base with origin/main") {
+        return;
+    }
     let Some(base) = merge_base_with_trunk() else {
         assert!(
             std::env::var("CI").is_err(),
@@ -530,4 +689,157 @@ fn baseline_plumbing_can_read_the_merge_base() {
     );
     // And a path that has never existed must be reported as absent, not as "".
     assert!(git_show(&base, "validation/definitely_not_a_file.json").is_none());
+}
+
+/// The history guard must actually fire, or it is decoration on a silent pass.
+///
+/// Same reasoning as `cell_ordering_detects_a_downgrade`: this file's whole
+/// method is to prove its detectors reject, rather than to trust that they
+/// would. A guard nobody has watched trigger is exactly the "passes VACUOUSLY"
+/// state the matrix records as `shallow` for everyone else's tests.
+#[cfg(test)]
+mod history_guard {
+    use super::history_defect;
+    use std::path::{Path, PathBuf};
+
+    /// Run git in `dir` and return trimmed stdout, panicking on failure.
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    }
+
+    /// A throwaway repository with identity configured, so the tests that need
+    /// real commits (the replace ref must point at objects that EXIST — git
+    /// silently ignores a broken ref, which would make that test vacuous) can
+    /// make them.
+    fn scratch_repo(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "bus-proof-history-{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q"]);
+        git(&dir, &["config", "user.email", "t@example.invalid"]);
+        git(&dir, &["config", "user.name", "t"]);
+        dir
+    }
+
+    /// Two commits, returning (HEAD, HEAD~1).
+    fn two_commits(dir: &Path) -> (String, String) {
+        std::fs::write(dir.join("f"), "a").unwrap();
+        git(dir, &["add", "-A"]);
+        git(dir, &["commit", "-qm", "one", "--no-verify"]);
+        std::fs::write(dir.join("f"), "b").unwrap();
+        git(dir, &["commit", "-qam", "two", "--no-verify"]);
+        (
+            git(dir, &["rev-parse", "HEAD"]),
+            git(dir, &["rev-parse", "HEAD~1"]),
+        )
+    }
+
+    fn defect_of(dir: &Path) -> String {
+        history_defect(dir).unwrap_or_else(|| {
+            panic!(
+                "history_defect() saw nothing wrong with {} — the guard is vacuous",
+                dir.display()
+            )
+        })
+    }
+
+    #[test]
+    fn a_fresh_full_repo_is_not_flagged() {
+        // The other half of "not vacuous": a guard that flags everything would
+        // turn every local `cargo test` into a failure and get deleted.
+        let dir = scratch_repo("clean");
+        assert!(history_defect(&dir).is_none(), "{:?}", history_defect(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_shallow_clone_is_flagged() {
+        let dir = scratch_repo("shallow");
+        // Exactly what `git clone --depth` / `actions/checkout` with a bounded
+        // fetch-depth leaves behind; `rev-parse --is-shallow-repository` keys
+        // on this file and nothing else.
+        std::fs::write(dir.join(".git/shallow"), "").unwrap();
+        let defect = defect_of(&dir);
+        assert!(defect.contains("shallow"), "{defect}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_grafted_history_is_flagged() {
+        // The case a shallow check alone misses: `--is-shallow-repository` says
+        // false, `merge-base` SUCCEEDS, and it answers from a parent chain that
+        // was rewritten locally. Wrong, and silent.
+        let dir = scratch_repo("grafts");
+        std::fs::create_dir_all(dir.join(".git/info")).unwrap();
+        std::fs::write(dir.join(".git/info/grafts"), "").unwrap();
+        let defect = defect_of(&dir);
+        assert!(defect.contains("graft"), "{defect}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_replace_ref_is_flagged() {
+        let dir = scratch_repo("replace");
+        let (head, parent) = two_commits(&dir);
+        // A REAL replace mapping: git drops a ref whose target is missing
+        // ("ignoring broken ref"), so a placeholder sha here would make this
+        // test pass for the wrong reason and prove nothing.
+        git(&dir, &["replace", &head, &parent]);
+        let defect = defect_of(&dir);
+        assert!(defect.contains("replace refs"), "{defect}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_partial_clone_is_flagged() {
+        // Stricter here than in generate_validation_status.py on purpose: this
+        // ratchet reads a BLOB out of the baseline commit, so `blob:none` — the
+        // filter that script explicitly allows — is the one that breaks it.
+        let dir = scratch_repo("partial");
+        for args in [
+            [
+                "config",
+                "remote.origin.url",
+                "https://example.invalid/x.git",
+            ],
+            ["config", "remote.origin.partialclonefilter", "blob:none"],
+        ] {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
+            assert!(out.status.success());
+        }
+        let defect = defect_of(&dir);
+        assert!(
+            defect.contains("partial clone") && defect.contains("blob:none"),
+            "{defect}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_directory_that_is_not_a_repo_is_flagged() {
+        let dir = std::env::temp_dir().join(format!("bus-proof-nogit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let defect = defect_of(&dir);
+        assert!(defect.contains("not a git checkout"), "{defect}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -24,6 +24,26 @@ impl SystemBus {
         self.clock_gating_bypass = bypass;
     }
 
+    /// Accept every write into the ESP32-C3 PMS register span, for the same
+    /// reason [`Self::set_clock_gating_bypass`] exists.
+    ///
+    /// Silicon makes PMS registers stop accepting writes in two situations the
+    /// SVD coverage probe cannot distinguish from "unmodelled": once a
+    /// `..._CONSTRAIN_0` / `..._MONITOR_0` lock bit is set the registers it
+    /// guards are read-only until reset, and the `..._MONITOR_2` / `_3`
+    /// violation-status words are written by the hardware, never by firmware.
+    ///
+    /// The probe walks every register in ascending offset order writing
+    /// `0xFFFF_FFFF` then `0`, so it *sets the lock bits itself* and then scores
+    /// the 13 registers behind them unresponsive — reporting a coverage
+    /// regression for behaviour that is strictly more faithful than before it
+    /// existed. This flag lets the probe ask "is this register modelled", a
+    /// property of the device, independent of whether a lock happens to be
+    /// engaged. The runtime never sets it, so firmware always sees real locks.
+    pub fn set_pms_write_bypass(&mut self, bypass: bool) {
+        self.pms_write_bypass = bypass;
+    }
+
     /// Inject a `missing_clock` fault: force `peripheral` to behave as if its
     /// clock is never enabled, so every CPU access to it is suppressed (reads
     /// return 0, writes are dropped) exactly like an unclocked peripheral on

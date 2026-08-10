@@ -427,8 +427,8 @@
     {
       "device_type": "mcp2515",
       "label": "MCP2515 CAN",
-      "summary": "SPI CAN controller register shell (no bus frames).",
-      "detail": "Microchip MCP2515 RESET/READ/WRITE/BIT_MODIFY for CANCTRL/CANSTAT and friends. CAN wire protocol is not simulated in this thin shell.",
+      "summary": "Functional SPI classical CAN controller for standard 11-bit data frames.",
+      "detail": "Microchip MCP2515 SPI commands, modes, timing, three transmit buffers, two receive buffers, standard-ID masks/filters, rollover, overflow, interrupt flags, and shared classical CAN delivery. Limitations: 11-bit data frames only; extended identifiers, remote frames, CAN FD/bitrate switching, physical INT GPIO wiring, and nested-device trace contribution are not modeled. Active modes currently validate only a 16 MHz oscillator at 500 kbit/s (within 1%); other oscillators and bitrates are not modeled.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -1860,7 +1860,7 @@
       "device_type": "tmp102",
       "label": "TI TMP102 Temperature",
       "summary": "12-bit I²C temperature sensor (self-drifting demo).",
-      "detail": "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read-only storage.",
+      "detail": "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read/write, as on silicon: a driver can program shutdown mode, one-shot, conversion rate, extended mode and the alert limits and read them back. The bits the datasheet reserves for silicon (the converter-resolution field R1:R0, the Alert status bit, and the unused low bits of each word) keep their reset value.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [

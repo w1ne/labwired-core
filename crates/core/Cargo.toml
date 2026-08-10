@@ -55,6 +55,21 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 [features]
 default = []
+# Silent-path census (`crates/core/src/census.rs`) — MEASUREMENT ONLY.
+#
+# Counts three paths on which the simulator can be wrong and still report
+# success: dropped Cortex-M memory errors, `StubPeripheral` factory
+# fallthrough, and undecoded register offsets inside peripheral `_ => {}` /
+# `_ => 0` arms. It records; it never repairs, escalates, or changes control
+# flow — with the feature off every recording site expands back to the exact
+# code it wraps.
+#
+# Deliberately NOT in `default` and NOT implied by any other feature, so it
+# cannot be switched on as a side effect. Enabling the feature alone still
+# writes nothing: a report is emitted only when `LABWIRED_CENSUS_OUT` also
+# names an output path at runtime. Build the measuring binary with
+# `cargo build -p labwired-cli --features silent-census`.
+silent-census = []
 # ESP32 WiFi/lwIP functional-outcome thunks (`peripherals::esp32s3::wifi_thunks`
 # — canned WL_CONNECTED + simulated sockets). Off by default and NOT in the CI
 # feature set (`jit,event-scheduler`), so this fake WiFi state can never compile
@@ -100,6 +115,12 @@ iolink-native = []
 # decodes per-pixel °C matching the injected thermal scene. Off by default and
 # never enabled by the browser crate so wasm builds need no C toolchain.
 mlx90640-decode-test = []
+# Batch-width diagnostics (#835): make `plan_cpu_window` record WHICH clause
+# bound the CPU quantum, so a board stuck at 1.00 steps/batch names its clamp
+# instead of being narrowed by elimination. Costs one thread-local counter
+# increment per batch plan, so it is opt-in and never in a shipped build.
+# Read it with `labwired_core::quantum_trace::snapshot()`.
+quantum-trace = []
 
 [[test]]
 name = "mlx90640_decode"
@@ -109,3 +130,233 @@ required-features = ["mlx90640-decode-test"]
 labwired-loader = { path = "../loader" }
 svd-ingestor = { path = "../svd-ingestor" }
 svd-parser = "0.14"
+
+# ── ZERO-TEST TARGETS CANNOT REPORT GREEN ────────────────────────────────────
+# Every target below is an integration test whose ENTIRE body sits behind an
+# inner `#![cfg(feature = "...")]`. Built without the feature the file compiles
+# to an EMPTY libtest binary, which prints `test result: ok. 0 passed` and exits
+# 0 — indistinguishable, to CI and to a human, from a suite that ran and passed.
+# `required-features` makes cargo SKIP the target instead of reporting it green,
+# and makes an explicit `--test <name>` without the feature a hard error.
+# Adding a new `#![cfg(feature = ...)]` test file without a block here fails
+# `crates/core/src/tests/no_vacuous_test_targets.rs`.
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "bench_walk_free_kw41z"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "board_batch_width"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "silent-census")]
+[[test]]
+name = "census_probe"
+required-features = ["silent-census"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
+name = "e2e_blinky"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
+name = "e2e_esp32s3_faithful_boot"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
+name = "e2e_hello_world"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
+name = "e2e_i2c_tmp102"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "wifi-thunks")]
+[[test]]
+name = "e2e_labwired_wifi"
+required-features = ["wifi-thunks"]
+
+# #![cfg(feature = "net-tests")]
+[[test]]
+name = "egress_e2e"
+required-features = ["net-tests"]
+
+# #![cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+[[test]]
+name = "esp32c3_ble_pong_perf_probe"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32c3_bt_event_residency_gate"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32c3_clamped_full_state_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32c3_oled_profile"
+required-features = ["event-scheduler"]
+
+# #![cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+[[test]]
+name = "esp32c3_pms_shipped_firmware"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32c3_shipped_lab_batch_gate"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32c3_usb_cdc_console"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32c3_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32s3_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "iolink-native")]
+[[test]]
+name = "iolink_native_master"
+required-features = ["iolink-native"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "kw41z_walk_free_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "nrf52840_timer_machine_gate"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "nrf52_easydma_tick512_fidelity"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "nrf52_timer_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "nrf54l15_grtc_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "nrf54l15_idle_ff_speedup"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
+name = "openai_deck_s3_boot"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(all(feature = "jit-framework", feature = "jit"))]
+[[test]]
+name = "riscv_jit_alu_lockstep"
+required-features = ["jit", "jit-framework"]
+
+# #![cfg(all(feature = "jit-framework", feature = "jit"))]
+[[test]]
+name = "riscv_jit_branch_lockstep"
+required-features = ["jit", "jit-framework"]
+
+# #![cfg(all(feature = "jit", feature = "event-scheduler"))]
+[[test]]
+name = "riscv_jit_c3_oled_differential"
+required-features = ["event-scheduler", "jit"]
+
+# #![cfg(all(feature = "jit-framework", feature = "jit"))]
+[[test]]
+name = "riscv_jit_combined_bench"
+required-features = ["jit", "jit-framework"]
+
+# #![cfg(all(feature = "jit-framework", feature = "jit"))]
+[[test]]
+name = "riscv_jit_combined_lockstep"
+required-features = ["jit", "jit-framework"]
+
+# #![cfg(feature = "jit-framework")]
+[[test]]
+name = "riscv_jit_lockstep"
+required-features = ["jit-framework"]
+
+# #![cfg(all(feature = "jit-framework", feature = "jit"))]
+[[test]]
+name = "riscv_jit_mem_lockstep"
+required-features = ["jit", "jit-framework"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "rp2040_i2c_irq_delivery"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "rp2040_timer_machine_gate"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32_dma_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32_timer_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32f103_dma_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32f401_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32h563_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32l073_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "stm32l476_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "systick_walk_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(all(feature = "event-scheduler", not(debug_assertions)))]
+[[test]]
+name = "world_esp32c3_ble_pong"
+required-features = ["event-scheduler"]

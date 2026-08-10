@@ -9,6 +9,113 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
+/// The ARMv7-M fault-reporting register file, shared between the SCB (which
+/// serves it over MMIO) and [`crate::cpu::CortexM`] (which writes the status
+/// bits when it escalates a fault, and reads `SHCSR` to decide whether it may).
+///
+/// **One home.** These registers are read by firmware and written by the core,
+/// so they cannot live in two places; the SCB owns the storage and the CPU holds
+/// an `Arc` to the same cells, exactly as it already does for `VTOR`,
+/// `ICSR.VECTACTIVE` and `SHPR1/2/3`.
+///
+/// **`enabled` gates the whole feature, register surface included.** With it
+/// `false` the SCB does not serve these offsets at all: they fall through to the
+/// pre-existing `_ => 0` / `_ => {}` arms, read 0 and swallow writes, exactly as
+/// they did before ARM fault modelling existed. That is what makes "escalation
+/// off changes nothing" true by construction rather than by measurement alone —
+/// no firmware can observe a new read-back, not even the `SHCSR |= BUSFAULTENA`
+/// round-trip that `cortex-m-rt` and Zephyr perform at boot.
+#[derive(Debug, Default)]
+pub struct ScbFaultState {
+    /// Master switch for ARMv7-M fault escalation (ARMv7-M ARM B1.5.14) and for
+    /// the fault register surface below. Default **false**.
+    pub enabled: AtomicBool,
+    /// SHCSR (0xE000ED24) — System Handler Control and State. Only
+    /// `MEMFAULTENA`/`BUSFAULTENA`/`USGFAULTENA` are acted on; the rest is
+    /// stored so a read-modify-write round-trips.
+    pub shcsr: AtomicU32,
+    /// CFSR (0xE000ED28) — MMFSR:BFSR:UFSR. Write-1-to-clear.
+    pub cfsr: AtomicU32,
+    /// HFSR (0xE000ED2C) — HardFault Status. Write-1-to-clear.
+    pub hfsr: AtomicU32,
+    /// MMFAR (0xE000ED34) — MemManage Fault Address. Stored for round-trip; the
+    /// MPU is not enforced, so nothing in the model ever writes it.
+    pub mmfar: AtomicU32,
+    /// BFAR (0xE000ED38) — BusFault Address.
+    pub bfar: AtomicU32,
+}
+
+/// `SHCSR.BUSFAULTENA`, bit 17 (ARMv7-M ARM B3.2.13).
+pub const SHCSR_BUSFAULTENA: u32 = 1 << 17;
+/// `CFSR.BFSR.PRECISERR` — BFSR bit 1, i.e. CFSR bit 9 (B3.2.15).
+pub const CFSR_BFSR_PRECISERR: u32 = 1 << 9;
+/// `CFSR.BFSR.BFARVALID` — BFSR bit 7, i.e. CFSR bit 15 (B3.2.15).
+pub const CFSR_BFSR_BFARVALID: u32 = 1 << 15;
+/// `HFSR.FORCED`, bit 30 (B3.2.16): set when a configurable-priority fault
+/// escalates to HardFault.
+pub const HFSR_FORCED: u32 = 1 << 30;
+
+/// Bits defined in SHCSR on ARMv7-M (B3.2.13); everything above bit 18 is
+/// reserved and reads as zero.
+const SHCSR_VALID: u32 = 0x0007_FFFF;
+
+impl ScbFaultState {
+    pub fn new(enabled: bool) -> Self {
+        Self {
+            enabled: AtomicBool::new(enabled),
+            ..Default::default()
+        }
+    }
+
+    /// True when ARM fault escalation and the fault register surface are live.
+    #[inline]
+    pub fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::Relaxed)
+    }
+
+    /// Serve a read of one of the fault registers, or `None` if this offset is
+    /// not one of them (or the feature is off, in which case the SCB must fall
+    /// through to its historical read-as-zero behaviour).
+    fn read(&self, offset: u64) -> Option<u32> {
+        if !self.is_enabled() {
+            return None;
+        }
+        Some(match offset {
+            0x24 => self.shcsr.load(Ordering::Relaxed),
+            0x28 => self.cfsr.load(Ordering::Relaxed),
+            0x2C => self.hfsr.load(Ordering::Relaxed),
+            0x34 => self.mmfar.load(Ordering::Relaxed),
+            0x38 => self.bfar.load(Ordering::Relaxed),
+            _ => return None,
+        })
+    }
+
+    /// Serve a write. Returns `true` if this offset was one of the fault
+    /// registers and the write was applied.
+    fn write(&self, offset: u64, value: u32) -> bool {
+        if !self.is_enabled() {
+            return false;
+        }
+        match offset {
+            0x24 => self.shcsr.store(value & SHCSR_VALID, Ordering::Relaxed),
+            // CFSR and HFSR are write-1-to-clear (B3.2.15 / B3.2.16): a fault
+            // handler acknowledges by writing back what it read. Storing the
+            // value instead would make `SCB->CFSR = SCB->CFSR;` a no-op and the
+            // fault would appear to still be live on the next entry.
+            0x28 => {
+                self.cfsr.fetch_and(!value, Ordering::Relaxed);
+            }
+            0x2C => {
+                self.hfsr.fetch_and(!value, Ordering::Relaxed);
+            }
+            0x34 => self.mmfar.store(value, Ordering::Relaxed),
+            0x38 => self.bfar.store(value, Ordering::Relaxed),
+            _ => return false,
+        }
+        true
+    }
+}
+
 /// Event token for the ICSR pend-drain chain (the SCB schedules exactly one
 /// kind of event, so a constant token suffices — no arming sequence needed:
 /// claims are idempotent and a duplicate chain dies on an empty latch set).
@@ -25,6 +132,9 @@ pub struct SharedScbState {
     /// Mirror of `pending_reset` the CPU can read without reaching the bus.
     /// See the field docs on [`Scb::sysreset_signal`].
     pub sysreset_signal: Arc<AtomicBool>,
+    /// The ARMv7-M fault register file, shared with the CPU. See
+    /// [`ScbFaultState`].
+    pub faults: Arc<ScbFaultState>,
 }
 
 /// System Control Block (SCB)
@@ -118,6 +228,11 @@ pub struct Scb {
     /// SysTick, then PendSV on consecutive cycles).
     #[serde(skip)]
     drain_chain_armed: bool,
+    /// ARMv7-M fault register file (SHCSR/CFSR/HFSR/MMFAR/BFAR), shared with
+    /// the CPU. Inert — and not even served over MMIO — unless
+    /// [`ScbFaultState::enabled`]. See that type's docs.
+    #[serde(skip)]
+    faults: Arc<ScbFaultState>,
 }
 
 impl Scb {
@@ -129,6 +244,7 @@ impl Scb {
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
+            faults: Arc::new(ScbFaultState::default()),
         })
     }
 
@@ -140,6 +256,7 @@ impl Scb {
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
+            faults: Arc::new(ScbFaultState::default()),
         })
     }
 
@@ -171,6 +288,7 @@ impl Scb {
             sysreset_signal: s.sysreset_signal,
             clock: None,
             drain_chain_armed: false,
+            faults: s.faults,
         }
     }
 
@@ -234,6 +352,12 @@ impl Scb {
         Arc::clone(&self.sysreset_signal)
     }
 
+    /// The shared ARMv7-M fault register file. The SCB serves it over MMIO; the
+    /// CPU writes the status bits when it escalates. One storage, two views.
+    pub fn fault_state(&self) -> Arc<ScbFaultState> {
+        Arc::clone(&self.faults)
+    }
+
     /// Write a 32-bit value to an SCB register at the given word-aligned offset.
     /// Only compiled in test builds; production MMIO goes through `Peripheral::write`.
     #[cfg(test)]
@@ -249,6 +373,12 @@ impl Scb {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        // ARMv7-M fault registers (SHCSR/CFSR/HFSR/MMFAR/BFAR) are served only
+        // while fault modelling is enabled; otherwise they fall through to the
+        // `_ => 0` arm below, exactly as before the feature existed.
+        if let Some(v) = self.faults.read(offset) {
+            return v;
+        }
         match offset {
             0x00 => self.cpuid,
             0x04 => {
@@ -287,11 +417,19 @@ impl Scb {
             // ARMv8-M MPU memory attribute indirection registers (Cortex-M33).
             0xC0 => self.mpu_mair0,
             0xC4 => self.mpu_mair1,
-            _ => 0,
+            _ => {
+                crate::census_reg!("scb:Scb", offset, "read");
+                0
+            }
         }
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        // See `read_reg`: with fault modelling off this returns false and the
+        // write falls through to the historical `_ => {}` arm (dropped).
+        if self.faults.write(offset, value) {
+            return;
+        }
         match offset {
             0x04 => {
                 // ICSR side effects (ARMv7-M ARM B3.2.4):
@@ -355,7 +493,9 @@ impl Scb {
             // attribute encodings have no effect since access is not enforced.
             0xC0 => self.mpu_mair0 = value,
             0xC4 => self.mpu_mair1 = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("scb:Scb", offset, "write");
+            }
         }
     }
 }

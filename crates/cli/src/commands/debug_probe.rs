@@ -164,6 +164,10 @@ pub fn stop_reason_str(r: &labwired_core::StopReason) -> &'static str {
         labwired_core::StopReason::StepDone => "step_done",
         labwired_core::StopReason::MaxStepsReached => "max_steps",
         labwired_core::StopReason::ManualStop => "halt",
+        // Firmware ended its own run through the `simctl` device. The contract
+        // is a fixed string, so the code is not spelled here; it travels with
+        // the `AdvanceReport`, which is the surface a harness reads.
+        labwired_core::StopReason::FirmwareExit(_) => "firmware_exit",
     }
 }
 

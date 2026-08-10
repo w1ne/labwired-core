@@ -80,8 +80,15 @@
 //! mirroring the UART/systimer pattern; the bus routes it through the per-core
 //! interrupt matrix.
 
+use crate::peripherals::esp_gpspi_wire::EspSpiWire;
 use crate::peripherals::spi::SpiDevice;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+/// ESP32-S3 core clock. The GP-SPI divisors count APB ticks and the engine's
+/// cycle axis is CPU cycles, so the narration scales by `CPU_CLOCK_HZ /
+/// APB_CLK_HZ` — the same conversion `esp_uart` applies to its baud divisor.
+/// The S3 runs its core at 240 MHz; the C3's copy of this model says 160.
+const CPU_CLOCK_HZ: u64 = 240_000_000;
 
 const CMD: u64 = 0x00;
 const ADDR: u64 = 0x04;
@@ -208,6 +215,12 @@ pub struct Esp32s3Spi {
 
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
+    /// Narration state for the SCK/MOSI/CS pads the output matrix can route this
+    /// controller to. Inert until `SystemBus::wire_esp32s3_spi_pads` binds it;
+    /// see [`crate::peripherals::esp_gpspi_wire`], shared with the C3's copy of
+    /// this same IP.
+    wire: EspSpiWire,
+    external_can_poll_scheduled: bool,
 }
 
 impl std::fmt::Debug for Esp32s3Spi {
@@ -245,7 +258,52 @@ impl Esp32s3Spi {
             attached_devices: Vec::new(),
 
             clock: None,
+            wire: EspSpiWire::default(),
+            external_can_poll_scheduled: false,
         }
+    }
+
+    /// The shared pad-line cell for this controller's SCK/MOSI/CS, created on
+    /// first use at bus wiring time.
+    ///
+    /// ⚠️ Creating the cell turns narration ON. `SystemBus::wire_esp32s3_spi_pads`
+    /// resolves the GPIO port FIRST for that reason: a controller owning a cell
+    /// no route reaches still buffers every launched transaction, arms a wakeup
+    /// per burst, and narrates into a wire nothing reads.
+    pub(crate) fn pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        let cpol = crate::peripherals::esp_gpspi_wire::framing(self.reg(MISC), self.reg(USER)).cpol;
+        self.wire.pad_lines_arc(cpol)
+    }
+
+    /// Engine cycles per SCK period, from this controller's own `SPI_CLOCK`.
+    fn bit_time_cycles(&self) -> Option<u64> {
+        crate::peripherals::esp_gpspi_wire::bit_time_cycles(self.reg(CLOCK), CPU_CLOCK_HZ)
+    }
+
+    /// Queue the bytes a transaction put on the wire, with the framing and rate
+    /// its registers were configured with.
+    fn wire_push_bytes(&mut self, bytes: &[u8]) {
+        if !self.wire.is_bound() {
+            return;
+        }
+        let framing = crate::peripherals::esp_gpspi_wire::framing(self.reg(MISC), self.reg(USER));
+        let bit_time = self.bit_time_cycles();
+        let now = self.clock.as_ref().map_or(0, |c| c.now());
+        for &b in bytes {
+            self.wire.push(b, framing, bit_time, now);
+        }
+    }
+
+    /// Publish a held burst once the wire has carried it. The cycle axis comes
+    /// from the bus clock; with none attached (a hand-built test bus) there is
+    /// no axis to place a waveform on and nothing is published.
+    fn wire_flush(&mut self, force: bool) {
+        let Some(now) = self.clock.as_ref().map(|c| c.now()) else {
+            return;
+        };
+        self.wire.flush(now, force);
     }
 
     /// Raw device push — does NOT wrap for tracing. The only production caller
@@ -255,6 +313,10 @@ impl Esp32s3Spi {
     /// either SPI model.
     pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
+    }
+
+    pub(crate) fn attached_devices_mut(&mut self) -> &mut [Box<dyn SpiDevice>] {
+        &mut self.attached_devices
     }
 
     /// Number of attached devices (used by the system-wiring tests; test-only,
@@ -335,6 +397,18 @@ impl Esp32s3Spi {
         }
         // Non-DMA (W-buffer) mode: existing logic unchanged.
         let bytes = self.miso_bytes();
+        // Narrate the MOSI payload FIRST. It is still sitting in W0..W15 at this
+        // point and the fill below overwrites it with the idle-MISO 0xFF, so
+        // reading it after would report a bus that only ever carried ones.
+        if self.wire.is_bound() {
+            let mosi: Vec<u8> = (0..bytes)
+                .map(|i| {
+                    let off = W0 + (i as u64 / 4) * 4;
+                    ((self.reg(off) >> ((i % 4) * 8)) & 0xFF) as u8
+                })
+                .collect();
+            self.wire_push_bytes(&mosi);
+        }
         for w in 0..bytes.div_ceil(4) {
             let off = W0 + (w as u64) * 4;
             // Bytes covered by this word: full 0xFF, partial keep only valid bytes.
@@ -369,6 +443,9 @@ impl Esp32s3Spi {
     /// With no device attached the MISO line floats high, so every byte
     /// reads 0xFF. Advances `pending_dma.transferred` by the burst length.
     pub(crate) fn dma_transfer(&mut self, mosi: &[u8]) -> Vec<u8> {
+        // GDMA-coupled transfers are the path esp_lcd drives a display over, so
+        // this is where most real S3 SPI traffic reaches the wire.
+        self.wire_push_bytes(mosi);
         let mut miso = Vec::with_capacity(mosi.len());
         for &m in mosi {
             let byte = if self.attached_devices.is_empty() {
@@ -404,6 +481,14 @@ impl Esp32s3Spi {
 }
 
 impl Peripheral for Esp32s3Spi {
+    fn line_names(&self) -> &'static [&'static str] {
+        crate::peripherals::esp_gpspi_wire::SPI_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        self.wire.wire_lines()
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_u32(offset & !3)?;
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)
@@ -489,6 +574,14 @@ impl Peripheral for Esp32s3Spi {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Legacy-walk publication point. Under `event-scheduler` the walk skips
+        // this model and the chain in `take_scheduled_events` owns it; without
+        // the feature this is where a held burst reaches the pads. Inert — one
+        // `is_empty` — on every bus that never routed an SPI pad.
+        self.wire_flush(false);
+        for device in &mut self.attached_devices {
+            device.poll_external_bus();
+        }
         PeripheralTickResult {
             explicit_irqs: if self.int_st() != 0 {
                 Some(vec![self.source_id])
@@ -508,6 +601,75 @@ impl Peripheral for Esp32s3Spi {
 
     fn needs_legacy_walk(&self) -> bool {
         !self.uses_scheduler()
+    }
+
+    /// Publish a held burst under the scheduler, where the walk skips this model.
+    ///
+    /// # Why an event chain and not `needs_legacy_walk() -> true`
+    ///
+    /// `SystemBus::derive_walk_deletable` is all-or-nothing: one model forcing
+    /// the walk back on drops walk-deletion for the WHOLE bus, including every
+    /// S3 lab that never routes an SPI pad. This chain costs wakeups only while
+    /// a burst is genuinely held — which needs BOTH routed pads and a launched
+    /// transaction — and it arms at the exact cycle the wire finishes
+    /// (`ready_in`), so a 64-byte burst costs ONE wakeup rather than 150 000.
+    /// `uses_scheduler`/`needs_legacy_walk` are deliberately UNCHANGED above.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        const EXTERNAL_CAN_POLL_EVENT: u32 = u32::MAX;
+        if self.clock.is_none() {
+            return Vec::new();
+        }
+        let mut events = Vec::new();
+        if self.wire.is_pending() && !self.wire.scheduled {
+            let now = self.clock.as_ref().map_or(0, |c| c.now());
+            self.wire.arm_seq = self.wire.arm_seq.wrapping_add(1);
+            if self.wire.arm_seq == EXTERNAL_CAN_POLL_EVENT {
+                self.wire.arm_seq = 0;
+            }
+            self.wire.scheduled = true;
+            events.push((self.wire.ready_in(now), self.wire.arm_seq));
+        }
+        let has_external_can = self
+            .attached_devices
+            .iter()
+            .any(|device| device.needs_external_bus_poll());
+        if has_external_can && !self.external_can_poll_scheduled {
+            self.external_can_poll_scheduled = true;
+            events.push((0, EXTERNAL_CAN_POLL_EVENT));
+        }
+        events
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        const EXTERNAL_CAN_POLL_EVENT: u32 = u32::MAX;
+        if event_token == EXTERNAL_CAN_POLL_EVENT {
+            for device in &mut self.attached_devices {
+                device.poll_external_bus();
+            }
+            return crate::sched::EventResult {
+                reschedule_delay: Some(1),
+                ..Default::default()
+            };
+        }
+        if event_token != self.wire.arm_seq {
+            // Stale token from a superseded arm; the live chain owns publication.
+            return crate::sched::EventResult::default();
+        }
+        self.wire_flush(false);
+        // A flush that reported LevelsOnly keeps its bytes; `ready_in` is then 0,
+        // so `max(1)` retries next cycle and converges as the run grows.
+        let now = self.clock.as_ref().map_or(0, |c| c.now());
+        let pending = self.wire.is_pending();
+        self.wire.scheduled = pending;
+        crate::sched::EventResult {
+            reschedule_delay: pending.then(|| self.wire.ready_in(now).max(1)),
+            ..Default::default()
+        }
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -552,6 +714,54 @@ impl Peripheral for Esp32s3Spi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct ExternalCanPoller(Arc<AtomicUsize>);
+    impl SpiDevice for ExternalCanPoller {
+        fn needs_external_bus_poll(&self) -> bool {
+            true
+        }
+        fn component_id(&self) -> Option<&str> {
+            Some("external-can")
+        }
+        fn poll_external_bus(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn transfer(&mut self, _mosi: u8) -> u8 {
+            0
+        }
+        fn cs_pin(&self) -> &str {
+            "GPIO10"
+        }
+    }
+
+    #[test]
+    fn scheduler_arms_recurring_external_can_poll() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let mut spi = Esp32s3Spi::new(SPI2_SOURCE);
+        spi.push_device(Box::new(ExternalCanPoller(polls.clone())));
+        spi.attach_cycle_clock(crate::CycleClock::default());
+
+        let events = spi.take_scheduled_events();
+        assert_eq!(
+            events.len(),
+            1,
+            "scheduler mode must arm external CAN polling"
+        );
+        let mut scheduler = crate::sched::EventScheduler::new();
+        let mut bus = crate::bus::SystemBus::new();
+        let result = spi.on_event(events[0].1, &mut scheduler, &mut bus);
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+        assert_eq!(result.reschedule_delay, Some(1));
+
+        let legacy_polls = Arc::new(AtomicUsize::new(0));
+        let mut legacy = Esp32s3Spi::new(SPI2_SOURCE);
+        legacy.push_device(Box::new(ExternalCanPoller(legacy_polls.clone())));
+        assert!(legacy.take_scheduled_events().is_empty());
+        legacy.tick();
+        assert_eq!(legacy_polls.load(Ordering::SeqCst), 1);
+    }
 
     const SPI2_SOURCE: u32 = 21;
     const SPI3_SOURCE: u32 = 22;

@@ -37,7 +37,7 @@ fn ensure_firmware_built() -> PathBuf {
         }
     }
     let status = Command::new("cargo")
-        .args(["+esp", "build", "--release"])
+        .args(["+esp", "build", "--release", "--target-dir", "target"])
         .current_dir("../../examples/esp32s3-hello-world")
         .status()
         .expect("cargo +esp build (is the ESP toolchain installed?)");

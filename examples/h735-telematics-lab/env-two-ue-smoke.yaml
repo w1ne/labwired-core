@@ -6,5 +6,16 @@ inputs:
 limits:
   # Single-UE publish ~0.8M steps; dual interleave + sub needs headroom.
   max_steps: 5000000
-  # No durable assertions (env runner only allows memory_value). Artifacts
-  # under --output-dir include per-node UART (`location received` on ue_b).
+  # ⚠ THIS SCRIPT ASSERTS NOTHING, AND CANNOT. The environment runner rejects
+  # any assertion that is not a node-qualified `memory_value`, and that one
+  # takes a raw `address: u64` with no symbol lookup — too brittle to pin a
+  # static across relinks. So this run exits 0 with `assertions: []` and
+  # `stop_reason: max_steps` whether or not ue_b ever hears ue_a. Do not read
+  # its exit code as evidence.
+  #
+  # What actually gates the pub/sub story is the CI step "Dual-UE pub/sub
+  # collect" in .github/workflows/core-coverage-matrix-smoke.yml, which greps
+  # the artifacts under --output-dir for `+QMTRECV` and `location received`
+  # and fails the job when either is missing. Run this locally the same way:
+  #
+  #   grep -q '+QMTRECV' <out>/uart.log && grep -q 'location received' <out>/uart.log

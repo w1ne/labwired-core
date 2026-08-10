@@ -1018,9 +1018,11 @@ fn step_adapter_matches_advance_single_contract() {
 }
 
 fn arm_synthetic_push_channel(machine: &mut Machine<CountingCpu>) {
-    machine
-        .logic_capture
-        .install(&[Some((usize::MAX, 0))], &[Some(false)], &[true]);
+    machine.logic_capture.install(
+        &[Some(crate::logic_capture::LogicSource::pad(usize::MAX, 0))],
+        &[Some(false)],
+        &[true],
+    );
     machine.bus.logic_tap.clear_events();
     machine.bus.logic_tap.set_clock(machine.total_cycles + 1);
     machine.bus.logic_tap.set_armed(true);

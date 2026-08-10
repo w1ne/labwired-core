@@ -72,7 +72,10 @@ impl Peripheral for Nrf52Aar {
             OFF_IRKPTR => self.irkptr,
             OFF_ADDRPTR => self.addrptr,
             OFF_SCRATCHPTR => self.scratchptr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.aar:Nrf52Aar", offset, "read");
+                0
+            }
         })
     }
 
@@ -90,7 +93,9 @@ impl Peripheral for Nrf52Aar {
             OFF_IRKPTR => self.irkptr = value,
             OFF_ADDRPTR => self.addrptr = value,
             OFF_SCRATCHPTR => self.scratchptr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.aar:Nrf52Aar", offset, "write");
+            }
         }
         Ok(())
     }

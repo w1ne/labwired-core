@@ -9,23 +9,74 @@
 use crate::*;
 use tracing::warn;
 
-/// Opt-in Arduino-matrix speed path (`LABWIRED_MATRIX_SPEED=1`).
+/// Turn on scheduler-safe CPU idle fast-forward for this `labwired test` run.
 ///
-/// Enables idle/delay fast-forward only (requires a CLI build with
-/// `--features event-scheduler`). Tick-interval widening is intentionally
-/// **not** applied here: under the event-scheduler feature, wide ticks have
-/// regressed ESP classic/S3/C3 FreeRTOS labs before, and the matrix already
-/// gets most of its wall-time win from shorter L2 delays + Waiti park.
-/// Default CLI / green labs are unchanged when the env var is unset.
-fn apply_matrix_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Machine<C>) {
-    if std::env::var("LABWIRED_MATRIX_SPEED").as_deref() != Ok("1") {
-        return;
+/// `SimulationConfig::idle_fast_forward_enabled` stays **false** in core's
+/// `Default` (see `crates/core/src/config.rs`) so every embedder keeps
+/// instruction-for-instruction behaviour unless it explicitly opts in. That
+/// guarantee is preserved: this opts in at the *run path*, it does not flip
+/// the library default.
+///
+/// `labwired test` is the hosted simulation runner — the process
+/// `services/labwired-builder`'s `/run` endpoint execs for every hosted
+/// `labwired_run` — and a firmware that sleeps is the common case there. With
+/// the flag off, an ESP32-C3 `vTaskDelay(200)` retires ~32M instructions of an
+/// idle FreeRTOS task to produce nothing (~160k instructions per idle
+/// millisecond, exactly linear in the delay), which is the bulk of a BLE
+/// bring-up's step budget. Fast-forward skips that window to the next
+/// scheduler deadline instead. `Machine::try_idle_fast_forward` refuses
+/// whenever anything could observe the skipped cycles (cycle-accurate bus,
+/// polled logic capture, honored breakpoints, active legacy peripheral ticks)
+/// and clamps the skip to the next event/motor deadline, so the FIRMWARE sees
+/// the same thing: `interpreted + idle_ff == total_cycles`, and the serial of
+/// a C3 BLE bring-up is byte-identical with the flag on and off (measured).
+///
+/// ⚠️ What it DOES change is `cycles` in result.json. That field is not
+/// `Machine::total_cycles`; it is accumulated by a per-step observer
+/// (`PerformanceMetrics`), so cycles the CPU skipped while parked are not in
+/// it. On the C3 BLE image, reaching the same serial milestone reports
+/// 120,356,558 cycles with the flag off and 31,740,172 with it on, for an
+/// identical `total_cycles` of 44,646,954. `max_cycles` is checked against the
+/// same counter, so it now bounds interpreted work rather than device time — a
+/// run gets further into the firmware for the same limit. Runs that declare
+/// `after_cycles` stimuli are excluded from fast-forward entirely for this
+/// reason (see `execute_test_loop`).
+///
+/// Escape hatch (opt-out, not opt-in): `LABWIRED_IDLE_FAST_FORWARD=0` restores
+/// per-instruction idling for one run, so a fidelity investigation can diff
+/// the two arms without rebuilding the CLI.
+///
+/// ⚠️ Inert unless the CLI is built `--features event-scheduler` —
+/// `try_idle_fast_forward` compiles to `0` without it. The hosted builder image
+/// does NOT build with that feature today (11 Xtensa tier-1 cells hang when it
+/// is on — see the feature's note in `crates/cli/Cargo.toml`), so setting this
+/// flag currently buys the hosted runner nothing. It is set here so the run
+/// path is correct the moment that blocker clears, and so
+/// `--features event-scheduler` builds get the acceleration now.
+///
+/// `LABWIRED_MATRIX_SPEED=1` is still accepted by the Arduino-matrix scripts;
+/// it now only asks for the log line, because the setting it used to gate is
+/// the default.
+///
+/// Tick-interval widening is deliberately **not** applied here: under the
+/// event-scheduler feature, wide ticks have regressed ESP classic/S3/C3
+/// FreeRTOS labs before.
+fn apply_run_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Machine<C>) {
+    let opted_out = std::env::var("LABWIRED_IDLE_FAST_FORWARD").as_deref() == Ok("0");
+    machine.config.idle_fast_forward_enabled = !opted_out;
+    // Only say so when the setting can actually do something, so the line is
+    // never a claim the build cannot honour.
+    if cfg!(feature = "event-scheduler") {
+        eprintln!(
+            "labwired-cli test: idle_ff={} (event_scheduler=on{})",
+            if opted_out { "off" } else { "on" },
+            if opted_out {
+                ", LABWIRED_IDLE_FAST_FORWARD=0"
+            } else {
+                ""
+            },
+        );
     }
-    machine.config.idle_fast_forward_enabled = true;
-    eprintln!(
-        "labwired-cli test: LABWIRED_MATRIX_SPEED=1 (idle_ff=on, event_scheduler={})",
-        cfg!(feature = "event-scheduler")
-    );
 }
 
 /// Apply the script's faults to the built bus before the run, logging any that
@@ -238,7 +289,7 @@ fn run_c3_rom_boot_no_elf(
     }
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
-    apply_matrix_speed_opts(&mut machine);
+    apply_run_speed_opts(&mut machine);
     machine.observers.push(metrics.clone());
     let fault_evidence = handle_faults(&mut machine.bus, faults);
 
@@ -1364,7 +1415,7 @@ pub(crate) fn run_test(
     macro_rules! run_machine {
         ($machine:expr) => {{
             let mut machine = $machine;
-            apply_matrix_speed_opts(&mut machine);
+            apply_run_speed_opts(&mut machine);
             // JIT-eligible RISC-V runs source cycles/instructions from the
             // machine's own counters (see `execute_test_loop`), so the metrics
             // step observer must NOT be installed — its presence would gate the

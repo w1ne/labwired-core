@@ -97,7 +97,10 @@ impl Peripheral for Nrf52Ppi {
                 self.fork_tep[((offset - OFF_FORK0_TEP) / 4) as usize]
             }
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.ppi:Nrf52Ppi", offset, "read");
+                0
+            }
         })
     }
 
@@ -162,7 +165,9 @@ impl Peripheral for Nrf52Ppi {
             OFF_FORK0_TEP..=OFF_FORK31_TEP if offset.is_multiple_of(4) => {
                 self.fork_tep[((offset - OFF_FORK0_TEP) / 4) as usize] = value;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.ppi:Nrf52Ppi", offset, "write");
+            }
         }
         Ok(())
     }

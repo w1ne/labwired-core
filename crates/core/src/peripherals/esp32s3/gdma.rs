@@ -566,7 +566,10 @@ impl Esp32s3Gdma {
             OUT_INT_CLR => 0,
             OUT_LINK => (c.tx.link_addr & OUT_LINK_ADDR_MASK) | OUT_LINK_PARK_BIT,
             OUT_PERI_SEL => c.tx.peri_sel & PERI_SEL_MASK,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.gdma:Esp32s3Gdma", blk, "read");
+                0
+            }
         }
     }
 
@@ -678,7 +681,9 @@ impl Esp32s3Gdma {
                 let _ = OUT_LINK_STOP_BIT;
             }
             OUT_PERI_SEL => c.tx.peri_sel = value & PERI_SEL_MASK,
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.gdma:Esp32s3Gdma", blk, "write");
+            }
         }
     }
 

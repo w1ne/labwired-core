@@ -680,6 +680,33 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // way real hardware is: the board says what's on the bus, not the SoC config.
     let i2c0 = Esp32s3I2c::new();
     bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
+    // Bind I2C0's SCL/SDA wire to the S3 output matrix, so a pad the firmware
+    // routes to I2CEXT0_SCL/SDA (signals 89/90) carries the real waveform for
+    // `read_gpio_pad` and the in-engine logic analyzer.
+    //
+    // ⚠️ This call was MISSING, and the S3 waveform gate did not notice because
+    // it builds its own bus and calls the wiring by hand. So the narration was
+    // green in test and dark on every real S3 lab — the "verified ≠ deployed"
+    // hole, in the one place it is hardest to see. `from_config` calls it too,
+    // but that path finds no `Esp32s3Gpio` either, because esp32s3.yaml still
+    // declares `gpio` as `type: "declarative"` rather than the `esp32s3_gpio`
+    // factory type; this programmatic path is what real S3 labs are built from.
+    //
+    // Must come AFTER both the gpio and i2c0 registrations above: pad_lines_arc
+    // CREATES the wire cell, and a controller owning a cell no route reaches
+    // narrates into nothing.
+    bus.wire_esp32s3_i2c_pads();
+    // Same for GP-SPI2 (SCK/MOSI/CS, matrix signals 101/103/110) and each
+    // UART's TX (12/15/18).
+    //
+    // ⚠️ These calls live HERE, not only in `from_config`, for the reason the
+    // I²C comment above records: `esp32s3.yaml` is an address-map stub — `uart0`
+    // is the vendor-neutral `uart` type, `gpio` is `declarative`, and there is no
+    // `spi2` entry at all — so `from_config` finds no S3 model to route and this
+    // programmatic builder is what every real S3 lab is built from. Gating on
+    // `from_config` alone would be green in test and dark in production.
+    bus.wire_esp32s3_spi_pads();
+    bus.wire_esp32s3_uart_pads();
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.

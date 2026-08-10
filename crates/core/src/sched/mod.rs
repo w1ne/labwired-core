@@ -15,6 +15,7 @@ pub mod result;
 
 pub use clock::{ClockDomain, ClockGraph};
 pub use event_scheduler::{
-    EventScheduler, ScheduledEvent, SchedulerStats, SimCycle, SUBSYSTEM_PERIPHERAL_IDX,
+    EventScheduler, ScheduledEvent, SchedulerStats, SimCycle, MAX_LIVE_EVENTS_PER_PERIPHERAL,
+    SUBSYSTEM_PERIPHERAL_IDX,
 };
 pub use result::EventResult;

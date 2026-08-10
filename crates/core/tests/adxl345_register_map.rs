@@ -25,6 +25,7 @@
 
 use labwired_core::peripherals::components::declarative_spi::GenericSpiDevice;
 use labwired_core::peripherals::spi::SpiDevice;
+use labwired_core::sim_input::SimInput;
 
 fn adxl345() -> GenericSpiDevice {
     let yaml = labwired_config::embedded_device_yaml("adxl345_spi")
@@ -88,10 +89,16 @@ fn every_documented_register_reads_its_datasheet_reset_value() {
     for &(addr, name, _, reset) in TABLE_16 {
         let got = read_u8(&mut d, addr);
         if got != reset {
-            wrong.push(format!("{name} (0x{addr:02X}): got 0x{got:02X}, datasheet 0x{reset:02X}"));
+            wrong.push(format!(
+                "{name} (0x{addr:02X}): got 0x{got:02X}, datasheet 0x{reset:02X}"
+            ));
         }
     }
-    assert!(wrong.is_empty(), "registers disagree with Table 16:\n  {}", wrong.join("\n  "));
+    assert!(
+        wrong.is_empty(),
+        "registers disagree with Table 16:\n  {}",
+        wrong.join("\n  ")
+    );
 }
 
 #[test]
@@ -108,10 +115,16 @@ fn writable_registers_store_what_a_driver_writes() {
         write_u8(&mut d, addr, 0x5A);
         let got = read_u8(&mut d, addr);
         if got != 0x5A {
-            lost.push(format!("{name} (0x{addr:02X}): wrote 0x5A, read 0x{got:02X}"));
+            lost.push(format!(
+                "{name} (0x{addr:02X}): wrote 0x5A, read 0x{got:02X}"
+            ));
         }
     }
-    assert!(lost.is_empty(), "writes did not stick:\n  {}", lost.join("\n  "));
+    assert!(
+        lost.is_empty(),
+        "writes did not stick:\n  {}",
+        lost.join("\n  ")
+    );
 }
 
 #[test]
@@ -134,7 +147,11 @@ fn read_only_registers_ignore_writes() {
 fn the_table_covers_every_address_the_datasheet_documents() {
     // Guards the failure where this file quietly shrinks: Table 16 names thirty
     // registers, six of which are the DATAX0..DATAZ1 pair halves excluded above.
-    assert_eq!(TABLE_16.len(), 24, "Table 16 has 30 registers, 6 of them data-pair halves");
+    assert_eq!(
+        TABLE_16.len(),
+        24,
+        "Table 16 has 30 registers, 6 of them data-pair halves"
+    );
 }
 
 #[test]
@@ -144,4 +161,48 @@ fn an_undocumented_address_still_reads_as_unmapped() {
     // registers were reaching it, not the default itself.
     let mut d = adxl345();
     assert_eq!(read_u8(&mut d, 0x3A), 0xFF);
+}
+
+#[test]
+fn each_data_byte_is_addressable_on_its_own() {
+    // Table 16 numbers all six data bytes separately (0x32-0x37), and page 18
+    // says "the least significant byte does not have to be read if that
+    // information is not needed" -- so pointing at the high byte alone is a
+    // supported access, not an edge case.
+    //
+    // The model declares them as three two-byte registers, which is right for a
+    // burst. What was wrong was a single-byte read: selecting registers by
+    // `addr >= start` skipped the register containing the address and answered
+    // from the next one, so 0x37 returned FIFO_CTL rather than DATAZ1 -- a
+    // different register's value, indistinguishable from real sensor data.
+    let mut d = adxl345();
+    d.set_input("accel_z", 1.0).unwrap();
+
+    // 1 g x 256 LSB/g = 0x0100, little-endian across 0x36 (lo) and 0x37 (hi).
+    d.cs_select();
+    d.transfer(0xC0 | 0x36);
+    let lo = d.transfer(0x00);
+    let hi = d.transfer(0x00);
+    d.cs_release();
+    assert_eq!((lo, hi), (0x00, 0x01), "burst read of DATAZ");
+
+    // The same two bytes, addressed one at a time.
+    assert_eq!(read_u8(&mut d, 0x36), lo, "DATAZ0 read on its own");
+    assert_eq!(read_u8(&mut d, 0x37), hi, "DATAZ1 read on its own");
+}
+
+#[test]
+fn a_read_inside_a_register_still_walks_on_to_the_next() {
+    // Starting mid-register must not break auto-increment: after the high byte
+    // of DATAZ the next byte is FIFO_CTL, exactly as a burst from 0x36 would
+    // reach it.
+    let mut d = adxl345();
+    d.set_input("accel_z", 1.0).unwrap();
+    d.cs_select();
+    d.transfer(0xC0 | 0x37);
+    let hi = d.transfer(0x00);
+    let next = d.transfer(0x00);
+    d.cs_release();
+    assert_eq!(hi, 0x01, "DATAZ1");
+    assert_eq!(next, 0x00, "FIFO_CTL follows");
 }

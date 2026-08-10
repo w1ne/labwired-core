@@ -94,12 +94,8 @@ const LABELS: [&str; DIGEST_WORDS] = [
     "rsv15",
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
 fn firmware_elf() -> Option<PathBuf> {
-    let base = repo_root().join("target/thumbv7em-none-eabi");
+    let base = labwired_core::test_support::target_dir().join("thumbv7em-none-eabi");
     for profile in ["release", "debug"] {
         let p = base.join(profile).join("firmware-nrf52840-cpu-conformance");
         if p.exists() {

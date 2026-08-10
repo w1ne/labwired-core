@@ -228,7 +228,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
-            last_gpio_in: [0; 2],
+            last_gpio_in: None,
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
@@ -259,6 +259,10 @@ impl SystemBus {
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
             esp32c3_sched_asserted_sources: [0; 2],
+            esp32c3_sensitive_idx: None,
+            esp32c3_pms: None,
+            pms_write_bypass: false,
+            esp32c3_pms_armed: false,
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             esp32s3_asserted_sources: [0; 2],
@@ -796,22 +800,61 @@ impl SystemBus {
                         desc,
                     ))
                 }
-                _other => {
-                    if plugins.is_empty() {
-                        tracing::debug!(
-                            "Mapping unknown peripheral type '{}' to Stub for id '{}'",
-                            p_cfg.r#type,
-                            p_cfg.id
-                        );
-                    } else {
-                        tracing::debug!(
-                            "Mapping unknown peripheral type '{}' to Stub for id '{}' (not claimed by {} loaded plugin(s))",
-                            p_cfg.r#type,
-                            p_cfg.id,
-                            plugins.len()
-                        );
+                // No model, no descriptor, no plugin claimed it. This used to
+                // install a zero-filled stub for ANY type, which is the one
+                // outcome this product cannot ship: firmware talks to the
+                // address, reads back zeros, and the run reports success while
+                // having modelled nothing.
+                //
+                // So an unrecognised type now FAILS THE LOAD. The only
+                // exceptions are the types measured as already reaching this
+                // arm in the shipped configs, each with a written reason in
+                // `known_stubs.rs` — see that file for the rules and the exit.
+                other => {
+                    // Census (measurement only; a no-op unless `silent-census`
+                    // is compiled in) — recorded BEFORE the allowlist decides,
+                    // so it keeps counting exactly what it counted when this
+                    // arm stubbed unconditionally. The histogram is what makes
+                    // the allowlist shrinkable: it says which entries are
+                    // actually reached, not just which ones are declared.
+                    crate::census::record_stub(&p_cfg.r#type);
+                    match super::known_stubs::known_stub_reason(other) {
+                        Some(reason) => {
+                            tracing::debug!(
+                                "peripheral '{}' (type '{}') resolves to a zero stub; \
+                             allowlisted: {}",
+                                p_cfg.id,
+                                p_cfg.r#type,
+                                reason
+                            );
+                            Box::new(crate::peripherals::stub::StubPeripheral::new(0x00))
+                        }
+                        None => {
+                            return Err(anyhow::anyhow!(
+                                "unknown peripheral type '{}' for peripheral '{}' in chip '{}' \
+                             (chip file '{}'): this engine has no model for it, no plugin \
+                             claimed it{}, and it is not on the known-stub allowlist. \
+                             Refusing to answer it with a zero-filled stub — firmware would \
+                             read zeros from silicon that was never modelled and the run \
+                             would still report success. Fix it one of three ways: model the \
+                             peripheral, describe it with `type: declarative` and a \
+                             descriptor `path`, or — if answering zeros really is right — \
+                             declare `type: stub` in the chip YAML (or add '{}' to \
+                             KNOWN_STUBBED_PERIPHERAL_TYPES in \
+                             crates/core/src/bus/known_stubs.rs with a written reason).",
+                                p_cfg.r#type,
+                                p_cfg.id,
+                                chip.name,
+                                manifest.chip,
+                                if plugins.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!(" (of {} loaded plugin(s))", plugins.len())
+                                },
+                                other,
+                            ));
+                        }
                     }
-                    Box::new(crate::peripherals::stub::StubPeripheral::new(0x00))
                 }
             };
 
@@ -868,10 +911,51 @@ impl SystemBus {
         // the C3 GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
+        // measurable on the C3 too rather than reading as a flat line. MISO/RX
+        // are deliberately unbound — nothing drives them.
+        bus.wire_esp32c3_spi_pads();
+        bus.wire_esp32c3_uart_pads();
+        // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
+        // matrix rather than an AF nibble.
+        bus.wire_esp32s3_i2c_pads();
+        // …and the S3's GP-SPI2 / UART TX, whose matrix indices are 101/103/110
+        // and 12/15/18 — neither the C3's nor the classic part's.
+        bus.wire_esp32s3_spi_pads();
+        bus.wire_esp32s3_uart_pads();
+        // Same for classic ESP32 (LX6), whose matrix indices are 29/30 —
+        // neither the C3's 53/54 nor the S3's 89/90.
+        bus.wire_esp32_i2c_pads();
+        // …and the classic part's VSPI (SPI3) and UART TX. VSPI's 63/65/68
+        // happen to be the C3's FSPI numbers and are NOT SPI signals on the S3;
+        // the UART indices 14/17/198 are the classic part's alone.
+        bus.wire_esp32_spi_pads();
+        bus.wire_esp32_uart_pads();
+        // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
+        bus.wire_rp2040_i2c_pads();
+        // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
+        // the routed pad and not just console text.
+        bus.wire_rp2040_uart_pads();
+        // And the RP2040 SPI controllers' SCK/MOSI/CSn, so a probe on an SPI pad
+        // measures the shifted bytes rather than the SIO output latch. MISO is
+        // deliberately unrouted — nothing drives it.
+        bus.wire_rp2040_spi_pads();
         // STM32: share each classic/FIFO SPI bit engine's live SCK/MOSI/MISO
         // line levels with the STM32 GPIO ports so AF-routed pads carry the
         // real waveform. No-op for every other chip.
         bus.wire_stm32_spi_pads();
+        // Same for each STM32 I²C controller's SCL/SDA, so that bus is
+        // measurable too rather than reading as a flat line.
+        bus.wire_stm32_i2c_pads();
+        // And each USART's TX/RX, so serial output is a waveform on the routed
+        // AF pad rather than the idle GPIO latch.
+        bus.wire_stm32_uart_pads();
+        // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can
+        // name. Unlike the four above this is not a datasheet AF table — the
+        // pad has no function register on this family, so the peripherals
+        // publish which pin they claim and the port reads it. No-op for every
+        // other chip.
+        bus.wire_nrf52_pads();
         // Resolve declared per-peripheral RCC clock-gates now that every
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.

@@ -1,0 +1,5 @@
+name: "nrf52840-obd2-vehicle-ecu"
+chip: "../../../configs/chips/stm32f103.yaml"
+# Standalone ECU node for the Task 7 environment; bxcan1 is supplied by the chip.
+external_devices: []
+board_io: []

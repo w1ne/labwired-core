@@ -636,6 +636,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "nrf54l15/global_wdt31_s.yaml" => Some(include_str!(
             "../../../../configs/peripherals/nrf54l15/global_wdt31_s.yaml"
         )),
+        "nrf54l15/icache_s.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/nrf54l15/icache_s.yaml"
+        )),
         "rp2040/adc.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/adc.yaml"
         )),
@@ -647,6 +650,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         )),
         "rp2040/i2c0.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/i2c0.yaml"
+        )),
+        "rp2040/io_bank0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2040/io_bank0.yaml"
         )),
         "rp2040/pio0.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/pio0.yaml"
@@ -1290,6 +1296,12 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "stm32g474re/adc1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32g474re/adc1.yaml"
         )),
+        "stm32g474re/crc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32g474re/crc.yaml"
+        )),
+        "stm32g474re/dbgmcu.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32g474re/dbgmcu.yaml"
+        )),
         "stm32g474re/dma1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32g474re/dma1.yaml"
         )),
@@ -1452,11 +1464,23 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "stm32h563/wwdg.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h563/wwdg.yaml"
         )),
+        "stm32h735/adc1.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/adc1.yaml"
+        )),
+        "stm32h735/adc2.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/adc2.yaml"
+        )),
         "stm32h735/crc.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/crc.yaml"
         )),
         "stm32h735/dbgmcu.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/dbgmcu.yaml"
+        )),
+        "stm32h735/fdcan1.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/fdcan1.yaml"
+        )),
+        "stm32h735/fdcan2.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/fdcan2.yaml"
         )),
         "stm32h735/flash.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/flash.yaml"
@@ -1491,6 +1515,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "stm32h735/i2c2.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/i2c2.yaml"
         )),
+        "stm32h735/i2c3.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/i2c3.yaml"
+        )),
         "stm32h735/iwdg1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/iwdg1.yaml"
         )),
@@ -1512,6 +1539,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "stm32h735/spi2.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/spi2.yaml"
         )),
+        "stm32h735/spi3.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/spi3.yaml"
+        )),
         "stm32h735/syscfg.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/syscfg.yaml"
         )),
@@ -1524,11 +1554,26 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "stm32h735/tim3.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/tim3.yaml"
         )),
+        "stm32h735/tim4.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/tim4.yaml"
+        )),
+        "stm32h735/tim8.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/tim8.yaml"
+        )),
+        "stm32h735/uart4.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/uart4.yaml"
+        )),
         "stm32h735/usart1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/usart1.yaml"
         )),
+        "stm32h735/usart2.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/usart2.yaml"
+        )),
         "stm32h735/usart3.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32h735/usart3.yaml"
+        )),
+        "stm32h735/usart6.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32h735/usart6.yaml"
         )),
         "stm32l073/adc.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32l073/adc.yaml"
@@ -1833,6 +1878,12 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "stm32wb55/adc.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32wb55/adc.yaml"
         )),
+        "stm32wb55/crc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32wb55/crc.yaml"
+        )),
+        "stm32wb55/dbgmcu.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32wb55/dbgmcu.yaml"
+        )),
         "stm32wb55/dma1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32wb55/dma1.yaml"
         )),
@@ -1883,6 +1934,12 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         )),
         "stm32wb55/usart1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32wb55/usart1.yaml"
+        )),
+        "stm32wba52/crc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32wba52/crc.yaml"
+        )),
+        "stm32wba52/dbgmcu.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32wba52/dbgmcu.yaml"
         )),
         "stm32wba52/flash.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32wba52/flash.yaml"

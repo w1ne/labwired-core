@@ -26,10 +26,19 @@
 //!
 //! Lux = `raw_counts × resolution`. Resolution scales inversely with the
 //! programmed gain and integration time, anchored at `0.0576 lux/count` for the
-//! power-on default (gain ×1, integration time 100 ms — ALS_CONF reset value
-//! 0x0000). The model honours ALS_CONF gain/IT bits when converting lux to raw
-//! counts, so firmware that reprograms gain/IT sees the same count scaling a
-//! real part would.
+//! documented default gain ×1 / integration time 100 ms. The model honours
+//! ALS_CONF gain/IT bits when converting lux to raw counts, so firmware that
+//! reprograms gain/IT sees the same count scaling a real part would.
+//!
+//! **ALS_CONF resets to `0x0001`, not `0x0000`: the part boots SHUT DOWN.**
+//! Datasheet Rev. 1.8 p7 — *"Command code 0 default value is 01 = devices is
+//! shut down"* — and Table 1 defines bit 0 `ALS_SD` as *"0 = ALS power on,
+//! 1 = ALS shut down"*. While that bit is set this model returns `0x0000` from
+//! ALS and WHITE rather than a light count, because a shut-down sensor has run
+//! no conversion. The declarative descriptor expresses the same thing with a
+//! `zero_when` gate; the two must agree byte-for-byte, which is what
+//! `veml7700_parity` proves. See `configs/devices/veml7700.yaml` for the
+//! modelled-scope caveats (no startup latency, mid-flight shutdown is a guess).
 //!
 //! The illuminance is an externally driven variable: it changes only when
 //! something drives it through the ONE stimulus contract,
@@ -46,6 +55,12 @@ const RESOLUTION_LUX_PER_COUNT: f64 = 0.0576;
 const REG_ALS_CONF: u8 = 0x00;
 const REG_ALS: u8 = 0x04;
 const REG_WHITE: u8 = 0x05;
+
+/// ALS_CONF power-on value: bit 0 (`ALS_SD`) SET — the part boots shut down
+/// (datasheet Rev. 1.8 p7, Table 1).
+const ALS_CONF_RESET: u16 = 0x0001;
+/// `ALS_SD` — shutdown bit. Set ⇒ ALS / WHITE report nothing.
+const ALS_SD: u16 = 0x0001;
 
 /// VEML7700 model.
 pub struct Veml7700 {
@@ -74,7 +89,8 @@ impl Veml7700 {
         Self {
             address,
             lux,
-            conf: [0; 4],
+            // ALS_CONF (index 0) boots with ALS_SD set; the rest reset to 0.
+            conf: [ALS_CONF_RESET, 0, 0, 0],
             pointer: 0,
             write_buf: Vec::with_capacity(4),
             read_word: 0,
@@ -117,9 +133,16 @@ impl Veml7700 {
         (lux / self.resolution()).round().clamp(0.0, 65535.0) as u16
     }
 
+    /// True while `ALS_SD` (ALS_CONF bit 0) is set — the part is shut down and
+    /// is running no conversion, so it has no light data to report.
+    fn shut_down(&self) -> bool {
+        self.conf[REG_ALS_CONF as usize] & ALS_SD != 0
+    }
+
     /// Latch the word a read of the current pointer returns.
     fn latch_read_word(&mut self) {
         self.read_word = match self.pointer {
+            REG_ALS | REG_WHITE if self.shut_down() => 0,
             REG_ALS => self.lux_to_counts(self.lux),
             // White channel runs a bit brighter than the visible ALS channel.
             REG_WHITE => self.lux_to_counts(self.lux * 1.15),
@@ -243,6 +266,22 @@ mod tests {
         (hi << 8) | lo
     }
 
+    /// Write a 16-bit LE word to `reg`.
+    fn write_reg(d: &mut Veml7700, reg: u8, word: u16) {
+        d.start();
+        d.write(reg);
+        d.write((word & 0xFF) as u8);
+        d.write((word >> 8) as u8);
+        d.stop();
+    }
+
+    /// Clear `ALS_SD` — what every real driver does first (the Leo lab's
+    /// `veml7700_init()` writes ALS_CONF = 0x0000). Tests that want a *reading*
+    /// must do this, because a VEML7700 boots shut down.
+    fn power_on(d: &mut Veml7700) {
+        write_reg(d, REG_ALS_CONF, 0x0000);
+    }
+
     #[test]
     fn address_defaults_to_0x10() {
         assert_eq!(Veml7700::new_default(0).address(), 0x10);
@@ -251,6 +290,7 @@ mod tests {
     #[test]
     fn als_reads_back_as_plausible_lux() {
         let mut d = Veml7700::new_default(VEML7700_ADDR);
+        power_on(&mut d);
         let counts = read_reg(&mut d, REG_ALS);
         let lux = counts as f64 * RESOLUTION_LUX_PER_COUNT;
         assert!(
@@ -263,6 +303,7 @@ mod tests {
     fn light_holds_until_driven() {
         use crate::sim_input::SimInput;
         let mut d = Veml7700::new_default(VEML7700_ADDR);
+        power_on(&mut d);
         for _ in 0..20 {
             let lux = read_reg(&mut d, REG_ALS) as f64 * RESOLUTION_LUX_PER_COUNT;
             assert!((lux - 450.0).abs() < 0.1, "no self-running scene: {lux:.1}");
@@ -296,6 +337,7 @@ mod tests {
     fn gain_and_integration_time_scale_resolution() {
         // A steady 100 lux so the ALS count depends only on resolution.
         let mut d = Veml7700::new(VEML7700_ADDR, 100.0);
+        power_on(&mut d); // ALS_CONF = 0x0000: ALS_SD clear, gain ×1, IT 100 ms
         let default_counts = read_reg(&mut d, REG_ALS); // gain ×1 / IT 100 ms
                                                         // Program ALS_CONF = 0x08C0: gain ×2 (bits[12:11]=01) + IT 800 ms
                                                         // (bits[9:6]=0011) → resolution 0.0036 lux/count → ~16× the counts.

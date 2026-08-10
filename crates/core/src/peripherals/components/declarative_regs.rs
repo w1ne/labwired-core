@@ -133,6 +133,15 @@ pub(crate) fn register_read_bytes(
     slots: &HashMap<String, f64>,
     reg_values: &HashMap<String, u32>,
 ) -> Vec<u8> {
+    // Power-gate (`zero_when`): a shut-down sensor is not converting, so it has
+    // no measurement to report. Checked FIRST, ahead of every value path, so it
+    // holds for composite `fields`, `popcount` and plain sourced registers
+    // alike. See `labwired_config::ZeroWhen` for the modelled scope.
+    if let Some(z) = &reg.zero_when {
+        if reg_values.get(&z.register).copied().unwrap_or(0) & z.mask != 0 {
+            return pack(0, reg.width, reg.endian);
+        }
+    }
     if !reg.fields.is_empty() {
         let mut word = reg.reset;
         for f in &reg.fields {
@@ -244,6 +253,7 @@ mod tests {
             page: None,
             self_clearing: None,
             popcount: None,
+            zero_when: None,
         }
     }
 
@@ -274,6 +284,7 @@ mod tests {
             page: None,
             self_clearing: None,
             popcount: None,
+            zero_when: None,
         };
         let mut slots = HashMap::new();
         slots.insert("ax".to_string(), -1.0); // -1 g × 256 = -256 = 0xFF00 two's-complement, LE
@@ -357,6 +368,7 @@ mod tests {
             page: None,
             self_clearing: None,
             popcount: None,
+            zero_when: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), 100.0); // 100°C → 400 = 0x190 in bits[31:18]
@@ -399,6 +411,7 @@ mod tests {
             page: None,
             self_clearing: None,
             popcount: None,
+            zero_when: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), -25.0); // -25°C → -100 → 14-bit two's-comp = 0x3F9C, <<18

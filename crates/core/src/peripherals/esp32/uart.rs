@@ -34,6 +34,11 @@
 //! `tick()` emits the UART interrupt-matrix source while `INT_ST != 0`; the bus
 //! routes it through the per-core interrupt matrix.
 
+use crate::cycle_clock::CycleClock;
+use crate::peripherals::pad_lines::PadLines;
+use crate::peripherals::uart::{LINE_RX, LINE_TX, UART_LINES};
+use crate::peripherals::uart_waveform::{UartFraming, UartNarrator};
+use crate::peripherals::wave_plan::NarrationFit;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::collections::VecDeque;
 use std::io::{self, Write};
@@ -70,6 +75,23 @@ const CPU_CLOCK_HZ: u64 = 240_000_000;
 /// CLKDIV reset (≈80 MHz / 115200). Used when CLKDIV reads 0.
 const RESET_CLKDIV: u32 = 0x0000_02B6;
 
+/// Bit periods one 10-bit 8N1 character occupies — the divisor between
+/// [`UartCore::cycles_per_byte`] (which paces the shift register) and the bit
+/// period the narration is drawn at. Named rather than inlined so the two can
+/// never disagree about what "one character" means; it is `frame_bits()` of
+/// [`UartFraming::default`], asserted against it in the tests below.
+const FRAME_BITS: u64 = 10;
+
+/// Characters a narration may hold before it is published anyway, compressed.
+///
+/// Unreachable in the common case — this model shifts bytes out at the real
+/// baud rate, so a flush follows each drain and holds at most the handful of
+/// characters one elapsed window completed. It exists for the caller that ticks
+/// this model directly with no cycle axis at all (the unit tests below), where
+/// `now` never moves and a held burst could otherwise grow without bound.
+/// Mirrors [`crate::peripherals::esp_uart`]'s constant of the same name.
+const WIRE_BURST_CAP: usize = 256;
+
 /// Config registers that are simple masked storage: (offset, reset, mask).
 /// The firmware writes CLKDIV/CONF0/CONF1/INT_ENA during `uart_hal` setup and
 /// reads them back; other offsets fall through to round-trip storage.
@@ -101,6 +123,22 @@ struct UartCore {
     int_raw_sticky: u32,
     drain_accum: u64,
     tx_active: bool,
+    /// Wire levels published to matrix-routed TX pads, so a logic analyzer
+    /// clipped to a remapped `U0TXD`/`U1TXD`/`U2TXD` measures a serial waveform
+    /// instead of the GPIO output latch. `None` — the common case, no lab routed
+    /// the pad — costs one branch per shifted byte and publishes nothing.
+    ///
+    /// On the CORE rather than on either window, for the same reason the FIFO
+    /// and the trace are: the APB and AHB aliases are two doors onto one UART,
+    /// and a character crosses the wire once whichever door pushed it.
+    lines: Option<Arc<PadLines>>,
+    /// Characters that have LEFT the shift register but are not yet painted.
+    /// Non-empty only between a drain and the flush that follows it in the same
+    /// call, or while the flush had no cycles to draw in.
+    wire_chars: Vec<u8>,
+    /// Cycle the last narration ran to — the floor the next one may not reach
+    /// back past, or two bursts splice into characters neither one sent.
+    wave_cursor: u64,
 }
 
 pub struct Esp32Uart {
@@ -108,6 +146,27 @@ pub struct Esp32Uart {
     echo_stdout: bool,
     /// Interrupt-matrix source ID (UART0=34, UART1=35, UART2=36).
     source_id: u32,
+    /// Bus-published cycle clock — the axis a narration is placed on. `Some`
+    /// once the bus has attached it (every `add_peripheral` does, feature or
+    /// not); `None` when a test ticks this model directly, where there is
+    /// nowhere to put a waveform.
+    ///
+    /// This does NOT migrate the model to the event scheduler:
+    /// `uses_scheduler()` stays false and `needs_legacy_walk()` stays at its
+    /// `true` default, because `tick_elapsed` still drains the TX FIFO and
+    /// nothing else does. Changing either is what wedged classic ESP32 in the
+    /// browser once already — see the note in `configure_xtensa_esp32`.
+    clock: Option<CycleClock>,
+    /// A HANDLE to the same TX/RX wire cell `UartCore::lines` owns — not a
+    /// second home for it.
+    ///
+    /// It exists because the cell lives behind the core's `Mutex` (the APB and
+    /// AHB windows are two doors onto one UART), and a
+    /// [`Peripheral::wire_lines`](crate::Peripheral::wire_lines) reference
+    /// cannot be handed out from inside a `MutexGuard`. Set in exactly one
+    /// place, [`Self::pad_lines_arc`], from the very `Arc` that call returns,
+    /// so the two can never point at different cells.
+    wire: Option<Arc<PadLines>>,
 }
 
 /// AHB-bus FIFO alias (`UART_FIFO_AHB_REG(i)`). Write-only TX push into the
@@ -156,10 +215,34 @@ impl Esp32Uart {
                 int_raw_sticky: 0,
                 drain_accum: 0,
                 tx_active: false,
+                lines: None,
+                wire_chars: Vec::new(),
+                wave_cursor: 0,
             })),
             echo_stdout,
             source_id,
+            clock: None,
+            wire: None,
         }
+    }
+
+    /// The shared pad-line cell for this UART's TX/RX pair, created on first use
+    /// at bus wiring time. A serial line idles HIGH (mark) in both directions,
+    /// so a start bit is always a falling edge.
+    ///
+    /// ⚠️ Creating the cell is what turns narration ON. Resolve the GPIO port
+    /// FIRST, as `SystemBus::wire_esp32_uart_pads` does: a controller that owns
+    /// a cell no route reaches still buffers and narrates on every transmitted
+    /// byte, into a wire nothing reads.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        let mut core = self.core.lock().unwrap();
+        let lines = core
+            .lines
+            .get_or_insert_with(|| Arc::new(PadLines::new(UART_LINES, &[true, true])))
+            .clone();
+        drop(core);
+        self.wire = Some(lines.clone());
+        lines
     }
 
     /// AHB FIFO window paired with this APB UART (same FIFO/sink/state).
@@ -226,6 +309,88 @@ impl UartCore {
         (10 * clkdiv * CPU_CLOCK_HZ / UART_SCLK_HZ).max(1)
     }
 
+    /// Engine cycles in one bit period.
+    ///
+    /// Derived FROM [`Self::cycles_per_byte`] rather than recomputed from
+    /// `CLKDIV`, so the rate the trace measures can never disagree with the rate
+    /// the shift register actually drained at — the two would otherwise differ
+    /// by integer rounding, and a waveform a cycle per bit off from the model
+    /// that produced it is exactly the kind of wrong that looks right.
+    ///
+    /// `None` below two cycles per bit, where
+    /// [`crate::peripherals::wave_plan::WavePlan`] cannot keep a period's halves
+    /// distinct. Unreachable at any real baud rate: `CLKDIV` resets to 694
+    /// (115200 from the 80 MHz APB source), which is 2082 CPU cycles per bit on
+    /// this 240 MHz part.
+    fn wire_bit_time(&self) -> Option<u64> {
+        let bit = self.cycles_per_byte() / FRAME_BITS;
+        (bit >= 2).then_some(bit)
+    }
+
+    /// Queue a character that has just left the shift register. Buffered, not
+    /// published — see [`Self::wire_flush`].
+    fn wire_push(&mut self, byte: u8) {
+        if self.lines.is_some() && self.wire_bit_time().is_some() {
+            self.wire_chars.push(byte);
+        }
+    }
+
+    /// Paint the characters this drain shifted out onto the routed TX pads.
+    ///
+    /// This model is a byte-paced ENGINE, not a transaction-level one: a
+    /// character only leaves [`Self::drain_accum`] once a full frame time has
+    /// elapsed for it. So by the moment this runs every buffered character has
+    /// genuinely had its wire time, and there is nothing to pace against — it
+    /// narrates unconditionally rather than holding for a deadline the way the
+    /// SPI wire must.
+    ///
+    /// What it still must respect is the capture layer: `LogicTap::push_at` →
+    /// `LogicCapture::ingest_push` accepts stamps in the PAST only and keeps one
+    /// level per channel per cycle. So the burst is drawn as one waveform ENDING
+    /// at `now` and reaching no further back than the previous flush, exactly as
+    /// the classic I²C narrator publishes.
+    fn wire_flush(&mut self, now: u64) {
+        if self.wire_chars.is_empty() {
+            return;
+        }
+        let Some(lines) = self.lines.clone() else {
+            self.wire_chars.clear();
+            return;
+        };
+        let Some(bit_time) = self.wire_bit_time() else {
+            self.wire_chars.clear();
+            return;
+        };
+        let mut narrator = UartNarrator::with_lines(
+            LINE_TX,
+            &[lines.level(LINE_TX), lines.level(LINE_RX)],
+            bit_time,
+        );
+        for &byte in &self.wire_chars {
+            narrator.frame(byte, UartFraming::default());
+        }
+        if let NarrationFit::LevelsOnly { .. } =
+            narrator.emit_between(&lines, self.wave_cursor, now)
+        {
+            // Fewer cycles exist than the waveform has transitions, so nothing
+            // was drawn. KEEP the characters and the cursor: `now` only grows,
+            // so a later drain will have the room. Clearing here would delete
+            // bytes that really crossed the wire and advance the cursor past
+            // cycles nothing painted — silent, unrecoverable loss, and the
+            // reason `emit_between` is `#[must_use]`.
+            if self.wire_chars.len() > WIRE_BURST_CAP {
+                // …except when the caller advances no cycles at all, where
+                // "later" never comes. Give up on the timeline rather than the
+                // memory; the levels above were already applied.
+                self.wire_chars.clear();
+                self.wave_cursor = now;
+            }
+            return;
+        }
+        self.wave_cursor = now;
+        self.wire_chars.clear();
+    }
+
     fn int_raw(&self) -> u32 {
         let mut v = self.int_raw_sticky;
         if self.tx_fifo.len() < self.txfifo_empty_thrhd() {
@@ -286,6 +451,14 @@ impl UartCore {
 }
 
 impl Peripheral for Esp32Uart {
+    fn line_names(&self) -> &'static [&'static str] {
+        UART_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.wire.as_deref()
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.core.lock().unwrap().trace.clone())
     }
@@ -388,6 +561,9 @@ impl Peripheral for Esp32Uart {
     /// shared C3/S3 twin already documents — see
     /// [`crate::peripherals::esp_uart::EspUart::tick_elapsed`].
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        // Read the axis before taking the core lock; a narration is placed on
+        // absolute cycles, and there is nowhere to put one without a clock.
+        let now = self.clock.as_ref().map(|c| c.now());
         let mut core = self.core.lock().unwrap();
         if !core.tx_fifo.is_empty() {
             core.drain_accum += cycles;
@@ -395,6 +571,10 @@ impl Peripheral for Esp32Uart {
             while core.drain_accum >= per_byte && !core.tx_fifo.is_empty() {
                 core.drain_accum -= per_byte;
                 if let Some(byte) = core.tx_fifo.pop_front() {
+                    // The wire sees the byte at the SAME choke point the sink
+                    // and the trace do, for the same reason: a byte leaves the
+                    // shift register exactly once, and this is that once.
+                    core.wire_push(byte);
                     core.trace.push(
                         &core.trace_name,
                         crate::bus::bus_trace::BusPayload::Uart {
@@ -420,6 +600,14 @@ impl Peripheral for Esp32Uart {
         } else {
             core.drain_accum = 0;
         }
+        // Paint whatever this window shifted out, and retry a narration an
+        // earlier window had no cycles to place: `now` has moved on, so cycles
+        // that did not exist then may exist now. One `is_empty` check on every
+        // bus that never routed a TX pad, which is every classic lab that
+        // existed before this.
+        if let Some(now) = now {
+            core.wire_flush(now);
+        }
 
         let asserting = core.int_raw() & core.reg(OFF_INT_ENA);
         PeripheralTickResult {
@@ -430,6 +618,15 @@ impl Peripheral for Esp32Uart {
             },
             ..PeripheralTickResult::default()
         }
+    }
+
+    /// Take the bus's cycle axis so a shifted character can be narrated onto its
+    /// routed pad. ⚠️ Storing a clock does NOT migrate this model to the event
+    /// scheduler — `uses_scheduler()` is deliberately left at its `false`
+    /// default, because `tick_elapsed` is still the only thing that drains the
+    /// TX FIFO.
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -505,6 +702,13 @@ mod tests {
 
     fn int_raw(u: &Esp32Uart) -> u32 {
         u.core.lock().unwrap().int_raw()
+    }
+
+    /// The pacing divisor and the narration's frame width must be the same
+    /// number, or the waveform is drawn at a rate the shift register never used.
+    #[test]
+    fn one_character_is_ten_bit_periods_to_both_the_shifter_and_the_narrator() {
+        assert_eq!(UartFraming::default().frame_bits(), FRAME_BITS);
     }
 
     #[test]

@@ -45,7 +45,10 @@ impl Peripheral for Nrf52Cryptocell {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
             OFF_ENABLE => self.enable & 1,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.cryptocell:Nrf52Cryptocell", offset, "read");
+                0
+            }
         })
     }
 

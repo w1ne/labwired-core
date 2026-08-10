@@ -12,4 +12,12 @@ external_devices:
     connection: "spi1"
     config:
       cs_pin: "PA4"
+      # D/C is a real wire on a real ILI9341 — the panel latches command-vs-data
+      # from it on every byte, and there is no 4-line-serial mode in which it can
+      # be left out. It is declared here because the canvas board of the same
+      # name wires PB0 -> tft DC (playground starter-diagrams), so the compiled
+      # hosted manifest carries `dc_pin` whether or not this file does. Leaving
+      # it out here meant the bundled lab and the hosted lab ran the model down
+      # two different framing paths, and only the hosted one was broken.
+      dc_pin: "PB0"
 board_io: []

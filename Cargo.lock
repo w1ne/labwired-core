@@ -1203,6 +1203,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nrf52832-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nrf52840-ble-collector"
 version = "0.1.0"
 dependencies = [
@@ -1274,6 +1282,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nrf52840-obd2-scanner"
+version = "0.21.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nrf52840-proximity"
 version = "0.1.0"
 dependencies = [
@@ -1306,6 +1323,14 @@ version = "0.21.0"
 dependencies = [
  "cortex-m-rt",
  "panic-halt",
+]
+
+[[package]]
+name = "firmware-perf-spin-riscv"
+version = "0.21.0"
+dependencies = [
+ "panic-halt",
+ "riscv-rt",
 ]
 
 [[package]]
@@ -2339,6 +2364,15 @@ name = "managed"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
+
+[[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
+]
 
 [[package]]
 name = "max31855-thermocouple-lab"
@@ -3926,10 +3960,14 @@ version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
 dependencies = [
+ "matchers",
  "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
  "sharded-slab",
  "smallvec",
  "thread_local",
+ "tracing",
  "tracing-core",
  "tracing-log",
 ]

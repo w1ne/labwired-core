@@ -495,11 +495,11 @@
 //! with the controller-level trace behind it:
 //!
 //! ```text
-//! [bt] radio RX ch39 aa=0x8e89bed6 rxd=0x1000 et=4 cs=0x0400 label=0
+//! [bt<n>] radio RX ch39 aa=0x8e89bed6 rxd=0x1000 et=4 cs=0x0400 label=0
 //!      pdu=20 0f 04 00 00 00 00 02 02 01 06 05 12 20 00 40 00
-//! [bt] +0x2d8 <= 0x0000103f      ← FIFO popped, head bitmap 0x4
-//! [bt] +0x018 <= 0x00000004      ← bit 2 W1C-acked
-//! [bt] radio: ET 4 end (clkn=7097)
+//! [bt<n>] +0x2d8 <= 0x0000103f      ← FIFO popped, head bitmap 0x4
+//! [bt<n>] +0x018 <= 0x00000004      ← bit 2 W1C-acked
+//! [bt<n>] radio: ET 4 end (clkn=7097)
 //! ```
 //!
 //! `02:00:00:00:00:04` is node A's own BLE address (`04 00 00 00 00 02` LSB
@@ -638,15 +638,75 @@
 //!
 //! **What the advertising stop does NOT do here, stated plainly.**
 //! `r_lld_adv_stop` (`0x4001_898A`), when the activity has an event in flight
-//! (state 1), writes `CS+0x20 = 1` and sets **`RWBLECNTL` bit 25** before
-//! moving the activity to state 2. This model stores that bit and acts on
-//! neither it nor `CS+0x20`: what bit 25 does to an event already programmed —
-//! end it early with `irq_type` 0, or with the abort `irq_type` 1
-//! `r_lld_adv_frm_cbk` also accepts — was **not** determined, and inventing one
-//! would put a fabricated callback path in the middle of the stop sequence. The
-//! measured consequence of not modelling it is bounded and small: the in-flight
-//! event runs to its programmed duration (≤ 2.8 ms of device time) and
-//! `r_lld_adv_frm_isr` then finds state 2 and completes the stop through
+//! (state 1 — set at the tail of `r_lld_adv_evt_start_cbk` `0x4001_696E`, i.e.
+//! the instant the event is handed to `sch_prog_push`), writes `CS+0x20 = 1`
+//! and sets **`RWBLECNTL` bit 25** before moving the activity to state 2.
+//!
+//! Bit 25 is now **cleared** on write, along with bit 24 — they are abort
+//! *requests* the hardware consumes, and latching them made the twin hand the
+//! firmware a control word silicon cannot produce. The ROM sites, the silicon
+//! read-backs and the twin trace that pin that are all at
+//! [`RWBLECNTL_SELF_CLEARING`].
+//!
+//! What is still **not** modelled is the abort's *effect*: ending the event
+//! that is already programmed. Two things about it are now settled that were
+//! not before, and one is still open.
+//!
+//! * Settled — **how silicon reports an aborted event.**
+//!   `r_sch_prog_end_isr` (`0x4003_0AB8`) reads the exchange-table status
+//!   `(ET+0x0 >> 3) & 7`, dispatches 3/4/5, and computes the callback's third
+//!   argument as `seqz(status - 4)` (`0x4003_0B52`) — i.e. **`irq_type = 1`
+//!   exactly when the status is 4**. `r_lld_adv_frm_cbk` (`0x4001_7550`) then
+//!   routes `irq_type` 1 to `lld_adv_frm_isr(act, ts, 1)` and 0 to
+//!   `lld_adv_frm_isr(act, ts, 0)`. So **status 4 is the abort encoding** — one
+//!   of the "status codes 1, 4, 5, 6 are named nowhere that was measured" gaps
+//!   listed below, now closed from the ROM. (For the *stop* path specifically
+//!   the distinction is inert: `lld_adv_frm_isr` branches on state 2 at
+//!   `0x4001_6FF8` before it ever looks at the abort flag.)
+//! * Settled — **what it costs not to do it**, measured rather than argued.
+//!   `LABWIRED_BT_TRACE=1`, two nodes, 150 M cycles/node ≈ CLKN 0..2840
+//!   (0.89 s), the published BLE Pong sketch rebuilt at two cadences.
+//!
+//!   At the sketch's own **~51 ms** — and `PUBLISH_MS` 20 and 40 both land
+//!   there, because one iteration of that `loop()` costs ~51 ms of device time
+//!   in the twin (49 status lines per 400 M cycles) and the SSD1306 repaint is
+//!   nearly all of it — `r_lld_adv_stop` took the state-1 branch **4 times on
+//!   node A and 3 on node B**, roughly one publish in four. Every one was
+//!   followed by the ordinary event end **0–10 CLKN ticks later (0–3.1 ms)**,
+//!   which is the whole of the delay the missing abort adds.
+//!
+//!   With the panel removed the loop runs at 6 ms and the achieved cadence is
+//!   **24 ms** (`pub=103` at `t=2494`). There the branch is taken **zero**
+//!   times, across 212 programmed events per node: each stop lands a few ms
+//!   *before* its activity's next programmed event, so it takes the
+//!   synchronous state-0 path at `0x4001_89E6` and never touches bit 25.
+//!   Republishing faster is not more likely to catch an event in flight — it
+//!   phase-locks the stop ahead of one — which is worth stating because the
+//!   opposite was the working theory.
+//!
+//!   Neither cadence stalls. Air frames stay at 3–5 (51 ms) and 5–6 (24 ms)
+//!   per 20 M cycles per node right to the end of a 400 M-cycle two-node run,
+//!   the host election settles, and at 24 ms both nodes agree on `score=7:6`
+//!   with the guest's ball identical to the host's.
+//! * Open — **whether the core also discards the event's transmission.** In
+//!   this model a legacy advertising event puts its PDU on the air when it
+//!   *starts*, so truncating a `Pending` one throws away a frame silicon has
+//!   already sent. That is not a theory: core#772 tried exactly that and
+//!   silenced both nodes.
+//!
+//! So the abort's effect stays unmodelled **on the measurement**, not on
+//! ignorance: at ≤3.1 ms per stop it changes nothing observable, while
+//! synthesising an event ending has a merged-and-reverted-the-same-day track
+//! record. Two independent defects in that attempt are worth recording so the
+//! next one does not inherit them: it keyed on the 0→1 edge of a bit this model
+//! then latched (so it could fire at most once per boot — see
+//! [`RWBLECNTL_SELF_CLEARING`]), and it shipped `self.rx_cursor = frame.seq`
+//! in `receive_event`, which re-delivers one frame forever and makes every
+//! receiver in the world deaf. Any measurement taken over that tree says
+//! nothing about the abort.
+//!
+//! The in-flight event therefore still runs to its programmed duration and
+//! `r_lld_adv_frm_isr` finds state 2 and completes the stop through
 //! `r_lld_adv_end` → `lld_adv_end_ind_handler` exactly as it does on silicon.
 //! The traces above are of a stop that completes that way, every iteration.
 //!
@@ -1255,7 +1315,55 @@ const RWBLECNTL: u64 = 0x000;
 /// was `+0x000 <= 0x8010_070f`, and the CPU sat on the instruction immediately
 /// after that store while the real part carried straight on into the next
 /// bring-up step.
-const RWBLECNTL_SELF_CLEARING: u32 = 0x8000_0000;
+///
+/// **Bits 25 and 24 are the same kind of bit, and for the same two reasons.**
+/// They are the RW-BLE core's two abort *requests* — bit 25 aborts the
+/// advertising event in flight, bit 24 aborts the scanning one — and firmware
+/// only ever ORs them in, never clears them:
+///
+/// | ROM site | writes |
+/// |---|---|
+/// | `r_lld_adv_stop` `0x4001_8A2C` (state 1 branch) | `(x & 0xFDFF_FFFF) \| 0x0200_0000` |
+/// | `r_lld_per_adv_stop` `0x4002_3E48` | the same, bit 25 |
+/// | `r_lld_scan_end` `0x4002_4634` | `(x & 0xFEFF_FFFF) \| 0x0100_0000`, bit 24, and then parks the scan activity in state 2 exactly as the advertising stop parks its own |
+/// | `r_lld_rpa_renew_evt_start_cbk` `0x4001_FF06`/`0x4001_FF18` | bit 25, then bit 24 — one after the other, aborting both activities so the resolvable private address can be renewed |
+///
+/// Those are **every** site in the mask ROM that touches either bit, and not
+/// one of them ever writes a zero into it: `r_lld_adv_stop`'s
+/// `and 0xFDFF_FFFF` immediately precedes an `or 0x0200_0000`, so it is a
+/// set, not a clear. No ROM site reads either bit back, either (the only
+/// `RWBLECNTL` *read* that is not part of one of those read-modify-writes is
+/// `r_lld_scan_process_pkt_rx_aux_adv_ind` `0x4002_4F92`, which tests bit 10).
+/// A request bit that software only ever sets and never polls has to be
+/// cleared by the hardware, or it latches on the first stop and stays.
+///
+/// And silicon says it is cleared: every dump of the live advertising part
+/// reads `+0x000 = 0x0010_070f` — bits 25 and 24 clear — on a part running
+/// firmware that demonstrably writes them set.
+///
+/// **The twin's own trace shows what latching them costs**, and it is a value
+/// silicon cannot produce. `LABWIRED_BT_TRACE=1`, two-node BLE Pong,
+/// 2026-08-07, both nodes, at CLKN 37:
+///
+/// ```text
+/// [bt1] +0x000 <= 0x0210070f   ← rpa_renew sets bit 25
+/// [bt1] +0x000 <= 0x0310070f   ← ... then ORs bit 24 onto what it read BACK
+/// ```
+///
+/// `r_lld_rpa_renew_evt_start_cbk` computes that second word as
+/// `(read_back & 0xFEFF_FFFF) | 0x0100_0000`. On silicon the read-back is
+/// `0x0010_070f`, so the second store is `0x0110_070f`. `0x0310_070f` only
+/// exists because this model handed the firmware back its own abort request.
+///
+/// The practical trap that follows, recorded because it has already cost one
+/// merged-and-reverted attempt (core#772 → #774): with the bits latched, an
+/// abort model keyed on the 0→1 *edge* of bit 25 can fire **at most once per
+/// boot**. Every later `r_lld_adv_stop` writes the identical word back — the
+/// isolated `+0x000 <= 0x0310070f` entries at CLKN 1576/1723/2161/2747 in that
+/// same trace are real stops landing on a live advertising event, and not one
+/// of them is an edge. Clearing the bits here is what makes any future abort
+/// model observable at all.
+const RWBLECNTL_SELF_CLEARING: u32 = 0x8300_0000;
 
 /// Read-only hardware identity/configuration words, seeded from the silicon
 /// capture of 2026-08-02. These are the ONLY snapshot-seeded values in the
@@ -1298,6 +1406,57 @@ const CYCLES_PER_CLKN_TICK: u64 = 50_000;
 const FINE_TICKS_PER_CLKN: u64 = 625;
 /// CPU cycles per fine tick (`CYCLES_PER_CLKN_TICK / FINE_TICKS_PER_CLKN`).
 const CYCLES_PER_FINE_TICK: u64 = CYCLES_PER_CLKN_TICK / FINE_TICKS_PER_CLKN;
+
+/// Furthest ahead [`Peripheral::on_event`] will commit its self-chained wake
+/// before waking to re-evaluate. 16 CLKN ticks = 5 ms of guest time.
+///
+/// ## Why a cap is needed at all
+///
+/// The scheduler has no cancel by design, so a wake that is superseded stays
+/// live until its deadline. [`Esp32c3Bt::take_scheduled_events`] avoids that by
+/// being idempotent — it compares [`Esp32c3Bt::armed_wake`] and declines to
+/// re-arm. The chain CANNOT be: the event it replaces has just fired, so
+/// something must always take its place.
+///
+/// That matters because the BT ROM parks its 10 ms comparator on a far-future
+/// sentinel — a measured `TIMER_10MS_TARGET` of 90001, i.e. 900 s — whenever no
+/// coarse timeout is pending. Every advertising round ends with the chain
+/// committing an event to that sentinel, and the next round's re-arm bumps
+/// [`Esp32c3Bt::arm_seq`] and strands it: live, unreachable, for the rest of
+/// the run. Measured at 185 stranded events per node per 96 M cycles — the
+/// residue that still held `LIVE_HWM [bt=119]` after the arm itself was made
+/// idempotent.
+///
+/// ## Why it is safe
+///
+/// A capped wake is a re-evaluation, not a behaviour change. It arrives,
+/// [`Esp32c3Bt::latch_at`] finds nothing due, [`Esp32c3Bt::service_radio`] finds
+/// nothing due, and the chain re-arms for whatever is still outstanding. A
+/// comparator still fires on the cycle [`Esp32c3Bt::deadline_cycles`] names,
+/// because the latch decides that, not which wake happens to run it.
+///
+/// ## Why this value — it is bracketed from both sides, not tuned
+///
+/// LOWER bound: the cap must never bite on a deadline the block legitimately
+/// schedules in the near term, or it splits real waits into pointless halves.
+/// The longest of those is a programmed radio event's own duration, and the
+/// measured legacy-advertising entry runs `0x0AF7` units of two half-µs =
+/// 2807 µs = 449 120 cycles. A horizon of 8 CLKN ticks (2.5 ms) sits *below*
+/// that and chopped every advertising event in two; the unit test
+/// `a_programmed_event_transmits_the_staged_pdu_and_ends` catches exactly that.
+///
+/// UPPER bound: stranded events ≈ horizon / re-arm interval, and this block
+/// re-arms roughly every 150 k cycles on the BLE Pong lab (≈700 arms per 96 M).
+/// The scheduler panics in debug builds above
+/// `MAX_LIVE_EVENTS_PER_PERIPHERAL` = 8, so the horizon must stay well inside
+/// 8 re-arm intervals ≈ 1.2 M cycles. One 10 ms tick (32 CLKN ticks, the unit
+/// `+0x0E4` counts in) was the tidier hardware number but exceeds that —
+/// measured `LIVE_HWM [bt=10]`, still tripping the ceiling.
+///
+/// 16 CLKN ticks = 800 000 cycles = 5 ms is the power-of-two CLKN multiple
+/// between the two bounds: comfortably above the 449 k radio duration, and
+/// comfortably inside the ceiling.
+const CHAIN_REEVALUATE_HORIZON: u64 = 16 * CYCLES_PER_CLKN_TICK;
 
 /// Process-cached `LABWIRED_BT_TRACE` gate. Read ONCE per process — the write
 /// path is hot and `std::env::var` is a syscall-backed lookup (same reasoning
@@ -1359,47 +1518,78 @@ pub struct Esp32c3Bt {
     /// exact rather than off by however far the published `CycleClock` lags
     /// mid-batch.
     sync_cycle: Cell<u64>,
-    /// Generation stamp for the in-flight scheduled comparator event. Bumped
-    /// on every write that could re-arm, so an event scheduled under an older
-    /// deadline dies on arrival instead of firing a stale interrupt.
+    /// Generation stamp for the in-flight scheduled event. Bumped whenever the
+    /// block's wake requirement changes, so an event scheduled under an older
+    /// requirement dies on arrival instead of firing a stale interrupt.
     ///
-    /// ## KNOWN COST — this block dominates scheduler time. Read before "fixing" it.
+    /// ## Why this is gated on [`Self::armed_wake`] rather than bumped per write
     ///
-    /// `take_scheduled_events` runs on **every MMIO access** to this block, not
-    /// only after a write that moves a comparator, and it bumps `arm_seq`
-    /// unconditionally. A fresh token is a fresh `(peripheral, token, deadline)`
-    /// key, so the scheduler's dedup index can never collapse these, and since
-    /// there is no scheduler-side cancel by design each one stays live until it
-    /// fires and is rejected as stale. Measured on the two-node BLE Pong lab:
+    /// `take_scheduled_events` runs after **every MMIO write** to this block,
+    /// not only after a write that moves a comparator. It used to bump this
+    /// counter unconditionally. A fresh token is a fresh
+    /// `(peripheral, token, deadline)` key, so the scheduler's dedup index
+    /// could never collapse the duplicates, and since there is no
+    /// scheduler-side cancel by design each one stayed live until it fired and
+    /// was rejected as stale. Measured on the two-node BLE Pong lab
+    /// (`tests/esp32c3_ble_pong_perf_probe.rs`, 96M cycles/node):
     ///
     /// ```text
-    /// LIVE_HWM [bt=436 systimer=4]     ceiling 8, live_event_ceiling_trips=1599
+    /// LIVE_HWM [bt=789 systimer=4]   max_queued=792  live_event_ceiling_trips=3310
     /// ```
     ///
-    /// 436 simultaneously-live events from only ~3.3k arms. That inflates the
+    /// 789 simultaneously-live events from only ~3.3k arms. That inflated the
     /// scheduler's `queued` dedup index — a linearly-scanned `Vec` chosen
-    /// *because* its measured high-water mark was 3 — to ~439 entries, and a
-    /// `sample` profile then puts `EventScheduler::{drain_due_into, schedule}`
+    /// *because* its measured high-water mark was 3 — to ~792 entries, and a
+    /// `sample` profile then put `EventScheduler::{drain_due_into, schedule}`
     /// at **4.7x the cost of the RISC-V interpreter**. Debug builds would panic
     /// on the `debug_assert!` behind `live_event_ceiling_trips`.
     ///
-    /// ## Why the obvious fixes do not work (three tried, all rejected by
-    /// `tests/world_esp32c3_ble_pong.rs`)
+    /// ## The three fixes that did NOT work, and the reason
+    ///
+    /// All three were rejected by `tests/world_esp32c3_ble_pong.rs` with
+    /// `nodeB ball never left spawn — no host frame ever arrived`:
     ///
     /// 1. Arm only when the absolute CPU deadline changes — wrong, `anchor`
     ///    equals the bus's `current_cycle` only on the write path.
     /// 2. Arm only when the comparator target changes (anchor-independent,
-    ///    elapsed/CLKN domain) — still starves the peer: no host frame arrives.
+    ///    elapsed/CLKN domain) — still starves the peer.
     /// 3. Emit every poll but reuse the token when the target is unchanged, so
     ///    dedup collapses the duplicates — also starves the peer.
     ///
-    /// 2 and 3 fail for the same reason, and it is the real finding:
+    /// 2 and 3 failed for the same reason, and it is the whole finding:
     /// **`on_event` is the only place `service_radio` runs, so the arm cadence
-    /// IS the radio cadence.** The controller is being driven by the duplicate
-    /// events. Any residency fix must first give the radio engine its own
-    /// explicit wake schedule; then, and only then, can the comparator arm be
-    /// made idempotent. Do not attempt one without the other.
+    /// WAS the radio cadence.** Both keyed the arm decision on the timer
+    /// comparators alone, so a `PROG_PUSH` that queued a radio event but moved
+    /// no comparator armed nothing at all: the entry was never decoded,
+    /// `sch_prog_end` never fired, and the link layer stalled. The duplicate
+    /// events were load-bearing.
+    ///
+    /// The fix is not to arm less often but to state *what the block is waiting
+    /// for* — including the radio engine's own next action — in a form two
+    /// polls can compare. See [`Self::armed_wake`], [`WakeAt`] and [`RadioWake`].
     arm_seq: u32,
+    /// The wake requirement the in-flight event was armed for; `(None, None)`
+    /// when nothing is armed because nothing needs to be.
+    ///
+    /// This is the residency fix. [`Self::take_scheduled_events`] compares
+    /// [`Self::next_wake`] against this and returns nothing when they match, so
+    /// a firmware poll that moved no wake cycle schedules no event.
+    ///
+    /// It is the folded wake and not the raw state on purpose. An arm encodes
+    /// one cycle, so that is all a re-arm can change: a comparator write that
+    /// moves a deadline which is not the earliest leaves the in-flight event
+    /// exactly right, and re-arming for it would strand that event for nothing.
+    ///
+    /// [`WakeAt`] is anchor-independent — an absolute elapsed-domain cycle, or
+    /// a *state* rather than the delay 0 it produces — so two polls at
+    /// different cycles that describe the same pending work compare equal. A
+    /// delay-based key never could, which is what defeated attempt 1 above.
+    ///
+    /// [`Peripheral::on_event`] re-states it after servicing, because the chain
+    /// re-arms itself under the SAME token via `reschedule_delay`: without that
+    /// the next MMIO write would compare against a stale entry, conclude the
+    /// work was uncovered, and arm a duplicate.
+    armed_wake: Option<WakeAt>,
     /// Cycle at which the block was first written, i.e. when the controller
     /// un-gated it. CLKN counts from here, so a read before any BLE activity
     /// returns 0 exactly like silicon at `reset halt`. `None` until then.
@@ -1427,6 +1617,40 @@ pub struct Esp32c3Bt {
     node_id: u64,
     /// The shared air this controller transmits into and listens on.
     air: BleAirBus,
+}
+
+/// What the radio engine is waiting for, expressed so that it is the SAME
+/// value at every cycle it is still waiting for the same thing.
+///
+/// This is the half of the arm key the two failed "arm only when the comparator
+/// target changed" attempts were missing. A *delay* cannot be compared across
+/// polls — it shrinks every cycle, so every poll looks like a change and
+/// re-arms; and a delay of 0 for "decode this now" is indistinguishable from a
+/// deadline that has just come due. A *state* can be compared: `Decode` means
+/// "there is an undecoded entry in `prog_queue`", and `At` names an absolute
+/// cycle in the same elapsed-cycle domain as [`Esp32c3Bt::elapsed_cycles`].
+///
+/// Both are derived from the programmed event's own exchange-table schedule
+/// (`ET+0x4` start, `ET+0xA` duration) and from the phase the engine is in —
+/// never from how often firmware happens to poll an MMIO register.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RadioWake {
+    /// An entry is queued but not decoded. Decoding reads exchange memory, so
+    /// it needs the bus, so it needs an event — at the first opportunity.
+    Decode,
+    /// The in-flight event's next phase transition, at this elapsed cycle.
+    At(u64),
+}
+
+/// The one cycle the block next needs an event at, folded from the comparators
+/// and [`RadioWake`]. See [`Esp32c3Bt::next_wake`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WakeAt {
+    /// As soon as the scheduler can: there is work that needs the bus and has
+    /// no future instant of its own.
+    Immediate,
+    /// At this absolute cycle in the [`Esp32c3Bt::elapsed_cycles`] domain.
+    At(u64),
 }
 
 /// Where a programmed radio event is in its life.
@@ -1461,6 +1685,7 @@ impl Esp32c3Bt {
             irq_fifo: RefCell::new(VecDeque::new()),
             sync_cycle: Cell::new(0),
             arm_seq: 0,
+            armed_wake: None,
             clock_base: None,
             clock: None,
             prog_queue: VecDeque::new(),
@@ -1679,8 +1904,9 @@ impl Esp32c3Bt {
             fifo.push_back(queued);
         }
         if bt_trace_enabled() {
+            let nid = self.node_id;
             eprintln!(
-                "[bt] IRQ raw|={rising:#010x} stat={:#010x} fifo_cnt={} (clkn={} fine={})",
+                "[bt{nid}] IRQ raw|={rising:#010x} stat={:#010x} fifo_cnt={} (clkn={} fine={})",
                 self.int_raw.get() & self.int_enable(),
                 fifo.len(),
                 Self::clkn_at(elapsed),
@@ -1698,18 +1924,56 @@ impl Esp32c3Bt {
         }
     }
 
-    /// Cycles from `elapsed` to the nearest armed, unspent comparator or
-    /// pending radio-event phase, or `None` when nothing is scheduled. Zero
-    /// when one is already due.
-    fn cycles_to_next_deadline(&self, elapsed: u64) -> Option<u64> {
+    /// Absolute elapsed cycle of the nearest armed, unspent comparator, or
+    /// `None` when none is armed.
+    ///
+    /// Anchor-independent on purpose: [`Self::deadline_cycles`] works in the
+    /// elapsed/CLKN domain, so two polls at different cycles that describe the
+    /// same pending comparator return the same number. That is what lets
+    /// [`Self::take_scheduled_events`] recognise a redundant arm.
+    fn next_comparator_deadline(&self) -> Option<u64> {
         let spent = self.comparators_fired.get() | self.int_raw.get();
         [INT_TIMER_10MS, INT_TIMER_HS, INT_TIMER_HUS]
             .into_iter()
             .filter(|bit| spent & bit == 0)
             .filter_map(|bit| self.deadline_cycles(bit))
-            .map(|deadline| deadline.saturating_sub(elapsed))
-            .chain(self.cycles_to_radio_deadline(elapsed))
             .min()
+    }
+
+    /// The single cycle this block next needs the CPU at: the earlier of the
+    /// nearest comparator and the radio engine's own next action, or `None`
+    /// when neither wants anything.
+    ///
+    /// This — not the pair it is folded from — is the arm key. An arm encodes
+    /// exactly one wake cycle, so that is the only thing a re-arm can change:
+    /// a `TIMER_HUS_TARGET` write that moves a comparator which is *not* the
+    /// earliest changes the block's internal state but not the wake, and
+    /// re-arming for it would strand the in-flight event for nothing.
+    ///
+    /// Both variants are anchor-independent, which is what makes the
+    /// comparison meaningful across two polls at different cycles. `Immediate`
+    /// is a state ("there is an undecoded entry"), not the delay 0 it
+    /// produces, so it stays equal to itself as the clock advances.
+    fn next_wake(&self) -> Option<WakeAt> {
+        let comparator = self.next_comparator_deadline();
+        match self.next_radio_wake() {
+            // Decoding needs the bus, which only `on_event` has, so nothing a
+            // comparator could ask for is sooner.
+            Some(RadioWake::Decode) => Some(WakeAt::Immediate),
+            Some(RadioWake::At(radio)) => {
+                Some(WakeAt::At(comparator.map_or(radio, |c| c.min(radio))))
+            }
+            None => comparator.map(WakeAt::At),
+        }
+    }
+
+    /// Cycles from `elapsed` to [`Self::next_wake`], or `None` when nothing is
+    /// scheduled. Zero when it is already due.
+    fn cycles_to_next_deadline(&self, elapsed: u64) -> Option<u64> {
+        self.next_wake().map(|wake| match wake {
+            WakeAt::Immediate => 0,
+            WakeAt::At(deadline) => deadline.saturating_sub(elapsed),
+        })
     }
 
     /// `+0x2D8` read: `cnt`/`rem` plus the head entry's bitmap, in the exact
@@ -1889,7 +2153,8 @@ impl Esp32c3Bt {
             // is left alone rather than guessed at; the event still ends
             // normally so the controller is never wedged by our ignorance.
             if bt_trace_enabled() {
-                eprintln!("[bt] radio: CS format {format:#06x} not modelled — no TX");
+                let nid = self.node_id;
+                eprintln!("[bt{nid}] radio: CS format {format:#06x} not modelled — no TX");
             }
             return false;
         }
@@ -1945,8 +2210,9 @@ impl Esp32c3Bt {
 
         if bt_trace_enabled() {
             let hex: String = pdu.iter().map(|b| format!("{b:02x} ")).collect();
+            let nid = self.node_id;
             eprintln!(
-                "[bt] radio TX ch{channel} aa={access_address:#010x} crcinit={crc_init:#08x} \
+                "[bt{nid}] radio TX ch{channel} aa={access_address:#010x} crcinit={crc_init:#08x} \
                  et={idx} pdu={hex}"
             );
         }
@@ -2017,8 +2283,9 @@ impl Esp32c3Bt {
         };
         if next_word & RXD_DONE != 0 {
             if bt_trace_enabled() {
+                let nid = self.node_id;
                 eprintln!(
-                    "[bt] radio RX ch{channel}: rxd={rxd:#06x} still RXDONE — no free buffer"
+                    "[bt{nid}] radio RX ch{channel}: rxd={rxd:#06x} still RXDONE — no free buffer"
                 );
             }
             return false;
@@ -2098,8 +2365,9 @@ impl Esp32c3Bt {
 
         if bt_trace_enabled() {
             let hex: String = frame.pdu.iter().map(|b| format!("{b:02x} ")).collect();
+            let nid = self.node_id;
             eprintln!(
-                "[bt] radio RX ch{channel} aa={access_address:#010x} rxd={rxd:#06x} \
+                "[bt{nid}] radio RX ch{channel} aa={access_address:#010x} rxd={rxd:#06x} \
                  et={idx} cs={cs:#06x} label={link_label} pdu={hex}"
             );
         }
@@ -2118,7 +2386,8 @@ impl Esp32c3Bt {
                     // decoded, so it is dropped rather than completed with
                     // invented state. Firmware will stall visibly.
                     if bt_trace_enabled() {
-                        eprintln!("[bt] radio: ET {idx} unreadable (EM unmapped) — dropped");
+                        let nid = self.node_id;
+                        eprintln!("[bt{nid}] radio: ET {idx} unreadable (EM unmapped) — dropped");
                     }
                     continue;
                 };
@@ -2171,8 +2440,9 @@ impl Esp32c3Bt {
                     self.set_et_status(bus, ev.et_idx, ET_STATUS_END);
                     self.raise_irq_bits(INT_SCH_PROG_END);
                     if bt_trace_enabled() {
+                        let nid = self.node_id;
                         eprintln!(
-                            "[bt] radio: ET {} end (clkn={})",
+                            "[bt{nid}] radio: ET {} end (clkn={})",
                             ev.et_idx,
                             Self::clkn_at(elapsed)
                         );
@@ -2183,13 +2453,19 @@ impl Esp32c3Bt {
         }
     }
 
-    /// Cycles from `elapsed` to the next thing the radio engine must do, or
-    /// `None` when it is idle. Zero when an entry is queued but not decoded —
-    /// decoding needs the bus, which only [`Peripheral::on_event`] has.
-    fn cycles_to_radio_deadline(&self, elapsed: u64) -> Option<u64> {
+    /// The radio engine's own next wake, or `None` when it is idle.
+    ///
+    /// THE RADIO'S WAKE SCHEDULE IS ITS OWN. An in-flight event knows exactly
+    /// when it next does something — `start` for the `Pending`->`Running`
+    /// transition, `start + duration` for the end — both decoded from the
+    /// entry's exchange-table schedule in [`Self::read_et_schedule`], neither
+    /// derived from firmware's MMIO polling rate. Returned as a state rather
+    /// than a delay so [`Self::armed_wake`] can tell "still waiting for the
+    /// same thing" from "waiting for something new"; see [`RadioWake`].
+    fn next_radio_wake(&self) -> Option<RadioWake> {
         match self.radio {
-            Some(ev) => Some(ev.deadline.saturating_sub(elapsed)),
-            None if !self.prog_queue.is_empty() => Some(0),
+            Some(ev) => Some(RadioWake::At(ev.deadline)),
+            None if !self.prog_queue.is_empty() => Some(RadioWake::Decode),
             None => None,
         }
     }
@@ -2247,14 +2523,29 @@ impl Peripheral for Esp32c3Bt {
         }
     }
 
-    /// Arm the nearest comparator deadline as a single in-flight event, under
-    /// a fresh generation so an event scheduled against an older target dies
-    /// on arrival. The `- 1` mirrors `ledc`: the bus turns a write-path delay
-    /// into the absolute deadline `anchor + 1 + delay`.
+    /// Arm the nearest comparator deadline or radio-engine wake as a single
+    /// in-flight event, under a fresh generation so an event scheduled against
+    /// an older requirement dies on arrival. The `- 1` mirrors `ledc`: the bus
+    /// turns a write-path delay into the absolute deadline `anchor + 1 + delay`.
+    ///
+    /// IDEMPOTENT. This runs after every MMIO write to the block, and most of
+    /// those writes — an `INTACK`, an IRQ-FIFO pop, a status poll's
+    /// read-modify-write — change nothing about when the block next needs the
+    /// CPU. Re-arming for those is what put 789 live events on the heap; see
+    /// [`Self::arm_seq`].
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() || self.clock_base.is_none() {
             return Vec::new();
         }
+        let want = self.next_wake();
+        if want == self.armed_wake {
+            // An event covering exactly this is already in flight.
+            return Vec::new();
+        }
+        // The requirement moved, so whatever is in flight is now wrong: bump
+        // the generation so it is rejected as stale when it arrives. There is
+        // no scheduler-side cancel, by design.
+        self.armed_wake = want;
         self.arm_seq = self.arm_seq.wrapping_add(1);
         // Anchored on the bus's `current_cycle` (handed over by `sync_to` just
         // before this write), not on the published clock, so the deadline the
@@ -2284,10 +2575,21 @@ impl Peripheral for Esp32c3Bt {
         self.latch_at(elapsed);
         // The radio engine runs here and only here: decoding a programmed
         // event means reading the controller's exchange memory, and `on_event`
-        // is the one hook that is handed the bus.
+        // is the one hook that is handed the bus. It is reached at the cycle
+        // the entry's own schedule asked for because `next_radio_wake` put that
+        // cycle in the arm key — not because firmware happened to poll.
         self.service_radio(elapsed, bus);
+        // `Machine::drain_scheduler_events` re-arms `reschedule_delay` under
+        // the SAME token, so record what that in-flight event now covers.
+        // Without this the next MMIO write would compare against a stale
+        // `armed_wake`, conclude the work was uncovered and arm a duplicate —
+        // and a radio phase transition, which is exactly what was just
+        // serviced, is one of the two things that moves the wake.
+        self.armed_wake = self.next_wake();
         crate::sched::EventResult {
-            reschedule_delay: self.cycles_to_next_deadline(elapsed),
+            reschedule_delay: self
+                .cycles_to_next_deadline(elapsed)
+                .map(|d| d.min(CHAIN_REEVALUATE_HORIZON)),
             ..Default::default()
         }
     }
@@ -2352,8 +2654,9 @@ impl Peripheral for Esp32c3Bt {
         // straight off the tail of the log and compared with the OpenOCD write
         // trace this model was built from.
         if bt_trace_enabled() {
+            let nid = self.node_id;
             eprintln!(
-                "[bt] +{offset:#05x} <= {value:#010x}  (clkn={} fine={})",
+                "[bt{nid}] +{offset:#05x} <= {value:#010x}  (clkn={} fine={})",
                 self.clkn(),
                 self.clkn_fine()
             );
@@ -2384,8 +2687,17 @@ impl Peripheral for Esp32c3Bt {
                     *slot = value;
                 }
             }
-            // Consume the self-clearing command bit — the hardware executes it
-            // and drops it, so it must never read back set.
+            // Consume the self-clearing command bits — bit31's kick and the
+            // two abort REQUESTS, bits 25 (advertising) and 24 (scanning). The
+            // hardware takes each one and drops it, so none of them may read
+            // back set; see [`RWBLECNTL_SELF_CLEARING`] for the ROM sites and
+            // the silicon/twin values that pin all three.
+            //
+            // What the core does with an abort request BEYOND clearing it —
+            // ending the event in flight early — is still not modelled, and
+            // that is a measured decision rather than an omission. See the
+            // "What the advertising stop does NOT do here" section of the
+            // module docs for the cost, in CLKN ticks, off the twin's trace.
             RWBLECNTL => {
                 if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
                     *slot = value & !RWBLECNTL_SELF_CLEARING;
@@ -2439,7 +2751,8 @@ impl Peripheral for Esp32c3Bt {
                         *slot = keep | target;
                     }
                     if bt_trace_enabled() {
-                        eprintln!("[bt] rxbuf jump -> {target:#06x}, raising bit 18");
+                        let nid = self.node_id;
+                        eprintln!("[bt{nid}] rxbuf jump -> {target:#06x}, raising bit 18");
                     }
                     self.raise_irq_bits(INT_LLD_UPDATE_RXBUF);
                 }
@@ -2521,6 +2834,75 @@ mod tests {
             0x0010_070f,
             "bit31 must be consumed, not stored — otherwise the controller \
              spins forever waiting for its own kick to clear"
+        );
+    }
+
+    /// **The two abort REQUEST bits read back clear, like bit31.** Silicon
+    /// reads `+0x000 = 0x0010_070f` on a live advertising part whose own
+    /// firmware writes bit 25 (`r_lld_adv_stop` `0x4001_8A2C`,
+    /// `r_lld_per_adv_stop` `0x4002_3E48`, `r_lld_rpa_renew_evt_start_cbk`
+    /// `0x4001_FF06`) and bit 24 (`r_lld_scan_end` `0x4002_4634`,
+    /// `r_lld_rpa_renew_evt_start_cbk` `0x4001_FF18`). No ROM site ever writes
+    /// a zero into either, and none reads either back, so nothing in software
+    /// could clear them.
+    ///
+    /// The values here are the exact ones off the two sides: what the C3's
+    /// firmware stores, and what OpenOCD reads back afterwards.
+    #[test]
+    fn rwblecntl_abort_requests_read_back_clear() {
+        for request in [0x0210_070fu32, 0x0110_070f, 0x0310_070f] {
+            let mut bt = Esp32c3Bt::new();
+            bt.write_u32(RWBLECNTL, 0x0010_070f).unwrap();
+            bt.write_u32(RWBLECNTL, request).unwrap();
+            assert_eq!(
+                bt.read_u32(RWBLECNTL).unwrap(),
+                0x0010_070f,
+                "wrote {request:#010x}; every live dump of an advertising C3 \
+                 reads +0x000 back as 0x0010_070f, abort requests consumed"
+            );
+        }
+    }
+
+    /// **The firmware's OWN next control word proves it**, which is what makes
+    /// this a silicon check rather than a restatement of the line above.
+    ///
+    /// `r_lld_rpa_renew_evt_start_cbk` (`0x4001_FEE0`) aborts both activities
+    /// back to back, and the second store is computed from what the first one
+    /// read BACK:
+    ///
+    /// ```text
+    /// 4001ff06: lw   a5,0(a4)      ; read RWBLECNTL
+    /// 4001ff0e: and  a5,a5,a3      ; a3 = 0xfdffffff
+    /// 4001ff14: or   a5,a5,a3      ; a3 = 0x02000000   -> set bit 25
+    /// 4001ff16: sw   a5,0(a4)
+    /// 4001ff18: lw   a5,0(a4)      ; read it BACK
+    /// 4001ff20: and  a5,a5,a3      ; a3 = 0xfeffffff
+    /// 4001ff26: or   a5,a5,a3      ; a3 = 0x01000000   -> set bit 24
+    /// 4001ff28: sw   a5,0(a4)
+    /// ```
+    ///
+    /// So the second word is `(read_back & 0xFEFF_FFFF) | 0x0100_0000`. On
+    /// silicon the read-back has bit 25 already gone, so that is
+    /// `0x0110_070f`. A model that latches the request makes the same
+    /// firmware compute `0x0310_070f` — which is exactly what the twin's
+    /// trace showed at CLKN 37 on both BLE Pong nodes, and a word the real
+    /// part can never produce.
+    #[test]
+    fn the_rpa_renew_sequence_computes_the_silicon_control_word() {
+        let mut bt = Esp32c3Bt::new();
+        bt.write_u32(RWBLECNTL, 0x0010_070f).unwrap();
+
+        // Replay `r_lld_rpa_renew_evt_start_cbk` instruction for instruction.
+        let first = (bt.read_u32(RWBLECNTL).unwrap() & 0xFDFF_FFFF) | 0x0200_0000;
+        assert_eq!(first, 0x0210_070f, "the abort-advertising store");
+        bt.write_u32(RWBLECNTL, first).unwrap();
+
+        let second = (bt.read_u32(RWBLECNTL).unwrap() & 0xFEFF_FFFF) | 0x0100_0000;
+        assert_eq!(
+            second, 0x0110_070f,
+            "the abort-scanning store the firmware computes from its own \
+             read-back. 0x0310_070f means bit 25 was still there to be read, \
+             which is the twin latching a request the core consumes"
         );
     }
 

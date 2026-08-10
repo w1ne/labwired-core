@@ -440,7 +440,10 @@ impl Fdcan {
             REG_VERR => 0x0000_0010,
             REG_IPIDR => 0x0013_0072,
             REG_SIDR => 0xA3C5_DD01,
-            _ => 0,
+            _ => {
+                crate::census_reg!("fdcan:Fdcan", offset, "read");
+                0
+            }
         }
     }
 
@@ -474,7 +477,9 @@ impl Fdcan {
             REG_TXBCIE => self.txbcie = value & 0x7,
             REG_CKDIV if self.config_unlocked() => self.ckdiv = value & 0xF,
             REG_OPTR => self.optr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("fdcan:Fdcan", offset, "write");
+            }
         }
     }
 

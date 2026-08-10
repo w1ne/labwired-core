@@ -323,12 +323,14 @@ fn main() -> ! {
                 // lockout side effects are not enforced — see file header).
                 wr(UICR_BASE, UICR_APPROTECT, APPROTECT_ENABLED);
                 uart_puts(b"ROT: PROVISIONED\n");
-                display::display_text(0, 0, "LABWIRED");
-                display::display_text(1, 0, "SECURE DEVICE LAB");
-                display::display_text(3, 0, "PROVISIONING");
-                display::display_text(4, 0, "ROOT KEY -> UICR");
-                display::display_text(6, 0, "REBOOTING...");
-                display::display_flush();
+                // Hold so the twin can show Boot 1 before SYSRESETREQ.
+                display::display_stage(&[
+                    (0, "LABWIRED"),
+                    (1, "SECURE DEVICE LAB"),
+                    (3, "PROVISIONING"),
+                    (4, "ROOT KEY TO UICR"),
+                    (6, "REBOOTING..."),
+                ]);
             } else {
                 uart_puts(b"ROT: PROVISION FAILED\n");
                 loop {
@@ -383,11 +385,12 @@ fn main() -> ! {
             if rejected {
                 uart_puts(b"TAMPER REJECT OK\n");
             }
-            display::display_text(0, 0, "SECURE BOOT OK");
-            display::display_text(1, 0, "FW v1");
-            display::display_text(3, 0, "OTA PKG v2 RX");
-            display::display_text(4, 0, "ECDSA VERIFY...");
-            display::display_flush();
+            display::display_stage(&[
+                (0, "SECURE BOOT OK"),
+                (1, "FW V1"),
+                (3, "OTA PKG V2 RX"),
+                (4, "ECDSA VERIFY..."),
+            ]);
 
             if !uart_recv_stage() {
                 uart_puts(b"OTA TRANSPORT ERROR\n");
@@ -440,10 +443,13 @@ fn main() -> ! {
                 }
                 wr(NVMC_BASE, NVMC_CONFIG, 0);
                 uart_puts(b"OTA v2 COMMITTED\n");
-                display::display_text(4, 0, "SE: SIG OK");
-                display::display_text(5, 0, "COMMITTED v2");
-                display::display_text(6, 0, "REBOOTING...");
-                display::display_flush();
+                display::display_stage(&[
+                    (0, "SECURE BOOT OK"),
+                    (1, "FW V1"),
+                    (3, "SE: SIG OK"),
+                    (4, "COMMITTED V2"),
+                    (6, "REBOOTING..."),
+                ]);
                 wr(SCB_AIRCR, 0, AIRCR_VECTKEY_SYSRESETREQ);
             } else {
                 uart_puts(b"OTA v2 REJECTED\n");
@@ -457,6 +463,15 @@ fn main() -> ! {
         results.boot_phase = 3;
         uart_puts(b"SECURE BOOT OK (v2)\n");
         uart_puts(b"ANTI-ROLLBACK v2 ACTIVE\n");
+        // One hold for boot-3 start (avoid stacking holds during ECDSA rejects —
+        // those already burn wall-time; intermediate flushes without hold still
+        // update the panel when the host samples mid-batch).
+        display::display_stage(&[
+            (0, "SECURE BOOT OK"),
+            (1, "FW V2 ACTIVE"),
+            (2, "ANTI-ROLLBACK ON"),
+            (4, "POLICY CHECK..."),
+        ]);
 
         // Read back the committed update from the flash slot and hash it.
         // The lab asserts these words against the golden payload digest —
@@ -503,6 +518,12 @@ fn main() -> ! {
             if sig_ok && version <= results.installed_version {
                 results.rollback_rejected = 1;
                 uart_puts(b"ROLLBACK REJECTED\n");
+                display::display_stage(&[
+                    (0, "SECURE BOOT OK"),
+                    (1, "FW V2 ACTIVE"),
+                    (2, "ANTI-ROLLBACK ON"),
+                    (4, "ROLLBACK REJECTED"),
+                ]);
             } else {
                 uart_puts(b"ROLLBACK TEST FAILED\n");
             }
@@ -529,6 +550,13 @@ fn main() -> ! {
             if !sig_ok {
                 results.badsig_rejected = 1;
                 uart_puts(b"BAD SIGNATURE REJECTED\n");
+                display::display_stage(&[
+                    (0, "SECURE BOOT OK"),
+                    (1, "FW V2 ACTIVE"),
+                    (2, "ANTI-ROLLBACK ON"),
+                    (4, "ROLLBACK REJECTED"),
+                    (5, "FORGED REJECTED"),
+                ]);
             } else {
                 uart_puts(b"FORGERY TEST FAILED\n");
             }
@@ -551,9 +579,11 @@ fn main() -> ! {
             }
         }
 
-        // Park: results sit in the pinned RESULTS struct for the lab to read.
+        // Final park screen — no hold; WFI keeps this frame for the twin.
+        // Smoke display_region assertions target this final composition.
+        display::display_clear();
         display::display_text(0, 0, "SECURE BOOT OK");
-        display::display_text(1, 0, "FW v2 ACTIVE");
+        display::display_text(1, 0, "FW V2 ACTIVE");
         display::display_text(2, 0, "ANTI-ROLLBACK ON");
         display::display_text(4, 0, "ROLLBACK REJECTED");
         display::display_text(5, 0, "FORGED REJECTED");

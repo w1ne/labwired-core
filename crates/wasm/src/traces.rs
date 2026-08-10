@@ -34,6 +34,29 @@ impl WasmSimulator {
         }
     }
 
+    /// Why the Serial pane can be empty while the firmware is talking.
+    ///
+    /// An ESP32-C3/S3 has two consoles and a board's USB socket is soldered to
+    /// exactly one of them, so the twin taps one — the same one the developer's
+    /// cable is on. If the firmware prints to the OTHER one, a real board shows
+    /// nothing and the twin faithfully shows nothing too. That is correct, and
+    /// completely baffling, so this says what happened.
+    ///
+    /// `null` when nothing was lost. See `labwired_core::console`.
+    #[wasm_bindgen]
+    pub fn console_mismatch(&self) -> Option<String> {
+        self.console.mismatch()
+    }
+
+    /// Raw bytes the firmware wrote to the console this board's USB connector is
+    /// not wired to. Empty when there are none. Diagnostic only — these bytes
+    /// are deliberately NOT merged into the Serial pane, because no real board
+    /// would have delivered them.
+    #[wasm_bindgen]
+    pub fn unheard_console_output(&self) -> Vec<u8> {
+        self.console.unheard_output()
+    }
+
     /// Non-consuming UART trace snapshot for instruments such as the logic analyzer.
     ///
     /// Reads the machine's ONE bus trace and groups by bus name. It does NOT

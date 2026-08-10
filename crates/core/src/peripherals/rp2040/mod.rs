@@ -12,6 +12,7 @@
 pub mod adc;
 pub mod dma;
 pub mod i2c;
+pub mod io_bank0;
 pub mod pwm;
 pub mod rtc;
 pub mod sio;

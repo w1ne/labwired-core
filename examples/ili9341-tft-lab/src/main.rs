@@ -14,6 +14,7 @@
 //!   PA5  — SCK     (AF push-pull)
 //!   PA6  — MISO    (input floating — not used by ILI9341 in write-only mode)
 //!   PA7  — MOSI    (AF push-pull)
+//!   PB0  — D/C     (GPIO output push-pull)
 
 #![no_std]
 #![no_main]
@@ -25,11 +26,20 @@ use panic_halt as _;
 
 const RCC_APB2ENR: *mut u32 = 0x4002_1018 as *mut u32;
 const GPIOA_CRL: *mut u32 = 0x4001_0800 as *mut u32;
+// CRH is the same four-bits-per-pin mux as CRL, for PA8..PA15 (PA9 = TX).
+const GPIOA_CRH: *mut u32 = 0x4001_0804 as *mut u32;
 const GPIOA_BSRR: *mut u32 = 0x4001_0810 as *mut u32;
+// ⚠️ The two `*_BRR` names below are the GPIO **bit-reset** registers, not the
+// USART baud divisor — that one is `UART1_BRR` at 0x4001_3808.
 const GPIOA_BRR: *mut u32 = 0x4001_0814 as *mut u32;
+const GPIOB_CRL: *mut u32 = 0x4001_0C00 as *mut u32;
+const GPIOB_BSRR: *mut u32 = 0x4001_0C10 as *mut u32;
+const GPIOB_BRR: *mut u32 = 0x4001_0C14 as *mut u32;
 const SPI1_CR1: *mut u16 = 0x4001_3000 as *mut u16;
 const SPI1_SR: *const u16 = 0x4001_3008 as *const u16;
 const SPI1_DR: *mut u16 = 0x4001_300C as *mut u16;
+const UART1_BRR: *mut u32 = (0x4001_3800 + 0x08) as *mut u32;
+const UART1_CR1: *mut u32 = (0x4001_3800 + 0x0C) as *mut u32;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
 // ----- UART helpers -------------------------------------------------------
@@ -74,27 +84,52 @@ fn cs_high() {
     unsafe { core::ptr::write_volatile(GPIOA_BSRR, 1 << 4) }
 }
 
+/// D/C low — the next byte on the wire is a COMMAND.
+fn dc_command() {
+    unsafe { core::ptr::write_volatile(GPIOB_BRR, 1 << 0) }
+}
+/// D/C high — the next bytes are parameters or pixel data.
+fn dc_data() {
+    unsafe { core::ptr::write_volatile(GPIOB_BSRR, 1 << 0) }
+}
+
 // ----- ILI9341 protocol ---------------------------------------------------
 //
-// The simulator's D/C pin is implicit in the command state machine:
-// the first byte after cs_low is always the command byte.
+// Framing is the D/C wire, because that is the only thing an ILI9341 in 4-line
+// serial mode has: the controller samples D/C on each byte's first clock edge,
+// low for a command and high for data (datasheet §7.3.2). It does NOT infer
+// framing from chip-select boundaries — there is no mode in which "the first
+// byte after CS falls is a command".
+//
+// This sketch used to leave PB0 undriven and rely on that CS-boundary idea,
+// which the simulator's legacy no-D/C path happened to approximate. On the
+// hosted lab, whose canvas wires PB0 -> DC, the compiled manifest carries
+// `dc_pin` and the model therefore reads framing from the wire like silicon —
+// so an undriven PB0 sat low forever, every byte decoded as a command, and the
+// panel rendered perfectly blank with no error anywhere. Real hardware would
+// have done exactly the same thing.
 
 fn tft_cmd(cmd: u8) {
     cs_low();
+    dc_command();
     spi_write(cmd);
     cs_high();
 }
 
 fn tft_cmd1(cmd: u8, p0: u8) {
     cs_low();
+    dc_command();
     spi_write(cmd);
+    dc_data();
     spi_write(p0);
     cs_high();
 }
 
 fn tft_cmd4(cmd: u8, p0: u8, p1: u8, p2: u8, p3: u8) {
     cs_low();
+    dc_command();
     spi_write(cmd);
+    dc_data();
     spi_write(p0);
     spi_write(p1);
     spi_write(p2);
@@ -178,7 +213,9 @@ fn draw_colour_bars(row_start: u16) {
     tft_set_window(0, 239, row_start, row_start + ROWS - 1);
 
     cs_low();
+    dc_command();
     spi_write(0x2C); // RAMWR
+    dc_data();
     for _row in 0..ROWS {
         for &color in &colours {
             for _px in 0..BAR_W {
@@ -197,7 +234,9 @@ fn draw_solid_band(row_start: u16, color: u16) {
     tft_set_window(0, COLS - 1, row_start, row_start + ROWS - 1);
 
     cs_low();
+    dc_command();
     spi_write(0x2C); // RAMWR
+    dc_data();
     for _ in 0..(COLS * ROWS) {
         tft_pixel(color);
     }
@@ -209,9 +248,19 @@ fn draw_solid_band(row_start: u16, color: u16) {
 #[entry]
 fn main() -> ! {
     unsafe {
-        // Enable RCC for GPIOA (bit 2) and SPI1 (bit 12)
+        // Enable RCC for AFIO (bit 0), GPIOA (bit 2), GPIOB (bit 3, the D/C
+        // port), SPI1 (bit 12) and USART1 (bit 14).
+        //
+        // USART1EN was missing here, and USART1 is clock-gated out of reset on
+        // this chip (stm32f103.yaml pins its gate to APB2ENR bit 14), so every
+        // byte written to its data register was dropped on the gated bus exactly
+        // as it is on silicon. The sketch printed nothing at all and the smoke
+        // test's three uart_contains assertions had no way to pass.
         let apb2enr = core::ptr::read_volatile(RCC_APB2ENR);
-        core::ptr::write_volatile(RCC_APB2ENR, apb2enr | (1 << 12) | (1 << 2));
+        core::ptr::write_volatile(
+            RCC_APB2ENR,
+            apb2enr | (1 << 14) | (1 << 12) | (1 << 3) | (1 << 2) | 1,
+        );
 
         // Configure GPIOA CRL:
         //   PA4 (CS)   = output PP 50 MHz  → bits [19:16] = 0011
@@ -223,8 +272,37 @@ fn main() -> ! {
         crl |= 0xB4B3_0000;
         core::ptr::write_volatile(GPIOA_CRL, crl);
 
-        // CS idle high
+        // GPIOB CRL: PB0 (D/C) = output PP 50 MHz → bits [3:0] = 0011
+        let mut crl_b = core::ptr::read_volatile(GPIOB_CRL);
+        crl_b &= 0xFFFF_FFF0;
+        crl_b |= 0x0000_0003;
+        core::ptr::write_volatile(GPIOB_CRL, crl_b);
+
+        // CS idle high; D/C idles low (command).
         core::ptr::write_volatile(GPIOA_BSRR, 1 << 4);
+        core::ptr::write_volatile(GPIOB_BRR, 1 << 0);
+
+        // PA9 = USART1_TX, alternate-function push-pull 50 MHz.
+        //
+        // PA9 is USART1_TX in the **Default** alternate-function column
+        // (DS5319 Rev 20, Table 5, p.31), so no AFIO remap is involved. The CRH
+        // nibble for PA9 is bits [7:4]; 0xB = MODE 0b11 (output, 50 MHz) + CNF
+        // 0b10 (alternate-function push-pull). Enabling the USART clock and
+        // writing DR was enough for LabWired's permissive USART model, but the
+        // pin itself stayed a floating input: the pad route never went live, so
+        // a logic analyzer on PA9 read the GPIO latch — a flat line — while the
+        // transaction-level bus monitor decoded the same traffic fine.
+        let crh = core::ptr::read_volatile(GPIOA_CRH);
+        core::ptr::write_volatile(GPIOA_CRH, (crh & !(0xF << 4)) | (0xB << 4));
+
+        // USART1 at 115 200 8N1. BRR = f_PCLK2 / baud at the default 16×
+        // oversampling; this firmware never touches the PLL, so the part runs
+        // on the 8 MHz HSI it selects at reset (DS5319 Rev 20 §2.3.7, p.15):
+        // 8_000_000 / 115_200 = 69.44 → 69 = 0x45. A zero BRR means no bit
+        // period at all, so there is nothing for a probe to see.
+        core::ptr::write_volatile(UART1_BRR, 0x45);
+        // USART1: UE (bit 13) | TE (bit 3) — transmit only, no interrupts.
+        core::ptr::write_volatile(UART1_CR1, (1 << 13) | (1 << 3));
 
         // SPI1: master mode, BR=000 (f/2), CPOL=0, CPHA=0, SPE
         // CR1 = SPE(6) | MSTR(2) = 0x0044

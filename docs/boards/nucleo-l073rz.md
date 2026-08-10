@@ -47,7 +47,7 @@ for the validation evidence and the full list of fidelity limits see
 | I2C1       | ⚠️ flag-level | sim+silicon agree (no NACK on bare bus); round-trip needs a slave |
 | RCC        | ✅ silicon    | dedicated `stm32l0` layout; CFGR@0x0C, CR reset `0x300`, SW→SWS clock-switch readback matches silicon (`0x04`) |
 | ADC1       | ⚠️ analog     | silicon converts VREFINT (`~0x86`); sim returns deterministic mock |
-| RNG        | ⚠️ by design  | sim deterministic (`0xCAFEBABE`); real TRNG can't/shouldn't match |
+| RNG        | ✅ clock-gated | dead unless RCC_AHBENR.RNGEN **and** RCC_CRRCR.HSI48RDY are set, as on silicon; the draw itself is deterministic (a real TRNG's value can't/shouldn't match) |
 | I2C2/3, SPI2 | ⚠️ present  | mapped, not exercised                                     |
 | TIM2/3/6/7/22, LPTIM1 | ⚠️ present | TIM2 32-bit; others 16-bit; not exercised        |
 | RTC/IWDG/WWDG/DAC | ⚠️ present | mapped, not exercised                              |
@@ -55,7 +55,7 @@ for the validation evidence and the full list of fidelity limits see
 | USB FS, LCD, COMP, SYSCFG | ⛔ stub | reads 0, writes dropped — no fault                          |
 
 Legend: ✅ silicon-validated · ⚠️ present/approximated/unvalidated · ⛔ stub.
-Full per-peripheral evidence + the 3 documented divergences:
+Full per-peripheral evidence + the documented divergences:
 [`examples/nucleo-l073rz/VALIDATION.md`](../../examples/nucleo-l073rz/VALIDATION.md) §6.
 
 ## Pin map (UM1724)

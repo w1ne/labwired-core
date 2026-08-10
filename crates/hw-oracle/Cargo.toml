@@ -48,3 +48,63 @@ hw-oracle-nrf52 = []
 
 [dev-dependencies]
 labwired-fuzz = { path = "../labwired-fuzz" }
+
+# ── ZERO-TEST TARGETS CANNOT REPORT GREEN ────────────────────────────────────
+# Every target below is an integration test whose ENTIRE body sits behind an
+# inner `#![cfg(feature = "...")]`. Built without the feature the file compiles
+# to an EMPTY libtest binary, which prints `test result: ok. 0 passed` and exits
+# 0 — indistinguishable, to CI and to a human, from a suite that ran and passed.
+# `required-features` makes cargo SKIP the target instead of reporting it green,
+# and makes an explicit `--test <name>` without the feature a hard error.
+# Adding a new `#![cfg(feature = ...)]` test file without a block here fails
+# `crates/core/src/tests/no_vacuous_test_targets.rs`.
+
+# #![cfg(feature = "hw-oracle-stm32")]
+[[test]]
+name = "f103_fuzz_hil_confirm"
+required-features = ["hw-oracle-stm32"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_ccm_conformance"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_full_register_conformance"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_gpio_conformance"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_mmio_diff"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_onboarding_diff"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_power_conformance"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_spim_easydma_conformance"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_spis_twis_conformance"
+required-features = ["hw-oracle-nrf52"]
+
+# #![cfg(feature = "hw-oracle-nrf52")]
+[[test]]
+name = "nrf52_timer_rtc_conformance"
+required-features = ["hw-oracle-nrf52"]

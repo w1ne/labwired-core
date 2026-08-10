@@ -29,6 +29,23 @@ const PAGE_SIZE: u32 = 64 * 1024;
 const PAGE_TABLE_ENTRIES: usize = 64;
 const PAGE_BYTES: usize = PAGE_SIZE as usize;
 
+/// Mirrored physical pages held per XIP window (fully associative).
+///
+/// **Why more than one.** The mirror is a read-through cache of immutable
+/// flash bytes; its *capacity* decides how often a fetch pays the 64 KiB fill,
+/// never which bytes come back. With a single way, firmware whose hot path
+/// spans two 64 KiB flash pages — any real ESP-IDF app, where the FreeRTOS
+/// scheduler, the driver ISR and the application loop sit in different pages —
+/// re-fills the whole page on essentially every fetch-window refill. Measured
+/// on the pinned C3 Arduino-BLE image (`e2e_esp32c3_ble_arduino`), that thrash
+/// was **~20 % of total process time and ~44 % of the time inside
+/// `Machine::advance`**, all of it in `_platform_memmove`.
+///
+/// Eight ways is 512 KiB per window. That is chosen to comfortably cover the
+/// hot working set (the measured win saturates well below it) rather than
+/// tuned to one firmware, so a different sketch does not fall off a cliff.
+const MIRROR_WAYS: usize = 8;
+
 /// One mirrored physical flash page for lock-free instruction fetch.
 ///
 /// # Safety / threading
@@ -39,7 +56,14 @@ const PAGE_BYTES: usize = PAGE_SIZE as usize;
 struct PageMirror {
     /// Physical page index currently held, or `u32::MAX` if empty.
     phys: AtomicU32,
-    bytes: UnsafeCell<[u8; PAGE_BYTES]>,
+    /// Boxed, NOT an inline `[u8; PAGE_BYTES]`. With [`MIRROR_WAYS`] ways an
+    /// inline array makes `PageMirrorSet` a 512 KiB value, and constructing one
+    /// risks that much STACK in any build where the in-place array
+    /// initialisation is not elided (debug, and the wasm target, whose stack is
+    /// ~1 MiB). Heap-allocating each page keeps construction O(1) stack
+    /// regardless of way count; the extra pointer hop on read is invisible next
+    /// to the 64 KiB fill it avoids.
+    bytes: UnsafeCell<Box<[u8; PAGE_BYTES]>>,
 }
 
 // SAFETY: single-threaded Machine ownership (see struct docs).
@@ -55,9 +79,16 @@ impl std::fmt::Debug for PageMirror {
 
 impl PageMirror {
     fn empty() -> Self {
+        // `vec![0u8; N].into_boxed_slice()` allocates zeroed pages straight from
+        // the allocator; `Box::new([0u8; PAGE_BYTES])` would build the array on
+        // the stack first, which is the thing this boxing exists to avoid.
+        let zeroed: Box<[u8]> = vec![0u8; PAGE_BYTES].into_boxed_slice();
+        let bytes: Box<[u8; PAGE_BYTES]> = zeroed
+            .try_into()
+            .expect("allocation is exactly PAGE_BYTES long");
         Self {
             phys: AtomicU32::new(u32::MAX),
-            bytes: UnsafeCell::new([0u8; PAGE_BYTES]),
+            bytes: UnsafeCell::new(bytes),
         }
     }
 
@@ -86,6 +117,81 @@ impl PageMirror {
         // Acquire. Single-threaded Machine: no concurrent fill.
         let src = unsafe { &*self.bytes.get() };
         out.copy_from_slice(&src[in_page..in_page + out.len()]);
+    }
+}
+
+/// A fully-associative set of [`PageMirror`] ways.
+///
+/// Purely a capacity change over the former single mirror: `lookup` returns a
+/// way holding exactly the bytes a one-way mirror would have re-filled, so the
+/// bytes handed back to the CPU are identical for every access sequence. Only
+/// the number of 64 KiB fills differs.
+struct PageMirrorSet {
+    ways: [PageMirror; MIRROR_WAYS],
+    /// Way that satisfied the previous lookup. Checked before the scan: guest
+    /// execution is overwhelmingly page-local, so this hits nearly always and
+    /// keeps the steady-state cost at one atomic load plus one compare — what
+    /// the single-way mirror cost.
+    last_way: AtomicU32,
+    /// Round-robin replacement cursor. Chosen over LRU deliberately: tracking
+    /// recency would need a write on every *hit*, and a hit is the hot path.
+    next_victim: AtomicU32,
+}
+
+impl std::fmt::Debug for PageMirrorSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PageMirrorSet")
+            .field("ways", &MIRROR_WAYS)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PageMirrorSet {
+    fn empty() -> Self {
+        Self {
+            ways: std::array::from_fn(|_| PageMirror::empty()),
+            last_way: AtomicU32::new(0),
+            next_victim: AtomicU32::new(0),
+        }
+    }
+
+    /// Way currently holding `phys_page`, if any.
+    #[inline]
+    fn lookup(&self, phys_page: u32) -> Option<usize> {
+        let hint = self.last_way.load(Ordering::Relaxed) as usize;
+        if hint < MIRROR_WAYS && self.ways[hint].matches(phys_page) {
+            return Some(hint);
+        }
+        for (i, w) in self.ways.iter().enumerate() {
+            if w.matches(phys_page) {
+                self.last_way.store(i as u32, Ordering::Relaxed);
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Fill a victim way with `src` and return it.
+    fn fill(&self, phys_page: u32, src: &[u8]) -> usize {
+        let victim = (self.next_victim.fetch_add(1, Ordering::Relaxed) as usize) % MIRROR_WAYS;
+        self.ways[victim].fill(phys_page, src);
+        self.last_way.store(victim as u32, Ordering::Relaxed);
+        victim
+    }
+
+    #[inline]
+    fn copy_from(&self, way: usize, in_page: usize, out: &mut [u8]) {
+        self.ways[way].copy_from(in_page, out);
+    }
+
+    /// Drop every mirrored page. A guest write through the XIP window mutates
+    /// the shared backing, so EVERY way must be dropped, not just the one the
+    /// write happened to land in — otherwise a stale way would keep serving
+    /// pre-write bytes.
+    fn invalidate_all(&self) {
+        for w in &self.ways {
+            w.phys.store(u32::MAX, Ordering::Release);
+        }
     }
 }
 
@@ -191,12 +297,13 @@ pub struct FlashXipPeripheral {
     xlat_gen: AtomicU64,
     xlat_entry_id: AtomicU32,
     xlat_phys_page: AtomicU32,
-    /// Mirrored physical page — steady-state instruction fetch never takes
+    /// Mirrored physical pages — steady-state instruction fetch never takes
     /// `backing`'s mutex (profile: ~half of post-word-read_u32 cost was
     /// `pthread_mutex_lock` on the flash Vec). Filled under the backing lock
     /// on miss; SPI flash does not mutate the Vec today (program/erase only
     /// update status regs), so the mirror stays coherent for current models.
-    page_mirror: PageMirror,
+    /// See [`MIRROR_WAYS`] for why this holds several pages rather than one.
+    page_mirror: PageMirrorSet,
 }
 
 // Manual Clone: atomics copy by load; cache is a hint so a clone starting cold
@@ -212,7 +319,7 @@ impl Clone for FlashXipPeripheral {
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
-            page_mirror: PageMirror::empty(),
+            page_mirror: PageMirrorSet::empty(),
         }
     }
 }
@@ -236,7 +343,7 @@ impl FlashXipPeripheral {
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
-            page_mirror: PageMirror::empty(),
+            page_mirror: PageMirrorSet::empty(),
         }
     }
 
@@ -339,15 +446,16 @@ impl FlashXipPeripheral {
         Some(phys_page as u64 * PAGE_SIZE as u64 + in_page)
     }
 
-    /// Ensure the page mirror holds `phys_page`, filling from `backing` on miss.
-    fn ensure_page_mirror(&self, phys_page: u32) {
-        if self.page_mirror.matches(phys_page) {
-            return;
+    /// Ensure some way holds `phys_page`, filling from `backing` on miss, and
+    /// return the way to read from.
+    fn ensure_page_mirror(&self, phys_page: u32) -> usize {
+        if let Some(way) = self.page_mirror.lookup(phys_page) {
+            return way;
         }
         let backing = self.backing.lock().unwrap();
         // Re-check under the lock in case of nested fills (should not happen).
-        if self.page_mirror.matches(phys_page) {
-            return;
+        if let Some(way) = self.page_mirror.lookup(phys_page) {
+            return way;
         }
         let start = (phys_page as usize).saturating_mul(PAGE_BYTES);
         let end = (start + PAGE_BYTES).min(backing.len());
@@ -356,7 +464,7 @@ impl FlashXipPeripheral {
         } else {
             &[][..]
         };
-        self.page_mirror.fill(phys_page, slice);
+        self.page_mirror.fill(phys_page, slice)
     }
 
     /// Read consecutive bytes starting at window `offset` into `out`.
@@ -374,8 +482,8 @@ impl FlashXipPeripheral {
         let in_page = (offset % PAGE_SIZE as u64) as usize;
         if in_page + out.len() <= PAGE_BYTES {
             let phys_page = (phys0 / PAGE_SIZE as u64) as u32;
-            self.ensure_page_mirror(phys_page);
-            self.page_mirror.copy_from(in_page, out);
+            let way = self.ensure_page_mirror(phys_page);
+            self.page_mirror.copy_from(way, in_page, out);
             return;
         }
         // Rare: multi-page span — fall back to per-byte path via mirror.
@@ -384,9 +492,9 @@ impl FlashXipPeripheral {
                 Some(phys) => {
                     let phys_page = (phys / PAGE_SIZE as u64) as u32;
                     let in_p = (phys % PAGE_SIZE as u64) as usize;
-                    self.ensure_page_mirror(phys_page);
+                    let way = self.ensure_page_mirror(phys_page);
                     let mut one = [0u8; 1];
-                    self.page_mirror.copy_from(in_p, &mut one);
+                    self.page_mirror.copy_from(way, in_p, &mut one);
                     *b = one[0];
                 }
                 None => *b = 0,
@@ -394,10 +502,10 @@ impl FlashXipPeripheral {
         }
     }
 
-    /// Drop the mirrored page (call if a future SPI path mutates flash bytes).
+    /// Drop every mirrored page (call if a future SPI path mutates flash bytes).
     #[allow(dead_code)]
     pub fn invalidate_page_mirror(&self) {
-        self.page_mirror.phys.store(u32::MAX, Ordering::Release);
+        self.page_mirror.invalidate_all();
     }
 
     /// Bulk read for the CPU instruction-fetch window. Same bytes as

@@ -23,9 +23,32 @@ mod nrf52_nvmc_tests {
     const EEN: u32 = 2;
 
     fn nrf52_bus() -> crate::bus::SystemBus {
+        nrf52_bus_with_lead_padding(0)
+    }
+
+    /// The same nRF52 bus, but with `pad` inert stub peripherals pushed AHEAD
+    /// of the NVMC so it does not land at index 0.
+    ///
+    /// The boundary erase drain resolves the NVMC through a bus index cached
+    /// once in `Machine::new`. Every other test here happens to push the NVMC
+    /// first, so they would still pass against a cache that always answered
+    /// "index 0". This shape is what discriminates a correctly resolved index
+    /// from a lucky one.
+    fn nrf52_bus_with_lead_padding(pad: usize) -> crate::bus::SystemBus {
         let mut bus = crate::bus::SystemBus::empty();
         bus.flash = LinearMemory::new_erased(0x10000, 0x0);
         bus.ram = LinearMemory::new(0x1000, 0x2000_0000);
+        for i in 0..pad {
+            bus.peripherals.push(crate::bus::PeripheralEntry {
+                name: format!("pad{i}"),
+                base: 0x4002_0000 + (i as u64) * 0x1000,
+                size: 0x1000,
+                irq: None,
+                dev: Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
+                ticks_remaining: 0,
+                clock_gate: None,
+            });
+        }
         bus.peripherals.push(crate::bus::PeripheralEntry {
             name: "nvmc".to_string(),
             base: NVMC_BASE,
@@ -49,7 +72,11 @@ mod nrf52_nvmc_tests {
     }
 
     fn machine_with_nvmc() -> Machine<crate::cpu::CortexM> {
-        let mut bus = nrf52_bus();
+        machine_with_nvmc_at_offset(0)
+    }
+
+    fn machine_with_nvmc_at_offset(pad: usize) -> Machine<crate::cpu::CortexM> {
+        let mut bus = nrf52_bus_with_lead_padding(pad);
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
         Machine::new(cpu, bus)
     }
@@ -160,6 +187,65 @@ mod nrf52_nvmc_tests {
             0x11,
             "erase without CONFIG.Een must be ignored"
         );
+    }
+
+    /// Erase must still land when the NVMC is NOT the first peripheral on the
+    /// bus, and must still be a clean-boundary effect (nothing erased until
+    /// the instruction commits). Guards the cached-index resolution in
+    /// `Machine::new` against an off-by-anything: with the index pinned to 0
+    /// this fails on all three op kinds while every other test here passes.
+    #[test]
+    fn erase_ops_land_when_nvmc_is_not_the_first_peripheral() {
+        for pad in [1usize, 5] {
+            // ERASEPAGE
+            let mut m = machine_with_nvmc_at_offset(pad);
+            assert!(
+                m.bus.peripherals[0].name.starts_with("pad"),
+                "padding must sit ahead of the NVMC (pad={pad})"
+            );
+            m.bus.write_u32(NVMC_BASE + OFF_CONFIG, WEN).unwrap();
+            m.bus.write_u8(0x0800, 0x11).unwrap();
+            m.bus.write_u8(0x1800, 0x22).unwrap();
+            m.bus.write_u32(NVMC_BASE + OFF_CONFIG, EEN).unwrap();
+            m.bus.write_u32(NVMC_BASE + OFF_ERASEPAGE, 0x0800).unwrap();
+            assert_eq!(
+                m.bus.read_u8(0x0800).unwrap(),
+                0x11,
+                "erase is latched, not applied at the store (pad={pad})"
+            );
+            step_once(&mut m);
+            assert_eq!(
+                m.bus.read_u8(0x0800).unwrap(),
+                0xFF,
+                "ERASEPAGE must land with the NVMC at index {pad}"
+            );
+            assert_eq!(m.bus.read_u8(0x1800).unwrap(), 0x22, "other page untouched");
+
+            // ERASEALL
+            let mut m = machine_with_nvmc_at_offset(pad);
+            m.bus.write_u32(NVMC_BASE + OFF_CONFIG, WEN).unwrap();
+            m.bus.write_u8(0xF000, 0x22).unwrap();
+            m.bus.write_u32(NVMC_BASE + OFF_CONFIG, EEN).unwrap();
+            m.bus.write_u32(NVMC_BASE + OFF_ERASEALL, 1).unwrap();
+            step_once(&mut m);
+            assert_eq!(
+                m.bus.read_u8(0xF000).unwrap(),
+                0xFF,
+                "ERASEALL must land with the NVMC at index {pad}"
+            );
+
+            // ERASEUICR
+            let mut m = machine_with_nvmc_at_offset(pad);
+            m.bus.write_u32(UICR_BASE + 0x080, 0x1234_5678).unwrap();
+            m.bus.write_u32(NVMC_BASE + OFF_CONFIG, EEN).unwrap();
+            m.bus.write_u32(NVMC_BASE + OFF_ERASEUICR, 1).unwrap();
+            step_once(&mut m);
+            assert_eq!(
+                m.bus.read_u32(UICR_BASE + 0x080).unwrap(),
+                0xFFFF_FFFF,
+                "ERASEUICR must land with the NVMC at index {pad}"
+            );
+        }
     }
 
     #[test]

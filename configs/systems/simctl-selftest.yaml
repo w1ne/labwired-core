@@ -1,0 +1,20 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# The board the simctl self-test runs on: the CI fixture Cortex-M3 plus the
+# simulation-control device.
+#
+# `simctl` is simulation-only — it exists on no silicon — so it is declared here
+# at the BOARD level rather than in the chip descriptor, which stays a
+# description of real hardware.
+name: "simctl-selftest"
+chip: "../chips/ci-fixture-cortex-m3-uart1.yaml"
+peripherals:
+  - id: "simctl"
+    type: "simctl"
+    base_address: 0x60000000
+    # Exactly the device's register window.
+    size: "32"

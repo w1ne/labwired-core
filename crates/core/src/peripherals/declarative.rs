@@ -162,6 +162,34 @@ impl GenericPeripheral {
         Some(self.apply_stuck_u32(offset as u64, val))
     }
 
+    /// Write `value` straight into the backing storage at `offset`, bypassing
+    /// the descriptor's access rules and any side effects — the counterpart of
+    /// [`Self::peek_u32_raw`].
+    ///
+    /// This exists for *hardware-side* status writes: register bits the SoC
+    /// itself latches rather than the CPU. The ESP32-C3 PMS is the first user —
+    /// a permission violation latches its address/world/operation into
+    /// `SENSITIVE_CORE_0_{I,D}RAM0_PMS_MONITOR_*`, which firmware then reads
+    /// back through `esp_memprot_get_violate_*`. Unlike
+    /// [`Self::force_register_value`] this does NOT touch the declared reset
+    /// value, so a reset still clears the latch. Returns false if `offset` is
+    /// outside the peripheral.
+    pub fn poke_u32_raw(&self, offset: u64, value: u32) -> bool {
+        let mut data = self.data.borrow_mut();
+        let offset = offset as usize;
+        let Some(end) = offset.checked_add(4) else {
+            return false;
+        };
+        if end > data.len() {
+            return false;
+        }
+        data[offset] = value as u8;
+        data[offset + 1] = (value >> 8) as u8;
+        data[offset + 2] = (value >> 16) as u8;
+        data[offset + 3] = (value >> 24) as u8;
+        true
+    }
+
     /// Force `reg_id` to `value`, overriding both its live contents and its
     /// declared reset value so the change survives a later reset. This is the
     /// injection point for the `wrong_reset_value` fault. Returns false if no
@@ -406,6 +434,11 @@ impl Peripheral for GenericPeripheral {
 
             return Ok(self.apply_stuck_byte(offset, val));
         }
+        // Census (measurement only; no-op without the `silent-census` feature).
+        // No register contains this byte, so the read below fabricates a zero —
+        // the same silent path as a hand-written model's `_ => 0` arm, just
+        // expressed as an `if let` miss instead of a match arm.
+        crate::census::record_undecoded_reg_named(&self.descriptor.peripheral, offset, "read");
         Ok(0)
     }
 
@@ -449,6 +482,10 @@ impl Peripheral for GenericPeripheral {
 
             return Ok(());
         }
+        // Census (measurement only; no-op without the `silent-census` feature).
+        // No register contains this byte, so the value is discarded — the same
+        // silent path as a hand-written model's `_ => {}` arm.
+        crate::census::record_undecoded_reg_named(&self.descriptor.peripheral, offset, "write");
         Ok(())
     }
 

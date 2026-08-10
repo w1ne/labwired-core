@@ -373,6 +373,20 @@ peripherals:
     size: "1KB"
     # STM32L0 RNG shares AES_RNG_LPUART1_IRQn = 29 (SVD); 20 is TIM21.
     irq: 29
+    # The RNG needs BOTH clocks, and silicon gives it neither by default:
+    #   - AHBENR.RNGEN (bit 20) — the bus clock (stm32l073.svd RCC.AHBENR@0x30).
+    #   - CRRCR.HSI48RDY (bit 1) — the RC48 KERNEL clock actually running
+    #     (stm32l073.svd RCC.CRRCR@0x08, HSI48ON bit0 -> HSI48RDY bit1).
+    #     RM0367 §7.2.4: the RNG is clocked from HSI48; RDY (not ON) is the bit
+    #     that says the oscillator has started.
+    # Sourced from a silicon capture, not from the model: on NUCLEO-L073RZ the
+    # demo firmware enabled HSI48 at the wrong offset, the real RNG's DRDY never
+    # asserted and DR read 0, while the simulator returned 0xCAFEBABE from
+    # CR.RNGEN alone (examples/nucleo-l073rz/VALIDATION.md). That is a false
+    # pass, which is what these two bits close.
+    clock:
+      - { reg: "ahbenr", bit: 20 }
+      - { reg: "crrcr", bit: 1 }
     config:
       debug_schema: "../peripherals/stm32l073/rng.yaml"
 

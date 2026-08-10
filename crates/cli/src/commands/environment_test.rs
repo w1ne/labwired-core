@@ -9,7 +9,7 @@ use crate::artifacts::{
     AssertionResult, EnvironmentConfig, EnvironmentNodeProvenance, EnvironmentNodeSnapshot,
     EnvironmentTestResult, Snapshot,
 };
-use crate::{build_stop_reason_details, TestArgs, EXIT_CONFIG_ERROR, EXIT_RUNTIME_ERROR};
+use crate::{build_stop_reason_details, TestArgs, EXIT_CONFIG_ERROR};
 use labwired_config::{EnvTestScript, EnvironmentManifest, StopReason, TestAssertion, TestLimits};
 use labwired_core::world::{MachineTrait, World};
 use sha2::{Digest, Sha256};
@@ -519,16 +519,20 @@ fn run_world(
         stop_reason,
         StopReason::WallTime | StopReason::MaxUartBytes | StopReason::NoProgress
     );
-    // Mirror the single-machine runner's precedence: a failed assertion is a
-    // test failure even if a runtime fault also occurred; wall/UART/no-progress
-    // limits are safety stops and cannot certify a world as passed.
-    let status = if !all_assertions_passed || safety_stop_requires_failure {
-        "fail"
-    } else if runtime_error {
-        "error"
-    } else {
-        "pass"
-    };
+    // The single-machine runner's precedence, by USING it rather than
+    // restating it: a failed assertion is a test failure even if a runtime
+    // fault also occurred; wall/UART/no-progress limits are safety stops and
+    // cannot certify a world as passed. The fields this runner leaves false are
+    // the ones its execution model cannot observe — a world node has no
+    // `simctl` verdict, no stimulus rejection and no fault gate.
+    let verdict = crate::verdict::RunFacts {
+        assertions_failed: !all_assertions_passed,
+        unexpected_safety_stop: safety_stop_requires_failure,
+        unrescued_runtime_error: runtime_error,
+        ..crate::verdict::RunFacts::default()
+    }
+    .verdict();
+    let status = verdict.status();
     let stop_reason_details = build_stop_reason_details(
         &stop_reason,
         &limits,
@@ -554,6 +558,11 @@ fn run_world(
         fidelity: labwired_core::fidelity::take().to_gaps(),
         config: config.clone(),
     };
+    // Silent-path census (measurement only; empty fn without the
+    // `silent-census` feature). The multi-node environment runner has its own
+    // result-writing path, separate from the single-node `write_outputs`, so it
+    // needs its own dump call or multi-node labs silently produce no census.
+    labwired_core::census::dump_if_requested();
     let snapshot = Snapshot::Environment {
         status: status.to_string(),
         message: result.message.clone(),
@@ -574,15 +583,9 @@ fn run_world(
         duration,
     );
 
-    let exit_code = if !all_assertions_passed || safety_stop_requires_failure {
-        ExitCode::from(crate::EXIT_ASSERT_FAIL)
-    } else if runtime_error {
-        ExitCode::from(EXIT_RUNTIME_ERROR)
-    } else {
-        ExitCode::SUCCESS
-    };
     EnvironmentRunOutcome {
-        exit_code,
+        // The same `verdict` the result above was written from.
+        exit_code: verdict.exit_code(),
         world_firmware_hash: result.config.world_firmware_hash.clone(),
         cycles,
     }
@@ -854,6 +857,11 @@ fn write_config_error(
         fidelity: labwired_core::fidelity::take().to_gaps(),
         config: config.clone(),
     };
+    // Silent-path census (measurement only; empty fn without the
+    // `silent-census` feature). The multi-node environment runner has its own
+    // result-writing path, separate from the single-node `write_outputs`, so it
+    // needs its own dump call or multi-node labs silently produce no census.
+    labwired_core::census::dump_if_requested();
     let empty_sinks = config
         .nodes
         .iter()

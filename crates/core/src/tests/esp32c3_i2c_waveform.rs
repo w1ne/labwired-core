@@ -14,6 +14,7 @@ mod esp32c3_i2c_waveform_tests {
     use crate::bus::bus_trace::{BusPayload, I2cSym};
     use crate::cpu::CortexM;
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::components::Ssd1306;
     use crate::{Bus, Machine};
     use std::collections::BTreeMap;
@@ -166,7 +167,10 @@ mod esp32c3_i2c_waveform_tests {
             .bus
             .find_peripheral_index_by_name("gpio")
             .expect("gpio registered");
-        let initial = machine.logic_watch(&[Some((gpio_idx, SDA_PIN)), Some((gpio_idx, SCL_PIN))]);
+        let initial = machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+        ]);
         assert_eq!(
             initial,
             vec![Some(true), Some(true)],
@@ -297,7 +301,10 @@ mod esp32c3_i2c_waveform_tests {
                 .bus
                 .find_peripheral_index_by_name("gpio")
                 .expect("gpio registered");
-            machine.logic_watch(&[Some((gpio_idx, SDA_PIN)), Some((gpio_idx, SCL_PIN))]);
+            machine.logic_watch(&[
+                Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+                Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            ]);
             kick_transaction(&mut machine);
             for _ in 0..80_000 {
                 machine.step().unwrap();

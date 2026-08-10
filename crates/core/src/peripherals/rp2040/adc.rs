@@ -380,7 +380,10 @@ impl Peripheral for Rp2040Adc {
             INTE => self.inte,
             INTF => self.intf,
             INTS => self.ints(),
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.adc:Rp2040Adc", offset, "read");
+                0
+            }
         })
     }
 
@@ -430,7 +433,9 @@ impl Peripheral for Rp2040Adc {
             INTR | INTS => {}
             INTE => self.inte = value & 0x1,
             INTF => self.intf = value & 0x1,
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.adc:Rp2040Adc", offset, "write");
+            }
         }
         Ok(())
     }

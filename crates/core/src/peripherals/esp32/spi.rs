@@ -39,7 +39,11 @@
 //! simplification as `peripherals::spi::Spi`. For the e-paper lab one
 //! SSD1680 panel is attached on SPI3.
 
+use crate::cycle_clock::CycleClock;
+use crate::peripherals::esp_gpspi_wire::EspSpiWire;
+use crate::peripherals::pad_lines::PadLines;
 use crate::peripherals::spi::SpiDevice;
+use crate::peripherals::spi_waveform::SpiFraming;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::{Arc, Mutex};
 
@@ -48,6 +52,11 @@ fn spi_debug_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var("LABWIRED_SPI_DEBUG").is_ok())
 }
+
+/// Classic-ESP32 core clock. The GP-SPI divisors count APB (80 MHz) ticks and
+/// the engine's cycle axis is CPU cycles, so a bit period is scaled by
+/// `CPU_CLOCK_HZ / APB_CLK_HZ` — exact here, 240 being a whole multiple of 80.
+const CPU_CLOCK_HZ: u64 = 240_000_000;
 
 const REG_CMD: u64 = 0x00;
 const REG_ADDR: u64 = 0x04;
@@ -59,6 +68,71 @@ const REG_MOSI_DLEN: u64 = 0x28;
 const REG_MISO_DLEN: u64 = 0x2C;
 const FIFO_START: u64 = 0x80;
 const FIFO_END: u64 = 0xC0; // exclusive — W0..W15 = 64 bytes
+
+/// `SPI_CLOCK_REG` — classic `spi_reg.h` :328. **0x18**, not the C3/S3's 0x0C.
+const REG_CLOCK: u64 = 0x18;
+/// `SPI_PIN_REG` — classic `spi_reg.h` :587. Classic has NO `SPI_MISC`; the
+/// clock-idle polarity that the C3/S3 keep in `MISC` (0x20) lives here.
+const REG_PIN: u64 = 0x34;
+
+/// `SPI_CLK_EQU_SYSCLK` (CLOCK bit 31) — `spi_reg.h` :332.
+const CLK_EQU_SYSCLK: u32 = 1 << 31;
+/// `SPI_CLKDIV_PRE` (CLOCK [30:18], **13 bits**) — `spi_reg.h` :341, `_V 0x1FFF`.
+/// ⚠️ The C3/S3 field is only four bits wide; masking with the sibling's 0xF
+/// would silently clamp every divider above 15 and report a rate the firmware
+/// never asked for.
+const CLKDIV_PRE_SHIFT: u32 = 18;
+const CLKDIV_PRE_MASK: u32 = 0x1FFF;
+/// `SPI_CLKCNT_N` (CLOCK [17:12], 6 bits) — `spi_reg.h` :348.
+const CLKCNT_N_SHIFT: u32 = 12;
+const CLKCNT_N_MASK: u32 = 0x3F;
+/// `SPI_CK_OUT_EDGE` (CPHA) — `SPI_USER` bit **7** on classic (`spi_reg.h`
+/// :506). ⚠️ The C3 and the S3 put it at bit 9; reading the sibling's bit gives
+/// a trace at the right rate framed on the wrong phase, which decodes to
+/// something plausible and wrong.
+const CK_OUT_EDGE: u32 = 1 << 7;
+/// `SPI_CK_IDLE_EDGE` (CPOL) — `SPI_PIN` bit 29 (`spi_reg.h` :599).
+const CK_IDLE_EDGE: u32 = 1 << 29;
+
+/// Engine cycles in one SCK period, from this controller's own `SPI_CLOCK`.
+///
+/// `f_spi = f_apb / ((CLKDIV_PRE + 1) * (CLKCNT_N + 1))`, or `f_apb` outright
+/// when `CLK_EQU_SYSCLK` is set — which is the register's RESET state
+/// (`spi_reg.h` :329 records `default: 1'b1`). `None` below two cycles per bit,
+/// where [`crate::peripherals::wave_plan::WavePlan`] cannot keep a period's
+/// halves distinct and nothing honest can be drawn.
+///
+/// Deliberately NOT `esp_gpspi_wire::bit_time_cycles`: that reads the same three
+/// field POSITIONS out of a register at a different offset with a different
+/// `CLKDIV_PRE` width. Only the narration machinery is shared, never the decode.
+fn bit_time_cycles(clock_reg: u32) -> Option<u64> {
+    let apb_ticks = if clock_reg & CLK_EQU_SYSCLK != 0 {
+        1
+    } else {
+        let pre = u64::from((clock_reg >> CLKDIV_PRE_SHIFT) & CLKDIV_PRE_MASK) + 1;
+        let n = u64::from((clock_reg >> CLKCNT_N_SHIFT) & CLKCNT_N_MASK) + 1;
+        pre * n
+    };
+    let ticks = apb_ticks * CPU_CLOCK_HZ / crate::peripherals::esp_gpspi_wire::APB_CLK_HZ;
+    (ticks >= 2).then_some(ticks)
+}
+
+/// How `SPI_PIN` and `SPI_USER` currently frame a byte on the wire.
+///
+/// Width is fixed at 8: `SPI_MOSI_DLEN` counts the transaction in BITS and the
+/// transaction engine walks the W buffer a byte at a time, so a byte is the unit
+/// that reaches the wire. `SPI_WR_BIT_ORDER` (`SPI_CTRL` bit 26, `spi_reg.h`
+/// :142) selects LSB-first and is NOT read here — the narrator only draws
+/// MSB-first, which is what every ESP-IDF/Arduino path programs; a firmware that
+/// flipped it would get a trace at the right rate with the bits reversed, so it
+/// is called out rather than silently assumed.
+fn framing(pin_reg: u32, user_reg: u32) -> SpiFraming {
+    SpiFraming {
+        cpol: pin_reg & CK_IDLE_EDGE != 0,
+        cpha: user_reg & CK_OUT_EDGE != 0,
+        bits: 8,
+    }
+}
 
 const CMD_USR_BIT: u32 = 1 << 18;
 /// All CMD bits that launch an operation and auto-clear (bits [31:16]:
@@ -114,6 +188,7 @@ const CMD_CHIP_ERASE: u8 = 0xC7;
 // Flash status-register bits (SPI NOR standard).
 const STATUS_WIP: u16 = 1 << 0;
 const STATUS_WEL: u16 = 1 << 1;
+const EXTERNAL_CAN_POLL_EVENT: u32 = u32::MAX;
 
 /// JEDEC id returned for RDID: Winbond W25Q32-class (mfg 0xEF, type 0x40,
 /// capacity 0x16 = 4 MiB). Matches the post-BROM `g_rom_flashchip` seed and
@@ -151,6 +226,19 @@ pub struct Esp32Spi {
     record_enabled: bool,
     captured_bytes: Vec<u8>,
     transactions: u64,
+
+    /// Levels published to matrix-routed pads, so a probe on `VSPICLK` /
+    /// `VSPID` / `VSPICS0` measures the shifted bytes rather than the GPIO
+    /// output latch. Inert until `SystemBus::wire_esp32_spi_pads` binds it;
+    /// the narration machinery is shared with the C3/S3 (see
+    /// [`crate::peripherals::esp_gpspi_wire`]) — only the register decode above
+    /// is classic-specific.
+    wire: EspSpiWire,
+    /// Bus-published cycle clock. `Some` once the bus has attached it, which
+    /// every production `add_peripheral`/`push_peripheral` does; `None` on a
+    /// hand-built bus, where there is no axis to place a waveform on.
+    clock: Option<CycleClock>,
+    external_can_poll_scheduled: bool,
 }
 
 impl std::fmt::Debug for Esp32Spi {
@@ -176,6 +264,28 @@ impl Esp32Spi {
     /// the same backing the XIP windows use.
     pub fn set_flash_backing(&mut self, flash: Arc<Mutex<Vec<u8>>>) {
         self.flash = Some(flash);
+    }
+
+    /// The shared pad-line cell for SCK/MOSI/CS, created on first use.
+    ///
+    /// ⚠️ Creating the cell is what turns narration ON.
+    /// `SystemBus::wire_esp32_spi_pads` resolves the GPIO port FIRST for that
+    /// reason: a controller that owns a cell no route reaches still buffers
+    /// every launched transaction, arms a wakeup per burst, and narrates into a
+    /// wire nothing reads.
+    pub(crate) fn pad_lines_arc(&mut self) -> Arc<PadLines> {
+        let cpol = framing(self.read_word(REG_PIN), self.user).cpol;
+        self.wire.pad_lines_arc(cpol)
+    }
+
+    /// Publish a held burst once the wire has carried it. Without a cycle clock
+    /// (a hand-built test bus) there is nowhere to place a waveform, so nothing
+    /// is drawn.
+    fn wire_flush(&mut self, force: bool) {
+        let Some(now) = self.clock.as_ref().map(|c| c.now()) else {
+            return;
+        };
+        self.wire.flush(now, force);
     }
 
     /// Raw device push — does NOT wrap for tracing. The only production caller
@@ -316,12 +426,23 @@ impl Esp32Spi {
         if self.user & USER_USR_MOSI_BIT != 0 {
             let bits = (self.mosi_dlen & 0x7FF) + 1;
             let byte_count = bits.div_ceil(8) as usize;
+            // Read the framing ONCE, before the loop, from the registers as they
+            // stand at the launch — that is the state the whole transaction goes
+            // out under, and `read_word` needs `&self` while the loop below
+            // holds `&mut self.attached_devices`.
+            let framing = framing(self.read_word(REG_PIN), self.user);
+            let bit_time = bit_time_cycles(self.read_word(REG_CLOCK));
+            let now = self.clock.as_ref().map_or(0, |c| c.now());
             for i in 0..byte_count {
                 let word = self.fifo[i / 4];
                 let byte = ((word >> ((i % 4) * 8)) & 0xFF) as u8;
                 if self.record_enabled {
                     self.captured_bytes.push(byte);
                 }
+                // The wire sees the byte at the SAME choke point the attached
+                // devices do: it leaves the W buffer exactly once, and this is
+                // that once. One branch when no pad routes this controller.
+                self.wire.push(byte, framing, bit_time, now);
                 for dev in &mut self.attached_devices {
                     dev.transfer(byte);
                 }
@@ -456,9 +577,27 @@ impl Esp32Spi {
 }
 
 impl Peripheral for Esp32Spi {
-    // Inert walk: SPI transactions run atomically at the launching CMD write (USR auto-clears there); tick() is an explicit no-op.
+    /// This model needs the walk EXACTLY when it is not on the scheduler.
+    ///
+    /// ⚠️ It used to be a flat `false` under the note "inert walk: SPI
+    /// transactions run atomically at the launching CMD write". That was true
+    /// while `tick()` was literally `default()`. It stopped being true the
+    /// moment `tick()` gained the burst flush: on a build without
+    /// `event-scheduler` the walk is the ONLY thing that publishes a narration,
+    /// so a flat `false` is the walk-starvation claim that
+    /// `crates/core/src/tests/walk_starvation_contract.rs` exists to catch —
+    /// and it caught this.
+    ///
+    /// The negation shape is what keeps `SystemBus::derive_walk_deletable`
+    /// (which is ALL-OR-NOTHING across the bus) unchanged where it matters:
+    /// under the feature a cycle clock is always attached, so
+    /// [`Self::uses_scheduler`] is true, this is false, and the bus stays as
+    /// deletable as it was — the [`Self::take_scheduled_events`] chain owns
+    /// publication and arms one wakeup per burst. Without the feature the walk
+    /// always runs regardless (`legacy_walk_disabled` is only read there) and
+    /// [`Self::tick`] publishes.
     fn needs_legacy_walk(&self) -> bool {
-        false
+        !self.uses_scheduler()
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
@@ -577,8 +716,92 @@ impl Peripheral for Esp32Spi {
         Ok(())
     }
 
+    /// Legacy-walk publication point. Under `event-scheduler` the walk skips
+    /// this model (see [`Self::uses_scheduler`]) and the event chain owns it;
+    /// without the feature this is where a held burst reaches the pads. Inert —
+    /// one `is_empty` — on every bus that never routed an SPI pad, which is what
+    /// this method did in full before the wire existed.
     fn tick(&mut self) -> PeripheralTickResult {
+        self.wire_flush(false);
+        for device in &mut self.attached_devices {
+            device.poll_external_bus();
+        }
         PeripheralTickResult::default()
+    }
+
+    /// Driven by the event scheduler once the bus has attached its cycle clock
+    /// (production `add_peripheral`/`push_peripheral` always do, under the
+    /// `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral; nothing here advances on its own, so there is no counter to
+    /// sync and no interrupt level to re-export — only the burst flush, which
+    /// [`Self::take_scheduled_events`] arms. Without a clock (feature off, or a
+    /// hand-built bus) it stays on the legacy walk and `tick()` publishes.
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Arm ONE wakeup for a held burst, at the cycle the wire finishes carrying
+    /// it. Costs nothing unless a lab has BOTH routed a pad and launched a
+    /// transaction, so a 64-byte burst is one wakeup rather than 100 000 walk
+    /// ticks. Mirrors `Esp32c3Spi`.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.clock.is_none() {
+            return Vec::new();
+        }
+        let mut events = Vec::new();
+        if self.wire.is_pending() && !self.wire.scheduled {
+            let now = self.clock.as_ref().map_or(0, |clock| clock.now());
+            self.wire.arm_seq = self.wire.arm_seq.wrapping_add(1);
+            if self.wire.arm_seq == EXTERNAL_CAN_POLL_EVENT {
+                self.wire.arm_seq = 0;
+            }
+            self.wire.scheduled = true;
+            events.push((self.wire.ready_in(now), self.wire.arm_seq));
+        }
+        let has_external_bus = self
+            .attached_devices
+            .iter()
+            .any(|device| device.needs_external_bus_poll());
+        if has_external_bus && !self.external_can_poll_scheduled {
+            self.external_can_poll_scheduled = true;
+            events.push((0, EXTERNAL_CAN_POLL_EVENT));
+        }
+        events
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token == EXTERNAL_CAN_POLL_EVENT {
+            for device in &mut self.attached_devices {
+                device.poll_external_bus();
+            }
+            return crate::sched::EventResult {
+                reschedule_delay: Some(1),
+                ..Default::default()
+            };
+        }
+        if event_token != self.wire.arm_seq {
+            // Stale token from a superseded arm; the live chain owns publication.
+            return crate::sched::EventResult::default();
+        }
+        self.wire_flush(false);
+        // A flush that reported LevelsOnly keeps its bytes; `ready_in` is then 0,
+        // so `max(1)` retries next cycle and converges as the run grows.
+        let now = self.clock.as_ref().map_or(0, |c| c.now());
+        let pending = self.wire.is_pending();
+        self.wire.scheduled = pending;
+        crate::sched::EventResult {
+            reschedule_delay: pending.then(|| self.wire.ready_in(now).max(1)),
+            ..Default::default()
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

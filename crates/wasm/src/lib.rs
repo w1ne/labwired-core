@@ -2,6 +2,7 @@ use labwired_config::{
     Arch, BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, SystemManifest,
 };
 use labwired_core::bus::SystemBus;
+use labwired_core::console::{ConsoleCapture, HostConsole};
 
 // #124 Phase 4: browser-side JIT prototype. Runs the dominant
 // `0x400829cc` hot block through `js_sys::WebAssembly` instead of the
@@ -10,7 +11,10 @@ mod inputs;
 mod inspect;
 mod install;
 mod jit_browser;
+#[cfg(test)]
+mod playground_repro;
 mod traces;
+mod world;
 // CortexM and XtensaLx7 are used via Box<dyn Cpu>; the concrete types are
 // only constructed inside the configure_* fns and immediately boxed.
 use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
@@ -55,11 +59,21 @@ struct Esp32IpiBridge {
     handshake_bytes: Vec<u32>,
 }
 
+/// A run's console capture plus the sink for the USB-Serial-JTAG block that the
+/// shared C3 ROM builder installs after the bus is handed over.
+type C3FlashConsole = (ConsoleCapture, Arc<Mutex<Vec<u8>>>);
+
 #[wasm_bindgen]
 pub struct WasmSimulator {
     machine: Option<Machine<Box<dyn Cpu>>>,
     board_io: Vec<BoardIoBinding>,
     uart_sink: Arc<Mutex<Vec<u8>>>,
+    /// Both of the board's consoles, one of them shown. `uart_sink` above IS
+    /// this capture's heard sink — the console the board's USB socket is wired
+    /// to. See [`labwired_core::console`]: the twin taps one console because a
+    /// real board gives you one, and records the other so that firmware
+    /// printing into a disconnected console is diagnosable instead of silent.
+    console: ConsoleCapture,
     uart_rx_bufs: Vec<Arc<Mutex<VecDeque<u8>>>>,
     #[allow(dead_code)]
     arch: Arch,
@@ -306,7 +320,8 @@ impl WasmSimulator {
         bus.ram = LinearMemory::new(20 * 1024, 0x2000_0000);
         bus.refresh_peripheral_index();
 
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        let console = ConsoleCapture::new(HostConsole::Undeclared, HostConsole::UsbSerialJtag);
+        let uart_sink = console.heard_sink();
         bus.attach_uart_tx_sink(uart_sink.clone(), false);
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
@@ -324,6 +339,7 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io: Vec::new(),
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::Arm,
             esp32_ipi: None,
@@ -392,14 +408,10 @@ impl WasmSimulator {
         let mut bus = SystemBus::from_config(chip, manifest)
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
-            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
-                bus.attach_uart_tx_sink(uart_sink.clone(), false);
-            }
-        } else {
-            bus.attach_uart_tx_sink(uart_sink.clone(), false);
-        }
+        let console = ConsoleCapture::for_manifest(manifest);
+        let uart_sink = console.heard_sink();
+        bus.attach_host_console(console.tapped(), uart_sink.clone())
+            .map_err(|e| JsValue::from_str(&e))?;
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let (cpu, _nvic) = configure_cortex_m(&mut bus);
@@ -418,12 +430,52 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io,
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::Arm,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
         })
+    }
+
+    /// ONE home for the console decision on the two ESP32-C3 merged-flash paths
+    /// (rom-boot and flash fast-start) — the paths a hosted Arduino/ESP-IDF
+    /// build actually takes.
+    ///
+    /// These are the only paths where a real mask ROM runs, and the C3 BROM
+    /// prints its banner to UART0 AND USB-Serial-JTAG. Wiring both into one
+    /// buffer would render every ROM character twice, so exactly one console is
+    /// shown — which is also what a real board gives you, since the socket is
+    /// soldered to one of them. The other console is recorded but not shown, so
+    /// [`WasmSimulator::console_mismatch`] can explain a pane that stays empty
+    /// because the firmware printed to the console this board has no cable on.
+    ///
+    /// Returns the capture (its `heard_sink` is the Serial pane) plus the sink
+    /// to hand `RomBootOpts::usb_serial_sink` — the USB-Serial-JTAG model is
+    /// added by the shared core builder AFTER the bus is handed over, so it is
+    /// the one console that cannot be attached through the bus here.
+    fn attach_c3_flash_console(
+        bus: &mut SystemBus,
+        manifest: &SystemManifest,
+    ) -> Result<C3FlashConsole, JsValue> {
+        let console = ConsoleCapture::for_manifest(manifest);
+        if console.tapped().is_usb_serial_jtag() {
+            // `deploy.usb: native` board (ESP32-C3 SuperMini): the USB-C socket
+            // IS the C3's USB-Serial-JTAG. UART0 exists and the ROM still writes
+            // to it, but on this board it comes out on GPIO20/21 header pins with
+            // nothing attached — record it as the console nobody can hear.
+            bus.attach_uart_tx_sink(console.unheard_sink(), false);
+            let usb = console.heard_sink();
+            Ok((console, usb))
+        } else {
+            // Bridge-chip board, or an undeclared manifest (historical default:
+            // UART0, where every Arduino/IDF lab shipped so far prints).
+            bus.attach_host_console(console.tapped(), console.heard_sink())
+                .map_err(|e| JsValue::from_str(&e))?;
+            let usb = console.unheard_sink();
+            Ok((console, usb))
+        }
     }
 
     /// RISC-V (esp32c3) bus setup. Mirrors `new_from_config_arm` but builds a
@@ -502,24 +554,8 @@ impl WasmSimulator {
         let bootloader_image = esp32c3_bootloader_program_image_from_merged_flash(flash)
             .map_err(|e| JsValue::from_str(&format!("ESP32-C3 flash fast-start: {e}")))?;
 
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        let capture_usb_serial = manifest
-            .debug_uart
-            .as_deref()
-            .map(|debug_uart| {
-                debug_uart.eq_ignore_ascii_case("usb_serial_jtag")
-                    || debug_uart.eq_ignore_ascii_case("usb-serial-jtag")
-            })
-            .unwrap_or(false);
-        if !capture_usb_serial {
-            if let Some(debug_uart) = manifest.debug_uart.as_deref() {
-                if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
-                    bus.attach_uart_tx_sink(uart_sink.clone(), false);
-                }
-            } else {
-                bus.attach_uart_tx_sink(uart_sink.clone(), false);
-            }
-        }
+        let (console, usb_serial_sink) = Self::attach_c3_flash_console(&mut bus, manifest)?;
+        let uart_sink = console.heard_sink();
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let mut machine = build_rom_boot_machine(
@@ -530,7 +566,7 @@ impl WasmSimulator {
                 // the browser builds one bridge each, so leaving this unpinned is
                 // what gives them distinct WiFi station MACs and BLE addresses.
                 pinned_efuse_mac: None,
-                usb_serial_sink: capture_usb_serial.then(|| uart_sink.clone()),
+                usb_serial_sink: Some(usb_serial_sink),
             },
             |c| Box::new(c) as Box<dyn Cpu>,
         );
@@ -553,6 +589,7 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io,
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::RiscV,
             esp32_ipi: None,
@@ -635,24 +672,28 @@ impl WasmSimulator {
             }
         };
 
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        let console = ConsoleCapture::for_manifest(manifest);
+        let uart_sink = console.heard_sink();
         // On the faithful C3 ROM path, esp-println's `jtag-serial` feature (used
         // by esp-hal apps) prints through USB_SERIAL_JTAG (0x6004_3000), not
         // UART0. The chip YAML only has a declarative register stub there, which
-        // never drains bytes, so route the real behavioral model (same IP as the
-        // S3, reused unchanged) into `uart_sink` — mirroring the S3 path — so the
-        // widget's Serial tab shows the app's output. A narrower, later-registered
-        // window overrides the declarative stub.
+        // never drains bytes, so install the real behavioral model (same IP as
+        // the S3, reused unchanged). A narrower, later-registered window
+        // overrides the declarative stub.
         if faithful_c3_rom {
             use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
-            let mut usb_serial = UsbSerialJtag::new();
-            usb_serial.set_sink(Some(uart_sink.clone()), false);
+            // `new_esp32c3()`, not `new()`: the latter leaves irq_source None, so
+            // the CDC interrupt never reaches the matrix and a CDC-on-boot build
+            // prints nothing. The sink is NOT attached here any more — the
+            // console-selection path below routes it via
+            // `attach_usb_serial_jtag_sink` so the tap follows the board's real
+            // USB socket instead of being hard-wired at construction.
             bus.add_peripheral(
                 "usb_serial_jtag",
                 0x6004_3000,
                 0x100,
                 None,
-                Box::new(usb_serial),
+                Box::new(UsbSerialJtag::new_esp32c3()),
             );
             bus.refresh_peripheral_index();
             // Same reason as the `rtc_i2c_ana` addition above: re-derive
@@ -660,12 +701,28 @@ impl WasmSimulator {
             // the one the boot path saw.
             bus.recompute_walk_deletable();
         }
-        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
-            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+        // No mask ROM executes on this bare-ELF path, so nothing writes the same
+        // bytes to both consoles: an undeclared manifest can keep capturing both
+        // into one pane, exactly as before. A manifest that DOES declare the
+        // board's console is authoritative and selects it — same rule, same
+        // parser, as the merged-flash paths.
+        match console.tapped() {
+            HostConsole::Undeclared => {
+                if faithful_c3_rom {
+                    bus.attach_usb_serial_jtag_sink(uart_sink.clone());
+                }
                 bus.attach_uart_tx_sink(uart_sink.clone(), false);
             }
-        } else {
-            bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            tapped => {
+                if faithful_c3_rom && !tapped.is_usb_serial_jtag() {
+                    bus.attach_usb_serial_jtag_sink(console.unheard_sink());
+                }
+                bus.attach_host_console(tapped, uart_sink.clone())
+                    .map_err(|e| JsValue::from_str(&e))?;
+                if tapped.is_usb_serial_jtag() {
+                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
+                }
+            }
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
@@ -688,6 +745,7 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io,
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::RiscV,
             esp32_ipi: None,
@@ -749,29 +807,8 @@ impl WasmSimulator {
             .expect("esp32c3_flash presence checked by caller")
             .clone();
 
-        // Capture one console for the widget's Serial tab. The C3 boot ROM
-        // prints the same banner to UART0 and USB_SERIAL_JTAG; wiring both into
-        // one browser buffer renders every ROM character twice. Default to
-        // UART0 (Arduino/IDF Serial in hosted labs). A manifest can explicitly
-        // request the USB console with debug_uart: usb_serial_jtag.
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        let capture_usb_serial = manifest
-            .debug_uart
-            .as_deref()
-            .map(|debug_uart| {
-                debug_uart.eq_ignore_ascii_case("usb_serial_jtag")
-                    || debug_uart.eq_ignore_ascii_case("usb-serial-jtag")
-            })
-            .unwrap_or(false);
-        if !capture_usb_serial {
-            if let Some(debug_uart) = manifest.debug_uart.as_deref() {
-                if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
-                    bus.attach_uart_tx_sink(uart_sink.clone(), false);
-                }
-            } else {
-                bus.attach_uart_tx_sink(uart_sink.clone(), false);
-            }
-        }
+        let (console, usb_serial_sink) = Self::attach_c3_flash_console(&mut bus, manifest)?;
+        let uart_sink = console.heard_sink();
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let mut machine = build_rom_boot_machine(
@@ -780,7 +817,7 @@ impl WasmSimulator {
             RomBootOpts {
                 // A new die per bridge — see the fast-start path above.
                 pinned_efuse_mac: None,
-                usb_serial_sink: capture_usb_serial.then(|| uart_sink.clone()),
+                usb_serial_sink: Some(usb_serial_sink),
             },
             // WasmSimulator holds Machine<Box<dyn Cpu>>; box the concrete RiscV.
             |c| Box::new(c) as Box<dyn Cpu>,
@@ -796,6 +833,7 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io,
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::RiscV,
             esp32_ipi: None,
@@ -820,8 +858,14 @@ impl WasmSimulator {
         let mut bus = SystemBus::new();
         let cpu = configure_xtensa_esp32(&mut bus);
 
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        // A classic ESP32 has NO USB peripheral: its devkit's CP210x sits on
+        // UART0 and IS the USB device the host enumerates. So `debug_uart:
+        // usb_serial_jtag` here is a board-mapping error, and `attach_host_console`
+        // says so instead of quietly showing UART0 under a USB label.
+        let console = ConsoleCapture::for_manifest(manifest);
+        let uart_sink = console.heard_sink();
+        bus.attach_host_console(console.tapped(), uart_sink.clone())
+            .map_err(|e| JsValue::from_str(&e))?;
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
@@ -861,6 +905,7 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io,
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::Xtensa,
             esp32_ipi: None,
@@ -887,7 +932,6 @@ impl WasmSimulator {
     ) -> Result<WasmSimulator, JsValue> {
         use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
         use labwired_core::boot::esp32s3_rom::RomImages;
-        use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
         use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
 
         // Inject the on-demand ROM blobs (None → configure falls back to the
@@ -910,20 +954,30 @@ impl WasmSimulator {
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
         let mut cpu = wiring.cpu;
 
-        // Route USB-serial-JTAG bytes into the widget's serial sink. esp-hal's
-        // `esp_println`/`println!` on the S3 targets USB_SERIAL_JTAG, not UART0.
-        let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        for p in bus.peripherals.iter_mut() {
-            if p.name == "usb_serial_jtag" {
-                if let Some(any_mut) = p.dev.as_any_mut() {
-                    if let Some(jtag) = any_mut.downcast_mut::<UsbSerialJtag>() {
-                        jtag.set_sink(Some(uart_sink.clone()), false);
-                    }
+        // S3 fast-boot runs no mask ROM, so nothing writes the same bytes to
+        // both consoles: an undeclared manifest keeps capturing both into one
+        // pane, exactly as before (esp-hal's `esp_println` targets
+        // USB_SERIAL_JTAG; an Arduino sketch may use UART0). A manifest that
+        // declares the board's console is authoritative and selects it — the
+        // same rule and the same parser as the C3 merged-flash paths.
+        let console = ConsoleCapture::for_manifest(manifest);
+        let uart_sink = console.heard_sink();
+        match console.tapped() {
+            HostConsole::Undeclared => {
+                bus.attach_usb_serial_jtag_sink(uart_sink.clone());
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+            tapped => {
+                if !tapped.is_usb_serial_jtag() {
+                    bus.attach_usb_serial_jtag_sink(console.unheard_sink());
+                }
+                bus.attach_host_console(tapped, uart_sink.clone())
+                    .map_err(|e| JsValue::from_str(&e))?;
+                if tapped.is_usb_serial_jtag() {
+                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
                 }
             }
         }
-        // Also capture UART0 in case a sketch uses the classic UART path.
-        bus.attach_uart_tx_sink(uart_sink.clone(), false);
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         // Wire any devices the manifest declares (e.g. an SH1107 OLED on i2c0) —
@@ -954,6 +1008,7 @@ impl WasmSimulator {
             machine: Some(machine),
             board_io: manifest.board_io.clone(),
             uart_sink,
+            console,
             uart_rx_bufs,
             arch: Arch::Xtensa,
             esp32_ipi: None,
@@ -1263,6 +1318,40 @@ impl WasmSimulator {
     /// call constructed via `js_sys::WebAssembly`. Off by default —
     /// callers opt in from JS once they've benchmarked.
     #[wasm_bindgen]
+    /// Wall-clock attribution for the open profiling window, as text, with this
+    /// chip's peripheral names resolved.
+    ///
+    /// The window is per-THREAD, not per-simulator: on a multi-chip lab every
+    /// chip in this worker records into it, and the report says so.
+    pub fn profile_report(&mut self) -> String {
+        self.machine().profile_report().render()
+    }
+
+    /// The same attribution as JSON, for a HUD to render.
+    pub fn profile_report_json(&mut self) -> String {
+        let report = self.machine().profile_report();
+        let rows: Vec<serde_json::Value> = report
+            .rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "ns": r.ns,
+                    "calls": r.calls,
+                    "percent": r.percent,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "clock": format!("{:?}", report.clock),
+            "windowNs": report.window_ns,
+            "machines": report.machines,
+            "unattributedNs": report.unattributed_ns,
+            "rows": rows,
+        })
+        .to_string()
+    }
+
     pub fn set_jit_enabled(&mut self, enabled: bool) {
         self.jit_browser_enabled = enabled;
         if !enabled {
@@ -1500,6 +1589,46 @@ extern "C" {
     fn perf_now() -> f64;
 }
 
+/// Nanosecond clock for [`labwired_core::profile`], from the same
+/// `performance.now()` import above.
+///
+/// ⚠️ **Resolution is much coarser than the spans being timed.** Chrome clamps
+/// `performance.now()` to 100 µs outside a cross-origin-isolated context (5 µs
+/// inside one), while a single peripheral event handler runs in ~100 ns. Any
+/// INDIVIDUAL event therefore measures 0 or one whole clamp step — the per-call
+/// numbers are noise.
+///
+/// The SUMS are still sound: truncation against a clock whose phase is
+/// uncorrelated with the work is unbiased, so over the millions of events in a
+/// real window the totals converge on the truth. Read the browser report as
+/// subsystem shares over a long window, never as the cost of one call, and
+/// sanity-check it against the `unattributed` row.
+fn profile_now_ns() -> u64 {
+    (perf_now() * 1_000_000.0) as u64
+}
+
+/// Start an engine profiling window in the browser, installing the
+/// `performance.now()` clock. Without this the wasm build has no clock at all
+/// and every duration would read zero — see `labwired_core::profile`.
+#[wasm_bindgen]
+pub fn profile_start() {
+    labwired_core::profile::set_clock(profile_now_ns);
+    labwired_core::profile::start();
+}
+
+/// Close the profiling window. The report survives until the next
+/// [`profile_start`].
+#[wasm_bindgen]
+pub fn profile_stop() {
+    labwired_core::profile::stop();
+}
+
+/// Is the engine profiler recording?
+#[wasm_bindgen]
+pub fn profile_enabled() -> bool {
+    labwired_core::profile::enabled()
+}
+
 /// A shared UART cross-link medium, owned by the host. Create one per multi-chip
 /// lab-group and pass it to every chip's `attach_uart_wire`; chips sharing a bus
 /// exchange bytes, chips on different buses are isolated. A fresh `WireBus` per
@@ -1687,6 +1816,7 @@ mod machine_advance_tests {
             machine: Some(machine),
             board_io: Vec::new(),
             uart_sink,
+            console: ConsoleCapture::new(HostConsole::Undeclared, HostConsole::UsbSerialJtag),
             uart_rx_bufs,
             arch,
             esp32_ipi: None,
@@ -2665,5 +2795,222 @@ external_devices:
             }
             drop(sim);
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod console_tap_tests {
+    //! THE TWIN MUST TAP THE CONSOLE THE BOARD'S CABLE IS ON.
+    //!
+    //! An ESP32-C3 has two consoles: UART0 and its own USB-Serial-JTAG. Which
+    //! one carries `Serial` to the host is a BOARD fact — `deploy.usb` in the
+    //! board contract:
+    //!
+    //!   * `native` (esp32-c3-supermini, esp32-s3-zero) — USB-C lands on the
+    //!     MCU's USB-Serial-JTAG. UART0 goes to GPIO20/21 header pins with
+    //!     nothing on them.
+    //!   * bridge chip (classic esp32, adafruit-feather-esp32-v2) — a CP210x on
+    //!     UART0 IS the USB device the host enumerates.
+    //!
+    //! The build side derives `ARDUINO_USB_CDC_ON_BOOT` from exactly that field.
+    //! These tests are the twin's half: the run manifest declares the board's
+    //! console and the Serial pane shows that console and only that console.
+    //!
+    //! ## The fixture
+    //!
+    //! One image driving BOTH consoles, so a single boot proves both directions:
+    //!
+    //! ```ino
+    //! HWCDC UsbCdc;
+    //! void setup() { Serial.begin(115200); UsbCdc.begin(); }
+    //! void loop() {
+    //!   Serial.println("LW_UART0_TICK");     // UART0
+    //!   UsbCdc.println("LW_USBCDC_TICK");    // USB-Serial-JTAG
+    //!   delay(100);
+    //! }
+    //! ```
+    //!
+    //! Built on the hosted PlatformIO toolchain for board `esp32-c3-supermini`,
+    //! language `arduino`, merged at its flash offsets into
+    //! `fixtures/esp32c3-usb-cdc-console-flash.bin`. It boots through the real
+    //! mask ROM, so both consoles carry genuine traffic: the C3 BROM prints its
+    //! banner to UART0 AND USB-Serial-JTAG, and the sketch then prints its own
+    //! marker to UART0.
+    //!
+    //! ## What `LW_USBCDC_TICK` is NOT doing here
+    //!
+    //! It never appears — on either console — and that is a SEPARATE, deeper
+    //! gap these tests deliberately do not paper over. `arduino-esp32`'s HWCDC
+    //! (the driver a CDC-on-boot build binds to `Serial`) is entirely
+    //! interrupt-driven: `HWCDC::write` only enqueues if `isCDC_Connected()`,
+    //! which needs `usb_serial_jtag_is_connected()` (a SOF-frame watchdog on
+    //! `INT_RAW.SOF`), and the ring buffer is only moved into the TX FIFO by the
+    //! `SERIAL_IN_EMPTY` ISR. The twin's USB-Serial-JTAG model has neither —
+    //! it is a polling-only byte sink (EP1_CONF permanently ready, no interrupt
+    //! registers at all), which is why the mask ROM's `usb_uart_tx_one_char`
+    //! busy-poll works through it and HWCDC produces nothing. Fixing the tap is
+    //! necessary and not sufficient; modelling the USB host (SOF + IN_EMPTY +
+    //! matrix IRQ) is the follow-up. Asserting on `LW_USBCDC_TICK` here would
+    //! just fail for a reason this change is not about, so instead these tests
+    //! use the traffic that IS real on both consoles.
+    use super::*;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    /// The C3 mask ROM banner. Printed to BOTH consoles, which is why the twin
+    /// cannot simply merge the two taps.
+    const ROM_BANNER: &str = "ESP-ROM:esp32c3";
+    /// The sketch's UART0 marker — app output, after the ROM is done.
+    const UART0_MARKER: &str = "LW_UART0_TICK";
+
+    fn root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    fn c3_chip() -> ChipDescriptor {
+        serde_yaml::from_str(
+            &std::fs::read_to_string(root().join("../../configs/chips/esp32c3.yaml"))
+                .expect("read esp32c3 chip yaml"),
+        )
+        .expect("parse chip yaml")
+    }
+
+    /// The C3 devkit manifest, optionally declaring the board's console.
+    fn c3_manifest(console: Option<&str>) -> SystemManifest {
+        let mut yaml =
+            std::fs::read_to_string(root().join("../../configs/systems/esp32c3-devkit.yaml"))
+                .expect("read esp32c3-devkit system yaml");
+        if let Some(console) = console {
+            yaml.push_str(&format!("\ndebug_uart: \"{console}\"\n"));
+        }
+        serde_yaml::from_str(&yaml).expect("parse system yaml")
+    }
+
+    fn c3_blobs() -> HashMap<String, Vec<u8>> {
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            "esp32c3_irom".into(),
+            std::fs::read(root().join("../core/roms/esp32c3/esp32c3_rom.bin"))
+                .expect("read vendored C3 IROM"),
+        );
+        blobs.insert(
+            "esp32c3_drom".into(),
+            std::fs::read(root().join("../core/roms/esp32c3/esp32c3_drom.bin"))
+                .expect("read vendored C3 DROM"),
+        );
+        blobs.insert(
+            "esp32c3_flash".into(),
+            std::fs::read(root().join("tests/fixtures/esp32c3-usb-cdc-console-flash.bin"))
+                .expect("read C3 two-console flash image"),
+        );
+        blobs
+    }
+
+    /// What the Serial pane shows, and what the twin says was said on the
+    /// console this board has no cable on. Boots the two-console fixture through
+    /// the real mask ROM until the sketch's UART0 marker has appeared on one
+    /// stream or the other, so neither assertion below can pass vacuously.
+    fn run_two_console_fixture(console: Option<&str>) -> (String, String) {
+        let chip = c3_chip();
+        let manifest = c3_manifest(console);
+        let mut sim = WasmSimulator::new_from_config_riscv_romboot(&chip, &manifest, &c3_blobs())
+            .expect("construct C3 rom-boot WasmSimulator");
+
+        const BATCH: u32 = 1_000_000;
+        const MAX_STEPS: u64 = 400_000_000;
+        let mut steps: u64 = 0;
+        let shown = loop {
+            let shown = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+            let unheard = String::from_utf8_lossy(&sim.unheard_console_output()).into_owned();
+            if shown.contains(UART0_MARKER) || unheard.contains(UART0_MARKER) {
+                break shown;
+            }
+            assert!(
+                steps < MAX_STEPS,
+                "the sketch never reached loop() within {MAX_STEPS} steps.\n\
+                 --- pane ---\n{shown}\n--- unheard ---\n{unheard}"
+            );
+            sim.step(BATCH).expect("step");
+            steps += BATCH as u64;
+        };
+        let unheard = String::from_utf8_lossy(&sim.unheard_console_output()).into_owned();
+        (shown, unheard)
+    }
+
+    /// DIRECTION 1 — the new case. A native-USB board declares its console, and
+    /// the pane shows what the USB-C cable carries: the ROM's USB-Serial-JTAG
+    /// traffic, and NOT the UART0 stream, which on a SuperMini goes to bare
+    /// header pins. Before this change the tap could only be UART0 unless a lab
+    /// hand-authored `debug_uart`, and nothing derived it from the board.
+    #[test]
+    #[ignore = "boots the real C3 mask ROM (~150M steps); run with --release --ignored"]
+    fn native_usb_board_shows_the_usb_console() {
+        let (shown, unheard) = run_two_console_fixture(Some("usb_serial_jtag"));
+
+        assert!(
+            shown.contains(ROM_BANNER),
+            "the USB-Serial-JTAG console carried no traffic at all:\n{shown}"
+        );
+        // Non-vacuous: UART0 demonstrably HAD app output at this point — it is
+        // sitting in the unheard stream — and it stayed out of the USB pane.
+        assert!(
+            unheard.contains(UART0_MARKER),
+            "UART0 never printed, so 'UART0 stays out of the pane' proves nothing:\n{unheard}"
+        );
+        assert!(
+            !shown.contains(UART0_MARKER),
+            "UART0 app output leaked into a native-USB board's pane — GPIO20/21 \
+             have nothing on them on a SuperMini:\n{shown}"
+        );
+    }
+
+    /// DIRECTION 2 — no regression. An undeclared manifest (every lab shipped so
+    /// far) still shows UART0, and still shows the ROM banner exactly once.
+    /// That count is the load-bearing part: the ROM prints the same banner to
+    /// both consoles, so a twin that merged the two taps to make the new case
+    /// "work" would double every ROM character here.
+    #[test]
+    #[ignore = "boots the real C3 mask ROM (~150M steps); run with --release --ignored"]
+    fn bridge_console_board_still_shows_uart0() {
+        let (shown, unheard) = run_two_console_fixture(None);
+
+        assert!(
+            shown.contains(UART0_MARKER),
+            "UART0 console regressed out of the Serial pane:\n{shown}"
+        );
+        assert_eq!(
+            shown.matches(ROM_BANNER).count(),
+            1,
+            "ROM banner is not printed exactly once — the two taps got merged:\n{shown}"
+        );
+        // The USB console said nothing UART0 did not also say, so there is
+        // nothing to report and the pane is the whole story.
+        assert!(
+            unheard.is_empty(),
+            "nothing should be unheard on a UART0-console board here:\n{unheard}"
+        );
+    }
+
+    /// The failure this change exists to stop being SILENT. With the board's
+    /// cable on USB, the sketch's UART0 output reaches no connector — a real
+    /// SuperMini shows nothing, and so does the twin. But the twin can SAY so,
+    /// which is the difference between "empty pane" and "empty pane for a
+    /// reason". The ROM banner both consoles received is not counted.
+    #[test]
+    #[ignore = "boots the real C3 mask ROM (~150M steps); run with --release --ignored"]
+    fn output_on_the_untapped_console_is_reported_not_lost() {
+        let (shown, unheard) = run_two_console_fixture(Some("usb_serial_jtag"));
+
+        assert!(
+            unheard.contains(UART0_MARKER),
+            "firmware printed to a console with no connector and the twin could \
+             not say so.\n--- pane ---\n{shown}\n--- unheard ---\n{unheard}"
+        );
+        assert!(
+            !unheard.contains(ROM_BANNER),
+            "the banner BOTH consoles received was counted as unheard output, \
+             which would raise the alarm on every single run:\n{unheard}"
+        );
     }
 }

@@ -25,6 +25,12 @@ const OFF_ENABLE: u64 = 0x500;
 const ENABLE_TWIM: u32 = 6;
 const ENABLE_SPIM: u32 = 7;
 const ENABLE_MASK: u32 = 0xF;
+/// The PSEL block: 0x508 and 0x50C are TWIM's SCL/SDA and SPIM's SCK/MOSI —
+/// the SAME two words on silicon — and 0x510/0x514 continue it (SPIM MISO,
+/// SPIM CSN). One register file, personality-selected: nRF52840 PS v1.11
+/// §6.31.7 (TWIM, p791) against §6.25.6 (SPIM, p727).
+const OFF_PSEL_FIRST: u64 = 0x508;
+const OFF_PSEL_LAST: u64 = 0x514;
 
 /// Unified SPIM0/TWIM0 serial instance at a single MMIO base.
 ///
@@ -70,6 +76,43 @@ impl Nrf52SerialInstance {
         &mut self.spim.attached_devices
     }
 
+    /// The TWIM half's SCL/SDA pad-line cell (bus wiring time only).
+    pub(crate) fn twim_pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        self.twim.pad_lines_arc()
+    }
+
+    /// The SPIM half's SCK/MOSI/MISO pad-line cell (bus wiring time only).
+    pub(crate) fn spim_pad_lines_arc(
+        &mut self,
+    ) -> std::sync::Arc<crate::peripherals::pad_lines::PadLines> {
+        self.spim.line_levels_arc().pad_lines().clone()
+    }
+
+    /// Give the TWIM half its pin claims. Its `sync_pin_claims` gates on
+    /// `ENABLE == 6`, so the two halves of this window can never both hold the
+    /// same pad.
+    pub(crate) fn install_twim_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        scl_token: u32,
+        sda_token: u32,
+    ) {
+        self.twim.install_pin_claims(claims, scl_token, sda_token);
+    }
+
+    /// Give the SPIM half its pin claims; gated on `ENABLE == 7`.
+    pub(crate) fn install_spim_pin_claims(
+        &mut self,
+        claims: &std::sync::Arc<crate::peripherals::nrf52::pin_select::NrfPinClaims>,
+        sck_token: u32,
+        mosi_token: u32,
+    ) {
+        self.spim
+            .install_nrf_pin_claims(claims, sck_token, mosi_token);
+    }
+
     fn active(&self) -> u32 {
         self.enable & ENABLE_MASK
     }
@@ -82,6 +125,30 @@ impl Default for Nrf52SerialInstance {
 }
 
 impl Peripheral for Nrf52SerialInstance {
+    /// ONE MMIO window, two personalities, two independent wires — so the
+    /// probeable line names are the ones `ENABLE` has actually selected.
+    ///
+    /// A window with `ENABLE` still at 0 publishes NO names, which is the
+    /// honest answer: nothing is driving these pads yet, and answering `SCL`
+    /// there would arm a probe on a wire the firmware may go on to configure
+    /// as SPI. Arm the probe after the driver has enabled the peripheral, the
+    /// same order a lab bench needs.
+    fn line_names(&self) -> &'static [&'static str] {
+        match self.active() {
+            ENABLE_TWIM => crate::peripherals::nrf52::twim::TWIM_LINES,
+            ENABLE_SPIM => self.spim.line_names(),
+            _ => &[],
+        }
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        match self.active() {
+            ENABLE_TWIM => self.twim.wire_lines(),
+            ENABLE_SPIM => self.spim.wire_lines(),
+            _ => None,
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         if offset & !3 == OFF_ENABLE {
             let byte_shift = (offset % 4) * 8;
@@ -121,7 +188,19 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read_u32(offset),
             ENABLE_SPIM => self.spim.read_u32(offset),
-            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM
+            // — EXCEPT across the PSEL block, which must mirror the write path
+            // below. Writes there go to BOTH halves, so both hold the same
+            // words; but TWIM only models 0x508/0x50C (SCL/SDA), so reading
+            // SPIM's MISO (0x510) or CSN (0x514) off the TWIM half returned 0
+            // while silicon — one register file, personality-selected — returns
+            // what was written. Read the SPIM half, which spans all four.
+            //
+            // Found by the live nRF52840 MMIO diff on 2026-08-09: PSEL.SCK and
+            // PSEL.MOSI matched, PSEL.MISO read sim=0x0 vs hw=0x2E. The write
+            // path had already been widened to the whole block; the read path
+            // was not given the same treatment.
+            _ if (OFF_PSEL_FIRST..=OFF_PSEL_LAST).contains(&offset) => self.spim.read_u32(offset),
             _ => self.twim.read_u32(offset),
         }
     }
@@ -137,7 +216,22 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.write_u32(offset, value),
             ENABLE_SPIM => self.spim.write_u32(offset, value),
-            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to
+            // TWIM — and, for the PSEL block ONLY, to SPIM as well.
+            //
+            // On silicon there is one register file behind this window and
+            // ENABLE selects a personality, so 0x508/0x50C ARE the same two
+            // words whether you call them PSEL.SCL/SDA or PSEL.SCK/MOSI. The
+            // TWIM-only shadow was enough while the values were merely read
+            // back, but they now ROUTE: nrfx and Zephyr pinctrl both program
+            // PSEL while the instance is disabled and set ENABLE afterwards, so
+            // a SPIM0 whose PSEL never reached the SPIM half would enable onto
+            // two Disconnected pins and its waveform would reach no pad at all —
+            // silently, with every register read still correct.
+            _ if (OFF_PSEL_FIRST..=OFF_PSEL_LAST).contains(&offset) => {
+                self.twim.write_u32(offset, value)?;
+                self.spim.write_u32(offset, value)
+            }
             _ => self.twim.write_u32(offset, value),
         }
     }
@@ -169,25 +263,34 @@ impl Peripheral for Nrf52SerialInstance {
 
     fn tick(&mut self) -> PeripheralTickResult {
         match self.active() {
-            ENABLE_TWIM => self.twim.tick(),
+            ENABLE_TWIM => {
+                self.spim.poll_external_bus_devices();
+                self.twim.tick()
+            }
             ENABLE_SPIM => self.spim.tick(),
-            _ => PeripheralTickResult::default(),
+            _ => {
+                self.spim.poll_external_bus_devices();
+                PeripheralTickResult::default()
+            }
         }
     }
 
     fn needs_bus_tick(&self) -> bool {
         match self.active() {
-            ENABLE_TWIM => self.twim.needs_bus_tick(),
+            ENABLE_TWIM => self.twim.needs_bus_tick() || self.spim.has_external_bus_device(),
             ENABLE_SPIM => self.spim.needs_bus_tick(),
-            _ => false,
+            _ => self.spim.has_external_bus_device(),
         }
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         match self.active() {
-            ENABLE_TWIM => self.twim.tick_with_bus(bus),
+            ENABLE_TWIM => {
+                self.spim.poll_external_bus_devices();
+                self.twim.tick_with_bus(bus);
+            }
             ENABLE_SPIM => self.spim.tick_with_bus(bus),
-            _ => {}
+            _ => self.spim.poll_external_bus_devices(),
         }
     }
 
@@ -290,6 +393,39 @@ mod tests {
     use super::*;
     use crate::{Bus, DmaRequest, SimulationConfig};
     use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct ExternalCanPoller(Arc<AtomicUsize>);
+    impl SpiDevice for ExternalCanPoller {
+        fn needs_external_bus_poll(&self) -> bool {
+            true
+        }
+        fn component_id(&self) -> Option<&str> {
+            Some("external-can")
+        }
+        fn poll_external_bus(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn transfer(&mut self, _mosi: u8) -> u8 {
+            0
+        }
+        fn cs_pin(&self) -> &str {
+            "P0.04"
+        }
+    }
+
+    #[test]
+    fn external_can_poll_is_independent_of_serial_mode() {
+        for mode in [0, ENABLE_TWIM] {
+            let polls = Arc::new(AtomicUsize::new(0));
+            let mut serial = Nrf52SerialInstance::new();
+            serial.attach_spi(Box::new(ExternalCanPoller(polls.clone())));
+            write32(&mut serial, OFF_ENABLE, mode);
+            serial.tick_with_bus(&mut FlatRam::new());
+            assert_eq!(polls.load(Ordering::SeqCst), 1, "mode {mode} polls once");
+        }
+    }
 
     // ── Minimal flat-RAM bus ──────────────────────────────────────────────────
 
@@ -519,5 +655,33 @@ mod tests {
             !s.needs_bus_tick(),
             "no pending bus tick on SPIM when no transfer started"
         );
+    }
+
+    /// Regression: the whole PSEL block must read back what was written while
+    /// the instance is DISABLED, not just the two words TWIM also models.
+    ///
+    /// nrfx and Zephyr pinctrl program PSEL before setting ENABLE. On silicon
+    /// there is one register file behind 0x508..=0x514, so every word reads
+    /// back regardless of personality. The model broadcast PSEL WRITES to both
+    /// halves but dispatched READS to TWIM, which models only SCL (0x508) and
+    /// SDA (0x50C) — so SPIM's MISO (0x510) and CSN (0x514) read 0.
+    ///
+    /// Caught on real hardware by nrf52_mmio_diff on 2026-08-09 (sim=0x0 vs
+    /// hw=0x2E), which only runs with a board attached. This asserts it on a
+    /// CI runner with no hardware.
+    #[test]
+    fn psel_block_reads_back_while_disabled() {
+        let mut s = Nrf52SerialInstance::new();
+        // ENABLE stays 0 — exactly the pinctrl ordering.
+        for (off, val) in [(0x508u64, 40u32), (0x50C, 41), (0x510, 46), (0x514, 43)] {
+            write32(&mut s, off, val);
+        }
+        for (off, val) in [(0x508u64, 40u32), (0x50C, 41), (0x510, 46), (0x514, 43)] {
+            assert_eq!(
+                read32(&s, off),
+                val,
+                "PSEL 0x{off:03X} must read back 0x{val:02X} while ENABLE=0"
+            );
+        }
     }
 }

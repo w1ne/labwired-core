@@ -65,6 +65,31 @@ jobs:
             profile_dir: release
             script: examples/stm32f401cdu6/uart-smoke.yaml
             system: configs/systems/stm32f401cdu6.yaml
+          # The H735 telematics lab — the Cortex-M7 cell, and the only one here
+          # whose script asserts PIXELS rather than a UART transcript.
+          #
+          # Its io-smoke.yaml had been running in NO workflow at all: the lab's
+          # four `display_region` boxes (solid header, solid MQTT band, sparse
+          # glyph rows, and a max_ink 0.0 dead zone below row 62) existed but
+          # gated nothing. The only automated check was the playground deploy's
+          # browser lab-smoke, which asserts the CYCLE COUNTER advances and
+          # states in its own header that "display motion is REPORTED, never
+          # asserted" — so a build painting a black panel still passed.
+          #
+          # Non-vacuity was verified before wiring this in, not assumed:
+          # re-pointing `dc_pin` from PA3 to an unconnected PC13 takes the run
+          # from 11/11 to 7/11, with all three ink regions reading 0.0%. The
+          # five UART assertions and the mqtt_fabric collect still PASS in that
+          # state, which is the whole point — the transcript says "location
+          # published" while the panel shows nothing. Cost is negligible: the
+          # sim reaches its assertions in 840k steps / 0.23s.
+          - id: h735-telematics-lab
+            target: thumbv7em-none-eabi
+            crate: h735-telematics-lab
+            profile: release
+            profile_dir: release
+            script: examples/h735-telematics-lab/io-smoke.yaml
+            system: examples/h735-telematics-lab/system.yaml
           # Note: demo-blinky-stm32f103 already covers F103 bluepill + same ELF;
           # a second identical cell was removed (CI roast 2026-07-23).
           - id: canmod-gps-sim
@@ -120,6 +145,38 @@ jobs:
             --script "${{ matrix.script }}" \
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
+
+      # The dual-UE pub/sub story, gated on its own marker.
+      #
+      # `env-two-ue-smoke.yaml` carries NO assertions, and cannot: the
+      # environment runner rejects anything that is not a node-qualified
+      # `memory_value` (validate_environment_assertions in
+      # crates/cli/src/commands/environment_test.rs), and `memory_value` takes a
+      # raw `address: u64` with no symbol lookup — too brittle to pin a static
+      # across relinks. So the runner exits 0 with `assertions: []` and
+      # `stop_reason: max_steps` whether or not ue_b ever hears ue_a. Verified:
+      # a clean run produces `status: pass` with an empty assertion list.
+      #
+      # env-two-ue.yaml's own header already says collect "is proven by
+      # subscriber UART (`location received`)". This step is what makes that
+      # sentence true. `grep -q` fails the job when the marker is absent, so a
+      # subscriber that silently stops receiving reddens here instead of
+      # passing vacuously.
+      - name: Dual-UE pub/sub collect (subscriber must actually receive)
+        if: matrix.id == 'h735-telematics-lab'
+        run: |
+          set -euo pipefail
+          out="out/coverage-matrix/${{ matrix.id }}-two-ue"
+          mkdir -p "$out"
+          ./target/release/labwired test \
+            --script examples/h735-telematics-lab/env-two-ue-smoke.yaml \
+            --output-dir "$out" \
+            --no-uart-stdout
+          grep -q '+QMTRECV' "$out/uart.log" \
+            || { echo "::error::ue_b never received a +QMTRECV from the fabric"; exit 1; }
+          grep -q 'location received' "$out/uart.log" \
+            || { echo "::error::subscriber never logged 'location received'"; exit 1; }
+          echo "dual-UE collect OK: +QMTRECV and 'location received' both present"
 
       - name: Verify frames against CSS's real DBC
         if: matrix.id == 'canmod-gps-sim'

@@ -57,6 +57,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "pwr",
     "flash",
     "rng",
+    "simctl",
     "crc",
     "rtc",
     "rtc_f1",
@@ -87,6 +88,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_adc",
     "rp2040_rtc",
     "rp2040_watchdog",
+    "rp2040_io_bank0",
     "rp2040_sio",
     "rp2040_clkrst",
     "rp2040_xip_ssi",
@@ -376,6 +378,15 @@ pub fn try_build(
             if let Some(cr1_mask) = p_cfg.config.get("cr1_mask").and_then(|v| v.as_u64()) {
                 spi.set_cr1_mask(cr1_mask as u16);
             }
+            // Which datasheet AF map routes this controller's pads. Needed
+            // because the H5 "SPI v3" register file is shared by parts whose
+            // pinouts DISAGREE (H563/H735 put SPI1_SCK on PB3 where the WBA52
+            // puts SPI1_MISO), so the register layout cannot pick the table.
+            // YAML: `config: { pad_map: stm32h5 }`. Absent ⇒ no SPI pad
+            // routing, which is the fail-closed default — see `SpiPadMap`.
+            if let Some(pad_map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                spi.set_pad_map(pad_map.parse::<crate::peripherals::spi::SpiPadMap>()?);
+            }
             // Hand-written SPI devices attach via the PeripheralKit registry
             // pass, so no external-device attach loop is needed here.
             Box::new(spi)
@@ -431,6 +442,9 @@ pub fn try_build(
             )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
+        // Simulation-control device: firmware ends its own run with an exit
+        // code. No configuration — the device has no non-deterministic knobs.
+        "simctl" => Box::new(crate::peripherals::simctl::SimCtl::new()),
         "rp2040_clkrst" => {
             let profile = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("rp2350") => crate::peripherals::rp2040_clocks::ClockResetProfile::Rp2350,
@@ -447,6 +461,7 @@ pub fn try_build(
         }
         "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
         "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
+        "rp2040_io_bank0" => Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new()),
         "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),

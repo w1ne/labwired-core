@@ -29,10 +29,12 @@ pub(crate) mod embedded_descriptors;
 pub(crate) mod external_devices;
 mod faults;
 mod from_config;
+pub mod known_stubs;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
 pub(crate) mod part_pack;
+mod pms;
 mod policy;
 mod profiles;
 mod resident_device;
@@ -87,17 +89,31 @@ impl SystemBus {
     }
 }
 
-/// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
-/// bit at bus-build time (the symbolic `reg` name from the yaml is mapped to the
-/// active chip family's offset via [`Rcc::enable_reg_offset`]). When present, a
-/// CPU access to the owning peripheral only takes effect while `bit` is set in
-/// the RCC enable register at `reg_offset` — modelling silicon clock-gating.
+/// One RCC bit a peripheral's clock depends on, resolved to a concrete register
+/// offset at bus-build time (the symbolic `reg` name from the yaml is mapped to
+/// the active chip family's offset via [`Rcc::rcc_reg_offset`]).
 #[derive(Debug, Clone, Copy)]
-pub struct ResolvedClockGate {
-    /// Byte offset of the RCC enable register within the rcc peripheral.
+pub struct RccClockBit {
+    /// Byte offset of the RCC register within the rcc peripheral.
     pub reg_offset: u64,
-    /// Enable-bit position within that register.
+    /// Bit position within that register that must be set.
     pub bit: u8,
+}
+
+/// A peripheral's RCC clock-gate: every bit in [`Self::requires`] must be set in
+/// the *live* RCC register map for a CPU access to the owning peripheral to take
+/// effect — modelling silicon clock-gating.
+///
+/// This is the ONE place the engine expresses "this model may only answer while
+/// the RCC says it is clocked", and [`SystemBus::is_peripheral_clocked`] is the
+/// ONE place it is evaluated. A peripheral model must never grow its own clock
+/// check: a bus-enable bit and a kernel-clock-source ready bit are both just
+/// entries in this list, so a new gating reason is a config line, not a second
+/// mechanism scattered into `peripherals/`.
+#[derive(Debug, Clone, Default)]
+pub struct ResolvedClockGate {
+    /// The bits that must ALL be set. Never empty when the gate is `Some`.
+    pub requires: Vec<RccClockBit>,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
@@ -119,8 +135,8 @@ pub struct PeripheralEntry {
     pub ticks_remaining: u64,
     /// Optional RCC clock-gate (silicon clock-gating model). `None` (the common
     /// case) → the peripheral is never gated and accesses always pass through.
-    /// `Some` → accesses are dropped (writes ignored, reads return 0) while the
-    /// gate bit is clear in the RCC, exactly like an unclocked peripheral on
+    /// `Some` → accesses are dropped (writes ignored, reads return 0) while ANY
+    /// required bit is clear in the RCC, exactly like an unclocked peripheral on
     /// real silicon. Resolved from `PeripheralConfig::clock` in `from_config`.
     pub clock_gate: Option<ResolvedClockGate>,
 }
@@ -297,11 +313,21 @@ pub struct SystemBus {
     /// runtime fired-observation). Empty in the common case.
     fault_unclocked: std::collections::HashMap<usize, std::sync::atomic::AtomicU64>,
     /// Last-known IN value of GPIO ports 0 and 1, used by the per-tick
-    /// edge-detection pass that drives GPIOTE EVENTS_IN. Both default to
-    /// 0 at construction; the first tick after a GPIO write will produce
-    /// edge events for any non-zero bits, which matches Nordic
-    /// hardware's "reset to zero, edge on first set" behavior.
-    last_gpio_in: [u32; 2],
+    /// edge-detection pass that drives GPIOTE EVENTS_IN.
+    ///
+    /// `None` until the first edge-detection pass, which ADOPTS the live IN
+    /// registers as the baseline and reports no changes. An edge is a
+    /// transition, and before the first observation there is nothing to have
+    /// transitioned from: a level the outside world already holds — a
+    /// `board_io` button settling its released level at attach, a sensor
+    /// driving a status line before the first cycle — was never a press. A
+    /// `[0; 2]` seed made every such pin present itself as a rising edge on the
+    /// very first tick, which both latched a GPIOTE EVENTS_IN nothing caused
+    /// and, through the per-edge scheduler harvest, perturbed unrelated
+    /// scheduler-driven models. `Option` rather than a companion flag so a
+    /// construction site cannot silently spell "not yet sampled" as "sampled
+    /// zero".
+    last_gpio_in: Option<[u32; 2]>,
     /// Phase 2B.2 (issue #192): the current CPU cycle count, mirrored from
     /// `Machine::total_cycles` once per step. Read by the MMIO write path to
     /// lazily sync scheduler-driven peripherals (`uses_scheduler() == true`)
@@ -457,6 +483,25 @@ pub struct SystemBus {
     /// next re-derivation), so delivery matches the legacy walk cycle-for-cycle
     /// at a given tick interval.
     esp32c3_sched_asserted_sources: [u64; 2],
+    /// Index of the ESP32-C3 `SENSITIVE` peripheral (0x600C_1000), which owns
+    /// the permission-control (PMS) register file. `None` on every other bus.
+    esp32c3_sensitive_idx: Option<usize>,
+    /// ESP32-C3 permission-control unit. A *derived cache* of the `SENSITIVE`
+    /// register file (rebuilt by `sync_esp32c3_pms_write` on every write into
+    /// the PMS register span) plus the latched violation status. `None` unless
+    /// the bus carries a C3 `SENSITIVE` block.
+    esp32c3_pms: Option<Box<crate::peripherals::esp32c3::pms::Esp32C3Pms>>,
+    /// Measurement hook (never set by the runtime): while true, the C3 PMS
+    /// accepts every register write, including ones a lock bit or a
+    /// hardware-owned status register would otherwise reject. See
+    /// [`SystemBus::set_pms_write_bypass`].
+    pms_write_bypass: bool,
+    /// Hot-path gate: `true` only while the PMS could actually block something
+    /// (some area narrowed AND its monitor enabled). Every store and every
+    /// instruction-fetch window refill reads this one bool, so firmware that
+    /// never enables memory protection pays a single predictable branch and
+    /// behaves byte-identically to before the PMS model existed.
+    esp32c3_pms_armed: bool,
     /// ESP32-S3 interrupt routing is present only when the S3 interrupt matrix
     /// peripheral is registered. Cached separately from C3's RISC-V routing so
     /// each chip model owns its own interrupt abstraction.
