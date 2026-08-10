@@ -18,11 +18,11 @@ use esp_hal::{
 };
 use esp_println::println;
 
+use esp32s3_doomlike_lab::assets;
 use esp32s3_doomlike_lab::display::{fill_frame, Ili9341Bus, Ili9341Display, PixelSink};
 use esp32s3_doomlike_lab::game::{Game, Phase};
 use esp32s3_doomlike_lab::input::{InputState, RawButtons};
 use esp32s3_doomlike_lab::render::{Renderer, HEIGHT, WIDTH};
-use esp32s3_doomlike_lab::assets;
 
 /// Internal 160×120 RGB565 render target (static — too large for the main stack).
 static mut FRAME: [u16; WIDTH * HEIGHT] = [0; WIDTH * HEIGHT];
@@ -124,15 +124,6 @@ fn main() -> ! {
         }
     }
 
-    // Red diagnostic frame proves the panel path before gameplay starts.
-    fill_frame(frame, assets::rgb565(255, 0, 0));
-    if display.present_2x(frame).is_err() {
-        println!("DOOMLIKE_DISPLAY_ERROR");
-        loop {
-            core::hint::spin_loop();
-        }
-    }
-
     let mut game = Game::new();
     let mut renderer = Renderer::new();
     let mut input = InputState::new();
@@ -161,11 +152,12 @@ fn main() -> ! {
         }
 
         renderer.render(&game, frame);
-        let _ = display.present_2x(frame);
 
         if !ready_printed {
             println!("DOOMLIKE_READY");
             ready_printed = true;
         }
+
+        let _ = display.present_2x(frame);
     }
 }
