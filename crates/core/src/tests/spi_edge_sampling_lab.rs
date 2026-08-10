@@ -15,9 +15,8 @@
 //!   * no `spi_mode`  → the byte-level default: clean 32-bit frame (unchanged).
 //!   * `spi_mode: 0`  → edge-accurate, master also mode 0: byte-identical.
 //!   * `spi_mode: 1`  → edge-accurate, master mode 0: the master latches on the
-//!                      same edge the slave changes MISO on, so every byte
-//!                      arrives shifted one bit and the decoded temperature is
-//!                      wrong.
+//!     same edge the slave changes MISO on, so every byte arrives shifted one
+//!     bit and the decoded temperature is wrong.
 
 #[cfg(test)]
 mod spi_edge_sampling_lab_tests {
@@ -216,9 +215,14 @@ mod spi_edge_sampling_lab_tests {
             }
         }
 
+        // Named so clippy::type_complexity does not fire on the tuple below:
+        // a boxed factory is the only way to hold differently-typed controllers
+        // in one table, and the table is the point of this guard.
+        type ControllerFactory = Box<dyn Fn() -> Box<dyn crate::Peripheral>>;
+
         // Same Rust type as the STM32 bit engine, but the H5 "SPI v3" register
         // file completes a frame whole — the guard must see the LAYOUT.
-        let cases: Vec<(&str, Box<dyn Fn() -> Box<dyn crate::Peripheral>>, &str)> = vec![
+        let cases: Vec<(&str, ControllerFactory, &str)> = vec![
             (
                 "spi_h5",
                 Box::new(|| {
