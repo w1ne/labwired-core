@@ -51,6 +51,9 @@ pub enum Arch {
     RiscV,
     #[serde(alias = "xtensa-lx7", alias = "xtensa-lx6")]
     Xtensa,
+    /// AVR8 (ATmega328P / classic Arduino Nano).
+    #[serde(alias = "avr8", alias = "atmega328p")]
+    Avr,
     Unknown,
 }
 

@@ -17,6 +17,8 @@
 // `crate::tests::cortex_m_memory_contract`, which covers the whole `cpu/` tree
 // and catches the `is_err()` / `.ok()` discard shapes clippy cannot see).
 #[deny(clippy::let_underscore_must_use)]
+pub mod avr;
+#[deny(clippy::let_underscore_must_use)]
 pub mod cortex_m;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv;
@@ -56,6 +58,7 @@ pub mod xtensa_jit_bytes;
 #[cfg(any(feature = "jit", feature = "jit-framework"))]
 pub mod jit_framework;
 
+pub use avr::Avr;
 pub use cortex_m::CortexM;
 pub use riscv::{RiscV, RiscVCoreProfile};
 pub use xtensa_lx7::XtensaLx7;

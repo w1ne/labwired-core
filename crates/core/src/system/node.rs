@@ -88,8 +88,12 @@ pub fn build_node_with_plugins(
         Arch::Arm => build_cortex_m_node(id, chip, system, firmware, plugins),
         Arch::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
         Arch::Xtensa => build_xtensa_node(id, chip, system, firmware),
+        Arch::Avr => anyhow::bail!(
+            "node '{id}': chip '{}' is AVR — multi-node World path does not host Avr yet; use Machine<Avr> directly",
+            chip.name
+        ),
         Arch::Unknown => anyhow::bail!(
-            "node '{id}': chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, or xtensa)",
+            "node '{id}': chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, or avr)",
             chip.name
         ),
     }
