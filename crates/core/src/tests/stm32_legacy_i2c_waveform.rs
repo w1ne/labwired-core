@@ -28,6 +28,7 @@ mod stm32_legacy_i2c_waveform_tests {
     use crate::bus::SystemBus;
     use crate::cpu::CortexM;
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::i2c::I2cDevice;
     use crate::{Bus, Machine};
     use labwired_config::{ChipDescriptor, SystemManifest};
@@ -173,7 +174,10 @@ mod stm32_legacy_i2c_waveform_tests {
             .bus
             .find_peripheral_index_by_name("gpiob")
             .expect("gpiob registered by from_config");
-        machine.logic_watch(&[Some((gpiob, SCL_PIN)), Some((gpiob, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpiob, SCL_PIN)),
+            Some(LogicSource::pad(gpiob, SDA_PIN)),
+        ]);
     }
 
     /// Spin the CPU until `flag` shows up in SR1, so the narration has real
@@ -237,14 +241,19 @@ mod stm32_legacy_i2c_waveform_tests {
     }
 
     /// The scoreboard's own claim, asserted on the shipping construction path:
-    /// the F4 binds its I²C wire to a pad, and the F103 — same legacy
-    /// controller, F1-layout GPIO ports this table does not route — does NOT.
+    /// the F4 binds its I²C wire to a pad through the AF4 table, and the F103 —
+    /// same legacy controller, F1-layout GPIO ports — binds through the F1
+    /// table on DIFFERENT pads.
     ///
-    /// The second half is the ordering hazard `wire_stm32_i2c_pads` documents:
-    /// creating the pad cell for a controller no route reaches would switch the
-    /// whole narration machinery on to publish into something nothing reads.
+    /// Both halves matter. The F103 once asserted here that it bound NOTHING;
+    /// that was the gap, not the design. What must still hold is that the two
+    /// parts are routed from their own datasheets: the F4 gets PB8/PB9 (DS10086
+    /// Rev 5 Table 9, page 46, AF04) and the F103 must NOT, because on that part
+    /// PB8/PB9 are I2C1's REMAP pads (DS5319 Rev 20 Table 5, page 33) and
+    /// nothing decodes `AFIO_MAPR`. One shared table would put a live I²C
+    /// waveform on an F103 TIM4 pad.
     #[test]
-    fn the_config_built_f4_binds_its_i2c_pads_and_the_f103_does_not() {
+    fn the_f4_and_the_f103_each_bind_i2c_from_their_own_datasheet() {
         let f401 = bus_for("stm32f401").bound_pad_functions();
         assert!(
             f401.contains(&"I2C1_SCL") && f401.contains(&"I2C1_SDA"),
@@ -253,11 +262,45 @@ mod stm32_legacy_i2c_waveform_tests {
 
         let f103 = bus_for("stm32f103").bound_pad_functions();
         assert!(
-            !f103.iter().any(|f| f.starts_with("I2C")),
-            "stm32f103's GPIO ports carry the F1 register layout, which no I²C \
-             AF table routes — binding anything there would be a pad cell no \
-             route reaches, got {f103:?}",
+            f103.contains(&"I2C1_SCL") && f103.contains(&"I2C1_SDA"),
+            "stm32f103 must bind I2C1 SCL+SDA through from_config, got {f103:?}",
         );
+
+        // Pin-level proof that the two tables did not merge. `bound_pad_functions`
+        // is per-port and name-only, so ask the pad itself: PB8 carries an I²C
+        // wire on the F4 and none on the F103.
+        for (chip, pb8_has_wire) in [("stm32f401", true), ("stm32f103", false)] {
+            let mut bus = bus_for(chip);
+            let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+            let mut machine = Machine::new(cpu, bus);
+            if chip == "stm32f401" {
+                machine
+                    .bus
+                    .write_u32(GPIOB_BASE + MODER, 0b10 << (8 * 2))
+                    .unwrap();
+                machine
+                    .bus
+                    .write_u32(GPIOB_BASE + 0x24, AF_I2C) // AFRH, pin 8
+                    .unwrap();
+            } else {
+                // F103 GPIOB is at a different address; CRH pin 8 = AF open drain.
+                machine.bus.write_u32(0x4001_0C00 + 0x04, 0b1111).unwrap();
+            }
+            let gpiob = machine
+                .bus
+                .find_peripheral_index_by_name("gpiob")
+                .expect("gpiob registered by from_config");
+            assert_eq!(
+                machine
+                    .logic_watch(&[Some(LogicSource::pad(gpiob, 8))])
+                    .first()
+                    .is_some_and(Option::is_some),
+                pb8_has_wire,
+                "{chip}: PB8 is I2C1_SCL at AF4 on the F401 (DS10086 page 46) and \
+                 a REMAP-only pad on the F103 (DS5319 page 33), whose default \
+                 function is TIM4_CH3",
+            );
+        }
     }
 
     /// The wrong-silicon guard: an F4 pad the datasheet leaves EMPTY at AF4
@@ -304,7 +347,10 @@ mod stm32_legacy_i2c_waveform_tests {
             .find_peripheral_index_by_name("gpioa")
             .expect("gpioa registered by from_config");
         assert_eq!(
-            machine.logic_watch(&[Some((gpioa, PA7)), Some((gpioa, PA8))]),
+            machine.logic_watch(&[
+                Some(LogicSource::pad(gpioa, PA7)),
+                Some(LogicSource::pad(gpioa, PA8))
+            ]),
             // PA7: no wire. PA8: I2C3_SCL, an idle open-drain bus, so high.
             vec![None, Some(true)],
             "DS10086 Rev 5 Table 9 (page 45): AF04 on PA7 is unassigned and AF04 \

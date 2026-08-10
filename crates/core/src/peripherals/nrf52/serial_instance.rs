@@ -125,6 +125,30 @@ impl Default for Nrf52SerialInstance {
 }
 
 impl Peripheral for Nrf52SerialInstance {
+    /// ONE MMIO window, two personalities, two independent wires — so the
+    /// probeable line names are the ones `ENABLE` has actually selected.
+    ///
+    /// A window with `ENABLE` still at 0 publishes NO names, which is the
+    /// honest answer: nothing is driving these pads yet, and answering `SCL`
+    /// there would arm a probe on a wire the firmware may go on to configure
+    /// as SPI. Arm the probe after the driver has enabled the peripheral, the
+    /// same order a lab bench needs.
+    fn line_names(&self) -> &'static [&'static str] {
+        match self.active() {
+            ENABLE_TWIM => crate::peripherals::nrf52::twim::TWIM_LINES,
+            ENABLE_SPIM => self.spim.line_names(),
+            _ => &[],
+        }
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        match self.active() {
+            ENABLE_TWIM => self.twim.wire_lines(),
+            ENABLE_SPIM => self.spim.wire_lines(),
+            _ => None,
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         if offset & !3 == OFF_ENABLE {
             let byte_shift = (offset % 4) * 8;

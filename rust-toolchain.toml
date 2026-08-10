@@ -1,0 +1,33 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Pin the host toolchain to the version CI already uses.
+#
+# Every workflow job installs `dtolnay/rust-toolchain@1.95.0` (22 call sites
+# across .github/workflows/), and Dockerfile.ci builds the release image on
+# `rust:1.95-slim-bookworm`. Nothing pinned the LOCAL compiler, so a developer
+# built with whatever `rustup default` happened to be — on this machine that is
+# 1.97.1 — and "it passes here" and "it passes in CI" were two different
+# compilers. For a simulator sold as a deterministic oracle, the compiler is
+# part of the machine under test.
+#
+# Deliberately channel-only:
+#   * no `components` — several jobs install rustfmt/clippy selectively
+#     (core-ci.yml) to keep the toolchain download small; listing them here
+#     would pull them into every job, including the ones that lint nothing.
+#   * no `targets` — the thumbv*/riscv32 targets are added by the jobs that
+#     cross-compile firmware, not by every job.
+#   * no `profile` — leave a developer's rustup default profile alone.
+#
+# The Xtensa crates are unaffected: examples/esp32*/, examples/tier1-fixture/
+# esp32{,s3}/ and crates/firmware-perf-spin-xtensa each carry their own
+# rust-toolchain.toml pinning `channel = "esp"`, and rustup's nearest-ancestor
+# lookup finds those before this file.
+#
+# When bumping: change this file and the 22 `dtolnay/rust-toolchain@` refs in
+# the same commit, or the two disagree again.
+[toolchain]
+channel = "1.95.0"

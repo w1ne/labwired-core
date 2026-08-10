@@ -218,7 +218,10 @@ impl Esp32s3Twai {
             }
             0x74 => self.rx_msg_count & 0x7F,
             0x7C => self.clock_divider,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.twai:Esp32s3Twai", offset, "read");
+                0
+            }
         }
     }
 
@@ -242,7 +245,9 @@ impl Esp32s3Twai {
             }
             // 0x74 RX_MSG_CNT is read-only.
             0x7C => self.clock_divider = value & 0x1FF,
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.twai:Esp32s3Twai", offset, "write");
+            }
         }
     }
 

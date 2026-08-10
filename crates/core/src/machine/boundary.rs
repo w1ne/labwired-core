@@ -21,6 +21,17 @@ impl<C: Cpu> Machine<C> {
         mode: ExecutionMode,
         count: u32,
     ) -> SimResult<CoreProgress> {
+        let span = crate::profile::span();
+        let progress = self.execute_cpu_window_inner(mode, count);
+        crate::profile::record_cpu(span);
+        progress
+    }
+
+    fn execute_cpu_window_inner(
+        &mut self,
+        mode: ExecutionMode,
+        count: u32,
+    ) -> SimResult<CoreProgress> {
         match mode {
             ExecutionMode::SingleDirect | ExecutionMode::RunDual => {
                 debug_assert_eq!(count, 1);

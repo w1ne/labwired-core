@@ -136,7 +136,10 @@ impl Fxos8700 {
             REG_TEMP => 0x14, // ~+20 °C die temp (0.96 °C/LSB)
             0x5B => self.m_ctrl_reg1,
             0x5C => self.m_ctrl_reg2,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.fxos8700:Fxos8700", reg, "read");
+                0
+            }
         }
     }
 
@@ -154,7 +157,9 @@ impl Fxos8700 {
             0x2B => self.ctrl_reg2 = value & !0x40, // RST is self-clearing
             0x5B => self.m_ctrl_reg1 = value,
             0x5C => self.m_ctrl_reg2 = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("components.fxos8700:Fxos8700", reg, "write");
+            }
         }
     }
 }

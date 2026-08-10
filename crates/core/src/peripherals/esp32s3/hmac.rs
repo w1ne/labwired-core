@@ -311,7 +311,10 @@ impl Peripheral for Esp32s3Hmac {
             REG_SOFT_JTAG_CTRL => self.soft_jtag,
             REG_WR_JTAG => self.wr_jtag,
             REG_DATE => self.date,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.hmac:Esp32s3Hmac", offset, "read");
+                0
+            }
         };
         Ok(v)
     }
@@ -371,7 +374,9 @@ impl Peripheral for Esp32s3Hmac {
             REG_SOFT_JTAG_CTRL => self.soft_jtag = value,
             REG_WR_JTAG => self.wr_jtag = value,
             REG_DATE => self.date = value & 0x3FFF_FFFF,
-            _ => {} // accept-and-ignore
+            _ => {
+                crate::census_reg!("esp32s3.hmac:Esp32s3Hmac", offset, "write");
+            } // accept-and-ignore
         }
         Ok(())
     }

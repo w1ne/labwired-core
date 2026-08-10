@@ -25,6 +25,8 @@
 //! cargo test --release -p labwired-core --test logic_capture_bench -- --ignored --nocapture
 //! ```
 
+use labwired_core::logic_capture::LogicSource;
+
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::gpio::{GpioPort, GpioRegisterLayout};
@@ -114,13 +116,13 @@ fn build_synthetic_machine() -> Machine<CortexM> {
     machine
 }
 
-/// First `n` readable GPIO pads on the bus, as `(peripheral_index, pin)`.
-fn readable_pads(machine: &Machine<CortexM>, n: usize) -> Vec<Option<(usize, u8)>> {
+/// First `n` readable GPIO pads on the bus, as pad channel sources.
+fn readable_pads(machine: &Machine<CortexM>, n: usize) -> Vec<Option<LogicSource>> {
     let mut out = Vec::new();
     for (idx, p) in machine.bus.peripherals.iter().enumerate() {
         for pin in 0..16u8 {
             if p.dev.read_gpio_pad(pin).is_some() {
-                out.push(Some((idx, pin)));
+                out.push(Some(LogicSource::pad(idx, pin)));
                 if out.len() == n {
                     return out;
                 }

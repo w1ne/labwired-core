@@ -203,8 +203,17 @@ impl PadRoutes {
         }
         for (idx, channels) in per_cell.into_iter().enumerate() {
             if self.registered[idx] != channels {
-                self.cells[idx].install_tap(Some(tap.clone()), channels.clone());
-                self.registered[idx] = channels;
+                // MERGE, never replace: this cell's channel table may also hold
+                // registrations from a DIFFERENT port's routing table, and
+                // `install_tap` would erase them. See `PadLines::merge_tap` —
+                // the STM32WBA52 splits SPI1_SCK (PB4) from SPI1_MOSI (PA15)
+                // across two ports, so on that part the overwrite lost the data
+                // channel every time.
+                let stale = std::mem::replace(&mut self.registered[idx], channels.clone());
+                // `invalidate_registrations` seeds `u32::MAX` sentinels to force
+                // a reinstall; those were never real channels, so removing them
+                // is a no-op on the cell.
+                self.cells[idx].merge_tap(Some(tap.clone()), &stale, &channels);
             }
         }
     }

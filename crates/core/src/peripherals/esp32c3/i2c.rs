@@ -745,6 +745,14 @@ impl std::fmt::Debug for Esp32c3I2c {
 }
 
 impl Peripheral for Esp32c3I2c {
+    fn line_names(&self) -> &'static [&'static str] {
+        I2C_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_ref().map(|levels| &**levels.pad_lines())
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         // Byte reads aren't used by esp-hal's I2C driver; route everything
         // through read_u32. Returning 0 for stray byte reads is harmless.
@@ -786,7 +794,10 @@ impl Peripheral for Esp32c3I2c {
             // Read-only FIFO-RAM windows: peek the head byte, never consume.
             REG_TXFIFO_START => self.tx_fifo.front().copied().unwrap_or(0) as u32,
             REG_RXFIFO_START => self.rx_fifo.borrow().front().copied().unwrap_or(0) as u32,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32c3.i2c:Esp32c3I2c", offset, "read");
+                0
+            }
         };
         if std::env::var("LABWIRED_I2C_TRACE").is_ok() {
             eprintln!("C3 I2C R [0x{offset:02x}] = 0x{v:08x}");
@@ -878,7 +889,9 @@ impl Peripheral for Esp32c3I2c {
                 masked_write(&mut self.reg_scl_stretch_conf, value, 0x0000_3FFF)
             }
             REG_DATE => self.reg_date = value, // fully writable (mask = 0xFFFF_FFFF)
-            _ => {}                            // Accept-and-ignore (unmapped offsets)
+            _ => {
+                crate::census_reg!("esp32c3.i2c:Esp32c3I2c", offset, "write");
+            } // Accept-and-ignore (unmapped offsets)
         }
         Ok(())
     }

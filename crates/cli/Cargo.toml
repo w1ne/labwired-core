@@ -44,6 +44,11 @@ ureq = { workspace = true }
 
 [features]
 default = []
+# Silent-path census — pass-through to labwired-core's `silent-census`.
+# Measurement only; see the note on that feature. Build the measuring binary
+# with `cargo build -p labwired-cli --features silent-census` and point
+# `LABWIRED_CENSUS_OUT` at a JSON path to get a report. Both are required.
+silent-census = ["labwired-core/silent-census"]
 # Phase 3.2 JIT pilot (issue #124) — pass-through to labwired-core's `jit`
 # feature. Build with `cargo build --release -p labwired-cli --features
 # jit-core` to enable the wasmtime-backed RV32IMC JIT.

@@ -427,6 +427,14 @@ impl Esp32I2c {
 }
 
 impl Peripheral for Esp32I2c {
+    fn line_names(&self) -> &'static [&'static str] {
+        I2C_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         // Byte reads aren't used by the I2C driver; route via read_u32.
         Ok(0)

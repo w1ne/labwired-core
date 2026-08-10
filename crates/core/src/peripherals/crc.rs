@@ -114,7 +114,10 @@ impl crate::Peripheral for Crc {
             0x08 => self.cr,
             0x10 => self.init,
             0x14 => self.pol,
-            _ => 0,
+            _ => {
+                crate::census_reg!("crc:Crc", reg, "read");
+                0
+            }
         };
         Ok(((val >> (byte * 8)) & 0xFF) as u8)
     }
@@ -128,7 +131,10 @@ impl crate::Peripheral for Crc {
             0x08 => self.cr,
             0x10 => self.init,
             0x14 => self.pol,
-            _ => 0,
+            _ => {
+                crate::census_reg!("crc:Crc", reg, "write");
+                0
+            }
         };
         let mask: u32 = 0xFF << (byte * 8);
         let new = (cur & !mask) | ((value as u32) << (byte * 8));
@@ -157,7 +163,9 @@ impl crate::Peripheral for Crc {
             }
             0x10 => self.init = new,
             0x14 => self.pol = new,
-            _ => {}
+            _ => {
+                crate::census_reg!("crc:Crc", reg, "write");
+            }
         }
         Ok(())
     }
@@ -177,7 +185,9 @@ impl crate::Peripheral for Crc {
             }
             0x10 => self.init = value,
             0x14 => self.pol = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("crc:Crc", offset, "write");
+            }
         }
         Ok(())
     }

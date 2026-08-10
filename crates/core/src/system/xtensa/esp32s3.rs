@@ -696,6 +696,17 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // CREATES the wire cell, and a controller owning a cell no route reaches
     // narrates into nothing.
     bus.wire_esp32s3_i2c_pads();
+    // Same for GP-SPI2 (SCK/MOSI/CS, matrix signals 101/103/110) and each
+    // UART's TX (12/15/18).
+    //
+    // ⚠️ These calls live HERE, not only in `from_config`, for the reason the
+    // I²C comment above records: `esp32s3.yaml` is an address-map stub — `uart0`
+    // is the vendor-neutral `uart` type, `gpio` is `declarative`, and there is no
+    // `spi2` entry at all — so `from_config` finds no S3 model to route and this
+    // programmatic builder is what every real S3 lab is built from. Gating on
+    // `from_config` alone would be green in test and dark in production.
+    bus.wire_esp32s3_spi_pads();
+    bus.wire_esp32s3_uart_pads();
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.

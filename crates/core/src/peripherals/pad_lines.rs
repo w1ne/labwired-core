@@ -204,6 +204,53 @@ impl PadLines {
         self.install_tap(None, Vec::new());
     }
 
+    /// Replace only ONE routing table's channel registrations on this wire,
+    /// leaving every other table's alone.
+    ///
+    /// # Why this is not [`install_tap`]
+    ///
+    /// One wire reaches pads on SEVERAL GPIO ports, and each port owns its own
+    /// [`PadRoutes`](super::pad_routing::PadRoutes) holding a handle to this
+    /// same cell. `install_tap` replaces the whole channel table, so the LAST
+    /// port to sync silently erased every earlier port's channels.
+    ///
+    /// That is invisible in the common case, because most labs put a bus's
+    /// pads on ONE port — an STM32H563 clips SPI1 to PA5/PA7 and both
+    /// registrations come from `gpioa`. It becomes unavoidable on a part whose
+    /// pads are SPLIT across ports: the STM32WBA52 has exactly one SPI and its
+    /// datasheet puts `SPI1_SCK` on PB4 while `SPI1_MOSI` is on PA15
+    /// (DS14127 Rev 10 Table 25, pages 76-77). Watching both, `gpioa`
+    /// registered MOSI and then `gpiob` overwrote the table with SCK alone —
+    /// the clock captured, the data channel silently empty, and the pad still
+    /// READING correctly the whole time, so levels looked right and only the
+    /// trace was wrong.
+    ///
+    /// [`clear_taps`](super::pad_routing::PadRoutes::clear_taps) already
+    /// documents this hazard for the DISARM path; this is the same hazard on
+    /// the arm path.
+    ///
+    /// `remove` is what the calling table registered last time, `add` is what
+    /// it wants now; both are indexed by line like [`PadLines::names`]. The tap
+    /// is dropped only once NO line has a watcher left.
+    pub fn merge_tap(&self, tap: Option<LogicTap>, remove: &[Vec<u32>], add: &[Vec<u32>]) {
+        let mut state = self.tap.lock().unwrap();
+        state.channels.resize(self.levels.len(), Vec::new());
+        for (line, channels) in state.channels.iter_mut().enumerate() {
+            if let Some(stale) = remove.get(line) {
+                channels.retain(|c| !stale.contains(c));
+            }
+            if let Some(fresh) = add.get(line) {
+                for &channel in fresh {
+                    if !channels.contains(&channel) {
+                        channels.push(channel);
+                    }
+                }
+            }
+        }
+        let any = state.channels.iter().any(|c| !c.is_empty());
+        state.tap = if any { tap } else { None };
+    }
+
     /// The installed tap's provisional "now", or `None` when nothing is
     /// capturing this wire.
     ///

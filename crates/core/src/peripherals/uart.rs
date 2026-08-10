@@ -794,9 +794,24 @@ pub struct Uart {
     /// `stream_clock` attached.
     #[serde(skip)]
     last_stream_cycle: u64,
-    /// The TX/RX pads this UART drives, present only once a lab routes them
-    /// (see `wire_uart_pads`). `None` — the common case — costs one branch per
-    /// transmitted byte and publishes nothing.
+    /// The TX/RX wire this UART drives.
+    ///
+    /// ALWAYS present. It used to be created only when a lab routed a pad to
+    /// this instance, which made the wire an accident of the pad tables: the
+    /// STM32 V2 table stops at instance 3, so a UART4 or UART5 owned no wire
+    /// and there was nothing to probe on any STM32 that has them (the
+    /// STM32L476 has both — DS10198 Rev 11, Table 13, p53). A UART knows what
+    /// it is transmitting whether or not a pin on this package can carry it,
+    /// so the wire exists whether or not a pad reaches it, and a
+    /// [`LogicSource::Wire`](crate::logic_capture::LogicSource::Wire) channel
+    /// can address it.
+    ///
+    /// The cost this replaces was noted at the wiring sites: a UART owning a
+    /// cell no route reaches still narrates every transmitted byte "into a
+    /// wire nothing reads". That is now false — a wire probe reads it — and
+    /// the work is bounded by [`WIRE_BURST_CAP`] characters per flush.
+    /// Narration remains gated on a programmed baud divisor, so a UART the
+    /// firmware never set up still costs one branch per byte.
     #[serde(skip)]
     lines: Option<Arc<PadLines>>,
     /// Characters transmitted since the last narration flush, waiting for the
@@ -807,6 +822,24 @@ pub struct Uart {
     /// back past. See [`Uart::wire_flush`].
     #[serde(skip)]
     wave_cursor: u64,
+    /// Characters a PEER really drove into this UART's RX path since the last
+    /// narration flush — the RX twin of [`Self::wire_chars`].
+    ///
+    /// Filled ONLY from `advance_ticks`, where an attached
+    /// [`UartStreamDevice`] (a GPS module, the far end of a `uart_cross_link`)
+    /// hands over bytes it has actually transmitted. Nothing else writes it,
+    /// which is the whole discipline: `LINE_RX` used to be read in four places
+    /// and written in none, and the fix for that is to publish what a peer
+    /// really sent, never to invent a level so a channel looks alive. With no
+    /// peer, this stays empty and an RX probe stays honestly flat.
+    #[serde(skip)]
+    wire_rx_chars: Vec<u8>,
+    /// [`Self::wave_cursor`] for the RX line. Separate because the two
+    /// directions are independent wires that narrate at different times; one
+    /// shared cursor would let a TX flush stop an RX burst from reaching back
+    /// over the cycles it really occupied.
+    #[serde(skip)]
+    wave_cursor_rx: u64,
 }
 
 impl core::fmt::Debug for Uart {
@@ -863,9 +896,13 @@ impl Uart {
             legacy_walk_forced: false,
             stream_clock: None,
             last_stream_cycle: 0,
-            lines: None,
+            // A serial line idles HIGH (mark) on both directions, so a start
+            // bit is always a falling edge — on TX and on RX alike.
+            lines: Some(Arc::new(PadLines::new(UART_LINES, &[true, true]))),
             wire_chars: Vec::new(),
             wave_cursor: 0,
+            wire_rx_chars: Vec::new(),
+            wave_cursor_rx: 0,
         }
     }
 
@@ -942,7 +979,9 @@ impl Uart {
         // Publish any burst the wire has now had time to carry. Cheap and
         // inert when nothing is buffered, which is every tick on a UART that
         // has no routed pads.
-        self.wire_flush(self.wire_chars.len() >= WIRE_BURST_CAP);
+        self.wire_flush(
+            self.wire_chars.len() >= WIRE_BURST_CAP || self.wire_rx_chars.len() >= WIRE_BURST_CAP,
+        );
         let mut dma_signals = Vec::new();
         if self.dma_tx_pending {
             dma_signals.push(1); // 1 = TX Signal
@@ -980,6 +1019,12 @@ impl Uart {
             }
             for byte in rx_trace {
                 self.record_trace("rx", byte);
+                // A peer really put this character on the wire, so RX really
+                // moved. Same gate as TX (`wire_push`): a programmed baud
+                // divisor, or nothing is narrated — a received character
+                // painted at an invented rate would be a trace measuring a
+                // frequency no wire carried.
+                self.wire_rx_push(byte);
             }
         }
 
@@ -1055,7 +1100,10 @@ impl Uart {
             0x10 => self.cr2,
             0x14 => self.cr3,
             0x18 => self.gtpr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("uart:Uart", base, "read");
+                0
+            }
         }
     }
 
@@ -1092,7 +1140,9 @@ impl Uart {
                     0x10 => set(&mut self.cr2),
                     0x14 => set(&mut self.cr3),
                     0x18 => set(&mut self.gtpr),
-                    _ => {}
+                    _ => {
+                        crate::census_reg!("uart:Uart", base, "write");
+                    }
                 }
                 return true;
             }
@@ -1210,6 +1260,22 @@ impl Uart {
         }
     }
 
+    /// [`Uart::wire_push`] for the RX direction: queue a character a PEER
+    /// drove into this UART for narration on `LINE_RX`.
+    ///
+    /// Only ever called from the stream-device service loop, i.e. only when
+    /// some other device really transmitted. Where nothing drives RX this is
+    /// never reached and the line stays at its idle mark — silence, not an
+    /// invented waveform.
+    fn wire_rx_push(&mut self, byte: u8) {
+        if self.lines.is_some() && self.bit_time_cycles().is_some() {
+            if self.wire_rx_chars.len() >= WIRE_BURST_CAP {
+                return;
+            }
+            self.wire_rx_chars.push(byte);
+        }
+    }
+
     /// Publish the buffered characters onto the routed pads, once the wire has
     /// had time to carry them.
     ///
@@ -1234,16 +1300,39 @@ impl Uart {
     /// silicon but are not decoded here: they live in PL011 UARTLCR_H and STM32
     /// CR1.PCE/PS/M and CR2.STOP, none of which this model captures yet.
     fn wire_flush(&mut self, force: bool) {
-        if self.wire_chars.is_empty() {
-            return;
+        if !self.wire_chars.is_empty() {
+            let chars = std::mem::take(&mut self.wire_chars);
+            let (held, cursor) = self.narrate_line(LINE_TX, chars, self.wave_cursor, force);
+            self.wire_chars = held;
+            self.wave_cursor = cursor;
         }
+        if !self.wire_rx_chars.is_empty() {
+            let chars = std::mem::take(&mut self.wire_rx_chars);
+            let (held, cursor) = self.narrate_line(LINE_RX, chars, self.wave_cursor_rx, force);
+            self.wire_rx_chars = held;
+            self.wave_cursor_rx = cursor;
+        }
+    }
+
+    /// Narrate `chars` onto one line, returning `(characters still held, new
+    /// cursor)`.
+    ///
+    /// One body for both directions. A `WavePlan` only records transitions on
+    /// the line a narrator was built for, so narrating RX never disturbs the
+    /// TX levels the same cell carries, and vice versa — the two directions
+    /// share a wire cell and nothing else.
+    fn narrate_line(
+        &self,
+        line: usize,
+        chars: Vec<u8>,
+        cursor: u64,
+        force: bool,
+    ) -> (Vec<u8>, u64) {
         let (Some(lines), Some(clock)) = (self.lines.clone(), self.stream_clock.clone()) else {
-            self.wire_chars.clear();
-            return;
+            return (Vec::new(), cursor);
         };
         let Some(bit_time) = self.bit_time_cycles() else {
-            self.wire_chars.clear();
-            return;
+            return (Vec::new(), cursor);
         };
         // The burst's OCCUPIED length, which is not its last edge: a character
         // of all ones transitions once and occupies ten bit periods. Waiting on
@@ -1251,32 +1340,28 @@ impl Uart {
         // framing rather than by building the plan, so a deferred flush — every
         // wakeup for the whole wire time of a burst — allocates nothing.
         let now = clock.now();
-        let duration =
-            self.wire_chars.len() as u64 * UartFraming::default().frame_bits() * bit_time;
-        if !force && now < self.wave_cursor.saturating_add(duration) {
-            return;
+        let duration = chars.len() as u64 * UartFraming::default().frame_bits() * bit_time;
+        if !force && now < cursor.saturating_add(duration) {
+            return (chars, cursor);
         }
         let mut narrator = UartNarrator::with_lines(
-            LINE_TX,
+            line,
             &[lines.level(LINE_TX), lines.level(LINE_RX)],
             bit_time,
         );
-        for &byte in &self.wire_chars {
+        for &byte in &chars {
             narrator.frame(byte, UartFraming::default());
         }
-        if let NarrationFit::LevelsOnly { .. } =
-            narrator.emit_between(&lines, self.wave_cursor, now)
-        {
+        if let NarrationFit::LevelsOnly { .. } = narrator.emit_between(&lines, cursor, now) {
             // Not enough cycles exist to hold even one per transition, so
             // nothing was drawn. Keep the characters and the cursor: `now` only
             // grows, so a later wakeup will have the room. Clearing here would
             // delete a message that was really transmitted and advance the
             // cursor past cycles nothing ever painted — silent, unrecoverable
             // data loss, and the reason this result is `#[must_use]`.
-            return;
+            return (chars, cursor);
         }
-        self.wave_cursor = now;
-        self.wire_chars.clear();
+        (Vec::new(), now)
     }
 
     fn push_tx(&mut self, value: u8) {
@@ -1374,6 +1459,14 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn line_names(&self) -> &'static [&'static str] {
+        UART_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.trace.clone())
     }

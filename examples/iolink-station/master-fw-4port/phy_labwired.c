@@ -28,7 +28,34 @@ static int p_set_baud_chk(iolink_baudrate_t b) {
 }
 static int p_prepare(void) { return 0; }
 
-#define PORT(IDX, U)                                                            \
+/* COM2 (38.4 kbaud) is what fill_one() asks the master stack for, so it is what
+ * the wire must actually carry. The L476 runs this lab on the MSI reset clock,
+ * 4 MHz (master/system.yaml `cpu_hz: 4_000_000` — no PLL is ever configured),
+ * and that clock feeds APB1/APB2 unprescaled. Under the default 16x
+ * oversampling BRR IS USARTDIV (RM0351 §38.5.4):
+ *
+ *   USARTDIV = f_ck / baud = 4 000 000 / 38 400 = 104.17 -> 104
+ *   actual baud = 4 000 000 / 104 = 38 461.5 (+0.16%, well inside 8N1 tolerance)
+ *
+ * Leaving BRR at its 0 reset is not a slow link, it is no link: the divisor is
+ * invalid, so there is no bit period at all. */
+#define IOLINK_COM2_BRR 104u
+
+/* Hand one pad to a USART: MODER = 10 (alternate function), push-pull, high
+ * speed, no pull, and the AF nibble in AFR[pin/8]. The AF number is what
+ * actually selects WHICH peripheral gets the pad, so it is the one field that
+ * must come from the datasheet rather than from habit. */
+static void pad_af(GPIO_TypeDef *g, uint32_t pin, uint32_t af) {
+    const uint32_t shift = pin * 2u;
+    g->MODER = (g->MODER & ~(3u << shift)) | (2u << shift);
+    g->OTYPER &= ~(1u << pin);
+    g->OSPEEDR |= 3u << shift;
+    g->PUPDR &= ~(3u << shift);
+    g->AFR[pin >> 3u] = (g->AFR[pin >> 3u] & ~(0xFu << ((pin & 7u) * 4u))) |
+                        (af << ((pin & 7u) * 4u));
+}
+
+#define PORT(IDX, U, GTX, TXP, GRX, RXP, AF)                                    \
     static int send_##IDX(void *user, const uint8_t *d, size_t n) {             \
         (void)user;                                                             \
         for (size_t i = 0; i < n; i++) {                                        \
@@ -48,6 +75,12 @@ static int p_prepare(void) { return 0; }
     }                                                                           \
     static int init_##IDX(void *user) {                                         \
         (void)user;                                                             \
+        pad_af((GTX), (TXP), (AF));                                             \
+        pad_af((GRX), (RXP), (AF));                                             \
+        (U)->CR1 = 0u;                                                          \
+        (U)->CR2 = 0u;                                                          \
+        (U)->CR3 = 0u;                                                          \
+        (U)->BRR = IOLINK_COM2_BRR;                                             \
         (U)->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;                  \
         return 0;                                                              \
     }                                                                           \
@@ -62,10 +95,20 @@ static int p_prepare(void) { return 0; }
         return 0;                                                              \
     }
 
-PORT(0, USART2)
-PORT(1, USART3)
-PORT(2, UART4)
-PORT(3, UART5)
+/* Pad + AF per port, every row read off STM32L476xx datasheet DS10198 Rev 11:
+ * Table 17 "Alternate function AF0 to AF7" for the USART1/2/3 rows and Table 18
+ * "AF8 to AF15" for the UART4/5 rows.
+ *   PA2/PA3   AF7  USART2_TX / USART2_RX   (Table 17, p88, port A)
+ *   PB10/PB11 AF7  USART3_TX / USART3_RX   (Table 17, p89, port B)
+ *   PA0/PA1   AF8  UART4_TX  / UART4_RX    (Table 18, p95, port A)
+ *   PC12      AF8  UART5_TX                (Table 18, p97, port C)
+ *   PD2       AF8  UART5_RX                (Table 18, p98, port D)
+ * UART5 is the one port whose TX and RX sit on different GPIO ports, which is
+ * why the macro takes a port per direction rather than one for both. */
+PORT(0, USART2, GPIOA, 2u, GPIOA, 3u, 7u)
+PORT(1, USART3, GPIOB, 10u, GPIOB, 11u, 7u)
+PORT(2, UART4, GPIOA, 0u, GPIOA, 1u, 8u)
+PORT(3, UART5, GPIOC, 12u, GPIOD, 2u, 8u)
 
 static void fill_one(iolink_phy_api_t *phy, iolink_master_config_t *cfg,
                      int (*init)(void *), int (*send)(void *, const uint8_t *, size_t),

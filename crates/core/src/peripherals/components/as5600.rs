@@ -74,7 +74,10 @@ impl As5600 {
             REG_AGC => 128,
             REG_MAG_H => 0x0C,
             REG_MAG_L => 0x80, // healthy magnitude
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.as5600:As5600", reg, "read");
+                0
+            }
         }
     }
 }

@@ -344,6 +344,14 @@ impl Rp2040Spi {
 }
 
 impl Peripheral for Rp2040Spi {
+    fn line_names(&self) -> &'static [&'static str] {
+        SPI_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     // ⚠️ `needs_legacy_walk()` is DELIBERATELY not overridden here, and the
     // default (`true`) is the honest answer even though the TRANSFER is
     // write-driven.
@@ -459,7 +467,10 @@ impl Peripheral for Rp2040Spi {
             SSPDR => self.pop_dr(), // reading SSPDR drains the RX FIFO
             SSPSR => self.status(),
             SSPCPSR => self.cpsr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.spi:Rp2040Spi", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -487,7 +498,9 @@ impl Peripheral for Rp2040Spi {
                 // room for what came back, so narrate it outside the FIFO guard.
                 self.wire_push(word);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.spi:Rp2040Spi", offset, "write");
+            }
         }
         Ok(())
     }

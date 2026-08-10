@@ -54,7 +54,10 @@ impl Peripheral for RadioController {
             0x0C if self.rx_pending => 1,
             0x10 => self.reg_rx_channel as u32,
             0x14 => self.reg_rx_data,
-            _ => 0,
+            _ => {
+                crate::census_reg!("radio:RadioController", reg_offset, "read");
+                0
+            }
         };
         Ok((val >> shift) as u8)
     }
@@ -86,7 +89,9 @@ impl Peripheral for RadioController {
                 // If we want to allow setting TX data via this register too?
                 // For now, let's keep it simple.
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("radio:RadioController", reg_offset, "write");
+            }
         }
         Ok(())
     }

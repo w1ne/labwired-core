@@ -91,20 +91,36 @@ fn a_nonzero_exit_code_reaches_the_harness_intact() {
 
 #[test]
 fn a_bus_without_simctl_never_stops_early() {
-    // ANTI-VACUITY CONTROL. Same program, same addresses, no device: the store
-    // lands in unmapped space and the firmware spins until it runs out of fuel.
-    // If this test ever starts reporting a firmware verdict, the ones above are
-    // proving nothing about the device.
+    // ANTI-VACUITY CONTROL. Same program, same addresses, no device: nothing may
+    // report a firmware verdict. If this test ever starts reporting one, the
+    // tests above are proving nothing about the device.
+    //
+    // With no simctl installed, SIMCTL_BASE is covered by no memory region and no
+    // peripheral window, so the `STR` is a store to unmapped space. The Cortex-M
+    // core propagates the bus's `MemoryViolation` (as RISC-V always has), so the
+    // run ends there. This used to assert `AdvanceStop::FuelLimit` — the spin
+    // loop burning its fuel — which only happened because the failing store was
+    // silently discarded. Faulting on the store is the stronger control: it
+    // proves the address really is unmapped without the device, rather than
+    // proving the fuel counter works.
     let mut m = machine(false);
     load_store_to_simctl_program(&mut m, SIMCTL_BASE + EXIT_OFFSET, 0);
 
-    let report = m.advance(AdvanceRequest::run(Some(64))).unwrap();
+    let outcome = m.advance(AdvanceRequest::run(Some(64)));
 
-    assert_eq!(
-        report.stop,
-        AdvanceStop::FuelLimit,
-        "with no simctl on the bus nothing may end the run early"
-    );
+    match outcome {
+        Err(crate::SimulationError::MemoryViolation(addr)) => {
+            assert_eq!(
+                addr,
+                SIMCTL_BASE + EXIT_OFFSET,
+                "the violation must be the simctl store itself"
+            );
+        }
+        other => panic!(
+            "with no simctl on the bus the store must fault, and nothing may end \
+             the run with a firmware verdict; got {other:?}"
+        ),
+    }
 }
 
 #[test]

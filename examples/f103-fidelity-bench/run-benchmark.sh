@@ -20,7 +20,7 @@
 set -u
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$here"
+cd "$here" || exit 1
 
 if [[ -z "${LABWIRED_BIN:-}" ]]; then
   for cand in ../../target/debug/labwired ../../target/release/labwired; do

@@ -753,7 +753,7 @@ pub fn xthal_window_spill_thunk(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimRe
     // Semantic spill via CPU helper (OF/UF save layout + WINDOWSTART=1<<WB).
     // Shared with interrupt-entry spill so FreeRTOS task switches do not need
     // this thunk to have run first. See `XtensaLx7::spill_call_preserve_to_stack`.
-    cpu.spill_call_preserve_to_stack(bus);
+    cpu.spill_call_preserve_to_stack(bus)?;
     // Explicit yield path: drop IRQ window snapshots so a later RFE in
     // another task cannot restore this task's call_preserve.
     cpu.clear_irq_window_stack();

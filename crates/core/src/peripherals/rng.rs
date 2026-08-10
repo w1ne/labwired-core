@@ -57,7 +57,10 @@ impl Rng {
                 self.sr &= !1;
                 v
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("rng:Rng", offset, "read");
+                0
+            }
         }
     }
 
@@ -75,7 +78,9 @@ impl Rng {
                 let clearable: u32 = 0b0110_0000;
                 self.sr &= !(value & clearable);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rng:Rng", offset, "write");
+            }
         }
     }
 }
@@ -105,7 +110,10 @@ impl crate::Peripheral for Rng {
         let mut v = match reg {
             0x00 => self.cr,
             0x04 => self.sr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rng:Rng", reg, "write");
+                0
+            }
         };
         let mask: u32 = 0xFF << (byte * 8);
         v = (v & !mask) | ((value as u32) << (byte * 8));

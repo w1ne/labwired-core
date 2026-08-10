@@ -1,0 +1,80 @@
+peripheral: CRC
+version: 0.1.0
+registers:
+- id: DR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: DR
+    bit_range:
+    - 31
+    - 0
+    description: Data register bits
+  side_effects: null
+- id: IDR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDR
+    bit_range:
+    - 31
+    - 0
+    description: General-purpose 8-bit data register               bits
+  side_effects: null
+- id: CR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RESET
+    bit_range:
+    - 0
+    - 0
+    description: RESET bit
+  - name: POLYSIZE
+    bit_range:
+    - 4
+    - 3
+    description: Polynomial size
+  - name: REV_IN
+    bit_range:
+    - 6
+    - 5
+    description: Reverse input data
+  - name: REV_OUT
+    bit_range:
+    - 7
+    - 7
+    description: Reverse output data
+  side_effects: null
+- id: INIT
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: CRC_INIT
+    bit_range:
+    - 31
+    - 0
+    description: Programmable initial CRC               value
+  side_effects: null
+- id: POL
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 79764919
+  fields:
+  - name: POL
+    bit_range:
+    - 31
+    - 0
+    description: Programmable polynomial
+  side_effects: null
+interrupts: null
+timing: null

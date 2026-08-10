@@ -64,7 +64,10 @@ impl Sai {
             0x38 => self.b.sr,
             0x3C => self.b.clrfr,
             0x40 => self.b.dr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("sai:Sai", offset, "read");
+                0
+            }
         }
     }
 
@@ -93,7 +96,9 @@ impl Sai {
                 self.b.clrfr = 0;
             }
             0x40 => self.b.dr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("sai:Sai", offset, "write");
+            }
         }
     }
 }

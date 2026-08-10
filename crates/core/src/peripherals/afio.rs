@@ -40,7 +40,10 @@ impl Afio {
             0x10 => self.exticr[2],
             0x14 => self.exticr[3],
             0x1C => self.mapr2,
-            _ => 0,
+            _ => {
+                crate::census_reg!("afio:Afio", offset, "read");
+                0
+            }
         }
     }
 
@@ -63,7 +66,9 @@ impl Afio {
             0x14 => self.exticr[3] = value & 0x7FFF,
             // MAPR2 is not implemented on F103 medium-density — reads 0.
             0x1C => self.mapr2 = 0,
-            _ => {}
+            _ => {
+                crate::census_reg!("afio:Afio", offset, "write");
+            }
         }
     }
 }

@@ -21,6 +21,7 @@
 #[cfg(test)]
 mod rp2040_spi_waveform_tests {
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::rp2040::io_bank0::{Rp2040IoBank0, GPIO_FUNC_SPI};
     use crate::peripherals::rp2040::sio::Rp2040Sio;
     use crate::peripherals::rp2040::spi::Rp2040Spi;
@@ -194,9 +195,9 @@ mod rp2040_spi_waveform_tests {
     fn watch_driven(machine: &mut Machine<crate::cpu::CortexM>) -> Vec<Option<bool>> {
         let sio = machine.bus.find_peripheral_index_by_name("sio").unwrap();
         machine.logic_watch(&[
-            Some((sio, MOSI_PIN)),
-            Some((sio, SCK_PIN)),
-            Some((sio, CS_PIN)),
+            Some(LogicSource::pad(sio, MOSI_PIN)),
+            Some(LogicSource::pad(sio, SCK_PIN)),
+            Some(LogicSource::pad(sio, CS_PIN)),
         ])
     }
 
@@ -390,7 +391,10 @@ mod rp2040_spi_waveform_tests {
             // Watch the pad under test ALONGSIDE a pad known to carry spi0
             // (GP3, `spi0_tx`), so a spi1 pad's silence means the instance
             // column and not a fixture that produced no traffic at all.
-            machine.logic_watch(&[Some((sio, pin)), Some((sio, MOSI_PIN))]);
+            machine.logic_watch(&[
+                Some(LogicSource::pad(sio, pin)),
+                Some(LogicSource::pad(sio, MOSI_PIN)),
+            ]);
             for _ in 0..20_000 {
                 machine.step().unwrap();
             }
@@ -426,7 +430,10 @@ mod rp2040_spi_waveform_tests {
         // the machinery is live in this very fixture, so the control channel's
         // silence means the table, not a broken setup. Without that, `is_empty`
         // is satisfied by any failure at all.
-        machine.logic_watch(&[Some((sio, MOSI_PIN)), Some((sio, NON_DRIVEN_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(sio, MOSI_PIN)),
+            Some(LogicSource::pad(sio, NON_DRIVEN_PIN)),
+        ]);
         for _ in 0..20_000 {
             machine.step().unwrap();
         }

@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod logic_capture_tests {
     use crate::cpu::CortexM;
+    use crate::logic_capture::LogicSource;
     use crate::logic_capture::{LogicCapture, LogicEdge, LOGIC_RING_CAPACITY};
     use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
     use crate::{Bus, Machine};
@@ -69,7 +70,7 @@ mod logic_capture_tests {
             .bus
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
-        let initial = machine.logic_watch(&[Some((idx, 0))]);
+        let initial = machine.logic_watch(&[Some(LogicSource::pad(idx, 0))]);
         assert_eq!(initial, vec![Some(false)], "pin starts low");
 
         // Sampling is per-cycle, so any spacing captures each edge exactly
@@ -126,7 +127,7 @@ mod logic_capture_tests {
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
         // Channel 0 unresolvable (None), channel 1 a real pad.
-        let initial = machine.logic_watch(&[None, Some((idx, 0))]);
+        let initial = machine.logic_watch(&[None, Some(LogicSource::pad(idx, 0))]);
         assert_eq!(initial, vec![None, Some(false)]);
 
         let gap = 48;
@@ -149,7 +150,7 @@ mod logic_capture_tests {
             .bus
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
-        machine.logic_watch(&[Some((idx, 0))]);
+        machine.logic_watch(&[Some(LogicSource::pad(idx, 0))]);
         let gap = 48;
 
         set_pin0(&mut machine, true);
@@ -182,7 +183,7 @@ mod logic_capture_tests {
             .bus
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
-        let initial = machine.logic_watch(&[Some((idx, 0))]);
+        let initial = machine.logic_watch(&[Some(LogicSource::pad(idx, 0))]);
 
         let gap = 48;
         step_n(&mut machine, gap);
@@ -312,7 +313,7 @@ mod logic_capture_tests {
     #[test]
     fn ring_buffer_drops_oldest_on_overflow() {
         let mut cap = LogicCapture::new();
-        cap.install(&[Some((0, 0))], &[Some(false)], &[false]);
+        cap.install(&[Some(LogicSource::pad(0, 0))], &[Some(false)], &[false]);
 
         let overflow = 100usize;
         let total = LOGIC_RING_CAPACITY + overflow;
@@ -320,7 +321,7 @@ mod logic_capture_tests {
         for i in 0..total {
             let cycle = i as u64 + 1;
             let level = i % 2 == 0;
-            cap.sample(cycle, |_, _| Some(level));
+            cap.sample(cycle, |_| Some(level));
         }
 
         let batch = cap.read_edges(0);
@@ -339,10 +340,10 @@ mod logic_capture_tests {
     #[test]
     fn acknowledged_reads_free_ring_capacity_for_continuous_capture() {
         let mut cap = LogicCapture::new();
-        cap.install(&[Some((0, 0))], &[Some(false)], &[false]);
+        cap.install(&[Some(LogicSource::pad(0, 0))], &[Some(false)], &[false]);
 
         for i in 0..LOGIC_RING_CAPACITY {
-            cap.sample(i as u64 + 1, |_, _| Some(i % 2 == 0));
+            cap.sample(i as u64 + 1, |_| Some(i % 2 == 0));
         }
 
         let first = cap.read_edges(0);
@@ -354,7 +355,7 @@ mod logic_capture_tests {
         assert_eq!(acknowledged.dropped, 0);
 
         for i in 0..LOGIC_RING_CAPACITY {
-            cap.sample(LOGIC_RING_CAPACITY as u64 + i as u64 + 1, |_, _| {
+            cap.sample(LOGIC_RING_CAPACITY as u64 + i as u64 + 1, |_| {
                 Some(i % 2 == 0)
             });
         }
@@ -369,9 +370,9 @@ mod logic_capture_tests {
     #[test]
     fn unknown_pad_records_no_edges() {
         let mut cap = LogicCapture::new();
-        cap.install(&[Some((0, 0))], &[None], &[false]);
+        cap.install(&[Some(LogicSource::pad(0, 0))], &[None], &[false]);
         for i in 0..10 {
-            cap.sample(i + 1, |_, _| None);
+            cap.sample(i + 1, |_| None);
         }
         let batch = cap.read_edges(0);
         assert!(batch.edges.is_empty());
@@ -387,7 +388,7 @@ mod logic_capture_tests {
             .bus
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
-        let initial = machine.logic_watch(&[Some((idx, 0))]);
+        let initial = machine.logic_watch(&[Some(LogicSource::pad(idx, 0))]);
         assert_eq!(initial, vec![Some(false)]);
 
         let toggles = 100usize;
@@ -439,7 +440,7 @@ mod logic_capture_tests {
             .bus
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
-        machine.logic_watch(&[Some((idx, 0))]);
+        machine.logic_watch(&[Some(LogicSource::pad(idx, 0))]);
 
         let steps = 300u32;
         machine.run(Some(steps)).unwrap();

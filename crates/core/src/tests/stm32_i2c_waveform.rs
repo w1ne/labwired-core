@@ -21,6 +21,7 @@
 mod stm32_i2c_waveform_tests {
     use crate::cpu::CortexM;
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
     use crate::peripherals::i2c::{I2c, I2cDevice, I2cRegisterLayout};
     use crate::{Bus, Machine};
@@ -203,8 +204,10 @@ mod stm32_i2c_waveform_tests {
             .bus
             .find_peripheral_index_by_name("gpiob")
             .expect("gpiob registered");
-        let initial =
-            machine.logic_watch(&[Some((gpiob_idx, SCL_PIN)), Some((gpiob_idx, SDA_PIN))]);
+        let initial = machine.logic_watch(&[
+            Some(LogicSource::pad(gpiob_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpiob_idx, SDA_PIN)),
+        ]);
         assert_eq!(
             initial,
             vec![Some(true), Some(true)],
@@ -238,7 +241,10 @@ mod stm32_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let gpiob_idx = machine.bus.find_peripheral_index_by_name("gpiob").unwrap();
-        machine.logic_watch(&[Some((gpiob_idx, SCL_PIN)), Some((gpiob_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpiob_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpiob_idx, SDA_PIN)),
+        ]);
 
         const ABSENT: u8 = 0x4A;
         let cr2 = (u32::from(ABSENT) << 1) | (1 << 16) | (1 << 25) | (1 << 13);
@@ -270,7 +276,10 @@ mod stm32_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let gpiob_idx = machine.bus.find_peripheral_index_by_name("gpiob").unwrap();
-        machine.logic_watch(&[Some((gpiob_idx, SCL_PIN)), Some((gpiob_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpiob_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpiob_idx, SDA_PIN)),
+        ]);
         // The narration occupies the cycles leading up to the transfer, so
         // asserting the PROGRAMMED rate requires that much history behind it —
         // which real firmware has, and which a transfer fired at power-on does

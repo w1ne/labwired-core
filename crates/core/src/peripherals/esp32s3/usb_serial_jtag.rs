@@ -571,7 +571,10 @@ impl Peripheral for UsbSerialJtag {
             // INT_CLR is write-only; the TRM gives it no read value.
             OFF_INT_CLR => 0,
             OFF_CONF0 => self.conf0,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.usb_serial_jtag:UsbSerialJtag", word, "read");
+                0
+            }
         };
         Ok(Self::lane(value, lane))
     }
@@ -590,7 +593,7 @@ impl Peripheral for UsbSerialJtag {
             // while the endpoint is busy, and `usb_serial_jtag_ll_write_txfifo`
             // breaks its loop on it. Guard rather than a nested `if`: clippy
             // 1.95 (what CI pins) reports collapsible_match otherwise. Falling
-            // through to `_ => {}` is the same no-op the nested form performed.
+            // through to `_ => { crate::census_reg!("esp32s3.usb_serial_jtag:UsbSerialJtag", word, "write"); }` is the same no-op the nested form performed.
             OFF_EP1 if lane == 0 && self.data_free() => {
                 self.tx_staging.push(value);
                 self.ep1_bytes_accepted += 1;
@@ -616,7 +619,9 @@ impl Peripheral for UsbSerialJtag {
             OFF_CONF0 => {
                 self.conf0 = (self.conf0 & !lane_mask) | (byte & lane_mask);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.usb_serial_jtag:UsbSerialJtag", word, "write");
+            }
         }
         Ok(())
     }

@@ -358,7 +358,10 @@ impl Esp32s3SarAdc {
             SARADC2_DATA_STATUS => self.adc2_data,
             ONETIME_SAMPLE => self.onetime_sample,
             CTRL_DATE => self.ctrl_date,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.sar_adc:Esp32s3SarAdc", offset, "read");
+                0
+            }
         }
     }
 
@@ -403,7 +406,9 @@ impl Esp32s3SarAdc {
                 self.service_triggers();
             }
             CTRL_DATE => self.ctrl_date = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.sar_adc:Esp32s3SarAdc", offset, "write");
+            }
         }
     }
 }

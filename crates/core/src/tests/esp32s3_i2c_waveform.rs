@@ -19,6 +19,7 @@
 #[cfg(test)]
 mod esp32s3_i2c_waveform_tests {
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
     use crate::peripherals::esp32s3::i2c::Esp32s3I2c;
     use crate::peripherals::i2c::I2cDevice;
@@ -172,7 +173,10 @@ mod esp32s3_i2c_waveform_tests {
         configure(&mut machine);
 
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
-        let initial = machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, SDA_PIN))]);
+        let initial = machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+        ]);
         assert_eq!(
             initial,
             vec![Some(true), Some(true)],
@@ -206,7 +210,7 @@ mod esp32s3_i2c_waveform_tests {
         configure(&mut machine);
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
         const UNRELATED: u8 = 4;
-        machine.logic_watch(&[Some((gpio_idx, UNRELATED))]);
+        machine.logic_watch(&[Some(LogicSource::pad(gpio_idx, UNRELATED))]);
 
         write_transfer(&mut machine, &[0x00, 0xAF]);
 
@@ -221,7 +225,10 @@ mod esp32s3_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
-        machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+        ]);
         // Let the machine run first. The narration occupies the cycles leading
         // up to the transfer, so it needs that much elapsed time behind it —
         // which any real firmware has by the time it touches a bus, but a
@@ -260,7 +267,10 @@ mod esp32s3_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
-        machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+        ]);
 
         // Barely any history: ~3k cycles against a waveform wanting ~49k. This
         // is the case that used to render as a single-cycle spike.

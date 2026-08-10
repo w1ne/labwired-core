@@ -26,7 +26,11 @@ use panic_halt as _;
 
 const RCC_APB2ENR: *mut u32 = 0x4002_1018 as *mut u32;
 const GPIOA_CRL: *mut u32 = 0x4001_0800 as *mut u32;
+// CRH is the same four-bits-per-pin mux as CRL, for PA8..PA15 (PA9 = TX).
+const GPIOA_CRH: *mut u32 = 0x4001_0804 as *mut u32;
 const GPIOA_BSRR: *mut u32 = 0x4001_0810 as *mut u32;
+// ⚠️ The two `*_BRR` names below are the GPIO **bit-reset** registers, not the
+// USART baud divisor — that one is `UART1_BRR` at 0x4001_3808.
 const GPIOA_BRR: *mut u32 = 0x4001_0814 as *mut u32;
 const GPIOB_CRL: *mut u32 = 0x4001_0C00 as *mut u32;
 const GPIOB_BSRR: *mut u32 = 0x4001_0C10 as *mut u32;
@@ -34,6 +38,7 @@ const GPIOB_BRR: *mut u32 = 0x4001_0C14 as *mut u32;
 const SPI1_CR1: *mut u16 = 0x4001_3000 as *mut u16;
 const SPI1_SR: *const u16 = 0x4001_3008 as *const u16;
 const SPI1_DR: *mut u16 = 0x4001_300C as *mut u16;
+const UART1_BRR: *mut u32 = (0x4001_3800 + 0x08) as *mut u32;
 const UART1_CR1: *mut u32 = (0x4001_3800 + 0x0C) as *mut u32;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -243,8 +248,8 @@ fn draw_solid_band(row_start: u16, color: u16) {
 #[entry]
 fn main() -> ! {
     unsafe {
-        // Enable RCC for GPIOA (bit 2), GPIOB (bit 3, the D/C port), SPI1
-        // (bit 12) and USART1 (bit 14).
+        // Enable RCC for AFIO (bit 0), GPIOA (bit 2), GPIOB (bit 3, the D/C
+        // port), SPI1 (bit 12) and USART1 (bit 14).
         //
         // USART1EN was missing here, and USART1 is clock-gated out of reset on
         // this chip (stm32f103.yaml pins its gate to APB2ENR bit 14), so every
@@ -254,7 +259,7 @@ fn main() -> ! {
         let apb2enr = core::ptr::read_volatile(RCC_APB2ENR);
         core::ptr::write_volatile(
             RCC_APB2ENR,
-            apb2enr | (1 << 14) | (1 << 12) | (1 << 3) | (1 << 2),
+            apb2enr | (1 << 14) | (1 << 12) | (1 << 3) | (1 << 2) | 1,
         );
 
         // Configure GPIOA CRL:
@@ -277,6 +282,25 @@ fn main() -> ! {
         core::ptr::write_volatile(GPIOA_BSRR, 1 << 4);
         core::ptr::write_volatile(GPIOB_BRR, 1 << 0);
 
+        // PA9 = USART1_TX, alternate-function push-pull 50 MHz.
+        //
+        // PA9 is USART1_TX in the **Default** alternate-function column
+        // (DS5319 Rev 20, Table 5, p.31), so no AFIO remap is involved. The CRH
+        // nibble for PA9 is bits [7:4]; 0xB = MODE 0b11 (output, 50 MHz) + CNF
+        // 0b10 (alternate-function push-pull). Enabling the USART clock and
+        // writing DR was enough for LabWired's permissive USART model, but the
+        // pin itself stayed a floating input: the pad route never went live, so
+        // a logic analyzer on PA9 read the GPIO latch — a flat line — while the
+        // transaction-level bus monitor decoded the same traffic fine.
+        let crh = core::ptr::read_volatile(GPIOA_CRH);
+        core::ptr::write_volatile(GPIOA_CRH, (crh & !(0xF << 4)) | (0xB << 4));
+
+        // USART1 at 115 200 8N1. BRR = f_PCLK2 / baud at the default 16×
+        // oversampling; this firmware never touches the PLL, so the part runs
+        // on the 8 MHz HSI it selects at reset (DS5319 Rev 20 §2.3.7, p.15):
+        // 8_000_000 / 115_200 = 69.44 → 69 = 0x45. A zero BRR means no bit
+        // period at all, so there is nothing for a probe to see.
+        core::ptr::write_volatile(UART1_BRR, 0x45);
         // USART1: UE (bit 13) | TE (bit 3) — transmit only, no interrupts.
         core::ptr::write_volatile(UART1_CR1, (1 << 13) | (1 << 3));
 

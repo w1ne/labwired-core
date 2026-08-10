@@ -90,9 +90,25 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         system: "nucleo-f401re",
         fixture: "stm32f401-blinky.elf",
         valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2001_FFFF)],
-        // Keep this as a control-flow survival check. The current F401 board model
-        // does not yet produce deterministic UART bytes end-to-end.
-        expected_uart_output: b"",
+        // Same `blink_sketch.ino.cpp` as the F103 case above, built by the STM32
+        // Arduino core for nucleo_f401re — so the banner below is the *firmware's*
+        // string, cross-checked against the F103 sibling, not a transcript of
+        // whatever the simulator happened to print.
+        //
+        // This case used to assert `b""`, which asserted nothing: the empty-expected
+        // early return in `assert_uart_contains` skipped the check entirely, leaving
+        // only the PC-range test, so a wedged USART2 would still have passed. The
+        // comment justifying it ("does not yet produce deterministic UART bytes")
+        // was stale — the F401 model emits these 45 bytes deterministically, byte
+        // for byte, at every budget from 200k to 3.2M cycles.
+        //
+        // `LED ON` (from `loop()`, not `setup()`) is included deliberately: it
+        // proves the sketch reached its main loop, not just the banner in setup().
+        // The next line only arrives after the sketch's `delay()` elapses — at
+        // 100M cycles this prints ON/OFF/ON, while the 72 MHz F103 gets one more
+        // toggle in the same cycle count, which is exactly what a fixed
+        // millisecond delay predicts for the faster 84 MHz part.
+        expected_uart_output: b"LabWired Playground - Arduino Blink\r\nLED ON\r\n",
     },
     SurvivalCase {
         // Unmodified Zephyr 3.7 hello_world for nucleo_f401re. Drives the kernel
@@ -1032,6 +1048,188 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0800_0000, 0x0802_FFFF), (0x2000_0000, 0x2000_4FFF)],
         expected_uart_output: b"DEV=20086447\nCLK=00000004\nCRC=B874177A\nDMA=OK\n",
     },
+    // ------------------------------------------------------------------
+    // Arduino-startup corpus (`L0_serial_boot`, verbatim from Core Arduino
+    // Matrix). Every ELF below is the exact binary the matrix builds and
+    // runs, and the assertion is the matrix's own L0 oracle: the sketch must
+    // reach `Serial.println("LW_L0_OK")` — i.e. the whole vendor startup
+    // (reset handler -> SystemInit -> HAL_Init -> SystemClock_Config ->
+    // HardwareSerial::begin) must complete, not merely "not crash".
+    //
+    // Why these live here and not only in the matrix: Core Arduino Matrix is
+    // a **main-only** workflow. `firmware_survival` runs on every PR. Twice
+    // an MMIO change (memory-violation propagation) passed the PR gate and
+    // then broke the matrix on main, because the only fixtures for these
+    // chips were Zephyr builds and Zephyr's minimal init never touches the
+    // peripherals STM32Cube's HAL touches. These cases put the Arduino
+    // startup path on the PR gate so that class of regression is caught
+    // before merge.
+    SurvivalCase {
+        // Adafruit/Nordic nRF52 Arduino core on nRF52832 (64 KB RAM part).
+        // `Serial` drives the legacy UART personality of UART0 (ENABLE=4):
+        // byte to TXD (0x51C), spin on EVENTS_TXDRDY (0x11C). Same console
+        // path as the nRF52840 case, but on the 64 KB/512 KB die, so it also
+        // pins that the nrf52832 chip config's smaller RAM/flash windows do
+        // not clip the Arduino core's stack and heap during startup.
+        name: "nrf52832_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "nrf52832",
+        system: "nrf52-dk",
+        fixture: "nrf52832-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0007_FFFF), (0x2000_0000, 0x2000_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // STM32 Arduino core on F1: legacy USART (SR/DR, not ISR/TDR) plus the
+        // Cube HAL bring-up — HAL_Init's SysTick at 1 kHz and
+        // SystemClock_Config spinning on RCC_CR HSERDY/PLLRDY and
+        // RCC_CFGR.SWS — before HardwareSerial can emit a byte.
+        name: "stm32f103_arduino_serial",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32f103",
+        system: "stm32f103-bare",
+        fixture: "stm32f103-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // STM32 Arduino core on F4 (NUCLEO-F401RE). The existing
+        // `stm32f401_blinky` case is also an Arduino build; it used to assert
+        // *no* UART bytes and so could not distinguish a working F401 from a
+        // wedged one, but it now pins the blink sketch's own banner. This case
+        // stays because it pins a different path end-to-end: F4 RCC (HSI ->
+        // PLL, PLLRDY, SWS) then USART2 TXE/TC, against the L0 matrix oracle.
+        name: "stm32f401_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32f401",
+        system: "nucleo-f401re",
+        fixture: "stm32f401-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // STM32 Arduino core on F4 (NUCLEO-F407). F407 previously had only
+        // bare-metal fixtures (`nucleo-f407-smoke`, `nucleo-f407-i2c`), so no
+        // vendor-HAL startup ran against it on a PR at all. Exercises the F4
+        // RCC PLL bring-up plus FLASH ACR latency/prefetch programming that
+        // HAL_RCC_ClockConfig performs before switching to 84 MHz.
+        name: "stm32f407_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32f407",
+        system: "nucleo-f407",
+        fixture: "stm32f407-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // *** This case exists because of the CRC peripheral. ***
+        // Zephyr startup never calls `HAL_CRC_Init`; STM32Cube's Arduino core
+        // startup does, and it writes CRC->POL at 0x4002_3014. While
+        // stm32g474re.yaml had no `crc` peripheral that write landed in
+        // unmapped space, which was harmless until memory violations began to
+        // propagate — at which point it became a hard stop. That combination
+        // reverted the propagation work twice, because the only G474 fixture
+        // on the PR gate was `stm32g474-zephyr-hello.elf`, which cannot reach
+        // the CRC path. Deleting `crc` from configs/chips/stm32g474re.yaml
+        // must fail this test.
+        name: "stm32g474re_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32g474re",
+        system: "nucleo_g474re",
+        fixture: "stm32g474re-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // STM32 Arduino core on H5 (Cortex-M33). Runs the H5 PWR VOS /
+        // FLASH latency / RCC bring-up under the Cube HAL rather than under
+        // Zephyr, and drives the modern USART (ISR/TDR + TEACK) console.
+        name: "stm32h563_arduino_serial",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32h563",
+        system: "nucleo-h563zi-demo",
+        fixture: "stm32h563-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x081F_FFFF), (0x2000_0000, 0x200A_0000)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // STM32 Arduino core on L0 (Cortex-M0+, ARMv6-M). The Cube HAL
+        // startup on L0 goes through PWR CR VOS + RCC ICSCR/CFGR on the
+        // dedicated `stm32l0` RCC layout, all decoded by the ARMv6-M subset.
+        name: "stm32l073_arduino_serial",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32l073",
+        system: "nucleo-l073rz",
+        fixture: "stm32l073-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0802_FFFF), (0x2000_0000, 0x2000_4FFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // STM32 Arduino core on L4. Complements
+        // `nucleo_l476rg_arduino_serial` (the PLLSAI1RDY hang regression)
+        // with the matrix's own L0 binary and oracle, so a matrix-visible
+        // break on this board reproduces from the PR gate too.
+        name: "stm32l476_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "stm32l476-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // *** This case exists because of the CRC peripheral. ***
+        // Same defect class as the G474 case above: Zephyr startup does not
+        // touch CRC, Arduino/STM32Cube startup calls `HAL_CRC_Init`, which
+        // writes CRC->POL at 0x4002_3014. The only WB55 fixture on the PR
+        // gate was `stm32wb55-zephyr-hello.elf`, so the unmapped write was
+        // invisible until Core Arduino Matrix ran on main. Deleting `crc`
+        // from configs/chips/stm32wb55.yaml must fail this test.
+        // Also carries the dual-core (M4 + M0+) HSEM lock path on the way in.
+        name: "stm32wb55_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32wb55",
+        system: "mb1355c",
+        fixture: "stm32wb55-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
+    SurvivalCase {
+        // *** This case exists because of the CRC peripheral. ***
+        // Third chip in the same revert: Zephyr startup does not touch CRC,
+        // Arduino/STM32Cube startup calls `HAL_CRC_Init` and writes CRC->POL
+        // at 0x4002_3014. `stm32wba52-zephyr-hello.elf` on the PR gate could
+        // not see it. Deleting `crc` from configs/chips/stm32wba52.yaml must
+        // fail this test. Also exercises the WBA-specific RCC (CFGR1@0x1C,
+        // BDCR1@0xF0) and the PWR VOSR ready handshake under the Cube HAL.
+        name: "stm32wba52_arduino_serial",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        hal: Hal::Arduino,
+        chip: "stm32wba52",
+        system: "nucleo_wba52cg",
+        fixture: "stm32wba52-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"LW_L0_OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1091,10 +1289,17 @@ fn assert_pc_in_range(pc: u32, cycles: u32, ranges: &[(u32, u32)]) {
 }
 
 fn assert_uart_contains(uart_bytes: &[u8], expected: &[u8], name: &str) {
-    // Empty expected means "no assertion" — useful for boards with known limitations.
-    if expected.is_empty() {
-        return;
-    }
+    // An empty `expected` used to mean "no assertion" and silently returned here,
+    // which turned the whole case into a survival-only check: it could not tell a
+    // working chip from a wedged one, and passed as long as the sim did not crash.
+    // Every case now carries a real oracle, so an empty expected is a bug in the
+    // table, not an opt-out. Fail loudly rather than skipping the check.
+    assert!(
+        !expected.is_empty(),
+        "Board '{name}': expected_uart_output is empty, which asserts nothing. Give this \
+         case a real oracle (run the fixture and pin what it genuinely emits), or assert \
+         something else meaningful about it — do not leave it vacuous.",
+    );
     assert!(
         uart_bytes.windows(expected.len()).any(|w| w == expected),
         "Board '{}': UART output did not contain expected bytes.\n\
@@ -1920,6 +2125,68 @@ fn test_nucleo_f407_i2c_survival() {
 #[test]
 fn test_nucleo_l073rz_smoke_survival() {
     run_survival_case(case_by_name("nucleo_l073rz_smoke"));
+}
+
+// --- Arduino-startup corpus (Core Arduino Matrix `L0_serial_boot`) ---------
+// Each asserts the sketch reaches `LW_L0_OK`, which is the matrix's own L0
+// oracle: the full vendor startup must complete. See the block comment on
+// these cases in SURVIVAL_CASES for why they are on the PR gate.
+
+#[test]
+fn test_nrf52832_arduino_serial_survival() {
+    run_survival_case(case_by_name("nrf52832_arduino_serial"));
+}
+
+#[test]
+fn test_stm32f103_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32f103_arduino_serial"));
+}
+
+#[test]
+fn test_stm32f401_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32f401_arduino_serial"));
+}
+
+#[test]
+fn test_stm32f407_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32f407_arduino_serial"));
+}
+
+/// Regression for the unmapped `CRC->POL` write (0x4002_3014) that reverted the
+/// Cortex-M memory-violation propagation work twice. Zephyr never calls
+/// `HAL_CRC_Init`; this Arduino/STM32Cube startup does.
+#[test]
+fn test_stm32g474re_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32g474re_arduino_serial"));
+}
+
+#[test]
+fn test_stm32h563_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32h563_arduino_serial"));
+}
+
+#[test]
+fn test_stm32l073_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32l073_arduino_serial"));
+}
+
+#[test]
+fn test_stm32l476_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32l476_arduino_serial"));
+}
+
+/// Regression for the unmapped `CRC->POL` write (0x4002_3014) on WB55 — see
+/// `test_stm32g474re_arduino_serial_survival`.
+#[test]
+fn test_stm32wb55_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32wb55_arduino_serial"));
+}
+
+/// Regression for the unmapped `CRC->POL` write (0x4002_3014) on WBA52 — see
+/// `test_stm32g474re_arduino_serial_survival`.
+#[test]
+fn test_stm32wba52_arduino_serial_survival() {
+    run_survival_case(case_by_name("stm32wba52_arduino_serial"));
 }
 
 #[test]

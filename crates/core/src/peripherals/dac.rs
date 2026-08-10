@@ -58,7 +58,10 @@ impl Dac {
             0x28 => self.dor1,
             0x2C => self.dor2,
             0x34 => self.sr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("dac:Dac", offset, "read");
+                0
+            }
         }
     }
 
@@ -87,7 +90,9 @@ impl Dac {
             0x24 => self.dhr12ld = value,
             0x28 | 0x2C => {}                      // DOR is read-only
             0x34 => self.sr = value & 0x3000_3000, // BWST/CAL flags W1C
-            _ => {}
+            _ => {
+                crate::census_reg!("dac:Dac", offset, "write");
+            }
         }
     }
 }

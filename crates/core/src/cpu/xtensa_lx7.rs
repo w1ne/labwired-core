@@ -723,7 +723,17 @@ impl XtensaLx7 {
     /// authority (ROM-accurate) before any switch can happen.
     ///
     /// Does **not** modify PC (caller handles RET for the spill thunk).
-    pub(crate) fn spill_call_preserve_to_stack(&mut self, bus: &mut dyn Bus) {
+    ///
+    /// Returns `Err(MemoryViolation)` if a save-area store lands on an address
+    /// the bus does not map. These stores used to be `let _ = bus.write_u32(..)`,
+    /// so an unmapped save area made the spill silently vanish and the run
+    /// carried on with registers that were never saved — a later
+    /// WindowUnderflow then reloaded whatever happened to be there. Real
+    /// silicon's `s32e` in `_WindowOverflow{4,8}` faults instead. Both callers
+    /// already return `SimResult<()>`, so the violation reaches the machine and
+    /// stops the run. (On that path the spill is left half-applied — WINDOWSTART
+    /// is not collapsed to `1<<WB` — which is fine: the run is over.)
+    pub(crate) fn spill_call_preserve_to_stack(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
         // Hybrid CALL preserve → stack OF save areas for IRQ / xthal spill.
         //
         // WindowOverflow4/8 (window_vectors.S):
@@ -762,24 +772,34 @@ impl XtensaLx7 {
             let below = ref_sp.wrapping_sub(sp);
             (sp >= ref_sp && above < 0x1000) || (sp < ref_sp && below < 0x100)
         };
-        let write4 =
-            |bus: &mut dyn Bus, base_sp: u32, off: u32, r0: u32, r1: u32, r2: u32, r3: u32| {
-                if !valid_sp(base_sp) || !stackish(base_sp, current_a1) {
-                    return;
-                }
-                if (base_sp as u64) < (off as u64) + 16 {
-                    return;
-                }
-                let b = base_sp.wrapping_sub(off);
-                // a0..a3 OF is strictly below base_sp (ENTRY locals live at/above).
-                if b >= base_sp {
-                    return;
-                }
-                let _ = bus.write_u32(b as u64, r0);
-                let _ = bus.write_u32(b as u64 + 4, r1);
-                let _ = bus.write_u32(b as u64 + 8, r2);
-                let _ = bus.write_u32(b as u64 + 12, r3);
-            };
+        // Declining to place a record (the three early returns) is a decision,
+        // not a dropped fault — those are `Ok(())`. Once we have committed to a
+        // save area, a bus refusal is a real memory violation and propagates.
+        let write4 = |bus: &mut dyn Bus,
+                      base_sp: u32,
+                      off: u32,
+                      r0: u32,
+                      r1: u32,
+                      r2: u32,
+                      r3: u32|
+         -> SimResult<()> {
+            if !valid_sp(base_sp) || !stackish(base_sp, current_a1) {
+                return Ok(());
+            }
+            if (base_sp as u64) < (off as u64) + 16 {
+                return Ok(());
+            }
+            let b = base_sp.wrapping_sub(off);
+            // a0..a3 OF is strictly below base_sp (ENTRY locals live at/above).
+            if b >= base_sp {
+                return Ok(());
+            }
+            bus.write_u32(b as u64, r0)?;
+            bus.write_u32(b as u64 + 4, r1)?;
+            bus.write_u32(b as u64 + 8, r2)?;
+            bus.write_u32(b as u64 + 12, r3)?;
+            Ok(())
+        };
 
         let frames: Vec<Vec<u32>> = self
             .call_preserve_stack
@@ -831,7 +851,7 @@ impl XtensaLx7 {
                 0
             };
             if spill_sp != 0 {
-                write4(bus, spill_sp, 16, regs[0], regs[1], regs[2], regs[3]);
+                write4(bus, spill_sp, 16, regs[0], regs[1], regs[2], regs[3])?;
             }
             // CALL8/CALL12: a4..a7 live in the parent OF (parent_sp - 32).
             // Parent SP is the previous preserve frame's a1 (strictly higher).
@@ -842,7 +862,7 @@ impl XtensaLx7 {
                     && stackish(parent_a1, current_a1)
                     && parent_a1.wrapping_sub(frame_a1) < 0x1000
                 {
-                    write4(bus, parent_a1, 32, regs[4], regs[5], regs[6], regs[7]);
+                    write4(bus, parent_a1, 32, regs[4], regs[5], regs[6], regs[7])?;
                 }
             }
         }
@@ -906,11 +926,12 @@ impl XtensaLx7 {
             let Some(&callee_sp) = all_sps.iter().rev().find(|&&s| s < a1) else {
                 continue;
             };
-            write4(bus, callee_sp, 16, a0, a1, a2, a3);
+            write4(bus, callee_sp, 16, a0, a1, a2, a3)?;
         }
 
         self.regs.set_windowstart(1u16 << (wb & 0x0F));
         self.regs.set_shadow_stacks(Default::default());
+        Ok(())
     }
 
     fn push_irq_window_frame(&mut self, bus: &dyn Bus) {
@@ -2937,7 +2958,7 @@ impl XtensaLx7 {
         // same-task RFE restore (so NotifyTake→ipc_task a5/a6 survive).
         if !self.faithful_windows {
             self.push_irq_window_frame(bus); // snapshot preserve + park under TCB
-            self.spill_call_preserve_to_stack(bus);
+            self.spill_call_preserve_to_stack(bus)?;
         }
         let entry_pc = self.pc;
         let vecbase = self.sr.read(VECBASE);

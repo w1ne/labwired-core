@@ -106,7 +106,9 @@ impl Peripheral for Nrf52Usbd {
             // USBPULLUP/EPINEN/EPOUTEN are effectively write-only on silicon —
             // the USB PHY state machine owns the actual state; reads return 0.
             OFF_USBPULLUP | OFF_EPINEN | OFF_EPOUTEN => return Ok(0),
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.usbd:Nrf52Usbd", offset, "read");
+            }
         }
         Ok(self.regs.get(&offset).copied().unwrap_or(0))
     }

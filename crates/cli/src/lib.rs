@@ -1992,13 +1992,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         if refs.is_empty() {
             Vec::new()
         } else {
-            let resolved: Vec<Option<(usize, u8)>> = refs
+            let resolved: Vec<Option<labwired_core::logic_capture::LogicSource>> = refs
                 .iter()
                 .map(|(name, pin)| {
                     machine
                         .bus
                         .find_peripheral_index_by_name(name)
-                        .map(|idx| (idx, *pin))
+                        .map(|idx| labwired_core::logic_capture::LogicSource::pad(idx, *pin))
                 })
                 .collect();
             for ((name, _), r) in refs.iter().zip(resolved.iter()) {
@@ -3158,6 +3158,13 @@ fn write_outputs<C: labwired_core::Cpu>(
     // populated. `take()` resets it, so it must run exactly once per run — this
     // is the sole call site on the run path.
     let fidelity = labwired_core::fidelity::take().to_gaps();
+
+    // Silent-path census (measurement only). Compiled to an empty function
+    // unless `--features silent-census`, and even then writes nothing unless
+    // LABWIRED_CENSUS_OUT names a path. Sits here because `write_outputs` is
+    // the sole call site on the run path, reached synchronously at the tail of
+    // `execute_test_loop` on the thread that ran the sim.
+    labwired_core::census::dump_if_requested();
 
     // Derive the top-level `message` from the stimulus block rather than taking
     // it as a second parameter, so the human sentence and the structured

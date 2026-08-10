@@ -1602,35 +1602,56 @@ peripherals:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Resolve a committed, already-executable fake `labwired` binary.
+    ///
+    /// THE ETXTBSY TRAP. These tests used to write the script themselves,
+    /// `chmod 0755` it, and then exec it. In a multithreaded test binary that
+    /// is a race: `exec` fails with `ETXTBSY` ("Text file busy") if *any*
+    /// process still holds the file open for writing. While this thread's
+    /// write fd is open, a concurrent `Command::spawn` on another test thread
+    /// forks, the child inherits the descriptor, and until that child reaches
+    /// its own `exec` (which is where `O_CLOEXEC` finally closes the
+    /// inherited fd) our exec is refused. The `git`-backed baseline tests
+    /// below fork repeatedly, so the window gets hit under CI parallelism.
+    ///
+    /// Exec'ing a fixture this process never opens for writing removes the
+    /// window by construction — no lock and no retry needed, and no
+    /// production code has to change to accommodate a test.
+    fn fake_labwired_bin(name: &str) -> PathBuf {
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name);
+        assert!(p.is_file(), "missing committed fixture: {}", p.display());
+        // The exec bit is carried by git (mode 100755). If a checkout ever
+        // drops it, fail here with the reason rather than as a baffling
+        // "Permission denied" inside the assertions below.
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&p).unwrap().permissions().mode();
+        assert!(
+            mode & 0o111 != 0,
+            "fixture must stay executable (mode {mode:o}): {}",
+            p.display()
+        );
+        p
+    }
+
     #[test]
     fn run_target_surfaces_child_crash_instead_of_blocked_row() {
-        let dir = std::env::temp_dir().join(format!("tier1-crash-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let fake = dir.join("labwired-fake");
-        std::fs::write(&fake, "#!/bin/sh\necho boom-stderr >&2\nexit 3\n").unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let fake = fake_labwired_bin("tier1-fake-crash.sh");
         let target = &TIER1_TARGETS[0];
         // chip yaml exists in-repo, ELF path doesn't need to exist for the spawn itself
         let err = run_target(target, &fake).unwrap_err();
         assert!(err.contains("boom-stderr"), "{err}");
         assert!(err.contains("esp32s3"), "{err}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn stderr_tail_truncation_is_char_boundary_safe() {
-        let dir = std::env::temp_dir().join(format!("tier1-crash-utf8-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let fake = dir.join("labwired-fake");
-        // >500 bytes of multibyte stderr (U+2744 = 3 bytes each × 200 = 600 bytes)
-        // so the naive len-500 cut lands mid-char.
-        std::fs::write(&fake, "#!/bin/sh\npython3 << 'PYEOF'\nimport sys\nfor i in range(200):\n    sys.stderr.buffer.write(b'\\xe2\\x9d\\x84')\nsys.exit(3)\nPYEOF\n").unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // The fixture writes >500 bytes of multibyte stderr (U+2744 = 3 bytes
+        // each × 200 = 600 bytes) so the naive len-500 cut lands mid-char.
+        let fake = fake_labwired_bin("tier1-fake-crash-utf8.sh");
         let target = &TIER1_TARGETS[0];
         let err = run_target(target, &fake).unwrap_err();
         assert!(err.contains("exited"), "{err}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

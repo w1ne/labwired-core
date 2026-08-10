@@ -126,7 +126,10 @@ impl Peripheral for Nrf52Qspi {
             OFF_CINSTRDAT0 => self.cinstrdat0,
             OFF_CINSTRDAT1 => self.cinstrdat1,
             OFF_IFTIMING => self.iftiming,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.qspi:Nrf52Qspi", offset, "read");
+                0
+            }
         })
     }
 
@@ -161,7 +164,9 @@ impl Peripheral for Nrf52Qspi {
             OFF_CINSTRDAT0 => self.cinstrdat0 = value,
             OFF_CINSTRDAT1 => self.cinstrdat1 = value,
             OFF_IFTIMING => self.iftiming = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.qspi:Nrf52Qspi", offset, "write");
+            }
         }
         Ok(())
     }

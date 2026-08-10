@@ -102,7 +102,10 @@ impl Ads1115 {
             REG_CONFIG => self.config | 0x8000, // OS = conversion ready
             REG_LO_THRESH => self.lo_thresh,
             REG_HI_THRESH => self.hi_thresh,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.ads1115:Ads1115", reg, "read");
+                0
+            }
         }
     }
 
@@ -111,7 +114,9 @@ impl Ads1115 {
             REG_CONFIG => self.config = value,
             REG_LO_THRESH => self.lo_thresh = value,
             REG_HI_THRESH => self.hi_thresh = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("components.ads1115:Ads1115", reg, "write");
+            }
         }
     }
 }

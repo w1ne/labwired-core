@@ -277,7 +277,10 @@ impl Peripheral for Nrf52Gpiote {
             OFF_CONFIG_0..=OFF_CONFIG_7 if offset.is_multiple_of(4) => {
                 self.config[((offset - OFF_CONFIG_0) / 4) as usize]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.gpiote:Nrf52Gpiote", offset, "read");
+                0
+            }
         })
     }
 
@@ -317,7 +320,9 @@ impl Peripheral for Nrf52Gpiote {
                     0
                 };
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.gpiote:Nrf52Gpiote", offset, "write");
+            }
         }
         Ok(())
     }

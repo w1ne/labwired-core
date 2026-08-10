@@ -59,7 +59,10 @@ impl Peripheral for Nrf52UsbRegulator {
             OFF_EVENTS_USBPWRRDY => self.events_usbpwrrdy,
             OFF_INTEN | OFF_INTENSET | OFF_INTENCLR => self.inten,
             OFF_USBREGSTATUS => self.usbregstatus & 0x3,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.usbregulator:Nrf52UsbRegulator", offset, "read");
+                0
+            }
         })
     }
 
@@ -73,7 +76,9 @@ impl Peripheral for Nrf52UsbRegulator {
             OFF_INTENSET => self.inten |= value & 1,
             OFF_INTENCLR => self.inten &= !value,
             OFF_USBREGSTATUS => {} // RO
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.usbregulator:Nrf52UsbRegulator", offset, "write");
+            }
         }
         Ok(())
     }

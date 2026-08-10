@@ -63,7 +63,10 @@ impl ExtiBank {
             0x0C => self.ftsr,
             0x10 => self.swier,
             0x14 => self.pr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("exti:ExtiBank", off, "read");
+                0
+            }
         }
     }
     /// `mask` is the implemented-line mask for this bank.
@@ -88,7 +91,9 @@ impl ExtiBank {
                 self.pr &= !clear;
                 self.swier &= !clear;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("exti:ExtiBank", off, "write");
+            }
         }
     }
 }
@@ -210,12 +215,18 @@ impl Exti {
         match self {
             Self::Stm32F1(e) => match offset {
                 0x00..=0x14 => e.bank1.read(offset),
-                _ => 0,
+                _ => {
+                    crate::census_reg!("exti:Exti", offset, "read");
+                    0
+                }
             },
             Self::Stm32L4(e) => match offset {
                 0x00..=0x14 => e.bank1.read(offset),
                 0x20..=0x34 => e.bank2.read(offset - 0x20),
-                _ => 0,
+                _ => {
+                    crate::census_reg!("exti:Exti", offset, "read");
+                    0
+                }
             },
         }
     }
@@ -231,7 +242,9 @@ impl Exti {
             Self::Stm32L4(e) => match offset {
                 0x00..=0x14 => e.bank1.write(offset, value, L4Exti::MASK1),
                 0x20..=0x34 => e.bank2.write(offset - 0x20, value, L4Exti::MASK2),
-                _ => {}
+                _ => {
+                    crate::census_reg!("exti:Exti", offset, "write");
+                }
             },
         }
     }

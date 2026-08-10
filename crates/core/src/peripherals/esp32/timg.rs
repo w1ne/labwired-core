@@ -402,7 +402,9 @@ impl Timg {
                 self.regs.insert(INT_RAW, raw & !mask);
             }
             RTCCALICFG => self.maybe_complete_rtc_calibration(),
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32.timg:Timg", word_off, "write");
+            }
         }
     }
 

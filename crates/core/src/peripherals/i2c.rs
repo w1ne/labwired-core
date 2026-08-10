@@ -340,6 +340,14 @@ impl F1I2c {
             .clone()
     }
 
+    /// The wire this controller publishes, for a
+    /// [`LogicSource::Wire`](crate::logic_capture::LogicSource::Wire) channel.
+    /// `None` until a lab wires its pads, because that is when the cell is
+    /// created — the controller has nothing to show before then either.
+    pub(crate) fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     /// Engine cycles in one SCL period, derived from CCR exactly as the legacy
     /// silicon derives it (RM0008 §26.6.8 / RM0090 §27.6.8, `I2C_CCR`):
     ///
@@ -550,7 +558,10 @@ impl F1I2c {
             }
             0x1C => self.ccr,
             0x20 => self.trise,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c:F1I2c", offset, "read");
+                0
+            }
         }
     }
 
@@ -673,7 +684,9 @@ impl F1I2c {
             // silicon-confirmed on F103.
             0x1C => self.ccr = (value as u32) & 0xCFFF,
             0x20 => self.trise = (value as u32) & 0x3F,
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c:F1I2c", offset, "write");
+            }
         }
     }
 
@@ -971,6 +984,14 @@ impl L4I2c {
             .clone()
     }
 
+    /// The wire this controller publishes, for a
+    /// [`LogicSource::Wire`](crate::logic_capture::LogicSource::Wire) channel.
+    /// `None` until a lab wires its pads, because that is when the cell is
+    /// created — the controller has nothing to show before then either.
+    pub(crate) fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     /// Engine cycles in one SCL period, from TIMINGR — exactly the derivation
     /// [`Self::address_phase_cycles`] uses, of which it takes nine.
     fn bit_time_cycles(&self) -> u64 {
@@ -1161,7 +1182,10 @@ impl L4I2c {
             0x20 => self.pecr,
             0x24 => self.rxdr,
             0x28 => self.txdr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c:L4I2c", offset, "read");
+                0
+            }
         }
     }
 
@@ -1292,7 +1316,9 @@ impl L4I2c {
                     self.tx_preloaded = true;
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c:L4I2c", offset, "write");
+            }
         }
     }
 
@@ -1627,7 +1653,10 @@ impl KinetisI2c {
             // S2: EMPTY=1 always (double-buffer TX FIFO empty) — the HAL polls
             // this before every D write on parts with double buffering.
             0x0C => 0x01,
-            _ => 0,
+            _ => {
+                crate::census_reg!("i2c:KinetisI2c", offset, "read");
+                0
+            }
         }
     }
 
@@ -1710,7 +1739,9 @@ impl KinetisI2c {
             0x09 => self.a2 = value,
             0x0A => self.slth = value,
             0x0B => self.sltl = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("i2c:KinetisI2c", offset, "write");
+            }
         }
     }
 
@@ -1872,6 +1903,23 @@ impl I2c {
 }
 
 impl crate::Peripheral for I2c {
+    fn line_names(&self) -> &'static [&'static str] {
+        match self {
+            // The Kinetis I2C model owns no narration cell, so it publishes no
+            // wire — an honest empty answer, not a guess at SCL/SDA.
+            Self::Stm32F1(_) | Self::Stm32L4(_) => I2C_LINES,
+            Self::Kinetis(_) => &[],
+        }
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        match self {
+            Self::Stm32F1(i) => i.wire_lines(),
+            Self::Stm32L4(i) => i.wire_lines(),
+            Self::Kinetis(_) => None,
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         Ok(match self {
             Self::Stm32F1(i) => i.read(offset),

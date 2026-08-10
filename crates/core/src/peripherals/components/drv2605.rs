@@ -366,7 +366,10 @@ impl Drv2605 {
             REG_CONTROL1 => self.control1,
             REG_CONTROL2 => self.control2,
             REG_CONTROL3 => self.control3,
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.drv2605:Drv2605", reg, "read");
+                0
+            }
         }
     }
 
@@ -411,7 +414,9 @@ impl Drv2605 {
             REG_CONTROL2 => self.control2 = value,
             REG_CONTROL3 => self.control3 = value,
             // Status is read-only (its diagnostic bits are latched by the part).
-            _ => {}
+            _ => {
+                crate::census_reg!("components.drv2605:Drv2605", reg, "write");
+            }
         }
     }
 }

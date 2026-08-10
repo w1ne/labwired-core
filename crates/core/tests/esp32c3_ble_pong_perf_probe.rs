@@ -56,11 +56,32 @@
 //! 2. Idle FF does not bite until ~6M cycles into boot (0 skipped at 4M).
 //!    A browser HUD reading `idle FF 0` on a lab that has only advanced a few
 //!    million cycles is reporting health, not a bug.
-//! 3. The scheduler, not the CPU, is the cost. A `sample` profile over
-//!    `probe_ble_pong_profile` put `EventScheduler::drain_due_into` (4014) and
-//!    `::schedule` (2384) against `RiscV::step` (1094) — 4.7x — because
-//!    `esp32c3::bt` leaks live events and blows out the dedup index. See the
-//!    `arm_seq` doc comment in `peripherals/esp32c3/bt.rs`.
+//! 3. ~~The scheduler, not the CPU, is the cost.~~ **NO LONGER TRUE, and the
+//!    reason it changed is the point.** That conclusion came from a `sample`
+//!    profile that put `EventScheduler::drain_due_into` (4014) and `::schedule`
+//!    (2384) against `RiscV::step` (1094) — 4.7x — because `esp32c3::bt` leaked
+//!    live events and blew out the dedup index. The `arm_seq` residency fix
+//!    removed the leak. Re-profiled 2026-08-09 on the same lab and workload:
+//!
+//!    | bucket                | share |
+//!    |-----------------------|------:|
+//!    | CPU interpret+decode  | 46.8% |
+//!    | **I²C model**         | 18.3% |
+//!    | IRQ matrix / PMS      |  9.3% |
+//!    | bus accessors         |  8.3% |
+//!    | scheduler             |  7.9% |
+//!    | **BLE (`bt`)**        |  1.6% |
+//!
+//!    The scheduler is now 7.9% and the BLE model — which this whole file is
+//!    named after — is 1.6%. The biggest single avoidable cost is
+//!    `Esp32c3I2c::chase` at 15.4%, entered once per I²C wire EDGE (~18 000
+//!    scheduler events per 1 KiB OLED frame).
+//!
+//!    ⚠️ Do NOT rank this by event count. `i2c0` owns 67% of all scheduler arms
+//!    but 18% of the wall clock, and deleting the OLED outright buys 1.14x.
+//!    Use `labwired_core::profile`, which measures nanoseconds — see
+//!    `probe_ble_pong_in_core_profile` below, which cross-checks it against an
+//!    external `sample` run of this same probe.
 //!
 //! ## 2026-08-08: is there a fixed per-call cost of `step_batch` on an
 //! ## air-attached chip? NO. Measured, native AND wasm.
@@ -362,6 +383,27 @@ fn probe_ble_pong_idle_ff() {
 #[ignore = "measurement probe, not a gate"]
 fn probe_ble_pong_profile() {
     probe("profile", true, 1_000_000, 400_000_000);
+}
+
+/// Cross-check `labwired_core::profile` against an external `sample` run of
+/// the SAME lab. The in-core instrument is only worth having if it agrees with
+/// a profiler that shares none of its assumptions.
+#[test]
+#[ignore = "measurement probe, not a gate"]
+fn probe_ble_pong_in_core_profile() {
+    let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin")).unwrap();
+    let mut a = build_node(&flash, true);
+    let mut b = build_node(&flash, true);
+    labwired_core::profile::start();
+    let mut fuel = 0u64;
+    while fuel < 400_000_000 {
+        for node in [&mut a, &mut b] {
+            let _ = node.machine.run(Some(1_000_000));
+        }
+        fuel += 1_000_000;
+    }
+    labwired_core::profile::stop();
+    eprintln!("{}", a.machine.profile_report().render());
 }
 
 /// Where in the boot does idle FF first bite? The browser HUD reads

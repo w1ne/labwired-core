@@ -1,13 +1,17 @@
 [
   {
     "buses": [
-      "I2C"
+      "I2C",
+      "SPI",
+      "UART"
     ],
     "name": "esp32"
   },
   {
     "buses": [
-      "I2C"
+      "I2C",
+      "SPI",
+      "UART"
     ],
     "name": "esp32c3"
   },
@@ -61,7 +65,9 @@
   },
   {
     "buses": [
-      "SPI"
+      "I2C",
+      "SPI",
+      "UART"
     ],
     "name": "stm32f103"
   },
@@ -124,6 +130,7 @@
   {
     "buses": [
       "I2C",
+      "SPI",
       "UART"
     ],
     "name": "stm32h563"
@@ -131,6 +138,7 @@
   {
     "buses": [
       "I2C",
+      "SPI",
       "UART"
     ],
     "name": "stm32h735"
@@ -162,6 +170,7 @@
   {
     "buses": [
       "I2C",
+      "SPI",
       "UART"
     ],
     "name": "stm32wba52"

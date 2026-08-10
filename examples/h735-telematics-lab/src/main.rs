@@ -21,18 +21,51 @@ use panic_halt as _;
 
 // ── Bases (configs/chips/stm32h735.yaml) ───────────────────────────────────
 const RCC_BASE: u32 = 0x5802_4400;
+const RCC_AHB4ENR: u32 = RCC_BASE + 0xE0;
 const RCC_APB1LENR: u32 = RCC_BASE + 0xE8;
 const RCC_APB2ENR: u32 = RCC_BASE + 0xF0;
 
 const GPIOA_BASE: u32 = 0x5802_0000;
+const GPIOB_BASE: u32 = 0x5802_0400;
+
+// stm32v2 GPIO: MODER @ 0x00, OTYPER @ 0x04, OSPEEDR @ 0x08, PUPDR @ 0x0C,
+// AFR[0] @ 0x20 (pins 0-7), AFR[1] @ 0x24 (pins 8-15).
+const GPIO_MODER: u32 = 0x00;
+const GPIO_OTYPER: u32 = 0x04;
+const GPIO_OSPEEDR: u32 = 0x08;
+const GPIO_PUPDR: u32 = 0x0C;
+const GPIO_AFR: u32 = 0x20;
 
 const USART3_BASE: u32 = 0x4000_4800; // console
 const USART1_BASE: u32 = 0x4001_1000; // modem
 const SPI1_BASE: u32 = 0x4001_3000; // TFT
 
-// stm32v2 UART: ISR @ 0x1C, RDR @ 0x24, TDR @ 0x28
+// stm32v2 UART: CR1 @ 0x00, BRR @ 0x0C, ISR @ 0x1C, RDR @ 0x24, TDR @ 0x28
+const USART_CR1: u32 = 0x00;
+const USART_BRR: u32 = 0x0C;
+const CR1_UE: u32 = 1 << 0;
+const CR1_RE: u32 = 1 << 2;
+const CR1_TE: u32 = 1 << 3;
 const ISR_TXE: u32 = 1 << 7;
 const ISR_RXNE: u32 = 1 << 5;
+
+/// 115200 8N1. This firmware never touches the PLL, so the core and the APB
+/// buses stay on the HSI reset clock: the H735 "system starts on the HSI clock"
+/// (DS13312 Rev 4, §3.10.1, p30), HSI is 64 MHz (same page, Table 40 p151), and
+/// RCC_CR resets with HSIDIV = 00 (÷1) per configs/peripherals/stm32h735/rcc.yaml.
+/// Under the default 16× oversampling BRR IS USARTDIV (RM0468 §51.8.4):
+///
+///   USARTDIV = 64_000_000 / 115_200 = 555.6 → 556
+///   actual baud = 64_000_000 / 556 = 115_107.9 (−0.08%)
+///
+/// Left at its 0 reset the divisor is invalid, not slow: there is no bit period,
+/// so nothing can be placed on the wire for a probe to see.
+const BRR_115200: u32 = 556;
+
+/// PA9 = USART1_TX, PA10 = USART1_RX, both AF7 — STM32H735xG datasheet DS13312
+/// Rev 4, Table 9 "pin alternate functions", port A, p97.
+/// PB10 = USART3_TX, PB11 = USART3_RX, both AF7 — same table, port B, p99.
+const AF7: u32 = 7;
 
 // SPI v2 (stm32h5): CR1, CR2, CFG1, CFG2, SR, IFCR, TXDR
 const H5_SPE: u32 = 1;
@@ -54,6 +87,61 @@ fn wr32(addr: u32, value: u32) {
 fn spin(n: u32) {
     for i in 0..n {
         core::hint::black_box(i);
+    }
+}
+
+// ── Serial pads ────────────────────────────────────────────────────────────
+
+/// Hand one pad to a USART: MODER = 10 (alternate function), push-pull, very
+/// high speed, no pull, and the AF nibble into AFR[pin / 8].
+///
+/// The AF nibble is the field that actually connects the pad to the peripheral.
+/// Without it the pin stays a plain GPIO, so a logic probe reads the output
+/// latch — a flat line — while the byte-level bus monitor decodes the same
+/// traffic perfectly. Both views are then "working" and they disagree.
+fn pad_af(gpio_base: u32, pin: u32, af: u32) {
+    let shift = pin * 2;
+    let moder = rd32(gpio_base + GPIO_MODER);
+    wr32(
+        gpio_base + GPIO_MODER,
+        (moder & !(0b11 << shift)) | (0b10 << shift),
+    );
+    wr32(
+        gpio_base + GPIO_OTYPER,
+        rd32(gpio_base + GPIO_OTYPER) & !(1 << pin),
+    );
+    wr32(
+        gpio_base + GPIO_OSPEEDR,
+        rd32(gpio_base + GPIO_OSPEEDR) | (0b11 << shift),
+    );
+    wr32(
+        gpio_base + GPIO_PUPDR,
+        rd32(gpio_base + GPIO_PUPDR) & !(0b11 << shift),
+    );
+    let afr = gpio_base + GPIO_AFR + (pin >> 3) * 4;
+    let nib = (pin & 7) * 4;
+    wr32(afr, (rd32(afr) & !(0xF << nib)) | (af << nib));
+}
+
+/// Mux both UARTs onto their pads and give each one a real bit period.
+///
+/// The H7 USART kernel clock needs no selection here: RCC_D2CCIP2R resets to 0,
+/// which is rcc_pclk2 for USART1 and rcc_pclk1 for USART3 (RM0468 §9.7.21) —
+/// the buses this firmware already leaves at their reset rate.
+fn uart_pads_init() {
+    // GPIOA (bit 0) + GPIOB (bit 1) on AHB4 — MODER/AFR are dead until the port
+    // is clocked (RM0468 §9.7.43).
+    wr32(RCC_AHB4ENR, rd32(RCC_AHB4ENR) | (1 << 0) | (1 << 1));
+
+    pad_af(GPIOA_BASE, 9, AF7); // USART1_TX → modem
+    pad_af(GPIOA_BASE, 10, AF7); // USART1_RX → modem
+    pad_af(GPIOB_BASE, 10, AF7); // USART3_TX → console
+    pad_af(GPIOB_BASE, 11, AF7); // USART3_RX → console
+
+    for base in [USART1_BASE, USART3_BASE] {
+        wr32(base + USART_CR1, 0);
+        wr32(base + USART_BRR, BRR_115200);
+        wr32(base + USART_CR1, CR1_UE | CR1_TE | CR1_RE);
     }
 }
 
@@ -449,6 +537,7 @@ fn main() -> ! {
     // Enable USART3 (APB1 bit 18) + USART1 (APB2 bit 4) + SPI1 (APB2 bit 12).
     wr32(RCC_APB1LENR, rd32(RCC_APB1LENR) | (1 << 18));
     wr32(RCC_APB2ENR, rd32(RCC_APB2ENR) | (1 << 4) | (1 << 12));
+    uart_pads_init();
 
     console_str("LabWired telematics / H735 + modem + TFT\r\n");
     console_str("Stand-in: BG770A AT model (not production modem)\r\n\r\n");

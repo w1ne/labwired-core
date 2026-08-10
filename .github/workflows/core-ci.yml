@@ -290,6 +290,8 @@ jobs:
           {
             echo "### Formatting: FAILED"
             echo
+            # shellcheck disable=SC2016  # backticks here are Markdown code
+            # spans for the step summary, not command substitution.
             echo 'Run `cargo +1.95.0 fmt --all` and push. The autofix job could not do it for you on this run.'
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
@@ -576,19 +578,26 @@ jobs:
 
       # The BLE Pong fixture is a COMMITTED copy of a published community lab,
       # and `world_esp32c3_ble_pong` (release-only, push-to-main) is the only
-      # thing that boots it. Both checks are cheap enough to run here so a PR
-      # that touches the sketch is told BEFORE the merge, not after.
-      #
-      #   * the cargo test hashes the committed .ino/.bin pair, so neither can
-      #     move without the other;
-      #   * the drift script asks api.labwired.com whether the OWNER has since
-      #     edited the live project. Nothing in-tree can know that, and not
-      #     knowing it is how the fixture sat at the #828 build while the
-      #     published lab moved on and three gates stayed green.
+      # thing that boots it. This hashes the committed .ino/.bin pair, so
+      # neither can move without the other. It is pure in-tree consistency:
+      # no network, and a PR that touches the sketch is told before the merge.
       - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
         run: cargo test -p labwired-core --test fixture_ble_pong_provenance
-      - name: BLE Pong fixture drift (committed .ino ↔ LIVE published lab)
-        run: scripts/ci/check-published-lab-drift.sh
+
+      # The LIVE-published-lab drift check deliberately does NOT run here.
+      #
+      # It asks api.labwired.com whether the owner has since edited the live
+      # project. That is a useful thing to know, but it is not a property of
+      # the pull request: a published lab is a living product artifact and is
+      # SUPPOSED to change. Asserting it as a required merge gate meant one
+      # ordinary lab edit blocked every PR in the repo — which is exactly what
+      # happened, blocking four unrelated PRs at once — and it also put a
+      # third-party network call on the critical path of every merge.
+      #
+      # It still runs on push-to-main and on the nightly cron (see
+      # `core-integrity`), where a lab edit reports a finding instead of
+      # halting the repo. That lane is what catches the case no PR causes:
+      # the owner editing the live project between merges.
 
   # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
   #
@@ -830,10 +839,13 @@ jobs:
       # same address" hid.
       # Run the drift check BEFORE the release-gated world test below, so a red
       # lane says "the published lab moved" rather than leaving someone to infer
-      # it from a two-node BLE failure. `pr-gate` runs this too; keeping it here
-      # is what covers the case nobody's PR causes — the owner editing the live
-      # project between merges. On push-to-main and on the nightly cron this is
-      # the only lane that looks at production at all.
+      # it from a two-node BLE failure. This is now the ONLY lane that runs it —
+      # `pr-gate` deliberately does not, because a published lab is supposed to
+      # change and one edit there blocked every PR in the repo. Here it is a
+      # monitor rather than a merge gate, and it covers the case nobody's PR
+      # causes: the owner editing the live project between merges. On
+      # push-to-main and on the nightly cron this is the only lane that looks
+      # at production at all.
       - name: BLE Pong fixture drift (committed .ino ↔ LIVE published lab)
         run: scripts/ci/check-published-lab-drift.sh
 

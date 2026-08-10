@@ -143,7 +143,10 @@ impl F1Gpio {
             0x08 => self.effective_idr(),
             0x0C => self.odr,
             0x18 => self.lckr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("gpio:F1Gpio", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -163,7 +166,9 @@ impl F1Gpio {
                 self.odr &= !(value & 0xFFFF);
             }
             0x18 => self.lckr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("gpio:F1Gpio", offset, "write");
+            }
         }
     }
 }
@@ -223,7 +228,10 @@ impl V2Gpio {
             0x1C => self.lckr,
             0x20 => self.afrl,
             0x24 => self.afrh,
-            _ => 0,
+            _ => {
+                crate::census_reg!("gpio:V2Gpio", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -248,7 +256,9 @@ impl V2Gpio {
                 // BRR: reset selected ODR bits.
                 self.odr &= !(value & 0xFFFF);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("gpio:V2Gpio", offset, "write");
+            }
         }
     }
 }
@@ -314,7 +324,10 @@ impl Nrf52Gpio {
                     0
                 }
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("gpio:Nrf52Gpio", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -345,7 +358,9 @@ impl Nrf52Gpio {
                     }
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("gpio:Nrf52Gpio", offset, "write");
+            }
         }
     }
 }
@@ -366,7 +381,10 @@ impl KinetisGpio {
             0x00 => self.pdor,
             0x10 => self.pdir,
             0x14 => self.pddr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("gpio:KinetisGpio", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -376,7 +394,9 @@ impl KinetisGpio {
             0x08 => self.pdor &= !value, // PCOR: clear 1s
             0x0C => self.pdor ^= value,  // PTOR: toggle
             0x14 => self.pddr = value,   // PDDR
-            _ => {}
+            _ => {
+                crate::census_reg!("gpio:KinetisGpio", offset, "write");
+            }
         }
     }
 }
@@ -739,10 +759,22 @@ impl GpioPort {
     ///
     /// V2: `MODER` must select AF, and the answer is the `AFRL`/`AFRH` nibble.
     /// F1: the pad is an AF output when `MODE != 0` and `CNF >= 0b10`; the
-    /// mapping is fixed (no AFIO remap modelled) so the value carries no
-    /// information and any bound route matches. F1 MISO — an input-mode pad on
-    /// real silicon — is intentionally NOT routed, so a plain GPIO input on
-    /// that pin never silently reads the SPI wire.
+    /// mapping is fixed so the value carries no information and any bound route
+    /// matches. F1 MISO — an input-mode pad on real silicon — is intentionally
+    /// NOT routed, so a plain GPIO input on that pin never silently reads the
+    /// SPI wire.
+    ///
+    /// ⚠️ "Fixed" means AFIO REMAP IS NOT CONSULTED, which is a narrower claim
+    /// than "AFIO is not modelled". [`crate::peripherals::afio::Afio`] does
+    /// model `MAPR`: it stores bits [15:0] and reads them back, silicon-checked
+    /// on the bench F103. Nothing DECODES them. This function reads CRL/CRH and
+    /// nothing else, so a route bound to a remap-only pad would be live the
+    /// moment firmware made that pad any alternate-function output — including
+    /// for its own default function. That is why the F1 tables in
+    /// `SystemBus::wire_stm32_i2c_pads` and `wire_stm32_uart_pads` bind
+    /// DEFAULT-column pads only, and a remapped F103 bus is dark rather than
+    /// wrong. Closing that gap means feeding `MAPR` in here as a second
+    /// selector input.
     ///
     /// nRF52: the port HAS no such register — Nordic muxes at the peripheral,
     /// which names its pin in `PSEL.*`. The answer therefore comes from the

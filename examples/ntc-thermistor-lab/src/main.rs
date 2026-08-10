@@ -13,10 +13,22 @@ const ADC1_CR1: *mut u32 = (ADC1_BASE + 0x04) as *mut u32;
 const ADC1_CR2: *mut u32 = (ADC1_BASE + 0x08) as *mut u32;
 const ADC1_DR: *const u32 = (ADC1_BASE + 0x4C) as *const u32;
 
+// RCC base: 0x4002_1000
+const RCC_BASE: u32 = 0x4002_1000;
+const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
+const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
+
+// GPIOA CRL — the F1 pad mux for PA0..PA7. Four bits per pin, MODE[1:0] then
+// CNF[1:0]. This family has no `MODER` and no `AFR`, so there is no AF number
+// to write: a pin's alternate function is fixed by the pin.
+const GPIOA_CRL: *mut u32 = (0x4001_0800 + 0x00) as *mut u32;
+
 // USART2 base: 0x4000_4400 (debug output)
 const UART2_BASE: u32 = 0x4000_4400;
 const UART2_SR: *const u32 = (UART2_BASE + 0x00) as *const u32;
 const UART2_DR: *mut u32 = (UART2_BASE + 0x04) as *mut u32;
+const UART2_BRR: *mut u32 = (UART2_BASE + 0x08) as *mut u32;
+const UART2_CR1: *mut u32 = (UART2_BASE + 0x0C) as *mut u32;
 
 const SR_EOC: u32 = 1 << 1; // End of conversion
 const SR_TXE: u32 = 1 << 7; // UART TX empty
@@ -79,6 +91,43 @@ fn adc1_read() -> u16 {
     }
 }
 
+/// Clock USART2, mux PA2 to `USART2_TX`, and give the transmitter a divisor.
+///
+/// This lab used to write `UART2_DR` with no setup at all. That transmits on
+/// LabWired's permissive USART model and nowhere else: PA2 stays the floating
+/// input it is after reset, so the pad route never goes live and a logic
+/// analyzer on PA2 reads the GPIO latch — a flat line — while the
+/// transaction-level bus monitor decodes the same traffic fine. A zero `BRR` is
+/// the other half: with no divisor there is no bit period, so there is nothing
+/// to narrate even once a route exists.
+///
+/// * PA2 = `USART2_TX` in the **Default** alternate-function column
+///   (DS5319 Rev 20, Table 5, p.29), so no AFIO remap is involved.
+/// * The `CRL` nibble for PA2 is bits [11:8]. `0xB` = MODE `0b11` (output,
+///   50 MHz) + CNF `0b10` (alternate-function push-pull).
+/// * `BRR` = f_PCLK1 / baud at the default 16× oversampling. This firmware
+///   never touches the PLL, so the part runs on the 8 MHz HSI it selects at
+///   reset (DS5319 Rev 20 §2.3.7, p.15) with an APB1 prescaler of 1:
+///   8_000_000 / 115_200 = 69.44 → 69 = 0x45.
+/// * `CR1` = UE (bit 13) | TE (bit 3): transmit only, no interrupts.
+///
+/// AFIOEN (APB2 bit 0) and IOPAEN (bit 2) come first — without IOPAEN the GPIO
+/// port is held in reset and the `CRL` write below would be swallowed.
+fn uart2_init() {
+    unsafe {
+        let apb2 = core::ptr::read_volatile(RCC_APB2ENR);
+        core::ptr::write_volatile(RCC_APB2ENR, apb2 | (1 << 0) | (1 << 2)); // AFIOEN | IOPAEN
+        let apb1 = core::ptr::read_volatile(RCC_APB1ENR);
+        core::ptr::write_volatile(RCC_APB1ENR, apb1 | (1 << 17)); // USART2EN
+
+        let crl = core::ptr::read_volatile(GPIOA_CRL);
+        core::ptr::write_volatile(GPIOA_CRL, (crl & !(0xF << 8)) | (0xB << 8));
+
+        core::ptr::write_volatile(UART2_BRR, 0x45);
+        core::ptr::write_volatile(UART2_CR1, (1 << 13) | (1 << 3));
+    }
+}
+
 /// Configure ADC1 channel 0.
 fn adc1_init() {
     unsafe {
@@ -93,6 +142,8 @@ fn adc1_init() {
 
 #[entry]
 fn main() -> ! {
+    uart2_init();
+
     uart2_str("NTC Thermistor Lab\r\n");
     uart2_str("ADC1 ch0 -> 12-bit count (0..4095)\r\n");
     uart2_str("Slide the temperature slider in the inspector to see the count change.\r\n");

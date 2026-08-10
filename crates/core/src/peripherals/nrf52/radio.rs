@@ -919,7 +919,10 @@ impl Peripheral for Nrf52Radio {
             OFF_CCACTRL => self.ccactrl,
             OFF_POWER => 1, // peripheral powered
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.radio:Nrf52Radio", offset, "read");
+                0
+            }
         })
     }
 
@@ -1021,7 +1024,7 @@ impl Peripheral for Nrf52Radio {
             OFF_CCACTRL => self.ccactrl = value,
             OFF_POWER => {} // RW but we ignore power state
 
-            _ => {}
+            _ => { crate::census_reg!("nrf52.radio:Nrf52Radio", offset, "write"); }
         }
         Ok(())
     }

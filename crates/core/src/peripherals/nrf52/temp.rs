@@ -72,7 +72,10 @@ impl Peripheral for Nrf52Temp {
             OFF_CAL_FIRST..=OFF_CAL_LAST if offset.is_multiple_of(4) => {
                 self.cal[((offset - OFF_CAL_FIRST) / 4) as usize]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.temp:Nrf52Temp", offset, "read");
+                0
+            }
         })
     }
 
@@ -96,7 +99,9 @@ impl Peripheral for Nrf52Temp {
             OFF_CAL_FIRST..=OFF_CAL_LAST if offset.is_multiple_of(4) => {
                 self.cal[((offset - OFF_CAL_FIRST) / 4) as usize] = value;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.temp:Nrf52Temp", offset, "write");
+            }
         }
         Ok(())
     }

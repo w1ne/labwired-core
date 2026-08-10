@@ -138,7 +138,9 @@ impl Peripheral for Esp32s3Sha {
         match off {
             START if value != 0 => self.run_block(true),
             CONTINUE if value != 0 => self.run_block(false),
-            _ => {}
+            _ => {
+                crate::census_reg!("esp32s3.sha:Esp32s3Sha", off, "write");
+            }
         }
         // START/CONTINUE auto-clear (the firmware polls BUSY, not these).
         if off == START || off == CONTINUE {

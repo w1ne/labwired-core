@@ -234,7 +234,10 @@ impl Peripheral for Esp32s3Ledc {
                 CH_DUTY => self.ch_duty[ch],
                 CH_CONF1 => self.ch_conf1[ch],
                 CH_DUTY_R => self.ch_duty_r[ch],
-                _ => 0,
+                _ => {
+                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "read");
+                    0
+                }
             };
             return Ok(v);
         }
@@ -244,7 +247,10 @@ impl Peripheral for Esp32s3Ledc {
                 // VALUE is the live counter. We don't run the PWM clock, so the
                 // count reads 0; firmware uses it only for diagnostics.
                 TIMER_VALUE => 0,
-                _ => 0,
+                _ => {
+                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "read");
+                    0
+                }
             };
             return Ok(v);
         }
@@ -255,7 +261,10 @@ impl Peripheral for Esp32s3Ledc {
             REG_INT_CLR => 0, // write-only semantics; reads as 0
             REG_CONF => self.conf,
             REG_DATE => self.date,
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", offset, "read");
+                0
+            }
         };
         Ok(v)
     }
@@ -284,7 +293,9 @@ impl Peripheral for Esp32s3Ledc {
                     }
                 }
                 CH_DUTY_R => {} // read-only
-                _ => {}
+                _ => {
+                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "write");
+                }
             }
             return Ok(());
         }
@@ -292,7 +303,9 @@ impl Peripheral for Esp32s3Ledc {
             match reg {
                 TIMER_CONF => self.timer_conf[t] = value,
                 TIMER_VALUE => {} // read-only counter
-                _ => {}
+                _ => {
+                    crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", reg, "write");
+                }
             }
             return Ok(());
         }
@@ -306,7 +319,9 @@ impl Peripheral for Esp32s3Ledc {
             REG_INT_ST => {} // read-only (INT_RAW & INT_ENA)
             REG_CONF => self.conf = value,
             REG_DATE => self.date = value,
-            _ => {} // accept-and-ignore (reserved/timing regs)
+            _ => {
+                crate::census_reg!("esp32s3.ledc:Esp32s3Ledc", offset, "write");
+            } // accept-and-ignore (reserved/timing regs)
         }
         Ok(())
     }

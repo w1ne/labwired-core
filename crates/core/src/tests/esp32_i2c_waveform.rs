@@ -19,6 +19,7 @@
 #[cfg(test)]
 mod esp32_i2c_waveform_tests {
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::esp32::gpio::Esp32Gpio;
     use crate::peripherals::esp32::i2c::Esp32I2c;
     use crate::peripherals::i2c::I2cDevice;
@@ -190,7 +191,10 @@ mod esp32_i2c_waveform_tests {
         configure(&mut machine);
 
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
-        let initial = machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, SDA_PIN))]);
+        let initial = machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+        ]);
         assert_eq!(
             initial,
             vec![Some(true), Some(true)],
@@ -224,7 +228,10 @@ mod esp32_i2c_waveform_tests {
         configure(&mut machine);
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
         const UNRELATED: u8 = 4;
-        machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, UNRELATED))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, UNRELATED)),
+        ]);
         for _ in 0..80_000 {
             machine.step().unwrap();
         }
@@ -249,7 +256,10 @@ mod esp32_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
-        machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+        ]);
         for _ in 0..80_000 {
             machine.step().unwrap();
         }
@@ -287,7 +297,10 @@ mod esp32_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let gpio_idx = machine.bus.find_peripheral_index_by_name("gpio").unwrap();
-        machine.logic_watch(&[Some((gpio_idx, SCL_PIN)), Some((gpio_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio_idx, SCL_PIN)),
+            Some(LogicSource::pad(gpio_idx, SDA_PIN)),
+        ]);
         for _ in 0..80_000 {
             machine.step().unwrap();
         }

@@ -172,7 +172,10 @@ impl RccModel for F1Rcc {
             0x20 => self.bdcr,
             0x24 => self.csr,
             0x28 => self.ahbrstr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:F1Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -217,7 +220,9 @@ impl RccModel for F1Rcc {
                 };
             }
             0x28 => self.ahbrstr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:F1Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -286,7 +291,10 @@ impl RccModel for F4Rcc {
             0x40 => self.apb1enr,
             0x44 => self.apb2enr,
             0x74 => self.csr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:F4Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -328,7 +336,9 @@ impl RccModel for F4Rcc {
                     value & !(1 << 1)
                 };
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:F4Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -488,7 +498,10 @@ impl RccModel for V2Rcc {
             0xF0 => self.bdcr1,
             // STM32WB EXTCFGR — dual-core AHB prescalers (CPU2 / shared domain).
             0x108 => self.extcfgr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:V2Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -594,7 +607,9 @@ impl RccModel for V2Rcc {
                 }
                 self.bdcr1 = v;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:V2Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -710,7 +725,10 @@ impl RccModel for H5Rcc {
             0xA8 => self.apb3enr,
             0xF0 => self.bdcr,
             0xF4 => self.rsr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:H5Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -782,7 +800,9 @@ impl RccModel for H5Rcc {
             // clears them via RMVF (bit 23, silicon-probed) — other writes
             // fall through to the no-op default.
             0xF4 if value & (1 << 23) != 0 => self.rsr = 0,
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:H5Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -976,7 +996,10 @@ impl RccModel for H7Rcc {
             0xEC => self.apb1henr,
             0xF0 => self.apb2enr,
             0xF4 => self.apb4enr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:H7Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -1066,7 +1089,9 @@ impl RccModel for H7Rcc {
             0xEC => self.apb1henr = value,
             0xF0 => self.apb2enr = value,
             0xF4 => self.apb4enr = value,
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:H7Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -1170,7 +1195,10 @@ impl RccModel for L4Rcc {
             0x60 => self.apb2enr,
             0x90 => self.bdcr,
             0x94 => self.csr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:L4Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -1219,7 +1247,9 @@ impl RccModel for L4Rcc {
                     value & !(1 << 1)
                 };
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:L4Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -1282,7 +1312,10 @@ impl RccModel for L0Rcc {
             0x34 => self.apb2enr,
             0x38 => self.apb1enr,
             0x50 => self.csr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:L0Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -1329,7 +1362,9 @@ impl RccModel for L0Rcc {
                     value & !(1 << 1)
                 };
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:L0Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {
@@ -1409,7 +1444,10 @@ impl RccModel for G4Rcc {
             0x90 => self.bdcr,
             0x94 => self.csr,
             0x98 => self.crrcr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rcc:G4Rcc", offset, "read");
+                0
+            }
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
@@ -1466,7 +1504,9 @@ impl RccModel for G4Rcc {
                     value & !(1 << 1)
                 };
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rcc:G4Rcc", offset, "write");
+            }
         }
     }
     fn snapshot(&self) -> serde_json::Value {

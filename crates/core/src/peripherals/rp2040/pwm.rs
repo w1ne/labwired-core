@@ -239,7 +239,10 @@ impl Peripheral for Rp2040Pwm {
             INTE => self.inte as u32,
             INTF => self.intf as u32,
             INTS => self.ints() as u32,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.pwm:Rp2040Pwm", offset, "read");
+                0
+            }
         })
     }
 
@@ -280,7 +283,9 @@ impl Peripheral for Rp2040Pwm {
             INTR => self.intr &= !(value as u8),
             INTE => self.inte = value as u8,
             INTF => self.intf = value as u8,
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.pwm:Rp2040Pwm", offset, "write");
+            }
         }
         Ok(())
     }

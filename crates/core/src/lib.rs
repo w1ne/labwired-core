@@ -7,6 +7,7 @@
 
 pub mod boot;
 pub mod bus;
+pub mod census;
 pub mod config;
 pub mod console;
 pub mod cosim;
@@ -27,6 +28,7 @@ pub mod pc_coverage;
 pub mod peripherals;
 pub mod physics;
 pub mod plugin;
+pub mod profile;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod signals;
@@ -685,6 +687,41 @@ pub trait Peripheral: std::fmt::Debug + Send {
         _watched: &[(u8, u32)],
     ) -> bool {
         false
+    }
+
+    /// Wire capability: this peripheral's OWN line names, in a stable order.
+    ///
+    /// The POSITION of a name here IS the `line` index of a
+    /// [`LogicSource::Wire`](crate::logic_capture::LogicSource::Wire) channel,
+    /// so the order is part of the contract and may never be permuted — doing
+    /// so would silently re-point every armed wire probe at a different signal.
+    /// Names are the datasheet's role labels (`"TX"`, `"SCL"`, `"SCK"`), and
+    /// resolution through [`Machine::resolve_wire_source`] ignores case.
+    ///
+    /// `&[]` — the default — means "this model publishes no wire", and is what
+    /// makes a wire probe on it a clear error instead of a silent channel zero.
+    ///
+    /// This is deliberately independent of [`Self::wire_lines`]: the names are
+    /// a property of the silicon and are known before any lab wires a pad,
+    /// while the cell they describe may not exist yet.
+    fn line_names(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    /// Wire capability: the narration cell this peripheral publishes into.
+    ///
+    /// This is the SAME cell a routed pad reads through
+    /// [`PadRoutes`](crate::peripherals::pad_routing::PadRoutes) — one wire,
+    /// one home. A wire channel registers on it directly, so it captures
+    /// whether or not any pad is muxed to the signal.
+    ///
+    /// `None` — the default — is the honest answer both for a model that owns
+    /// no wire at all and for one whose cell is created lazily at pad-wiring
+    /// time and has not been created. Levels published here must always be the
+    /// state of the WIRE (for an open-drain bus, the wired-AND of every
+    /// driver), never of a register.
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        None
     }
 
     /// Bus-aware tick hook for peripherals that need to read or write the
@@ -1578,6 +1615,18 @@ pub struct Machine<C: Cpu> {
     /// differential oracle tests use to compare the two capture modes; it is
     /// NOT user-facing configuration.
     logic_force_poll: bool,
+    /// What the WIRE half of the last watch set registered on each
+    /// peripheral's [`PadLines`](crate::peripherals::pad_lines::PadLines), as
+    /// `(peripheral index, channels per line)`.
+    ///
+    /// Remembered because a wire cell can also hold a PAD route's channel
+    /// registrations — the same USART watched on PA2 and on its own `TX` line
+    /// at once — and `PadLines::install_tap` would erase them. The arm path
+    /// therefore MERGES, which needs to know what it itself put there last
+    /// time so it can take exactly that back and nothing else. Same hazard
+    /// [`PadRoutes::sync_taps`](crate::peripherals::pad_routing::PadRoutes::sync_taps)
+    /// documents from the pad side, same fix.
+    logic_wire_taps: Vec<(usize, Vec<Vec<u32>>)>,
 
     /// Cached bus index of the chip's authoritative simulated-µs source (first
     /// peripheral whose [`Peripheral::sim_time_us`] answers `Some` — the ESP32
@@ -1654,25 +1703,44 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Install a logic-analyzer watch set, resetting the capture buffer and
-    /// cursor. `resolved[i]` is `Some((peripheral_index, pin))` for a
-    /// resolvable GPIO ref or `None` for an unresolvable one (never sampled).
-    /// Returns each channel's initial pad level (`None` = unknown), same order
-    /// as `resolved`, so the caller can seed the waveform before the first
-    /// edge. Passing an empty slice disarms capture.
+    /// cursor. `resolved[i]` is `Some(source)` for a resolvable ref — a
+    /// [`LogicSource::Pad`](logic_capture::LogicSource::Pad) or a
+    /// [`LogicSource::Wire`](logic_capture::LogicSource::Wire) — or `None` for
+    /// an unresolvable one (never sampled). Returns each channel's initial
+    /// level (`None` = unknown), same order as `resolved`, so the caller can
+    /// seed the waveform before the first edge. Passing an empty slice disarms
+    /// capture.
     ///
     /// Each resolvable channel is armed in one of two modes: push
-    /// (event-driven — the owning peripheral accepted
-    /// [`Peripheral::install_logic_tap`] and reports pad writes itself) or the
-    /// per-cycle poll fallback. See [`crate::logic_capture`].
-    pub fn logic_watch(&mut self, resolved: &[Option<(usize, u8)>]) -> Vec<Option<bool>> {
-        // Group the watch set per owning peripheral as (pin, channel) pairs.
+    /// (event-driven — for a pad, the owning peripheral accepted
+    /// [`Peripheral::install_logic_tap`] and reports pad writes itself; for a
+    /// wire, this method registers the channel on the peripheral's own
+    /// [`PadLines`](crate::peripherals::pad_lines::PadLines)) or the per-cycle
+    /// poll fallback. See [`crate::logic_capture`].
+    ///
+    /// Push is not an optimisation for a wire channel, it is the only correct
+    /// mode: a transaction-level model narrates a whole finished burst through
+    /// [`PadLines::set_line_at`](crate::peripherals::pad_lines::PadLines::set_line_at)
+    /// in one call, so a per-cycle poller would see only the LAST level of the
+    /// burst and every intermediate edge would be lost.
+    pub fn logic_watch(
+        &mut self,
+        resolved: &[Option<logic_capture::LogicSource>],
+    ) -> Vec<Option<bool>> {
+        use logic_capture::LogicSource;
+
+        // Group the PAD half of the watch set per owning peripheral as
+        // (pin, channel) pairs. Wire channels are handled below, and are
+        // deliberately not offered to `install_logic_tap`: that hook is about
+        // pads, and a peripheral answering it must not have to guess which of
+        // its own lines a pin number meant.
         let mut per_peripheral: std::collections::HashMap<usize, Vec<(u8, u32)>> =
             std::collections::HashMap::new();
         if !self.logic_force_poll {
             for (ch, r) in resolved.iter().enumerate() {
-                if let Some((idx, pin)) = *r {
+                if let Some(LogicSource::Pad { peripheral, pin }) = *r {
                     per_peripheral
-                        .entry(idx)
+                        .entry(peripheral)
                         .or_default()
                         .push((pin, ch as u32));
                 }
@@ -1695,16 +1763,71 @@ impl<C: Cpu> Machine<C> {
             }
         }
 
+        // ── The WIRE half ───────────────────────────────────────────────────
+        // AFTER the pad pass, never before. A GPIO port with no watched pin
+        // clears the pad-route taps on the very cells wire channels register
+        // on (`PadRoutes::clear_taps`), and ports are visited in bus-index
+        // order — registering first would simply be erased by a later port.
+        let mut wire_now: std::collections::HashMap<usize, Vec<Vec<u32>>> =
+            std::collections::HashMap::new();
+        if !self.logic_force_poll {
+            for (ch, r) in resolved.iter().enumerate() {
+                let Some(LogicSource::Wire { peripheral, line }) = *r else {
+                    continue;
+                };
+                let Some(width) = self
+                    .bus
+                    .peripherals
+                    .get(peripheral)
+                    .and_then(|p| p.dev.wire_lines())
+                    .map(|lines| lines.names().len())
+                else {
+                    continue;
+                };
+                let slot = wire_now
+                    .entry(peripheral)
+                    .or_insert_with(|| vec![Vec::new(); width]);
+                if let Some(channels) = slot.get_mut(line) {
+                    channels.push(ch as u32);
+                    push[ch] = true;
+                }
+            }
+        }
+        // Take back exactly what the previous watch set registered here and
+        // install what this one wants — including on peripherals that dropped
+        // out of the watch set entirely, which is what disarms them.
+        let stale = std::mem::take(&mut self.logic_wire_taps);
+        let mut touched: Vec<usize> = wire_now.keys().copied().collect();
+        for (idx, _) in &stale {
+            if !touched.contains(idx) {
+                touched.push(*idx);
+            }
+        }
+        const NO_CHANNELS: &[Vec<u32>] = &[];
+        for idx in touched {
+            let remove = stale
+                .iter()
+                .find(|(i, _)| *i == idx)
+                .map_or(NO_CHANNELS, |(_, channels)| channels.as_slice());
+            let add = wire_now.get(&idx).map_or(NO_CHANNELS, Vec::as_slice);
+            if let Some(lines) = self
+                .bus
+                .peripherals
+                .get(idx)
+                .and_then(|p| p.dev.wire_lines())
+            {
+                lines.merge_tap(Some(tap.clone()), remove, add);
+            }
+        }
+        self.logic_wire_taps = wire_now
+            .into_iter()
+            .filter(|(_, channels)| channels.iter().any(|line| !line.is_empty()))
+            .collect();
+
         let bus = &self.bus;
         let initial: Vec<Option<bool>> = resolved
             .iter()
-            .map(|r| {
-                r.and_then(|(idx, pin)| {
-                    bus.peripherals
-                        .get(idx)
-                        .and_then(|p| p.dev.read_gpio_pad(pin))
-                })
-            })
+            .map(|r| r.and_then(|source| Self::read_logic_source(bus, source)))
             .collect();
         self.logic_capture.install(resolved, &initial, &push);
 
@@ -1791,12 +1914,81 @@ impl<C: Cpu> Machine<C> {
         }
         if self.logic_capture.poll_active() {
             let bus = &self.bus;
-            self.logic_capture.sample(now, |idx, pin| {
-                bus.peripherals
-                    .get(idx)
-                    .and_then(|p| p.dev.read_gpio_pad(pin))
+            self.logic_capture
+                .sample(now, |source| Self::read_logic_source(bus, source));
+        }
+    }
+
+    /// The level one analyzer channel reads right now. The ONE place the two
+    /// channel kinds are told apart, so arming (`logic_watch`'s initial
+    /// levels) and sampling can never disagree about what a channel means.
+    ///
+    /// ⚠️ A `Pad` reads `read_gpio_pad` and stops there. There is deliberately
+    /// no fallback to the peripheral's wire: an unmuxed pad IS the GPIO latch,
+    /// and a probe that quietly showed bus traffic on a pin no bus reaches
+    /// would be lying about the exact thing it was clipped on to answer.
+    fn read_logic_source(bus: &bus::SystemBus, source: logic_capture::LogicSource) -> Option<bool> {
+        match source {
+            logic_capture::LogicSource::Pad { peripheral, pin } => bus
+                .peripherals
+                .get(peripheral)
+                .and_then(|p| p.dev.read_gpio_pad(pin)),
+            logic_capture::LogicSource::Wire { peripheral, line } => bus
+                .peripherals
+                .get(peripheral)
+                .and_then(|p| p.dev.wire_lines())
+                // Out of range reads UNKNOWN, not low: `PadLines::level`
+                // answers `false` for a stale index so a pad read can never
+                // panic the engine, and taking that at face value here would
+                // draw a confident flat-low trace for a line that does not
+                // exist.
+                .filter(|lines| line < lines.names().len())
+                .map(|lines| lines.level(line)),
+        }
+    }
+
+    /// Resolve a wire reference — a peripheral NAME and a line NAME — to a
+    /// [`LogicSource::Wire`](logic_capture::LogicSource::Wire).
+    ///
+    /// This is the door a frontend, a test or an agent comes through, and it
+    /// is the reason a wire channel is addressed by name at all: `usart2.TX`
+    /// survives a bus reorder, an AF-table edit and a chip-config rename,
+    /// where a line index does not.
+    ///
+    /// Line names match ignoring case. Every failure is REPORTED rather than
+    /// swallowed — see [`LogicRefError`](logic_capture::LogicRefError).
+    pub fn resolve_wire_source(
+        &self,
+        peripheral: &str,
+        line: &str,
+    ) -> Result<logic_capture::LogicSource, logic_capture::LogicRefError> {
+        let Some(idx) = self.bus.find_peripheral_index_by_name(peripheral) else {
+            return Err(logic_capture::LogicRefError::UnknownPeripheral {
+                peripheral: peripheral.to_string(),
+            });
+        };
+        let names = self.bus.peripherals[idx].dev.line_names();
+        if names.is_empty() {
+            return Err(logic_capture::LogicRefError::NoWireLines {
+                peripheral: peripheral.to_string(),
             });
         }
+        match logic_capture::line_index_of(names, line) {
+            Some(index) => Ok(logic_capture::LogicSource::wire(idx, index)),
+            None => Err(logic_capture::LogicRefError::UnknownLine {
+                peripheral: peripheral.to_string(),
+                line: line.to_string(),
+                available: names.to_vec(),
+            }),
+        }
+    }
+
+    /// The wire line names `peripheral` publishes, for a frontend listing what
+    /// can be probed. Empty for a peripheral with no wire.
+    pub fn wire_line_names(&self, peripheral: &str) -> &'static [&'static str] {
+        self.bus
+            .find_peripheral_index_by_name(peripheral)
+            .map_or(&[], |idx| self.bus.peripherals[idx].dev.line_names())
     }
 }
 
@@ -1848,6 +2040,19 @@ impl<C: Cpu> Machine<C> {
             .filter(|(_, p)| p.dev.drives_central_i2c_time())
             .map(|(i, _)| i)
             .collect();
+        // Silent-path census, counter (b2) — measurement only, and an empty
+        // `#[inline(always)]` fn without the `silent-census` feature.
+        //
+        // This is the ONE place the census can honestly ask "what is still a
+        // stub?": `Machine::new` is the single choke every runner (CLI lab
+        // runner, environment runner, wasm, DAP, python, `system::node`) passes
+        // through with a *finished* bus, so `from_config` and every
+        // post-factory replacement pass — `configure_cortex_m`'s NVIC/SCB/DWT
+        // install above all — have already run. Counting stubs at the factory
+        // instead reports peripherals that were replaced by real models before
+        // the first instruction; that error is what this counter exists to
+        // correct. Identity is by `TypeId`, never by name.
+        crate::census::record_live_stubs(&bus);
         Self {
             cpu,
             cpu_secondary: None,
@@ -1876,6 +2081,7 @@ impl<C: Cpu> Machine<C> {
             event_placeholder: Some(Box::new(crate::peripherals::stub::StubPeripheral::new(0))),
             logic_capture: logic_capture::LogicCapture::new(),
             logic_force_poll: false,
+            logic_wire_taps: Vec::new(),
             i2c_time_source_index,
             i2c_time_controller_indices,
             last_i2c_time_us: u64::MAX,
@@ -1939,6 +2145,22 @@ impl<C: Cpu> Machine<C> {
 
     pub fn step_profile(&self) -> StepProfile {
         self.step_profile
+    }
+
+    /// Wall-clock attribution for the open [`profile`] window, with peripheral
+    /// indices resolved to their bus names.
+    ///
+    /// [`StepProfile`] counts events; this measures the time they cost. The two
+    /// disagree sharply — on the BLE Pong lab `i2c0` owns 67 % of scheduler
+    /// arms but 18 % of wall time — so rank optimisation work by this one.
+    pub fn profile_report(&self) -> profile::Report {
+        let names: Vec<String> = self
+            .bus
+            .peripherals
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
+        profile::snapshot().report(&names)
     }
 
     fn record_peripheral_tick_profile(&mut self, cost_entries: usize) {
@@ -2382,6 +2604,22 @@ impl<C: Cpu> Machine<C> {
     /// drain.
     #[cfg(feature = "event-scheduler")]
     fn drain_scheduler_events(&mut self) {
+        // Measured INCLUSIVE of the peripheral handlers dispatched below;
+        // `profile::Snapshot::report` subtracts them so nothing is charged
+        // twice.
+        let span = crate::profile::span();
+        if span.is_some() {
+            // Stable and unique among live machines for as long as this one
+            // exists, which is all the report needs to tell "one chip" from
+            // "several merged".
+            crate::profile::set_machine(self as *const Self as u64);
+        }
+        self.drain_scheduler_events_inner();
+        crate::profile::record_sched(span);
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn drain_scheduler_events_inner(&mut self) {
         // One-time bootstrap: give every scheduler-driven peripheral a chance
         // to schedule events that arise from *setup* rather than an MMIO write
         // (e.g. a UART with an RX stream attached before firmware advances, or
@@ -2473,7 +2711,13 @@ impl<C: Cpu> Machine<C> {
                 .take()
                 .expect("event_placeholder present between events");
             let mut dev = std::mem::replace(&mut self.bus.peripherals[idx].dev, stub);
+            // Attribute the handler to the peripheral that owns it. This is the
+            // measurement that told us `i2c0` is 18% of the BLE Pong lab while
+            // the `bt` model — the subsystem the slowdown was blamed on — is
+            // 1.6%. Event COUNTS say the opposite; see `profile`'s header.
+            let handler_span = crate::profile::span();
             let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
+            crate::profile::record_peripheral(handler_span, idx);
             // Put the real peripheral back and reclaim the stub for reuse.
             let stub_back = std::mem::replace(&mut self.bus.peripherals[idx].dev, dev);
             self.event_placeholder = Some(stub_back);

@@ -155,7 +155,9 @@ impl Peripheral for SimCtl {
         match offset {
             SOUT => self.stdout.push(value),
             SERR => self.stderr.push(value),
-            _ => {}
+            _ => {
+                crate::census_reg!("simctl:SimCtl", offset, "write");
+            }
         }
         Ok(())
     }
@@ -173,7 +175,9 @@ impl Peripheral for SimCtl {
             }
             SOUT => self.stdout.push((value & 0xFF) as u8),
             SERR => self.stderr.push((value & 0xFF) as u8),
-            _ => {}
+            _ => {
+                crate::census_reg!("simctl:SimCtl", offset, "write");
+            }
         }
         Ok(())
     }

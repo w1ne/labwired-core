@@ -200,6 +200,14 @@ impl Rp2040I2c {
 }
 
 impl Peripheral for Rp2040I2c {
+    fn line_names(&self) -> &'static [&'static str] {
+        I2C_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&crate::peripherals::pad_lines::PadLines> {
+        self.lines.as_deref()
+    }
+
     /// Scheduler-driven, held-level: `I2C0_IRQ` rides an event chain, not the
     /// per-cycle walk.
     ///
@@ -336,7 +344,10 @@ impl Peripheral for Rp2040I2c {
             IC_RXFLR => u32::from(self.rx_byte.get().is_some()),
             IC_TX_ABRT_SOURCE => self.tx_abrt_source.get(),
             IC_COMP_TYPE => IC_COMP_TYPE_MAGIC,
-            _ => 0,
+            _ => {
+                crate::census_reg!("rp2040.i2c:Rp2040I2c", offset, "read");
+                0
+            }
         };
         Ok(val)
     }
@@ -412,7 +423,9 @@ impl Peripheral for Rp2040I2c {
                     self.wire_flush();
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("rp2040.i2c:Rp2040I2c", offset, "write");
+            }
         }
         Ok(())
     }

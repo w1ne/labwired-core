@@ -32,6 +32,8 @@
 //! decoder were derived from each other, both could be wrong together and this
 //! file would assert nothing.
 
+use labwired_core::logic_capture::LogicSource;
+
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::logic_capture::LogicEdge;
@@ -343,7 +345,10 @@ fn a_twim_transfer_puts_a_decodable_i2c_waveform_on_the_pads_psel_selects() {
     configure_twim(&mut machine, u32::from(SCL), u32::from(SDA));
 
     let gpio = gpio0(&machine);
-    let initial = machine.logic_watch(&[Some((gpio, SCL)), Some((gpio, SDA))]);
+    let initial = machine.logic_watch(&[
+        Some(LogicSource::pad(gpio, SCL)),
+        Some(LogicSource::pad(gpio, SDA)),
+    ]);
     assert_eq!(
         initial,
         vec![Some(true), Some(true)],
@@ -403,7 +408,10 @@ fn scl_runs_at_the_rate_the_frequency_register_programs() {
         .unwrap();
     configure_twim(&mut machine, u32::from(SCL), u32::from(SDA));
     let gpio = gpio0(&machine);
-    machine.logic_watch(&[Some((gpio, SCL)), Some((gpio, SDA))]);
+    machine.logic_watch(&[
+        Some(LogicSource::pad(gpio, SCL)),
+        Some(LogicSource::pad(gpio, SDA)),
+    ]);
     run(&mut machine, 80_000);
 
     let bus = &mut machine.bus;
@@ -448,7 +456,7 @@ fn a_pad_no_psel_selects_shows_no_bus_traffic() {
     configure_twim(&mut machine, u32::from(SCL), u32::from(SDA));
 
     let gpio = gpio0(&machine);
-    machine.logic_watch(&[Some((gpio, BYSTANDER))]);
+    machine.logic_watch(&[Some(LogicSource::pad(gpio, BYSTANDER))]);
     run(&mut machine, 80_000);
 
     let bus = &mut machine.bus;
@@ -476,7 +484,7 @@ fn a_disabled_twim_releases_its_pads_back_to_the_gpio_latch() {
     configure_twim(&mut machine, u32::from(SCL), 26);
 
     let gpio = gpio0(&machine);
-    let claimed = machine.logic_watch(&[Some((gpio, SCL))]);
+    let claimed = machine.logic_watch(&[Some(LogicSource::pad(gpio, SCL))]);
     assert_eq!(
         claimed,
         vec![Some(true)],
@@ -488,7 +496,7 @@ fn a_disabled_twim_releases_its_pads_back_to_the_gpio_latch() {
     bus.write_u32(SERIAL0 + OFF_ENABLE, 0).unwrap();
     bus.write_u32(0x5000_0000 + 0x518, 1 << SCL).unwrap(); // DIRSET
     bus.write_u32(0x5000_0000 + 0x50C, 1 << SCL).unwrap(); // OUTCLR
-    let released = machine.logic_watch(&[Some((gpio, SCL))]);
+    let released = machine.logic_watch(&[Some(LogicSource::pad(gpio, SCL))]);
     assert_eq!(
         released,
         vec![Some(false)],
@@ -516,7 +524,10 @@ fn re_pointing_psel_at_runtime_moves_the_waveform_to_the_new_pad() {
         .unwrap(); // OUTCLR
 
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, FIRST)), Some((gpio, SECOND))]),
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio, FIRST)),
+            Some(LogicSource::pad(gpio, SECOND))
+        ]),
         vec![Some(true), Some(false)],
         "P0.{FIRST} carries SCL (idle high); P0.{SECOND} is still a GPIO (low)",
     );
@@ -529,7 +540,10 @@ fn re_pointing_psel_at_runtime_moves_the_waveform_to_the_new_pad() {
     bus.write_u32(SERIAL0 + OFF_ENABLE, ENABLE_TWIM).unwrap();
 
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, FIRST)), Some((gpio, SECOND))]),
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio, FIRST)),
+            Some(LogicSource::pad(gpio, SECOND))
+        ]),
         vec![Some(false), Some(true)],
         "the claim must FOLLOW PSEL: P0.{FIRST} is a plain GPIO again, and \
          P0.{SECOND} now reads the I²C wire",
@@ -556,7 +570,7 @@ fn a_uarte_transfer_puts_a_decodable_serial_waveform_on_the_pad_psel_txd_selects
 
     let gpio = gpio0(&machine);
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, TX))]),
+        machine.logic_watch(&[Some(LogicSource::pad(gpio, TX))]),
         vec![Some(true)],
         "an idle serial line rests HIGH (mark) on the pad PSEL.TXD selects",
     );
@@ -599,7 +613,7 @@ fn uarte_bit_time_is_the_one_the_baudrate_register_programs() {
         .unwrap();
     bus.write_u32(UARTE0 + OFF_ENABLE, ENABLE_UARTE).unwrap();
     let gpio = gpio0(&machine);
-    machine.logic_watch(&[Some((gpio, TX))]);
+    machine.logic_watch(&[Some(LogicSource::pad(gpio, TX))]);
     run(&mut machine, 80_000);
 
     // 0xAA alternates every bit, so every bit boundary is an edge and the
@@ -669,7 +683,10 @@ fn a_spim_transfer_puts_a_decodable_spi_waveform_on_the_pads_psel_selects() {
 
     let gpio = gpio0(&machine);
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, SCK)), Some((gpio, MOSI))]),
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio, SCK)),
+            Some(LogicSource::pad(gpio, MOSI))
+        ]),
         vec![Some(false), Some(false)],
         "mode 0 rests SCK low (CPOL = ActiveHigh) and MOSI low",
     );
@@ -761,7 +778,7 @@ fn the_spim_half_of_the_shared_window_only_claims_pads_while_enable_selects_it()
 
     let gpio = gpio0(&machine);
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, SCK))]),
+        machine.logic_watch(&[Some(LogicSource::pad(gpio, SCK))]),
         vec![Some(false)],
         "PSEL written while both personalities are disabled claims nothing, so \
          the pad still reads the GPIO latch firmware drove low",
@@ -772,7 +789,7 @@ fn the_spim_half_of_the_shared_window_only_claims_pads_while_enable_selects_it()
         .write_u32(SERIAL0 + OFF_ENABLE, ENABLE_TWIM)
         .unwrap();
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, SCK))]),
+        machine.logic_watch(&[Some(LogicSource::pad(gpio, SCK))]),
         vec![Some(true)],
         "ENABLE = 6 hands the pad to TWIM, whose SCL idles HIGH against a latch \
          still driven low",
@@ -790,7 +807,7 @@ fn the_spim_half_of_the_shared_window_only_claims_pads_while_enable_selects_it()
         .write_u32(SERIAL0 + OFF_ENABLE, ENABLE_SPIM)
         .unwrap();
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, SCK))]),
+        machine.logic_watch(&[Some(LogicSource::pad(gpio, SCK))]),
         vec![Some(false)],
         "ENABLE = 7 hands the SAME pad to SPIM, whose SCK idles at CPOL (low) \
          against a latch now driven HIGH — so this can only be the SPIM wire, \
@@ -833,7 +850,10 @@ fn the_nrf52832_gets_the_same_i2c_waveform_through_its_single_port() {
 
     let gpio = gpio0(&machine);
     assert_eq!(
-        machine.logic_watch(&[Some((gpio, SCL)), Some((gpio, SDA))]),
+        machine.logic_watch(&[
+            Some(LogicSource::pad(gpio, SCL)),
+            Some(LogicSource::pad(gpio, SDA))
+        ]),
         vec![Some(true), Some(true)],
         "an idle open-drain I²C bus rests high on both pads PSEL selects",
     );

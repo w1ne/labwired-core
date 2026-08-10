@@ -154,6 +154,8 @@ jobs:
         # rust-toolchain.toml apply (--manifest-path from the repo root skips
         # them — that's what broke the first run with E0463).
         run: |
+          # shellcheck disable=SC1090  # export-esp.sh is generated at runtime
+          # by `espup install`; there is no file to follow at lint time.
           source ~/export-esp.sh
           (cd examples/esp32s3-blinky && cargo build --release)
           (cd examples/esp32s3-hello-world && cargo build --release)
@@ -427,6 +429,8 @@ jobs:
           # overwrites MANIFEST.json with hashes of the fresh build, and
           # comparing the rebuild against itself would always pass.
           git show HEAD:tests/fixtures/tier1/MANIFEST.json > /tmp/committed-manifest.json
+          # shellcheck disable=SC1090  # export-esp.sh is generated at runtime
+          # by `espup install`; there is no file to follow at lint time.
           source ~/export-esp.sh
           ./scripts/build_tier1_fixtures.sh
 

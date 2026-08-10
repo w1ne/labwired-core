@@ -29,6 +29,7 @@ pub(crate) mod embedded_descriptors;
 pub(crate) mod external_devices;
 mod faults;
 mod from_config;
+pub mod known_stubs;
 mod mmio_activity;
 mod mmio_words;
 mod motors;

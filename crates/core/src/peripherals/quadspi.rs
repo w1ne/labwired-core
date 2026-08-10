@@ -63,7 +63,10 @@ impl Quadspi {
             0x28 => self.psmar,
             0x2C => self.pir,
             0x30 => self.lptr,
-            _ => 0,
+            _ => {
+                crate::census_reg!("quadspi:Quadspi", offset, "read");
+                0
+            }
         }
     }
 
@@ -100,7 +103,9 @@ impl Quadspi {
             0x28 => self.psmar = value,
             0x2C => self.pir = value & 0xFFFF,
             0x30 => self.lptr = value & 0xFFFF,
-            _ => {}
+            _ => {
+                crate::census_reg!("quadspi:Quadspi", offset, "write");
+            }
         }
     }
 }

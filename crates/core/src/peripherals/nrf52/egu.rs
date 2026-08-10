@@ -71,7 +71,10 @@ impl Peripheral for Nrf52Egu {
                 self.events_triggered[((offset - OFF_EVENTS_TRIGGERED_0) / 4) as usize]
             }
             OFF_INTEN | OFF_INTENSET | OFF_INTENCLR => self.inten,
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.egu:Nrf52Egu", offset, "read");
+                0
+            }
         })
     }
 
@@ -96,7 +99,9 @@ impl Peripheral for Nrf52Egu {
             OFF_INTEN => self.inten = value & 0xFFFF,
             OFF_INTENSET => self.inten |= value & 0xFFFF,
             OFF_INTENCLR => self.inten &= !value,
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.egu:Nrf52Egu", offset, "write");
+            }
         }
         Ok(())
     }

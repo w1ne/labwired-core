@@ -156,6 +156,27 @@ opt-level = 1
 panic = "abort"
 lto = "thin"
 debug = true
+# A silent wrap in the simulator's OWN arithmetic is a wrong register value that
+# still reports PASS — the exact false-green class this repo exists to close.
+# `overflow-checks` defaults to `debug-assertions`, which is false in release, so
+# until now everything that ships (the CLI, the wasm engine, the Docker image)
+# and four `cargo test --release` CI lanes were blind to it. `profile.bench`
+# inherits from here, which is the profile `cargo test --release` actually uses,
+# so those lanes are covered by this one key.
+#
+# Measured cost on this tree (macOS, aarch64, rustc 1.97.1), same work either
+# side: the 18-chip Tier-1 matrix ratchet run went 72.53 s -> 73.42 s (+1.2%),
+# and an 8M-step nRF52840 Tier-1 run through the CLI went 2.62 s -> 2.60 s of
+# user CPU at the minimum of 10 reps. The check is a compare-and-branch on a
+# path already dominated by memory traffic, so it disappears into the noise.
+#
+# This also reaches the firmware crates below, which cross-compile to
+# thumbv*/riscv32 — three Tier-1 fixtures (nrf52832, nrf52840, rp2040) are
+# workspace members rather than standalone crates, so their ELF bytes move.
+# tests/fixtures/tier1/MANIFEST.json therefore needs regenerating; that gate is
+# already red on main for all eighteen blobs (nightly run 31292884206), so this
+# does not newly break it, but whoever regenerates must do it after this lands.
+overflow-checks = true
 
 # Per-package release overrides for embedded firmware crates and CI fixtures.
 # These build for thumbv*/riscv32 targets and want size-optimized binaries

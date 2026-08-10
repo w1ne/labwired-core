@@ -424,6 +424,14 @@ impl Nrf52Uarte {
 }
 
 impl Peripheral for Nrf52Uarte {
+    fn line_names(&self) -> &'static [&'static str] {
+        UARTE_LINES
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
     fn bus_trace_handle(&self) -> Option<crate::bus::bus_trace::BusTrace> {
         Some(self.trace.clone())
     }

@@ -144,7 +144,10 @@ impl Dwt {
         match aligned_offset {
             DWT_CTRL => self.ctrl,
             DWT_CYCCNT => self.cyccnt.get(),
-            _ => 0,
+            _ => {
+                crate::census_reg!("dwt:Dwt", aligned_offset, "read");
+                0
+            }
         }
     }
 }
@@ -190,7 +193,9 @@ impl Peripheral for Dwt {
                 let cur = self.cyccnt.get();
                 self.cyccnt.set((cur & !mask) | inserted);
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("dwt:Dwt", aligned_offset, "write");
+            }
         }
         Ok(())
     }

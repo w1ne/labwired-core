@@ -358,7 +358,10 @@ impl Esp32s3Rsa {
             OFF_INT_ENA => self.int_ena as u32,
             // Operand memory blocks.
             o if o < OFF_M_DASH => self.block_word(o).unwrap_or(0),
-            _ => 0,
+            _ => {
+                crate::census_reg!("esp32s3.rsa:Esp32s3Rsa", offset, "read");
+                0
+            }
         }
     }
 
@@ -395,7 +398,7 @@ impl Esp32s3Rsa {
                     vec[word] = value;
                 }
             }
-            _ => {}
+            _ => { crate::census_reg!("esp32s3.rsa:Esp32s3Rsa", offset, "write"); }
         }
     }
 }

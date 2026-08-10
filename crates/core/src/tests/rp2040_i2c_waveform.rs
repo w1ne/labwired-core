@@ -15,6 +15,7 @@
 #[cfg(test)]
 mod rp2040_i2c_waveform_tests {
     use crate::logic_capture::LogicEdge;
+    use crate::logic_capture::LogicSource;
     use crate::peripherals::i2c::I2cDevice;
     use crate::peripherals::rp2040::i2c::Rp2040I2c;
     use crate::peripherals::rp2040::io_bank0::{Rp2040IoBank0, GPIO_FUNC_I2C};
@@ -153,7 +154,10 @@ mod rp2040_i2c_waveform_tests {
         configure(&mut machine);
 
         let sio_idx = machine.bus.find_peripheral_index_by_name("sio").unwrap();
-        let initial = machine.logic_watch(&[Some((sio_idx, SCL_PIN)), Some((sio_idx, SDA_PIN))]);
+        let initial = machine.logic_watch(&[
+            Some(LogicSource::pad(sio_idx, SCL_PIN)),
+            Some(LogicSource::pad(sio_idx, SDA_PIN)),
+        ]);
         assert_eq!(
             initial,
             vec![Some(true), Some(true)],
@@ -194,7 +198,7 @@ mod rp2040_i2c_waveform_tests {
         bus.write_u32(I2C0_BASE + IC_ENABLE, ENABLE_ENABLE).unwrap();
 
         let sio_idx = machine.bus.find_peripheral_index_by_name("sio").unwrap();
-        machine.logic_watch(&[Some((sio_idx, SDA_PIN))]);
+        machine.logic_watch(&[Some(LogicSource::pad(sio_idx, SDA_PIN))]);
         for _ in 0..40_000 {
             machine.step().unwrap();
         }
@@ -211,7 +215,10 @@ mod rp2040_i2c_waveform_tests {
         let mut machine = machine();
         configure(&mut machine);
         let sio_idx = machine.bus.find_peripheral_index_by_name("sio").unwrap();
-        machine.logic_watch(&[Some((sio_idx, SCL_PIN)), Some((sio_idx, SDA_PIN))]);
+        machine.logic_watch(&[
+            Some(LogicSource::pad(sio_idx, SCL_PIN)),
+            Some(LogicSource::pad(sio_idx, SDA_PIN)),
+        ]);
         for _ in 0..40_000 {
             machine.step().unwrap();
         }

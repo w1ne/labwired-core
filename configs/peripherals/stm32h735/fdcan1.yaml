@@ -1,0 +1,2729 @@
+peripheral: FDCAN1
+version: 0.1.0
+registers:
+- id: FDCAN_CREL
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DAY
+    bit_range:
+    - 7
+    - 0
+    description: Timestamp Day
+  - name: MON
+    bit_range:
+    - 15
+    - 8
+    description: Timestamp Month
+  - name: YEAR
+    bit_range:
+    - 19
+    - 16
+    description: Timestamp Year
+  - name: SUBSTEP
+    bit_range:
+    - 23
+    - 20
+    description: Sub-step of Core release
+  - name: STEP
+    bit_range:
+    - 27
+    - 24
+    description: Step of Core release
+  - name: REL
+    bit_range:
+    - 31
+    - 28
+    description: Core release
+  side_effects: null
+- id: FDCAN_ENDN
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ETV
+    bit_range:
+    - 31
+    - 0
+    description: Endiannes Test Value
+  side_effects: null
+- id: FDCAN_DBTP
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DSJW
+    bit_range:
+    - 3
+    - 0
+    description: Synchronization Jump Width
+  - name: DTSEG2
+    bit_range:
+    - 7
+    - 4
+    description: |-
+      Data time segment after sample
+                    point
+  - name: DTSEG1
+    bit_range:
+    - 12
+    - 8
+    description: |-
+      Data time segment after sample
+                    point
+  - name: DBRP
+    bit_range:
+    - 20
+    - 16
+    description: Data BIt Rate Prescaler
+  - name: TDC
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      Transceiver Delay
+                    Compensation
+  side_effects: null
+- id: FDCAN_TEST
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: LBCK
+    bit_range:
+    - 4
+    - 4
+    description: Loop Back mode
+  - name: TX
+    bit_range:
+    - 6
+    - 5
+    description: Loop Back mode
+  - name: RX
+    bit_range:
+    - 7
+    - 7
+    description: Control of Transmit Pin
+  side_effects: null
+- id: FDCAN_RWD
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WDC
+    bit_range:
+    - 7
+    - 0
+    description: Watchdog configuration
+  - name: WDV
+    bit_range:
+    - 15
+    - 8
+    description: Watchdog value
+  side_effects: null
+- id: FDCAN_CCCR
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: INIT
+    bit_range:
+    - 0
+    - 0
+    description: Initialization
+  - name: CCE
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      Configuration Change
+                    Enable
+  - name: ASM
+    bit_range:
+    - 2
+    - 2
+    description: |-
+      ASM Restricted Operation
+                    Mode
+  - name: CSA
+    bit_range:
+    - 3
+    - 3
+    description: Clock Stop Acknowledge
+  - name: CSR
+    bit_range:
+    - 4
+    - 4
+    description: Clock Stop Request
+  - name: MON
+    bit_range:
+    - 5
+    - 5
+    description: Bus Monitoring Mode
+  - name: DAR
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Disable Automatic
+                    Retransmission
+  - name: TEST
+    bit_range:
+    - 7
+    - 7
+    description: Test Mode Enable
+  - name: FDOE
+    bit_range:
+    - 8
+    - 8
+    description: FD Operation Enable
+  - name: BSE
+    bit_range:
+    - 9
+    - 9
+    description: FDCAN Bit Rate Switching
+  - name: PXHD
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      Protocol Exception Handling
+                    Disable
+  - name: EFBI
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Edge Filtering during Bus
+                    Integration
+  - name: TXP
+    bit_range:
+    - 14
+    - 14
+    description: TXP
+  - name: NISO
+    bit_range:
+    - 15
+    - 15
+    description: Non ISO Operation
+  side_effects: null
+- id: FDCAN_NBTP
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSEG2
+    bit_range:
+    - 6
+    - 0
+    description: |-
+      Nominal Time segment after sample
+                    point
+  - name: NTSEG1
+    bit_range:
+    - 15
+    - 8
+    description: |-
+      Nominal Time segment before sample
+                    point
+  - name: NBRP
+    bit_range:
+    - 24
+    - 16
+    description: Bit Rate Prescaler
+  - name: NSJW
+    bit_range:
+    - 31
+    - 25
+    description: |-
+      NSJW: Nominal (Re)Synchronization Jump
+                    Width
+  side_effects: null
+- id: FDCAN_TSCC
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSS
+    bit_range:
+    - 1
+    - 0
+    description: Timestamp Select
+  - name: TCP
+    bit_range:
+    - 19
+    - 16
+    description: |-
+      Timestamp Counter
+                    Prescaler
+  side_effects: null
+- id: FDCAN_TSCV
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSC
+    bit_range:
+    - 15
+    - 0
+    description: Timestamp Counter
+  side_effects: null
+- id: FDCAN_TOCC
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ETOC
+    bit_range:
+    - 0
+    - 0
+    description: Enable Timeout Counter
+  - name: TOS
+    bit_range:
+    - 2
+    - 1
+    description: Timeout Select
+  - name: TOP
+    bit_range:
+    - 31
+    - 16
+    description: Timeout Period
+  side_effects: null
+- id: FDCAN_TOCV
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TOC
+    bit_range:
+    - 15
+    - 0
+    description: Timeout Counter
+  side_effects: null
+- id: FDCAN_ECR
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TEC
+    bit_range:
+    - 7
+    - 0
+    description: Transmit Error Counter
+  - name: TREC
+    bit_range:
+    - 14
+    - 8
+    description: Receive Error Counter
+  - name: RP
+    bit_range:
+    - 15
+    - 15
+    description: Receive Error Passive
+  - name: CEL
+    bit_range:
+    - 23
+    - 16
+    description: AN Error Logging
+  side_effects: null
+- id: FDCAN_PSR
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LEC
+    bit_range:
+    - 2
+    - 0
+    description: Last Error Code
+  - name: ACT
+    bit_range:
+    - 4
+    - 3
+    description: Activity
+  - name: EP
+    bit_range:
+    - 5
+    - 5
+    description: Error Passive
+  - name: EW
+    bit_range:
+    - 6
+    - 6
+    description: Warning Status
+  - name: BO
+    bit_range:
+    - 7
+    - 7
+    description: Bus_Off Status
+  - name: DLEC
+    bit_range:
+    - 10
+    - 8
+    description: Data Last Error Code
+  - name: RESI
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      ESI flag of last received FDCAN
+                    Message
+  - name: RBRS
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      BRS flag of last received FDCAN
+                    Message
+  - name: REDL
+    bit_range:
+    - 13
+    - 13
+    description: Received FDCAN Message
+  - name: PXE
+    bit_range:
+    - 14
+    - 14
+    description: Protocol Exception Event
+  - name: TDCV
+    bit_range:
+    - 22
+    - 16
+    description: |-
+      Transmitter Delay Compensation
+                    Value
+  side_effects: null
+- id: FDCAN_TDCR
+  address_offset: 72
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TDCF
+    bit_range:
+    - 6
+    - 0
+    description: |-
+      Transmitter Delay Compensation Filter
+                    Window Length
+  - name: TDCO
+    bit_range:
+    - 14
+    - 8
+    description: |-
+      Transmitter Delay Compensation
+                    Offset
+  side_effects: null
+- id: FDCAN_IR
+  address_offset: 80
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RF0N
+    bit_range:
+    - 0
+    - 0
+    description: Rx FIFO 0 New Message
+  - name: RF0W
+    bit_range:
+    - 1
+    - 1
+    description: Rx FIFO 0 Full
+  - name: RF0F
+    bit_range:
+    - 2
+    - 2
+    description: Rx FIFO 0 Full
+  - name: RF0L
+    bit_range:
+    - 3
+    - 3
+    description: Rx FIFO 0 Message Lost
+  - name: RF1N
+    bit_range:
+    - 4
+    - 4
+    description: Rx FIFO 1 New Message
+  - name: RF1W
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Rx FIFO 1 Watermark
+                    Reached
+  - name: RF1F
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Rx FIFO 1 Watermark
+                    Reached
+  - name: RF1L
+    bit_range:
+    - 7
+    - 7
+    description: Rx FIFO 1 Message Lost
+  - name: HPM
+    bit_range:
+    - 8
+    - 8
+    description: High Priority Message
+  - name: TC
+    bit_range:
+    - 9
+    - 9
+    description: Transmission Completed
+  - name: TCF
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Transmission Cancellation
+                    Finished
+  - name: TEF
+    bit_range:
+    - 11
+    - 11
+    description: Tx FIFO Empty
+  - name: TEFN
+    bit_range:
+    - 12
+    - 12
+    description: Tx Event FIFO New Entry
+  - name: TEFW
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Tx Event FIFO Watermark
+                    Reached
+  - name: TEFF
+    bit_range:
+    - 14
+    - 14
+    description: Tx Event FIFO Full
+  - name: TEFL
+    bit_range:
+    - 15
+    - 15
+    description: Tx Event FIFO Element Lost
+  - name: TSW
+    bit_range:
+    - 16
+    - 16
+    description: Timestamp Wraparound
+  - name: MRAF
+    bit_range:
+    - 17
+    - 17
+    description: Message RAM Access Failure
+  - name: TOO
+    bit_range:
+    - 18
+    - 18
+    description: Timeout Occurred
+  - name: DRX
+    bit_range:
+    - 19
+    - 19
+    description: |-
+      Message stored to Dedicated Rx
+                    Buffer
+  - name: ELO
+    bit_range:
+    - 22
+    - 22
+    description: Error Logging Overflow
+  - name: EP
+    bit_range:
+    - 23
+    - 23
+    description: Error Passive
+  - name: EW
+    bit_range:
+    - 24
+    - 24
+    description: Warning Status
+  - name: BO
+    bit_range:
+    - 25
+    - 25
+    description: Bus_Off Status
+  - name: WDI
+    bit_range:
+    - 26
+    - 26
+    description: Watchdog Interrupt
+  - name: PEA
+    bit_range:
+    - 27
+    - 27
+    description: |-
+      Protocol Error in Arbitration Phase
+                    (Nominal Bit Time is used)
+  - name: PED
+    bit_range:
+    - 28
+    - 28
+    description: |-
+      Protocol Error in Data Phase (Data Bit
+                    Time is used)
+  - name: ARA
+    bit_range:
+    - 29
+    - 29
+    description: Access to Reserved Address
+  side_effects: null
+- id: FDCAN_IE
+  address_offset: 84
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RF0NE
+    bit_range:
+    - 0
+    - 0
+    description: |-
+      Rx FIFO 0 New Message
+                    Enable
+  - name: RF0WE
+    bit_range:
+    - 1
+    - 1
+    description: Rx FIFO 0 Full Enable
+  - name: RF0FE
+    bit_range:
+    - 2
+    - 2
+    description: Rx FIFO 0 Full Enable
+  - name: RF0LE
+    bit_range:
+    - 3
+    - 3
+    description: |-
+      Rx FIFO 0 Message Lost
+                    Enable
+  - name: RF1NE
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Rx FIFO 1 New Message
+                    Enable
+  - name: RF1WE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Rx FIFO 1 Watermark Reached
+                    Enable
+  - name: RF1FE
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Rx FIFO 1 Watermark Reached
+                    Enable
+  - name: RF1LE
+    bit_range:
+    - 7
+    - 7
+    description: |-
+      Rx FIFO 1 Message Lost
+                    Enable
+  - name: HPME
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      High Priority Message
+                    Enable
+  - name: TCE
+    bit_range:
+    - 9
+    - 9
+    description: |-
+      Transmission Completed
+                    Enable
+  - name: TCFE
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Transmission Cancellation Finished
+                    Enable
+  - name: TEFE
+    bit_range:
+    - 11
+    - 11
+    description: Tx FIFO Empty Enable
+  - name: TEFNE
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      Tx Event FIFO New Entry
+                    Enable
+  - name: TEFWE
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Tx Event FIFO Watermark Reached
+                    Enable
+  - name: TEFFE
+    bit_range:
+    - 14
+    - 14
+    description: Tx Event FIFO Full Enable
+  - name: TEFLE
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Tx Event FIFO Element Lost
+                    Enable
+  - name: TSWE
+    bit_range:
+    - 16
+    - 16
+    description: |-
+      Timestamp Wraparound
+                    Enable
+  - name: MRAFE
+    bit_range:
+    - 17
+    - 17
+    description: |-
+      Message RAM Access Failure
+                    Enable
+  - name: TOOE
+    bit_range:
+    - 18
+    - 18
+    description: Timeout Occurred Enable
+  - name: DRXE
+    bit_range:
+    - 19
+    - 19
+    description: |-
+      Message stored to Dedicated Rx Buffer
+                    Enable
+  - name: BECE
+    bit_range:
+    - 20
+    - 20
+    description: |-
+      Bit Error Corrected Interrupt
+                    Enable
+  - name: BEUE
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      Bit Error Uncorrected Interrupt
+                    Enable
+  - name: ELOE
+    bit_range:
+    - 22
+    - 22
+    description: |-
+      Error Logging Overflow
+                    Enable
+  - name: EPE
+    bit_range:
+    - 23
+    - 23
+    description: Error Passive Enable
+  - name: EWE
+    bit_range:
+    - 24
+    - 24
+    description: Warning Status Enable
+  - name: BOE
+    bit_range:
+    - 25
+    - 25
+    description: Bus_Off Status Enable
+  - name: WDIE
+    bit_range:
+    - 26
+    - 26
+    description: Watchdog Interrupt Enable
+  - name: PEAE
+    bit_range:
+    - 27
+    - 27
+    description: |-
+      Protocol Error in Arbitration Phase
+                    Enable
+  - name: PEDE
+    bit_range:
+    - 28
+    - 28
+    description: |-
+      Protocol Error in Data Phase
+                    Enable
+  - name: ARAE
+    bit_range:
+    - 29
+    - 29
+    description: |-
+      Access to Reserved Address
+                    Enable
+  side_effects: null
+- id: FDCAN_ILS
+  address_offset: 88
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RF0NL
+    bit_range:
+    - 0
+    - 0
+    description: |-
+      Rx FIFO 0 New Message Interrupt
+                    Line
+  - name: RF0WL
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      Rx FIFO 0 Watermark Reached Interrupt
+                    Line
+  - name: RF0FL
+    bit_range:
+    - 2
+    - 2
+    description: |-
+      Rx FIFO 0 Full Interrupt
+                    Line
+  - name: RF0LL
+    bit_range:
+    - 3
+    - 3
+    description: |-
+      Rx FIFO 0 Message Lost Interrupt
+                    Line
+  - name: RF1NL
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Rx FIFO 1 New Message Interrupt
+                    Line
+  - name: RF1WL
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Rx FIFO 1 Watermark Reached Interrupt
+                    Line
+  - name: RF1FL
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Rx FIFO 1 Full Interrupt
+                    Line
+  - name: RF1LL
+    bit_range:
+    - 7
+    - 7
+    description: |-
+      Rx FIFO 1 Message Lost Interrupt
+                    Line
+  - name: HPML
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      High Priority Message Interrupt
+                    Line
+  - name: TCL
+    bit_range:
+    - 9
+    - 9
+    description: |-
+      Transmission Completed Interrupt
+                    Line
+  - name: TCFL
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Transmission Cancellation Finished
+                    Interrupt Line
+  - name: TEFL
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      Tx FIFO Empty Interrupt
+                    Line
+  - name: TEFNL
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      Tx Event FIFO New Entry Interrupt
+                    Line
+  - name: TEFWL
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Tx Event FIFO Watermark Reached
+                    Interrupt Line
+  - name: TEFFL
+    bit_range:
+    - 14
+    - 14
+    description: |-
+      Tx Event FIFO Full Interrupt
+                    Line
+  - name: TEFLL
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Tx Event FIFO Element Lost Interrupt
+                    Line
+  - name: TSWL
+    bit_range:
+    - 16
+    - 16
+    description: |-
+      Timestamp Wraparound Interrupt
+                    Line
+  - name: MRAFL
+    bit_range:
+    - 17
+    - 17
+    description: |-
+      Message RAM Access Failure Interrupt
+                    Line
+  - name: TOOL
+    bit_range:
+    - 18
+    - 18
+    description: |-
+      Timeout Occurred Interrupt
+                    Line
+  - name: DRXL
+    bit_range:
+    - 19
+    - 19
+    description: |-
+      Message stored to Dedicated Rx Buffer
+                    Interrupt Line
+  - name: BECL
+    bit_range:
+    - 20
+    - 20
+    description: |-
+      Bit Error Corrected Interrupt
+                    Line
+  - name: BEUL
+    bit_range:
+    - 21
+    - 21
+    description: |-
+      Bit Error Uncorrected Interrupt
+                    Line
+  - name: ELOL
+    bit_range:
+    - 22
+    - 22
+    description: |-
+      Error Logging Overflow Interrupt
+                    Line
+  - name: EPL
+    bit_range:
+    - 23
+    - 23
+    description: |-
+      Error Passive Interrupt
+                    Line
+  - name: EWL
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      Warning Status Interrupt
+                    Line
+  - name: BOL
+    bit_range:
+    - 25
+    - 25
+    description: Bus_Off Status
+  - name: WDIL
+    bit_range:
+    - 26
+    - 26
+    description: Watchdog Interrupt Line
+  - name: PEAL
+    bit_range:
+    - 27
+    - 27
+    description: |-
+      Protocol Error in Arbitration Phase
+                    Line
+  - name: PEDL
+    bit_range:
+    - 28
+    - 28
+    description: |-
+      Protocol Error in Data Phase
+                    Line
+  - name: ARAL
+    bit_range:
+    - 29
+    - 29
+    description: |-
+      Access to Reserved Address
+                    Line
+  side_effects: null
+- id: FDCAN_ILE
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EINT0
+    bit_range:
+    - 0
+    - 0
+    description: Enable Interrupt Line 0
+  - name: EINT1
+    bit_range:
+    - 1
+    - 1
+    description: Enable Interrupt Line 1
+  side_effects: null
+- id: FDCAN_GFC
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RRFE
+    bit_range:
+    - 0
+    - 0
+    description: |-
+      Reject Remote Frames
+                    Extended
+  - name: RRFS
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      Reject Remote Frames
+                    Standard
+  - name: ANFE
+    bit_range:
+    - 3
+    - 2
+    description: |-
+      Accept Non-matching Frames
+                    Extended
+  - name: ANFS
+    bit_range:
+    - 5
+    - 4
+    description: |-
+      Accept Non-matching Frames
+                    Standard
+  side_effects: null
+- id: FDCAN_SIDFC
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FLSSA
+    bit_range:
+    - 15
+    - 2
+    description: |-
+      Filter List Standard Start
+                    Address
+  - name: LSS
+    bit_range:
+    - 23
+    - 16
+    description: List Size Standard
+  side_effects: null
+- id: FDCAN_XIDFC
+  address_offset: 136
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FLESA
+    bit_range:
+    - 15
+    - 2
+    description: |-
+      Filter List Standard Start
+                    Address
+  - name: LSE
+    bit_range:
+    - 23
+    - 16
+    description: List Size Extended
+  side_effects: null
+- id: FDCAN_XIDAM
+  address_offset: 144
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EIDM
+    bit_range:
+    - 28
+    - 0
+    description: Extended ID Mask
+  side_effects: null
+- id: FDCAN_HPMS
+  address_offset: 148
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: BIDX
+    bit_range:
+    - 5
+    - 0
+    description: Buffer Index
+  - name: MSI
+    bit_range:
+    - 7
+    - 6
+    description: Message Storage Indicator
+  - name: FIDX
+    bit_range:
+    - 14
+    - 8
+    description: Filter Index
+  - name: FLST
+    bit_range:
+    - 15
+    - 15
+    description: Filter List
+  side_effects: null
+- id: FDCAN_NDAT1
+  address_offset: 152
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ND0
+    bit_range:
+    - 0
+    - 0
+    description: New data
+  - name: ND1
+    bit_range:
+    - 1
+    - 1
+    description: New data
+  - name: ND2
+    bit_range:
+    - 2
+    - 2
+    description: New data
+  - name: ND3
+    bit_range:
+    - 3
+    - 3
+    description: New data
+  - name: ND4
+    bit_range:
+    - 4
+    - 4
+    description: New data
+  - name: ND5
+    bit_range:
+    - 5
+    - 5
+    description: New data
+  - name: ND6
+    bit_range:
+    - 6
+    - 6
+    description: New data
+  - name: ND7
+    bit_range:
+    - 7
+    - 7
+    description: New data
+  - name: ND8
+    bit_range:
+    - 8
+    - 8
+    description: New data
+  - name: ND9
+    bit_range:
+    - 9
+    - 9
+    description: New data
+  - name: ND10
+    bit_range:
+    - 10
+    - 10
+    description: New data
+  - name: ND11
+    bit_range:
+    - 11
+    - 11
+    description: New data
+  - name: ND12
+    bit_range:
+    - 12
+    - 12
+    description: New data
+  - name: ND13
+    bit_range:
+    - 13
+    - 13
+    description: New data
+  - name: ND14
+    bit_range:
+    - 14
+    - 14
+    description: New data
+  - name: ND15
+    bit_range:
+    - 15
+    - 15
+    description: New data
+  - name: ND16
+    bit_range:
+    - 16
+    - 16
+    description: New data
+  - name: ND17
+    bit_range:
+    - 17
+    - 17
+    description: New data
+  - name: ND18
+    bit_range:
+    - 18
+    - 18
+    description: New data
+  - name: ND19
+    bit_range:
+    - 19
+    - 19
+    description: New data
+  - name: ND20
+    bit_range:
+    - 20
+    - 20
+    description: New data
+  - name: ND21
+    bit_range:
+    - 21
+    - 21
+    description: New data
+  - name: ND22
+    bit_range:
+    - 22
+    - 22
+    description: New data
+  - name: ND23
+    bit_range:
+    - 23
+    - 23
+    description: New data
+  - name: ND24
+    bit_range:
+    - 24
+    - 24
+    description: New data
+  - name: ND25
+    bit_range:
+    - 25
+    - 25
+    description: New data
+  - name: ND26
+    bit_range:
+    - 26
+    - 26
+    description: New data
+  - name: ND27
+    bit_range:
+    - 27
+    - 27
+    description: New data
+  - name: ND28
+    bit_range:
+    - 28
+    - 28
+    description: New data
+  - name: ND29
+    bit_range:
+    - 29
+    - 29
+    description: New data
+  - name: ND30
+    bit_range:
+    - 30
+    - 30
+    description: New data
+  - name: ND31
+    bit_range:
+    - 31
+    - 31
+    description: New data
+  side_effects: null
+- id: FDCAN_NDAT2
+  address_offset: 156
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ND32
+    bit_range:
+    - 0
+    - 0
+    description: New data
+  - name: ND33
+    bit_range:
+    - 1
+    - 1
+    description: New data
+  - name: ND34
+    bit_range:
+    - 2
+    - 2
+    description: New data
+  - name: ND35
+    bit_range:
+    - 3
+    - 3
+    description: New data
+  - name: ND36
+    bit_range:
+    - 4
+    - 4
+    description: New data
+  - name: ND37
+    bit_range:
+    - 5
+    - 5
+    description: New data
+  - name: ND38
+    bit_range:
+    - 6
+    - 6
+    description: New data
+  - name: ND39
+    bit_range:
+    - 7
+    - 7
+    description: New data
+  - name: ND40
+    bit_range:
+    - 8
+    - 8
+    description: New data
+  - name: ND41
+    bit_range:
+    - 9
+    - 9
+    description: New data
+  - name: ND42
+    bit_range:
+    - 10
+    - 10
+    description: New data
+  - name: ND43
+    bit_range:
+    - 11
+    - 11
+    description: New data
+  - name: ND44
+    bit_range:
+    - 12
+    - 12
+    description: New data
+  - name: ND45
+    bit_range:
+    - 13
+    - 13
+    description: New data
+  - name: ND46
+    bit_range:
+    - 14
+    - 14
+    description: New data
+  - name: ND47
+    bit_range:
+    - 15
+    - 15
+    description: New data
+  - name: ND48
+    bit_range:
+    - 16
+    - 16
+    description: New data
+  - name: ND49
+    bit_range:
+    - 17
+    - 17
+    description: New data
+  - name: ND50
+    bit_range:
+    - 18
+    - 18
+    description: New data
+  - name: ND51
+    bit_range:
+    - 19
+    - 19
+    description: New data
+  - name: ND52
+    bit_range:
+    - 20
+    - 20
+    description: New data
+  - name: ND53
+    bit_range:
+    - 21
+    - 21
+    description: New data
+  - name: ND54
+    bit_range:
+    - 22
+    - 22
+    description: New data
+  - name: ND55
+    bit_range:
+    - 23
+    - 23
+    description: New data
+  - name: ND56
+    bit_range:
+    - 24
+    - 24
+    description: New data
+  - name: ND57
+    bit_range:
+    - 25
+    - 25
+    description: New data
+  - name: ND58
+    bit_range:
+    - 26
+    - 26
+    description: New data
+  - name: ND59
+    bit_range:
+    - 27
+    - 27
+    description: New data
+  - name: ND60
+    bit_range:
+    - 28
+    - 28
+    description: New data
+  - name: ND61
+    bit_range:
+    - 29
+    - 29
+    description: New data
+  - name: ND62
+    bit_range:
+    - 30
+    - 30
+    description: New data
+  - name: ND63
+    bit_range:
+    - 31
+    - 31
+    description: New data
+  side_effects: null
+- id: FDCAN_RXF0C
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: F0SA
+    bit_range:
+    - 15
+    - 2
+    description: Rx FIFO 0 Start Address
+  - name: F0S
+    bit_range:
+    - 23
+    - 16
+    description: Rx FIFO 0 Size
+  - name: F0WM
+    bit_range:
+    - 31
+    - 24
+    description: FIFO 0 Watermark
+  side_effects: null
+- id: FDCAN_RXF0S
+  address_offset: 164
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: F0FL
+    bit_range:
+    - 6
+    - 0
+    description: Rx FIFO 0 Fill Level
+  - name: F0G
+    bit_range:
+    - 13
+    - 8
+    description: Rx FIFO 0 Get Index
+  - name: F0P
+    bit_range:
+    - 21
+    - 16
+    description: Rx FIFO 0 Put Index
+  - name: F0F
+    bit_range:
+    - 24
+    - 24
+    description: Rx FIFO 0 Full
+  - name: RF0L
+    bit_range:
+    - 25
+    - 25
+    description: Rx FIFO 0 Message Lost
+  side_effects: null
+- id: FDCAN_RXF0A
+  address_offset: 168
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FA01
+    bit_range:
+    - 5
+    - 0
+    description: |-
+      Rx FIFO 0 Acknowledge
+                    Index
+  side_effects: null
+- id: FDCAN_RXBC
+  address_offset: 172
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RBSA
+    bit_range:
+    - 15
+    - 2
+    description: Rx Buffer Start Address
+  side_effects: null
+- id: FDCAN_RXF1C
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: F1SA
+    bit_range:
+    - 15
+    - 2
+    description: Rx FIFO 1 Start Address
+  - name: F1S
+    bit_range:
+    - 22
+    - 16
+    description: Rx FIFO 1 Size
+  - name: F1WM
+    bit_range:
+    - 30
+    - 24
+    description: Rx FIFO 1 Watermark
+  side_effects: null
+- id: FDCAN_RXF1S
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: F1FL
+    bit_range:
+    - 6
+    - 0
+    description: Rx FIFO 1 Fill Level
+  - name: F1GI
+    bit_range:
+    - 14
+    - 8
+    description: Rx FIFO 1 Get Index
+  - name: F1PI
+    bit_range:
+    - 22
+    - 16
+    description: Rx FIFO 1 Put Index
+  - name: F1F
+    bit_range:
+    - 24
+    - 24
+    description: Rx FIFO 1 Full
+  - name: RF1L
+    bit_range:
+    - 25
+    - 25
+    description: Rx FIFO 1 Message Lost
+  - name: DMS
+    bit_range:
+    - 31
+    - 30
+    description: Debug Message Status
+  side_effects: null
+- id: FDCAN_RXF1A
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: F1AI
+    bit_range:
+    - 5
+    - 0
+    description: |-
+      Rx FIFO 1 Acknowledge
+                    Index
+  side_effects: null
+- id: FDCAN_RXESC
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: F0DS
+    bit_range:
+    - 2
+    - 0
+    description: 'Rx FIFO 1 Data Field Size:'
+  - name: F1DS
+    bit_range:
+    - 6
+    - 4
+    description: 'Rx FIFO 0 Data Field Size:'
+  - name: RBDS
+    bit_range:
+    - 10
+    - 8
+    description: 'Rx Buffer Data Field Size:'
+  side_effects: null
+- id: FDCAN_TXBC
+  address_offset: 192
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TBSA
+    bit_range:
+    - 15
+    - 2
+    description: Tx Buffers Start Address
+  - name: NDTB
+    bit_range:
+    - 21
+    - 16
+    description: |-
+      Number of Dedicated Transmit
+                    Buffers
+  - name: TFQS
+    bit_range:
+    - 29
+    - 24
+    description: Transmit FIFO/Queue Size
+  - name: TFQM
+    bit_range:
+    - 30
+    - 30
+    description: Tx FIFO/Queue Mode
+  side_effects: null
+- id: FDCAN_TXFQS
+  address_offset: 196
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TFFL
+    bit_range:
+    - 5
+    - 0
+    description: Tx FIFO Free Level
+  - name: TFGI
+    bit_range:
+    - 12
+    - 8
+    description: TFGI
+  - name: TFQPI
+    bit_range:
+    - 20
+    - 16
+    description: Tx FIFO/Queue Put Index
+  - name: TFQF
+    bit_range:
+    - 21
+    - 21
+    description: Tx FIFO/Queue Full
+  side_effects: null
+- id: FDCAN_TXESC
+  address_offset: 200
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TBDS
+    bit_range:
+    - 2
+    - 0
+    description: 'Tx Buffer Data Field Size:'
+  side_effects: null
+- id: FDCAN_TXBRP
+  address_offset: 204
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TRP
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Transmission Request
+                    Pending
+  side_effects: null
+- id: FDCAN_TXBAR
+  address_offset: 208
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AR
+    bit_range:
+    - 31
+    - 0
+    description: Add Request
+  side_effects: null
+- id: FDCAN_TXBCR
+  address_offset: 212
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CR
+    bit_range:
+    - 31
+    - 0
+    description: Cancellation Request
+  side_effects: null
+- id: FDCAN_TXBTO
+  address_offset: 216
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TO
+    bit_range:
+    - 31
+    - 0
+    description: Transmission Occurred.
+  side_effects: null
+- id: FDCAN_TXBCF
+  address_offset: 220
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CF
+    bit_range:
+    - 31
+    - 0
+    description: Cancellation Finished
+  side_effects: null
+- id: FDCAN_TXBTIE
+  address_offset: 224
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TIE
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Transmission Interrupt
+                    Enable
+  side_effects: null
+- id: FDCAN_TXBCIE
+  address_offset: 228
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CF
+    bit_range:
+    - 31
+    - 0
+    description: |-
+      Cancellation Finished Interrupt
+                    Enable
+  side_effects: null
+- id: FDCAN_TXEFC
+  address_offset: 240
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EFSA
+    bit_range:
+    - 15
+    - 2
+    description: Event FIFO Start Address
+  - name: EFS
+    bit_range:
+    - 21
+    - 16
+    description: Event FIFO Size
+  - name: EFWM
+    bit_range:
+    - 29
+    - 24
+    description: Event FIFO Watermark
+  side_effects: null
+- id: FDCAN_TXEFS
+  address_offset: 244
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EFFL
+    bit_range:
+    - 5
+    - 0
+    description: Event FIFO Fill Level
+  - name: EFGI
+    bit_range:
+    - 12
+    - 8
+    description: Event FIFO Get Index.
+  - name: EFPI
+    bit_range:
+    - 20
+    - 16
+    description: Event FIFO put index.
+  - name: EFF
+    bit_range:
+    - 24
+    - 24
+    description: Event FIFO Full.
+  - name: TEFL
+    bit_range:
+    - 25
+    - 25
+    description: |-
+      Tx Event FIFO Element
+                    Lost.
+  side_effects: null
+- id: FDCAN_TXEFA
+  address_offset: 248
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EFAI
+    bit_range:
+    - 4
+    - 0
+    description: |-
+      Event FIFO Acknowledge
+                    Index
+  side_effects: null
+- id: FDCAN_TTTMC
+  address_offset: 256
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TMSA
+    bit_range:
+    - 15
+    - 2
+    description: |-
+      Trigger Memory Start
+                    Address
+  - name: TME
+    bit_range:
+    - 22
+    - 16
+    description: Trigger Memory Elements
+  side_effects: null
+- id: FDCAN_TTRMC
+  address_offset: 260
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RID
+    bit_range:
+    - 28
+    - 0
+    description: Reference Identifier.
+  - name: XTD
+    bit_range:
+    - 30
+    - 30
+    description: Extended Identifier
+  - name: RMPS
+    bit_range:
+    - 31
+    - 31
+    description: |-
+      Reference Message Payload
+                    Select
+  side_effects: null
+- id: FDCAN_TTOCF
+  address_offset: 264
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OM
+    bit_range:
+    - 1
+    - 0
+    description: Operation Mode
+  - name: GEN
+    bit_range:
+    - 3
+    - 3
+    description: Gap Enable
+  - name: TM
+    bit_range:
+    - 4
+    - 4
+    description: Time Master
+  - name: LDSDL
+    bit_range:
+    - 7
+    - 5
+    description: |-
+      LD of Synchronization Deviation
+                    Limit
+  - name: IRTO
+    bit_range:
+    - 14
+    - 8
+    description: |-
+      Initial Reference Trigger
+                    Offset
+  - name: EECS
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Enable External Clock
+                    Synchronization
+  - name: AWL
+    bit_range:
+    - 23
+    - 16
+    description: Application Watchdog Limit
+  - name: EGTF
+    bit_range:
+    - 24
+    - 24
+    description: |-
+      Enable Global Time
+                    Filtering
+  - name: ECC
+    bit_range:
+    - 25
+    - 25
+    description: Enable Clock Calibration
+  - name: EVTP
+    bit_range:
+    - 26
+    - 26
+    description: Event Trigger Polarity
+  side_effects: null
+- id: FDCAN_TTMLM
+  address_offset: 268
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CCM
+    bit_range:
+    - 5
+    - 0
+    description: Cycle Count Max
+  - name: CSS
+    bit_range:
+    - 7
+    - 6
+    description: |-
+      Cycle Start
+                    Synchronization
+  - name: TXEW
+    bit_range:
+    - 11
+    - 8
+    description: Tx Enable Window
+  - name: ENTT
+    bit_range:
+    - 27
+    - 16
+    description: |-
+      Expected Number of Tx
+                    Triggers
+  side_effects: null
+- id: FDCAN_TURCF
+  address_offset: 272
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NCL
+    bit_range:
+    - 15
+    - 0
+    description: |-
+      Numerator Configuration
+                    Low.
+  - name: DC
+    bit_range:
+    - 29
+    - 16
+    description: Denominator Configuration.
+  - name: ELT
+    bit_range:
+    - 31
+    - 31
+    description: Enable Local Time
+  side_effects: null
+- id: FDCAN_TTOCN
+  address_offset: 276
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SGT
+    bit_range:
+    - 0
+    - 0
+    description: Set Global time
+  - name: ECS
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      External Clock
+                    Synchronization
+  - name: SWP
+    bit_range:
+    - 2
+    - 2
+    description: Stop Watch Polarity
+  - name: SWS
+    bit_range:
+    - 4
+    - 3
+    description: Stop Watch Source.
+  - name: RTIE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Register Time Mark Interrupt Pulse
+                    Enable
+  - name: TMC
+    bit_range:
+    - 7
+    - 6
+    description: Register Time Mark Compare
+  - name: TTIE
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      Trigger Time Mark Interrupt Pulse
+                    Enable
+  - name: GCS
+    bit_range:
+    - 9
+    - 9
+    description: Gap Control Select
+  - name: FGP
+    bit_range:
+    - 10
+    - 10
+    description: Finish Gap.
+  - name: TMG
+    bit_range:
+    - 11
+    - 11
+    description: Time Mark Gap
+  - name: NIG
+    bit_range:
+    - 12
+    - 12
+    description: Next is Gap
+  - name: ESCN
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      External Synchronization
+                    Control
+  - name: LCKC
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      TT Operation Control Register
+                    Locked
+  side_effects: null
+- id: CAN_TTGTP
+  address_offset: 280
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NCL
+    bit_range:
+    - 15
+    - 0
+    description: Time Preset
+  - name: CTP
+    bit_range:
+    - 31
+    - 16
+    description: Cycle Time Target Phase
+  side_effects: null
+- id: FDCAN_TTTMK
+  address_offset: 284
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TM
+    bit_range:
+    - 15
+    - 0
+    description: Time Mark
+  - name: TICC
+    bit_range:
+    - 22
+    - 16
+    description: Time Mark Cycle Code
+  - name: LCKM
+    bit_range:
+    - 31
+    - 31
+    description: |-
+      TT Time Mark Register
+                    Locked
+  side_effects: null
+- id: FDCAN_TTIR
+  address_offset: 288
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SBC
+    bit_range:
+    - 0
+    - 0
+    description: Start of Basic Cycle
+  - name: SMC
+    bit_range:
+    - 1
+    - 1
+    description: Start of Matrix Cycle
+  - name: CSM
+    bit_range:
+    - 2
+    - 2
+    description: |-
+      Change of Synchronization
+                    Mode
+  - name: SOG
+    bit_range:
+    - 3
+    - 3
+    description: Start of Gap
+  - name: RTMI
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Register Time Mark
+                    Interrupt.
+  - name: TTMI
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Trigger Time Mark Event
+                    Internal
+  - name: SWE
+    bit_range:
+    - 6
+    - 6
+    description: Stop Watch Event
+  - name: GTW
+    bit_range:
+    - 7
+    - 7
+    description: Global Time Wrap
+  - name: GTD
+    bit_range:
+    - 8
+    - 8
+    description: Global Time Discontinuity
+  - name: GTE
+    bit_range:
+    - 9
+    - 9
+    description: Global Time Error
+  - name: TXU
+    bit_range:
+    - 10
+    - 10
+    description: Tx Count Underflow
+  - name: TXO
+    bit_range:
+    - 11
+    - 11
+    description: Tx Count Overflow
+  - name: SE1
+    bit_range:
+    - 12
+    - 12
+    description: Scheduling Error 1
+  - name: SE2
+    bit_range:
+    - 13
+    - 13
+    description: Scheduling Error 2
+  - name: ELC
+    bit_range:
+    - 14
+    - 14
+    description: Error Level Changed.
+  - name: IWTG
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Initialization Watch
+                    Trigger
+  - name: WT
+    bit_range:
+    - 16
+    - 16
+    description: Watch Trigger
+  - name: AW
+    bit_range:
+    - 17
+    - 17
+    description: Application Watchdog
+  - name: CER
+    bit_range:
+    - 18
+    - 18
+    description: Configuration Error
+  side_effects: null
+- id: FDCAN_TTIE
+  address_offset: 292
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SBCE
+    bit_range:
+    - 0
+    - 0
+    description: |-
+      Start of Basic Cycle Interrupt
+                    Enable
+  - name: SMCE
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      Start of Matrix Cycle Interrupt
+                    Enable
+  - name: CSME
+    bit_range:
+    - 2
+    - 2
+    description: |-
+      Change of Synchronization Mode Interrupt
+                    Enable
+  - name: SOGE
+    bit_range:
+    - 3
+    - 3
+    description: |-
+      Start of Gap Interrupt
+                    Enable
+  - name: RTMIE
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Register Time Mark Interrupt
+                    Enable
+  - name: TTMIE
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Trigger Time Mark Event Internal
+                    Interrupt Enable
+  - name: SWEE
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Stop Watch Event Interrupt
+                    Enable
+  - name: GTWE
+    bit_range:
+    - 7
+    - 7
+    description: |-
+      Global Time Wrap Interrupt
+                    Enable
+  - name: GTDE
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      Global Time Discontinuity Interrupt
+                    Enable
+  - name: GTEE
+    bit_range:
+    - 9
+    - 9
+    description: |-
+      Global Time Error Interrupt
+                    Enable
+  - name: TXUE
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Tx Count Underflow Interrupt
+                    Enable
+  - name: TXOE
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      Tx Count Overflow Interrupt
+                    Enable
+  - name: SE1E
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      Scheduling Error 1 Interrupt
+                    Enable
+  - name: SE2E
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Scheduling Error 2 Interrupt
+                    Enable
+  - name: ELCE
+    bit_range:
+    - 14
+    - 14
+    description: |-
+      Change Error Level Interrupt
+                    Enable
+  - name: IWTGE
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Initialization Watch Trigger Interrupt
+                    Enable
+  - name: WTE
+    bit_range:
+    - 16
+    - 16
+    description: |-
+      Watch Trigger Interrupt
+                    Enable
+  - name: AWE
+    bit_range:
+    - 17
+    - 17
+    description: |-
+      Application Watchdog Interrupt
+                    Enable
+  - name: CERE
+    bit_range:
+    - 18
+    - 18
+    description: |-
+      Configuration Error Interrupt
+                    Enable
+  side_effects: null
+- id: FDCAN_TTILS
+  address_offset: 296
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SBCL
+    bit_range:
+    - 0
+    - 0
+    description: |-
+      Start of Basic Cycle Interrupt
+                    Line
+  - name: SMCL
+    bit_range:
+    - 1
+    - 1
+    description: |-
+      Start of Matrix Cycle Interrupt
+                    Line
+  - name: CSML
+    bit_range:
+    - 2
+    - 2
+    description: |-
+      Change of Synchronization Mode Interrupt
+                    Line
+  - name: SOGL
+    bit_range:
+    - 3
+    - 3
+    description: |-
+      Start of Gap Interrupt
+                    Line
+  - name: RTMIL
+    bit_range:
+    - 4
+    - 4
+    description: |-
+      Register Time Mark Interrupt
+                    Line
+  - name: TTMIL
+    bit_range:
+    - 5
+    - 5
+    description: |-
+      Trigger Time Mark Event Internal
+                    Interrupt Line
+  - name: SWEL
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Stop Watch Event Interrupt
+                    Line
+  - name: GTWL
+    bit_range:
+    - 7
+    - 7
+    description: |-
+      Global Time Wrap Interrupt
+                    Line
+  - name: GTDL
+    bit_range:
+    - 8
+    - 8
+    description: |-
+      Global Time Discontinuity Interrupt
+                    Line
+  - name: GTEL
+    bit_range:
+    - 9
+    - 9
+    description: |-
+      Global Time Error Interrupt
+                    Line
+  - name: TXUL
+    bit_range:
+    - 10
+    - 10
+    description: |-
+      Tx Count Underflow Interrupt
+                    Line
+  - name: TXOL
+    bit_range:
+    - 11
+    - 11
+    description: |-
+      Tx Count Overflow Interrupt
+                    Line
+  - name: SE1L
+    bit_range:
+    - 12
+    - 12
+    description: |-
+      Scheduling Error 1 Interrupt
+                    Line
+  - name: SE2L
+    bit_range:
+    - 13
+    - 13
+    description: |-
+      Scheduling Error 2 Interrupt
+                    Line
+  - name: ELCL
+    bit_range:
+    - 14
+    - 14
+    description: |-
+      Change Error Level Interrupt
+                    Line
+  - name: IWTGL
+    bit_range:
+    - 15
+    - 15
+    description: |-
+      Initialization Watch Trigger Interrupt
+                    Line
+  - name: WTL
+    bit_range:
+    - 16
+    - 16
+    description: |-
+      Watch Trigger Interrupt
+                    Line
+  - name: AWL
+    bit_range:
+    - 17
+    - 17
+    description: |-
+      Application Watchdog Interrupt
+                    Line
+  - name: CERL
+    bit_range:
+    - 18
+    - 18
+    description: |-
+      Configuration Error Interrupt
+                    Line
+  side_effects: null
+- id: FDCAN_TTOST
+  address_offset: 300
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EL
+    bit_range:
+    - 1
+    - 0
+    description: Error Level
+  - name: MS
+    bit_range:
+    - 3
+    - 2
+    description: Master State.
+  - name: SYS
+    bit_range:
+    - 5
+    - 4
+    description: Synchronization State
+  - name: GTP
+    bit_range:
+    - 6
+    - 6
+    description: |-
+      Quality of Global Time
+                    Phase
+  - name: QCS
+    bit_range:
+    - 7
+    - 7
+    description: Quality of Clock Speed
+  - name: RTO
+    bit_range:
+    - 15
+    - 8
+    description: Reference Trigger Offset
+  - name: WGTD
+    bit_range:
+    - 22
+    - 22
+    description: |-
+      Wait for Global Time
+                    Discontinuity
+  - name: GFI
+    bit_range:
+    - 23
+    - 23
+    description: Gap Finished Indicator.
+  - name: TMP
+    bit_range:
+    - 26
+    - 24
+    description: Time Master Priority
+  - name: GSI
+    bit_range:
+    - 27
+    - 27
+    description: Gap Started Indicator.
+  - name: WFE
+    bit_range:
+    - 28
+    - 28
+    description: Wait for Event
+  - name: AWE
+    bit_range:
+    - 29
+    - 29
+    description: Application Watchdog Event
+  - name: WECS
+    bit_range:
+    - 30
+    - 30
+    description: |-
+      Wait for External Clock
+                    Synchronization
+  - name: SPL
+    bit_range:
+    - 31
+    - 31
+    description: Schedule Phase Lock
+  side_effects: null
+- id: FDCAN_TURNA
+  address_offset: 304
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: NAV
+    bit_range:
+    - 17
+    - 0
+    description: Numerator Actual Value
+  side_effects: null
+- id: FDCAN_TTLGT
+  address_offset: 308
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: LT
+    bit_range:
+    - 15
+    - 0
+    description: Local Time
+  - name: GT
+    bit_range:
+    - 31
+    - 16
+    description: Global Time
+  side_effects: null
+- id: FDCAN_TTCTC
+  address_offset: 312
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CT
+    bit_range:
+    - 15
+    - 0
+    description: Cycle Time
+  - name: CC
+    bit_range:
+    - 21
+    - 16
+    description: Cycle Count
+  side_effects: null
+- id: FDCAN_TTCPT
+  address_offset: 316
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CT
+    bit_range:
+    - 5
+    - 0
+    description: Cycle Count Value
+  - name: SWV
+    bit_range:
+    - 31
+    - 16
+    description: Stop Watch Value
+  side_effects: null
+- id: FDCAN_TTCSM
+  address_offset: 320
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: CSM
+    bit_range:
+    - 15
+    - 0
+    description: Cycle Sync Mark
+  side_effects: null
+- id: FDCAN_TTTS
+  address_offset: 768
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SWTDEL
+    bit_range:
+    - 1
+    - 0
+    description: |-
+      Stop watch trigger input
+                    selection
+  - name: EVTSEL
+    bit_range:
+    - 5
+    - 4
+    description: |-
+      Event trigger input
+                    selection
+  side_effects: null
+interrupts:
+  FDCAN1_IT1: 21
+  FDCAN1_IT0: 19
+  FDCAN_CAL: 63
+timing: null

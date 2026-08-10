@@ -30,6 +30,29 @@ const SIG_GPIO_OUT: u32 = 128;
 /// `soc/esp32c3/include/soc/gpio_sig_map.h`).
 const SIG_I2CEXT0_SCL: u32 = 53;
 const SIG_I2CEXT0_SDA: u32 = 54;
+/// GPIO-matrix OUTPUT signal indices of GP-SPI2 (FSPI) — the controller
+/// arduino-esp32's `SPIClass SPI(FSPI)` drives. esp-idf
+/// `soc/esp32c3/include/soc/gpio_sig_map.h`: `FSPICLK_OUT_IDX` :104,
+/// `FSPID_OUT_IDX` :108, `FSPICS0_OUT_IDX` :114.
+///
+/// ⚠️ These are C3 numbers. The S3 spells the same three signals 101/103/110
+/// and the classic ESP32's VSPI is 63/65/68 — the index space is PER CHIP, and
+/// borrowing a sibling's constant fails silently in BOTH directions: a plain
+/// pad decodes as routed and a routed pad as plain.
+const SIG_FSPICLK: u32 = 63;
+const SIG_FSPID: u32 = 65;
+const SIG_FSPICS0: u32 = 68;
+/// GPIO-matrix OUTPUT signal indices of the UART transmitters (esp-idf
+/// `gpio_sig_map.h` :29 `U0TXD_OUT_IDX`, :35 `U1TXD_OUT_IDX`).
+///
+/// ⚠️ The DEFAULT `U0TXD` pad (GPIO21) reaches the pin through IO_MUX
+/// function 0 (`io_mux_reg.h` :267), NOT through this matrix, so a stock
+/// `Serial.begin()` leaves these routes dark and the pad rightly keeps reading
+/// the GPIO latch. The route lights up when firmware remaps TX to any other pin
+/// — `uart_set_pin` falls back to `gpio_matrix_out` for a non-IO_MUX pad, and
+/// UART1 has no IO_MUX route on the C3 at all, so it is matrix-only.
+const SIG_U0TXD: u32 = 6;
+const SIG_U1TXD: u32 = 9;
 
 /// ESP32-C3 GPIO-matrix OUTPUT signal index → signal name, for the I²C / SPI /
 /// UART signals the logic analyzer cares about (from esp-idf
@@ -167,6 +190,57 @@ impl Esp32c3Gpio {
                 .bind(&wire, pin, Some(SIG_I2CEXT0_SDA), 1, "I2CEXT0_SDA");
         }
         self.i2c_lines = Some(lines);
+    }
+
+    /// Bind GP-SPI2's SCK/MOSI/CS wire to every pad the output matrix can route
+    /// it to. Which pad is live at any moment is then decided by
+    /// `FUNCn_OUT_SEL_CFG`, through the shared routing seam — exactly as for
+    /// I²C above. MISO is deliberately not bound; see
+    /// [`crate::peripherals::esp_gpspi_wire`].
+    pub(crate) fn bind_spi_lines(
+        &mut self,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        use crate::peripherals::esp_gpspi_wire::{LINE_CS, LINE_MOSI, LINE_SCK};
+        for pin in 0..PIN_COUNT {
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_FSPICLK), LINE_SCK, "SPI2_SCK");
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_FSPID), LINE_MOSI, "SPI2_MOSI");
+            self.pad_routes
+                .bind(lines, pin, Some(SIG_FSPICS0), LINE_CS, "SPI2_CS");
+        }
+    }
+
+    /// Bind one UART's TX wire to every pad the output matrix can route it to.
+    ///
+    /// TX ONLY. Nothing in the engine drives the RX line, so a bound RX pad
+    /// would report a confident constant idle-high — including while an attached
+    /// GPS or modem was actually sending. That is worse than the GPIO-latch
+    /// fallback it would replace, because it looks authoritative. Same call as
+    /// `wire_rp2040_uart_pads` documents. RX joins the table when something
+    /// drives it, not before.
+    pub(crate) fn bind_uart_tx_lines(
+        &mut self,
+        instance: usize,
+        lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) {
+        let (signal, func) = match instance {
+            0 => (SIG_U0TXD, "UART0_TX"),
+            1 => (SIG_U1TXD, "UART1_TX"),
+            // The C3 has two UARTs (`SOC_UART_NUM` = 2) and no U2 signal exists
+            // in its matrix at all, so there is nothing to bind.
+            _ => return,
+        };
+        for pin in 0..PIN_COUNT {
+            self.pad_routes.bind(
+                lines,
+                pin,
+                Some(signal),
+                crate::peripherals::uart::LINE_TX,
+                func,
+            );
+        }
     }
 
     /// Every signal name bound to this port's pads, live or not — the

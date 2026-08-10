@@ -80,7 +80,10 @@ impl Peripheral for Nrf52I2s {
             OFF_PSEL_FIRST..=OFF_PSEL_LAST if offset.is_multiple_of(4) => {
                 self.psel[((offset - OFF_PSEL_FIRST) / 4) as usize]
             }
-            _ => 0,
+            _ => {
+                crate::census_reg!("nrf52.i2s:Nrf52I2s", offset, "read");
+                0
+            }
         })
     }
 
@@ -103,7 +106,9 @@ impl Peripheral for Nrf52I2s {
             OFF_PSEL_FIRST..=OFF_PSEL_LAST if offset.is_multiple_of(4) => {
                 self.psel[((offset - OFF_PSEL_FIRST) / 4) as usize] = value;
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("nrf52.i2s:Nrf52I2s", offset, "write");
+            }
         }
         Ok(())
     }

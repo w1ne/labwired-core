@@ -237,7 +237,10 @@ impl Bmi270 {
                 0x31 => ((self.steps >> 8) & 0xFF) as u8,
                 0x32 => ((self.steps >> 16) & 0xFF) as u8,
                 0x33 => ((self.steps >> 24) & 0xFF) as u8,
-                _ => 0,
+                _ => {
+                    crate::census_reg!("components.bmi270:Bmi270", reg, "read");
+                    0
+                }
             }
         } else {
             0
@@ -288,7 +291,10 @@ impl Bmi270 {
             REG_PWR_CONF => self.pwr_conf,
             REG_PWR_CTRL => self.pwr_ctrl,
 
-            _ => 0,
+            _ => {
+                crate::census_reg!("components.bmi270:Bmi270", reg, "read");
+                0
+            }
         }
     }
 
@@ -323,7 +329,9 @@ impl Bmi270 {
 
             // Read-only (CHIP_ID, data, STATUS, INTERNAL_STATUS, TEMPERATURE …)
             // and unmapped registers ignore writes.
-            _ => {}
+            _ => {
+                crate::census_reg!("components.bmi270:Bmi270", reg, "write");
+            }
         }
     }
 

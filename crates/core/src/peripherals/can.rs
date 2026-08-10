@@ -45,7 +45,10 @@ impl Peripheral for CanController {
             0x08 if self.rx_pending => 1,
             0x0C => self.rx_id,
             0x10 => self.rx_data,
-            _ => 0,
+            _ => {
+                crate::census_reg!("can:CanController", reg_offset, "read");
+                0
+            }
         };
         Ok((val >> shift) as u8)
     }
@@ -67,7 +70,9 @@ impl Peripheral for CanController {
                     self.rx_pending = false;
                 }
             }
-            _ => {}
+            _ => {
+                crate::census_reg!("can:CanController", reg_offset, "write");
+            }
         }
         Ok(())
     }
