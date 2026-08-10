@@ -1,3 +1,4 @@
+pub mod arch_policy;
 pub mod builder;
 pub mod cortex_m;
 pub mod efuse;

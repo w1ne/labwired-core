@@ -40,6 +40,10 @@ pub mod no_vacuous_test_targets;
 pub mod nrf52;
 pub mod nrf52_nvmc;
 #[cfg(test)]
+pub mod one_arch_policy;
+#[cfg(test)]
+pub mod one_arduino_boot_path;
+#[cfg(test)]
 pub mod peripheral_reachability;
 #[cfg(test)]
 pub mod pre_merge_lane_covers_browser;

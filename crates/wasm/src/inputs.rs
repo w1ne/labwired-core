@@ -789,7 +789,7 @@ board_io:
                 labwired_core::console::HostConsole::UsbSerialJtag,
             ),
             uart_rx_bufs: Vec::new(),
-            arch: Arch::RiscV,
+            arch: labwired_core::system::arch_policy::MachineFamily::RiscV,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,

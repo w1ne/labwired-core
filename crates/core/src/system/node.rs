@@ -16,10 +16,11 @@
 //! That keeps it callable from the CLI, the hosted runner, and the browser
 //! without dragging any of their orchestration along.
 
+use crate::system::arch_policy::{elf_arch, machine_family, MachineFamily};
 use crate::world::MachineTrait;
 use crate::Machine;
 use anyhow::Context;
-use labwired_config::{Arch, ChipDescriptor, SystemManifest};
+use labwired_config::{ChipDescriptor, SystemManifest};
 
 /// The image a node executes.
 ///
@@ -84,14 +85,10 @@ pub fn build_node_with_plugins(
     firmware: NodeFirmware,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
-    match chip.arch {
-        Arch::Arm => build_cortex_m_node(id, chip, system, firmware, plugins),
-        Arch::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
-        Arch::Xtensa => build_xtensa_node(id, chip, system, firmware),
-        Arch::Unknown => anyhow::bail!(
-            "node '{id}': chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, or xtensa)",
-            chip.name
-        ),
+    match machine_family(chip).with_context(|| format!("node '{id}'"))? {
+        MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, plugins),
+        MachineFamily::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
+        MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware),
     }
 }
 
@@ -343,12 +340,9 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     use goblin::elf::Elf;
 
     let elf = Elf::parse(bytes).context("parse ELF")?;
-    let arch = match elf.header.e_machine {
-        goblin::elf::header::EM_ARM => crate::Arch::Arm,
-        goblin::elf::header::EM_RISCV => crate::Arch::RiscV,
-        goblin::elf::header::EM_XTENSA => crate::Arch::XtensaLx7,
-        machine => anyhow::bail!("unsupported ELF machine type {machine}"),
-    };
+    let machine = elf.header.e_machine;
+    let arch = elf_arch(machine)
+        .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {

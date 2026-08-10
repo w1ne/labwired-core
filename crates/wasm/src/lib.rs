@@ -1,6 +1,4 @@
-use labwired_config::{
-    Arch, BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, SystemManifest,
-};
+use labwired_config::{BoardIoBinding, BoardIoKind, BoardIoSignal, ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::console::{ConsoleCapture, HostConsole};
 
@@ -24,6 +22,7 @@ use labwired_core::decoder::xtensa_length;
 use labwired_core::decoder::xtensa_narrow;
 use labwired_core::memory::{LinearMemory, ProgramImage};
 use labwired_core::peripherals::adc::Adc;
+use labwired_core::system::arch_policy::{machine_family, MachineFamily};
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::Arch as CoreArch;
@@ -76,7 +75,12 @@ pub struct WasmSimulator {
     console: ConsoleCapture,
     uart_rx_bufs: Vec<Arc<Mutex<VecDeque<u8>>>>,
     #[allow(dead_code)]
-    arch: Arch,
+    /// Which decoder the Trace panel uses. Typed as `MachineFamily`, not
+    /// `Arch`, so `Unknown` is unrepresentable: the disassembler used to
+    /// fold it in with Arm and print Thumb for an architecture nobody had
+    /// established — the same guess that let an unknown chip boot as a
+    /// Cortex-M.
+    arch: MachineFamily,
     /// Set by `install_esp32_arduino_quirks` / `enable_esp32_dual_core_emulation`.
     /// When `Some`, `step_with_esp32_aids` runs the IPI bridge + dual-core
     /// handshake keep-alives each cycle.
@@ -341,7 +345,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::Arm,
+            arch: MachineFamily::CortexM,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -370,9 +374,14 @@ impl WasmSimulator {
         let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml)
             .map_err(|e| JsValue::from_str(&format!("Chip YAML error: {}", e)))?;
 
-        match chip.arch {
-            Arch::Arm | Arch::Unknown => Self::new_from_config_arm(&chip, &manifest, firmware),
-            Arch::RiscV => {
+        // The dispatch is `arch_policy`'s, not this crate's. It used to be a
+        // local match that folded `Unknown` in with `Arm`, so a chip declaring
+        // no architecture ran here as a Cortex-M while the CLI refused it.
+        let family = machine_family(&chip)
+            .map_err(|e| JsValue::from_str(&format!("Chip architecture error: {e:#}")))?;
+        match family {
+            MachineFamily::CortexM => Self::new_from_config_arm(&chip, &manifest, firmware),
+            MachineFamily::RiscV => {
                 let blob_map = parse_named_blobs(&blobs);
                 // A board opts into faithful ROM boot by supplying the merged
                 // flash image (`bootloader@0x0 + partition-table@0x8000 +
@@ -392,11 +401,11 @@ impl WasmSimulator {
                     Self::new_from_config_riscv(&chip, &manifest, firmware, &blob_map)
                 }
             }
-            Arch::Xtensa if chip.name.starts_with("esp32s3") => {
+            MachineFamily::Xtensa if chip.name.starts_with("esp32s3") => {
                 let blob_map = parse_named_blobs(&blobs);
                 Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
             }
-            Arch::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
+            MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
         }
     }
 
@@ -432,7 +441,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::Arm,
+            arch: MachineFamily::CortexM,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -591,7 +600,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::RiscV,
+            arch: MachineFamily::RiscV,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -747,7 +756,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::RiscV,
+            arch: MachineFamily::RiscV,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -835,7 +844,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::RiscV,
+            arch: MachineFamily::RiscV,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -907,7 +916,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::Xtensa,
+            arch: MachineFamily::Xtensa,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -1010,7 +1019,7 @@ impl WasmSimulator {
             uart_sink,
             console,
             uart_rx_bufs,
-            arch: Arch::Xtensa,
+            arch: MachineFamily::Xtensa,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -1165,7 +1174,7 @@ impl WasmSimulator {
             // ESP32-C3 / generic RV32: use the RISC-V decoder. The previous path
             // always ran Thumb decode, so C3 Trace showed ARM-looking ops and
             // frequent `Unknown32` against real RISC-V encodings.
-            Arch::RiscV => {
+            MachineFamily::RiscV => {
                 let pc = pc & !1;
                 match machine.bus.read_u16(pc as u64) {
                     Ok(lo) => {
@@ -1185,7 +1194,7 @@ impl WasmSimulator {
                     Err(_) => "?? (Error reading RV instruction)".to_string(),
                 }
             }
-            Arch::Xtensa => {
+            MachineFamily::Xtensa => {
                 // Match the LX7 fetch path: length from byte0, then narrow/wide.
                 match machine.bus.read_u8(pc as u64) {
                     Ok(b0) => {
@@ -1205,7 +1214,7 @@ impl WasmSimulator {
                     Err(_) => "?? (Error reading Xtensa instruction)".to_string(),
                 }
             }
-            Arch::Arm | Arch::Unknown => {
+            MachineFamily::CortexM => {
                 let pc = pc & !1;
                 match machine.bus.read_u16(pc as u64) {
                     Ok(h1) => {
@@ -1802,7 +1811,7 @@ mod machine_advance_tests {
     fn wrap_test_machine<C: Cpu + 'static>(
         cpu: C,
         mut bus: SystemBus,
-        arch: Arch,
+        arch: MachineFamily,
     ) -> WasmSimulator {
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
         bus.attach_uart_tx_sink(uart_sink.clone(), false);
@@ -1832,7 +1841,7 @@ mod machine_advance_tests {
             bus.write_u16(index * 2, 0xBF00).unwrap();
         }
         cpu.set_pc(0);
-        wrap_test_machine(cpu, bus, Arch::Arm)
+        wrap_test_machine(cpu, bus, MachineFamily::CortexM)
     }
 
     fn configured_arm_simulator() -> WasmSimulator {
@@ -1842,7 +1851,7 @@ mod machine_advance_tests {
             bus.write_u16(index * 2, 0xBF00).unwrap();
         }
         cpu.set_pc(0);
-        wrap_test_machine(cpu, bus, Arch::Arm)
+        wrap_test_machine(cpu, bus, MachineFamily::CortexM)
     }
 
     fn riscv_simulator() -> WasmSimulator {
@@ -1852,7 +1861,7 @@ mod machine_advance_tests {
             bus.write_u32(index * 4, 0x0000_0013).unwrap();
         }
         cpu.set_pc(0);
-        wrap_test_machine(cpu, bus, Arch::RiscV)
+        wrap_test_machine(cpu, bus, MachineFamily::RiscV)
     }
 
     fn xtensa_simulator() -> WasmSimulator {
@@ -1863,7 +1872,7 @@ mod machine_advance_tests {
             bus.write_u8(index * 2 + 1, 0xf0).unwrap();
         }
         cpu.set_pc(0);
-        wrap_test_machine(cpu, bus, Arch::Xtensa)
+        wrap_test_machine(cpu, bus, MachineFamily::Xtensa)
     }
 
     fn assert_batch_matches_32_singles(

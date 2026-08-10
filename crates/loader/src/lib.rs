@@ -413,15 +413,15 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
 
     info!("ELF Entry Point: {:#x}", elf.entry);
 
-    let arch = match elf.header.e_machine {
-        goblin::elf::header::EM_ARM => labwired_core::Arch::Arm,
-        goblin::elf::header::EM_RISCV => labwired_core::Arch::RiscV,
-        94 => labwired_core::Arch::XtensaLx7, // EM_XTENSA = 94
-        _ => {
+    // The mapping itself lives in `labwired_core::system::arch_policy`; this
+    // crate only chooses what to do when it says "not modelled". It records
+    // Unknown rather than failing, because a caller that never runs the image
+    // (a symboliser, a disassembler) is still served by a parsed one.
+    let arch =
+        labwired_core::system::arch_policy::elf_arch(elf.header.e_machine).unwrap_or_else(|| {
             warn!("Unknown ELF machine type: {}", elf.header.e_machine);
             labwired_core::Arch::Unknown
-        }
-    };
+        });
 
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
