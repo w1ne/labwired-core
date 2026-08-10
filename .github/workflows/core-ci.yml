@@ -867,6 +867,16 @@ jobs:
       - name: BLE Pong fixture drift (committed .ino ↔ LIVE published lab)
         run: scripts/ci/check-published-lab-drift.sh
 
+      # ⚠ EVERY ENGINE GATE BELOW CARRIES `if: !cancelled()`, AND THE STEP ABOVE
+      # IS WHY. The drift check reads production over the network, so it fails
+      # for reasons that have nothing to do with the commit — and a failed step
+      # skips the rest of the job by default. On 2026-08-09 it went red at 15:53
+      # because the owner edited the published sketch. #908 merged 46 minutes
+      # later and broke `world_esp32c3_ble_pong` (two C3 nodes stopped electing
+      # a host); that test sits in the step below and DID NOT RUN for the next
+      # 29 hours, on that merge or any after it. A third-party monitor must
+      # never be able to stand in front of this repo's own gates.
+
       # `esp32c3_usb_cdc_console` is here for COST, not because it is
       # release-only: same reason as `world_esp32c3_ble_pong` above. It boots
       # the C3 mask ROM, which is 335s in debug (measured) and seconds in
@@ -881,6 +891,7 @@ jobs:
       # its own headline behaviour — CDC-on-boot builds actually printing — with
       # no lane running the test that proves it.
       - name: Release-gated tests — cfg(not(debug_assertions))
+        if: ${{ !cancelled() }}
         run: >
           cargo test --release -p labwired-core --features event-scheduler
           --lib --test event_scheduler --test release_only_cfg_ratchet
@@ -910,6 +921,7 @@ jobs:
       # ratchet; see the comment on that PR step for what shipped through the
       # hole they close.
       - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
+        if: ${{ !cancelled() }}
         run: >
           cargo test -p labwired-core --features jit,event-scheduler
           --test intmatrix_alarm
@@ -948,6 +960,7 @@ jobs:
       # `tick_elapsed_forced` has it. This step runs the oracle in the
       # configuration that exposes it, on every push to main.
       - name: Feature gate — hardware oracle under event-scheduler
+        if: ${{ !cancelled() }}
         run: >
           cargo test -p labwired-hw-oracle
           --features labwired-core/event-scheduler
@@ -974,6 +987,7 @@ jobs:
       # The crate is small and its dependency graph is already warm from the
       # step above, so this is seconds.
       - name: Compile-only — hardware-oracle harnesses (nRF52 / STM32 over SWD)
+        if: ${{ !cancelled() }}
         run: >
           cargo test -p labwired-hw-oracle
           --features hw-oracle-nrf52,hw-oracle-stm32 --no-run
