@@ -1,0 +1,68 @@
+# ESP32-S3 Doom-like community lab circuit.
+#
+# Firmware drives an ILI9341 over GP-SPI2 and samples six active-low buttons.
+# Pin map (must match playground starter-diagram and firmware GPIO wiring):
+#
+#   SPI2 SCLK  = GPIO12
+#   SPI2 MOSI  = GPIO13
+#   TFT CS     = GPIO10
+#   TFT D/C    = GPIO11
+#   TFT RESET  = GPIO14  (firmware-driven; not a bus device pin)
+#
+#   btn_forward  = GPIO1
+#   btn_backward = GPIO2
+#   btn_left     = GPIO3
+#   btn_right    = GPIO4
+#   btn_fire     = GPIO5
+#   btn_use      = GPIO6
+#
+name: "esp32s3-doomlike-lab"
+chip: "../../configs/chips/esp32s3.yaml"
+
+external_devices:
+  - id: "tft"
+    type: "ili9341"
+    # Production ESP32-S3 GP-SPI2 is registered as `spi2_s3` (0x6002_4000),
+    # not the classic-ESP32 name `spi2`.
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO10"
+      dc_pin: "GPIO11"
+
+board_io:
+  - id: "btn_forward"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 1
+    signal: "input"
+    active_high: false
+  - id: "btn_backward"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 2
+    signal: "input"
+    active_high: false
+  - id: "btn_left"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 3
+    signal: "input"
+    active_high: false
+  - id: "btn_right"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 4
+    signal: "input"
+    active_high: false
+  - id: "btn_fire"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 5
+    signal: "input"
+    active_high: false
+  - id: "btn_use"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 6
+    signal: "input"
+    active_high: false

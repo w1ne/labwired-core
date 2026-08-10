@@ -12,6 +12,54 @@ use labwired_config::{
 use std::path::PathBuf;
 
 #[test]
+fn esp32s3_spi_latches_display_dc_from_gpio_output() {
+    use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+    use crate::peripherals::esp32s3::gpspi::Esp32s3Spi;
+    use crate::peripherals::spi::SpiDevice;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    struct DcSpy(Arc<AtomicBool>);
+    impl SpiDevice for DcSpy {
+        fn transfer(&mut self, _mosi: u8) -> u8 {
+            0
+        }
+        fn cs_pin(&self) -> &str {
+            "GPIO10"
+        }
+        fn dc_source(&self) -> Option<(u64, u8)> {
+            Some((0x6000_4004, 11))
+        }
+        fn set_dc_level(&mut self, level: bool) {
+            self.0.store(level, Ordering::SeqCst);
+        }
+    }
+
+    let observed = Arc::new(AtomicBool::new(false));
+    let mut spi = Esp32s3Spi::new(21);
+    spi.push_device(Box::new(DcSpy(observed.clone())));
+
+    let mut bus = SystemBus::new();
+    bus.add_peripheral(
+        "gpio",
+        0x6000_4000,
+        0x1000,
+        None,
+        Box::new(Esp32s3Gpio::new()),
+    );
+    bus.add_peripheral("spi2_s3", 0x6002_4000, 0x1000, None, Box::new(spi));
+    bus.refresh_peripheral_index();
+    crate::Bus::write_u32(&mut bus, 0x6000_4004, 1 << 11).unwrap();
+    let spi_index = bus.find_peripheral_index_by_name("spi2_s3").unwrap();
+
+    bus.maybe_latch_dc(spi_index);
+
+    assert!(observed.load(Ordering::SeqCst));
+}
+
+#[test]
 fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let mut bus = SystemBus::new();
     // Systimer model owns ESP register map; bus only sees MmioAccessClass.

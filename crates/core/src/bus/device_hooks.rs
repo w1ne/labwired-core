@@ -440,6 +440,7 @@ impl SystemBus {
     pub(crate) fn maybe_latch_dc(&mut self, idx: usize) {
         use crate::peripherals::esp32::spi::Esp32Spi;
         use crate::peripherals::esp32c3::spi::Esp32c3Spi;
+        use crate::peripherals::esp32s3::gpspi::Esp32s3Spi;
         use crate::peripherals::spi::{Spi, SpiDevice};
 
         // Borrow the attached-device list off whichever SPI peripheral kind
@@ -452,6 +453,9 @@ impl SystemBus {
                 return Some(&s.attached_devices);
             }
             if let Some(s) = any.downcast_ref::<Esp32c3Spi>() {
+                return Some(&s.attached_devices);
+            }
+            if let Some(s) = any.downcast_ref::<Esp32s3Spi>() {
                 return Some(&s.attached_devices);
             }
             None
@@ -468,6 +472,11 @@ impl SystemBus {
             if any.is::<Esp32c3Spi>() {
                 return any
                     .downcast_mut::<Esp32c3Spi>()
+                    .map(|s| &mut s.attached_devices);
+            }
+            if any.is::<Esp32s3Spi>() {
+                return any
+                    .downcast_mut::<Esp32s3Spi>()
                     .map(|s| &mut s.attached_devices);
             }
             None

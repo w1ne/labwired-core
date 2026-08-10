@@ -2435,7 +2435,14 @@ boards:
     # esp32s3_reset_conformance (1 passed) were executed on this branch. The source digest moved;
     # the model did not.
     drift_ack: 2026-08-10
-    drift_ack_digest: 54de00d1da761d8c0a7d7cd729c2dfb0e820ee2b5c756f7ce5765d78bf7c2d00
+    # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
+    # attached devices and return their MISO bytes; display D/C observes the S3
+    # GPIO output; GPIO labels resolve against the S3 register bank. This is an
+    # intentional behavioural correction needed by the ILI9341 community demo.
+    # The anchored nine reset registers and their reset values are unchanged.
+    # Owner-approved drift acknowledgement without a new live register capture;
+    # focused evidence: 3 production ILI9341 path tests and 20 GP-SPI tests.
+    drift_ack_digest: 2db52b8c59a9b1ce54f55d190a3c6ea193f269420bcabe5184016ecafd71c17d
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

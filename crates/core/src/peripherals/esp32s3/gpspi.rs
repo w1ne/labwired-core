@@ -211,7 +211,7 @@ pub struct Esp32s3Spi {
     /// Devices on this controller's bus (same model as `Esp32Spi` /
     /// the shared `Spi`): transfers broadcast to every device, first
     /// non-zero MISO byte wins (single-device labs in practice).
-    attached_devices: Vec<Box<dyn SpiDevice>>,
+    pub(crate) attached_devices: Vec<Box<dyn SpiDevice>>,
 
     /// Bus-published cycle clock (walk-free level export).
     clock: Option<CycleClock>,
@@ -366,6 +366,20 @@ impl Esp32s3Spi {
         (bits.div_ceil(8)).min(64)
     }
 
+    fn exchange_byte(&mut self, mosi: u8) -> u8 {
+        if self.attached_devices.is_empty() {
+            return 0xFF;
+        }
+        let mut winner = 0u8;
+        for device in &mut self.attached_devices {
+            let response = device.transfer(mosi);
+            if winner == 0 {
+                winner = response;
+            }
+        }
+        winner
+    }
+
     /// Launch the user transaction.
     ///
     /// In DMA mode (`SPI_DMA_TX_ENA` or `SPI_DMA_RX_ENA` set in `DMA_CONF`):
@@ -395,10 +409,11 @@ impl Esp32s3Spi {
             });
             return;
         }
-        // Non-DMA (W-buffer) mode: existing logic unchanged.
+        // Non-DMA W-buffer mode is full-duplex: send MOSI to attached devices
+        // and replace the transmitted bytes with their MISO responses.
         let bytes = self.miso_bytes();
         // Narrate the MOSI payload FIRST. It is still sitting in W0..W15 at this
-        // point and the fill below overwrites it with the idle-MISO 0xFF, so
+        // point and the exchange below overwrites it with MISO, so
         // reading it after would report a bus that only ever carried ones.
         if self.wire.is_bound() {
             let mosi: Vec<u8> = (0..bytes)
@@ -409,17 +424,20 @@ impl Esp32s3Spi {
                 .collect();
             self.wire_push_bytes(&mosi);
         }
-        for w in 0..bytes.div_ceil(4) {
-            let off = W0 + (w as u64) * 4;
-            // Bytes covered by this word: full 0xFF, partial keep only valid bytes.
-            let first_byte = w * 4;
-            let mut word = 0u32;
-            for b in 0..4 {
-                if first_byte + b < bytes {
-                    word |= 0xFFu32 << (8 * b);
+        for word_index in 0..bytes.div_ceil(4) {
+            let off = W0 + (word_index as u64) * 4;
+            let mosi_word = self.reg(off);
+            let mut miso_word = 0u32;
+            for byte_index in 0..4 {
+                let absolute = word_index * 4 + byte_index;
+                if absolute >= bytes {
+                    break;
                 }
+                let shift = byte_index * 8;
+                let mosi = ((mosi_word >> shift) & 0xFF) as u8;
+                miso_word |= (self.exchange_byte(mosi) as u32) << shift;
             }
-            self.set_reg_raw(off, word);
+            self.set_reg_raw(off, miso_word);
         }
         // Clear the USR start bit (auto-clear on done) so `!(CMD & USR)` exits.
         let cmd = self.reg(CMD) & !USR_BIT;
@@ -715,7 +733,7 @@ impl Peripheral for Esp32s3Spi {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     struct ExternalCanPoller(Arc<AtomicUsize>);
     impl SpiDevice for ExternalCanPoller {
@@ -927,6 +945,32 @@ mod tests {
             0x0000_00FF,
             "5th byte 0xFF, rest untouched"
         );
+    }
+
+    #[test]
+    fn cpu_w_buffer_transaction_streams_mosi_to_attached_device() {
+        struct Spy(Arc<Mutex<Vec<u8>>>);
+        impl SpiDevice for Spy {
+            fn transfer(&mut self, mosi: u8) -> u8 {
+                self.0.lock().unwrap().push(mosi);
+                mosi ^ 0xA5
+            }
+
+            fn cs_pin(&self) -> &str {
+                "GPIO10"
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let mut s = Esp32s3Spi::new(SPI2_SOURCE);
+        s.push_device(Box::new(Spy(seen.clone())));
+        s.write_u32(W0, 0x0403_0201).unwrap();
+        s.write_u32(MS_DLEN, 4 * 8 - 1).unwrap();
+
+        s.write_u32(CMD, USR_BIT).unwrap();
+
+        assert_eq!(&*seen.lock().unwrap(), &[1, 2, 3, 4]);
+        assert_eq!(s.read_u32(W0).unwrap(), 0xA1A6_A7A4);
     }
 
     #[test]
