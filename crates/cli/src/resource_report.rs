@@ -96,7 +96,9 @@ pub(crate) fn compute_footprint(
     Some(report)
 }
 
-/// PT_LOAD extents using `p_vaddr` + `p_memsz` (includes BSS; not filesz).
+/// PT_LOAD extents with `p_vaddr` / `p_memsz` / `p_filesz`.
+///
+/// `memsz` includes BSS; `filesz` is 0 for pure NOBITS reserves (heap/stack).
 pub(crate) fn load_extents_from_elf(firmware_bytes: &[u8]) -> Vec<LoadExtent> {
     let Ok(elf) = Elf::parse(firmware_bytes) else {
         return Vec::new();
@@ -112,6 +114,7 @@ pub(crate) fn load_extents_from_elf(firmware_bytes: &[u8]) -> Vec<LoadExtent> {
         extents.push(LoadExtent {
             vaddr: ph.p_vaddr,
             memsz: ph.p_memsz,
+            filesz: ph.p_filesz,
         });
     }
     extents

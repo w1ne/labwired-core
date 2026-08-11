@@ -91,11 +91,18 @@ impl RamRegion {
     }
 }
 
-/// Load segment extent for paint safety (use `p_vaddr` + `p_memsz`, not filesz).
+/// Load segment extent for paint floor / safety.
+///
+/// - `memsz` (`p_memsz`): full runtime image including BSS — used for the default
+///   heap floor so paint starts after zeroed globals.
+/// - `filesz` (`p_filesz`): bytes actually present in the ELF file. Pure NOBITS
+///   reservations (`filesz == 0`), such as GNU `._user_heap_stack`, are free
+///   space (heap/stack) and may be painted when a heap-floor symbol is known.
 #[derive(Debug, Clone, Copy)]
 pub struct LoadExtent {
     pub vaddr: u64,
     pub memsz: u64,
+    pub filesz: u64,
 }
 
 /// Word pattern written into the unused stack window before the run.
@@ -152,8 +159,15 @@ pub fn compute_paint_range(
         return Err("stack_region_too_small_or_unknown");
     }
 
-    // Refuse if any load extent overlaps the paint window.
+    // Refuse if file-backed image (data + BSS via memsz) overlaps the paint
+    // window. Pure NOBITS segments (`filesz == 0`) are skipped: they are either
+    // a dedicated BSS PT_LOAD (already covered by image_ram_end / heap-floor
+    // symbols) or a heap/stack reserve (GNU `._user_heap_stack`) that paint
+    // is *meant* to cover when `_end` / `__bss_end__` is known.
     for ext in load_extents {
+        if ext.filesz == 0 {
+            continue;
+        }
         let lo = ext.vaddr.max(paint_lo);
         let hi = ext.vaddr.saturating_add(ext.memsz).min(paint_hi);
         if hi > lo {
@@ -200,11 +214,38 @@ mod tests {
         let extents = [LoadExtent {
             vaddr: 0x2000_0000,
             memsz: 0x1000, // 4K image in RAM
+            filesz: 0x80,
         }];
         let sp = 0x2000_5000;
         let (lo, hi) = compute_paint_range(sp, ram, &extents, None).unwrap();
         assert_eq!(lo, 0x2000_1000);
         assert_eq!(hi, 0x2000_5000);
+    }
+
+    #[test]
+    fn user_heap_stack_nobits_is_paintable_with_end_symbol() {
+        // Matches stm32f103-blinky.elf: .data+.bss LOAD + pure NOBITS heap/stack.
+        let ram = RamRegion {
+            base: 0x2000_0000,
+            size: 0x5000,
+        };
+        let extents = [
+            LoadExtent {
+                vaddr: 0x2000_0000,
+                memsz: 0x46c,
+                filesz: 0x7c,
+            },
+            LoadExtent {
+                vaddr: 0x2000_046c,
+                memsz: 0x604,
+                filesz: 0,
+            },
+        ];
+        let sp = 0x2000_5000;
+        let end = 0x2000_0470;
+        let (lo, hi) = compute_paint_range(sp, ram, &extents, Some(end)).unwrap();
+        assert_eq!(lo, end);
+        assert_eq!(hi, sp);
     }
 
     #[test]
