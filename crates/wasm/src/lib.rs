@@ -406,6 +406,8 @@ impl WasmSimulator {
                 Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
             }
             MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
+            // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
+            MachineFamily::Avr => Self::new_from_config_avr(&chip, &manifest, firmware),
         }
     }
 
@@ -442,6 +444,45 @@ impl WasmSimulator {
             console,
             uart_rx_bufs,
             arch: MachineFamily::CortexM,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        })
+    }
+
+    /// AVR8 (ATmega328P / classic Arduino Nano) constructor for the browser.
+    /// Mirrors `labwired_core::system::node::build_avr_node`: parse ELF into
+    /// the Avr program image, attach the host console, box the CPU.
+    fn new_from_config_avr(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        let mut bus = SystemBus::from_config(chip, manifest)
+            .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
+
+        let console = ConsoleCapture::for_manifest(manifest);
+        let uart_sink = console.heard_sink();
+        bus.attach_host_console(console.tapped(), uart_sink.clone())
+            .map_err(|e| JsValue::from_str(&e))?;
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        let program_image = load_elf_bytes(firmware)
+            .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
+        let mut cpu = labwired_core::cpu::Avr::new();
+        cpu.load_program_image(&program_image);
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let machine = Machine::new(boxed, bus);
+
+        let board_io = manifest.board_io.clone();
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io,
+            uart_sink,
+            console,
+            uart_rx_bufs,
+            arch: MachineFamily::Avr,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
@@ -1231,6 +1272,12 @@ impl WasmSimulator {
                     Err(_) => "?? (Error reading h1)".to_string(),
                 }
             }
+            // No shared AVR decoder in the wasm Trace panel yet — show the raw
+            // opcode word so the pane is never empty / wrong-arch.
+            MachineFamily::Avr => match machine.bus.read_u16(pc as u64) {
+                Ok(word) => format!("AVR {word:#06x}"),
+                Err(_) => "?? (Error reading AVR instruction)".to_string(),
+            },
         }
     }
 

@@ -18,9 +18,6 @@ use tracing::{debug, info, warn};
 
 pub mod footprint;
 pub mod multi_image;
-pub mod footprint;
-
-pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
