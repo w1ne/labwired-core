@@ -1557,7 +1557,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
-        // Load failed: no successful machine run for footprint/paint.
+        // Load failed: no successful machine run for footprint/paint/metrics.
+        None,
         None,
         None,
     );
@@ -2022,6 +2023,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         firmware_bytes,
         chip_mem.as_ref(),
     );
+    // Drop load/paint bus traffic so `metrics.memory_*` reflect the run only.
+    let _ = machine.bus.take_access_counts();
+
+    // Cheap statistical PC histogram (no SimulationObserver — JIT-safe).
+    let mut pc_hist: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
+    let mut pc_sample_budget: u64 = 0;
+    // Best-effort exception count: SimulationError::ExceptionRaised only in P1.
+    let mut exception_count: u64 = 0;
 
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -2702,6 +2711,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             Ok(report) => {
                 step += report.primary_steps;
                 steps_executed = step;
+                // Statistical PC sampling: one histogram hit every
+                // PC_SAMPLE_EVERY retired primary steps, using the post-batch
+                // PC (no per-instruction observer — keeps JIT eligible).
+                if report.primary_steps > 0 {
+                    pc_sample_budget =
+                        pc_sample_budget.saturating_add(u64::from(report.primary_steps));
+                    while pc_sample_budget >= resource_report::PC_SAMPLE_EVERY {
+                        pc_sample_budget -= resource_report::PC_SAMPLE_EVERY;
+                        resource_report::note_pc_sample(&mut pc_hist, machine.cpu.get_pc());
+                    }
+                }
                 // A firmware-authored verdict ends the run immediately: the
                 // firmware has stated the result, so continuing would only let
                 // a later timeout overwrite it.
@@ -2718,6 +2738,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             }
             Err(error) => {
                 sim_error_happened = true;
+                if matches!(
+                    error,
+                    labwired_core::SimulationError::ExceptionRaised { .. }
+                ) {
+                    exception_count = exception_count.saturating_add(1);
+                }
                 stop_reason = map_sim_error_to_stop_reason(&error);
                 if stop_reason != StopReason::Halt {
                     error!("Simulation error at step {}: {}", step, error);
@@ -2876,6 +2902,22 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     // Finalize main-stack report before assertion evaluation so
     // `resource_budget` can compare against high-water / footprint.
+    // Snapshot bus access counts before paint scan / memory assertions pollute
+    // the run-lifetime counters.
+    let (memory_reads, memory_writes, peripheral_accesses) = machine.bus.access_counts();
+    let top_pcs = resource_report::top_pc_samples(&pc_hist, resource_report::PC_SAMPLE_TOP_N);
+    let pc_samples = resource_report::resolve_pc_sample_symbols(&top_pcs, firmware_path);
+    let execution_metrics = artifacts::ExecutionMetrics {
+        cycles: metrics.get_cycles(),
+        instructions: metrics.get_instructions(),
+        steps_executed,
+        memory_reads,
+        memory_writes,
+        peripheral_accesses,
+        exceptions: exception_count,
+        pc_samples,
+    };
+
     let memory = if let Some(session) = paint_session {
         let final_sp = resource_report::arm_sp(&machine.cpu);
         resource_report::finalize_paint_report(&machine.bus, final_sp, session)
@@ -3228,6 +3270,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         stimulus_outcomes,
         footprint,
         Some(memory),
+        Some(execution_metrics),
     );
 
     // The same `verdict` the artifact above was written from. Not a second
@@ -3265,6 +3308,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     stimuli: Vec<StimulusOutcome>,
     footprint: Option<artifacts::FootprintReport>,
     memory: Option<labwired_core::stack_paint::MainStackReport>,
+    metrics_block: Option<artifacts::ExecutionMetrics>,
 ) {
     let status = verdict.status();
 
@@ -3330,6 +3374,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         stimuli,
         footprint,
         memory,
+        metrics: metrics_block,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -3670,6 +3715,7 @@ pub(crate) fn write_config_error_outputs(
         // Config error: no firmware footprint or stack paint collected.
         footprint: None,
         memory: None,
+        metrics: None,
     };
 
     if let Some(output_dir) = &args.output_dir {

@@ -218,3 +218,93 @@ pub(crate) fn finalize_paint_report(
 pub(crate) fn arm_sp(cpu: &impl labwired_core::Cpu) -> u64 {
     cpu.get_register(13) as u64
 }
+
+// ── Execution metrics: PC histogram ──────────────────────────────────────────
+
+/// Sample every N retired primary steps (cheap statistical PC histogram).
+pub(crate) const PC_SAMPLE_EVERY: u64 = 256;
+
+/// Keep the top-N hottest PCs in `result.json` metrics.
+pub(crate) const PC_SAMPLE_TOP_N: usize = 16;
+
+/// Record one PC hit in the sample histogram.
+#[inline]
+pub(crate) fn note_pc_sample(hist: &mut std::collections::HashMap<u32, u64>, pc: u32) {
+    *hist.entry(pc).or_insert(0) += 1;
+}
+
+/// Sort histogram entries by count descending (then PC ascending for stability)
+/// and take the top `n`.
+pub(crate) fn top_pc_samples(
+    hist: &std::collections::HashMap<u32, u64>,
+    n: usize,
+) -> Vec<(u32, u64)> {
+    let mut entries: Vec<(u32, u64)> = hist.iter().map(|(&pc, &count)| (pc, count)).collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    if entries.len() > n {
+        entries.truncate(n);
+    }
+    entries
+}
+
+/// Resolve optional function names for top PC samples via DWARF.
+pub(crate) fn resolve_pc_sample_symbols(
+    samples: &[(u32, u64)],
+    firmware_path: &std::path::Path,
+) -> Vec<crate::artifacts::PcSample> {
+    let symbols = labwired_loader::SymbolProvider::new(firmware_path).ok();
+    samples
+        .iter()
+        .map(|&(pc, count)| {
+            // Thumb: try both with and without LSB for DWARF lookup.
+            let symbol = symbols.as_ref().and_then(|sp| {
+                sp.lookup(pc as u64)
+                    .or_else(|| sp.lookup((pc & !1) as u64))
+                    .and_then(|loc| loc.function)
+            });
+            crate::artifacts::PcSample {
+                pc: pc as u64,
+                count,
+                symbol,
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod pc_sample_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn top_pc_samples_sorts_by_count_then_pc() {
+        let mut hist = HashMap::new();
+        hist.insert(0x1000, 10);
+        hist.insert(0x2000, 50);
+        hist.insert(0x1500, 50); // same count as 0x2000 → lower PC first
+        hist.insert(0x3000, 5);
+        hist.insert(0x4000, 1);
+
+        let top = top_pc_samples(&hist, 3);
+        assert_eq!(top.len(), 3);
+        assert_eq!(top[0], (0x1500, 50));
+        assert_eq!(top[1], (0x2000, 50));
+        assert_eq!(top[2], (0x1000, 10));
+    }
+
+    #[test]
+    fn top_pc_samples_empty_hist() {
+        let hist = HashMap::new();
+        assert!(top_pc_samples(&hist, 16).is_empty());
+    }
+
+    #[test]
+    fn note_pc_sample_accumulates() {
+        let mut hist = HashMap::new();
+        note_pc_sample(&mut hist, 0xABCD);
+        note_pc_sample(&mut hist, 0xABCD);
+        note_pc_sample(&mut hist, 0x1234);
+        assert_eq!(hist.get(&0xABCD), Some(&2));
+        assert_eq!(hist.get(&0x1234), Some(&1));
+    }
+}
