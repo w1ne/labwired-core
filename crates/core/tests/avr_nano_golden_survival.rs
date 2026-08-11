@@ -42,7 +42,8 @@ impl Bus for MockBus {
 }
 
 fn fixture_elf() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/avr/arduino-nano-blinky.elf")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/avr/arduino-nano-blinky.elf")
 }
 
 #[test]
@@ -120,9 +121,6 @@ fn golden_elf_is_avr_and_loads() {
     assert_eq!(cpu.get_pc() & 1, 0);
     assert_eq!(cpu.ucsr0a & UCSRA_UDRE, UCSRA_UDRE);
 }
-
-
-
 
 /// Fast path: golden reaches Serial + does not reboot during init.
 #[test]

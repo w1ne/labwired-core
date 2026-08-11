@@ -191,6 +191,12 @@ const SHIPPED: &[Board] = &[
         yaml_stem: "rp2040",
         display_lab: false,
     },
+    Board {
+        chip: "atmega328p",
+        aliases: &["atmega328p", "nano", "avr"],
+        yaml_stem: "atmega328p",
+        display_lab: false,
+    },
 ];
 
 /// SHRINK-ONLY allowlist of (chip, class) pairs known to lack coverage today.

@@ -16,8 +16,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-pub mod multi_image;
 pub mod footprint;
+pub mod multi_image;
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
@@ -447,11 +447,19 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
             if arch == labwired_core::Arch::Avr {
                 // avr-gcc: .text at low VMA; .data has VMA 0x800000+data and LMA in flash
                 // so CRT can LPM-copy. Emit BOTH a flash LMA segment and a data VMA segment.
-                let v = if ph.p_vaddr != 0 { ph.p_vaddr } else { ph.p_paddr };
+                let v = if ph.p_vaddr != 0 {
+                    ph.p_vaddr
+                } else {
+                    ph.p_paddr
+                };
                 let (space, data_addr) = labwired_core::cpu::avr::classify_avr_vma(v);
                 match space {
                     labwired_core::cpu::avr::AvrLoadSpace::Flash => {
-                        let flash_addr = if ph.p_paddr != 0 { ph.p_paddr } else { data_addr };
+                        let flash_addr = if ph.p_paddr != 0 {
+                            ph.p_paddr
+                        } else {
+                            data_addr
+                        };
                         debug!("AVR flash segment {:#x} size {}", flash_addr, size);
                         program_image.add_segment(flash_addr, segment_data);
                     }
