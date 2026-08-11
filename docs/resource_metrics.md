@@ -1,14 +1,20 @@
-# Resource metrics (P0)
+# Resource metrics (P0 + P1)
 
-Scenario budgets for firmware **footprint** and **main-stack high-water** during
-`labwired test`. These are CI gates for “does this build still fit?”, not
-silicon performance counters (no MHz, no CPI, no peripheral latency).
+Scenario budgets for firmware **footprint** and **main-stack high-water** (P0),
+plus always-on cheap **execution counters** (P1) during `labwired test`.
 
-Worked examples: [examples/metrics/](../examples/metrics/README.md).
+- **P0** — CI gates for “does this build still fit?” (flash/RAM/stack).
+- **P1** — industry-standard execution metrics in `result.json` (`metrics`):
+  cycles, instructions, bus access counts, best-effort exceptions, PC samples.
+
+These are **not** silicon performance counters (no MHz, no CPI, no peripheral
+latency). Worked examples: [examples/metrics/](../examples/metrics/README.md).
 
 ---
 
 ## What is measured
+
+### Footprint & stack (P0)
 
 | Signal | Source | `result.json` path |
 |--------|--------|--------------------|
@@ -31,9 +37,52 @@ include:
 - `section_sum_not_bin_image` — totals are section sums, not `objcopy -O binary` size
 - `totals_from_chip_catalog` — device totals came from the chip descriptor
 
+### Execution metrics (P1)
+
+Always-on for every successful machine run. Top-level
+`cycles` / `instructions` / `steps_executed` remain for compatibility; the same
+values are nested under `metrics` together with bus and PC data:
+
+| Field | Source |
+|-------|--------|
+| `metrics.cycles` | Same as top-level `cycles` (observer or machine counters) |
+| `metrics.instructions` | Same as top-level `instructions` |
+| `metrics.steps_executed` | Same as top-level `steps_executed` |
+| `metrics.memory_reads` | Successful RAM / flash / extra_mem reads (any width) |
+| `metrics.memory_writes` | Successful RAM / flash / extra_mem writes (any width) |
+| `metrics.peripheral_accesses` | MMIO via `note_mmio_activity` (not double-counted as memory) |
+| `metrics.exceptions` | Best-effort: `SimulationError::ExceptionRaised` stop paths only |
+| `metrics.pc_samples` | Top-16 PCs by sample count (every 256 retired steps) |
+
+Example:
+
+```json
+"metrics": {
+  "cycles": 200000,
+  "instructions": 180000,
+  "steps_executed": 180000,
+  "memory_reads": 50000,
+  "memory_writes": 12000,
+  "peripheral_accesses": 8000,
+  "exceptions": 0,
+  "pc_samples": [
+    { "pc": 134217996, "count": 4000, "symbol": "main" }
+  ]
+}
+```
+
+PC sampling is **statistical** (post-batch PC every 256 primary steps) and does
+**not** install a `SimulationObserver`, so it does not force the JIT off.
+Optional `symbol` comes from DWARF when available.
+
+Bus counters start after load/paint so they reflect run traffic only (not ELF
+load or stack paint fill/scan).
+
 ---
 
-## Scope and limits (P0)
+## Scope and limits
+
+### P0 (footprint / stack)
 
 - **Scenario budgets, not silicon perf.** Limits you write in the test script
   are product/CI ceilings for that scenario, not datasheet capacity tests.
@@ -45,6 +94,16 @@ include:
   references a known chip; unknown totals omit the pct fields.
 - **`labwired test` only.** Footprint and paint are wired into the headless
   test runner. Interactive `run` / playground do not emit these blocks today.
+
+### P1 (execution metrics)
+
+- **Cheap and always-on.** Cell counters on the bus + test-loop sampling; no
+  full trace.
+- **Exceptions are best-effort.** Handled NVIC entries that do not fault the
+  run are not counted in P1; only `ExceptionRaised` errors increment
+  `metrics.exceptions`.
+- **No access budgets yet.** Optional `resource_budget.max_peripheral_accesses`
+  is a follow-up; P1 only reports counts.
 
 ---
 
@@ -122,6 +181,11 @@ On pass, `evidence` is omitted. Methods you may see: `elf_section_totals_v1`,
 ```bash
 # Footprint + memory block from a green run
 jq '{footprint, memory}' /tmp/m-pass/result.json
+
+# Execution metrics (P1)
+jq '.metrics' /tmp/m-pass/result.json
+jq '{cycles, memory_reads, peripheral_accesses, pc_samples: .pc_samples[:3]}' \
+  /tmp/m-pass/result.json | jq -c .
 
 # text_bytes path (section-sum text)
 jq '.footprint.text_bytes' /tmp/m-pass/result.json
