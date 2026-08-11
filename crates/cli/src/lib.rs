@@ -1629,6 +1629,8 @@ fn assertion_currently_passes(
         TestAssertion::DisplayRegion(a) => {
             evaluate_display_region(&machine.bus, &a.display_region).is_ok()
         }
+        // Evaluated post-run from footprint/memory (Tasks 5–6); not a live latch.
+        TestAssertion::ResourceBudget(_) => false,
     }
 }
 
@@ -2873,7 +2875,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         false
                     }
                 }
-            } // MqttFabric is handled above via assertion_currently_passes.
+            }
+            // Footprint / stack paint evaluation lands in Tasks 5–6.
+            TestAssertion::ResourceBudget(_) => false, // MqttFabric is handled above via assertion_currently_passes.
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -3210,6 +3214,9 @@ fn write_outputs<C: labwired_core::Cpu>(
         fidelity,
         logic_edges,
         stimuli,
+        // Resource metrics (footprint / stack paint) wired in later tasks.
+        footprint: None,
+        memory: None,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -3547,6 +3554,9 @@ pub(crate) fn write_config_error_outputs(
         // Nor any stimulus outcomes: the run was rejected before a machine
         // existed, so no stimulus was ever attempted.
         stimuli: Vec::new(),
+        // Config error: no firmware footprint or stack paint collected.
+        footprint: None,
+        memory: None,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -3880,6 +3890,18 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
                 d.min_ink,
                 d.max_ink.unwrap_or(1.0)
             )
+        }
+        TestAssertion::ResourceBudget(a) => {
+            let b = &a.resource_budget;
+            if let Some(n) = b.max_flash_bytes {
+                format!("resource_budget: max_flash_bytes={n}")
+            } else if let Some(n) = b.max_ram_static_bytes {
+                format!("resource_budget: max_ram_static_bytes={n}")
+            } else if let Some(n) = b.max_main_stack_bytes {
+                format!("resource_budget: max_main_stack_bytes={n}")
+            } else {
+                "resource_budget".to_string()
+            }
         }
     };
 
