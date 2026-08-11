@@ -31,6 +31,7 @@ Popular boards: [ESP32-C3](boards/esp32c3.md) · [nRF52840](boards/nrf52840.md) 
 - [Architecture overview](architecture.md) — CPU, bus, peripherals
 - [Hardware–sim parity](golden_reference.md)
 - [Configuration (YAML)](configuration_reference.md)
+- [Resource metrics](resource_metrics.md) — flash / RAM footprint and main-stack budgets in `labwired test`
 - [Target support rubric](target_support_rubric.md)
 
 ---
@@ -40,6 +41,7 @@ Popular boards: [ESP32-C3](boards/esp32c3.md) · [nRF52840](boards/nrf52840.md) 
 - [Simulating sensors (I²C)](examples/i2c_sensor_example.md)
 - [DMA & interrupts](examples/dma_exti_example.md)
 - [Integrated test walkthrough](examples/integrated_test_walkthrough.md)
+- [Resource metrics examples](../examples/metrics/README.md) — STM32F103 blinky flash / stack budgets
 
 ---
 
