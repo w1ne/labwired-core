@@ -82,7 +82,6 @@ pub const UCSRA_TXC: u8 = 1 << 6;
 pub const TIMSK_TOIE0: u8 = 1 << 0;
 pub const TIFR_TOV0: u8 = 1 << 0;
 
-
 impl Default for Avr {
     fn default() -> Self {
         Self::new()
@@ -101,11 +100,20 @@ impl Avr {
             io: [0; 0xE0],
             pending_irq: 0,
             cycles: 0,
-            tcnt0: 0, tccr0a: 0, tccr0b: 0, timsk0: 0, tifr0: 0,
-            ocr0a: 0, ocr0b: 0, t0_prescale_acc: 0,
+            tcnt0: 0,
+            tccr0a: 0,
+            tccr0b: 0,
+            timsk0: 0,
+            tifr0: 0,
+            ocr0a: 0,
+            ocr0b: 0,
+            t0_prescale_acc: 0,
             serial_tx: Vec::new(),
             serial_sink: None,
-            ucsr0a: UCSRA_UDRE, ucsr0b: 0, ucsr0c: 0, ubrr0: 0,
+            ucsr0a: UCSRA_UDRE,
+            ucsr0b: 0,
+            ucsr0c: 0,
+            ubrr0: 0,
         }
     }
 
@@ -227,26 +235,73 @@ impl Avr {
 
     fn data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         match addr {
-            0x0000..=0x001F => { self.r[addr as usize] = value; Ok(()) }
-            0x005D => { self.sp = (self.sp & 0xFF00) | value as u16; Ok(()) }
-            0x005E => { self.sp = (self.sp & 0x00FF) | ((value as u16) << 8); Ok(()) }
-            0x005F => { self.sreg = value; Ok(()) }
-            0x0035 => { self.tifr0 &= !value; Ok(()) }
-            0x0044 => { self.tccr0a = value; Ok(()) }
-            0x0045 => { self.tccr0b = value; Ok(()) }
-            0x0046 => { self.tcnt0 = value; Ok(()) }
-            0x0047 => { self.ocr0a = value; Ok(()) }
-            0x0048 => { self.ocr0b = value; Ok(()) }
-            0x006E => { self.timsk0 = value; Ok(()) }
+            0x0000..=0x001F => {
+                self.r[addr as usize] = value;
+                Ok(())
+            }
+            0x005D => {
+                self.sp = (self.sp & 0xFF00) | value as u16;
+                Ok(())
+            }
+            0x005E => {
+                self.sp = (self.sp & 0x00FF) | ((value as u16) << 8);
+                Ok(())
+            }
+            0x005F => {
+                self.sreg = value;
+                Ok(())
+            }
+            0x0035 => {
+                self.tifr0 &= !value;
+                Ok(())
+            }
+            0x0044 => {
+                self.tccr0a = value;
+                Ok(())
+            }
+            0x0045 => {
+                self.tccr0b = value;
+                Ok(())
+            }
+            0x0046 => {
+                self.tcnt0 = value;
+                Ok(())
+            }
+            0x0047 => {
+                self.ocr0a = value;
+                Ok(())
+            }
+            0x0048 => {
+                self.ocr0b = value;
+                Ok(())
+            }
+            0x006E => {
+                self.timsk0 = value;
+                Ok(())
+            }
             0x00C0 => {
-                if value & UCSRA_TXC != 0 { self.ucsr0a &= !UCSRA_TXC; }
+                if value & UCSRA_TXC != 0 {
+                    self.ucsr0a &= !UCSRA_TXC;
+                }
                 self.ucsr0a |= UCSRA_UDRE;
                 Ok(())
             }
-            0x00C1 => { self.ucsr0b = value; Ok(()) }
-            0x00C2 => { self.ucsr0c = value; Ok(()) }
-            0x00C4 => { self.ubrr0 = (self.ubrr0 & 0xFF00) | value as u16; Ok(()) }
-            0x00C5 => { self.ubrr0 = (self.ubrr0 & 0x00FF) | ((value as u16) << 8); Ok(()) }
+            0x00C1 => {
+                self.ucsr0b = value;
+                Ok(())
+            }
+            0x00C2 => {
+                self.ucsr0c = value;
+                Ok(())
+            }
+            0x00C4 => {
+                self.ubrr0 = (self.ubrr0 & 0xFF00) | value as u16;
+                Ok(())
+            }
+            0x00C5 => {
+                self.ubrr0 = (self.ubrr0 & 0x00FF) | ((value as u16) << 8);
+                Ok(())
+            }
             0x00C6 => {
                 self.serial_tx.push(value);
                 if let Some(sink) = &self.serial_sink {
@@ -274,13 +329,21 @@ impl Avr {
 
     fn t0_prescaler(&self) -> u32 {
         match self.tccr0b & 0x07 {
-            0 => 0, 1 => 1, 2 => 8, 3 => 64, 4 => 256, 5 => 1024, _ => 0,
+            0 => 0,
+            1 => 1,
+            2 => 8,
+            3 => 64,
+            4 => 256,
+            5 => 1024,
+            _ => 0,
         }
     }
 
     pub fn tick_timer0(&mut self, cpu_cycles: u32) {
         let div = self.t0_prescaler();
-        if div == 0 || cpu_cycles == 0 { return; }
+        if div == 0 || cpu_cycles == 0 {
+            return;
+        }
         self.t0_prescale_acc = self.t0_prescale_acc.saturating_add(cpu_cycles);
         while self.t0_prescale_acc >= div {
             self.t0_prescale_acc -= div;
@@ -924,10 +987,17 @@ impl Cpu for Avr {
         self.sreg = 0;
         self.pending_irq = 0;
         self.cycles = 0;
-        self.tcnt0 = 0; self.tccr0a = 0; self.tccr0b = 0;
-        self.timsk0 = 0; self.tifr0 = 0; self.t0_prescale_acc = 0;
+        self.tcnt0 = 0;
+        self.tccr0a = 0;
+        self.tccr0b = 0;
+        self.timsk0 = 0;
+        self.tifr0 = 0;
+        self.t0_prescale_acc = 0;
         self.serial_tx.clear();
-        self.ucsr0a = UCSRA_UDRE; self.ucsr0b = 0; self.ucsr0c = 0; self.ubrr0 = 0;
+        self.ucsr0a = UCSRA_UDRE;
+        self.ucsr0b = 0;
+        self.ucsr0c = 0;
+        self.ubrr0 = 0;
         Ok(())
     }
 
@@ -1140,7 +1210,9 @@ mod tests {
     #[test]
     fn timer0_overflow_pends_with_arduino_prescale() {
         let mut cpu = Avr::new();
-        cpu.tccr0a = 0x03; cpu.tccr0b = 0x03; cpu.timsk0 = TIMSK_TOIE0;
+        cpu.tccr0a = 0x03;
+        cpu.tccr0b = 0x03;
+        cpu.timsk0 = TIMSK_TOIE0;
         cpu.tick_timer0(16384);
         assert!(cpu.pending_irq & (1 << VEC_TIMER0_OVF) != 0);
     }
@@ -1162,14 +1234,20 @@ mod tests {
         cpu.load_words(0, &[0x9A2D, 0x982D, 0xE508, 0x9300, 0x00C6, 0xCFFA]);
         let mut bus = MockBus::new();
         let cfg = SimulationConfig::default();
-        let mut hi = false; let mut lo = false;
+        let mut hi = false;
+        let mut lo = false;
         for _ in 0..200 {
             cpu.step(&mut bus, &[], &cfg).unwrap();
-            if cpu.portb() & 0x20 != 0 { hi = true; } else { lo = true; }
-            if hi && lo && cpu.serial_tx.contains(&b'X') { break; }
+            if cpu.portb() & 0x20 != 0 {
+                hi = true;
+            } else {
+                lo = true;
+            }
+            if hi && lo && cpu.serial_tx.contains(&b'X') {
+                break;
+            }
         }
         assert!(hi && lo);
         assert!(cpu.serial_tx.contains(&b'X'));
     }
-
 }
