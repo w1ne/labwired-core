@@ -25,6 +25,7 @@ mod asset_validation;
 mod commands;
 mod component_validation;
 mod gpio_observer;
+mod resource_report;
 mod size_limited_writer;
 mod vcd_trace;
 mod wifi_frames;
@@ -1556,6 +1557,9 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
+        // Load failed: no successful machine run for footprint/paint.
+        None,
+        None,
     );
     verdict.exit_code()
 }
@@ -1934,7 +1938,27 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // forces the JIT's correctness gate shut), so the loop mirrors the machine's
     // own counters into `metrics` before each cycle-sensitive check.
     jit_eligible: bool,
+    // Architecture of the loaded image (paint is ARM-only in P0).
+    arch: labwired_core::Arch,
+    // Script + env kill switch for main-stack paint.
+    stack_paint: bool,
+    // Chip flash/RAM map for footprint totals and paint RAM bounds.
+    chip_mem: Option<resource_report::ChipMemoryMap>,
 ) -> ExitCode {
+    // ── Resource metrics: footprint + main-stack paint (load/reset-time) ────
+    // Paint is not a SimulationObserver: fill unused stack RAM now, scan after
+    // the run. Footprint is pure ELF section math and does not touch the bus.
+    let footprint = resource_report::compute_footprint(firmware_bytes, chip_mem.as_ref());
+    let sp_top = resource_report::arm_sp(&machine.cpu);
+    let (memory_pre, paint_session) = resource_report::apply_stack_paint(
+        &mut machine.bus,
+        sp_top,
+        arch,
+        stack_paint,
+        firmware_bytes,
+        chip_mem.as_ref(),
+    );
+
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
     let max_uart_bytes = resolved_limits.max_uart_bytes;
@@ -3094,6 +3118,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         );
     }
 
+    // Finalize main-stack report: scan paint window if we filled one.
+    let memory = if let Some(session) = paint_session {
+        let final_sp = resource_report::arm_sp(&machine.cpu);
+        resource_report::finalize_paint_report(&machine.bus, final_sp, session)
+    } else {
+        memory_pre
+    };
+
     write_outputs(
         args,
         verdict,
@@ -3116,6 +3148,8 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         Some(inspect_block),
         logic_edges,
         stimulus_outcomes,
+        footprint,
+        Some(memory),
     );
 
     // The same `verdict` the artifact above was written from. Not a second
@@ -3151,6 +3185,8 @@ fn write_outputs<C: labwired_core::Cpu>(
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
     stimuli: Vec<StimulusOutcome>,
+    footprint: Option<artifacts::FootprintReport>,
+    memory: Option<labwired_core::stack_paint::MainStackReport>,
 ) {
     let status = verdict.status();
 
@@ -3214,9 +3250,8 @@ fn write_outputs<C: labwired_core::Cpu>(
         fidelity,
         logic_edges,
         stimuli,
-        // Resource metrics (footprint / stack paint) wired in later tasks.
-        footprint: None,
-        memory: None,
+        footprint,
+        memory,
     };
 
     if let Some(output_dir) = &args.output_dir {
