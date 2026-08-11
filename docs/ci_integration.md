@@ -55,36 +55,80 @@ jobs:
         run: echo "${{ steps.labwired.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
 ```
 
-**Inputs:** `script` (required), `version` (default `v0.21.0`), `output-dir`, `args`.  
-**Outputs:** `status`, `summary-md`, `report-html`, `artifact-url`, `exit-code`.
+The public action reference is an **immutable action-source pin** to
+`bfd879522914b586223081c4c89ba315db4a97ed`. Inputs: `script` (required), `version`
+(default `v0.21.0`), `output-dir`, and `args`. The action downloads that CLI
+release, writes JUnit to `output-dir/junit.xml`, appends `summary.md` to the job
+summary, and always uploads the output directory (including on failure).
 
-The action downloads the pinned CLI release, runs `labwired test`, writes JUnit under `output-dir`, and uploads the directory even on failure.
+**Outputs:** `status`, `summary-md`, `report-html`, `artifact-url`, `exit-code`
+(via the `labwired` step id).
 
-Minimal one-liner style (if the CLI is already on the runner):
+---
+
+## Container runner
+
+The release image uses `labwired` as the entrypoint. Pass `test` after the image
+name — do not repeat `labwired` in the container command:
+
+```bash
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --volume "$PWD:/workspace" \
+  --workdir /workspace \
+  ghcr.io/w1ne/labwired:v0.21.0 \
+  test --script tests/firmware-test.yaml \
+       --output-dir out/labwired \
+       --no-uart-stdout
+```
+
+When you bind-mount a workspace, pass the caller UID/GID so generated artifacts
+stay writable on the host.
+
+---
+
+## GitLab CI
+
+Clear the image entrypoint so GitLab can start its job shell. See
+[integration-templates/gitlab-ci.yml](integration-templates/gitlab-ci.yml):
 
 ```yaml
-- run: labwired test --script examples/ci/uart-ok.yaml --junit report.xml
+test:firmware:
+  image:
+    name: ghcr.io/w1ne/labwired:v0.21.0
+    entrypoint: [""]
+  script:
+    - labwired test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
 ```
 
 ---
 
-## Container / self-built CLI
+## Artifacts
+
+Use `--output-dir` everywhere. A run writes `result.json`, `uart.log`, and JUnit
+under that directory. The GitHub action always uploads the directory; other CI
+systems should retain it on failure.
+
+---
+
+## Advanced: build from source
 
 ```bash
-# After building from source
 cargo build --release -p labwired-cli
 ./target/release/labwired test \
   --script tests/firmware-test.yaml \
   --output-dir out/labwired
 ```
 
-Docker images and templates: [integration templates](integration-templates/README.md).
+More templates: [integration templates](integration-templates/README.md).
 
 ---
 
 ## What to assert
 
-Use the [test script schema](ci_test_runner.md): UART substrings, register values, stop reasons, step limits. Prefer checks that match real product behavior — not only “boot completed.”
+Use the [test script schema](ci_test_runner.md): UART substrings, register values,
+stop reasons, step limits. Prefer checks that match product behavior — not only
+“boot completed.”
 
 ---
 
