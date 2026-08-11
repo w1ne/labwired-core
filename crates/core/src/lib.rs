@@ -34,6 +34,7 @@ pub mod sched;
 pub mod signals;
 pub mod sim_input;
 pub mod snapshot;
+pub mod stack_paint;
 pub mod system;
 #[doc(hidden)]
 pub mod test_support;

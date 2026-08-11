@@ -1914,6 +1914,7 @@ version = "0.21.0"
 dependencies = [
  "anyhow",
  "clap",
+ "goblin",
  "human-size",
  "labwired-codegen",
  "labwired-config",

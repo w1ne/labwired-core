@@ -3405,9 +3405,43 @@ pub struct DisplayRegionAssertion {
     pub display_region: DisplayRegionDetails,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceBudgetAssertion {
+    pub resource_budget: ResourceBudgetDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceBudgetDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_flash_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_ram_static_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_main_stack_bytes: Option<u64>,
+}
+
+impl ResourceBudgetDetails {
+    pub fn validate(&self, index: usize) -> anyhow::Result<()> {
+        let n = self.max_flash_bytes.is_some() as u8
+            + self.max_ram_static_bytes.is_some() as u8
+            + self.max_main_stack_bytes.is_some() as u8;
+        if n != 1 {
+            anyhow::bail!(
+                "assertions[{index}]: resource_budget must set exactly one of \
+                 max_flash_bytes, max_ram_static_bytes, max_main_stack_bytes"
+            );
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
+    /// Early for untagged serde: unique `resource_budget` key disambiguates.
+    ResourceBudget(ResourceBudgetAssertion),
     UartContains(UartContainsAssertion),
     UartRegex(UartRegexAssertion),
     UartOrdered(UartOrderedAssertion),
@@ -3624,6 +3658,10 @@ pub struct UartInjectionSpec {
     pub trigger: FaultTrigger,
 }
 
+fn default_stack_paint() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TestScript {
@@ -3632,6 +3670,9 @@ pub struct TestScript {
     pub limits: TestLimits,
     #[serde(default)]
     pub assertions: Vec<TestAssertion>,
+    /// When true (default), paint the main stack before run for high-water tracking.
+    #[serde(default = "default_stack_paint")]
+    pub stack_paint: bool,
     /// Faults to inject into the simulated silicon (schema_version 1.1+).
     #[serde(default)]
     pub faults: Vec<FaultSpec>,
@@ -3811,6 +3852,9 @@ impl TestScript {
             }
             if let TestAssertion::DisplayRegion(assertion) = assertion {
                 validate_display_region(index, &assertion.display_region)?;
+            }
+            if let TestAssertion::ResourceBudget(assertion) = assertion {
+                assertion.resource_budget.validate(index)?;
             }
         }
 
@@ -4890,6 +4934,37 @@ assertions:
         assert_eq!(script.inputs.firmware, "path/to/fw.elf");
         assert_eq!(script.limits.max_steps, 1000);
         assert_eq!(script.assertions.len(), 2);
+        // stack_paint defaults to true when omitted
+        assert!(script.stack_paint);
+    }
+
+    #[test]
+    fn parses_resource_budget_and_stack_paint() {
+        let yaml = r#"
+schema_version: "1.0"
+inputs:
+  firmware: "path/to/fw.elf"
+  system: "path/to/sys.yaml"
+limits:
+  max_steps: 1000
+stack_paint: false
+assertions:
+  - resource_budget:
+      max_main_stack_bytes: 512
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        script.validate().unwrap();
+        assert!(!script.stack_paint);
+        assert_eq!(script.assertions.len(), 1);
+        let TestAssertion::ResourceBudget(a) = &script.assertions[0] else {
+            panic!(
+                "expected resource_budget assertion, got {:?}",
+                script.assertions[0]
+            );
+        };
+        assert_eq!(a.resource_budget.max_main_stack_bytes, Some(512));
+        assert!(a.resource_budget.max_flash_bytes.is_none());
+        assert!(a.resource_budget.max_ram_static_bytes.is_none());
     }
 
     #[test]

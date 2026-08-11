@@ -1,0 +1,18 @@
+# Intentionally fails: main-stack high-water cannot fit in 1 byte.
+# Expect exit code 1 (assert fail) with resource_budget evidence on the stack assert.
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "../../../tests/fixtures/stm32f103-blinky.elf"
+limits:
+  max_steps: 200000
+  max_cycles: 200000
+stack_paint: true
+assertions:
+  - resource_budget:
+      max_flash_bytes: 20000
+  - resource_budget:
+      max_ram_static_bytes: 8000
+  - resource_budget:
+      max_main_stack_bytes: 1
+  - expected_stop_reason: max_cycles

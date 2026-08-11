@@ -1,0 +1,11 @@
+# Minimal STM32F103 system for resource-metrics examples.
+# Paths are relative to this directory (examples/metrics/stm32f103-blinky/).
+name: "metrics-stm32f103-blinky"
+chip: "../../../configs/chips/stm32f103.yaml"
+board_io:
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

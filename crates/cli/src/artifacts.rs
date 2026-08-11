@@ -143,6 +143,68 @@ pub(crate) struct TestResult {
     /// the ones that never fired.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) stimuli: Vec<StimulusOutcome>,
+    /// ELF Berkeley-style flash/RAM footprint (text/data/bss). Absent when
+    /// footprint was not computed for this run (e.g. config error, or not yet
+    /// wired). Optional totals/pct fields omitted when device limits unknown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) footprint: Option<FootprintReport>,
+    /// Main-stack paint / high-water report. Absent when not collected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) memory: Option<labwired_core::stack_paint::MainStackReport>,
+}
+
+/// Berkeley-style firmware footprint for `result.json` (`footprint`).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct FootprintReport {
+    pub method: String,
+    pub text_bytes: u64,
+    pub data_bytes: u64,
+    pub bss_bytes: u64,
+    pub flash_used_bytes: u64,
+    pub ram_static_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ram_total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_used_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ram_static_pct: Option<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
+}
+
+/// Percent used of total, half-up to 2 decimal places. Returns 0.0 if total is 0.
+pub(crate) fn pct2(used: u64, total: u64) -> f64 {
+    if total == 0 {
+        return 0.0;
+    }
+    let v = (used as f64) * 100.0 / (total as f64);
+    (v * 100.0).round() / 100.0
+}
+
+/// Build a [`FootprintReport`] from loader ELF section totals and optional
+/// device flash/RAM capacities.
+pub(crate) fn footprint_from_elf_totals(
+    totals: &labwired_loader::ElfSectionTotals,
+    flash_total: Option<u64>,
+    ram_total: Option<u64>,
+) -> FootprintReport {
+    let flash_used = totals.flash_used();
+    let ram_static = totals.ram_static();
+    FootprintReport {
+        method: labwired_loader::FOOTPRINT_METHOD.to_string(),
+        text_bytes: totals.text,
+        data_bytes: totals.data,
+        bss_bytes: totals.bss,
+        flash_used_bytes: flash_used,
+        ram_static_bytes: ram_static,
+        flash_total_bytes: flash_total,
+        ram_total_bytes: ram_total,
+        flash_used_pct: flash_total.map(|t| pct2(flash_used, t)),
+        ram_static_pct: ram_total.map(|t| pct2(ram_static, t)),
+        notes: Vec::new(),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -174,6 +236,12 @@ pub(crate) enum AssertionEvidence {
         token_cycle: u64,
         latency_cycles: u64,
         configured_max_cycles: u64,
+    },
+    ResourceBudget {
+        name: String,
+        measured: Option<u64>,
+        limit: u64,
+        method: String,
     },
 }
 

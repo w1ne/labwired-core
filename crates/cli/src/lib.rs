@@ -25,6 +25,7 @@ mod asset_validation;
 mod commands;
 mod component_validation;
 mod gpio_observer;
+mod resource_report;
 mod size_limited_writer;
 mod vcd_trace;
 mod wifi_frames;
@@ -1556,6 +1557,9 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
+        // Load failed: no successful machine run for footprint/paint.
+        None,
+        None,
     );
     verdict.exit_code()
 }
@@ -1629,7 +1633,73 @@ fn assertion_currently_passes(
         TestAssertion::DisplayRegion(a) => {
             evaluate_display_region(&machine.bus, &a.display_region).is_ok()
         }
+        // Post-run only (footprint / stack paint). Terminal like FirmwareExit:
+        // does not block `stop_when_assertions_pass` early-stop of live checks.
+        TestAssertion::ResourceBudget(_) => true,
     }
+}
+
+/// Evaluate a `resource_budget` assertion against post-run footprint / memory.
+///
+/// Exactly one of the three limits is set (validated at script load).
+/// Evidence is attached **only on failure**.
+fn evaluate_resource_budget(
+    details: &labwired_config::ResourceBudgetDetails,
+    footprint: Option<&artifacts::FootprintReport>,
+    memory: Option<&labwired_core::stack_paint::MainStackReport>,
+) -> (bool, Option<AssertionEvidence>) {
+    use labwired_core::stack_paint::MainStackMethod;
+
+    let (name, measured, limit, method) = if let Some(limit) = details.max_flash_bytes {
+        let (measured, method) = match footprint {
+            Some(f) => (Some(f.flash_used_bytes), f.method.clone()),
+            None => (None, "footprint_unavailable".to_string()),
+        };
+        ("max_flash_bytes", measured, limit, method)
+    } else if let Some(limit) = details.max_ram_static_bytes {
+        let (measured, method) = match footprint {
+            Some(f) => (Some(f.ram_static_bytes), f.method.clone()),
+            None => (None, "footprint_unavailable".to_string()),
+        };
+        ("max_ram_static_bytes", measured, limit, method)
+    } else if let Some(limit) = details.max_main_stack_bytes {
+        let (measured, method) = match memory {
+            Some(m) => {
+                let method = match m.main_stack_method {
+                    MainStackMethod::Paint => "paint",
+                    MainStackMethod::Disabled => "disabled",
+                    MainStackMethod::Unsupported => "unsupported",
+                };
+                (m.main_stack_high_water_bytes, method.to_string())
+            }
+            None => (None, "unsupported".to_string()),
+        };
+        ("max_main_stack_bytes", measured, limit, method)
+    } else {
+        // validate() should reject this; fail closed if it ever reaches here.
+        return (
+            false,
+            Some(AssertionEvidence::ResourceBudget {
+                name: "resource_budget".to_string(),
+                measured: None,
+                limit: 0,
+                method: "invalid".to_string(),
+            }),
+        );
+    };
+
+    let passed = measured.is_some_and(|m| m <= limit);
+    let evidence = if !passed {
+        Some(AssertionEvidence::ResourceBudget {
+            name: name.to_string(),
+            measured,
+            limit,
+            method,
+        })
+    } else {
+        None
+    };
+    (passed, evidence)
 }
 
 /// Measure one `display_region` assertion against the live panel.
@@ -1932,7 +2002,27 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // forces the JIT's correctness gate shut), so the loop mirrors the machine's
     // own counters into `metrics` before each cycle-sensitive check.
     jit_eligible: bool,
+    // Architecture of the loaded image (paint is ARM-only in P0).
+    arch: labwired_core::Arch,
+    // Script + env kill switch for main-stack paint.
+    stack_paint: bool,
+    // Chip flash/RAM map for footprint totals and paint RAM bounds.
+    chip_mem: Option<resource_report::ChipMemoryMap>,
 ) -> ExitCode {
+    // ── Resource metrics: footprint + main-stack paint (load/reset-time) ────
+    // Paint is not a SimulationObserver: fill unused stack RAM now, scan after
+    // the run. Footprint is pure ELF section math and does not touch the bus.
+    let footprint = resource_report::compute_footprint(firmware_bytes, chip_mem.as_ref());
+    let sp_top = resource_report::arm_sp(&machine.cpu);
+    let (memory_pre, paint_session) = resource_report::apply_stack_paint(
+        &mut machine.bus,
+        sp_top,
+        arch,
+        stack_paint,
+        firmware_bytes,
+        chip_mem.as_ref(),
+    );
+
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
     let max_uart_bytes = resolved_limits.max_uart_bytes;
@@ -2405,7 +2495,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let has_runtime_assertions = assertions.iter().any(|a| {
         !matches!(
             a,
-            TestAssertion::ExpectedStopReason(_) | TestAssertion::FirmwareExit(_)
+            TestAssertion::ExpectedStopReason(_)
+                | TestAssertion::FirmwareExit(_)
+                | TestAssertion::ResourceBudget(_)
         )
     });
     let assertions_are_uart_only = assertions
@@ -2413,7 +2505,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         .filter(|a| {
             !matches!(
                 a,
-                TestAssertion::ExpectedStopReason(_) | TestAssertion::FirmwareExit(_)
+                TestAssertion::ExpectedStopReason(_)
+                    | TestAssertion::FirmwareExit(_)
+                    | TestAssertion::ResourceBudget(_)
             )
         })
         .all(|a| {
@@ -2698,7 +2792,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 cached_all_pass = assertions.iter().enumerate().all(|(index, assertion)| {
                     matches!(
                         assertion,
-                        TestAssertion::ExpectedStopReason(_) | TestAssertion::FirmwareExit(_)
+                        TestAssertion::ExpectedStopReason(_)
+                            | TestAssertion::FirmwareExit(_)
+                            | TestAssertion::ResourceBudget(_)
                     ) || (matches!(assertion, TestAssertion::MotorSpeedReached(_))
                         && assertion_latched[index])
                         || matches!(assertion, TestAssertion::ShutdownLatency(a)
@@ -2778,34 +2874,61 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         String::from_utf8_lossy(&bytes).to_string()
     };
 
+    // Finalize main-stack report before assertion evaluation so
+    // `resource_budget` can compare against high-water / footprint.
+    let memory = if let Some(session) = paint_session {
+        let final_sp = resource_report::arm_sp(&machine.cpu);
+        resource_report::finalize_paint_report(&machine.bus, final_sp, session)
+    } else {
+        memory_pre
+    };
+
     let mut assertion_results = Vec::new();
     let mut all_passed = true;
     let mut expected_stop_reason_matched = false;
 
     for (assertion_index, assertion) in assertions.iter().enumerate() {
-        let passed = match assertion {
-            TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
-            TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
+        let (passed, evidence) = match assertion {
+            TestAssertion::UartContains(a) => (uart_text.contains(&a.uart_contains), None),
+            TestAssertion::UartRegex(a) => (simple_regex_is_match(&a.uart_regex, &uart_text), None),
             TestAssertion::UartOrdered(_)
             | TestAssertion::MotorState(_)
-            | TestAssertion::MqttFabric(_) => {
-                assertion_currently_passes(assertion, &uart_text, machine)
-            }
-            TestAssertion::MotorSpeedReached(_) => {
-                assertion_latched[assertion_index]
-                    || assertion_currently_passes(assertion, &uart_text, machine)
-            }
-            TestAssertion::ShutdownLatency(a) => shutdown_latency_passes(
-                &a.shutdown_latency,
-                &stimulus_cycles,
-                &uart_milestone_cycles,
+            | TestAssertion::MqttFabric(_) => (
+                assertion_currently_passes(assertion, &uart_text, machine),
+                None,
             ),
-            TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
+            TestAssertion::MotorSpeedReached(_) => (
+                assertion_latched[assertion_index]
+                    || assertion_currently_passes(assertion, &uart_text, machine),
+                None,
+            ),
+            TestAssertion::ShutdownLatency(a) => {
+                let passed = shutdown_latency_passes(
+                    &a.shutdown_latency,
+                    &stimulus_cycles,
+                    &uart_milestone_cycles,
+                );
+                let evidence = shutdown_latency_cycles(
+                    &a.shutdown_latency,
+                    &stimulus_cycles,
+                    &uart_milestone_cycles,
+                )
+                .map(|(stimulus_cycle, token_cycle, latency_cycles)| {
+                    AssertionEvidence::ShutdownLatency {
+                        stimulus_cycle,
+                        token_cycle,
+                        latency_cycles,
+                        configured_max_cycles: a.shutdown_latency.max_cycles,
+                    }
+                });
+                (passed, evidence)
+            }
+            TestAssertion::ExpectedStopReason(a) => (a.expected_stop_reason == stop_reason, None),
             // Passes only if the FIRMWARE ended the run with exactly this code.
             // A timeout, halt or fault leaves `firmware_exit_code` None, so a
             // run that never reached its own success path fails rather than
             // passing by silence.
-            TestAssertion::FirmwareExit(a) => firmware_exit_code == Some(a.firmware_exit),
+            TestAssertion::FirmwareExit(a) => (firmware_exit_code == Some(a.firmware_exit), None),
             TestAssertion::MemoryValue(a) => {
                 // `size` is the value width. Accept either bytes (1/2/4) or
                 // bits (8/16/32) — both name the same u8/u16/u32 reads — so a
@@ -2831,7 +2954,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                 };
 
-                match result {
+                let passed = match result {
                     Ok(val) => {
                         let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
                         let expected = a.memory_value.expected_value as u32;
@@ -2851,29 +2974,36 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         );
                         false
                     }
-                }
+                };
+                (passed, None)
             }
             TestAssertion::UdsTester(a) => {
-                match evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester) {
+                let passed = match evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester)
+                {
                     Ok(()) => true,
                     Err(msg) => {
                         error!("Assertion failed: {}", msg);
                         false
                     }
-                }
+                };
+                (passed, None)
             }
             // The measurement itself carries the diagnosis (which region, how
             // much ink, what was required), so it is logged rather than
             // reduced to a bare `false`.
             TestAssertion::DisplayRegion(a) => {
-                match evaluate_display_region(&machine.bus, &a.display_region) {
+                let passed = match evaluate_display_region(&machine.bus, &a.display_region) {
                     Ok(()) => true,
                     Err(msg) => {
                         error!("Assertion failed: {}", msg);
                         false
                     }
-                }
-            } // MqttFabric is handled above via assertion_currently_passes.
+                };
+                (passed, None)
+            }
+            TestAssertion::ResourceBudget(a) => {
+                evaluate_resource_budget(&a.resource_budget, footprint.as_ref(), Some(&memory))
+            }
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -2889,22 +3019,6 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             );
         }
 
-        let evidence = match &assertion {
-            TestAssertion::ShutdownLatency(a) => shutdown_latency_cycles(
-                &a.shutdown_latency,
-                &stimulus_cycles,
-                &uart_milestone_cycles,
-            )
-            .map(|(stimulus_cycle, token_cycle, latency_cycles)| {
-                AssertionEvidence::ShutdownLatency {
-                    stimulus_cycle,
-                    token_cycle,
-                    latency_cycles,
-                    configured_max_cycles: a.shutdown_latency.max_cycles,
-                }
-            }),
-            _ => None,
-        };
         assertion_results.push(AssertionResult {
             assertion: assertion.clone(),
             passed,
@@ -3112,6 +3226,8 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         Some(inspect_block),
         logic_edges,
         stimulus_outcomes,
+        footprint,
+        Some(memory),
     );
 
     // The same `verdict` the artifact above was written from. Not a second
@@ -3147,6 +3263,8 @@ fn write_outputs<C: labwired_core::Cpu>(
     inspect: Option<labwired_core::inspect::MachineInspect>,
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
     stimuli: Vec<StimulusOutcome>,
+    footprint: Option<artifacts::FootprintReport>,
+    memory: Option<labwired_core::stack_paint::MainStackReport>,
 ) {
     let status = verdict.status();
 
@@ -3210,6 +3328,8 @@ fn write_outputs<C: labwired_core::Cpu>(
         fidelity,
         logic_edges,
         stimuli,
+        footprint,
+        memory,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -3547,6 +3667,9 @@ pub(crate) fn write_config_error_outputs(
         // Nor any stimulus outcomes: the run was rejected before a machine
         // existed, so no stimulus was ever attempted.
         stimuli: Vec::new(),
+        // Config error: no firmware footprint or stack paint collected.
+        footprint: None,
+        memory: None,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -3880,6 +4003,18 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
                 d.min_ink,
                 d.max_ink.unwrap_or(1.0)
             )
+        }
+        TestAssertion::ResourceBudget(a) => {
+            let b = &a.resource_budget;
+            if let Some(n) = b.max_flash_bytes {
+                format!("resource_budget: max_flash_bytes={n}")
+            } else if let Some(n) = b.max_ram_static_bytes {
+                format!("resource_budget: max_ram_static_bytes={n}")
+            } else if let Some(n) = b.max_main_stack_bytes {
+                format!("resource_budget: max_main_stack_bytes={n}")
+            } else {
+                "resource_budget".to_string()
+            }
         }
     };
 
@@ -4273,6 +4408,159 @@ mod tests {
 
         let json = serde_json::to_value(snapshot).expect("snapshot should serialize");
         assert_eq!(json["type"], "config_error");
+    }
+}
+
+#[cfg(test)]
+mod resource_budget_tests {
+    use super::*;
+    use labwired_core::stack_paint::{MainStackMethod, MainStackReport};
+
+    fn flash_details(limit: u64) -> labwired_config::ResourceBudgetDetails {
+        labwired_config::ResourceBudgetDetails {
+            max_flash_bytes: Some(limit),
+            max_ram_static_bytes: None,
+            max_main_stack_bytes: None,
+        }
+    }
+
+    fn stack_details(limit: u64) -> labwired_config::ResourceBudgetDetails {
+        labwired_config::ResourceBudgetDetails {
+            max_flash_bytes: None,
+            max_ram_static_bytes: None,
+            max_main_stack_bytes: Some(limit),
+        }
+    }
+
+    fn sample_footprint(flash: u64, ram: u64) -> artifacts::FootprintReport {
+        artifacts::FootprintReport {
+            method: "elf_section_totals_v1".to_string(),
+            text_bytes: flash,
+            data_bytes: 0,
+            bss_bytes: ram,
+            flash_used_bytes: flash,
+            ram_static_bytes: ram,
+            flash_total_bytes: None,
+            ram_total_bytes: None,
+            flash_used_pct: None,
+            ram_static_pct: None,
+            notes: vec![],
+        }
+    }
+
+    #[test]
+    fn flash_budget_passes_when_measured_within_limit() {
+        let fp = sample_footprint(1000, 200);
+        let (passed, evidence) = evaluate_resource_budget(&flash_details(1000), Some(&fp), None);
+        assert!(passed);
+        assert!(evidence.is_none());
+    }
+
+    #[test]
+    fn flash_budget_fails_with_evidence_when_over_limit() {
+        let fp = sample_footprint(1001, 200);
+        let (passed, evidence) = evaluate_resource_budget(&flash_details(1000), Some(&fp), None);
+        assert!(!passed);
+        let Some(AssertionEvidence::ResourceBudget {
+            name,
+            measured,
+            limit,
+            method,
+        }) = evidence
+        else {
+            panic!("expected ResourceBudget evidence");
+        };
+        assert_eq!(name, "max_flash_bytes");
+        assert_eq!(measured, Some(1001));
+        assert_eq!(limit, 1000);
+        assert_eq!(method, "elf_section_totals_v1");
+    }
+
+    #[test]
+    fn flash_budget_fails_when_footprint_unavailable() {
+        let (passed, evidence) = evaluate_resource_budget(&flash_details(1000), None, None);
+        assert!(!passed);
+        let Some(AssertionEvidence::ResourceBudget {
+            measured, method, ..
+        }) = evidence
+        else {
+            panic!("expected ResourceBudget evidence");
+        };
+        assert_eq!(measured, None);
+        assert_eq!(method, "footprint_unavailable");
+    }
+
+    #[test]
+    fn main_stack_budget_uses_high_water_and_paint_method() {
+        let mem = MainStackReport {
+            main_stack_method: MainStackMethod::Paint,
+            main_stack_limit_bytes: Some(2048),
+            main_stack_high_water_bytes: Some(512),
+            main_stack_free_min_bytes: Some(1536),
+            main_stack_base: Some(0x2000_0000),
+            main_stack_top: Some(0x2000_0800),
+            main_stack_overflow_suspected: Some(false),
+            main_stack_unsupported_reason: None,
+        };
+        let (passed, evidence) = evaluate_resource_budget(&stack_details(512), None, Some(&mem));
+        assert!(passed);
+        assert!(evidence.is_none());
+
+        let (passed, evidence) = evaluate_resource_budget(&stack_details(511), None, Some(&mem));
+        assert!(!passed);
+        match evidence {
+            Some(AssertionEvidence::ResourceBudget {
+                name,
+                measured,
+                limit,
+                method,
+            }) => {
+                assert_eq!(name, "max_main_stack_bytes");
+                assert_eq!(measured, Some(512));
+                assert_eq!(limit, 511);
+                assert_eq!(method, "paint");
+            }
+            other => panic!("unexpected evidence: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn main_stack_budget_fails_when_high_water_missing() {
+        let mem = MainStackReport::disabled();
+        let (passed, evidence) = evaluate_resource_budget(&stack_details(512), None, Some(&mem));
+        assert!(!passed);
+        match evidence {
+            Some(AssertionEvidence::ResourceBudget {
+                measured, method, ..
+            }) => {
+                assert_eq!(measured, None);
+                assert_eq!(method, "disabled");
+            }
+            other => panic!("unexpected evidence: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resource_budget_fail_evidence_serializes() {
+        let result = AssertionResult {
+            assertion: TestAssertion::ResourceBudget(labwired_config::ResourceBudgetAssertion {
+                resource_budget: flash_details(100),
+            }),
+            passed: false,
+            evidence: Some(AssertionEvidence::ResourceBudget {
+                name: "max_flash_bytes".to_string(),
+                measured: Some(150),
+                limit: 100,
+                method: "elf_section_totals_v1".to_string(),
+            }),
+        };
+        let json = serde_json::to_value(result).unwrap();
+        assert_eq!(json["evidence"]["type"], "resource_budget");
+        assert_eq!(json["evidence"]["name"], "max_flash_bytes");
+        assert_eq!(json["evidence"]["measured"], 150);
+        assert_eq!(json["evidence"]["limit"], 100);
+        assert_eq!(json["evidence"]["method"], "elf_section_totals_v1");
+        assert_eq!(json["passed"], false);
     }
 }
 

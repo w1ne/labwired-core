@@ -156,6 +156,8 @@ fn run_c3_rom_boot_no_elf(
     stimuli: &[labwired_config::StimulusSpec],
     uart_injections: &[labwired_config::UartInjectionSpec],
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+    stack_paint: bool,
+    chip_mem: Option<crate::resource_report::ChipMemoryMap>,
 ) -> ExitCode {
     // Build the from_config bus (peripherals + external devices) exactly as the
     // ELF rom-boot path does before build_c3_rom_boot_machine.
@@ -313,6 +315,9 @@ fn run_c3_rom_boot_no_elf(
         uart_injections,
         // rom-boot is never JIT-eligible (it forces cycle-accurate stepping).
         false,
+        labwired_core::Arch::RiscV,
+        stack_paint,
+        chip_mem,
     )
 }
 
@@ -392,6 +397,14 @@ pub(crate) fn run_test(
     let script_profile = match &loaded {
         LoadedTestScript::V1_0(script) => script.inputs.profile.clone(),
         _ => None,
+    };
+
+    // Main-stack paint: schema_version 1.0 carries `stack_paint` (default true);
+    // legacy scripts and environment runs default to enabled. Env kill switch
+    // applied via `stack_paint_enabled_flag`.
+    let stack_paint = match &loaded {
+        LoadedTestScript::V1_0(script) => crate::resource_report::stack_paint_enabled(script),
+        _ => crate::resource_report::stack_paint_enabled_flag(true),
     };
 
     let (
@@ -601,6 +614,13 @@ pub(crate) fn run_test(
         (None, None) => None,
     };
 
+    // Chip flash/RAM totals + primary RAM region for footprint % and stack paint.
+    let chip_mem = resolved_system.as_ref().and_then(|s| {
+        s.chip_with_plugins(&crate::plugin_chip_yaml(plugins))
+            .ok()
+            .map(|c| crate::resource_report::ChipMemoryMap::from_chip(&c))
+    });
+
     // Resolve the firmware source. Normally an ELF is required (via --firmware or
     // inputs.firmware). The ONE exception is the faithful ESP32-C3 (RISC-V)
     // rom-boot path: the flash image (LABWIRED_ESP32C3_FLASH) is the program the
@@ -643,6 +663,8 @@ pub(crate) fn run_test(
             &stimuli,
             &uart_injections,
             plugins,
+            stack_paint,
+            chip_mem,
         );
         // Best-effort Pro-tier metering (no ELF → hash the empty program; the
         // no-key MCP path never meters). Mirrors the ELF paths' tail metering.
@@ -1231,6 +1253,9 @@ pub(crate) fn run_test(
                 // Xtensa (ESP32) path: never JIT-eligible (the RV32IMC JIT is
                 // RISC-V only), so keep the exact current observer-based metrics.
                 false,
+                labwired_core::Arch::XtensaLx7,
+                stack_paint,
+                chip_mem,
             );
             // Device-block render readout. Surfaces the attached panel block's
             // REAL render state — refresh_gen AND black-plane ink — so a generic
@@ -1458,6 +1483,9 @@ pub(crate) fn run_test(
                 &stimuli,
                 &uart_injections,
                 jit_eligible,
+                program.arch,
+                stack_paint,
+                chip_mem,
             )
         }};
     }
