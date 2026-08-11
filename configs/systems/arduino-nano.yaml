@@ -1,0 +1,9 @@
+name: arduino-nano
+chip: ../chips/atmega328p.yaml
+clock:
+  cpu_hz: 16000000
+board_io:
+  - id: led
+    type: led
+    pin: "PB5"
+    active_high: true
