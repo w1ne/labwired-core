@@ -209,8 +209,30 @@ def main() -> int:
                 )
             continue
 
-        for sketch in sketches:
+        # Optional per-board sketch allowlist (e.g. Sense runs L0–L2 + L4 only).
+        only = board.get("sketches_only")
+        board_sketches = (
+            [s for s in sketches if s["id"] in set(only)] if only else list(sketches)
+        )
+
+        for sketch in board_sketches:
             sid = sketch["id"]
+            # Sketch-level board allowlist (e.g. L4_sense_whoami → Sense only).
+            allow = sketch.get("boards")
+            if allow and bid not in allow:
+                print(
+                    f"==> {bid} × {sid}: skip (sketch boards allowlist)",
+                    flush=True,
+                )
+                rows.append(
+                    {
+                        "board": bid,
+                        "sketch": sid,
+                        "status": "skipped",
+                        "detail": f"sketch limited to {allow}",
+                    }
+                )
+                continue
             skip_sk = board.get("sketches_skip") or []
             if sid in skip_sk:
                 reason = (board.get("sketches_skip_reason") or {}).get(sid) or board.get(

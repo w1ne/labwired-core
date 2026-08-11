@@ -269,6 +269,41 @@ boards:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
 
+  - id: arduino-nano-33-ble
+    doc: docs/boards/arduino-nano-33-ble.md
+    chip: configs/chips/nrf52840.yaml
+    tier: sim-validated
+    note: "nRF52840 carrier (Arduino Nano 33 BLE ABX00030). Offline gates on product system; silicon rides nrf52840/XIAO capture — no dedicated Nano PCB SWD capture. USBD+RADIO on chip model."
+    offline_tests:
+      - "nrf52.rs nano33ble_* (manifest + board_io LEDs, GPIO LED pins, SPIM0 EasyDMA; Sense Wire1 attach)"
+    models:
+      - crates/core/src/peripherals/nrf52
+      - configs/chips/nrf52840.yaml
+      - configs/systems/arduino-nano-33-ble.yaml
+
+  - id: arduino-nano-33-ble-sense
+    doc: docs/boards/arduino-nano-33-ble-sense.md
+    chip: configs/chips/nrf52840.yaml
+    tier: sim-validated
+    note: "Sense ABX00031: Wire1→i2c0 sensors + classic TWI; E2E LW_SENSE_OK; no dedicated PCB silicon capture."
+    offline_tests:
+      - "nrf52.rs nano33ble_sense_manifest_attaches_wire1_sensors"
+      - "nrf52.rs nano33ble_sense_classic_twi_who_am_i"
+      - "nrf52.rs nano33ble_classic_twi_txdsent_pends_irq"
+      - "examples/arduino-nano-33-ble-sense/verify → LW_SENSE_OK"
+      - "arduino-matrix arduino-nano-33-ble-sense × L4_sense_whoami → LW_SENSE_OK"
+    models:
+      - crates/core/src/peripherals/nrf52
+      - crates/core/src/peripherals/nrf52/twim.rs
+      - configs/chips/nrf52840.yaml
+      - configs/systems/arduino-nano-33-ble-sense.yaml
+      - configs/devices/lsm9ds1_ag.yaml
+      - configs/devices/lsm9ds1_m.yaml
+      - configs/devices/hts221.yaml
+      - configs/devices/lps22hb.yaml
+      - configs/devices/apds9960.yaml
+
+
   - id: stm32h563
     doc: docs/boards/stm32h563.md
     chip: configs/chips/stm32h563.yaml

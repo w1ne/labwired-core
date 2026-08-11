@@ -64,6 +64,31 @@ boards:
     led_min_edges: 2
     family: nrf
 
+  - id: arduino-nano-33-ble
+    chip: nrf52840
+    system: systems/arduino-nano-33-ble.yaml
+    pio: { platform: nordicnrf52, board: nano33ble, framework: arduino }
+    max_steps: 8000000
+    budget_reason: "Arduino mbed core boot is heavier than nRF5 Arduino; headroom for L0–L2"
+    # LED_BUILTIN = D13 = P0.13
+    led_watch: "gpio0:13"
+    led_min_edges: 2
+    family: nrf
+    notes: "Arduino mbed ARDUINO_NANO33BLE — product Nano 33 BLE carrier"
+
+  - id: arduino-nano-33-ble-sense
+    chip: nrf52840
+    system: systems/arduino-nano-33-ble-sense.yaml
+    pio: { platform: nordicnrf52, board: nano33ble, framework: arduino }
+    max_steps: 8000000
+    budget_reason: "mbed boot + classic TWI WHO_AM_I ×5; L4 ~2.5M measured"
+    led_watch: "gpio0:13"
+    led_min_edges: 2
+    family: nrf
+    notes: "Sense ABX00031 — Wire1 sensors on i2c0; L4_sense_whoami → LW_SENSE_OK"
+    # L0–L2 shared with carrier; L4 Sense suite; L3 INA219 not on this system.
+    sketches_only: [L0_serial_boot, L1_serial_loop, L2_blink_serial, L4_sense_whoami]
+
   - id: rp2040
     chip: rp2040
     system: systems/rp2040.yaml
@@ -187,3 +212,10 @@ sketches:
     dir: sketches/L3_i2c_sensor
     marker: "LW_L3_OK"
     description: "Wire + INA219@0x40 (system external_devices) — peripheral kit path"
+
+  - id: L4_sense_whoami
+    dir: sketches/L4_sense_whoami
+    marker: "LW_SENSE_OK"
+    description: "Nano 33 BLE Sense Wire1 WHO_AM_I ×5 (LSM9DS1/HTS221/LPS22HB/APDS9960)"
+    # Only meaningful with Sense onboard suite (system external_devices on i2c0).
+    boards: [arduino-nano-33-ble-sense]

@@ -1,0 +1,31 @@
+# ST LSM9DS1 magnetometer (I²C) — Nano 33 BLE Sense Wire1.
+# WHO_AM_I_M (0x0F) = 0x3D. Default address 0x1E.
+# Mag FS ±4 gauss default → 6842 LSB/gauss (approx); SimInput in gauss.
+type: lsm9ds1_m
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x1E
+    registers:
+      - { name: WHO_AM_I_M, addr: 0x0F, width: 1, endian: be, access: r, reset: 0x3D }
+      - { name: CTRL_REG1_M, addr: 0x20, width: 1, endian: be, access: rw, reset: 0x10 }
+      - { name: CTRL_REG2_M, addr: 0x21, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: CTRL_REG3_M, addr: 0x22, width: 1, endian: be, access: rw, reset: 0x03 }
+      - { name: STATUS_REG_M, addr: 0x27, width: 1, endian: be, access: r, reset: 0x0F }
+      - { name: OUT_X_M, addr: 0x28, width: 2, endian: le, access: r, signed: true, source: mx, encode: { scale: 6842.0 } }
+      - { name: OUT_Y_M, addr: 0x2A, width: 2, endian: le, access: r, signed: true, source: my, encode: { scale: 6842.0 } }
+      - { name: OUT_Z_M, addr: 0x2C, width: 2, endian: le, access: r, signed: true, source: mz, encode: { scale: 6842.0 } }
+
+metadata:
+  label: "ST LSM9DS1 Mag"
+  summary: "LSM9DS1 magnetometer on I²C with SimInput mx/my/mz (gauss)."
+  category: i2c
+  inputs:
+    - { key: mx, label: "Mag X", unit: "gauss", min: -16, max: 16, default: 0.2 }
+    - { key: my, label: "Mag Y", unit: "gauss", min: -16, max: 16, default: 0 }
+    - { key: mz, label: "Mag Z", unit: "gauss", min: -16, max: 16, default: 0.4 }
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Nano 33 BLE Sense uses 0x1E."

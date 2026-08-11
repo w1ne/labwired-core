@@ -9,23 +9,25 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 |-------|------|----------------------|--------------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-08-06 | ⚠ drift acked 2026-08-06 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-08-06 | ⚠ drift acked 2026-08-06 (re-capture pending) |
-| `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-08-07 | ⚠ drift acked 2026-08-07 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-08-07 | ⚠ drift acked 2026-08-07 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-08-07 | ⚠ drift acked 2026-08-07 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-08-07 | ⚠ drift acked 2026-08-07 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-08-07 | ⚠ drift acked 2026-08-07 (re-capture pending) |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | 2026-08-07 | ⚠ drift acked 2026-08-07 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-07-15 | 2026-08-06 | ⚠ drift acked 2026-08-06 (re-capture pending) |
+| `arduino-nano-33-ble` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-06 | no silicon capture |
+| `arduino-nano-33-ble-sense` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-06 | no silicon capture |
+| `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
+| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
+| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
+| `esp32s3` | 🟢 silicon-verified | 2026-07-15 | 2026-08-08 | ✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE |
 | `stm32f401` | 🟡 smoke-manual | — | 2026-08-03 | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-08-03 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-08-03 | no silicon capture |
-| `rp2040` | ⚪ structural | — | 2026-08-05 | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | 2026-08-05 | no silicon capture |
+| `rp2040` | ⚪ structural | — | 2026-08-08 | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | 2026-08-08 | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-07 | no silicon capture |
-| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-07 | no silicon capture |
-| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-07 | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-08 | no silicon capture |
+| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-08 | no silicon capture |
 | `esp32` | ⚪ structural | — | 2026-08-05 | no silicon capture |
-| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
+| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-08 | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-08-03 | no silicon capture |
@@ -47,13 +49,31 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
   - offline (CI): nrf52.rs xiao_* (manifest build, GPIO task regs, SPIM0 EasyDMA)
 - Drift status: **⚠ drift acked 2026-08-06 (re-capture pending)**
 
+## `arduino-nano-33-ble` — 🔵 sim-validated (deep model, no HW diff)
+
+- Doc: [`docs/boards/arduino-nano-33-ble.md`](arduino-nano-33-ble.md)  ·  Chip: `configs/chips/nrf52840.yaml`
+- Note: nRF52840 carrier (Arduino Nano 33 BLE ABX00030). Offline gates on product system; silicon rides nrf52840/XIAO capture — no dedicated Nano PCB SWD capture. USBD+RADIO on chip model.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): nrf52.rs nano33ble_* (manifest + board_io LEDs, GPIO LED pins, SPIM0 EasyDMA; Sense Wire1 attach)
+- Drift status: **no silicon capture**
+
+## `arduino-nano-33-ble-sense` — 🔵 sim-validated (deep model, no HW diff)
+
+- Doc: [`docs/boards/arduino-nano-33-ble-sense.md`](arduino-nano-33-ble-sense.md)  ·  Chip: `configs/chips/nrf52840.yaml`
+- Note: Sense ABX00031: Wire1 first-begin → **`i2c0`** (TWI0); five declarative sensors; classic TWI (ENABLE=5) + BB_STOP. PDM mic block present, no E2E mic sketch. No dedicated PCB silicon capture.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): nrf52.rs `nano33ble_sense_*` + `nano33ble_classic_twi_txdsent_pends_irq`
+  - offline (CI): arduino-matrix `arduino-nano-33-ble-sense` × `L4_sense_whoami` → `LW_SENSE_OK`
+  - offline (example): `examples/arduino-nano-33-ble-sense/verify` → `LW_SENSE_OK`
+- Drift status: **no silicon capture**
+
 ## `stm32h563` — 🟢 silicon-verified
 
 - Doc: [`docs/boards/stm32h563.md`](stm32h563.md)  ·  Chip: `configs/chips/stm32h563.yaml`
 - Silicon: **2026-06-22** on STLINK-V3 (USB 0483:374e, NUCLEO-H563ZI, dapdirect AP1 recipe) — FLASH program-behaviour live-diff run on the board 2026-06-22 (drives real program/erase over SWD): write buffer (NSSR.WBNE) accumulates a 16-byte quad-word, commits + sets EOP only on completion; a misaligned quad-word raises INCERR alone and commits nothing; program-over-not-erased is permitted and ANDs the bits (no PGSERR); flags clear via NSCCR (0x30), not by writing NSSR. The sim H5 flash error-flag + read-while-write fidelity gates were CORRECTED to match this capture (earlier datasheet model was wrong on all four points). Prior MMIO/reset diff (h563_mmio_diff + h563_parity_diff + h563_class_diff, 0 divergence) still holds.
   - offline (CI): h563_conformance (5 tests vs frozen 2026-06-10..12 captures)
   - offline (CI): h563_mmio_diff::{h563_mmio_sim_only,h563_parity_sim_only,h563_class_sim_only}
-- Drift status: **⚠ drift acked 2026-08-07 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `esp32c3` — 🟢 silicon-verified
 
@@ -61,7 +81,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Note: Reset-state oracle, not behavioural. ~40 peripherals declared (NOT 6 as the prose doc says).
 - Silicon: **2026-06-17** on USB-JTAG (built-in, openocd-esp32) — re-verified live — reset oracle re-captured live 2026-06-17: 1123/1123 static registers match committed baseline (13 deltas all in per-chip efuse + live USB-device state, none in the asserted set); esp32c3_reset_values_match_silicon passes
   - offline (CI): esp32c3_reset_conformance::esp32c3_reset_values_match_silicon (79 regs; 366/423 overlap matched silicon)
-- Drift status: **⚠ drift acked 2026-08-07 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `nucleo-l476rg` — 🟢 silicon-verified
 
@@ -70,7 +90,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on STLINK-V2.1 (USB 0483:374b serial 0670FF…1747, NUCLEO-L476RG onboard) — Live re-capture after the v0.17.0 merge: l476_mmio_diff + l476_parity_diff pass (15 mmio + 104 parity), 0 divergence. Supersedes the 2026-06-19 drift_ack.
   - offline (CI): l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}
   - offline (CI): firmware_survival L476 cases (UART byte stream)
-- Drift status: **⚠ drift acked 2026-08-07 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `nucleo-l073rz` — 🟢 silicon-verified
 
@@ -79,7 +99,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK V2.1 (NUCLEO-L073RZ over SWD) — Live re-capture after the v0.17.0 merge: l0_mmio_diff 20/20, 0 divergence (RCC/GPIO/SPI1/TIM2/TIM21, incl. the TIM2-16-bit fix). Supersedes the 2026-06-19 drift_ack.
   - offline (CI): stm32l0_mmio_diff::{l0_mmio_sim_only,l0_parity_sim_only}
   - offline (CI): firmware_survival L073 smoke case
-- Drift status: **⚠ drift acked 2026-08-07 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `stm32f103` — 🟢 silicon-verified
 
@@ -88,7 +108,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK V2.1 (USB 0483:374b), genuine STM32F103 — Live re-capture after the v0.17.0 bxcan/clock-gating merge: stm32f1_mmio_diff 102/102 (24 reset + 26 R/W + 52 sweep), 0 divergence, and f103_conformance digest matches silicon. Supersedes the 2026-06-19 drift_ack. (Earlier capture caught + fixed a classic SPI CR1 bug masking CRCNEXT bit 12 — 0xEFFF vs silicon 0xFFFF.)
   - offline (CI): stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}
   - offline (CI): f103_conformance::conformance_sim (digest)
-- Drift status: **⚠ drift acked 2026-08-07 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `stm32f407` — 🟢 silicon-smoke
 
@@ -97,7 +117,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK/V2 (USB 0483:3748, IDCODE 0x10016413) — connect-under-reset (firmware was holding SWD), adapter 480 kHz — Live re-capture after the v0.17.0 merge: stm32f4_mmio_diff 37/37 (2 reset + 31 sweep + 4 behaviour), 0 divergence. Caught + fixed a real model bug: F407 silicon does NOT latch SPI1 CR1 bit 12 (CRCNEXT) — writes 0xFFFF, reads 0xEFFF — vs F103 which keeps it writable; spi.rs now applies a per-part cr1_mask (F4 0xEFFF). Supersedes the 2026-06-19 drift_ack. (I²C/UART models still smoke-tier — not in the mmio diff.)
   - offline (CI): stm32f4_mmio_diff::{f4_reset_sim_only,f4_sweep_sim_only,f4_behavior_sim_only}
   - offline (CI): firmware_survival F407 smoke + i2c cases (sim-self-pinned)
-- Drift status: **⚠ drift acked 2026-08-07 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `esp32s3` — 🟢 silicon-verified
 
@@ -106,7 +126,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-07-15** on USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5) — Live OpenOCD re-capture on 2026-07-15: connected ESP32-S3 rev 0.2 (MAC 9c:13:9e:f4:40:c0), both Xtensa JTAG taps examined, and reset-state windows captured for UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, and RTC_CNTL.
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **⚠ drift acked 2026-08-06 (re-capture pending)**
+- Drift status: **✖ DRIFT — model 2026-08-08 > capture; RE-CAPTURE**
 
 ## `stm32f401` — 🟡 smoke-manual
 

@@ -1,0 +1,33 @@
+# Broadcom / Avago APDS-9960 (I²C) — Nano 33 BLE Sense Wire1.
+# ID (0x92) = 0xAB. Default address 0x39.
+#
+# Proximity PDATA is 8-bit. Clear-channel ALS is 16-bit LE at CDATAL/CDATAH.
+# Gesture FIFO is not modelled — ENABLE/GCONF are storage only.
+type: apds9960
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x39
+    registers:
+      - { name: ENABLE, addr: 0x80, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: ATIME, addr: 0x81, width: 1, endian: be, access: rw, reset: 0xFF }
+      - { name: WTIME, addr: 0x83, width: 1, endian: be, access: rw, reset: 0xFF }
+      - { name: ID, addr: 0x92, width: 1, endian: be, access: r, reset: 0xAB }
+      - { name: STATUS, addr: 0x93, width: 1, endian: be, access: r, reset: 0x01 }
+      - { name: CDATA, addr: 0x94, width: 2, endian: le, access: r, source: ambient, encode: { scale: 1.0, clamp_min: 0, clamp_max: 65535 } }
+      - { name: PDATA, addr: 0x9C, width: 1, endian: be, access: r, source: proximity, encode: { scale: 1.0, clamp_min: 0, clamp_max: 255 } }
+      - { name: GPENTH, addr: 0xA0, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: GCONF1, addr: 0xA2, width: 1, endian: be, access: rw, reset: 0x00 }
+
+metadata:
+  label: "APDS-9960"
+  summary: "APDS-9960 proximity + clear ALS with SimInput; gesture FIFO not modelled."
+  category: i2c
+  inputs:
+    - { key: proximity, label: "Proximity", unit: "counts", min: 0, max: 255, default: 0 }
+    - { key: ambient, label: "Clear ALS", unit: "counts", min: 0, max: 65535, default: 100 }
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Nano 33 BLE Sense uses 0x39."

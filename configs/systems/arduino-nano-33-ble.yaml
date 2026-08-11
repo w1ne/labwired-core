@@ -1,0 +1,50 @@
+# LabWired - Arduino Nano 33 BLE System Configuration
+#
+# Pin assignments from Arduino mbed core variant ARDUINO_NANO33BLE
+# (framework-arduino-mbed/variants/ARDUINO_NANO33BLE/variant.cpp + pins_arduino.h).
+# RGB LEDs are active-low; LED_BUILTIN (D13 / P0.13) and LED_PWR (P1.09) are
+# active-high. Product MCU profile arduino-nano-33-ble must match these pins
+# (board-config mcu-profile-source-drift).
+name: "arduino-nano-33-ble"
+chip: "../chips/nrf52840.yaml"
+# Arduino mbed Nano 33 BLE links the application at 0x10000 (SoftDevice / MBR
+# reserve below). Without this, Cortex-M reset reads empty vectors at 0x0 and
+# faults immediately (PC=0 / unmapped MMIO).
+reset_vector_offset: 0x10000
+external_devices: []
+board_io:
+  # Yellow user LED on D13 / SCK (LED_BUILTIN). Active-high.
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: true
+
+  # RGB LEDs — active-low (Arduino variant / schematic).
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 24
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 16
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 6
+    signal: "output"
+    active_high: false
+
+  # Power LED (LED_PWR). Active-high; core turns it on at boot.
+  - id: "led_pwr"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 9
+    signal: "output"
+    active_high: true

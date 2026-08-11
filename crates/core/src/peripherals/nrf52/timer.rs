@@ -155,8 +155,14 @@ impl Nrf52Timer {
         }
     }
 
+    /// True when the event scheduler owns this timer's time base (feature on
+    /// AND bus clock attached). Must match SysTick / nRF RTC / STM32 TIM:
+    /// without `event-scheduler`, the bus never calls `sync_to` on MMIO and
+    /// never drains scheduled events — so a clock-only gate freezes the
+    /// counter (mbed `us_ticker` on Nano 33 BLE never advances → hang in
+    /// `delay` / `ThisThread::sleep_for`).
     fn scheduler_mode(&self) -> bool {
-        self.clock.is_some()
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
     }
 
     /// Advance the timer by `cycles` base ticks (one base tick ≡ one legacy
@@ -673,5 +679,24 @@ mod tests {
         t.write_u32(OFF_TASKS_CLEAR, 1).unwrap();
         assert_eq!(t.counter, 0);
         assert_eq!(t.prescaler_accum, 0);
+    }
+
+    #[test]
+    fn scheduler_mode_off_without_feature_even_with_clock() {
+        let mut t = Nrf52Timer::new();
+        t.attach_cycle_clock(crate::cycle_clock::CycleClock::default());
+        assert!(
+            !t.uses_scheduler(),
+            "without event-scheduler feature, clock attach must not opt into scheduler"
+        );
+        assert!(t.needs_legacy_walk());
+        t.write_u32(OFF_BITMODE, 3).unwrap();
+        t.write_u32(OFF_PRESCALER, 0).unwrap();
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert!(t.legacy_tick_active());
+        for _ in 0..16 {
+            t.tick();
+        }
+        assert_eq!(t.counter, 16, "legacy tick must advance free-running counter");
     }
 }

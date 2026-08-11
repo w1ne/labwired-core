@@ -9,6 +9,14 @@
 //! TWIM0 base: 0x40003000  (shared with SPIM0/SPIS0/SPI0/TWI0/TWIS0)
 //! TWIM1 base: 0x40004000  (shared with SPIM1/SPIS1/SPI1/TWI1/TWIS1)
 //! ENABLE value: 6 selects TWIM master mode (PS §6.31.4.1).
+//! ENABLE value: 5 selects classic TWI byte-mode (PS §6.32) — Arduino mbed
+//! `nrfx_twi` on Nano 33 BLE Wire/Wire1.
+//!
+//! # Classic TWI (ENABLE=5) — byte TXD/RXD
+//!
+//! `nrfx_twi` drives TASKS_STARTTX/STARTRX then polls EVENTS_TXDSENT (0x11C)
+//! / EVENTS_RXDREADY (0x108) while writing TXD (0x51C) / reading RXD (0x518).
+//! Without this path, Sense WHO_AM_I hangs forever in `twi_transfer`.
 //!
 //! # EasyDMA operation
 //!
@@ -47,7 +55,7 @@
 
 use crate::peripherals::i2c::I2cDevice;
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 // ── Task offsets ──────────────────────────────────────────────────────────────
 const OFF_TASKS_STARTRX: u64 = 0x000;
@@ -58,6 +66,10 @@ const OFF_TASKS_SUSPEND: u64 = 0x01C;
 
 // ── Event offsets ─────────────────────────────────────────────────────────────
 const OFF_EVENTS_STOPPED: u64 = 0x104;
+/// Classic TWI only (PS §6.32) — not present on TWIM.
+const OFF_EVENTS_RXDREADY: u64 = 0x108;
+/// Classic TWI only (PS §6.32) — not present on TWIM.
+const OFF_EVENTS_TXDSENT: u64 = 0x11C;
 const OFF_EVENTS_ERROR: u64 = 0x124;
 const OFF_EVENTS_SUSPENDED: u64 = 0x148;
 const OFF_EVENTS_RXSTARTED: u64 = 0x14C;
@@ -76,6 +88,10 @@ const OFF_PSEL_SCL: u64 = 0x508;
 const OFF_PSEL_SDA: u64 = 0x50C;
 const OFF_FREQUENCY: u64 = 0x524;
 
+// ── Classic TWI byte data registers (PS §6.32) — distinct from EasyDMA PTR ───
+const OFF_TWI_RXD: u64 = 0x518;
+const OFF_TWI_TXD: u64 = 0x51C;
+
 // ── EasyDMA registers ─────────────────────────────────────────────────────────
 const OFF_RXD_PTR: u64 = 0x534;
 const OFF_RXD_MAXCNT: u64 = 0x538;
@@ -83,6 +99,18 @@ const OFF_RXD_AMOUNT: u64 = 0x53C;
 const OFF_TXD_PTR: u64 = 0x544;
 const OFF_TXD_MAXCNT: u64 = 0x548;
 const OFF_TXD_AMOUNT: u64 = 0x54C;
+
+/// ENABLE register values (shared serial instance).
+const ENABLE_TWI: u32 = 5;
+const ENABLE_TWIM: u32 = 6;
+
+/// Classic TWI transfer direction after STARTTX / STARTRX.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TwiDir {
+    Idle,
+    Tx,
+    Rx,
+}
 
 // ── Address register ──────────────────────────────────────────────────────────
 const OFF_ADDRESS: u64 = 0x588;
@@ -94,10 +122,17 @@ const SHORT_LASTTX_STOP: u32 = 1 << 9; // LASTTX → STOP
 const SHORT_LASTRX_STARTTX: u32 = 1 << 10; // LASTRX → STARTTX
 const SHORT_LASTRX_SUSPEND: u32 = 1 << 11; // LASTRX → SUSPEND
 const SHORT_LASTRX_STOP: u32 = 1 << 12; // LASTRX → STOP
+// Classic TWI BB shortcuts (PS §6.32 SHORTS) — distinct from TWIM LAST* shorts.
+const SHORT_BB_SUSPEND: u32 = 1 << 0; // BB → SUSPEND
+const SHORT_BB_STOP: u32 = 1 << 1; // BB → STOP
 
-// ── INTEN bits (PS §6.31, TWIM_INTENSET table) ───────────────────────────────
-// STOPPED=1, ERROR=9, SUSPENDED=18, RXSTARTED=19, TXSTARTED=20, LASTRX=23, LASTTX=24
+// ── INTEN bits (PS §6.31 TWIM + §6.32 classic TWI) ───────────────────────────
+// Shared: STOPPED=1, ERROR=9
+// Classic TWI: RXDREADY=2, TXDSENT=7
+// TWIM: SUSPENDED=18, RXSTARTED=19, TXSTARTED=20, LASTRX=23, LASTTX=24
 const INTEN_STOPPED: u32 = 1 << 1;
+const INTEN_RXDREADY: u32 = 1 << 2; // classic TWI
+const INTEN_TXDSENT: u32 = 1 << 7; // classic TWI
 const INTEN_ERROR: u32 = 1 << 9;
 const INTEN_SUSPENDED: u32 = 1 << 18;
 const INTEN_RXSTARTED: u32 = 1 << 19;
@@ -105,6 +140,8 @@ const INTEN_TXSTARTED: u32 = 1 << 20;
 const INTEN_LASTRX: u32 = 1 << 23;
 const INTEN_LASTTX: u32 = 1 << 24;
 const INTEN_MASK: u32 = INTEN_STOPPED
+    | INTEN_RXDREADY
+    | INTEN_TXDSENT
     | INTEN_ERROR
     | INTEN_SUSPENDED
     | INTEN_RXSTARTED
@@ -130,7 +167,9 @@ const SHORTS_MASK: u32 = SHORT_LASTTX_STARTRX
     | SHORT_LASTTX_STOP
     | SHORT_LASTRX_STARTTX
     | SHORT_LASTRX_SUSPEND
-    | SHORT_LASTRX_STOP;
+    | SHORT_LASTRX_STOP
+    | SHORT_BB_SUSPEND
+    | SHORT_BB_STOP;
 
 // ── Pending-transfer token values ─────────────────────────────────────────────
 /// No transfer pending.
@@ -150,6 +189,11 @@ const PENDING_STOP: u8 = 3;
 pub struct Nrf52Twim {
     // ── EVENTS (HW-set only; SW write-1 ignored, write-0 clears) ─────────────
     events_stopped: u32,
+    /// Classic TWI EVENTS_RXDREADY (0x108). `Cell` so RXD read can re-arm
+    /// the next byte without `&mut self`.
+    events_rxdready: Cell<u32>,
+    /// Classic TWI EVENTS_TXDSENT (0x11C).
+    events_txdsent: u32,
     events_error: u32,
     events_suspended: u32,
     events_rxstarted: u32,
@@ -192,6 +236,17 @@ pub struct Nrf52Twim {
     /// I2C devices attached to this master bus.  Keyed by 7-bit address.
     #[allow(dead_code)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+
+    // ── Classic TWI (ENABLE=5) byte-mode state ───────────────────────────────
+    twi_dir: TwiDir,
+    /// Last classic-TWI RXD byte presented to firmware. `Cell` so a `&self`
+    /// RXD read can advance the stream (nrfx reads RXD then waits for the
+    /// next RXDREADY).
+    twi_rxd: Cell<u8>,
+    /// Active device index for the current classic-TWI transfer, if any.
+    twi_dev: Option<usize>,
+    /// Classic TWI raised an INTEN-armed event; bus-tick must deliver IRQ.
+    twi_irq_pending: bool,
 }
 
 impl std::fmt::Debug for Nrf52Twim {
@@ -208,6 +263,8 @@ impl Default for Nrf52Twim {
     fn default() -> Self {
         Self {
             events_stopped: 0,
+            events_rxdready: Cell::new(0),
+            events_txdsent: 0,
             events_error: 0,
             events_suspended: 0,
             events_rxstarted: 0,
@@ -233,6 +290,10 @@ impl Default for Nrf52Twim {
             pending: PENDING_NONE,
             busy_cycles: 0,
             attached_devices: Vec::new(),
+            twi_dir: TwiDir::Idle,
+            twi_rxd: Cell::new(0xFF),
+            twi_dev: None,
+            twi_irq_pending: false,
         }
     }
 }
@@ -307,6 +368,169 @@ impl Nrf52Twim {
                                                // Floor at one byte-time so even a 0-byte STOP delays past the
                                                // driver's critical section.
         ((bytes + 1) * 9 * cycles_per_bit).max(9 * cycles_per_bit)
+    }
+
+    #[inline]
+    fn is_classic_twi(&self) -> bool {
+        (self.enable & ENABLE_MASK) == ENABLE_TWI
+    }
+
+    /// After a classic-TWI event latch, mark IRQ pending if INTEN arms it.
+    fn twi_note_event(&mut self, inten_bit: u32) {
+        if self.inten & inten_bit != 0 {
+            self.twi_irq_pending = true;
+        }
+    }
+
+    /// After INTEN/INTENSET, pend IRQ if any armed event is already latched.
+    fn twi_rearm_irq_from_events(&mut self) {
+        if !self.is_classic_twi() {
+            return;
+        }
+        let armed = (self.events_stopped != 0 && self.inten & INTEN_STOPPED != 0)
+            || (self.events_rxdready.get() != 0 && self.inten & INTEN_RXDREADY != 0)
+            || (self.events_txdsent != 0 && self.inten & INTEN_TXDSENT != 0)
+            || (self.events_error != 0 && self.inten & INTEN_ERROR != 0);
+        if armed {
+            self.twi_irq_pending = true;
+        }
+    }
+
+
+    /// Honour classic-TWI BB shortcuts after a completed data byte.
+    /// Silicon generates EVENTS_BB before/around each byte; nrfx couples BB→STOP
+    /// for the last RX byte (and BB→SUSPEND for no_stop TX). Without this the
+    /// blocking poll waits forever for EVENTS_STOPPED that never arrives.
+    fn twi_apply_bb_shorts_after_byte(&mut self) {
+        if !self.is_classic_twi() {
+            return;
+        }
+        if self.shorts & SHORT_BB_STOP != 0 {
+            if std::env::var_os("LW_TWI_TRACE").is_some() {
+                eprintln!("[twi] BB_STOP → STOPPED");
+            }
+            self.twi_stop();
+        } else if self.shorts & SHORT_BB_SUSPEND != 0 {
+            self.twi_dir = TwiDir::Idle;
+            self.events_suspended = 1;
+            self.twi_note_event(INTEN_SUSPENDED);
+            if std::env::var_os("LW_TWI_TRACE").is_some() {
+                eprintln!("[twi] BB_SUSPEND → SUSPENDED");
+            }
+        }
+    }
+
+    /// Classic TWI: begin address phase for TX (TASKS_STARTTX).
+    fn twi_start_tx(&mut self) {
+        let addr7 = (self.address & ADDRESS_MASK) as u8;
+        if std::env::var_os("LW_TWI_TRACE").is_some() {
+            eprintln!("[twi] STARTTX addr={addr7:#x} enable={}", self.enable);
+        }
+        match self.device_for(addr7) {
+            None => {
+                self.errorsrc |= ERRORSRC_ANACK;
+                self.events_error = 1;
+                self.twi_note_event(INTEN_ERROR);
+                self.twi_dir = TwiDir::Idle;
+                self.twi_dev = None;
+            }
+            Some(idx) => {
+                self.attached_devices[idx].borrow_mut().start();
+                self.twi_dev = Some(idx);
+                self.twi_dir = TwiDir::Tx;
+                self.events_error = 0;
+            }
+        }
+    }
+
+    /// Classic TWI: begin address phase for RX (TASKS_STARTRX) and present
+    /// the first RXD byte immediately (nrfx polls EVENTS_RXDREADY in a tight
+    /// loop — deferred presentation never completes).
+    fn twi_start_rx(&mut self) {
+        let addr7 = (self.address & ADDRESS_MASK) as u8;
+        if std::env::var_os("LW_TWI_TRACE").is_some() {
+            eprintln!("[twi] STARTRX addr={addr7:#x} enable={} dir={:?}", self.enable, self.twi_dir);
+        }
+        match self.device_for(addr7) {
+            None => {
+                self.errorsrc |= ERRORSRC_ANACK;
+                self.events_error = 1;
+                self.twi_note_event(INTEN_ERROR);
+                self.twi_dir = TwiDir::Idle;
+                self.twi_dev = None;
+            }
+            Some(idx) => {
+                self.attached_devices[idx].borrow_mut().start();
+                self.twi_dev = Some(idx);
+                self.twi_dir = TwiDir::Rx;
+                self.events_error = 0;
+                // First byte ready.
+                let b = self.attached_devices[idx].borrow_mut().read();
+                self.twi_rxd.set(b);
+                self.events_rxdready.set(1);
+                self.twi_note_event(INTEN_RXDREADY);
+                if std::env::var_os("LW_TWI_TRACE").is_some() {
+                    eprintln!(
+                        "[twi] RXDREADY=1 first_byte={b:#x} inten={:#x} shorts={:#x}",
+                        self.inten, self.shorts
+                    );
+                }
+                // Single-byte RX sets SHORTS=BB_STOP before STARTRX; STOPPED must
+                // latch so the blocking poll can leave the transfer.
+                self.twi_apply_bb_shorts_after_byte();
+            }
+        }
+    }
+
+    /// Classic TWI: firmware wrote TXD — clock out one byte and raise TXDSENT.
+    fn twi_write_txd(&mut self, byte: u8) {
+        if self.twi_dir != TwiDir::Tx {
+            // STARTTX may race a TXD write; treat as TX start + data.
+            self.twi_start_tx();
+        }
+        if let Some(idx) = self.twi_dev {
+            self.attached_devices[idx].borrow_mut().write(byte);
+            self.events_txdsent = 1;
+            self.twi_note_event(INTEN_TXDSENT);
+            if std::env::var_os("LW_TWI_TRACE").is_some() {
+                eprintln!(
+                    "[twi] TXD={byte:#x} TXDSENT=1 inten={:#x} shorts={:#x}",
+                    self.inten, self.shorts
+                );
+            }
+            self.twi_apply_bb_shorts_after_byte();
+        } else if std::env::var_os("LW_TWI_TRACE").is_some() {
+            eprintln!("[twi] TXD={byte:#x} no device (dir={:?})", self.twi_dir);
+        }
+        // If no device, ERROR already latched in twi_start_tx.
+    }
+
+    /// Classic TWI: firmware *read* RXD — return the presented byte and
+    /// queue the next (RXDREADY) for multi-byte transfers.
+    fn twi_read_rxd(&self) -> u8 {
+        let byte = self.twi_rxd.get();
+        if self.twi_dir == TwiDir::Rx {
+            if let Some(idx) = self.twi_dev {
+                self.twi_rxd
+                    .set(self.attached_devices[idx].borrow_mut().read());
+                self.events_rxdready.set(1);
+            }
+        }
+        byte
+    }
+
+    /// Classic TWI: STOP — release the bus.
+    fn twi_stop(&mut self) {
+        if let Some(idx) = self.twi_dev {
+            self.attached_devices[idx].borrow_mut().stop();
+        }
+        self.twi_dir = TwiDir::Idle;
+        self.twi_dev = None;
+        self.events_stopped = 1;
+        // Do NOT clear TXDSENT/RXDREADY here: silicon leaves them latched so
+        // firmware can observe the last byte event and STOPPED together (the
+        // BB_STOP short path sets both). Software clears events explicitly.
+        self.twi_note_event(INTEN_STOPPED);
     }
 
     /// Execute a TX transfer: read `txd_maxcnt` bytes from bus RAM at
@@ -395,8 +619,11 @@ impl Nrf52Twim {
 
 impl Nrf52Twim {
     fn irq_from_events(&self) -> PeripheralTickResult {
+        let rxdready = self.events_rxdready.get();
         let events: &[(&u32, u32, u64)] = &[
             (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
+            (&rxdready, INTEN_RXDREADY, OFF_EVENTS_RXDREADY),
+            (&self.events_txdsent, INTEN_TXDSENT, OFF_EVENTS_TXDSENT),
             (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
             (
                 &self.events_suspended,
@@ -503,12 +730,17 @@ impl Peripheral for Nrf52Twim {
 
             // EVENTS.
             OFF_EVENTS_STOPPED => self.events_stopped,
+            OFF_EVENTS_RXDREADY => self.events_rxdready.get(),
+            OFF_EVENTS_TXDSENT => self.events_txdsent,
             OFF_EVENTS_ERROR => self.events_error,
             OFF_EVENTS_SUSPENDED => self.events_suspended,
             OFF_EVENTS_RXSTARTED => self.events_rxstarted,
             OFF_EVENTS_TXSTARTED => self.events_txstarted,
             OFF_EVENTS_LASTRX => self.events_lastrx,
             OFF_EVENTS_LASTTX => self.events_lasttx,
+
+            // Classic TWI byte RXD (EasyDMA uses PTR at 0x534).
+            OFF_TWI_RXD => self.twi_read_rxd() as u32,
 
             // SHORTS.
             OFF_SHORTS => self.shorts & SHORTS_MASK,
@@ -543,6 +775,34 @@ impl Peripheral for Nrf52Twim {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             // ── TASKS ─────────────────────────────────────────────────────────
+            // Classic TWI (ENABLE=5): byte-mode STARTTX/STARTRX/STOP complete
+            // immediately via TXD/RXD events — no EasyDMA pending transfer.
+            OFF_TASKS_STARTRX if value != 0 && self.is_classic_twi() => {
+                self.twi_start_rx();
+            }
+            OFF_TASKS_STARTTX if value != 0 && self.is_classic_twi() => {
+                self.twi_start_tx();
+            }
+            OFF_TASKS_STOP if value != 0 && self.is_classic_twi() => {
+                self.twi_stop();
+            }
+            // Classic TWI SUSPEND (repeated-START between write and read): keep
+            // the slave selected, do not fire STOPPED.
+            OFF_TASKS_SUSPEND if value != 0 && self.is_classic_twi() => {
+                // Silicon latches EVENTS_SUSPENDED; nrfx may poll it after no_stop TX.
+                self.twi_dir = TwiDir::Idle;
+                self.events_suspended = 1;
+                self.twi_note_event(INTEN_SUSPENDED);
+                if std::env::var_os("LW_TWI_TRACE").is_some() {
+                    eprintln!("[twi] SUSPEND events_suspended=1");
+                }
+            }
+            OFF_TASKS_RESUME if value != 0 && self.is_classic_twi() => {
+                self.events_suspended = 0;
+                if std::env::var_os("LW_TWI_TRACE").is_some() {
+                    eprintln!("[twi] RESUME");
+                }
+            }
             OFF_TASKS_STARTRX if value != 0 => {
                 self.pending = PENDING_RX;
                 self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
@@ -585,6 +845,8 @@ impl Peripheral for Nrf52Twim {
 
             // ── EVENTS — SW write-1 ignored; SW write-0 clears ───────────────
             OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
+            OFF_EVENTS_RXDREADY if value == 0 => self.events_rxdready.set(0),
+            OFF_EVENTS_TXDSENT if value == 0 => self.events_txdsent = 0,
             OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
             OFF_EVENTS_SUSPENDED if value == 0 => self.events_suspended = 0,
             OFF_EVENTS_RXSTARTED if value == 0 => self.events_rxstarted = 0,
@@ -592,12 +854,25 @@ impl Peripheral for Nrf52Twim {
             OFF_EVENTS_LASTRX if value == 0 => self.events_lastrx = 0,
             OFF_EVENTS_LASTTX if value == 0 => self.events_lasttx = 0,
 
+            // Classic TWI TXD (byte mode).
+            OFF_TWI_TXD if self.is_classic_twi() => {
+                self.twi_write_txd((value & 0xFF) as u8);
+            }
+
             // ── SHORTS ────────────────────────────────────────────────────────
             OFF_SHORTS => self.shorts = value & SHORTS_MASK,
 
             // ── INTEN / INTENSET / INTENCLR ───────────────────────────────────
-            OFF_INTEN => self.inten = value & INTEN_MASK,
-            OFF_INTENSET => self.inten |= value & INTEN_MASK,
+            // Silicon: arming INTEN while the corresponding EVENTS_* is already
+            // set immediately pends the IRQ (nrfx_twi writes TXD then INTENSET).
+            OFF_INTEN => {
+                self.inten = value & INTEN_MASK;
+                self.twi_rearm_irq_from_events();
+            }
+            OFF_INTENSET => {
+                self.inten |= value & INTEN_MASK;
+                self.twi_rearm_irq_from_events();
+            }
             OFF_INTENCLR => self.inten &= !(value & INTEN_MASK),
 
             // ── ERRORSRC W1C ─────────────────────────────────────────────────
@@ -629,24 +904,44 @@ impl Peripheral for Nrf52Twim {
         // EasyDMA still rides the bus-tick pump (works for bare-bus unit tests
         // and for walk-deleted buses where bus_tick_indices keep running). The
         // scheduler path also completes transfers in on_event as a dual path.
-        self.pending != PENDING_NONE
+        // Classic TWI also needs a bus tick to deliver INTEN-armed IRQs after
+        // TXDSENT/RXDREADY (mbed/nrfx is IRQ-driven, not pure poll).
+        self.pending != PENDING_NONE || self.twi_irq_pending
     }
 
     /// EasyDMA engine (legacy walk / feature-off).
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         self.run_pending_transfer(bus);
+        // Classic TWI IRQ delivery is handled in tick() via irq_from_events.
+        let _ = bus;
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        if self.twi_irq_pending {
+            self.twi_irq_pending = false;
+        }
         self.irq_from_events()
     }
 
     fn uses_scheduler(&self) -> bool {
-        true
+        // Classic TWI is IRQ-level + poll; keep it on the legacy walk so
+        // `tick()` can deliver TXDSENT/RXDREADY IRQs without event-scheduler.
+        // EasyDMA TWIM still uses needs_bus_tick for transfer completion.
+        !self.is_classic_twi()
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        false
+        self.is_classic_twi()
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        // Always visit classic TWI so INTEN-armed events raise IRQ every step
+        // until firmware clears them (level-ish delivery matching Nordic).
+        self.is_classic_twi()
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {

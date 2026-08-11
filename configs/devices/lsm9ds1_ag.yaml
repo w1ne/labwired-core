@@ -1,0 +1,46 @@
+# ST LSM9DS1 accelerometer + gyroscope (I²C) — Nano 33 BLE Sense Wire1.
+#
+# Register-pointer device (auto-increment not required for axis words).
+# WHO_AM_I (0x0F) = 0x68. Default address 0x6B (SDO_A/G high on Sense).
+#
+# Encoding assumes power-on full-scale after typical Arduino init:
+#   XL ±2 g  →  16384 LSB/g
+#   G  ±245 dps → ~114.286 LSB/(°/s)  (8.75 mdps/LSB)
+# Firmware that reconfigures FS still sees numbers; absolute scale then drifts
+# from silicon until FS-aware encode is added.
+type: lsm9ds1_ag
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x6B
+    registers:
+      - { name: WHO_AM_I, addr: 0x0F, width: 1, endian: be, access: r, reset: 0x68 }
+      - { name: CTRL_REG1_G, addr: 0x10, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: CTRL_REG6_XL, addr: 0x20, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: STATUS_REG, addr: 0x17, width: 1, endian: be, access: r, reset: 0x03 }
+      # Gyro axes — signed 16-bit LE, SimInput °/s.
+      - { name: OUT_X_G, addr: 0x18, width: 2, endian: le, access: r, signed: true, source: gx, encode: { scale: 114.28571428571428 } }
+      - { name: OUT_Y_G, addr: 0x1A, width: 2, endian: le, access: r, signed: true, source: gy, encode: { scale: 114.28571428571428 } }
+      - { name: OUT_Z_G, addr: 0x1C, width: 2, endian: le, access: r, signed: true, source: gz, encode: { scale: 114.28571428571428 } }
+      # Accel axes — signed 16-bit LE, SimInput g (default ~0/0/1 for gravity).
+      - { name: OUT_X_XL, addr: 0x28, width: 2, endian: le, access: r, signed: true, source: ax, encode: { scale: 16384.0 } }
+      - { name: OUT_Y_XL, addr: 0x2A, width: 2, endian: le, access: r, signed: true, source: ay, encode: { scale: 16384.0 } }
+      - { name: OUT_Z_XL, addr: 0x2C, width: 2, endian: le, access: r, signed: true, source: az, encode: { scale: 16384.0 } }
+
+metadata:
+  label: "ST LSM9DS1 AG"
+  summary: "LSM9DS1 accel/gyro on I²C with SimInput ax/ay/az (g) and gx/gy/gz (°/s)."
+  detail: "Arduino Nano 33 BLE Sense Wire1 @ 0x6B. FS-aware encode not modelled; ±2 g / ±245 dps scales assumed."
+  category: i2c
+  inputs:
+    - { key: ax, label: "Accel X", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: ay, label: "Accel Y", unit: "g", min: -16, max: 16, default: 0 }
+    - { key: az, label: "Accel Z", unit: "g", min: -16, max: 16, default: 1 }
+    - { key: gx, label: "Gyro X", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gy, label: "Gyro Y", unit: "dps", min: -2000, max: 2000, default: 0 }
+    - { key: gz, label: "Gyro Z", unit: "dps", min: -2000, max: 2000, default: 0 }
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Nano 33 BLE Sense uses 0x6B."

@@ -1,0 +1,9 @@
+# labwired test script — Sense Wire1 WHO_AM_I + serial marker
+schema_version: "1.0"
+inputs:
+  firmware: ".pio/build/nano33ble/firmware.elf"
+  system: "../../../configs/systems/arduino-nano-33-ble-sense.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "LW_SENSE_OK"

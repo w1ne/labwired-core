@@ -1,0 +1,42 @@
+# Arduino matrix system — Nano 33 BLE Sense (product sensors on Wire1 → i2c0).
+# L0–L2: same mbed boot as base Nano 33 BLE.
+# L4_sense_whoami: WHO_AM_I of the soldered suite (marker LW_SENSE_OK).
+# L3_i2c_sensor (INA219) is skipped for this board — suite is not INA219.
+name: "arduino-matrix-nano33ble-sense"
+chip: "../../../configs/chips/nrf52840.yaml"
+reset_vector_offset: 0x10000
+
+external_devices:
+  - id: "imu_ag"
+    type: "lsm9ds1_ag"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x6B
+  - id: "imu_mag"
+    type: "lsm9ds1_m"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x1E
+  - id: "hts221"
+    type: "hts221"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x5F
+  - id: "lps22hb"
+    type: "lps22hb"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x5C
+  - id: "apds9960"
+    type: "apds9960"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x39
+
+board_io:
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: true

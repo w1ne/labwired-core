@@ -1,0 +1,31 @@
+# ST LPS22HB barometer (I²C) — Nano 33 BLE Sense Wire1.
+# WHO_AM_I (0x0F) = 0xB1. Default address 0x5C.
+#
+# PRESS_OUT is 24-bit little-endian across three registers (XL, L, H).
+# Model exposes a 24-bit LE word at PRESS_OUT_XL (addr 0x28, width 3).
+# Encoding: 4096 LSB/hPa (datasheet). TEMP_OUT: 100 LSB/°C.
+type: lps22hb
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x5C
+    registers:
+      - { name: WHO_AM_I, addr: 0x0F, width: 1, endian: be, access: r, reset: 0xB1 }
+      - { name: CTRL_REG1, addr: 0x10, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: CTRL_REG2, addr: 0x11, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: STATUS, addr: 0x27, width: 1, endian: be, access: r, reset: 0x03 }
+      - { name: PRESS_OUT, addr: 0x28, width: 3, endian: le, access: r, signed: true, source: pressure, encode: { scale: 4096.0 } }
+      - { name: TEMP_OUT, addr: 0x2B, width: 2, endian: le, access: r, signed: true, source: temperature, encode: { scale: 100.0 } }
+
+metadata:
+  label: "ST LPS22HB"
+  summary: "LPS22HB pressure/temp with SimInput pressure (hPa) and temperature (°C)."
+  category: i2c
+  inputs:
+    - { key: pressure, label: "Pressure", unit: "hPa", min: 260, max: 1260, default: 1013.25, noise_sigma: 0.1 }
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 85, default: 22, noise_sigma: 0.05 }
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Nano 33 BLE Sense uses 0x5C."

@@ -1,0 +1,13 @@
+# LabWired - Arduino Nano 33 BLE UART/GPIO/SPI smoke test
+# Uses the shared nRF52840 smoke firmware (UART banner + SPIM0 path).
+# LED GPIO pins in that firmware are XIAO-oriented; this smoke proves the
+# Nano product system builds the same die and runs UART/SPIM smoke paths.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-demo"
+  system: "../../configs/systems/arduino-nano-33-ble.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "NRF52840_SMOKE_OK"
+  - expected_stop_reason: max_steps

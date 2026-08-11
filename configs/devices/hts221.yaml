@@ -1,0 +1,35 @@
+# ST HTS221 humidity + temperature (I²C) — Nano 33 BLE Sense Wire1.
+# WHO_AM_I (0x0F) = 0xBC. Default address 0x5F.
+#
+# Real HTS221 applies factory calibration coefficients (H0_rH_x2 …). This model
+# uses a simplified linear map so SimInput humidity (%) and temperature (°C)
+# drive the OUT registers for agent/firmware loops. Not byte-identical to a
+# given die's calibration — enough for integration tests and stimulus.
+#   humidity OUT (16-bit LE) ≈ RH% × 512
+#   temp OUT (16-bit LE) ≈ T(°C) × 64
+type: hts221
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x5F
+    registers:
+      - { name: WHO_AM_I, addr: 0x0F, width: 1, endian: be, access: r, reset: 0xBC }
+      - { name: AV_CONF, addr: 0x10, width: 1, endian: be, access: rw, reset: 0x1B }
+      - { name: CTRL_REG1, addr: 0x20, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: CTRL_REG2, addr: 0x21, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: STATUS_REG, addr: 0x27, width: 1, endian: be, access: r, reset: 0x03 }
+      - { name: HUMIDITY_OUT, addr: 0x28, width: 2, endian: le, access: r, signed: true, source: humidity, encode: { scale: 512.0 } }
+      - { name: TEMP_OUT, addr: 0x2A, width: 2, endian: le, access: r, signed: true, source: temperature, encode: { scale: 64.0 } }
+
+metadata:
+  label: "ST HTS221"
+  summary: "HTS221 humidity/temp with SimInput channels (linear encode, not factory cal)."
+  category: i2c
+  inputs:
+    - { key: humidity, label: "Relative humidity", unit: "%", min: 0, max: 100, default: 45, noise_sigma: 0.5 }
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 120, default: 22, noise_sigma: 0.1 }
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit address. Nano 33 BLE Sense uses 0x5F."

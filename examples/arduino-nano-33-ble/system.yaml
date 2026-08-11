@@ -1,0 +1,35 @@
+name: "arduino-nano-33-ble"
+chip: "../../configs/chips/nrf52840.yaml"
+reset_vector_offset: 0x10000
+external_devices: []
+board_io:
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: true
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 24
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 16
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 6
+    signal: "output"
+    active_high: false
+  - id: "led_pwr"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 9
+    signal: "output"
+    active_high: true

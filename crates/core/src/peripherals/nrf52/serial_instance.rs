@@ -22,6 +22,7 @@ use crate::peripherals::spi::{Spi, SpiDevice, SpiRegisterLayout};
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 
 const OFF_ENABLE: u64 = 0x500;
+const ENABLE_TWI: u32 = 5; // classic TWI (Arduino mbed / nrfx_twi)
 const ENABLE_TWIM: u32 = 6;
 const ENABLE_SPIM: u32 = 7;
 const ENABLE_MASK: u32 = 0xF;
@@ -88,7 +89,7 @@ impl Peripheral for Nrf52SerialInstance {
             return Ok(((self.enable & ENABLE_MASK) >> byte_shift) as u8);
         }
         match self.active() {
-            ENABLE_TWIM => self.twim.read(offset),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.read(offset),
             ENABLE_SPIM => self.spim.read(offset),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
             _ => self.twim.read(offset),
@@ -107,7 +108,7 @@ impl Peripheral for Nrf52SerialInstance {
             return Ok(());
         }
         match self.active() {
-            ENABLE_TWIM => self.twim.write(offset, value),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.write(offset, value),
             ENABLE_SPIM => self.spim.write(offset, value),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
             _ => self.twim.write(offset, value),
@@ -119,7 +120,7 @@ impl Peripheral for Nrf52SerialInstance {
             return Ok(self.enable & ENABLE_MASK);
         }
         match self.active() {
-            ENABLE_TWIM => self.twim.read_u32(offset),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.read_u32(offset),
             ENABLE_SPIM => self.spim.read_u32(offset),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
             _ => self.twim.read_u32(offset),
@@ -135,7 +136,7 @@ impl Peripheral for Nrf52SerialInstance {
             return Ok(());
         }
         match self.active() {
-            ENABLE_TWIM => self.twim.write_u32(offset, value),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.write_u32(offset, value),
             ENABLE_SPIM => self.spim.write_u32(offset, value),
             // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
             _ => self.twim.write_u32(offset, value),
@@ -147,7 +148,7 @@ impl Peripheral for Nrf52SerialInstance {
             return Ok((self.enable & ENABLE_MASK) as u16);
         }
         match self.active() {
-            ENABLE_TWIM => self.twim.read_u16(offset),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.read_u16(offset),
             ENABLE_SPIM => self.spim.read_u16(offset),
             _ => self.twim.read_u16(offset),
         }
@@ -161,7 +162,7 @@ impl Peripheral for Nrf52SerialInstance {
             return Ok(());
         }
         match self.active() {
-            ENABLE_TWIM => self.twim.write_u16(offset, value),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.write_u16(offset, value),
             ENABLE_SPIM => self.spim.write_u16(offset, value),
             _ => self.twim.write_u16(offset, value),
         }
@@ -169,7 +170,7 @@ impl Peripheral for Nrf52SerialInstance {
 
     fn tick(&mut self) -> PeripheralTickResult {
         match self.active() {
-            ENABLE_TWIM => self.twim.tick(),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.tick(),
             ENABLE_SPIM => self.spim.tick(),
             _ => PeripheralTickResult::default(),
         }
@@ -177,7 +178,7 @@ impl Peripheral for Nrf52SerialInstance {
 
     fn needs_bus_tick(&self) -> bool {
         match self.active() {
-            ENABLE_TWIM => self.twim.needs_bus_tick(),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.needs_bus_tick(),
             ENABLE_SPIM => self.spim.needs_bus_tick(),
             _ => false,
         }
@@ -185,7 +186,7 @@ impl Peripheral for Nrf52SerialInstance {
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         match self.active() {
-            ENABLE_TWIM => self.twim.tick_with_bus(bus),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.tick_with_bus(bus),
             ENABLE_SPIM => self.spim.tick_with_bus(bus),
             _ => {}
         }
@@ -198,27 +199,36 @@ impl Peripheral for Nrf52SerialInstance {
         bus: &mut dyn Bus,
     ) -> crate::sched::EventResult {
         match self.active() {
-            ENABLE_TWIM => self.twim.on_event(event_token, sched, bus),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.on_event(event_token, sched, bus),
             ENABLE_SPIM => self.spim.on_event(event_token, sched, bus),
             _ => crate::sched::EventResult::default(),
         }
     }
 
     fn uses_scheduler(&self) -> bool {
-        // Both sub-peripherals are scheduler-driven; when neither is enabled
-        // the instance is a pure config surface (no walk work). Always true
-        // so ENABLE flips after bus construction cannot re-introduce a
-        // forcer on a walk-deleted bus.
-        true
+        // Classic TWI (ENABLE=5) needs the legacy walk for IRQ delivery;
+        // TWIM/SPIM stay scheduler/bus-tick driven.
+        match self.active() {
+            ENABLE_TWI => false,
+            _ => true,
+        }
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        false
+        self.active() == ENABLE_TWI
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        self.active() == ENABLE_TWI
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
     }
 
     fn sync_to(&mut self, tick_now: u64) {
         match self.active() {
-            ENABLE_TWIM => self.twim.sync_to(tick_now),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.sync_to(tick_now),
             ENABLE_SPIM => self.spim.sync_to(tick_now),
             _ => {}
         }
@@ -226,7 +236,7 @@ impl Peripheral for Nrf52SerialInstance {
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         match self.active() {
-            ENABLE_TWIM => self.twim.take_scheduled_events(),
+            ENABLE_TWI | ENABLE_TWIM => self.twim.take_scheduled_events(),
             ENABLE_SPIM => self.spim.take_scheduled_events(),
             _ => Vec::new(),
         }

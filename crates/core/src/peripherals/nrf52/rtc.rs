@@ -224,16 +224,17 @@ impl Nrf52Rtc {
             let prev = self.counter.get();
             let next = (prev.wrapping_add(1)) & COUNTER_MASK;
             self.counter.set(next);
+            // EVENTS_TICK / OVRFLW always latch on silicon; EVTEN is PPI-only.
+            self.events_tick.set(1);
             if self.evten & EN_TICK != 0 {
-                self.events_tick.set(1);
                 fired_mask |= EN_TICK;
             }
             if self.inten & EN_TICK != 0 {
                 irq = true;
             }
             if prev == COUNTER_MASK && next == 0 {
+                self.events_ovrflw.set(1);
                 if self.evten & EN_OVRFLW != 0 {
-                    self.events_ovrflw.set(1);
                     fired_mask |= EN_OVRFLW;
                 }
                 if self.inten & EN_OVRFLW != 0 {
@@ -243,8 +244,15 @@ impl Nrf52Rtc {
             for i in 0..self.num_cc {
                 if next == (self.cc[i] & COUNTER_MASK) {
                     let bit = 1u32 << (EN_COMPARE_SHIFT + i as u32);
+                    // Silicon always latches EVENTS_COMPARE[n] on match
+                    // (PS §6.21). EVTEN only routes the event to PPI; INTEN
+                    // routes it to NVIC. mbed's common_rtc_init leaves EVTEN
+                    // clear (it writes EVTENCLR) and relies on INTEN + the
+                    // software event flag — if we gate the latch on EVTEN the
+                    // ISR sees EVENTS_COMPARE==0 and never arms the wake flag,
+                    // so Nano 33 BLE mbed delay()/sleep hang forever.
+                    self.events_compare[i].set(1);
                     if self.evten & bit != 0 {
-                        self.events_compare[i].set(1);
                         fired_mask |= bit;
                     }
                     if self.inten & bit != 0 {

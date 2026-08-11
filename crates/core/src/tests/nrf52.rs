@@ -109,6 +109,148 @@ fn xiao_nrf52840_gpio_task_registers_drive_led_pins() {
     assert_eq!(bus.read_u32(0x5000_0504).unwrap() & (1 << 26), 0);
 }
 
+/// Arduino Nano 33 BLE — product system reuses nrf52840.yaml with Nano LED board_io.
+#[test]
+fn nano33ble_manifest_builds_with_uart_gpio_and_board_leds() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/arduino-nano-33-ble.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|_| panic!("Failed to load chip config at {:?}", chip_path));
+    let mut manifest = SystemManifest::from_file(&system_path)
+        .unwrap_or_else(|_| panic!("Failed to load system manifest at {:?}", system_path));
+
+    let anchored_chip = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored_chip.to_str().unwrap().to_string();
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("Failed to build Nano 33 BLE bus");
+    let names: Vec<&str> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
+
+    assert!(names.contains(&"uart0"), "uart0 missing: {names:?}");
+    assert!(names.contains(&"gpio0"), "gpio0 missing: {names:?}");
+    assert!(names.contains(&"gpio1"), "gpio1 missing: {names:?}");
+    assert!(names.contains(&"i2c0"), "i2c0 missing: {names:?}");
+    assert!(names.contains(&"spi2"), "spi2 missing: {names:?}");
+
+    // Carrier LEDs from the product system manifest.
+    let board_io_ids: Vec<&str> = manifest.board_io.iter().map(|io| io.id.as_str()).collect();
+    for expected in [
+        "led_builtin",
+        "led_red",
+        "led_green",
+        "led_blue",
+        "led_pwr",
+    ] {
+        assert!(
+            board_io_ids.contains(&expected),
+            "board_io {expected} missing: {board_io_ids:?}"
+        );
+    }
+}
+
+/// Nano 33 BLE RGB + LED_BUILTIN pins (variant.cpp): P0.24 / P0.16 / P0.06 / P0.13.
+#[test]
+fn nano33ble_gpio_task_registers_drive_led_pins() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/arduino-nano-33-ble.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored_chip = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored_chip.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("Failed to build Nano 33 BLE bus");
+
+    // LEDR P0.24 — OUTSET then OUTCLR on GPIO0 task registers.
+    bus.write_u32(0x5000_0508, 1 << 24).unwrap();
+    assert_eq!(bus.read_u32(0x5000_0504).unwrap() & (1 << 24), 1 << 24);
+    bus.write_u32(0x5000_050C, 1 << 24).unwrap();
+    assert_eq!(bus.read_u32(0x5000_0504).unwrap() & (1 << 24), 0);
+
+    // LED_BUILTIN P0.13
+    bus.write_u32(0x5000_0508, 1 << 13).unwrap();
+    assert_eq!(bus.read_u32(0x5000_0504).unwrap() & (1 << 13), 1 << 13);
+    bus.write_u32(0x5000_050C, 1 << 13).unwrap();
+    assert_eq!(bus.read_u32(0x5000_0504).unwrap() & (1 << 13), 0);
+
+    // LED_PWR is on P1.09 — gpio1 base is the LabWired-remapped window 0x5000_1000.
+    bus.write_u32(0x5000_1508, 1 << 9).unwrap();
+    assert_eq!(bus.read_u32(0x5000_1504).unwrap() & (1 << 9), 1 << 9);
+    bus.write_u32(0x5000_150C, 1 << 9).unwrap();
+    assert_eq!(bus.read_u32(0x5000_1504).unwrap() & (1 << 9), 0);
+}
+
+#[test]
+fn nano33ble_sense_manifest_attaches_wire1_sensors() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/arduino-nano-33-ble-sense.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored_chip = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored_chip.to_str().unwrap().to_string();
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("Nano 33 BLE Sense bus");
+    let names: Vec<&str> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
+    // Wire1 first-begin → TWI0 = chip id i2c0 (sensors hang here, not twi1).
+    assert!(names.contains(&"i2c0"), "i2c0 missing: {names:?}");
+    assert!(names.contains(&"pdm"), "pdm missing for mic path: {names:?}");
+    assert!(names.contains(&"radio"), "radio missing: {names:?}");
+    assert!(names.contains(&"usbd"), "usbd missing: {names:?}");
+
+    let ext: Vec<&str> = manifest
+        .external_devices
+        .iter()
+        .map(|d| d.id.as_str())
+        .collect();
+    for expected in ["imu_ag", "imu_mag", "hts221", "lps22hb", "apds9960"] {
+        assert!(ext.contains(&expected), "external_device {expected} missing: {ext:?}");
+    }
+    for d in &manifest.external_devices {
+        assert_eq!(
+            d.connection, "i2c0",
+            "Sense device {} must connect to i2c0 (Wire1→TWI0), got {}",
+            d.id, d.connection
+        );
+    }
+}
+
+#[test]
+fn nano33ble_spim0_start_sets_end_event_and_amount() {
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/arduino-nano-33-ble.yaml");
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored_chip = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored_chip.to_str().unwrap().to_string();
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("Failed to build Nano 33 BLE bus");
+
+    // Same SPIM0 EasyDMA path as XIAO (shared nrf52840 chip model).
+    bus.write_u32(0x4000_3500, 7).unwrap();
+    bus.write_u32(0x4000_3544, 0x2000_0000).unwrap();
+    bus.write_u32(0x4000_3548, 4).unwrap();
+    bus.write_u32(0x4000_3010, 1).unwrap();
+    bus.tick_peripherals_fully_forced();
+
+    assert_eq!(bus.read_u32(0x4000_3118).unwrap(), 1, "EVENTS_END must be 1");
+    assert_eq!(bus.read_u32(0x4000_354C).unwrap(), 4, "TXD.AMOUNT must equal MAXCNT");
+    assert_eq!(bus.read_u32(0x4000_3120).unwrap(), 1, "EVENTS_ENDTX must be 1");
+}
+
 /// Behavioural test: TIMER0 driven through onboarding manifest.
 /// Configures BITMODE=32-bit, PRESCALER=0, CC[0]=5, enables COMPARE[0] IRQ,
 /// starts the timer, then ticks the bus enough cycles for the compare to
@@ -1069,5 +1211,191 @@ fn gpiote_task_drive_reaches_the_port_the_chip_yaml_declares() {
             "PORT={port}: the drive must NOT leak into {other}.IN bit {PIN} \
              ({other} base {other_base:#010x}); got {other}.IN = {other_in:#010x}"
         );
+    }
+}
+
+
+/// Regression: mbed us_ticker (Nano 33 BLE) free-runs TIMER1 via legacy walk.
+/// A clock-only `scheduler_mode` (without event-scheduler) freezes the counter
+/// because MMIO never sync_to's and the walk skips uses_scheduler models.
+#[test]
+fn nrf52840_timer1_legacy_walk_advances_free_running_counter() {
+    use crate::Bus;
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/nrf52840.yaml");
+    if !system_path.is_file() {
+        system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        system_path.push("../../configs/systems/arduino-nano-33-ble.yaml");
+    }
+
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    if anchored.is_file() {
+        manifest.chip = anchored.to_str().unwrap().to_string();
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+
+    const TIMER1: u64 = 0x4000_9000;
+    bus.write_u32(TIMER1 + 0x508, 3).unwrap(); // BITMODE 32
+    bus.write_u32(TIMER1 + 0x510, 0).unwrap(); // PRESCALER 0
+    bus.write_u32(TIMER1 + 0x000, 1).unwrap(); // TASKS_START
+
+    // Production walk (not forced): must advance free-running counter.
+    for _ in 0..32 {
+        let _ = bus.tick_peripherals();
+    }
+    bus.write_u32(TIMER1 + 0x044, 1).unwrap(); // TASKS_CAPTURE[1]
+    let cc1 = bus.read_u32(TIMER1 + 0x544).unwrap();
+    assert!(
+        cc1 >= 16,
+        "TIMER1 free-running counter should advance on legacy walk; CC[1]={cc1}"
+    );
+}
+
+
+
+#[test]
+fn nano33ble_sense_classic_twi_who_am_i() {
+    use crate::Bus;
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/arduino-nano-33-ble-sense.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("sense bus");
+
+    // TWIM1 / TWI1 base
+    const TWI1: u64 = 0x4000_3000; // i2c0 / TWI0 — Wire1 first-begin instance
+    const TASKS_STARTTX: u64 = TWI1 + 0x008;
+    const TASKS_STARTRX: u64 = TWI1 + 0x000;
+    const TASKS_STOP: u64 = TWI1 + 0x014;
+    const TASKS_SUSPEND: u64 = TWI1 + 0x01C;
+    const EVENTS_STOPPED: u64 = TWI1 + 0x104;
+    const EVENTS_RXDREADY: u64 = TWI1 + 0x108;
+    const EVENTS_TXDSENT: u64 = TWI1 + 0x11C;
+    const EVENTS_ERROR: u64 = TWI1 + 0x124;
+    const ENABLE: u64 = TWI1 + 0x500;
+    const TXD: u64 = TWI1 + 0x51C;
+    const RXD: u64 = TWI1 + 0x518;
+    const ADDRESS: u64 = TWI1 + 0x588;
+
+    // Count attached devices on i2c0 (Wire1 first-begin → TWI0).
+    let idx = bus.find_peripheral_index_by_name("i2c0").expect("i2c0");
+    let n = {
+        let p = &bus.peripherals[idx];
+        let any = p.dev.as_any().unwrap();
+        if let Some(s) = any.downcast_ref::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>() {
+            s.attached_i2c_devices().len()
+        } else if let Some(t) = any.downcast_ref::<crate::peripherals::nrf52::twim::Nrf52Twim>() {
+            t.attached_devices().len()
+        } else {
+            999
+        }
+    };
+    eprintln!("i2c0 attached slaves: {n}");
+    assert!(n >= 5, "expected Sense sensors on i2c0, got {n}");
+
+    bus.write_u32(ENABLE, 5).unwrap(); // classic TWI
+    bus.write_u32(ADDRESS, 0x6B).unwrap();
+
+    // Write reg 0x0F
+    bus.write_u32(EVENTS_TXDSENT, 0).unwrap();
+    bus.write_u32(EVENTS_ERROR, 0).unwrap();
+    bus.write_u32(TASKS_STARTTX, 1).unwrap();
+    bus.write_u32(TXD, 0x0F).unwrap();
+    assert_eq!(bus.read_u32(EVENTS_ERROR).unwrap(), 0, "ANACK on write?");
+    assert_eq!(bus.read_u32(EVENTS_TXDSENT).unwrap(), 1, "TXDSENT after TXD");
+    bus.write_u32(TASKS_SUSPEND, 1).unwrap();
+
+    // Read 1 byte
+    bus.write_u32(EVENTS_RXDREADY, 0).unwrap();
+    bus.write_u32(TASKS_STARTRX, 1).unwrap();
+    assert_eq!(bus.read_u32(EVENTS_ERROR).unwrap(), 0, "ANACK on read?");
+    assert_eq!(bus.read_u32(EVENTS_RXDREADY).unwrap(), 1, "RXDREADY");
+    bus.write_u32(EVENTS_RXDREADY, 0).unwrap();
+    let who = bus.read_u32(RXD).unwrap() & 0xFF;
+    bus.write_u32(TASKS_STOP, 1).unwrap();
+    assert_eq!(bus.read_u32(EVENTS_STOPPED).unwrap(), 1);
+    assert_eq!(who, 0x68, "LSM9DS1 AG WHO_AM_I");
+}
+
+#[test]
+fn nano33ble_classic_twi_txdsent_pends_irq() {
+    use crate::Bus;
+    let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chip_path.push("../../configs/chips/nrf52840.yaml");
+    let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    system_path.push("../../configs/systems/arduino-nano-33-ble-sense.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let anchored = system_path.parent().unwrap().join(&manifest.chip);
+    manifest.chip = anchored.to_str().unwrap().to_string();
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("sense bus");
+
+    const TWI0: u64 = 0x4000_3000;
+    const TASKS_STARTTX: u64 = TWI0 + 0x008;
+    const EVENTS_TXDSENT: u64 = TWI0 + 0x11C;
+    const INTENSET: u64 = TWI0 + 0x304;
+    const ENABLE: u64 = TWI0 + 0x500;
+    const TXD: u64 = TWI0 + 0x51C;
+    const ADDRESS: u64 = TWI0 + 0x588;
+    const TWI0_IRQ: u32 = 3;
+
+    // Ensure peripheral is on legacy walk after ENABLE=5
+    bus.write_u32(ENABLE, 5).unwrap();
+    let idx = bus.find_peripheral_index_by_name("i2c0").expect("i2c0");
+    let on_walk = bus.legacy_tick_entry_descriptors()
+        .iter()
+        .any(|(n, _, _)| n == "i2c0");
+    eprintln!("i2c0 on legacy walk after ENABLE=5: {on_walk}");
+    eprintln!("legacy entries: {:?}", bus.legacy_tick_entry_descriptors().iter().map(|(n,_,_)| n.clone()).collect::<Vec<_>>());
+    assert!(on_walk, "i2c0 must be on legacy walk for ENABLE=5");
+
+    bus.write_u32(ADDRESS, 0x6B).unwrap();
+    bus.write_u32(EVENTS_TXDSENT, 0).unwrap();
+    bus.write_u32(TASKS_STARTTX, 1).unwrap();
+    bus.write_u32(TXD, 0x0F).unwrap();
+    assert_eq!(bus.read_u32(EVENTS_TXDSENT).unwrap(), 1, "TXDSENT");
+
+    // mbed/nrfx INTEN mask 0x286 = STOPPED|RXDREADY|TXDSENT|ERROR
+    bus.write_u32(INTENSET, 0x286).unwrap();
+    assert_eq!(bus.read_u32(INTENSET).unwrap() & (1 << 7), 1 << 7, "TXDSENT inten armed");
+
+    // Direct peripheral tick
+    let res_irq = {
+        let p = &mut bus.peripherals[idx];
+        let res = p.dev.tick();
+        eprintln!("direct tick: irq={} fired={:?}", res.irq, res.fired_events);
+        res.irq
+    };
+    assert!(res_irq, "classic TWI tick must raise irq when TXDSENT+INTEN");
+
+    // Bus-level tick — raw irq 3 if no NVIC, or exception 19 if NVIC+ISER
+    let mut saw_raw = false;
+    let mut saw_exc = false;
+    for i in 0..5 {
+        let (irqs, _) = bus.tick_peripherals_fully_forced();
+        eprintln!("tick {i}: irqs={irqs:?}");
+        if irqs.contains(&TWI0_IRQ) {
+            saw_raw = true;
+        }
+        if irqs.contains(&(16 + TWI0_IRQ)) {
+            saw_exc = true;
+        }
+    }
+    // If NVIC present without ISER, pend still lands in ISPR
+    if let Some(nvic) = &bus.nvic {
+        let ispr0 = nvic.ispr[0].load(std::sync::atomic::Ordering::SeqCst);
+        eprintln!("NVIC ISPR0={ispr0:#x} bit3={}", (ispr0 >> 3) & 1);
+        assert_ne!((ispr0 >> 3) & 1, 0, "NVIC ISPR bit 3 must be set");
+    } else {
+        assert!(saw_raw || saw_exc, "expected TWI0 IRQ in tick list, raw={saw_raw} exc={saw_exc}");
     }
 }

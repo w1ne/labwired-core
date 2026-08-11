@@ -1,11 +1,16 @@
 // LabWired Arduino matrix L2 — LED_BUILTIN digitalWrite + serial marker.
-// Pin: LED_BUILTIN when defined, else board-common fallbacks.
+#if defined(ARDUINO_ARDUINO_NANO33BLE) || defined(ARDUINO_NANO33BLE)
+#define LW_SERIAL Serial1
+#else
+#define LW_SERIAL Serial
+#endif
+
 #ifndef LED_BUILTIN
 #  if defined(ARDUINO_ARCH_ESP32)
 #    define LW_LED 2
 #  elif defined(ARDUINO_ARCH_RP2040)
 #    define LW_LED 25
-#  elif defined(ARDUINO_ARCH_NRF52) || defined(ARDUINO_ARCH_NRF52840)
+#  elif defined(ARDUINO_ARCH_NRF52) || defined(ARDUINO_ARCH_NRF52840) || defined(ARDUINO_ARDUINO_NANO33BLE)
 #    define LW_LED 13
 #  else
 #    define LW_LED 13
@@ -16,12 +21,9 @@
 
 void setup() {
   pinMode(LW_LED, OUTPUT);
-  Serial.begin(115200);
-  // Short delays: matrix stops on first LW_L2_OK; long wall time was almost
-  // entirely delay() spin, not model work. 1 ms still exercises digitalWrite
-  // + millis/SysTick scheduling without 40+ ms of empty wait per loop.
+  LW_SERIAL.begin(115200);
   delay(1);
-  Serial.println("LW_L2_BOOT");
+  LW_SERIAL.println("LW_L2_BOOT");
 }
 
 void loop() {
@@ -29,5 +31,5 @@ void loop() {
   delay(1);
   digitalWrite(LW_LED, LOW);
   delay(1);
-  Serial.println("LW_L2_OK");
+  LW_SERIAL.println("LW_L2_OK");
 }

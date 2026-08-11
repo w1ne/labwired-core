@@ -55,3 +55,6 @@ fixtures/
 # Python
 __pycache__/
 *.pyc
+
+# PlatformIO build trees
+**/.pio/

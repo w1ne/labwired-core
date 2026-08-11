@@ -1,0 +1,21 @@
+# Arduino matrix system — Nano 33 BLE product pinout + INA219 for L3.
+name: "arduino-matrix-nano33ble"
+chip: "../../../configs/chips/nrf52840.yaml"
+# Arduino mbed app is linked at 0x10000 (SoftDevice reserve below).
+reset_vector_offset: 0x10000
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on Arduino Wire.
+  # Arduino mbed Nano 33 BLE Wire uses TWIM0-class bus; kit attach uses i2c0
+  # (chip id for TWIM0 in nrf52840.yaml). Harmless for L0–L2.
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x40
+board_io:
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: true

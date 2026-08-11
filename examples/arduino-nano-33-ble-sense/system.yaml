@@ -1,0 +1,79 @@
+# LabWired - Arduino Nano 33 BLE Sense (example mirror of product system)
+#
+# OVERLAY of arduino-nano-33-ble:
+#   • same nrf52840 chip + same LED board_io (carrier)
+#   • PLUS external_devices on Wire1 first-begin → chip `i2c0` (TWI0)
+#
+# Keep in lockstep with configs/systems/arduino-nano-33-ble-sense.yaml.
+#
+# Firmware must raise sensors-3V3 (P0.22) and I2C pull-ups (P1.00) before Wire1
+# — those are firmware-owned GPIO, not board_io phantoms (same rule as Feather
+# NEOPIXEL_I2C_POWER).
+name: "arduino-nano-33-ble-sense"
+chip: "../../configs/chips/nrf52840.yaml"
+# Same mbed app link address as base Nano 33 BLE (SoftDevice reserve).
+reset_vector_offset: 0x10000
+
+# ── Sense overlay: onboard sensors on Wire1 → i2c0 ──────────────────────────
+# Arduino mbed assigns TWI instance IDs at WireN.begin() when PinMap_I2C is
+# empty: first bus that begins is instance 0 = TWI0 @ 0x40003000 (chip `i2c0`).
+# Sense sketches call Wire1.begin() only, so sensors hang off `i2c0`, not `twi1`.
+external_devices:
+  - id: "imu_ag"
+    type: "lsm9ds1_ag"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x6B
+  - id: "imu_mag"
+    type: "lsm9ds1_m"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x1E
+  - id: "hts221"
+    type: "hts221"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x5F
+  - id: "lps22hb"
+    type: "lps22hb"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x5C
+  - id: "apds9960"
+    type: "apds9960"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x39
+
+# ── Carrier LEDs (identical to arduino-nano-33-ble.yaml) ────────────────────
+board_io:
+  - id: "led_builtin"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 13
+    signal: "output"
+    active_high: true
+  - id: "led_red"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 24
+    signal: "output"
+    active_high: false
+  - id: "led_green"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 16
+    signal: "output"
+    active_high: false
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "gpio0"
+    pin: 6
+    signal: "output"
+    active_high: false
+  - id: "led_pwr"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 9
+    signal: "output"
+    active_high: true

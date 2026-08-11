@@ -347,9 +347,19 @@ impl Peripheral for Nrf52Uarte {
             // STARTRX (UARTE personality) arms an EasyDMA drain of the RX
             // injection queue; the RAM write happens in `do_easydma_rx`.
             OFF_TASKS_STARTRX if self.enable != ENABLE_UART_LEGACY => self.rx_pending = true,
-            // Legacy-personality STARTRX and the stop/flush tasks: accepted,
-            // no modelled effect (legacy RX is byte-pull driven by RXD reads).
-            OFF_TASKS_STARTRX | OFF_TASKS_STOPRX | OFF_TASKS_FLUSHRX => {}
+            // STOPRX: silicon raises EVENTS_RXTO when the receiver stops
+            // (PS §6.34.3 typical RX sequence). Arduino Nano 33 BLE
+            // `initVariant` does STOPRX then spins on RXTO to shut down the
+            // SoftDevice/bootloader UARTE0 — without RXTO that loop never
+            // exits and setup() never runs. Always complete immediately
+            // (same shape as STOPTX → TXSTOPPED above).
+            OFF_TASKS_STOPRX => {
+                self.rx_pending = false;
+                self.events_rxto = 1;
+            }
+            // Legacy-personality STARTRX and FLUSHRX: accepted; legacy RX is
+            // byte-pull driven by RXD reads.
+            OFF_TASKS_STARTRX | OFF_TASKS_FLUSHRX => {}
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears
             OFF_EVENTS_CTS if value == 0 => self.events_cts = 0,
             OFF_EVENTS_NCTS if value == 0 => self.events_ncts = 0,
