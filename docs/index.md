@@ -1,64 +1,53 @@
-# LabWired Core Documentation
+# LabWired documentation
 
-**Deterministic firmware simulation** — the same binary in the browser, in CI, and under an agent. The agent proposes; the **oracle disposes**.
-
----
-
-## Three doors (start here)
-
-| Path | For | Start |
-|------|-----|--------|
-| **Playground** | Humans, zero install | [Playground first run](tutorials/playground.md) · [app.labwired.com](https://app.labwired.com) |
-| **Agent (MCP)** | Claude Code, Codex, Cursor, … | [Connect MCP](agent/mcp.md) · [First agent run](agent/first-run.md) · [Tools](agent/tools.md) |
-| **CLI / CI** | Local sim, pipelines, oracle scripts | [Running firmware](getting_started_firmware.md) · [CI integration](ci_integration.md) |
-
-**Fidelity:** [What a green pass means](fidelity.md) · [Scoreboards](coverage/chip-conformance.md)
+Run **real firmware** on a **digital twin** of the board — in the browser, from an agent, or in CI. Same models. Deterministic results.
 
 ---
 
-## Boards & parts
+## Start here (four doors)
 
-- **[Boards](boards/esp32c3.md)** — per-MCU pins, artifact format, ✅/⚠️/❌ matrix (template: [ESP32-C3](boards/esp32c3.md))
-- **[Parts](parts/index.md)** — external components (sensors, displays, …)
-- **[Board onboarding](board_onboarding_playbook.md)** — add a new chip (contributors)
+| Door | You want to… | Start |
+|------|----------------|--------|
+| **Playground** | Try without installing | [Playground first run](tutorials/playground.md) · [app.labwired.com](https://app.labwired.com) |
+| **Agent (MCP)** | Let Claude / Codex / Cursor drive the twin | [Connect MCP](agent/mcp.md) · [First agent run](agent/first-run.md) |
+| **CLI / CI** | Run locally or in a pipeline | [Run firmware](getting_started_firmware.md) · [CI](ci_integration.md) |
+| **Onboard hardware** | Add a sensor, actuator, or board | [Pick a track](howto/onboard-hardware.md) · [Onboard a part](howto/onboard-part.md) |
 
-Popular boards: [ESP32-C3](boards/esp32c3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [STM32F401](boards/stm32f401.md)
-
----
-
-## Core concepts
-
-- [Architecture overview](architecture.md) — CPU, bus, peripherals
-- [Hardware–sim parity](golden_reference.md)
-- [Configuration (YAML)](configuration_reference.md)
-- [Resource metrics](resource_metrics.md) — flash / RAM footprint and main-stack budgets in `labwired test`
-- [Target support rubric](target_support_rubric.md)
+**What does a green pass mean?** → [Fidelity](fidelity.md)
 
 ---
 
-## Tutorials & examples
+## Onboard hardware (quick pick)
 
-- [Simulating sensors (I²C)](examples/i2c_sensor_example.md)
-- [DMA & interrupts](examples/dma_exti_example.md)
-- [Integrated test walkthrough](examples/integrated_test_walkthrough.md)
-- [Resource metrics examples](../examples/metrics/README.md) — STM32F103 blinky flash / stack budgets
+| Track | Examples | Guide |
+|-------|----------|--------|
+| **Part** (most common) | I²C sensor, SPI chip, servo, motor, buzzer | [Onboard a part](howto/onboard-part.md) |
+| **Board / MCU** | New chip or Nucleo / Pico / ESP board | [Board playbook](board_onboarding_playbook.md) |
+| **On-chip peripheral** | New timer / UART model inside a chip | [Peripheral modeling](peripherals.md) |
 
----
-
-## Debugging
-
-- [VS Code](vscode_debugging.md) · [Native DAP](debugging.md) · [GDB](gdb_integration.md)
+Parts catalog: [Parts](parts/index.md) · Support levels: [Target rubric](target_support_rubric.md)
 
 ---
 
-## Contributing (engine)
+## Boards (popular)
 
-- [Core agents manual](agents.md) — AI agents working **in this repository**
-- [Peripheral modeling](peripherals.md) · [Declarative registers](declarative_registers.md)
-- [Release strategy](release_strategy.md)
+[ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [STM32F401](boards/stm32f401.md) · [full board list in nav]
+
+---
+
+## More (when you need it)
+
+| Topic | Link |
+|-------|------|
+| Agent tools | [Tool reference](agent/tools.md) |
+| CLI flags | [CLI reference](cli_reference.md) |
+| Troubleshooting | [Troubleshooting](troubleshooting.md) |
+| YAML config | [Configuration reference](configuration_reference.md) |
+| Architecture (engine) | [Architecture](architecture.md) |
+| Agents working *in* this repo | [Core agents manual](agents.md) |
 
 ---
 
 ## Product
 
-Simulation for registered users is not cycle-metered on the product side; hosted agent tokens follow your plan on [labwired.com](https://labwired.com). This site documents **how the twin works** and **how to drive it**.
+Hosted Playground and MCP use the same core models as the open CLI. Plans and tokens: [labwired.com](https://labwired.com).
