@@ -4,7 +4,7 @@ Run **real firmware** on a **digital twin** of the board — in the browser, fro
 
 ---
 
-## Start here (four doors)
+## Start here
 
 | Door | You want to… | Start |
 |------|----------------|--------|
