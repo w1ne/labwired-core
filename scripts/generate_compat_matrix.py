@@ -56,9 +56,17 @@ def parse_yaml_fallback(text: str) -> dict:
         stripped = line.strip()
         if stripped.startswith("#") or not stripped:
             continue
-        if stripped == "peripherals:":
-            in_peripherals = True
-            continue
+        # Block form `peripherals:` or empty inline `peripherals: []`.
+        # Inline empty-list is common on minimal chips (atmega328p); treating it
+        # as a scalar left result["peripherals"] as the string "[]" and broke
+        # _consumed with AttributeError on str.get.
+        if stripped == "peripherals:" or stripped.startswith("peripherals:"):
+            rest = stripped[len("peripherals:") :].strip()
+            if rest in ("", "[]"):
+                in_peripherals = rest == ""  # only enter list mode for block form
+                result["peripherals"] = []
+                continue
+            # Non-empty inline list — fall through to generic scalar (rare).
         if not in_peripherals:
             if ":" in stripped and not stripped.startswith("-"):
                 key, _, val = stripped.partition(":")
@@ -78,10 +86,16 @@ def parse_yaml_fallback(text: str) -> dict:
 
 def _consumed(config: dict) -> tuple:
     """The projection this script actually reads. Equivalence is judged on it."""
+    per = config.get("peripherals", []) or []
+    if not isinstance(per, list):
+        per = []
+    types = tuple(
+        (p.get("type") if isinstance(p, dict) else None) for p in per
+    )
     return (
         config.get("name"),
         config.get("arch"),
-        tuple(p.get("type") for p in config.get("peripherals", []) or []),
+        types,
     )
 
 
