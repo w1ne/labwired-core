@@ -56,7 +56,6 @@ plugins:
 nav:
   - Home: index.md
   - Fidelity: fidelity.md
-  - llms.txt (agents): llms.md
   - Architecture Overview: architecture.md
   - Hardware-Sim Parity: golden_reference.md
 
