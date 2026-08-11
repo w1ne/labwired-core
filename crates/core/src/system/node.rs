@@ -88,15 +88,35 @@ pub fn build_node_with_plugins(
         Arch::Arm => build_cortex_m_node(id, chip, system, firmware, plugins),
         Arch::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
         Arch::Xtensa => build_xtensa_node(id, chip, system, firmware),
-        Arch::Avr => anyhow::bail!(
-            "node '{id}': chip '{}' is AVR — multi-node World path does not host Avr yet; use Machine<Avr> directly",
-            chip.name
-        ),
+        Arch::Avr => build_avr_node(id, chip, system, firmware, plugins),
         Arch::Unknown => anyhow::bail!(
             "node '{id}': chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, or avr)",
             chip.name
         ),
     }
+}
+
+fn build_avr_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Avr::new();
+    cpu.load_program_image(&image);
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
 }
 
 fn is_cortex_m(chip: &ChipDescriptor) -> bool {
