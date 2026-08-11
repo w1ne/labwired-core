@@ -1,591 +1,609 @@
 {
- "$schema_note": "Per-chip UART/SPI/I2C evidence. THE GATE for this file is crates/core/src/tests/bus_proof_matrix.rs, which runs in core-ci's `pr-gate` job (cargo test --lib) on every pull request. Read that file's module docs before editing this one. States: proven | shallow | none. proven = real firmware moved observable data. shallow = evidence exists but asserts register state only, OR moves bytes without firmware, OR is #[ignore]d / self-skips and therefore passes vacuously. none = nothing.",
- "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
- "surveyed": "2026-08-03",
- "chips": {
-  "esp32": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/esp32_classic_walk_differential.rs",
-    "test": "esp32_classic_serial_reaches_sink_under_browser_policy",
-    "signal": "the committed tests/fixtures/tier1/esp32.elf runs under the BROWSER's event-scheduler policy and the test asserts the UART TX sink is non-empty, printing sink_bytes=N as evidence",
-    "lane": "core-ci / pr-scheduler-observable - EVERY PULL REQUEST (cargo test -p labwired-core --features event-scheduler --test esp32_classic_walk_differential -- --nocapture)"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/esp32/src/main.rs",
-    "test": "check_spi",
-    "gap": "the fixture's own comment says it: 'No SPI device is attached in the tier-1 setup; the streamed bytes go nowhere'. Asserts FIFO word storage + CMD.USR self-clear. The real device-level SPI proofs exist but run in NO lane: examples/esp32-bay-occupancy (ILI9341 over SPI3, panel ink 6610/6610/6352) has no committed ELF and no workflow, and crates/core/tests/e2e_labwired_ereader.rs silently `return`s at line 69 unless LABWIRED_EREADER_ELF points at an ELF - grep over .github/workflows/ finds neither that var nor LABWIRED_REQUIRE_EREADER_ELF anywhere.",
-    "lane": "none"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "examples/tier1-fixture/esp32/src/main.rs",
-    "test": "check_i2c",
-    "signal": "phase 2 of the fixture does a full write-pointer / repeated-start / read against the board-level BMP280 model that configure_xtensa_esp32 attaches at 0x76 (crates/core/src/system/xtensa/esp32.rs:565), and requires the byte back to be the real CHIP_ID 0x58; phase 1 requires an absent 0x20 to NACK. Reported as TIER1 i2c PASS over the real UART.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC) via tier1_matrix; also core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
-   }
-  },
-  "esp32c3": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_esp32c3_demo_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'ESP OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/esp32c3/src/main.rs",
-    "test": "check_spi",
-    "gap": "fixture comment: 'With no device on the bus the controller shifts in an idle (pulled-high) MISO line'. Asserts USR self-clear, TRANS_DONE and W0 == 0xFFFFFFFF. No configs/systems/*.yaml attaches an SPI device to an esp32c3 bus anywhere in the repo.",
-    "lane": "core-ci / core-full (nightly) via tier1_matrix"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "crates/cli/tests/e2e_leo_airquality.rs",
-    "test": "leo_normal_scenario_boots_all_sensors_and_flips_verdict",
-    "signal": "a committed ELF running UNMODIFIED Sensirion vendor drivers (SCD41/SGP41/SPS30) plus VEML7700 and an SSD1306 decodes real sensor values over the C3 I2C0 command-list engine; the test asserts the decoded values drive a verdict state machine and that assert_oled_rendered counts >200 lit pixels in the panel's own framebuffer",
-    "lane": "core-nightly (cron 03:05 UTC): cargo test --release -p labwired-cli --test e2e_leo_airquality",
-    "note": "tier1 check_i2c (BMP280 CHIP_ID 0x58) and the arduino-matrix INA219 cell are two further independent proofs on this chip."
-   }
-  },
-  "esp32s3": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
-    "test": "LW_L0_OK",
-    "signal": "real PlatformIO-compiled Arduino firmware; the sim captures hardware UART0/USARTx bytes and a uart_contains oracle matches the LW_L0_OK marker printed from setup()",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "crates/core/tests/esp32s3_gpspi_oracle.rs",
-    "test": "gpspi_cpu_transfer_executes_and_latches_done",
-    "gap": "a synthetic register-level CPU-mode transfer with NO device attached (MISO reads the 0xFFFFFFFF idle); asserts USR auto-clear, TRANS_DONE latch and length-bounded fill. Not firmware-driven. examples/tier1-fixture/esp32s3 has no check_spi at all and docs/coverage/tier1-matrix.json records esp32s3/spi as 'na'; no manifest attaches an SPI device to an esp32s3 bus.",
-    "lane": "core-ci / core-full (nightly) via cargo test --workspace"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "crates/core/tests/e2e_i2c_tmp102.rs",
-    "test": "i2c_tmp102_firmware_runs_and_prints_temperature",
-    "signal": "real esp-hal firmware from examples/esp32s3-i2c-tmp102 talks to a real TMP102 model through the production manifest/factory path; the test asserts monotonically-drifting decoded 'T = ...' lines over the USB-Serial-JTAG sink AND a GPIO2 threshold crossing once the decoded temperature passes 30 C",
-    "lane": "core-nightly / esp32s3-fixtures-e2e (cron 03:05 UTC, --features esp32s3-fixtures)",
-    "note": "ensure_firmware_built() panics loudly if the +esp toolchain is absent - it does not skip. The arduino-matrix INA219 cell is a second, independent proof on this chip."
-   }
-  },
-  "esp32s3-zero": {
-   "in_boards": false,
-   "uart": {
-    "state": "none",
-    "gap": "no test loads configs/chips/esp32s3-zero.yaml and moves a byte. strict_onboarding.rs explicitly SKIPs the stem ('Xtensa covered by hw-oracle / e2e fixture tests'), and crates/cli/src/tier1.rs folds the board variant into the esp32s3 row ('one row per SILICON'). The esp32s3 evidence does not transfer: every one of those tests loads configs/chips/esp32s3.yaml."
-   },
-   "spi": {
-    "state": "none",
-    "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
-   },
-   "i2c": {
-    "state": "none",
-    "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
-   }
-  },
-  "mkw41z4": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_kw41z_smoke_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'KW41Z_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_kw41z_lcd_renders_screen",
-    "signal": "boots the unmodified kw41z-lcd-activity.elf, then reads the PCD8544 panel MODEL's own framebuffer back and confirms the display was turned on and real pixels were drawn - i.e. the DSPI master actually clocked the bytes into the panel. kw41z_lcd_bus_trace_captures_i2c_and_spi in the same file independently asserts a BusPayload::Spi frame on spi0.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "kw41z_lcd_bus_trace_captures_i2c_and_spi",
-    "signal": "the universal bus-trace logic analyzer captures, from unmodified firmware, an I2C address frame for the FXOS8700 at 0x1f AND at least one I2cSym::Data event on i2c1; test_kw41z_zephyr_fxos8700_survival additionally asserts the decoded 'AX=' reading reaches UART",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   }
-  },
-  "nrf52832": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
-    "test": "LW_L0_OK",
-    "signal": "real PlatformIO-compiled Arduino firmware; the sim captures hardware UART0/USARTx bytes and a uart_contains oracle matches the LW_L0_OK marker printed from setup()",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "firmware_survival.rs also has an nrf52832_demo case, but its expected_uart_output is b\"\" and assert_uart_contains short-circuits on an empty expectation - that case proves nothing about UART."
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/nrf52832/src/main.rs",
-    "test": "check_spi",
-    "gap": "SPIM EasyDMA is STARTed and EVENTS_END/TXD.AMOUNT/RXD.AMOUNT are checked - counts, not content. It never compares SPI_RX_BUF against SPI_TX_BUF, so it cannot tell a transferred byte from garbage.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "nrf52840": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_nrf52840_demo_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'NRF52840_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/nrf52840/src/main.rs",
-    "test": "check_spi",
-    "gap": "SPIM EasyDMA is STARTed and EVENTS_END/TXD.AMOUNT/RXD.AMOUNT are checked - counts, not content. crates/core/tests/nrf52_spim_easydma_executing.rs DOES prove real RAM byte movement, but from a hand-built SystemBus with no chip config and no firmware.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. sim_input_reachability.rs attaches a real ADXL345 to the Nrf52Twim but reads it back by calling the Rust device object directly, bypassing the TWIM TASKS/EasyDMA registers entirely."
-   }
-  },
-  "nrf5340": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_nrf5340_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nrf5340dk/nrf5340/cpuapp' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "none",
-    "gap": "no SPI/SPIM test, example, firmware crate or system manifest references nrf5340 SPI anywhere."
-   },
-   "i2c": {
-    "state": "none",
-    "gap": "no TWIM/I2C test, example, firmware crate or system manifest references nrf5340 I2C anywhere. The chip is also not in the arduino matrix."
-   }
-  },
-  "nrf54l15": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_nrf54l15_smoke_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'nRF54L15 boot OK' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "none",
-    "gap": "no SPI/SPIM test, example or manifest references nrf54l15 SPI. configs/systems/nrf54l15dk.yaml, smart-ring.yaml and examples/nrf54l15-dk wire GPIO and TWIM devices only."
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "crates/core/tests/nrf54l15_smart_ring_probe.rs",
-    "test": "smart_ring_firmware_reads_all_four_sensor_ids_over_i2c",
-    "signal": "the committed nrf54l15-smart-ring.elf does WHO_AM_I reads of four device models on TWIM21 and the test asserts each returned that model's REAL datasheet identity (BMI270 0x24, MAX30102 0x15, TMP117 0x0117, DRV2605 0xE0), that nothing NACKed, and that the firmware's 0xEE RX-buffer poison sentinel did not survive - a stub or a no-op cannot pass",
-    "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --workspace",
-    "note": "the strongest single bus proof in the repo. Fixture absence is a hard assert!, not a skip. It runs nightly only: core-integrity's push gate runs --lib plus four named --test targets, and this is not one of them."
-   }
-  },
-  "rp2040": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_rp2040_demo_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'RP2040_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "proven",
-    "file": "crates/core/src/tests/rp2040_spi_carries_a_byte.rs",
-    "test": "rp2040_spi_loopback_carries_a_real_byte_under_firmware",
-    "signal": "the committed tests/fixtures/tier1/rp2040.elf runs in-sim; its check_spi puts the PL022 in internal loopback (CR1.LBM), writes 0xA5 to SSPDR, waits for SR.RNE and requires the byte read back to be 0xA5. The test asserts 'TIER1 spi PASS' on the real UART sink, asserts 'TIER1 spi FAIL' is absent, asserts the transcript is non-empty, and separately re-reads the fixture SOURCE to require the 0xA5 comparison still exists so a weakened check cannot keep the claim alive on a stale ELF.",
-    "lane": "core-ci / pr-gate - EVERY PULL REQUEST (cargo test --lib over default-members)",
-    "note": "watched fail first: forcing the loopback path off in peripherals/rp2040/spi.rs makes the firmware print 'TIER1 spi FAIL code=spi-data' and the test go red. It is internal loopback, not an external device - the byte round-trips through the shift engine, nothing on the board receives it."
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. rp2040_i2c_irq_delivery.rs drives the real shipped chip through Machine::advance but asserts only NVIC.ISPR bits; the byte-content proof in peripherals/rp2040/i2c.rs is a bare unit test with no chip and no firmware."
-   }
-  },
-  "rp2350": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "examples/pico2/uart-smoke.yaml",
-    "test": "uart_contains",
-    "signal": "real firmware (firmware-rp2350-demo, Cortex-M33 bare-metal) boots on the rp2350 descriptor and its UART0 output matches the uart_contains 'RP2350_SMOKE_OK' oracle; run 2026-08-05, exit 0",
-    "lane": "manual example run (examples/pico2) - not yet CI-wired",
-    "note": "evidence covers PL011 UART0 on the RP2350 address map (0x40070000) and the rp2350 clkrst profile; TrustZone/bootrom/PIO v2/dual-core are not declared as modeled"
-   },
-   "spi": {
-    "state": "none",
-    "gap": "no fixture loads configs/chips/rp2350.yaml and moves SPI bytes; the descriptor reuses the RP2040 spi model on RP2350 bases but evidence does not transfer automatically - a pico2 SPI fixture is follow-up work"
-   },
-   "i2c": {
-    "state": "none",
-    "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
-   }
-  },
-  "stm32f103": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32f103_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_f103rb' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32f103/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "stm32f401": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32f401_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_f401re' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival",
-    "note": "the sibling stm32f401_blinky case sets expected_uart_output: b\"\" with the comment 'F401 board model does not yet produce deterministic UART bytes end-to-end' - that case is a no-op; the zephyr case is the real one."
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32f401/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "stm32f405": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "examples/feather-f405/uart-smoke.yaml",
-    "test": "uart_contains",
-    "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f405 descriptor and its UART2 output matches the uart_contains 'OK' oracle; run 2026-08-04, exit 0",
-    "lane": "manual example run (examples/feather-f405) - not yet CI-wired",
-    "note": "evidence covers the F4-profile shared IP the F405 reuses; F405-only instances (I2C2/SPI2/USART3/TIM3-5) are not yet declared in the chip yaml"
-   },
-   "spi": {
-    "state": "none",
-    "gap": "no fixture loads configs/chips/stm32f405.yaml and moves SPI bytes; the descriptor reuses the F4 spi1 model but evidence does not transfer automatically - a feather-f405 SPI fixture is follow-up work"
-   },
-   "i2c": {
-    "state": "none",
-    "gap": "no fixture loads configs/chips/stm32f405.yaml and completes an I2C transaction; the descriptor reuses the F4 i2c1 model but evidence does not transfer automatically - a feather-f405 I2C fixture is follow-up work"
-   }
-  },
-  "stm32f767": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "examples/nucleo-f767zi/uart-smoke.yaml",
-    "test": "uart_contains",
-    "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f767 descriptor and its USART2 output matches the uart_contains 'OK' oracle; run 2026-08-05, exit 0",
-    "lane": "manual example run (examples/nucleo-f767zi) - not yet CI-wired",
-    "note": "evidence covers the F4-profile shared IP the F767 reuses; F7-only peripherals (Ethernet/LTDC/CAN/USB/SAI/QSPI) are not declared in the chip yaml"
-   },
-   "spi": {
-    "state": "none",
-    "gap": "no fixture loads configs/chips/stm32f767.yaml and moves SPI bytes; the descriptor reuses the F4 spi model but evidence does not transfer automatically - a nucleo-f767zi SPI fixture is follow-up work"
-   },
-   "i2c": {
-    "state": "none",
-    "gap": "no fixture loads configs/chips/stm32f767.yaml and completes an I2C transaction; the F7 i2c instances run the stm32l4 (v2) profile, which IS proven on stm32l476, but per-chip evidence does not transfer - a nucleo-f767zi I2C fixture is follow-up work"
-   }
-  },
-  "stm32f401cdu6": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "examples/stm32f401cdu6/uart-smoke.yaml",
-    "test": "uart_contains: \"OK\"",
-    "signal": "firmware-f401-demo writes 'O','K','\\n' straight to USART2->DR and the script runner's uart_contains oracle matches them on the captured sink, against configs/systems/stm32f401cdu6.yaml",
-    "lane": "core-onboarding-smoke / onboarding-stm32f401cdu6 (push to main + schedule; NOT on PRs)",
-    "note": "thin but real: a 3-byte bare DR write inside a 64-step budget, and it runs the GENERIC firmware-f401-demo crate, not the chip-specific firmware-f401cdu6-blackpill-demo."
-   },
-   "spi": {
-    "state": "none",
-    "gap": "nothing exercises SPI on this chip descriptor. It has no tier-1 fixture (absent from TIER1_TARGETS), is not in the arduino matrix, and is named in strict_onboarding.rs's SMOKE_LESS_ALLOWLIST so the generic onboarding gate skips it."
-   },
-   "i2c": {
-    "state": "none",
-    "gap": "crates/firmware-f401cdu6-blackpill-demo/src/i2c_smoke.rs and examples/stm32f401cdu6-blackpill/i2c-smoke.yaml exist and do a real address+data write expecting an ACK - but that yaml is referenced by NO workflow and NO test, and its own system.yaml declares external_devices: [], so if it ever ran it would NACK. Dead code, not coverage."
-   }
-  },
-  "stm32f407": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_nucleo_f407_smoke_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'the F407 smoke transcript' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32f407/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "crates/core/tests/e2e_stm32f407_i2c.rs",
-    "test": "firmware_drives_aht20_and_bmp280_through_simulator",
-    "signal": "real cross-built firmware drives the AHT20 and BMP280 models through the F407 I2C1 state machine; the test asserts GPIOA.ODR bit 5 goes high, a branch the firmware only takes once AHT20 BUSY has cleared AND the BMP280 returned chip-ID 0x58",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test e2e_stm32f407_i2c",
-    "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
-   }
-  },
-  "stm32f411ceu6": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/cli/src/tier1.rs",
-    "test": "\"stm32f411\"",
-    "signal": "the committed tests/fixtures/tier1/stm32f411.elf boots against configs/chips/stm32f411ceu6.yaml and the harness parses the real TIER1 protocol transcript out of the captured UART; parse_tier1_uart treats 'TIER1 done' arriving at all as the UART proof",
-    "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --release -p labwired-cli --test tier1_matrix --test tier1_matrix_ratchet",
-    "note": "this chip is NOT in the arduino matrix and has no firmware_survival case, so tier-1 is its only bus evidence of any kind."
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32f411/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32f411/src/main.rs",
-    "test": "check_i2c",
-    "gap": "firmware-driven, but it only addresses an ABSENT slave and requires the NACK. That proves the arbitration path, not that any device ever received or returned data.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   }
-  },
-  "stm32g474re": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32g474_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_g474re' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32g474re/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "stm32h563": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32h563_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_h563zi' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32h563/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "stm32h735": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "examples/stm32h735-smoke/io-smoke.yaml",
-    "test": "uart_contains: \"TIER1 done\"",
-    "signal": "the committed tests/fixtures/tier1/stm32h735.elf runs against examples/stm32h735-smoke/system.yaml and the script runner's uart_contains oracles match the real TIER1 transcript lines on the captured UART - no cross-compile needed",
-    "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --workspace runs crates/core/tests/strict_onboarding.rs; also tier1_matrix in the same job",
-    "note": "this chip has NO firmware_survival case and is NOT in the arduino matrix."
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32h735/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32h735/src/main.rs",
-    "test": "check_i2c",
-    "gap": "firmware-driven, but it only addresses an ABSENT slave and requires the NACK. That proves the arbitration path, not that any device ever received or returned data.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   }
-  },
-  "stm32l073": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32l073_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_l073rz' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32l073/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "stm32l476": {
-   "in_boards": true,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32l476_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_l476rg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "proven",
-    "file": "crates/core/tests/world_multichip.rs",
-    "test": "master_chip_reaches_operate_with_real_sensor_chip",
-    "signal": "two independent L476 chip instances run real firmware; a real SN74HC165 shift register is attached on spi1 (examples/iolink-station/sensor/system.yaml) and its 0xA5 preset is read over SPI by the sensor chip, sent across the modelled C/Q UART wire, and read back out of the master chip's RAM by ELF symbol (g_master_pd0). A specific payload byte survives the whole path.",
-    "lane": "core-board-ci / iolink-station-l476 (gate: true in configs/ci/boards.yml, runs on pull_request; path-filtered to configs|examples|hil|platformio)",
-    "note": "VACUITY WATCH: skip_or_fail_missing_elfs() returns silently unless LABWIRED_REQUIRE_IOLINK_ELFS is set. Only examples/iolink-station/ci/test.sh sets it. In any OTHER lane that runs cargo test --workspace this same file silently skips."
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. firmware_survival's nucleo_l476rg_i2c case and firmware-l476-demo's 'I2C1 OK' are register/status fingerprints only - no device ever ACKs there. The nokia5110 PCD8544 framebuffer tests would be strong SPI evidence but every test in those three files is #[ignore]d and no workflow passes --ignored."
-   }
-  },
-  "stm32wb55": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32wb55_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_wb55rg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32wb55/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
-  },
-  "stm32wba52": {
-   "in_boards": false,
-   "uart": {
-    "state": "proven",
-    "file": "crates/core/tests/firmware_survival.rs",
-    "test": "test_stm32wba52_zephyr_survival",
-    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_wba52cg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
-    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
-   },
-   "spi": {
-    "state": "shallow",
-    "file": "examples/tier1-fixture/stm32wba52/src/main.rs",
-    "test": "check_spi",
-    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
-    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
-   },
-   "i2c": {
-    "state": "proven",
-    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
-    "test": "LW_L3_OK",
-    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
-    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
-    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
-   }
+  "$schema_note": "Per-chip UART/SPI/I2C evidence. THE GATE for this file is crates/core/src/tests/bus_proof_matrix.rs, which runs in core-ci's `pr-gate` job (cargo test --lib) on every pull request. Read that file's module docs before editing this one. States: proven | shallow | none. proven = real firmware moved observable data. shallow = evidence exists but asserts register state only, OR moves bytes without firmware, OR is #[ignore]d / self-skips and therefore passes vacuously. none = nothing.",
+  "chip_set_derived_from": "configs/chips/*.yaml minus ci-fixture-* (same rule as crates/core/src/tests/builtin_chip_self_contained.rs). This is a SUPERSET of the `chip:` values in the superproject's packages/board-config/src/boards.ts BOARDS array, which is why a new BOARDS chip cannot dodge this gate: it cannot ship without its chip yaml. `in_boards` records BOARDS membership as of 2026-08-03 and is informational only.",
+  "surveyed": "2026-08-03",
+  "chips": {
+    "atmega328p": {
+      "in_boards": true,
+      "uart": {
+        "state": "none",
+        "gap": "P0 AVR twin models USART0 TX into a host sink in unit tests (cpu::avr::tests) but no committed firmware_survival / tier1 ELF lane proves UART under labwired run yet.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model on ATmega328P P0.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No TWI model on ATmega328P P0.",
+        "lane": "none"
+      }
+    },
+    "esp32": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/esp32_classic_walk_differential.rs",
+        "test": "esp32_classic_serial_reaches_sink_under_browser_policy",
+        "signal": "the committed tests/fixtures/tier1/esp32.elf runs under the BROWSER's event-scheduler policy and the test asserts the UART TX sink is non-empty, printing sink_bytes=N as evidence",
+        "lane": "core-ci / pr-scheduler-observable - EVERY PULL REQUEST (cargo test -p labwired-core --features event-scheduler --test esp32_classic_walk_differential -- --nocapture)"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/esp32/src/main.rs",
+        "test": "check_spi",
+        "gap": "the fixture's own comment says it: 'No SPI device is attached in the tier-1 setup; the streamed bytes go nowhere'. Asserts FIFO word storage + CMD.USR self-clear. The real device-level SPI proofs exist but run in NO lane: examples/esp32-bay-occupancy (ILI9341 over SPI3, panel ink 6610/6610/6352) has no committed ELF and no workflow, and crates/core/tests/e2e_labwired_ereader.rs silently `return`s at line 69 unless LABWIRED_EREADER_ELF points at an ELF - grep over .github/workflows/ finds neither that var nor LABWIRED_REQUIRE_EREADER_ELF anywhere.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "examples/tier1-fixture/esp32/src/main.rs",
+        "test": "check_i2c",
+        "signal": "phase 2 of the fixture does a full write-pointer / repeated-start / read against the board-level BMP280 model that configure_xtensa_esp32 attaches at 0x76 (crates/core/src/system/xtensa/esp32.rs:565), and requires the byte back to be the real CHIP_ID 0x58; phase 1 requires an absent 0x20 to NACK. Reported as TIER1 i2c PASS over the real UART.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC) via tier1_matrix; also core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
+      }
+    },
+    "esp32c3": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_esp32c3_demo_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'ESP OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/esp32c3/src/main.rs",
+        "test": "check_spi",
+        "gap": "fixture comment: 'With no device on the bus the controller shifts in an idle (pulled-high) MISO line'. Asserts USR self-clear, TRANS_DONE and W0 == 0xFFFFFFFF. No configs/systems/*.yaml attaches an SPI device to an esp32c3 bus anywhere in the repo.",
+        "lane": "core-ci / core-full (nightly) via tier1_matrix"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "crates/cli/tests/e2e_leo_airquality.rs",
+        "test": "leo_normal_scenario_boots_all_sensors_and_flips_verdict",
+        "signal": "a committed ELF running UNMODIFIED Sensirion vendor drivers (SCD41/SGP41/SPS30) plus VEML7700 and an SSD1306 decodes real sensor values over the C3 I2C0 command-list engine; the test asserts the decoded values drive a verdict state machine and that assert_oled_rendered counts >200 lit pixels in the panel's own framebuffer",
+        "lane": "core-nightly (cron 03:05 UTC): cargo test --release -p labwired-cli --test e2e_leo_airquality",
+        "note": "tier1 check_i2c (BMP280 CHIP_ID 0x58) and the arduino-matrix INA219 cell are two further independent proofs on this chip."
+      }
+    },
+    "esp32s3": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+        "test": "LW_L0_OK",
+        "signal": "real PlatformIO-compiled Arduino firmware; the sim captures hardware UART0/USARTx bytes and a uart_contains oracle matches the LW_L0_OK marker printed from setup()",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "crates/core/tests/esp32s3_gpspi_oracle.rs",
+        "test": "gpspi_cpu_transfer_executes_and_latches_done",
+        "gap": "a synthetic register-level CPU-mode transfer with NO device attached (MISO reads the 0xFFFFFFFF idle); asserts USR auto-clear, TRANS_DONE latch and length-bounded fill. Not firmware-driven. examples/tier1-fixture/esp32s3 has no check_spi at all and docs/coverage/tier1-matrix.json records esp32s3/spi as 'na'; no manifest attaches an SPI device to an esp32s3 bus.",
+        "lane": "core-ci / core-full (nightly) via cargo test --workspace"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "crates/core/tests/e2e_i2c_tmp102.rs",
+        "test": "i2c_tmp102_firmware_runs_and_prints_temperature",
+        "signal": "real esp-hal firmware from examples/esp32s3-i2c-tmp102 talks to a real TMP102 model through the production manifest/factory path; the test asserts monotonically-drifting decoded 'T = ...' lines over the USB-Serial-JTAG sink AND a GPIO2 threshold crossing once the decoded temperature passes 30 C",
+        "lane": "core-nightly / esp32s3-fixtures-e2e (cron 03:05 UTC, --features esp32s3-fixtures)",
+        "note": "ensure_firmware_built() panics loudly if the +esp toolchain is absent - it does not skip. The arduino-matrix INA219 cell is a second, independent proof on this chip."
+      }
+    },
+    "esp32s3-zero": {
+      "in_boards": false,
+      "uart": {
+        "state": "none",
+        "gap": "no test loads configs/chips/esp32s3-zero.yaml and moves a byte. strict_onboarding.rs explicitly SKIPs the stem ('Xtensa covered by hw-oracle / e2e fixture tests'), and crates/cli/src/tier1.rs folds the board variant into the esp32s3 row ('one row per SILICON'). The esp32s3 evidence does not transfer: every one of those tests loads configs/chips/esp32s3.yaml."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
+      }
+    },
+    "mkw41z4": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_kw41z_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'KW41Z_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_kw41z_lcd_renders_screen",
+        "signal": "boots the unmodified kw41z-lcd-activity.elf, then reads the PCD8544 panel MODEL's own framebuffer back and confirms the display was turned on and real pixels were drawn - i.e. the DSPI master actually clocked the bytes into the panel. kw41z_lcd_bus_trace_captures_i2c_and_spi in the same file independently asserts a BusPayload::Spi frame on spi0.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "kw41z_lcd_bus_trace_captures_i2c_and_spi",
+        "signal": "the universal bus-trace logic analyzer captures, from unmodified firmware, an I2C address frame for the FXOS8700 at 0x1f AND at least one I2cSym::Data event on i2c1; test_kw41z_zephyr_fxos8700_survival additionally asserts the decoded 'AX=' reading reaches UART",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      }
+    },
+    "nrf52832": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L0_serial_boot/src/main.ino",
+        "test": "LW_L0_OK",
+        "signal": "real PlatformIO-compiled Arduino firmware; the sim captures hardware UART0/USARTx bytes and a uart_contains oracle matches the LW_L0_OK marker printed from setup()",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "firmware_survival.rs also has an nrf52832_demo case, but its expected_uart_output is b\"\" and assert_uart_contains short-circuits on an empty expectation - that case proves nothing about UART."
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/nrf52832/src/main.rs",
+        "test": "check_spi",
+        "gap": "SPIM EasyDMA is STARTed and EVENTS_END/TXD.AMOUNT/RXD.AMOUNT are checked - counts, not content. It never compares SPI_RX_BUF against SPI_TX_BUF, so it cannot tell a transferred byte from garbage.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "nrf52840": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_nrf52840_demo_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'NRF52840_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/nrf52840/src/main.rs",
+        "test": "check_spi",
+        "gap": "SPIM EasyDMA is STARTed and EVENTS_END/TXD.AMOUNT/RXD.AMOUNT are checked - counts, not content. crates/core/tests/nrf52_spim_easydma_executing.rs DOES prove real RAM byte movement, but from a hand-built SystemBus with no chip config and no firmware.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. sim_input_reachability.rs attaches a real ADXL345 to the Nrf52Twim but reads it back by calling the Rust device object directly, bypassing the TWIM TASKS/EasyDMA registers entirely."
+      }
+    },
+    "nrf5340": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_nrf5340_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nrf5340dk/nrf5340/cpuapp' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "no SPI/SPIM test, example, firmware crate or system manifest references nrf5340 SPI anywhere."
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "no TWIM/I2C test, example, firmware crate or system manifest references nrf5340 I2C anywhere. The chip is also not in the arduino matrix."
+      }
+    },
+    "nrf54l15": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_nrf54l15_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'nRF54L15 boot OK' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "no SPI/SPIM test, example or manifest references nrf54l15 SPI. configs/systems/nrf54l15dk.yaml, smart-ring.yaml and examples/nrf54l15-dk wire GPIO and TWIM devices only."
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "crates/core/tests/nrf54l15_smart_ring_probe.rs",
+        "test": "smart_ring_firmware_reads_all_four_sensor_ids_over_i2c",
+        "signal": "the committed nrf54l15-smart-ring.elf does WHO_AM_I reads of four device models on TWIM21 and the test asserts each returned that model's REAL datasheet identity (BMI270 0x24, MAX30102 0x15, TMP117 0x0117, DRV2605 0xE0), that nothing NACKed, and that the firmware's 0xEE RX-buffer poison sentinel did not survive - a stub or a no-op cannot pass",
+        "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --workspace",
+        "note": "the strongest single bus proof in the repo. Fixture absence is a hard assert!, not a skip. It runs nightly only: core-integrity's push gate runs --lib plus four named --test targets, and this is not one of them."
+      }
+    },
+    "rp2040": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_rp2040_demo_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'RP2040_SMOKE_OK\\\\n' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "crates/core/src/tests/rp2040_spi_carries_a_byte.rs",
+        "test": "rp2040_spi_loopback_carries_a_real_byte_under_firmware",
+        "signal": "the committed tests/fixtures/tier1/rp2040.elf runs in-sim; its check_spi puts the PL022 in internal loopback (CR1.LBM), writes 0xA5 to SSPDR, waits for SR.RNE and requires the byte read back to be 0xA5. The test asserts 'TIER1 spi PASS' on the real UART sink, asserts 'TIER1 spi FAIL' is absent, asserts the transcript is non-empty, and separately re-reads the fixture SOURCE to require the 0xA5 comparison still exists so a weakened check cannot keep the claim alive on a stale ELF.",
+        "lane": "core-ci / pr-gate - EVERY PULL REQUEST (cargo test --lib over default-members)",
+        "note": "watched fail first: forcing the loopback path off in peripherals/rp2040/spi.rs makes the firmware print 'TIER1 spi FAIL code=spi-data' and the test go red. It is internal loopback, not an external device - the byte round-trips through the shift engine, nothing on the board receives it."
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. rp2040_i2c_irq_delivery.rs drives the real shipped chip through Machine::advance but asserts only NVIC.ISPR bits; the byte-content proof in peripherals/rp2040/i2c.rs is a bare unit test with no chip and no firmware."
+      }
+    },
+    "rp2350": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "examples/pico2/uart-smoke.yaml",
+        "test": "uart_contains",
+        "signal": "real firmware (firmware-rp2350-demo, Cortex-M33 bare-metal) boots on the rp2350 descriptor and its UART0 output matches the uart_contains 'RP2350_SMOKE_OK' oracle; run 2026-08-05, exit 0",
+        "lane": "manual example run (examples/pico2) - not yet CI-wired",
+        "note": "evidence covers PL011 UART0 on the RP2350 address map (0x40070000) and the rp2350 clkrst profile; TrustZone/bootrom/PIO v2/dual-core are not declared as modeled"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "no fixture loads configs/chips/rp2350.yaml and moves SPI bytes; the descriptor reuses the RP2040 spi model on RP2350 bases but evidence does not transfer automatically - a pico2 SPI fixture is follow-up work"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "no fixture loads configs/chips/rp2350.yaml and completes an I2C transaction; the descriptor reuses the RP2040 i2c model on RP2350 bases but per-chip evidence does not transfer - a pico2 I2C fixture is follow-up work"
+      }
+    },
+    "stm32f103": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32f103_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_f103rb' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32f103/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32f401": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32f401_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_f401re' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival",
+        "note": "the sibling stm32f401_blinky case sets expected_uart_output: b\"\" with the comment 'F401 board model does not yet produce deterministic UART bytes end-to-end' - that case is a no-op; the zephyr case is the real one."
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32f401/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32f401cdu6": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "examples/stm32f401cdu6/uart-smoke.yaml",
+        "test": "uart_contains: \"OK\"",
+        "signal": "firmware-f401-demo writes 'O','K','\\n' straight to USART2->DR and the script runner's uart_contains oracle matches them on the captured sink, against configs/systems/stm32f401cdu6.yaml",
+        "lane": "core-onboarding-smoke / onboarding-stm32f401cdu6 (push to main + schedule; NOT on PRs)",
+        "note": "thin but real: a 3-byte bare DR write inside a 64-step budget, and it runs the GENERIC firmware-f401-demo crate, not the chip-specific firmware-f401cdu6-blackpill-demo."
+      },
+      "spi": {
+        "state": "none",
+        "gap": "nothing exercises SPI on this chip descriptor. It has no tier-1 fixture (absent from TIER1_TARGETS), is not in the arduino matrix, and is named in strict_onboarding.rs's SMOKE_LESS_ALLOWLIST so the generic onboarding gate skips it."
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "crates/firmware-f401cdu6-blackpill-demo/src/i2c_smoke.rs and examples/stm32f401cdu6-blackpill/i2c-smoke.yaml exist and do a real address+data write expecting an ACK - but that yaml is referenced by NO workflow and NO test, and its own system.yaml declares external_devices: [], so if it ever ran it would NACK. Dead code, not coverage."
+      }
+    },
+    "stm32f405": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "examples/feather-f405/uart-smoke.yaml",
+        "test": "uart_contains",
+        "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f405 descriptor and its UART2 output matches the uart_contains 'OK' oracle; run 2026-08-04, exit 0",
+        "lane": "manual example run (examples/feather-f405) - not yet CI-wired",
+        "note": "evidence covers the F4-profile shared IP the F405 reuses; F405-only instances (I2C2/SPI2/USART3/TIM3-5) are not yet declared in the chip yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "no fixture loads configs/chips/stm32f405.yaml and moves SPI bytes; the descriptor reuses the F4 spi1 model but evidence does not transfer automatically - a feather-f405 SPI fixture is follow-up work"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "no fixture loads configs/chips/stm32f405.yaml and completes an I2C transaction; the descriptor reuses the F4 i2c1 model but evidence does not transfer automatically - a feather-f405 I2C fixture is follow-up work"
+      }
+    },
+    "stm32f407": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_nucleo_f407_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'the F407 smoke transcript' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32f407/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "crates/core/tests/e2e_stm32f407_i2c.rs",
+        "test": "firmware_drives_aht20_and_bmp280_through_simulator",
+        "signal": "real cross-built firmware drives the AHT20 and BMP280 models through the F407 I2C1 state machine; the test asserts GPIOA.ODR bit 5 goes high, a branch the firmware only takes once AHT20 BUSY has cleared AND the BMP280 returned chip-ID 0x58",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test e2e_stm32f407_i2c",
+        "note": "the arduino-matrix INA219 cell is a second, independent proof on this chip."
+      }
+    },
+    "stm32f411ceu6": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/cli/src/tier1.rs",
+        "test": "\"stm32f411\"",
+        "signal": "the committed tests/fixtures/tier1/stm32f411.elf boots against configs/chips/stm32f411ceu6.yaml and the harness parses the real TIER1 protocol transcript out of the captured UART; parse_tier1_uart treats 'TIER1 done' arriving at all as the UART proof",
+        "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --release -p labwired-cli --test tier1_matrix --test tier1_matrix_ratchet",
+        "note": "this chip is NOT in the arduino matrix and has no firmware_survival case, so tier-1 is its only bus evidence of any kind."
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32f411/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32f411/src/main.rs",
+        "test": "check_i2c",
+        "gap": "firmware-driven, but it only addresses an ABSENT slave and requires the NACK. That proves the arbitration path, not that any device ever received or returned data.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      }
+    },
+    "stm32f767": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "examples/nucleo-f767zi/uart-smoke.yaml",
+        "test": "uart_contains",
+        "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f767 descriptor and its USART2 output matches the uart_contains 'OK' oracle; run 2026-08-05, exit 0",
+        "lane": "manual example run (examples/nucleo-f767zi) - not yet CI-wired",
+        "note": "evidence covers the F4-profile shared IP the F767 reuses; F7-only peripherals (Ethernet/LTDC/CAN/USB/SAI/QSPI) are not declared in the chip yaml"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "no fixture loads configs/chips/stm32f767.yaml and moves SPI bytes; the descriptor reuses the F4 spi model but evidence does not transfer automatically - a nucleo-f767zi SPI fixture is follow-up work"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "no fixture loads configs/chips/stm32f767.yaml and completes an I2C transaction; the F7 i2c instances run the stm32l4 (v2) profile, which IS proven on stm32l476, but per-chip evidence does not transfer - a nucleo-f767zi I2C fixture is follow-up work"
+      }
+    },
+    "stm32g474re": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32g474_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_g474re' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32g474re/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32h563": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32h563_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_h563zi' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32h563/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32h735": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "examples/stm32h735-smoke/io-smoke.yaml",
+        "test": "uart_contains: \"TIER1 done\"",
+        "signal": "the committed tests/fixtures/tier1/stm32h735.elf runs against examples/stm32h735-smoke/system.yaml and the script runner's uart_contains oracles match the real TIER1 transcript lines on the captured UART - no cross-compile needed",
+        "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --workspace runs crates/core/tests/strict_onboarding.rs; also tier1_matrix in the same job",
+        "note": "this chip has NO firmware_survival case and is NOT in the arduino matrix."
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32h735/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32h735/src/main.rs",
+        "test": "check_i2c",
+        "gap": "firmware-driven, but it only addresses an ABSENT slave and requires the NACK. That proves the arbitration path, not that any device ever received or returned data.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      }
+    },
+    "stm32l073": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32l073_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_l073rz' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32l073/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32l476": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32l476_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_l476rg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "crates/core/tests/world_multichip.rs",
+        "test": "master_chip_reaches_operate_with_real_sensor_chip",
+        "signal": "two independent L476 chip instances run real firmware; a real SN74HC165 shift register is attached on spi1 (examples/iolink-station/sensor/system.yaml) and its 0xA5 preset is read over SPI by the sensor chip, sent across the modelled C/Q UART wire, and read back out of the master chip's RAM by ELF symbol (g_master_pd0). A specific payload byte survives the whole path.",
+        "lane": "core-board-ci / iolink-station-l476 (gate: true in configs/ci/boards.yml, runs on pull_request; path-filtered to configs|examples|hil|platformio)",
+        "note": "VACUITY WATCH: skip_or_fail_missing_elfs() returns silently unless LABWIRED_REQUIRE_IOLINK_ELFS is set. Only examples/iolink-station/ci/test.sh sets it. In any OTHER lane that runs cargo test --workspace this same file silently skips."
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. firmware_survival's nucleo_l476rg_i2c case and firmware-l476-demo's 'I2C1 OK' are register/status fingerprints only - no device ever ACKs there. The nokia5110 PCD8544 framebuffer tests would be strong SPI evidence but every test in those three files is #[ignore]d and no workflow passes --ignored."
+      }
+    },
+    "stm32wb55": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32wb55_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_wb55rg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32wb55/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "stm32wba52": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32wba52_zephyr_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_wba52cg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+        "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "shallow",
+        "file": "examples/tier1-fixture/stm32wba52/src/main.rs",
+        "test": "check_spi",
+        "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+        "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+      },
+      "i2c": {
+        "state": "proven",
+        "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+        "test": "LW_L3_OK",
+        "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+        "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+        "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    }
   }
- }
 }

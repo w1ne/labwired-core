@@ -1210,6 +1210,7 @@ pub fn is_builtin_chip_spec(spec: &str) -> bool {
 
 /// The chips bundled with the CLI, in the spelling a `chip:` field accepts.
 pub const BUILTIN_CHIP_NAMES: &[&str] = &[
+    "atmega328p",
     "esp32",
     "esp32c3",
     "esp32s3",
@@ -1247,6 +1248,7 @@ pub const MOVED_CHIP_NAMES: &[&str] = &[];
 /// builds (no `std::fs`) resolve them too.
 pub fn embedded_chip_yaml(name: &str) -> Option<&'static str> {
     Some(match name {
+        "atmega328p" => include_str!("../../../configs/chips/atmega328p.yaml"),
         "esp32" => include_str!("../../../configs/chips/esp32.yaml"),
         "esp32c3" => include_str!("../../../configs/chips/esp32c3.yaml"),
         "esp32s3" => include_str!("../../../configs/chips/esp32s3.yaml"),

@@ -310,17 +310,17 @@ impl Avr {
                     }
                 }
                 self.ucsr0a |= UCSRA_UDRE | UCSRA_TXC;
-                bus.write_u8(addr as u64, value).ok();
+                bus.write_u8(addr as u64, value)?;
                 Ok(())
             }
             0x0020..=0x00FF => {
                 self.io[(addr - 0x20) as usize] = value;
-                bus.write_u8(addr as u64, value).ok();
+                bus.write_u8(addr as u64, value)?;
                 Ok(())
             }
             a if (SRAM_START..=RAMEND).contains(&a) => {
                 self.sram[(a - SRAM_START) as usize] = value;
-                bus.write_u8(a as u64, value).ok();
+                bus.write_u8(a as u64, value)?;
                 Ok(())
             }
             _ => Err(SimulationError::MemoryViolation(addr as u64)),

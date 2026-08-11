@@ -101,7 +101,10 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
         Arch::Avr => {
             // P0 AVR has no SVD-backed peripheral list on the chip yaml yet
             // (peripherals: []). Nothing to validate beyond load.
-            println!("Skipping AVR register compliance for {:?} (no SVD map)", path);
+            println!(
+                "Skipping AVR register compliance for {:?} (no SVD map)",
+                path
+            );
         }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
