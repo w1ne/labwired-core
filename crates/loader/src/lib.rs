@@ -16,8 +16,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-pub mod footprint;
 pub mod multi_image;
+pub mod footprint;
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
@@ -431,27 +431,6 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
     for ph in elf.program_headers {
         if ph.p_type == PT_LOAD {
             // We only care about loadable segments
-            let start_addr = if arch == labwired_core::Arch::Avr {
-                let v = if ph.p_vaddr != 0 {
-                    ph.p_vaddr
-                } else {
-                    ph.p_paddr
-                };
-                let (space, addr) = labwired_core::cpu::avr::classify_avr_vma(v);
-                match space {
-                    labwired_core::cpu::avr::AvrLoadSpace::Flash => {
-                        if ph.p_paddr != 0 {
-                            ph.p_paddr
-                        } else {
-                            addr
-                        }
-                    }
-                    labwired_core::cpu::avr::AvrLoadSpace::Data
-                    | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => addr,
-                }
-            } else {
-                ph.p_paddr
-            };
             let size = ph.p_filesz as usize;
             let offset = ph.p_offset as usize;
 
@@ -459,17 +438,44 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 continue;
             }
 
-            debug!(
-                "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
-                start_addr, size, offset
-            );
-
             if offset + size > buffer.len() {
                 return Err(anyhow!("Segment out of bounds in ELF file"));
             }
 
             let segment_data = buffer[offset..offset + size].to_vec();
-            program_image.add_segment(start_addr, segment_data);
+
+            if arch == labwired_core::Arch::Avr {
+                // avr-gcc: .text at low VMA; .data has VMA 0x800000+data and LMA in flash
+                // so CRT can LPM-copy. Emit BOTH a flash LMA segment and a data VMA segment.
+                let v = if ph.p_vaddr != 0 { ph.p_vaddr } else { ph.p_paddr };
+                let (space, data_addr) = labwired_core::cpu::avr::classify_avr_vma(v);
+                match space {
+                    labwired_core::cpu::avr::AvrLoadSpace::Flash => {
+                        let flash_addr = if ph.p_paddr != 0 { ph.p_paddr } else { data_addr };
+                        debug!("AVR flash segment {:#x} size {}", flash_addr, size);
+                        program_image.add_segment(flash_addr, segment_data);
+                    }
+                    labwired_core::cpu::avr::AvrLoadSpace::Data
+                    | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => {
+                        // Flash LMA holds the initializer image (for LPM / __do_copy_data).
+                        if ph.p_paddr < 0x8000 {
+                            debug!("AVR data LMA flash {:#x} size {}", ph.p_paddr, size);
+                            program_image.add_segment(ph.p_paddr, segment_data.clone());
+                        }
+                        // Keep the *biased* VMA so load_program_image can tell
+                        // data-space from program-space (0x100..RAMEND overlaps LMA).
+                        debug!("AVR data VMA (biased) {:#x} size {}", v, size);
+                        program_image.add_segment(v, segment_data);
+                    }
+                }
+            } else {
+                let start_addr = ph.p_paddr;
+                debug!(
+                    "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
+                    start_addr, size, offset
+                );
+                program_image.add_segment(start_addr, segment_data);
+            }
         }
     }
 

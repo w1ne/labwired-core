@@ -55,3 +55,4 @@ fixtures/
 # Python
 __pycache__/
 *.pyc
+examples/arduino-nano-blinky/.pio/
