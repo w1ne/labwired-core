@@ -120,6 +120,17 @@ fn resource_metrics_pass_footprint_and_stack_paint() {
         run.result["memory"]
     );
 
+    let memory = &run.result["memory"];
+    assert_eq!(
+        memory["heap_method"].as_str(),
+        Some("paint"),
+        "expected memory.heap_method == paint; memory: {memory}"
+    );
+    assert!(
+        memory["heap_high_water_bytes"].as_u64().is_some(),
+        "expected memory.heap_high_water_bytes present; memory: {memory}"
+    );
+
     // P1 execution metrics: always-on nested block with positive cycles and
     // non-empty bus traffic (memory and/or peripheral accesses).
     let metrics = &run.result["metrics"];

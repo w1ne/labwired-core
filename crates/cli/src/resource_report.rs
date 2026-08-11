@@ -13,8 +13,8 @@ use crate::artifacts::{footprint_from_elf_totals, FootprintReport};
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::Elf;
 use labwired_core::stack_paint::{
-    compute_paint_range, scan_paint, LoadExtent, MainStackMethod, MainStackReport, RamRegion,
-    PAINT_WORD,
+    compute_paint_range, scan_shared_paint, LoadExtent, MainStackMethod, MainStackReport,
+    RamRegion, PAINT_WORD,
 };
 use labwired_core::Bus; // write_u32 / read_u32 on SystemBus
 
@@ -200,16 +200,22 @@ pub(crate) fn finalize_paint_report(
         words.push(bus.read_u32(addr).unwrap_or(0));
         addr += 4;
     }
-    let (high_water, free_min, overflow) = scan_paint(&words, final_sp, lo, hi);
+    let scan = scan_shared_paint(&words, final_sp, lo, hi);
     MainStackReport {
         main_stack_method: MainStackMethod::Paint,
-        main_stack_limit_bytes: Some(hi - lo),
-        main_stack_high_water_bytes: Some(high_water),
-        main_stack_free_min_bytes: Some(free_min),
+        main_stack_limit_bytes: Some(scan.limit_bytes),
+        main_stack_high_water_bytes: Some(scan.stack_high_water_bytes),
+        main_stack_free_min_bytes: Some(scan.stack_free_min_bytes),
         main_stack_base: Some(lo),
         main_stack_top: Some(hi),
-        main_stack_overflow_suspected: Some(overflow),
+        main_stack_overflow_suspected: Some(scan.overflow_suspected),
         main_stack_unsupported_reason: None,
+        heap_method: Some("paint".to_string()),
+        heap_limit_bytes: Some(scan.limit_bytes),
+        heap_high_water_bytes: Some(scan.heap_high_water_bytes),
+        heap_free_min_bytes: Some(scan.heap_free_min_bytes),
+        heap_base: Some(lo),
+        heap_top: Some(hi),
     }
 }
 

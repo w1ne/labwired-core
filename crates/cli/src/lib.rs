@@ -2715,8 +2715,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 // PC_SAMPLE_EVERY retired primary steps, using the post-batch
                 // PC (no per-instruction observer — keeps JIT eligible).
                 if report.primary_steps > 0 {
-                    pc_sample_budget =
-                        pc_sample_budget.saturating_add(u64::from(report.primary_steps));
+                    pc_sample_budget = pc_sample_budget.saturating_add(report.primary_steps);
                     while pc_sample_budget >= resource_report::PC_SAMPLE_EVERY {
                         pc_sample_budget -= resource_report::PC_SAMPLE_EVERY;
                         resource_report::note_pc_sample(&mut pc_hist, machine.cpu.get_pc());
@@ -4547,6 +4546,12 @@ mod resource_budget_tests {
             main_stack_top: Some(0x2000_0800),
             main_stack_overflow_suspected: Some(false),
             main_stack_unsupported_reason: None,
+            heap_method: Some("paint".to_string()),
+            heap_limit_bytes: Some(2048),
+            heap_high_water_bytes: Some(0),
+            heap_free_min_bytes: Some(1536),
+            heap_base: Some(0x2000_0000),
+            heap_top: Some(0x2000_0800),
         };
         let (passed, evidence) = evaluate_resource_budget(&stack_details(512), None, Some(&mem));
         assert!(passed);

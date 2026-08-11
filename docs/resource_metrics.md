@@ -20,7 +20,8 @@ latency). Worked examples: [examples/metrics/](../examples/metrics/README.md).
 |--------|--------|--------------------|
 | Flash used | ELF section sum (text + data) | `footprint.flash_used_bytes` |
 | Static RAM | ELF section sum (data + bss) | `footprint.ram_static_bytes` |
-| Main stack high-water | Stack paint after load/reset | `memory.main_stack_high_water_bytes` |
+| Main stack high-water | Dual-end paint (from high end) | `memory.main_stack_high_water_bytes` |
+| Heap high-water | Dual-end paint (from low end) | `memory.heap_high_water_bytes` |
 
 Also present when available:
 
@@ -30,6 +31,10 @@ Also present when available:
 - `footprint.flash_used_pct` / `ram_static_pct` — percent of catalog totals
 - `memory.main_stack_method` — `paint` | `disabled` | `unsupported`
 - `memory.main_stack_free_min_bytes`, `main_stack_overflow_suspected`, …
+- `memory.heap_method` — `"paint"` | `"disabled"` | `"unsupported"` (dual-end
+  of the same paint window; free is the middle still painted)
+- `memory.heap_high_water_bytes` / `heap_free_min_bytes` / `heap_limit_bytes` /
+  `heap_base` / `heap_top` — present when method is `paint`
 
 Method string for footprint is always `elf_section_totals_v1`. Notes typically
 include:
@@ -209,12 +214,17 @@ jq '.assertions[]
    RAM-resident PT_LOAD image including BSS).
 2. Fill `[heap_floor, SP)` with paint word `0xA5A5A5A5` (skipping pure
    file-backed image; GNU `._user_heap_stack` NOBITS reserves are paintable).
-3. After the run, scan from low addresses upward while words still equal paint;
-   high-water = window size − remaining paint.
+3. After the run, **dual-end** scan of the same window:
+   - **Heap** high-water: contiguous non-paint words from the low end upward.
+   - **Stack** high-water: contiguous non-paint words from the high end downward.
+   - **Free**: middle words still equal to paint (shared residual).
+   - Overflow suspected when free is zero, final SP is outside the window, or
+     heap+stack used words exceed the window length.
 
 If the range is too small, outside RAM, or otherwise unsafe, paint is
 `unsupported` with a stable `main_stack_unsupported_reason` string — and any
-`max_main_stack_bytes` assert fails closed.
+`max_main_stack_bytes` assert fails closed. Heap fields report
+`heap_method: "unsupported"` / `"disabled"` in those paths.
 
 Non-ARM arches report `unsupported` / `arch_not_implemented` in P0.
 
