@@ -267,7 +267,11 @@ FIXTURES = {
 # precisely so it cannot be dropped from here and start reading as coverage —
 # which is what happened when the Xtensa parts were moved out of this dict into
 # FIXTURES and WAIVED was emptied.
-WAIVED: dict[str, str] = {}
+WAIVED: dict[str, str] = {
+    # P0 AVR twin: CPU + Timer0/USART only; no bare-metal spin fixture crate yet
+    # (no firmware-perf-spin-avr / avr-unknown-gnu-atmega328 target in this gate).
+    "atmega328p": "no perf-spin fixture for AVR8 yet; CPU P0 without linked spin ELF",
+}
 
 # Descriptors that are CI plumbing rather than a modelled part.
 CHIP_EXCLUDE_PREFIX = "ci-fixture-"
