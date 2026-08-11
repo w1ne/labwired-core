@@ -59,7 +59,27 @@ pub struct Avr {
     pub io: [u8; 0xE0],
     pub pending_irq: u64,
     pub cycles: u64,
+    pub tcnt0: u8,
+    pub tccr0a: u8,
+    pub tccr0b: u8,
+    pub timsk0: u8,
+    pub tifr0: u8,
+    pub ocr0a: u8,
+    pub ocr0b: u8,
+    pub t0_prescale_acc: u32,
+    pub serial_tx: Vec<u8>,
+    pub ucsr0a: u8,
+    pub ucsr0b: u8,
+    pub ucsr0c: u8,
+    pub ubrr0: u16,
 }
+
+pub const VEC_TIMER0_OVF: u32 = 22;
+pub const UCSRA_UDRE: u8 = 1 << 5;
+pub const UCSRA_TXC: u8 = 1 << 6;
+pub const TIMSK_TOIE0: u8 = 1 << 0;
+pub const TIFR_TOV0: u8 = 1 << 0;
+
 
 impl Default for Avr {
     fn default() -> Self {
@@ -79,6 +99,10 @@ impl Avr {
             io: [0; 0xE0],
             pending_irq: 0,
             cycles: 0,
+            tcnt0: 0, tccr0a: 0, tccr0b: 0, timsk0: 0, tifr0: 0,
+            ocr0a: 0, ocr0b: 0, t0_prescale_acc: 0,
+            serial_tx: Vec::new(),
+            ucsr0a: UCSRA_UDRE, ucsr0b: 0, ucsr0c: 0, ubrr0: 0,
         }
     }
 
@@ -179,49 +203,96 @@ impl Avr {
             0x005D => Ok((self.sp & 0xFF) as u8),
             0x005E => Ok((self.sp >> 8) as u8),
             0x005F => Ok(self.sreg),
-            0x0020..=0x00FF => {
-                // Local io file is authoritative for v1 flat I/O; also mirrored to bus on write.
-                Ok(self.io[(addr - 0x20) as usize])
-            }
-            a if a >= SRAM_START && a <= RAMEND => {
-                Ok(self.sram[(a - SRAM_START) as usize])
-            }
+            0x0035 => Ok(self.tifr0),
+            0x0044 => Ok(self.tccr0a),
+            0x0045 => Ok(self.tccr0b),
+            0x0046 => Ok(self.tcnt0),
+            0x0047 => Ok(self.ocr0a),
+            0x0048 => Ok(self.ocr0b),
+            0x006E => Ok(self.timsk0),
+            0x00C0 => Ok(self.ucsr0a | UCSRA_UDRE),
+            0x00C1 => Ok(self.ucsr0b),
+            0x00C2 => Ok(self.ucsr0c),
+            0x00C4 => Ok((self.ubrr0 & 0xFF) as u8),
+            0x00C5 => Ok((self.ubrr0 >> 8) as u8),
+            0x00C6 => Ok(0),
+            0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
+            a if a >= SRAM_START && a <= RAMEND => Ok(self.sram[(a - SRAM_START) as usize]),
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
         }
     }
 
     fn data_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         match addr {
-            0x0000..=0x001F => {
-                self.r[addr as usize] = value;
+            0x0000..=0x001F => { self.r[addr as usize] = value; Ok(()) }
+            0x005D => { self.sp = (self.sp & 0xFF00) | value as u16; Ok(()) }
+            0x005E => { self.sp = (self.sp & 0x00FF) | ((value as u16) << 8); Ok(()) }
+            0x005F => { self.sreg = value; Ok(()) }
+            0x0035 => { self.tifr0 &= !value; Ok(()) }
+            0x0044 => { self.tccr0a = value; Ok(()) }
+            0x0045 => { self.tccr0b = value; Ok(()) }
+            0x0046 => { self.tcnt0 = value; Ok(()) }
+            0x0047 => { self.ocr0a = value; Ok(()) }
+            0x0048 => { self.ocr0b = value; Ok(()) }
+            0x006E => { self.timsk0 = value; Ok(()) }
+            0x00C0 => {
+                if value & UCSRA_TXC != 0 { self.ucsr0a &= !UCSRA_TXC; }
+                self.ucsr0a |= UCSRA_UDRE;
                 Ok(())
             }
-            0x005D => {
-                self.sp = (self.sp & 0xFF00) | value as u16;
-                Ok(())
-            }
-            0x005E => {
-                self.sp = (self.sp & 0x00FF) | ((value as u16) << 8);
-                Ok(())
-            }
-            0x005F => {
-                self.sreg = value;
+            0x00C1 => { self.ucsr0b = value; Ok(()) }
+            0x00C2 => { self.ucsr0c = value; Ok(()) }
+            0x00C4 => { self.ubrr0 = (self.ubrr0 & 0xFF00) | value as u16; Ok(()) }
+            0x00C5 => { self.ubrr0 = (self.ubrr0 & 0x00FF) | ((value as u16) << 8); Ok(()) }
+            0x00C6 => {
+                self.serial_tx.push(value);
+                self.ucsr0a |= UCSRA_UDRE | UCSRA_TXC;
+                let _ = bus.write_u8(addr as u64, value);
                 Ok(())
             }
             0x0020..=0x00FF => {
-                let idx = (addr - 0x20) as usize;
-                self.io[idx] = value;
+                self.io[(addr - 0x20) as usize] = value;
                 let _ = bus.write_u8(addr as u64, value);
                 Ok(())
             }
             a if a >= SRAM_START && a <= RAMEND => {
-                let off = (a - SRAM_START) as usize;
-                self.sram[off] = value;
+                self.sram[(a - SRAM_START) as usize] = value;
                 let _ = bus.write_u8(a as u64, value);
                 Ok(())
             }
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
         }
+    }
+
+    fn t0_prescaler(&self) -> u32 {
+        match self.tccr0b & 0x07 {
+            0 => 0, 1 => 1, 2 => 8, 3 => 64, 4 => 256, 5 => 1024, _ => 0,
+        }
+    }
+
+    pub fn tick_timer0(&mut self, cpu_cycles: u32) {
+        let div = self.t0_prescaler();
+        if div == 0 || cpu_cycles == 0 { return; }
+        self.t0_prescale_acc = self.t0_prescale_acc.saturating_add(cpu_cycles);
+        while self.t0_prescale_acc >= div {
+            self.t0_prescale_acc -= div;
+            let (next, overflowed) = self.tcnt0.overflowing_add(1);
+            self.tcnt0 = next;
+            if overflowed {
+                self.tifr0 |= TIFR_TOV0;
+                if self.timsk0 & TIMSK_TOIE0 != 0 {
+                    self.pending_irq |= 1u64 << VEC_TIMER0_OVF;
+                }
+            }
+        }
+    }
+
+    pub fn portb(&self) -> u8 {
+        self.io[(0x25 - 0x20) as usize]
+    }
+
+    pub fn serial_as_str(&self) -> String {
+        String::from_utf8_lossy(&self.serial_tx).into_owned()
     }
 
     fn push_byte(&mut self, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
@@ -272,7 +343,7 @@ impl Avr {
         self.pending_irq &= !(1u64 << vec);
         self.set_flag_i(false);
         self.push_pc(bus)?;
-        self.pc = vec * 4;
+        self.pc = vec.saturating_sub(1) * 4;
         Ok(true)
     }
 
@@ -812,6 +883,10 @@ impl Cpu for Avr {
         self.sreg = 0;
         self.pending_irq = 0;
         self.cycles = 0;
+        self.tcnt0 = 0; self.tccr0a = 0; self.tccr0b = 0;
+        self.timsk0 = 0; self.tifr0 = 0; self.t0_prescale_acc = 0;
+        self.serial_tx.clear();
+        self.ucsr0a = UCSRA_UDRE; self.ucsr0b = 0; self.ucsr0c = 0; self.ubrr0 = 0;
         Ok(())
     }
 
@@ -821,7 +896,11 @@ impl Cpu for Avr {
         observers: &[Arc<dyn SimulationObserver>],
         config: &SimulationConfig,
     ) -> SimResult<()> {
-        self.step_inner(bus, observers, config)
+        let before = self.cycles;
+        self.step_inner(bus, observers, config)?;
+        let delta = self.cycles.saturating_sub(before) as u32;
+        self.tick_timer0(delta.max(1));
+        Ok(())
     }
 
     fn set_pc(&mut self, val: u32) {
@@ -1017,4 +1096,39 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, SimulationError::DecodeError(0)));
     }
+    #[test]
+    fn timer0_overflow_pends_with_arduino_prescale() {
+        let mut cpu = Avr::new();
+        cpu.tccr0a = 0x03; cpu.tccr0b = 0x03; cpu.timsk0 = TIMSK_TOIE0;
+        cpu.tick_timer0(16384);
+        assert!(cpu.pending_irq & (1 << VEC_TIMER0_OVF) != 0);
+    }
+
+    #[test]
+    fn usart_udre_tx_never_blocks() {
+        let mut cpu = Avr::new();
+        let mut bus = MockBus::new();
+        for b in b"Hi" {
+            cpu.data_write(0xC6, *b, &mut bus).unwrap();
+            assert_ne!(cpu.data_read(0xC0, &bus).unwrap() & UCSRA_UDRE, 0);
+        }
+        assert_eq!(cpu.serial_tx, b"Hi");
+    }
+
+    #[test]
+    fn hand_blink_toggles_portb5_and_serial() {
+        let mut cpu = Avr::new();
+        cpu.load_words(0, &[0x9A2D, 0x982D, 0xE508, 0x9300, 0x00C6, 0xCFFA]);
+        let mut bus = MockBus::new();
+        let cfg = SimulationConfig::default();
+        let mut hi = false; let mut lo = false;
+        for _ in 0..200 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+            if cpu.portb() & 0x20 != 0 { hi = true; } else { lo = true; }
+            if hi && lo && cpu.serial_tx.contains(&b'X') { break; }
+        }
+        assert!(hi && lo);
+        assert!(cpu.serial_tx.contains(&b'X'));
+    }
+
 }

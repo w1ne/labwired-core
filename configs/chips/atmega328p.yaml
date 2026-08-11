@@ -1,0 +1,11 @@
+name: "atmega328p"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+flash:
+  base: 0x00000000
+  size: "32KB"
+ram:
+  base: 0x00000100
+  size: "2KB"
+peripherals: []
