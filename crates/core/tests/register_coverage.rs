@@ -261,6 +261,8 @@ fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
             m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
+        // AVR P0: no SVD/register map probe yet — estate only until a capture lands.
+        Arch::Avr => (0, 0, 0),
         Arch::Unknown => (0, 0, 0),
     };
     Some((total, mapped, reset_ok, modeled))
