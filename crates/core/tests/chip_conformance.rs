@@ -216,6 +216,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_kw41z_smoke_survival"),
     },
+    // Classic Arduino Nano / ATmega328P — P0 CPU + Timer0/USART twin. No silicon
+    // SWD capture and no firmware_survival golden yet (behavior lands with a
+    // blink/UART smoke). Estate-only until those exist.
+    ChipConf {
+        name: "atmega328p",
+        yaml: "configs/chips/atmega328p.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`

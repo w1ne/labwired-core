@@ -173,5 +173,12 @@
     "level": 1,
     "name": "mkw41z4",
     "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "atmega328p",
+    "reg_match": 0
   }
 ]

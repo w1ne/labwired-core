@@ -1,5 +1,9 @@
 [
   {
+    "buses": [],
+    "name": "atmega328p"
+  },
+  {
     "buses": [
       "I2C",
       "UART"

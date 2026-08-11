@@ -31,3 +31,4 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32wb55 | **L0** | ✓ | 22 | — | — | — |
 | stm32wba52 | **L0** | ✓ | 21 | — | — | — |
 | mkw41z4 | **L1** | ✓ | 20 | — | — | firmware_survival::test_kw41z_smoke_survival |
+| atmega328p | **L0** | ✓ | 0 | — | — | — |
