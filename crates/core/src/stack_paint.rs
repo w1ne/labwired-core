@@ -130,10 +130,9 @@ pub fn compute_paint_range(
 
     // SP at top of RAM (one past last byte) is OK when sp_top == ram.end().
     // Otherwise SP (or the last stack byte) must lie in the RAM region.
-    if !ram.contains(sp_top.saturating_sub(1)) && sp_top != ram.end() {
-        if sp_top != ram.end() && !ram.contains(sp_top) {
-            return Err("stack_ram_region_unknown");
-        }
+    let sp_in_ram = ram.contains(sp_top) || ram.contains(sp_top.saturating_sub(1));
+    if sp_top != ram.end() && !sp_in_ram {
+        return Err("stack_ram_region_unknown");
     }
 
     let mut image_ram_end = ram.base;
