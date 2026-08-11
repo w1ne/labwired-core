@@ -76,7 +76,7 @@ pub struct Avr {
     pub ubrr0: u16,
 }
 
-pub const VEC_TIMER0_OVF: u32 = 22;
+pub const VEC_TIMER0_OVF: u32 = 17; // datasheet 1-based; @0x40 = __vector_16
 pub const UCSRA_UDRE: u8 = 1 << 5;
 pub const UCSRA_TXC: u8 = 1 << 6;
 pub const TIMSK_TOIE0: u8 = 1 << 0;
@@ -311,22 +311,19 @@ impl Avr {
     pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
         for seg in &image.segments {
             let addr = seg.start_addr;
-            if addr < 0x8000 {
-                self.load_flash(addr as u32, &seg.data);
-            } else if let Some(d) = strip_avr_data_bias(addr) {
+            if let Some(d) = strip_avr_data_bias(addr) {
+                // Data / EEPROM space (biased VMA from avr-gcc).
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = d as u16 + i as u16;
                     if a >= SRAM_START && a <= RAMEND {
                         self.sram[(a - SRAM_START) as usize] = *b;
+                    } else if (0x20..=0xFF).contains(&a) {
+                        self.io[(a - 0x20) as usize] = *b;
                     }
                 }
-            } else if addr >= SRAM_START as u64 && addr <= RAMEND as u64 {
-                for (i, b) in seg.data.iter().enumerate() {
-                    let a = addr as u16 + i as u16;
-                    if a >= SRAM_START && a <= RAMEND {
-                        self.sram[(a - SRAM_START) as usize] = *b;
-                    }
-                }
+            } else if addr < 0x8000 {
+                // Program flash (code + data LMA).
+                self.load_flash(addr as u32, &seg.data);
             }
         }
         self.pc = image.entry_point as u32 & !1;
@@ -379,6 +376,10 @@ impl Avr {
         }
         self.pending_irq &= !(1u64 << vec);
         self.set_flag_i(false);
+        // Hardware clears the matching timer overflow flag on vector entry.
+        if vec == VEC_TIMER0_OVF {
+            self.tifr0 &= !TIFR_TOV0;
+        }
         self.push_pc(bus)?;
         self.pc = vec.saturating_sub(1) * 4;
         Ok(true)
@@ -572,6 +573,26 @@ impl Avr {
             self.cycles += 1;
             return Ok(());
         }
+        // ADC Rd,Rr: 0001 11rd dddd rrrr
+        if (op & 0xFC00) == 0x1C00 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let rr = (((op >> 5) & 0x10) | (op & 0x0F)) as usize;
+            let carry = (self.sreg & 1) as u8;
+            let sum = self.r[rd] as u16 + self.r[rr] as u16 + carry as u16;
+            let res = sum as u8;
+            let c = sum > 0xFF;
+            let v = (!(self.r[rd] ^ self.r[rr]) & (self.r[rd] ^ res)) & 0x80 != 0;
+            self.r[rd] = res;
+            self.set_c(c);
+            self.set_z(res);
+            self.set_n(res);
+            self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
 
         // EOR
         if (op & 0xFC00) == 0x2400 {
@@ -630,6 +651,163 @@ impl Avr {
             self.set_z(res);
             self.set_n(res);
             self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // SUB Rd,Rr: 0001 10rd dddd rrrr
+        if (op & 0xFC00) == 0x1800 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let rr = (((op >> 5) & 0x10) | (op & 0x0F)) as usize;
+            let a = self.r[rd];
+            let b = self.r[rr];
+            let (res, c) = a.overflowing_sub(b);
+            let v = ((a ^ b) & (a ^ res)) & 0x80 != 0;
+            self.r[rd] = res;
+            self.set_c(c);
+            self.set_z(res);
+            self.set_n(res);
+            self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // MUL Rd,Rr: 1001 11rd dddd rrrr → R1:R0 = Rd * Rr (unsigned)
+        if (op & 0xFC00) == 0x9C00 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let rr = (((op >> 5) & 0x10) | (op & 0x0F)) as usize;
+            let prod = (self.r[rd] as u16) * (self.r[rr] as u16);
+            self.r[0] = (prod & 0xFF) as u8;
+            self.r[1] = (prod >> 8) as u8;
+            self.set_c((prod & 0x8000) != 0);
+            self.set_z(if prod == 0 { 0 } else { 1 });
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // MULS Rd,Rr: 0000 0010 dddd rrrr  (Rd,Rr in 16..31)
+        if (op & 0xFF00) == 0x0200 {
+            let rd = 16 + ((op >> 4) & 0x0F) as usize;
+            let rr = 16 + (op & 0x0F) as usize;
+            let prod = (self.r[rd] as i8 as i16) * (self.r[rr] as i8 as i16);
+            let prod_u = prod as u16;
+            self.r[0] = (prod_u & 0xFF) as u8;
+            self.r[1] = (prod_u >> 8) as u8;
+            self.set_c((prod_u & 0x8000) != 0);
+            self.set_z(if prod_u == 0 { 0 } else { 1 });
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // MULSU Rd,Rr: 0000 0011 0ddd 0rrr (Rd,Rr in 16..23)
+        if (op & 0xFF88) == 0x0300 {
+            let rd = 16 + ((op >> 4) & 0x07) as usize;
+            let rr = 16 + (op & 0x07) as usize;
+            let prod = (self.r[rd] as i8 as i16) * (self.r[rr] as u8 as i16);
+            let prod_u = prod as u16;
+            self.r[0] = (prod_u & 0xFF) as u8;
+            self.r[1] = (prod_u >> 8) as u8;
+            self.set_c((prod_u & 0x8000) != 0);
+            self.set_z(if prod_u == 0 { 0 } else { 1 });
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // ICALL: 1001 0101 0000 1001 — call to Z (word address)
+        if op == 0x9509 {
+            self.pc = next;
+            self.push_pc(bus)?;
+            let z = u16::from_le_bytes([self.r[30], self.r[31]]);
+            self.pc = (z as u32) * 2;
+            self.cycles += 3;
+            return Ok(());
+        }
+
+        // NEG Rd: 1001 010d dddd 0001
+        if (op & 0xFE0F) == 0x9401 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let a = self.r[rd];
+            let res = (0u8).wrapping_sub(a);
+            self.r[rd] = res;
+            self.set_c(a != 0);
+            self.set_z(res);
+            self.set_n(res);
+            self.set_v(res == 0x80);
+            self.update_s_from_nv();
+            // H flag: roughly from borrow into bit 3
+            if (a & 0x0F) != 0 {
+                self.sreg |= 0x20;
+            } else {
+                self.sreg &= !0x20;
+            }
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // SWAP Rd: 1001 010d dddd 0010
+        if (op & 0xFE0F) == 0x9402 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let v = self.r[rd];
+            self.r[rd] = (v << 4) | (v >> 4);
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // ASR Rd: 1001 010d dddd 0101
+        if (op & 0xFE0F) == 0x9405 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let a = self.r[rd];
+            let res = ((a as i8) >> 1) as u8;
+            self.r[rd] = res;
+            self.set_c(a & 1 != 0);
+            self.set_z(res);
+            self.set_n(res);
+            self.set_v(((res >> 7) ^ (a & 1)) != 0);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // LSR Rd: 1001 010d dddd 0110
+        if (op & 0xFE0F) == 0x9406 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let a = self.r[rd];
+            let c = a & 1 != 0;
+            let res = a >> 1;
+            self.r[rd] = res;
+            self.set_c(c);
+            self.set_z(res);
+            self.sreg &= !0x04; // N = 0
+            self.set_v(c); // V = N⊕C = C
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // ROR Rd: 1001 010d dddd 0111
+        if (op & 0xFE0F) == 0x9407 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let a = self.r[rd];
+            let c_in = self.sreg & 1;
+            let c_out = a & 1 != 0;
+            let res = (a >> 1) | (c_in << 7);
+            self.r[rd] = res;
+            self.set_c(c_out);
+            self.set_z(res);
+            self.set_n(res);
+            let n = (res >> 7) & 1;
+            self.set_v((n ^ (c_out as u8)) != 0);
             self.update_s_from_nv();
             self.pc = next;
             self.cycles += 1;
@@ -782,6 +960,7 @@ impl Avr {
         }
 
         // ST X,Rr
+        // ST X, Rr: 1001 001r rrrr 1100
         if (op & 0xFE0F) == 0x920C {
             let rr = ((op >> 4) & 0x1F) as usize;
             let x = u16::from_le_bytes([self.r[26], self.r[27]]);
@@ -790,6 +969,57 @@ impl Avr {
             self.cycles += 2;
             return Ok(());
         }
+
+        // ST X+, Rr: 1001 001r rrrr 1101
+        if (op & 0xFE0F) == 0x920D {
+            let rr = ((op >> 4) & 0x1F) as usize;
+            let x = u16::from_le_bytes([self.r[26], self.r[27]]);
+            self.data_write(x, self.r[rr], bus)?;
+            let x2 = x.wrapping_add(1);
+            self.r[26] = (x2 & 0xFF) as u8;
+            self.r[27] = (x2 >> 8) as u8;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // ST -X, Rr: 1001 001r rrrr 1110
+        if (op & 0xFE0F) == 0x920E {
+            let rr = ((op >> 4) & 0x1F) as usize;
+            let x = u16::from_le_bytes([self.r[26], self.r[27]]).wrapping_sub(1);
+            self.r[26] = (x & 0xFF) as u8;
+            self.r[27] = (x >> 8) as u8;
+            self.data_write(x, self.r[rr], bus)?;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // LD Rd, X+: 1001 000d dddd 1101
+        if (op & 0xFE0F) == 0x900D {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let x = u16::from_le_bytes([self.r[26], self.r[27]]);
+            self.r[rd] = self.data_read(x, bus)?;
+            let x2 = x.wrapping_add(1);
+            self.r[26] = (x2 & 0xFF) as u8;
+            self.r[27] = (x2 >> 8) as u8;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // LD Rd, -X: 1001 000d dddd 1110
+        if (op & 0xFE0F) == 0x900E {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let x = u16::from_le_bytes([self.r[26], self.r[27]]).wrapping_sub(1);
+            self.r[26] = (x & 0xFF) as u8;
+            self.r[27] = (x >> 8) as u8;
+            self.r[rd] = self.data_read(x, bus)?;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
 
         // JMP
         if (op & 0xFE0E) == 0x940C {
@@ -907,6 +1137,265 @@ impl Avr {
             self.cycles += 1;
             return Ok(());
         }
+
+
+        // ANDI Rd,K: 0111 KKKK dddd KKKK  (Rd 16..31)
+        if (op & 0xF000) == 0x7000 {
+            let rd = 16 + ((op >> 4) & 0x0F) as usize;
+            let k = ((op & 0x0F00) >> 4) as u8 | (op & 0x0F) as u8;
+            let res = self.r[rd] & k;
+            self.r[rd] = res;
+            self.set_v(false);
+            self.set_z(res);
+            self.set_n(res);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // ORI Rd,K: 0110 KKKK dddd KKKK
+        if (op & 0xF000) == 0x6000 {
+            let rd = 16 + ((op >> 4) & 0x0F) as usize;
+            let k = ((op & 0x0F00) >> 4) as u8 | (op & 0x0F) as u8;
+            let res = self.r[rd] | k;
+            self.r[rd] = res;
+            self.set_v(false);
+            self.set_z(res);
+            self.set_n(res);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // SUBI Rd,K: 0101 KKKK dddd KKKK
+        if (op & 0xF000) == 0x5000 {
+            let rd = 16 + ((op >> 4) & 0x0F) as usize;
+            let k = ((op & 0x0F00) >> 4) as u8 | (op & 0x0F) as u8;
+            let a = self.r[rd];
+            let (res, c) = a.overflowing_sub(k);
+            let v = ((a ^ k) & (a ^ res)) & 0x80 != 0;
+            self.r[rd] = res;
+            self.set_c(c);
+            self.set_z(res);
+            self.set_n(res);
+            self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // SBCI Rd,K: 0100 KKKK dddd KKKK
+        if (op & 0xF000) == 0x4000 {
+            let rd = 16 + ((op >> 4) & 0x0F) as usize;
+            let k = ((op & 0x0F00) >> 4) as u8 | (op & 0x0F) as u8;
+            let carry = (self.sreg & 1) as u8;
+            let a = self.r[rd] as u16;
+            let sub = k as u16 + carry as u16;
+            let (res16, c1) = a.overflowing_sub(sub);
+            let res = res16 as u8;
+            let v = ((self.r[rd] ^ k) & (self.r[rd] ^ res)) & 0x80 != 0;
+            self.r[rd] = res;
+            self.set_c(c1 || a < sub);
+            self.set_z(res);
+            self.set_n(res);
+            self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // CPC Rd,Rr: 0000 01rd dddd rrrr
+        if (op & 0xFC00) == 0x0400 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let rr = (((op >> 5) & 0x10) | (op & 0x0F)) as usize;
+            let carry = (self.sreg & 1) as u8;
+            let a = self.r[rd] as u16;
+            let b = self.r[rr] as u16 + carry as u16;
+            let (res16, _) = a.overflowing_sub(b);
+            let res = res16 as u8;
+            let c = a < b;
+            let v = ((self.r[rd] ^ self.r[rr]) & (self.r[rd] ^ res)) & 0x80 != 0;
+            self.set_c(c);
+            // Z is sticky for CPC: only clear if res != 0
+            if res != 0 {
+                self.sreg &= !0x02;
+            }
+            self.set_n(res);
+            self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // SBC Rd,Rr: 0000 10rd dddd rrrr
+        if (op & 0xFC00) == 0x0800 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let rr = (((op >> 5) & 0x10) | (op & 0x0F)) as usize;
+            let carry = (self.sreg & 1) as u8;
+            let a = self.r[rd] as u16;
+            let b = self.r[rr] as u16 + carry as u16;
+            let res = a.wrapping_sub(b) as u8;
+            let c = a < b;
+            let v = ((self.r[rd] ^ self.r[rr]) & (self.r[rd] ^ res)) & 0x80 != 0;
+            self.r[rd] = res;
+            self.set_c(c);
+            if res != 0 { self.sreg &= !0x02; } else { /* Z sticky leave */ }
+            self.set_n(res);
+            self.set_v(v);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // COM Rd: 1001 010d dddd 0000
+        if (op & 0xFE0F) == 0x9400 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let res = !self.r[rd];
+            self.r[rd] = res;
+            self.set_c(true);
+            self.set_v(false);
+            self.set_z(res);
+            self.set_n(res);
+            self.update_s_from_nv();
+            self.pc = next;
+            self.cycles += 1;
+            return Ok(());
+        }
+
+        // LDD Rd, Z+q: 10q0 qq0d dddd 0qqq  (bit3=0 → Z)
+        // LDD Rd, Y+q: 10q0 qq0d dddd 1qqq  (bit3=1 → Y)
+        // STD Z+q / Y+q: same with bit9=1 (store).
+        if (op & 0xD000) == 0x8000 {
+            let q = (((op & 0x2000) >> 8) | ((op & 0x0C00) >> 7) | (op & 0x07)) as u16;
+            let reg = ((op >> 4) & 0x1F) as usize;
+            let is_st = (op & 0x0200) != 0;
+            // ISA: bit 3 clear = Z, set = Y (not the other way around).
+            let use_y = (op & 0x0008) != 0;
+            let base = if use_y {
+                u16::from_le_bytes([self.r[28], self.r[29]])
+            } else {
+                u16::from_le_bytes([self.r[30], self.r[31]])
+            };
+            let addr = base.wrapping_add(q);
+            if is_st {
+                self.data_write(addr, self.r[reg], bus)?;
+            } else {
+                self.r[reg] = self.data_read(addr, bus)?;
+            }
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // LD Rd, Y+ / -Y / Z+ / -Z and ST counterparts
+        // LD Rd, Y+: 1001 000d dddd 1001
+        // LD Rd, -Y: 1001 000d dddd 1010
+        // LD Rd, Z+: 1001 000d dddd 0001
+        // LD Rd, -Z: 1001 000d dddd 0010
+        // ST Y+, Rr: 1001 001r rrrr 1001 etc.
+        if (op & 0xFE0C) == 0x9008 || (op & 0xFE0C) == 0x9000 || (op & 0xFE0C) == 0x9208 || (op & 0xFE0C) == 0x9200 {
+            let is_st = (op & 0x0200) != 0;
+            let reg = ((op >> 4) & 0x1F) as usize;
+            let mode = op & 0x0F;
+            // Y modes: 1001, 1010, 1100(ld Y), Z: 0001, 0010, 0000(ld Z bare handled elsewhere)
+            let (base_lo, base_hi, predec, postinc) = match mode {
+                0x9 => (28usize, 29usize, false, true),  // Y+
+                0xA => (28, 29, true, false),             // -Y
+                0x1 => (30, 31, false, true),             // Z+
+                0x2 => (30, 31, true, false),             // -Z
+                0xC if !is_st => (28, 29, false, false), // LD Rd, Y
+                0x8 if is_st => (28, 29, false, false),  // unlikely
+                0x0 if !is_st && (op & 0xFE0F) == 0x9000 => {
+                    // already LDS
+                    (0, 0, false, false)
+                }
+                _ => (0, 0, false, false),
+            };
+            if base_lo != 0 {
+                let mut base = u16::from_le_bytes([self.r[base_lo], self.r[base_hi]]);
+                if predec {
+                    base = base.wrapping_sub(1);
+                }
+                if is_st {
+                    self.data_write(base, self.r[reg], bus)?;
+                } else {
+                    self.r[reg] = self.data_read(base, bus)?;
+                }
+                if postinc {
+                    base = base.wrapping_add(1);
+                }
+                if predec || postinc {
+                    self.r[base_lo] = (base & 0xFF) as u8;
+                    self.r[base_hi] = (base >> 8) as u8;
+                }
+                self.pc = next;
+                self.cycles += 2;
+                return Ok(());
+            }
+        }
+
+        // LD Rd, Y: 1000 000d dddd 1000
+        // ST Y, Rr: 1000 001r rrrr 1000
+        // LD Rd, Z: 1000 000d dddd 0000
+        // ST Z, Rr: 1000 001r rrrr 0000
+        if (op & 0xD208) == 0x8000 || (op & 0xD208) == 0x8008 {
+            // might overlap LDD — already handled with q bits
+        }
+        if (op & 0xFE0F) == 0x8008 {
+            // LD Rd, Y (q=0 form without q bits) — actually 1000 000d dddd 1000
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let y = u16::from_le_bytes([self.r[28], self.r[29]]);
+            self.r[rd] = self.data_read(y, bus)?;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+        if (op & 0xFE0F) == 0x8208 {
+            let rr = ((op >> 4) & 0x1F) as usize;
+            let y = u16::from_le_bytes([self.r[28], self.r[29]]);
+            self.data_write(y, self.r[rr], bus)?;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+        if (op & 0xFE0F) == 0x8000 {
+            let rd = ((op >> 4) & 0x1F) as usize;
+            let z = u16::from_le_bytes([self.r[30], self.r[31]]);
+            self.r[rd] = self.data_read(z, bus)?;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+        if (op & 0xFE0F) == 0x8200 {
+            let rr = ((op >> 4) & 0x1F) as usize;
+            let z = u16::from_le_bytes([self.r[30], self.r[31]]);
+            self.data_write(z, self.r[rr], bus)?;
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
+        // FMUL Rd,Rr: 0000 0011 0ddd 1rrr (Rd,Rr in 16..23)
+        if (op & 0xFF88) == 0x0308 {
+            let rd = 16 + ((op >> 4) & 0x07) as usize;
+            let rr = 16 + (op & 0x07) as usize;
+            let prod = (self.r[rd] as u16) * (self.r[rr] as u16);
+            let shifted = prod << 1;
+            self.r[0] = (shifted & 0xFF) as u8;
+            self.r[1] = (shifted >> 8) as u8;
+            self.set_c((prod & 0x8000) != 0);
+            self.set_z(if shifted == 0 { 0 } else { 1 });
+            self.pc = next;
+            self.cycles += 2;
+            return Ok(());
+        }
+
 
         Err(SimulationError::DecodeError(pc as u64))
     }
@@ -1125,6 +1614,60 @@ mod tests {
         cpu.step(&mut bus, &[], &SimulationConfig::default())
             .unwrap();
         assert_eq!(cpu.io[0x05], 1 << 5);
+    }
+
+    #[test]
+    fn st_x_plus_increments() {
+        let mut cpu = Avr::new();
+        // ST X+, r1 with r1=0, X=0x120
+        cpu.r[1] = 0;
+        cpu.r[26] = 0x20;
+        cpu.r[27] = 0x01;
+        cpu.flash[0] = 0x1d; // ST X+, r1 = 0x921d LE
+        cpu.flash[1] = 0x92;
+        cpu.flash[2] = 0xff; // rjmp .-2
+        cpu.flash[3] = 0xcf;
+        cpu.set_pc(0);
+        let mut bus = MockBus::new();
+        cpu.step(&mut bus, &[], &SimulationConfig::default()).unwrap();
+        assert_eq!(cpu.r[26], 0x21);
+        assert_eq!(cpu.r[27], 0x01);
+        assert_eq!(cpu.sram[0x20], 0); // 0x120-0x100=0x20
+    }
+
+    /// Regression: STD Z+q must use Z (bit3=0), not Y — wrong polarity
+    /// clobbered SPH when Y held the ctor-table cursor (0x5C) and q hit 0x5E.
+    #[test]
+    fn std_z_plus_q_does_not_touch_sp_via_y() {
+        let mut cpu = Avr::new();
+        cpu.sp = 0x08FD;
+        // Y = 0x005C (looks like ctor cursor); Z = 0x0129 (Serial object)
+        cpu.r[28] = 0x5C;
+        cpu.r[29] = 0x00;
+        cpu.r[30] = 0x29;
+        cpu.r[31] = 0x01;
+        cpu.r[1] = 0x00;
+        // STD Z+2, r1 = 0x8212 (bit3 clear → Z)
+        cpu.load_words(0, &[0x8212, 0xCFFF]);
+        let mut bus = MockBus::new();
+        cpu.step(&mut bus, &[], &SimulationConfig::default()).unwrap();
+        assert_eq!(cpu.sp, 0x08FD, "SPH/SPL must not change");
+        // 0x129+2 = 0x12B → sram index 0x2B
+        assert_eq!(cpu.sram[0x2B], 0x00);
+    }
+
+    #[test]
+    fn lpm_rd_z_r25_encoding() {
+        let mut cpu = Avr::new();
+        cpu.flash[0] = 0x94;
+        cpu.flash[1] = 0x91;
+        cpu.flash[100] = 0xAB;
+        cpu.r[30] = 100;
+        cpu.r[31] = 0;
+        cpu.set_pc(0);
+        let mut bus = MockBus::new();
+        cpu.step(&mut bus, &[], &SimulationConfig::default()).unwrap();
+        assert_eq!(cpu.r[25], 0xAB);
     }
 
     #[test]

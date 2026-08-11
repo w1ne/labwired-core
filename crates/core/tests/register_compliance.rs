@@ -98,6 +98,11 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 validate_registers(&mut machine, &chip)?;
             }
         }
+        Arch::Avr => {
+            // AVR register smoke uses the native Avr CPU + chip YAML; full
+            // SystemBus peripheral sweep is still Cortex/RISC-V oriented.
+            println!("Skipping AVR register-map sweep for {:?}", path);
+        }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);
         }
