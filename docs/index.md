@@ -31,7 +31,7 @@ Parts catalog: [Parts](parts/index.md) · Support levels: [Target rubric](target
 
 ## Boards (popular)
 
-[ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [STM32F401](boards/stm32f401.md) · [full board list in nav]
+[ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [STM32F401](boards/stm32f401.md)
 
 ---
 
