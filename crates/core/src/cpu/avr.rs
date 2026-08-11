@@ -228,7 +228,7 @@ impl Avr {
             0x00C5 => Ok((self.ubrr0 >> 8) as u8),
             0x00C6 => Ok(0),
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
-            a if a >= SRAM_START && a <= RAMEND => Ok(self.sram[(a - SRAM_START) as usize]),
+            a if (SRAM_START..=RAMEND).contains(&a) => Ok(self.sram[(a - SRAM_START) as usize]),
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
         }
     }
@@ -310,17 +310,17 @@ impl Avr {
                     }
                 }
                 self.ucsr0a |= UCSRA_UDRE | UCSRA_TXC;
-                let _ = bus.write_u8(addr as u64, value);
+                bus.write_u8(addr as u64, value).ok();
                 Ok(())
             }
             0x0020..=0x00FF => {
                 self.io[(addr - 0x20) as usize] = value;
-                let _ = bus.write_u8(addr as u64, value);
+                bus.write_u8(addr as u64, value).ok();
                 Ok(())
             }
-            a if a >= SRAM_START && a <= RAMEND => {
+            a if (SRAM_START..=RAMEND).contains(&a) => {
                 self.sram[(a - SRAM_START) as usize] = value;
-                let _ = bus.write_u8(a as u64, value);
+                bus.write_u8(a as u64, value).ok();
                 Ok(())
             }
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
@@ -379,14 +379,14 @@ impl Avr {
             } else if let Some(d) = strip_avr_data_bias(addr) {
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = d as u16 + i as u16;
-                    if a >= SRAM_START && a <= RAMEND {
+                    if (SRAM_START..=RAMEND).contains(&a) {
                         self.sram[(a - SRAM_START) as usize] = *b;
                     }
                 }
-            } else if addr >= SRAM_START as u64 && addr <= RAMEND as u64 {
+            } else if (SRAM_START as u64..=RAMEND as u64).contains(&addr) {
                 for (i, b) in seg.data.iter().enumerate() {
                     let a = addr as u16 + i as u16;
-                    if a >= SRAM_START && a <= RAMEND {
+                    if (SRAM_START..=RAMEND).contains(&a) {
                         self.sram[(a - SRAM_START) as usize] = *b;
                     }
                 }
@@ -717,7 +717,7 @@ impl Avr {
         }
 
         // BRcc
-        if (op & 0xF800) == 0xF000 || (op & 0xF800) == 0xF400 {
+        if (op & 0xFC00) == 0xF000 || (op & 0xFC00) == 0xF400 {
             let k = ((op >> 3) & 0x7F) as i8;
             let offset = if k & 0x40 != 0 { k | !0x7F } else { k };
             let bit = (op & 0x07) as u8;
@@ -757,7 +757,7 @@ impl Avr {
         if (op & 0xFF00) == 0x9600 {
             let d = ((op >> 4) & 0x03) as usize;
             let rd = 24 + d * 2;
-            let k = (((op >> 6) & 0x03) << 4) as u16 | (op & 0x0F) as u16;
+            let k = (((op >> 6) & 0x03) << 4) | (op & 0x0F);
             let val = u16::from_le_bytes([self.r[rd], self.r[rd + 1]]).wrapping_add(k);
             self.r[rd] = (val & 0xFF) as u8;
             self.r[rd + 1] = (val >> 8) as u8;
@@ -772,7 +772,7 @@ impl Avr {
         if (op & 0xFF00) == 0x9700 {
             let d = ((op >> 4) & 0x03) as usize;
             let rd = 24 + d * 2;
-            let k = (((op >> 6) & 0x03) << 4) as u16 | (op & 0x0F) as u16;
+            let k = (((op >> 6) & 0x03) << 4) | (op & 0x0F);
             let val = u16::from_le_bytes([self.r[rd], self.r[rd + 1]]).wrapping_sub(k);
             self.r[rd] = (val & 0xFF) as u8;
             self.r[rd + 1] = (val >> 8) as u8;
