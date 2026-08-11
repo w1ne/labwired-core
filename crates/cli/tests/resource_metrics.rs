@@ -62,8 +62,7 @@ fn run_metrics(script_rel: &str) -> MetricsRun {
     }
 
     let result_json = std::fs::read_to_string(&result_path).expect("read result.json");
-    let result: serde_json::Value =
-        serde_json::from_str(&result_json).expect("parse result.json");
+    let result: serde_json::Value = serde_json::from_str(&result_json).expect("parse result.json");
 
     let run = MetricsRun {
         exit_code: output.status.code(),

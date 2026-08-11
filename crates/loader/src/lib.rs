@@ -16,8 +16,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-pub mod multi_image;
 pub mod footprint;
+pub mod multi_image;
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 

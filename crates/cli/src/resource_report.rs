@@ -146,10 +146,7 @@ pub(crate) fn apply_stack_paint(
         return (MainStackReport::disabled(), None);
     }
     if !matches!(arch, labwired_core::Arch::Arm) {
-        return (
-            MainStackReport::unsupported("arch_not_implemented"),
-            None,
-        );
+        return (MainStackReport::unsupported("arch_not_implemented"), None);
     }
     let Some(mem) = chip_mem else {
         return (

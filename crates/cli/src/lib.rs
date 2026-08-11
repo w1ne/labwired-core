@@ -2889,12 +2889,8 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     for (assertion_index, assertion) in assertions.iter().enumerate() {
         let (passed, evidence) = match assertion {
-            TestAssertion::UartContains(a) => {
-                (uart_text.contains(&a.uart_contains), None)
-            }
-            TestAssertion::UartRegex(a) => {
-                (simple_regex_is_match(&a.uart_regex, &uart_text), None)
-            }
+            TestAssertion::UartContains(a) => (uart_text.contains(&a.uart_contains), None),
+            TestAssertion::UartRegex(a) => (simple_regex_is_match(&a.uart_regex, &uart_text), None),
             TestAssertion::UartOrdered(_)
             | TestAssertion::MotorState(_)
             | TestAssertion::MqttFabric(_) => (
@@ -2927,16 +2923,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 });
                 (passed, evidence)
             }
-            TestAssertion::ExpectedStopReason(a) => {
-                (a.expected_stop_reason == stop_reason, None)
-            }
+            TestAssertion::ExpectedStopReason(a) => (a.expected_stop_reason == stop_reason, None),
             // Passes only if the FIRMWARE ended the run with exactly this code.
             // A timeout, halt or fault leaves `firmware_exit_code` None, so a
             // run that never reached its own success path fails rather than
             // passing by silence.
-            TestAssertion::FirmwareExit(a) => {
-                (firmware_exit_code == Some(a.firmware_exit), None)
-            }
+            TestAssertion::FirmwareExit(a) => (firmware_exit_code == Some(a.firmware_exit), None),
             TestAssertion::MemoryValue(a) => {
                 // `size` is the value width. Accept either bytes (1/2/4) or
                 // bits (8/16/32) — both name the same u8/u16/u32 reads — so a
@@ -2986,14 +2978,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 (passed, None)
             }
             TestAssertion::UdsTester(a) => {
-                let passed =
-                    match evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester) {
-                        Ok(()) => true,
-                        Err(msg) => {
-                            error!("Assertion failed: {}", msg);
-                            false
-                        }
-                    };
+                let passed = match evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester)
+                {
+                    Ok(()) => true,
+                    Err(msg) => {
+                        error!("Assertion failed: {}", msg);
+                        false
+                    }
+                };
                 (passed, None)
             }
             // The measurement itself carries the diagnosis (which region, how
@@ -3009,11 +3001,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 };
                 (passed, None)
             }
-            TestAssertion::ResourceBudget(a) => evaluate_resource_budget(
-                &a.resource_budget,
-                footprint.as_ref(),
-                Some(&memory),
-            ),
+            TestAssertion::ResourceBudget(a) => {
+                evaluate_resource_budget(&a.resource_budget, footprint.as_ref(), Some(&memory))
+            }
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -4461,8 +4451,7 @@ mod resource_budget_tests {
     #[test]
     fn flash_budget_passes_when_measured_within_limit() {
         let fp = sample_footprint(1000, 200);
-        let (passed, evidence) =
-            evaluate_resource_budget(&flash_details(1000), Some(&fp), None);
+        let (passed, evidence) = evaluate_resource_budget(&flash_details(1000), Some(&fp), None);
         assert!(passed);
         assert!(evidence.is_none());
     }
@@ -4470,8 +4459,7 @@ mod resource_budget_tests {
     #[test]
     fn flash_budget_fails_with_evidence_when_over_limit() {
         let fp = sample_footprint(1001, 200);
-        let (passed, evidence) =
-            evaluate_resource_budget(&flash_details(1000), Some(&fp), None);
+        let (passed, evidence) = evaluate_resource_budget(&flash_details(1000), Some(&fp), None);
         assert!(!passed);
         let Some(AssertionEvidence::ResourceBudget {
             name,
@@ -4493,9 +4481,7 @@ mod resource_budget_tests {
         let (passed, evidence) = evaluate_resource_budget(&flash_details(1000), None, None);
         assert!(!passed);
         let Some(AssertionEvidence::ResourceBudget {
-            measured,
-            method,
-            ..
+            measured, method, ..
         }) = evidence
         else {
             panic!("expected ResourceBudget evidence");
@@ -4516,13 +4502,11 @@ mod resource_budget_tests {
             main_stack_overflow_suspected: Some(false),
             main_stack_unsupported_reason: None,
         };
-        let (passed, evidence) =
-            evaluate_resource_budget(&stack_details(512), None, Some(&mem));
+        let (passed, evidence) = evaluate_resource_budget(&stack_details(512), None, Some(&mem));
         assert!(passed);
         assert!(evidence.is_none());
 
-        let (passed, evidence) =
-            evaluate_resource_budget(&stack_details(511), None, Some(&mem));
+        let (passed, evidence) = evaluate_resource_budget(&stack_details(511), None, Some(&mem));
         assert!(!passed);
         match evidence {
             Some(AssertionEvidence::ResourceBudget {
@@ -4543,14 +4527,11 @@ mod resource_budget_tests {
     #[test]
     fn main_stack_budget_fails_when_high_water_missing() {
         let mem = MainStackReport::disabled();
-        let (passed, evidence) =
-            evaluate_resource_budget(&stack_details(512), None, Some(&mem));
+        let (passed, evidence) = evaluate_resource_budget(&stack_details(512), None, Some(&mem));
         assert!(!passed);
         match evidence {
             Some(AssertionEvidence::ResourceBudget {
-                measured,
-                method,
-                ..
+                measured, method, ..
             }) => {
                 assert_eq!(measured, None);
                 assert_eq!(method, "disabled");
@@ -4562,11 +4543,9 @@ mod resource_budget_tests {
     #[test]
     fn resource_budget_fail_evidence_serializes() {
         let result = AssertionResult {
-            assertion: TestAssertion::ResourceBudget(
-                labwired_config::ResourceBudgetAssertion {
-                    resource_budget: flash_details(100),
-                },
-            ),
+            assertion: TestAssertion::ResourceBudget(labwired_config::ResourceBudgetAssertion {
+                resource_budget: flash_details(100),
+            }),
             passed: false,
             evidence: Some(AssertionEvidence::ResourceBudget {
                 name: "max_flash_bytes".to_string(),

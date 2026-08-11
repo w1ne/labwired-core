@@ -403,9 +403,7 @@ pub(crate) fn run_test(
     // legacy scripts and environment runs default to enabled. Env kill switch
     // applied via `stack_paint_enabled_flag`.
     let stack_paint = match &loaded {
-        LoadedTestScript::V1_0(script) => {
-            crate::resource_report::stack_paint_enabled(script)
-        }
+        LoadedTestScript::V1_0(script) => crate::resource_report::stack_paint_enabled(script),
         _ => crate::resource_report::stack_paint_enabled_flag(true),
     };
 

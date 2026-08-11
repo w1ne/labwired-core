@@ -251,7 +251,7 @@ mod tests {
     #[test]
     fn scan_half_used() {
         let mut words = vec![PAINT_WORD; 64]; // 256 bytes
-        // "use" top 128 bytes → last 32 words clobbered
+                                              // "use" top 128 bytes → last 32 words clobbered
         for w in words.iter_mut().skip(32) {
             *w = 0;
         }
