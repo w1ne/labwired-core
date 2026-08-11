@@ -62,7 +62,17 @@ impl SystemBus {
     #[inline]
     pub fn requires_cycle_accurate(&self) -> bool {
         let hcsr04_needs_cycle_accurate = !self.hcsr04.is_empty() && !self.hcsr04_event_scheduled();
-        hcsr04_needs_cycle_accurate || self.flash_models_ops
+        // DHT22/DHT11 (and keypad / rotary) drive timed pad edges from
+        // `service_gpio_devices`. Firmware times them with digitalRead + micros
+        // busy-loops whose MMIO is SideEffectFree — so timer-poll idle
+        // fast-forward would leap over the whole frame while the pad stays
+        // frozen, and every freehand DHT read returns NaN (ESP32-C3, 2026-08-11).
+        // Buttons opt out via `is_level_driven_on_stimulus` and do not force this.
+        let gpio_timing_devices = self
+            .gpio_devices
+            .iter()
+            .any(|d| !d.is_level_driven_on_stimulus());
+        hcsr04_needs_cycle_accurate || self.flash_models_ops || gpio_timing_devices
     }
 
     /// The largest `peripheral_tick_interval` this bus can run at without
@@ -89,6 +99,17 @@ impl SystemBus {
     /// run `RECOMMENDED_TICK_INTERVAL` for scheduler-paced peripherals while
     /// remaining cycle-accurate at the CPU/FLASH layer.
     pub fn max_safe_tick_interval(&self) -> u32 {
+        // Per-tick GPIO-timing devices (DHT one-wire, keypad scan, rotary) need
+        // a service pass every cycle until they grow an event-scheduled edge
+        // path like HC-SR04. Raising the interval freezes the pad for N cycles
+        // between services and under-samples µs-scale pulse widths.
+        if self
+            .gpio_devices
+            .iter()
+            .any(|d| !d.is_level_driven_on_stimulus())
+        {
+            return 1;
+        }
         #[cfg(feature = "event-scheduler")]
         {
             let hcsr04_forced_legacy = !self.hcsr04.is_empty() && self.hcsr04_scheduling_disabled;
