@@ -154,6 +154,7 @@ fn each_declared_architecture_reaches_its_own_family() {
         (Arch::Arm, MachineFamily::CortexM),
         (Arch::RiscV, MachineFamily::RiscV),
         (Arch::Xtensa, MachineFamily::Xtensa),
+        (Arch::Avr, MachineFamily::Avr),
     ] {
         let got = machine_family(&chip_with_arch(arch)).expect("declared arch must be accepted");
         assert_eq!(got, want, "chip arch {arch:?} reached the wrong family");
