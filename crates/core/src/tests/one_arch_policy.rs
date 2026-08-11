@@ -131,6 +131,7 @@ fn chip_with_arch(arch: Arch) -> ChipDescriptor {
             Arch::Arm => "arm",
             Arch::RiscV => "riscv",
             Arch::Xtensa => "xtensa",
+            Arch::Avr => "avr",
             Arch::Unknown => "unknown",
         }
     );
