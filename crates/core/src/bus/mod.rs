@@ -363,6 +363,14 @@ pub struct SystemBus {
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,
+    /// Run-lifetime successful RAM / flash / extra_mem reads (any width).
+    /// Always-on, cheap; not MMIO (see [`Self::peripheral_accesses`]).
+    memory_reads: std::cell::Cell<u64>,
+    /// Run-lifetime successful RAM / flash / extra_mem writes (any width).
+    memory_writes: std::cell::Cell<u64>,
+    /// Run-lifetime peripheral MMIO accesses (read or write), counted at
+    /// [`Self::note_mmio_activity`]. Never double-counts memory.
+    peripheral_accesses: std::cell::Cell<u64>,
     /// Phase 2B.3c (issue #192): when true, `tick_peripherals_phase1` skips the
     /// entire per-cycle peripheral walk — the actual ~2.4x win. Set ONLY for a
     /// config whose every peripheral is migrated (`uses_scheduler`) or inert

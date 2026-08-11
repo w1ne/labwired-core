@@ -1,23 +1,19 @@
 # Connect an agent (MCP)
 
-LabWired exposes a **Model Context Protocol** server so coding agents can **describe hardware, run firmware on the digital twin, and verify** — without grading their own homework.
+Connect Claude Code, Codex, Cursor, or another MCP client so an agent can **list boards, run firmware on the twin, and verify** results.
 
-The agent **proposes**. The **oracle disposes**.
-
-!!! tip "Product vs engine"
-    This page is for **using** LabWired from Claude Code, Codex, Cursor, and friends.  
-    For contributing to the simulator engine itself, see [Core agents manual](../agents.md).
+The agent proposes changes. **A green verify or test is the proof** — not a free-form claim that it “looks good.”
 
 ---
 
-## Two surfaces
+## Two ways to connect
 
-| Surface | Endpoint / install | Compile from source | Best for |
-|---------|-------------------|---------------------|----------|
-| **Hosted** | `https://api.labwired.com/mcp` | Yes (`labwired_compile`) | Cloud agents, zero local sim install |
-| **Stdio (local)** | `npx -y @labwired/mcp` | No — flash **artifacts** only | Offline / on-box CLI + `labwired` binary |
+| Surface | How | Compile in the cloud | Best for |
+|---------|-----|----------------------|----------|
+| **Hosted** | `https://api.labwired.com/mcp` | Yes (`labwired_compile`) | Cloud agents, no local sim |
+| **Stdio (local)** | `npx -y @labwired/mcp` | No — use local build artifacts | Offline / local CLI |
 
-Tool names are the same family (`labwired_<verb>`). Stdio **does not** advertise `labwired_compile` — build locally or use hosted, then pass `firmware_ref` / ELF paths. Registry SoT: monorepo `@labwired/board-config` (`mcp-tools.ts`).
+Tool names share the `labwired_*` family. Stdio does **not** expose `labwired_compile`: build locally (or on hosted), then pass a firmware ref or path.
 
 ---
 
@@ -35,17 +31,28 @@ claude mcp add labwired --transport http https://api.labwired.com/mcp
 codex mcp add labwired --url https://api.labwired.com/mcp
 ```
 
-Sign in / OAuth when the client prompts — same account as [app.labwired.com](https://app.labwired.com).
+Sign in when the client opens a browser — same account as [app.labwired.com](https://app.labwired.com).
 
-### Other HTTP MCP clients
-
-Point the client at:
+### Other HTTP clients
 
 ```text
 https://api.labwired.com/mcp
 ```
 
-Use the client’s “remote MCP / HTTP / SSE” flow and complete auth.
+Use the client’s remote MCP / HTTP flow and finish auth.
+
+Example JSON shape:
+
+```json
+{
+  "mcpServers": {
+    "labwired": {
+      "type": "http",
+      "url": "https://api.labwired.com/mcp"
+    }
+  }
+}
+```
 
 ---
 
@@ -54,10 +61,10 @@ Use the client’s “remote MCP / HTTP / SSE” flow and complete auth.
 ### Prerequisites
 
 1. **Node ≥ 20**
-2. **`labwired` CLI on `PATH`** (local runs):
+2. **`labwired` CLI on `PATH`** for local runs:
 
 ```bash
-curl -fsSL https://labwired.com/install.sh | sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
 labwired --help
 ```
 
@@ -82,7 +89,7 @@ claude mcp add labwired -- npx -y @labwired/mcp
 }
 ```
 
-### Global binary
+### Global binary (optional)
 
 ```bash
 npm install -g @labwired/mcp
@@ -95,19 +102,18 @@ labwired-mcp
 
 Ask the agent:
 
-> List LabWired boards with `labwired_list`, then describe `esp32-c3-supermini` (or `esp32c3`).
+> List LabWired boards with `labwired_list`, then describe `esp32-c3-supermini`.
 
-You should see catalog entries and pin/toolchain metadata — not a hallucinated pinout.
-
-Next: [First agent run](first-run.md) · [Tool reference](tools.md)
+You should see real catalog entries and pins — not a guessed pinout.
 
 ---
 
-## Related
+## Next
 
 | | |
 |--|--|
+| [First agent run](first-run.md) | Full list → run → verify loop |
+| [Tool reference](tools.md) | What each tool does |
 | [Playground](https://app.labwired.com) | Human visual lab |
-| [CLI — running firmware](../getting_started_firmware.md) | Non-agent path |
-| [CI integration](../ci_integration.md) | Oracle in pipelines |
+| [Run firmware (CLI)](../getting_started_firmware.md) | Non-agent path |
 | [Fidelity](../fidelity.md) | What a green pass means |

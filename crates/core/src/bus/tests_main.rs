@@ -98,6 +98,51 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     assert!(!bus.take_timer_poll_coalesce_eligible());
 }
 
+/// Resource metrics P1: successful RAM/flash/extra_mem accesses increment
+/// memory counters; peri MMIO increments `peripheral_accesses` only (no
+/// double-count as memory).
+#[test]
+fn access_counts_track_memory_and_peripheral_separately() {
+    use crate::Bus;
+
+    let mut bus = SystemBus::new();
+    // SystemBus::new places RAM at 0x2000_0000 and a gpio peripheral at
+    // 0x4001_0800. Flash is at 0x0.
+    assert_eq!(bus.access_counts(), (0, 0, 0));
+
+    let _ = bus.read_u32(0x2000_0000).expect("ram read");
+    let _ = bus.read_u8(0x0000_0010).expect("flash read");
+    bus.write_u32(0x2000_0100, 0xA5A5_A5A5).expect("ram write");
+    bus.write_u8(0x2000_0104, 0x5A).expect("ram byte write");
+
+    let (reads, writes, peri) = bus.access_counts();
+    assert_eq!(
+        reads,
+        2,
+        "one ram word + one flash byte read; counts={:?}",
+        bus.access_counts()
+    );
+    assert_eq!(
+        writes,
+        2,
+        "two ram writes; counts={:?}",
+        bus.access_counts()
+    );
+    assert_eq!(peri, 0, "no MMIO yet; counts={:?}", bus.access_counts());
+
+    // GPIO on default bus: 0x4001_0800.
+    let _ = bus.read_u32(0x4001_0800).expect("gpio read");
+    bus.write_u32(0x4001_0800, 0x1).expect("gpio write");
+    let (reads2, writes2, peri2) = bus.access_counts();
+    assert_eq!(reads2, reads, "peri must not count as memory_reads");
+    assert_eq!(writes2, writes, "peri must not count as memory_writes");
+    assert_eq!(peri2, 2, "one peri read + one peri write");
+
+    let taken = bus.take_access_counts();
+    assert_eq!(taken, (reads2, writes2, peri2));
+    assert_eq!(bus.access_counts(), (0, 0, 0));
+}
+
 /// `max_safe_tick_interval`: 1 while the legacy walk is live (the default
 /// bus), the batching recommendation once the walk is deleted, and back to
 /// 1 when a non-relaxable device (test-only HC-SR04 legacy pin) is present.
@@ -3068,6 +3113,9 @@ fn test_flash_boot_alias_read_and_write() {
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         atomic_register_aliases: false,
@@ -3176,6 +3224,9 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         atomic_register_aliases: false,
@@ -3435,6 +3486,9 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         atomic_register_aliases: false,
@@ -3692,6 +3746,9 @@ fn test_peripheral_range_index_lookup() {
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         atomic_register_aliases: false,
@@ -3804,6 +3861,9 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
         atomic_register_aliases: false,

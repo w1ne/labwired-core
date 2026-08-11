@@ -598,21 +598,31 @@ impl SystemBus {
                 }
             }
 
-            // HC-SR04, DHT22 and CAN synthetic services are not present on C3
-            // ROM-boot labs; keep them off the C3 high-frequency tick path.
-            //
-            // When the sensor is event-scheduled, its ECHO edges are driven by
-            // `Machine::drain_scheduler_events` at their exact cycles instead —
-            // skip the per-cycle pass so the two paths don't both drive the pad
-            // (and so a walk-free bus can early-out of the tick entirely).
-            if !self.hcsr04_event_scheduled() {
-                self.service_hcsr04();
-            }
-            self.service_gpio_devices();
+            // CAN synthetic services stay Nordic/non-C3: C3 ROM-boot labs do
+            // not host them and the high-frequency IRQ tick must stay lean.
             self.service_can_diagnostic_testers();
             self.service_can_uds_testers();
             self.service_can_log_players();
         }
+
+        // Bus-resident external devices (DHT22/DHT11, rotary, keypad) and the
+        // HC-SR04 per-tick ECHO drive must run on every chip family — including
+        // ESP32-C3, where the Nordic GPIO/GPIOTE block above is skipped.
+        //
+        // Leaving these inside `!esp32c3_irq_routing` made every C3 freehand
+        // DHT lab print DHT_NAN forever: the write-hook armed the frame, but
+        // `service_gpio_devices` never drove external_levels, so digitalRead
+        // only ever saw idle/pull-up (live direct twin, 2026-08-11).
+        //
+        // When HC-SR04 is event-scheduled, ECHO edges come from
+        // `Machine::drain_scheduler_events` at exact cycles — skip the per-tick
+        // pass so both paths don't drive the pad. `service_gpio_devices`
+        // early-outs on an empty list; `per_cycle_tick_is_trivial` already
+        // refuses the walk-free fast path when a device needs service.
+        if !self.hcsr04_event_scheduled() {
+            self.service_hcsr04();
+        }
+        self.service_gpio_devices();
 
         (
             interrupts,

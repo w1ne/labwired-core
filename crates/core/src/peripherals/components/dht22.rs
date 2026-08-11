@@ -106,6 +106,10 @@ pub struct Dht22 {
 
     temperature_c: f32,
     humidity_pct: f32,
+    /// When true, pack frames as DHT11 (integer RH/T + 0 decimals) so firmware
+    /// using `#define DHTTYPE DHT11` decodes valid humidity/temperature.
+    /// DHT22 packing (×10 16-bit words) makes DHT11 libraries return NaN forever.
+    dht11_frame: bool,
 
     /// Last host-driven level observed on the ODR bit. The line idles high
     /// (external pull-up), so this starts `true`.
@@ -141,6 +145,29 @@ impl Dht22 {
         initial_temperature_c: f32,
         initial_humidity_pct: f32,
     ) -> Self {
+        Self::new_with_frame(
+            id,
+            data_odr_addr,
+            data_idr_addr,
+            data_bit,
+            cpu_hz,
+            initial_temperature_c,
+            initial_humidity_pct,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_frame(
+        id: String,
+        data_odr_addr: u64,
+        data_idr_addr: u64,
+        data_bit: u8,
+        cpu_hz: u64,
+        initial_temperature_c: f32,
+        initial_humidity_pct: f32,
+        dht11_frame: bool,
+    ) -> Self {
         Self {
             id,
             data_odr_addr,
@@ -149,6 +176,7 @@ impl Dht22 {
             cpu_hz: cpu_hz.max(1),
             temperature_c: initial_temperature_c.clamp(MIN_TEMP_C, MAX_TEMP_C),
             humidity_pct: initial_humidity_pct.clamp(MIN_HUMIDITY_PCT, MAX_HUMIDITY_PCT),
+            dht11_frame,
             host_high: true,
             low_start_cycle: None,
             transitions: Vec::new(),
@@ -213,22 +241,33 @@ impl Dht22 {
     }
 
     /// The five frame bytes for the *current* readings: `[h_hi, h_lo, t_hi,
-    /// t_lo, checksum]`. Temperature is sign-magnitude — bit 15 of the 16-bit
-    /// temperature word marks a negative reading.
+    /// t_lo, checksum]`.
+    ///
+    /// DHT22: temperature is sign-magnitude — bit 15 of the 16-bit temperature
+    /// word marks a negative reading; both values are ×10.
+    /// DHT11: integer RH and T in the high bytes, decimal bytes zero.
     pub fn frame_bytes(&self) -> [u8; 5] {
-        let h_raw = (self.humidity_pct * 10.0).round().clamp(0.0, 1000.0) as u16;
-        let magnitude = (self.temperature_c.abs() * 10.0).round().clamp(0.0, 800.0) as u16;
-        let t_raw = if self.temperature_c < 0.0 {
-            magnitude | 0x8000
+        let b = if self.dht11_frame {
+            // Aosong DHT11 datasheet: integer RH 0–100, integer T 0–50 (typical),
+            // decimal bytes reserved/0 on most modules.
+            let h = self.humidity_pct.round().clamp(0.0, 100.0) as u8;
+            let t = self.temperature_c.round().clamp(0.0, 50.0) as u8;
+            [h, 0u8, t, 0u8]
         } else {
-            magnitude
+            let h_raw = (self.humidity_pct * 10.0).round().clamp(0.0, 1000.0) as u16;
+            let magnitude = (self.temperature_c.abs() * 10.0).round().clamp(0.0, 800.0) as u16;
+            let t_raw = if self.temperature_c < 0.0 {
+                magnitude | 0x8000
+            } else {
+                magnitude
+            };
+            [
+                (h_raw >> 8) as u8,
+                h_raw as u8,
+                (t_raw >> 8) as u8,
+                t_raw as u8,
+            ]
         };
-        let b = [
-            (h_raw >> 8) as u8,
-            h_raw as u8,
-            (t_raw >> 8) as u8,
-            t_raw as u8,
-        ];
         let checksum = b.iter().fold(0u8, |acc, &byte| acc.wrapping_add(byte));
         [b[0], b[1], b[2], b[3], checksum]
     }
@@ -311,9 +350,14 @@ impl Dht22 {
             t += self.cycles(if bit { BIT_1_HIGH_US } else { BIT_0_HIGH_US });
         }
 
-        // The last bit's HIGH runs straight into the idle-high release, so the
-        // closing edge is a no-op level-wise; push it anyway so the schedule
-        // carries an explicit end-of-frame cycle.
+        // End-of-frame: the sensor pulls LOW ~50 µs then releases to idle high
+        // (Aosong AM2302 / DHT11 datasheets). Without this edge, a bitbang
+        // reader measuring "how long does HIGH last?" never sees the last
+        // bit's HIGH end (line stays idle-high), so a trailing 0 becomes a 1
+        // under any timeout-based measure and the checksum fails forever
+        // (ESP32-C3 freehand DHT_NAN, 2026-08-11).
+        edges.push((t, false));
+        t += self.cycles(BIT_LOW_US);
         edges.push((t, true));
         self.transitions = edges;
     }
@@ -417,6 +461,11 @@ impl crate::bus::BusResidentDevice for Dht22 {
         if pad_high == self.last_pad_high() {
             return;
         }
+        // drive_input_bit (set_gpio_input) is the ESP32-C3 seam: IN is not a
+        // writable data register, digitalRead samples external_levels. Also
+        // poke drive_idr_bit so STM32-style GpioPort tests that read the IDR
+        // word directly still see the level (raw IDR MMIO is a no-op on C3).
+        let _ = bus.drive_input_bit(self.data_idr_addr, self.data_bit, pad_high);
         bus.drive_idr_bit(self.data_idr_addr, self.data_bit, pad_high);
         self.set_last_pad_high(pad_high);
     }
@@ -496,8 +545,8 @@ mod tests {
         assert!(s.is_transmitting(), "a ≥1 ms start pulse must be answered");
 
         let tr = s.transitions().to_vec();
-        // 2 response edges + 2 per data bit + the closing release.
-        assert_eq!(tr.len(), 2 * FRAME_BITS + 3);
+        // 2 response edges + 2 per data bit + end-of-frame 50 µs LOW + release HIGH.
+        assert_eq!(tr.len(), 2 * FRAME_BITS + 4);
 
         // Sensor waits out the pull-up gap, then pulls low.
         assert_eq!(tr[0].0, release + RESPONSE_DELAY_US as u64);
@@ -718,7 +767,7 @@ mod tests {
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
         use crate::Bus;
 
-        const GPIOA: u64 = 0x4800_0000; // stm32v2: IDR @ 0x10, ODR @ 0x14, BSRR @ 0x18
+        const GPIOA: u64 = 0x4800_0000; // stm32v2: MODER @ 0x00, IDR @ 0x10, ODR @ 0x14, BSRR @ 0x18
         let bit = 4u8;
 
         let mut bus = SystemBus::empty();
@@ -741,6 +790,10 @@ mod tests {
 
         let pad = |bus: &SystemBus| (bus.read_u32(GPIOA + 0x10).unwrap() >> bit) & 1;
 
+        // Pin as push-pull output so BSRR/ODR are the host driver the write-hook
+        // samples (input-mode BSRR leaves MODER floating and ODR unread).
+        bus.write_u32(GPIOA, 0b01 << (bit * 2)).unwrap();
+
         // Idle: the first service tick drives the pull-up level high.
         bus.set_current_cycle(0);
         bus.write_u32(GPIOA + 0x18, 1 << bit).unwrap(); // release (BSRR set)
@@ -753,9 +806,11 @@ mod tests {
         bus.service_gpio_devices();
         assert_eq!(pad(&bus), 0, "host start pulse reads back low");
 
-        // Release at cycle 1_200 → frame armed.
+        // Release at cycle 1_200 → frame armed. Then pinMode(INPUT) so IDR
+        // samples the sensor (output mode reads back ODR on STM32).
         bus.set_current_cycle(1_200);
         bus.write_u32(GPIOA + 0x18, 1 << bit).unwrap();
+        bus.write_u32(GPIOA, 0).unwrap(); // MODER input
         bus.service_gpio_devices();
         assert_eq!(pad(&bus), 1, "pull-up gap before the sensor answers");
         assert!(
@@ -812,6 +867,205 @@ mod tests {
             bits = (bits << 1) | u64::from(high_n > 40);
         }
         assert_eq!(bits, 0x02_8D_00_EA_79, "decoded frame matches the encoder");
+    }
+
+    /// ESP32-C3 path: the sensor drives `external_levels` via `drive_input_bit`
+    /// (raw IDR MMIO is ignored), host release is detected when ENABLE is
+    /// cleared (Arduino `pinMode(INPUT_PULLUP)`), and
+    /// `tick_peripherals_fully` services the device even with
+    /// `esp32c3_irq_routing` set (the Nordic GPIO block is skipped on C3).
+    #[test]
+    fn frame_driven_through_esp32c3_gpio() {
+        use crate::bus::SystemBus;
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::Bus;
+
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const OUT: u64 = 0x04;
+        const ENABLE: u64 = 0x20;
+        const IN: u64 = 0x3C;
+        let bit = 4u8;
+        let mask = 1u32 << bit;
+
+        let mut bus = SystemBus::empty();
+        bus.esp32c3_irq_routing = true;
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(Esp32c3Gpio::new()),
+        );
+        bus.gpio_devices.push(Box::new(Dht22::new(
+            "env".into(),
+            GPIO_BASE + OUT,
+            GPIO_BASE + IN,
+            bit,
+            HZ,
+            25.0,
+            55.0,
+        )));
+
+        let pad = |bus: &SystemBus| {
+            // Firmware digitalRead samples IN → effective_input / external_levels.
+            (bus.read_u32(GPIO_BASE + IN).unwrap() >> bit) & 1
+        };
+
+        // Idle high via first service.
+        bus.set_current_cycle(0);
+        bus.tick_peripherals_fully();
+        assert_eq!(pad(&bus), 1, "C3 external drive idles high");
+
+        // Start pulse: enable output, drive LOW for 1.1 ms.
+        bus.set_current_cycle(100);
+        bus.write_u32(GPIO_BASE + ENABLE, mask).unwrap();
+        bus.write_u32(GPIO_BASE + OUT, 0).unwrap();
+        bus.tick_peripherals_fully();
+        assert_eq!(pad(&bus), 0, "host start pulse low on C3 pad");
+
+        // Release the open-drain line the way Arduino DHT does: clear ENABLE
+        // while ODR is still 0. OE-clear must arm the frame (not ODR alone).
+        bus.set_current_cycle(1_200);
+        bus.write_u32(GPIO_BASE + ENABLE, 0).unwrap();
+        assert!(
+            bus.gpio_devices_of::<Dht22>()
+                .next()
+                .unwrap()
+                .is_transmitting(),
+            "OE-clear write-hook must arm the DHT frame on C3"
+        );
+        bus.tick_peripherals_fully();
+        assert_eq!(pad(&bus), 1, "pull-up gap before sensor answers");
+
+        // Sensor response LOW at release+30 µs (1 cycle/µs at HZ=1_000_000).
+        bus.set_current_cycle(1_200 + 30);
+        bus.tick_peripherals_fully();
+        assert_eq!(pad(&bus), 0, "sensor response LOW via drive_input_bit");
+
+        bus.set_current_cycle(1_200 + 30 + 80);
+        bus.tick_peripherals_fully();
+        assert_eq!(pad(&bus), 1, "sensor response HIGH via drive_input_bit");
+    }
+
+    /// Firmware-shaped release: `digitalWrite(HIGH)` then `pinMode(INPUT)`.
+    /// Decode the full 40-bit frame the way the freehand bitbang sketch does.
+    #[test]
+    fn c3_bitbang_decode_matches_frame() {
+        use crate::bus::SystemBus;
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::Bus;
+
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const OUT: u64 = 0x04;
+        const ENABLE: u64 = 0x20;
+        const IN: u64 = 0x3C;
+        // Match the live C3 freehand system.yaml (160 MHz).
+        const CPU_HZ: u64 = 160_000_000;
+        let bit = 4u8;
+        let mask = 1u32 << bit;
+        let cyc = |us: u64| us * (CPU_HZ / 1_000_000);
+
+        let mut bus = SystemBus::empty();
+        bus.esp32c3_irq_routing = true;
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(Esp32c3Gpio::new()),
+        );
+        bus.gpio_devices.push(Box::new(Dht22::new(
+            "env".into(),
+            GPIO_BASE + OUT,
+            GPIO_BASE + IN,
+            bit,
+            CPU_HZ,
+            25.0,
+            55.0,
+        )));
+
+        let read = |bus: &SystemBus| (bus.read_u32(GPIO_BASE + IN).unwrap() >> bit) & 1 != 0;
+
+        // Idle.
+        bus.set_current_cycle(0);
+        bus.tick_peripherals_fully();
+
+        // Start: OUTPUT LOW for 2 ms.
+        let mut now = cyc(100);
+        bus.set_current_cycle(now);
+        bus.write_u32(GPIO_BASE + ENABLE, mask).unwrap();
+        bus.write_u32(GPIO_BASE + OUT, 0).unwrap();
+        bus.tick_peripherals_fully();
+
+        // digitalWrite(HIGH) release while still OUTPUT.
+        now += cyc(2_000);
+        bus.set_current_cycle(now);
+        bus.write_u32(GPIO_BASE + OUT, mask).unwrap();
+        assert!(
+            bus.gpio_devices_of::<Dht22>()
+                .next()
+                .unwrap()
+                .is_transmitting(),
+            "digitalWrite HIGH must arm the frame"
+        );
+
+        // delayMicroseconds(30) then pinMode(INPUT_PULLUP).
+        now += cyc(30);
+        bus.set_current_cycle(now);
+        bus.write_u32(GPIO_BASE + ENABLE, 0).unwrap();
+        bus.tick_peripherals_fully();
+
+        // Firmware expectLevel walk — sample every 1 µs of sim time.
+        let expect = |bus: &mut SystemBus, now: &mut u64, level: bool, timeout_us: u64| -> bool {
+            let start = *now;
+            while read(bus) == level {
+                if (*now - start) / (CPU_HZ / 1_000_000) > timeout_us {
+                    return false;
+                }
+                *now += cyc(1);
+                bus.set_current_cycle(*now);
+                bus.tick_peripherals_fully();
+            }
+            true
+        };
+
+        assert!(
+            expect(&mut bus, &mut now, true, 100),
+            "wait sensor pull low"
+        );
+        assert!(expect(&mut bus, &mut now, false, 100), "wait response high");
+        assert!(expect(&mut bus, &mut now, true, 100), "wait first bit low");
+
+        let mut data = [0u8; 5];
+        for i in 0..40 {
+            assert!(expect(&mut bus, &mut now, false, 100), "bit {i} low end");
+            // Measure HIGH width; last bit ends idle-high so timeout ends the pulse.
+            let t0 = now;
+            let high_deadline = now + cyc(100);
+            while read(&bus) {
+                if now >= high_deadline {
+                    break;
+                }
+                now += cyc(1);
+                bus.set_current_cycle(now);
+                bus.tick_peripherals_fully();
+            }
+            let w_us = (now - t0) / (CPU_HZ / 1_000_000);
+            data[i / 8] <<= 1;
+            if w_us > 40 {
+                data[i / 8] |= 1;
+            }
+        }
+        let sum = data[0]
+            .wrapping_add(data[1])
+            .wrapping_add(data[2])
+            .wrapping_add(data[3]);
+        assert_eq!(sum, data[4], "checksum data={data:?}");
+        // DHT22 packing: RH 55.0 → 550 = 0x0226, T 25.0 → 250 = 0x00FA
+        assert_eq!(data[0], 0x02);
+        assert_eq!(data[1], 0x26);
+        assert_eq!(data[2], 0x00);
+        assert_eq!(data[3], 0xFA);
     }
 
     /// The sensor is reachable from the ONE bus stimulus walk, so `set_input`

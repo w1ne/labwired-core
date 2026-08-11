@@ -1,7 +1,8 @@
-# Resource metrics examples (P0)
+# Resource metrics examples (P0 + P1)
 
-Scenario budgets for flash, static RAM, and **main stack** high-water — not
-silicon performance counters. Metrics and assertions are collected by
+Scenario budgets for flash, static RAM, and **main stack** high-water (P0), plus
+always-on execution counters under `result.json` → `metrics` (P1: cycles, bus
+accesses, PC samples). Not silicon performance counters. Collected by
 `labwired test` only (not `labwired run` / playground).
 
 ## Layout
@@ -56,25 +57,27 @@ of `max_flash_bytes`, `max_ram_static_bytes`, `max_main_stack_bytes`.
 Pass result — footprint and main-stack high-water:
 
 ```bash
-jq '{footprint, memory}' /tmp/m-pass/result.json
+jq '{footprint, memory, metrics}' /tmp/m-pass/result.json
 # {
 #   "footprint": {
 #     "method": "elf_section_totals_v1",
 #     "text_bytes": 12760,
-#     "data_bytes": 124,
-#     "bss_bytes": 2548,
-#     "flash_used_bytes": 12884,
-#     "ram_static_bytes": 2672,
-#     "flash_total_bytes": 1000000,
-#     "ram_total_bytes": 20480,
-#     "flash_used_pct": 1.29,
-#     "ram_static_pct": 13.05,
-#     "notes": ["section_sum_not_bin_image", "totals_from_chip_catalog"]
+#     ...
 #   },
 #   "memory": {
 #     "main_stack_method": "paint",
 #     "main_stack_high_water_bytes": 172,
 #     ...
+#   },
+#   "metrics": {
+#     "cycles": 200000,
+#     "instructions": ...,
+#     "steps_executed": ...,
+#     "memory_reads": ...,
+#     "memory_writes": ...,
+#     "peripheral_accesses": ...,
+#     "exceptions": 0,
+#     "pc_samples": [ { "pc": ..., "count": ..., "symbol": "..." }, ... ]
 #   }
 # }
 ```

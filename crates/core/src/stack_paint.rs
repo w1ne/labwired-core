@@ -8,6 +8,10 @@
 //!
 //! Pure bounds/fill/scan math for resource-metrics P0. Bus fill and CLI wiring
 //! live elsewhere; this module only computes paint windows and scans words.
+//!
+//! The free RAM window between the heap floor and stack top is painted once.
+//! Post-run scan is dual-ended: heap grows from low addresses upward, stack
+//! from high addresses downward; remaining paint in the middle is free.
 
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +24,7 @@ pub enum MainStackMethod {
     Disabled,
 }
 
-/// Main-stack report block for `result.json` (`memory`).
+/// Main-stack (and dual-end heap) report block for `result.json` (`memory`).
 ///
 /// Optional fields are omitted when unset (no `null` placeholders).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,6 +44,19 @@ pub struct MainStackReport {
     pub main_stack_overflow_suspected: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_stack_unsupported_reason: Option<String>,
+    /// Dual-end heap method: `"paint"`, `"disabled"`, or `"unsupported"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_limit_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_high_water_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_free_min_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_base: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heap_top: Option<u64>,
 }
 
 impl MainStackReport {
@@ -54,6 +71,12 @@ impl MainStackReport {
             main_stack_top: None,
             main_stack_overflow_suspected: None,
             main_stack_unsupported_reason: None,
+            heap_method: Some("disabled".to_string()),
+            heap_limit_bytes: None,
+            heap_high_water_bytes: None,
+            heap_free_min_bytes: None,
+            heap_base: None,
+            heap_top: None,
         }
     }
 
@@ -68,6 +91,12 @@ impl MainStackReport {
             main_stack_top: None,
             main_stack_overflow_suspected: None,
             main_stack_unsupported_reason: Some(reason.to_string()),
+            heap_method: Some("unsupported".to_string()),
+            heap_limit_bytes: None,
+            heap_high_water_bytes: None,
+            heap_free_min_bytes: None,
+            heap_base: None,
+            heap_top: None,
         }
     }
 }
@@ -110,6 +139,17 @@ pub const PAINT_WORD: u32 = 0xA5A5_A5A5;
 
 /// Minimum paint window size; smaller ranges are rejected as unsupported.
 pub const MIN_PAINT_BYTES: u64 = 64;
+
+/// Dual-end paint scan result (heap from low, stack from high).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaintScan {
+    pub stack_high_water_bytes: u64,
+    pub stack_free_min_bytes: u64,
+    pub heap_high_water_bytes: u64,
+    pub heap_free_min_bytes: u64,
+    pub limit_bytes: u64,
+    pub overflow_suspected: bool,
+}
 
 /// Compute half-open paint range `[paint_lo, paint_hi)` or an unsupported reason.
 ///
@@ -177,26 +217,75 @@ pub fn compute_paint_range(
     Ok((paint_lo, paint_hi))
 }
 
-/// Scan painted region from low addresses upward while words equal [`PAINT_WORD`].
+/// Dual-end scan of a shared paint window.
 ///
-/// Returns `(high_water_bytes, free_min_bytes, overflow_suspected)`.
-///
-/// - `words` must cover `[paint_lo, paint_hi)` as little-endian words in address order.
-/// - Overflow is suspected if no paint remains, or `final_sp` is outside the window.
-pub fn scan_paint(words: &[u32], final_sp: u64, paint_lo: u64, paint_hi: u64) -> (u64, u64, bool) {
-    let limit = paint_hi - paint_lo;
-    let mut unused_words = 0u64;
+/// - Heap high-water: contiguous non-paint words from the **start** (low addr).
+/// - Stack high-water: contiguous non-paint words from the **end** (high addr).
+/// - Free: middle words still equal to [`PAINT_WORD`].
+/// - Overflow if free is zero, SP is outside `[paint_lo, paint_hi]`, or
+///   heap+stack used words exceed the window length.
+pub fn scan_shared_paint(words: &[u32], final_sp: u64, paint_lo: u64, paint_hi: u64) -> PaintScan {
+    let limit_bytes = paint_hi.saturating_sub(paint_lo);
+    let n = words.len();
+
+    // Heap: non-paint from low addresses upward.
+    let mut heap_words = 0usize;
     for &w in words {
         if w == PAINT_WORD {
-            unused_words += 1;
-        } else {
             break;
         }
+        heap_words += 1;
     }
-    let unused = unused_words * 4;
-    let high_water = limit.saturating_sub(unused);
-    let overflow = unused == 0 || final_sp < paint_lo || final_sp > paint_hi;
-    (high_water, unused, overflow)
+
+    // Stack: non-paint from high addresses downward.
+    let mut stack_words = 0usize;
+    for &w in words.iter().rev() {
+        if w == PAINT_WORD {
+            break;
+        }
+        stack_words += 1;
+    }
+
+    // Free = middle still paint (shared residual between heap and stack fronts).
+    let free_words = if heap_words + stack_words >= n {
+        0usize
+    } else {
+        words[heap_words..n - stack_words]
+            .iter()
+            .filter(|&&w| w == PAINT_WORD)
+            .count()
+    };
+
+    let free_bytes = (free_words as u64).saturating_mul(4);
+    let heap_high_water_bytes = (heap_words as u64).saturating_mul(4);
+    let stack_high_water_bytes = (stack_words as u64).saturating_mul(4);
+
+    let overflow_suspected = free_words == 0
+        || final_sp < paint_lo
+        || final_sp > paint_hi
+        || heap_words.saturating_add(stack_words) > n;
+
+    PaintScan {
+        stack_high_water_bytes,
+        stack_free_min_bytes: free_bytes,
+        heap_high_water_bytes,
+        heap_free_min_bytes: free_bytes,
+        limit_bytes,
+        overflow_suspected,
+    }
+}
+
+/// Scan painted region; returns `(stack_high_water, free_min, overflow_suspected)`.
+///
+/// Thin wrapper over [`scan_shared_paint`] for callers that only need stack
+/// fields. Stack grows from the high end; free is remaining middle paint.
+pub fn scan_paint(words: &[u32], final_sp: u64, paint_lo: u64, paint_hi: u64) -> (u64, u64, bool) {
+    let scan = scan_shared_paint(words, final_sp, paint_lo, paint_hi);
+    (
+        scan.stack_high_water_bytes,
+        scan.stack_free_min_bytes,
+        scan.overflow_suspected,
+    )
 }
 
 #[cfg(test)]
@@ -250,7 +339,7 @@ mod tests {
     #[test]
     fn scan_half_used() {
         let mut words = vec![PAINT_WORD; 64]; // 256 bytes
-                                              // "use" top 128 bytes → last 32 words clobbered
+                                              // "use" top 128 bytes → last 32 words clobbered (stack only)
         for w in words.iter_mut().skip(32) {
             *w = 0;
         }
@@ -260,6 +349,42 @@ mod tests {
         assert_eq!(free, 128);
         assert_eq!(hw, 128);
         assert!(!ov);
+
+        let scan = scan_shared_paint(&words, paint_hi - 4, paint_lo, paint_hi);
+        assert_eq!(scan.stack_high_water_bytes, 128);
+        assert_eq!(scan.stack_free_min_bytes, 128);
+        assert_eq!(scan.heap_high_water_bytes, 0);
+        assert_eq!(scan.heap_free_min_bytes, 128);
+        assert!(!scan.overflow_suspected);
+    }
+
+    #[test]
+    fn scan_heap_and_stack_both_grow() {
+        // 64 words (256 bytes): heap uses first 16 words, stack last 20, free middle 28.
+        let mut words = vec![PAINT_WORD; 64];
+        for w in words.iter_mut().take(16) {
+            *w = 0x1111_1111;
+        }
+        for w in words.iter_mut().skip(44) {
+            *w = 0x2222_2222;
+        }
+        let paint_lo = 0x2000_0000;
+        let paint_hi = paint_lo + 256;
+        let scan = scan_shared_paint(&words, paint_hi - 8, paint_lo, paint_hi);
+        assert_eq!(scan.heap_high_water_bytes, 64); // 16 * 4
+        assert_eq!(scan.stack_high_water_bytes, 80); // 20 * 4
+        assert_eq!(scan.stack_free_min_bytes, 112); // 28 * 4
+        assert_eq!(scan.heap_free_min_bytes, 112);
+        assert_eq!(scan.limit_bytes, 256);
+        assert!(!scan.overflow_suspected);
+
+        // Collision: heap + stack meet with no free paint left.
+        let full = vec![0u32; 64];
+        let ov = scan_shared_paint(&full, paint_hi - 4, paint_lo, paint_hi);
+        assert_eq!(ov.heap_high_water_bytes, 256);
+        assert_eq!(ov.stack_high_water_bytes, 256);
+        assert_eq!(ov.stack_free_min_bytes, 0);
+        assert!(ov.overflow_suspected);
     }
 
     #[test]

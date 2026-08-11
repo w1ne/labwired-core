@@ -4,15 +4,16 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 //
-// End-to-end coverage for P0 resource metrics via examples/metrics/stm32f103-blinky.
+// End-to-end coverage for P0/P1 resource metrics via examples/metrics/stm32f103-blinky.
 //
 // Exercises the path an author (or CI gate) runs:
 //
 //   labwired test --script examples/metrics/stm32f103-blinky/test-pass.yaml
 //   labwired test --script examples/metrics/stm32f103-blinky/test-fail-stack.yaml
 //
-// Pass asserts ELF footprint totals + stack paint method; fail asserts a
-// resource_budget failure with limit evidence for max_main_stack_bytes: 1.
+// Pass asserts ELF footprint totals + stack paint method + P1 execution metrics;
+// fail asserts a resource_budget failure with limit evidence for
+// max_main_stack_bytes: 1.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -117,6 +118,53 @@ fn resource_metrics_pass_footprint_and_stack_paint() {
         method, "paint",
         "expected memory.main_stack_method == paint; memory: {}",
         run.result["memory"]
+    );
+
+    let memory = &run.result["memory"];
+    assert_eq!(
+        memory["heap_method"].as_str(),
+        Some("paint"),
+        "expected memory.heap_method == paint; memory: {memory}"
+    );
+    assert!(
+        memory["heap_high_water_bytes"].as_u64().is_some(),
+        "expected memory.heap_high_water_bytes present; memory: {memory}"
+    );
+
+    // P1 execution metrics: always-on nested block with positive cycles and
+    // non-empty bus traffic (memory and/or peripheral accesses).
+    let metrics = &run.result["metrics"];
+    assert!(
+        metrics.is_object(),
+        "expected result.metrics object; result keys: {:?}",
+        run.result.as_object().map(|o| o.keys().collect::<Vec<_>>())
+    );
+    let cycles = metrics["cycles"].as_u64().unwrap_or(0);
+    assert!(
+        cycles > 0,
+        "expected metrics.cycles > 0; metrics: {metrics}"
+    );
+    // Top-level compat fields must match the nested metrics block.
+    assert_eq!(
+        run.result["cycles"].as_u64(),
+        Some(cycles),
+        "top-level cycles must match metrics.cycles"
+    );
+    let mem_r = metrics["memory_reads"].as_u64().unwrap_or(0);
+    let mem_w = metrics["memory_writes"].as_u64().unwrap_or(0);
+    let peri = metrics["peripheral_accesses"].as_u64().unwrap_or(0);
+    assert!(
+        mem_r > 0 || peri > 0,
+        "expected memory_reads or peripheral_accesses > 0; metrics: {metrics}"
+    );
+    // Blinky does RAM traffic; writes may be small but reads (fetch + data) are not.
+    assert!(
+        mem_r > 0 || mem_w > 0,
+        "expected some memory traffic; metrics: {metrics}"
+    );
+    assert!(
+        metrics["pc_samples"].as_array().is_some(),
+        "expected metrics.pc_samples array; metrics: {metrics}"
     );
 }
 

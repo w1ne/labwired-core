@@ -68,16 +68,19 @@ nav:
 
   - Tutorials:
     - Playground first run: tutorials/playground.md
-    - Running Firmware: getting_started_firmware.md
-    - Simulating Sensors (I2C): examples/i2c_sensor_example.md
-    - Mastering DMA & Interrupts: examples/dma_exti_example.md
+    - Run firmware (CLI): getting_started_firmware.md
+    - I2C sensor example (TMP102): examples/i2c_sensor_example.md
+    - DMA & Interrupts: examples/dma_exti_example.md
     - Integrated Test Walkthrough: examples/integrated_test_walkthrough.md
 
   - How-To Guides:
-    - Board Onboarding: board_onboarding_playbook.md
+    - Onboard hardware: howto/onboard-hardware.md
+    - Onboard a part (I2C/SPI/actuators): howto/onboard-part.md
+    - Board onboarding: board_onboarding_playbook.md
+    - Target support levels: target_support_rubric.md
     - Multi-node worlds: howto/multi-node.md
-    - CI/CD Integration: ci_integration.md
-    - Peripheral Modeling: peripherals.md
+    - CI integration: ci_integration.md
+    - Peripheral modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
     - Debugging with VS Code: vscode_debugging.md
     - GDB Integration: gdb_integration.md
@@ -102,6 +105,8 @@ nav:
     - ESP32-C3: boards/esp32c3.md
     - ESP32-S3: boards/esp32s3.md
     - nRF52840: boards/nrf52840.md
+    - Arduino Nano 33 BLE: boards/arduino-nano-33-ble.md
+    - Arduino Nano 33 BLE Sense: boards/arduino-nano-33-ble-sense.md
     - XIAO nRF52840 Sense: boards/seeed-xiao-nrf52840-sense.md
     - RP2040: boards/rp2040.md
     - RP2350: boards/rp2350.md

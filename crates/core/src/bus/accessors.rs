@@ -52,6 +52,7 @@ impl crate::Bus for SystemBus {
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {
+            self.note_memory_read();
             return Ok(val);
         }
         // Cortex-M boot alias: 0x0000_0000 mirrors flash start on many STM32
@@ -68,14 +69,17 @@ impl crate::Bus for SystemBus {
         if self.config.optimized_bus_access {
             // Fast path: flash/extra_mem before peripherals.
             if let Some(val) = self.flash.read_u8(addr) {
+                self.note_memory_read();
                 return Ok(val);
             }
             for mem in &self.extra_mem {
                 if let Some(val) = mem.read_u8(addr) {
+                    self.note_memory_read();
                     return Ok(val);
                 }
             }
             if let Some(val) = flash_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -101,14 +105,17 @@ impl crate::Bus for SystemBus {
                 return p.dev.read(off);
             }
             if let Some(val) = self.flash.read_u8(addr) {
+                self.note_memory_read();
                 return Ok(val);
             }
             for mem in &self.extra_mem {
                 if let Some(val) = mem.read_u8(addr) {
+                    self.note_memory_read();
                     return Ok(val);
                 }
             }
             if let Some(val) = flash_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
         }
@@ -191,6 +198,7 @@ impl crate::Bus for SystemBus {
                             self.flash
                                 .write_u8(self.flash.base_addr + qoff, existing & nb);
                         }
+                        self.note_memory_write();
                         for observer in &self.observers {
                             observer.on_memory_write(addr, old_value, value);
                         }
@@ -234,6 +242,7 @@ impl crate::Bus for SystemBus {
                     .unwrap_or(0xFF);
                 self.flash
                     .write_u8(self.flash.base_addr + off, existing & value);
+                self.note_memory_write();
                 for observer in &self.observers {
                     observer.on_memory_write(addr, old_value, value);
                 }
@@ -250,6 +259,7 @@ impl crate::Bus for SystemBus {
             || flash_alias_write
             || self.extra_mem.iter_mut().any(|m| m.write_u8(addr, value))
         {
+            self.note_memory_write();
             Ok(())
         } else {
             // Dynamic Peripherals
@@ -320,6 +330,7 @@ impl crate::Bus for SystemBus {
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         if let Some(val) = self.ram.read_u16(addr) {
+            self.note_memory_read();
             return Ok(val);
         }
         // See read_u32: with optimized_bus_access off, peripherals (FlashXip)
@@ -348,9 +359,11 @@ impl crate::Bus for SystemBus {
             // flash.base+addr, which would shadow RP2040/ESP mask ROM at 0x0
             // with XIP contents at flash.base+addr (e.g. 0xa10 → 0x10000a10).
             if let Some(val) = extra_mem_half(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -371,12 +384,15 @@ impl crate::Bus for SystemBus {
                 return self.peripherals[idx].dev.read_u16(off);
             }
             if let Some(val) = extra_mem_half(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
         }
+        // Fall-through counts via per-byte note_memory_read in read_u8.
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         Ok(b0 | (b1 << 8))
@@ -415,6 +431,7 @@ impl crate::Bus for SystemBus {
         }
 
         if let Some(val) = self.ram.read_u32(addr) {
+            self.note_memory_read();
             return Ok(val);
         }
         // Flash region + boot alias, and peripherals. With optimized_bus_access
@@ -446,9 +463,11 @@ impl crate::Bus for SystemBus {
             // Same ordering as read_u16: bootrom/IRAM in extra_mem must win
             // over the low-address flash alias (RP2040 mask ROM @ 0x0).
             if let Some(val) = extra_mem_word(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -471,12 +490,15 @@ impl crate::Bus for SystemBus {
             // IRAM / ROM / RTC after peripherals so XIP FlashXip still wins on
             // 0x4200_0000 / 0x3C00_0000 over zero-filled extra_mem twins.
             if let Some(val) = extra_mem_word(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
         }
+        // Fall-through counts via per-byte note_memory_read in read_u8.
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -497,6 +519,7 @@ impl crate::Bus for SystemBus {
             wrote = self.flash.write_u16(self.flash.base_addr + addr, value);
         }
         if wrote {
+            self.note_memory_write();
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
@@ -600,6 +623,7 @@ impl crate::Bus for SystemBus {
             wrote = self.flash.write_u32(self.flash.base_addr + addr, value);
         }
         if wrote {
+            self.note_memory_write();
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {

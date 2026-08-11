@@ -133,8 +133,11 @@ impl SystemBus {
             "ODR and IDR of one pin must share a bit index"
         );
 
-        self.gpio_devices
-            .push(Box::new(crate::peripherals::components::dht22::Dht22::new(
+        // Canvas/part type `dht11` shares this descriptor; pack DHT11 integer
+        // frames so Adafruit-style `#define DHTTYPE DHT11` firmware gets valid reads.
+        let dht11_frame = ext.r#type.eq_ignore_ascii_case("dht11");
+        self.gpio_devices.push(Box::new(
+            crate::peripherals::components::dht22::Dht22::new_with_frame(
                 ext.id.clone(),
                 odr_addr,
                 idr_addr,
@@ -142,7 +145,9 @@ impl SystemBus {
                 cpu_hz,
                 temperature_c,
                 humidity_pct,
-            )));
+                dht11_frame,
+            ),
+        ));
         Ok(())
     }
 

@@ -1,9 +1,8 @@
 # MCP tool reference
 
-Canonical names are `labwired_<verb>`. Both **hosted** (`https://api.labwired.com/mcp`) and **stdio** (`@labwired/mcp`) load tools from the same registry; surface tags decide what each client advertises.
+Tool names are `labwired_<verb>`. **Hosted** (`https://api.labwired.com/mcp`) and **stdio** (`@labwired/mcp`) share the same family; not every tool appears on both surfaces.
 
-!!! note "Living contract"
-    Shapes live in monorepo `packages/board-config/src/mcp-tools.ts`. If this page and the live server disagree, **the server wins** — file a docs fix.
+If this page and the live server disagree, **the live server wins** — fix the docs.
 
 ---
 
@@ -11,76 +10,66 @@ Canonical names are `labwired_<verb>`. Both **hosted** (`https://api.labwired.co
 
 | Tool | Hosted | Stdio | Role |
 |------|:------:|:-----:|------|
-| `labwired_search` | ✅ | ✅ | Search the tool catalog by keyword |
-| `labwired_list` | ✅ | ✅ | List boards / MCUs / components (`kind` optional) |
-| `labwired_describe` | ✅ | ✅ | Pins, buses, attrs for any catalog id |
-| `labwired_validate` | ✅ | ✅ | ERC / diagram checks before run |
+| `labwired_search` | ✅ | ✅ | Search tools by keyword |
+| `labwired_list` | ✅ | ✅ | List boards / MCUs / components |
+| `labwired_describe` | ✅ | ✅ | Pins, buses, attrs for a catalog id |
+| `labwired_validate` | ✅ | ✅ | Diagram / wiring checks before run |
 | `labwired_compile` | ✅ | ❌ | Source → `firmware_ref` (+ ESP flash images) |
-| `labwired_run` | ✅ | ✅ | Execute firmware on the twin; observe serial/GPIO/… |
-| `labwired_inspect` | ✅ | ✅ | Deeper state from a prior `snapshot_id` |
-| `labwired_verify` | ✅ | ✅ | **Oracle** — pass/fail, not model self-report |
-| `labwired_lab` | ✅ | ❌ | Open / share a Studio lab widget + URL |
+| `labwired_run` | ✅ | ✅ | Run firmware; serial, GPIO, snapshot |
+| `labwired_inspect` | ✅ | ✅ | Deeper state from a `snapshot_id` |
+| `labwired_verify` | ✅ | ✅ | **Pass/fail oracle** |
+| `labwired_lab` | ✅ | ❌ | Studio lab widget + share URL |
 
-**Rule for agents:** never claim success until `labwired_verify` (or an explicit oracle assertion in the run result) is green.
+**Rule:** do not claim success until `labwired_verify` (or an explicit test assertion) is green.
 
 ---
 
-## Discovery & parts
+## Discovery and parts
 
 | Tool | Hosted | Stdio | Role |
 |------|:------:|:-----:|------|
-| `labwired_catalog` | ✅ | — | Versioned Circuit V1 catalog snapshot |
-| `labwired_resolve_circuit` | ✅ | — | Resolve CircuitRequestV1 → validated graph |
-| `labwired_part` | ✅ | ✅* | Lookup part by MPN / alias / catalog id |
-| `labwired_part_citation` | ✅ | ✅* | Evidence behind a knowledge claim |
-| `labwired_datasheet` | ✅ | ✅* | Read manufacturer datasheet text (paged) |
-| `labwired_export` | ✅ | ✅ | Export diagram (KiCad netlist / schematic / BOM / …) |
+| `labwired_catalog` | ✅ | — | Catalog snapshot |
+| `labwired_part` | ✅ | ✅* | Lookup by MPN / alias / id |
+| `labwired_datasheet` | ✅ | ✅* | Datasheet text (paged) |
+| `labwired_export` | ✅ | ✅ | KiCad netlist / schematic / BOM / … |
+| `labwired_validate_device` | ✅* | ✅* | Validate a device YAML before merge |
 
-\*Advertisement may follow registry `surfaces`; if a tool is missing on stdio, use hosted or the CLI.
-
----
-
-## Power / advanced
-
-| Tool | Hosted | Stdio | Role |
-|------|:------:|:-----:|------|
-| `labwired_put_source` | ✅ | — | Store source tree as content-addressed refs |
-| `labwired_debug` | ✅ | ✅* | Scripted breakpoints / probe on the twin |
-| `labwired_fuzz` | — | ✅ | Coverage-guided fuzz; crashes are replayable |
-| `labwired_ingest_svd` | — | ✅ | SVD → declarative peripheral YAML |
-| `labwired_validate_device` | — | ✅ | Validate declarative device YAML (no persist) |
-| `labwired_project` | ✅ | — | Create / update / publish Studio projects |
+\*May vary by surface; if missing on stdio, use hosted or the CLI.
 
 ---
 
-## Currency: firmware refs
+## Typical sequences
 
-Hosted `labwired_compile` returns a **`firmware_ref`** (`sha256:<hex>`).  
-`labwired_run` / `labwired_verify` / fuzz accept that ref (or a lab document’s artifact ref).
+**Blink / UART demo**
 
-Stdio resolves refs from the **local artifact cache**, then the hosted blob API when needed. Prefer refs over stuffing multi‑MB binaries through the model context.
+```text
+list → describe board → compile (hosted) → run → verify (serial contains …)
+```
+
+**Sensor / actuator**
+
+```text
+list components → describe part → validate diagram → run (+ stimuli if needed) → verify
+```
+
+**New part authoring**
+
+```text
+validate_device (YAML) → attach on a known board → run → verify → document
+```
+
+See [Onboard a part](../howto/onboard-part.md).
 
 ---
 
-## Stdio vs hosted run/verify
+## Deprecated names
 
-| | Hosted | Stdio |
-|--|--------|-------|
-| Input | Source compile-then-run **or** `firmware_ref` | **Artifact-only** (`firmware_ref` / path + target) |
-| Diagram | Supported on run/lab paths | Diagram validate + local system yaml patterns |
-| Stimuli | Supported on `labwired_run` | Supported |
-| Snapshot | `snapshot_id` for `labwired_inspect` | In-proc snapshot store |
-
----
-
-## Deprecated names (do not use)
-
-Old names (`labwired_list_boards`, `labwired_run_device`, `labwired_inspect_run`, `search_tools`, …) are **removed**. Hard rename only — no aliases.
+Do not use old aliases if the server still accepts them for compatibility. Prefer the `labwired_*` names in the tables above. If a client shows only legacy names, update the MCP package or connection URL.
 
 ---
 
 ## Next
 
-- [Connect MCP](mcp.md)  
-- [First agent run](first-run.md)  
-- Board fidelity: [ESP32-C3](../boards/esp32c3.md)  
+- [Connect MCP](mcp.md)
+- [First agent run](first-run.md)
+- [Fidelity](../fidelity.md)

@@ -236,12 +236,54 @@ impl SystemBus {
             if data_idx != idx {
                 continue;
             }
-            // Default high: an unreadable ODR means "released" (pull-up wins),
-            // which is the safe idle state rather than a spurious start pulse.
-            let host_high = self
-                .read_u32(odr_addr)
-                .map(|v| (v >> bit) & 1 != 0)
-                .unwrap_or(true);
+            // Host open-drain level: the MCU drives the wire LOW only while the
+            // output driver is enabled AND ODR is 0. Arduino's DHT library ends
+            // the start pulse with pinMode(INPUT_PULLUP) — that clears ENABLE
+            // while leaving ODR low. Watching ODR alone never saw release, so
+            // the sensor never armed and every Adafruit DHT read returned NaN
+            // (live ESP32-C3 freehand, 2026-08-11).
+            //
+            // ESP32/C3/S3 GPIO: OUT at base+0x04, ENABLE at base+0x20 → delta
+            // 0x1C from the ODR address resolve_pin_odr returns. ONLY apply this
+            // on ESP GPIO models — STM32 ODR+0x1C lands on an unrelated register
+            // whose bit pattern looked like "OE clear" and forced host_high
+            // always-true (start pulse never armed on STM32 tests).
+            let host_high = {
+                let is_esp_gpio = self.find_peripheral_index(odr_addr).is_some_and(|i| {
+                    self.peripherals[i]
+                        .dev
+                        .as_any()
+                        .map(|a| {
+                            a.downcast_ref::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>()
+                                .is_some()
+                                || a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
+                                    .is_some()
+                                || a.downcast_ref::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>(
+                                )
+                                .is_some()
+                        })
+                        .unwrap_or(false)
+                });
+                if is_esp_gpio {
+                    const ESP_OUT_TO_ENABLE: u64 = 0x1C;
+                    let enable_addr = odr_addr.wrapping_add(ESP_OUT_TO_ENABLE);
+                    let output_enabled = self
+                        .read_u32(enable_addr)
+                        .map(|en| (en >> bit) & 1 != 0)
+                        .unwrap_or(true);
+                    if !output_enabled {
+                        true // released to pull-up
+                    } else {
+                        self.read_u32(odr_addr)
+                            .map(|v| (v >> bit) & 1 != 0)
+                            .unwrap_or(true)
+                    }
+                } else {
+                    self.read_u32(odr_addr)
+                        .map(|v| (v >> bit) & 1 != 0)
+                        .unwrap_or(true)
+                }
+            };
             if let Some(s) = self.gpio_devices[i].as_any_mut().downcast_mut::<Dht22>() {
                 s.observe_line(host_high, now);
             }

@@ -151,6 +151,38 @@ pub(crate) struct TestResult {
     /// Main-stack paint / high-water report. Absent when not collected.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) memory: Option<labwired_core::stack_paint::MainStackReport>,
+    /// Always-on cheap execution metrics (cycles, bus accesses, PC samples).
+    /// Present on successful machine runs; omitted on config-error paths that
+    /// never built a machine. Top-level `cycles` / `instructions` /
+    /// `steps_executed` remain for compatibility.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) metrics: Option<ExecutionMetrics>,
+}
+
+/// Industry-standard execution counters for `result.json` (`metrics`).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct ExecutionMetrics {
+    pub cycles: u64,
+    pub instructions: u64,
+    pub steps_executed: u64,
+    pub memory_reads: u64,
+    pub memory_writes: u64,
+    pub peripheral_accesses: u64,
+    /// Best-effort: counts `SimulationError::ExceptionRaised` stop paths in P1.
+    /// Handled NVIC/exception entries that do not fault the run are not counted.
+    pub exceptions: u64,
+    /// Top PC histogram samples (descending by count). Empty when no samples.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pc_samples: Vec<PcSample>,
+}
+
+/// One hot PC from statistical sampling during the test loop.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct PcSample {
+    pub pc: u64,
+    pub count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
 }
 
 /// Berkeley-style firmware footprint for `result.json` (`footprint`).
