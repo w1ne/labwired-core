@@ -189,6 +189,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
         echo_stdout: bool,
     ) -> anyhow::Result<()> {
+        // AVR USART TX is modelled on the CPU, not a bus UART peripheral.
+        if let Some(avr) = self
+            .cpu
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::cpu::Avr>())
+        {
+            avr.set_serial_sink(sink.clone());
+        }
         self.bus.attach_uart_tx_sink(sink, echo_stdout);
         Ok(())
     }

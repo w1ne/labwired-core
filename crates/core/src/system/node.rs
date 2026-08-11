@@ -89,11 +89,31 @@ pub fn build_node_with_plugins(
         MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, plugins),
         MachineFamily::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
         MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware),
-        MachineFamily::Avr => anyhow::bail!(
-            "node '{id}': chip '{}' AVR path lands in a later commit on this branch",
-            chip.name
-        ),
+        MachineFamily::Avr => build_avr_node(id, chip, system, firmware, plugins),
     }
+}
+
+fn build_avr_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Avr::new();
+    cpu.load_program_image(&image);
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
 }
 
 fn is_cortex_m(chip: &ChipDescriptor) -> bool {

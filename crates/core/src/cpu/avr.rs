@@ -11,7 +11,7 @@
 
 use crate::snapshot::{AvrCpuSnapshot, CpuSnapshot};
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub const FLASH_SIZE: usize = 32 * 1024;
 pub const RAMEND: u16 = 0x08FF;
@@ -68,6 +68,8 @@ pub struct Avr {
     pub ocr0b: u8,
     pub t0_prescale_acc: u32,
     pub serial_tx: Vec<u8>,
+    /// Optional live sink for MachineTrait UART capture.
+    pub serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
     pub ucsr0a: u8,
     pub ucsr0b: u8,
     pub ucsr0c: u8,
@@ -102,6 +104,7 @@ impl Avr {
             tcnt0: 0, tccr0a: 0, tccr0b: 0, timsk0: 0, tifr0: 0,
             ocr0a: 0, ocr0b: 0, t0_prescale_acc: 0,
             serial_tx: Vec::new(),
+            serial_sink: None,
             ucsr0a: UCSRA_UDRE, ucsr0b: 0, ucsr0c: 0, ubrr0: 0,
         }
     }
@@ -246,6 +249,11 @@ impl Avr {
             0x00C5 => { self.ubrr0 = (self.ubrr0 & 0x00FF) | ((value as u16) << 8); Ok(()) }
             0x00C6 => {
                 self.serial_tx.push(value);
+                if let Some(sink) = &self.serial_sink {
+                    if let Ok(mut g) = sink.lock() {
+                        g.push(value);
+                    }
+                }
                 self.ucsr0a |= UCSRA_UDRE | UCSRA_TXC;
                 let _ = bus.write_u8(addr as u64, value);
                 Ok(())
@@ -293,6 +301,35 @@ impl Avr {
 
     pub fn serial_as_str(&self) -> String {
         String::from_utf8_lossy(&self.serial_tx).into_owned()
+    }
+
+    pub fn set_serial_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
+        self.serial_sink = Some(sink);
+    }
+
+    /// Load a ProgramImage: low addresses → flash; data-space addresses → SRAM.
+    pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
+        for seg in &image.segments {
+            let addr = seg.start_addr;
+            if addr < 0x8000 {
+                self.load_flash(addr as u32, &seg.data);
+            } else if let Some(d) = strip_avr_data_bias(addr) {
+                for (i, b) in seg.data.iter().enumerate() {
+                    let a = d as u16 + i as u16;
+                    if a >= SRAM_START && a <= RAMEND {
+                        self.sram[(a - SRAM_START) as usize] = *b;
+                    }
+                }
+            } else if addr >= SRAM_START as u64 && addr <= RAMEND as u64 {
+                for (i, b) in seg.data.iter().enumerate() {
+                    let a = addr as u16 + i as u16;
+                    if a >= SRAM_START && a <= RAMEND {
+                        self.sram[(a - SRAM_START) as usize] = *b;
+                    }
+                }
+            }
+        }
+        self.pc = image.entry_point as u32 & !1;
     }
 
     fn push_byte(&mut self, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
@@ -876,6 +913,10 @@ impl Avr {
 }
 
 impl Cpu for Avr {
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.r = [0; 32];
         self.pc = 0;
