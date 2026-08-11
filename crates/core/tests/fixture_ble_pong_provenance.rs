@@ -32,9 +32,7 @@
 //! `.ino`; nothing short of compiling can. What they do prove is that the pair
 //! is the pair somebody last recorded, so neither file can move alone and
 //! silently. The only way to land a NEW pair is to actually rebuild the image
-//! (recipe in the failure message), and the only way to notice that the OWNER
-//! edited the live project is `scripts/ci/check-published-lab-drift.sh`, which
-//! compares the committed sketch against api.labwired.com from a networked lane.
+//! (recipe in the failure message).
 
 use std::path::PathBuf;
 

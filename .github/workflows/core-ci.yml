@@ -592,21 +592,6 @@ jobs:
       - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
         run: cargo test -p labwired-core --test fixture_ble_pong_provenance
 
-      # The LIVE-published-lab drift check deliberately does NOT run here.
-      #
-      # It asks api.labwired.com whether the owner has since edited the live
-      # project. That is a useful thing to know, but it is not a property of
-      # the pull request: a published lab is a living product artifact and is
-      # SUPPOSED to change. Asserting it as a required merge gate meant one
-      # ordinary lab edit blocked every PR in the repo — which is exactly what
-      # happened, blocking four unrelated PRs at once — and it also put a
-      # third-party network call on the critical path of every merge.
-      #
-      # It still runs on push-to-main and on the nightly cron (see
-      # `core-integrity`), where a lab edit reports a finding instead of
-      # halting the repo. That lane is what catches the case no PR causes:
-      # the owner editing the live project between merges.
-
   # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
   #
   # THE LANE THAT DID NOT EXIST PRE-MERGE.
@@ -855,27 +840,12 @@ jobs:
       # minutes in debug. It is the only lane that runs two ESP32-C3 instances
       # against each other over the BLE air, which is where "both nodes have the
       # same address" hid.
-      # Run the drift check BEFORE the release-gated world test below, so a red
-      # lane says "the published lab moved" rather than leaving someone to infer
-      # it from a two-node BLE failure. This is now the ONLY lane that runs it —
-      # `pr-gate` deliberately does not, because a published lab is supposed to
-      # change and one edit there blocked every PR in the repo. Here it is a
-      # monitor rather than a merge gate, and it covers the case nobody's PR
-      # causes: the owner editing the live project between merges. On
-      # push-to-main and on the nightly cron this is the only lane that looks
-      # at production at all.
-      - name: BLE Pong fixture drift (committed .ino ↔ LIVE published lab)
-        run: scripts/ci/check-published-lab-drift.sh
 
-      # ⚠ EVERY ENGINE GATE BELOW CARRIES `if: !cancelled()`, AND THE STEP ABOVE
-      # IS WHY. The drift check reads production over the network, so it fails
-      # for reasons that have nothing to do with the commit — and a failed step
-      # skips the rest of the job by default. On 2026-08-09 it went red at 15:53
-      # because the owner edited the published sketch. #908 merged 46 minutes
-      # later and broke `world_esp32c3_ble_pong` (two C3 nodes stopped electing
-      # a host); that test sits in the step below and DID NOT RUN for the next
-      # 29 hours, on that merge or any after it. A third-party monitor must
-      # never be able to stand in front of this repo's own gates.
+      # EVERY ENGINE GATE BELOW CARRIES `if: !cancelled()` so that a failure in
+      # an earlier step reports alongside, not instead of, this job's own
+      # release gates — a failed step skips the rest of the job by default, and
+      # these lanes are too load-bearing to disappear silently behind an
+      # unrelated red.
 
       # `esp32c3_usb_cdc_console` is here for COST, not because it is
       # release-only: same reason as `world_esp32c3_ble_pong` above. It boots

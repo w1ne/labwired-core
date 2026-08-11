@@ -9,20 +9,18 @@
 //! IT IS A FROZEN COPY, NOT A LIVE FETCH. CI has no network, so this test runs
 //! a COMMITTED flash image (`fixtures/esp32c3-ble-pong-flash.bin`) built from a
 //! COMMITTED copy of the sketch (`fixtures/esp32c3-ble-pong.ino`). Nothing here
-//! contacts api.labwired.com. Two separate mechanisms keep that copy honest,
-//! and neither is optional:
+//! contacts api.labwired.com, and nothing should: a published lab is a living
+//! product artifact and is SUPPOSED to change, so this test must not depend on
+//! what the owner has on the live site today.
 //!
-//! * `tests/fixture_ble_pong_provenance.rs` pins the sha256 of BOTH files, so
-//!   editing the `.ino` without rebuilding the `.bin` — or swapping the `.bin`
-//!   without recording which source it came from — fails there instead of
-//!   silently testing firmware nobody runs. It is not `cfg`-gated, so unlike
-//!   this file it also runs on PRs. That is exactly how this file rotted once
-//!   already: the fixture was frozen at the #828 build while the published
-//!   sketch moved on repeatedly, and the test stayed green against firmware
-//!   that no longer existed — while the lab was visibly broken in the browser.
-//! * `scripts/ci/check-published-lab-drift.sh` runs in a networked lane and fails if
-//!   the OWNER edits the live project so it no longer matches the committed
-//!   `.ino`. A hash pinned in-tree cannot notice that on its own.
+//! `tests/fixture_ble_pong_provenance.rs` pins the sha256 of BOTH files, so
+//! editing the `.ino` without rebuilding the `.bin` — or swapping the `.bin`
+//! without recording which source it came from — fails there instead of
+//! silently testing firmware nobody runs. It is not `cfg`-gated, so unlike
+//! this file it also runs on PRs. That is exactly how this file rotted once
+//! already: the fixture was frozen at the #828 build while the published
+//! sketch moved on repeatedly, and the test stayed green against firmware
+//! that no longer existed — while the lab was visibly broken in the browser.
 //!
 //! The sketch elects its host over the air: each node publishes its state in
 //! the manufacturer data of its advertisement, and in its scan callback
