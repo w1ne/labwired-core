@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   steps_per_batch=..` line so a caller can prove which loop executed. The default
   `labwired run` for ARM is unchanged.
 
+### Changed
+- **ARMv7-M fault escalation now defaults ON** (#903 shipped it flagged and
+  off). A precise data-access fault on Cortex-M raises BusFault — escalating to
+  HardFault per B1.5.14 when the handler is not enabled — instead of aborting
+  the run with `memory_violation`, and the SCB serves the SHCSR/CFSR/HFSR/
+  MMFAR/BFAR register surface. `LABWIRED_CORTEXM_FAULTS=0` (or `false`) is the
+  process-wide opt-out that keeps the legacy #880 abort contract;
+  `CortexM::set_faults_enabled` remains the per-core override. Instruction
+  fetch, vector-table reads and stacking faults stay on the abort path by
+  design, so `examples/ci/dummy-memory-violation.yaml` is unaffected.
+
 ### Fixed
 - **Two I²C parts powered up in a state silicon never powers up in.** Firmware
   that relies on the documented power-on state worked in simulation and would

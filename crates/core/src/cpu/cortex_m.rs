@@ -251,7 +251,9 @@ impl CortexM {
     }
 
     /// Turn ARMv7-M fault escalation (and the SCB fault register surface) on or
-    /// off. **Default off.** This is the single switch for the whole feature:
+    /// off. The process default is **on** (`LABWIRED_CORTEXM_FAULTS` is the
+    /// opt-out); this is the explicit per-core override, and the single switch
+    /// for the whole feature:
     /// the CPU and the SCB read the same `AtomicBool`, so they cannot disagree
     /// about whether firmware can enable a handler the core will never pend.
     ///
@@ -1189,7 +1191,8 @@ impl CortexM {
     /// address is the faulting instruction — which is what B1.5.6 requires for a
     /// synchronous fault.
     ///
-    /// With fault modelling off (the default) this is `step_execute` verbatim:
+    /// With fault modelling off (the `LABWIRED_CORTEXM_FAULTS` opt-out) this is
+    /// `step_execute` verbatim:
     /// `pending_data_fault` is only ever written on the error path, and the
     /// `Err` is returned unchanged.
     #[inline(always)]
