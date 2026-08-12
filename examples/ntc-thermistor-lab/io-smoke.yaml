@@ -1,11 +1,33 @@
 # LabWired - NTC Thermistor Lab smoke test
-schema_version: "1.0"
+#
+# The assertions below exist because this smoke once passed while the lab was
+# broken twice over: the firmware never enabled the ADC1 clock (so the gated
+# peripheral dropped every write and the EOC poll timed out to adc=0), and the
+# F1 ADC model picked the converted channel from CR2 low bits instead of SQR3
+# SQ1 (so even clocked, the seeded NTC level on channel 0 never reached DR).
+# Banner-only assertions cannot see either failure — the firmware prints
+# "[NTC] iter=" no matter what the ADC does. Assert the CONVERSION: the boot
+# reading must be the 25 °C divider midpoint, and a temperature stimulus must
+# move a later reading in the physically correct direction (NTC resistance
+# falls as it heats, so the pull-down divider output rises).
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/ntc-thermistor-lab"
   system: "./system.yaml"
 limits:
-  max_steps: 200000
+  max_steps: 4000000
 assertions:
   - uart_contains: "NTC Thermistor Lab"
   - uart_contains: "[NTC] iter="
+  # Boot conversion: 25 °C = Vref/2 = 1650 mV = 2047 counts. A dead ADC
+  # (unclocked, or converting a channel with no seed) can never print this.
+  - uart_contains: "[NTC] iter=0 adc=2047/4095"
+  # After the 80 °C stimulus below, some later reading must land in the
+  # 3000..4095 range (80 °C computes to ~3633 counts on this divider; the
+  # range pins the DIRECTION, not the float rounding).
+  - uart_regex: '\[NTC\] iter=[1-9][0-9]* adc=[3-9][0-9]{3}/4095'
   - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "thermistor", channel: "temperature" }
+    trigger: !after_cycles { cycles: 1000000 }
+    value: 80.0

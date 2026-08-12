@@ -113,6 +113,11 @@ impl FromStr for AdcRegisterLayout {
 pub struct F1AdcRegs {
     cr1: u32, // 0x04
     cr2: u32, // 0x08
+    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14). Only SQ1[4:0] — the first (and, on
+    /// this single-shot model, only) regular-sequence channel — is consumed,
+    /// by `advance_conversion`. Reset value 0 selects channel 0, which is what
+    /// firmware that never programs the sequence converts on silicon.
+    sqr3: u32,
 }
 
 /// STM32L4 ADC register file (data `dr` is shared on `Adc`).
@@ -284,8 +289,13 @@ impl Adc {
                 let (cr1, cr2) = self.f1_ctrl();
 
                 // Injected channel value if available; else increment DR for
-                // visual feedback. SQR3 ch fallback uses CR2 low bits (legacy).
-                let ch = (cr2 & 0x1F) as usize;
+                // visual feedback. The converted channel is SQR3 SQ1[4:0]
+                // (RM0008 §11.12.14) — NOT a CR2 bit field: the earlier CR2
+                // low-bits fallback always read ≥ 1 for any firmware that
+                // holds ADON set, so a seeded channel 0 was never returned.
+                // SQR3 resets to 0, so firmware that never programs the
+                // sequence converts channel 0, exactly like silicon.
+                let ch = self.f1_regular_channel();
                 if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
                     self.dr = self.channel_inputs[ch] as u32;
                 } else {
@@ -339,6 +349,15 @@ impl Adc {
             AdcRegs::Stm32F1(r) => (r.cr1, r.cr2),
             // Neither the L4 nor the H7 runs the F1 countdown engine.
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) => (0, 0),
+        }
+    }
+
+    /// Regular channel being converted: SQR3 SQ1[4:0] on the F1 layout; 0 on
+    /// the other families (their engines select from their own SQR1/PCSEL).
+    fn f1_regular_channel(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) => 0,
         }
     }
 
@@ -600,6 +619,7 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => self.dr,
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "read");
@@ -644,6 +664,11 @@ impl Peripheral for Adc {
                     }
                     if trigger {
                         self.start_conversion();
+                    }
+                }
+                0x34..=0x37 => {
+                    if let AdcRegs::Stm32F1(r) = &mut self.regs {
+                        r.sqr3 = (r.sqr3 & !mask) | val_shifted;
                     }
                 }
                 _ => {
@@ -791,6 +816,71 @@ mod tests {
         assert!(!adc.converting);
         assert_eq!(adc.dr, 1);
         assert!((adc.sr & (1 << 1)) != 0); // EOC
+    }
+
+    /// RM0008 §11.12.14: the regular channel comes from SQR3 SQ1[4:0], not from
+    /// any CR2 bit field. A seeded channel 5 must land in DR only when SQR3
+    /// selects it; selecting channel 0 must return that channel's seed instead.
+    #[test]
+    fn f1_conversion_channel_comes_from_sqr3_sq1() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 1650); // ch0 ≈ half scale
+        adc.set_channel_input(5, 3300); // ch5 full scale
+
+        // SQR3 read/write round-trips at 0x34.
+        adc.write_u32(0x34, 5).unwrap();
+        assert_eq!(adc.read_u32(0x34).unwrap(), 5);
+
+        let convert = |adc: &mut Adc| {
+            adc.write(0x08, 1).unwrap(); // ADON
+            adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+            for _ in 0..15 {
+                adc.tick();
+            }
+            assert!((adc.sr & (1 << 1)) != 0, "EOC");
+            adc.dr
+        };
+
+        let ch5 = adc.channel_input_count(5) as u32;
+        assert_eq!(convert(&mut adc), ch5, "SQR3 SQ1 = 5 converts channel 5");
+
+        // Re-select channel 0: the next conversion returns the ch0 seed, not a
+        // stale ch5 result. (ADON stays set; SWSTART rising edge retriggers.)
+        adc.write_u32(0x34, 0).unwrap();
+        let ch0 = adc.channel_input_count(0) as u32;
+        assert_eq!(convert(&mut adc), ch0, "SQR3 SQ1 = 0 converts channel 0");
+    }
+
+    /// Firmware that never programs the sequence converts channel 0 — SQR3
+    /// resets to 0 on silicon. This is the ntc-thermistor-lab shape: the demo
+    /// firmware triggers conversions with SQR3 untouched, and the NTC seed on
+    /// channel 0 must reach DR. (The legacy CR2 low-bits fallback read 1 here
+    /// because ADON is CR2 bit 0, so the ch0 seed was never returned.)
+    #[test]
+    fn f1_unwritten_sqr3_converts_channel_zero() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 1650);
+        adc.write(0x08, 1).unwrap(); // ADON, CR2 low bits = 1
+        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, adc.channel_input_count(0) as u32);
+    }
+
+    /// CR2 low bits must NOT influence the converted channel: with SQR3 = 0,
+    /// garbage in CR2[4:0] (here CONT|ADON) still converts channel 0.
+    #[test]
+    fn f1_cr2_low_bits_do_not_select_the_channel() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 1650);
+        adc.set_channel_input(3, 3300);
+        adc.write(0x08, 1 | (1 << 1)).unwrap(); // ADON | CONT
+        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, adc.channel_input_count(0) as u32);
     }
 
     #[test]
@@ -981,10 +1071,13 @@ mod scheduler_diff {
 
     #[test]
     fn f1_single_conversion_walk_identity() {
-        // EOCIE + ADON + SWSTART on channel 3 → 14-cycle countdown → EOC + DR.
+        // EOCIE + ADON + SWSTART on channel 3 (SQR3 SQ1) → 14-cycle countdown →
+        // EOC + DR. The channel is programmed through SQR3 @ 0x34, the register
+        // the model consults since the CR2 low-bits fallback was removed.
         let script = [
             (1u64, Op::Write(0x04, 1 << 5)), // CR1.EOCIE
-            (1, Op::Write(0x08, 1 | 3)),     // CR2.ADON, SQR-fallback channel 3
+            (1, Op::Write(0x34, 3)),         // SQR3.SQ1 = channel 3
+            (1, Op::Write(0x08, 1)),         // CR2.ADON
             (2, Op::Write(0x0B, 1 << 6)),    // CR2.SWSTART (bit 30) → convert
             (20, Op::Write(0x00, 0)),        // read-back settle (no-op SR write)
         ];
@@ -996,9 +1089,10 @@ mod scheduler_diff {
         // CONT + ADON: after the first EOC the engine re-arms and converts again,
         // so the chain must perpetuate across multiple completions.
         let script = [
-            (1u64, Op::Write(0x04, 1 << 5)),        // CR1.EOCIE
-            (1, Op::Write(0x08, 1 | (1 << 1) | 3)), // CR2.ADON | CONT | channel 3
-            (2, Op::Write(0x0B, 1 << 6)),           // SWSTART → first conversion
+            (1u64, Op::Write(0x04, 1 << 5)),    // CR1.EOCIE
+            (1, Op::Write(0x34, 3)),            // SQR3.SQ1 = channel 3
+            (1, Op::Write(0x08, 1 | (1 << 1))), // CR2.ADON | CONT
+            (2, Op::Write(0x0B, 1 << 6)),       // SWSTART → first conversion
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);
