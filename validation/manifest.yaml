@@ -647,8 +647,18 @@ boards:
     # longer stands in for a missing capture; see silicon.last_capture. Note the
     # scope caveat recorded there: the register diff was re-run, the FLASH
     # program-behaviour live-diff was not.
-    drift_ack: 2026-08-10
-    drift_ack_digest: 1a723b165e42c49b19f54091b7254eadd3c16ac53d1ed2f28b3565f40432ae06
+    # 2026-08-12 (#959): peripherals/adc.rs — the F1 regular-channel select moved
+    # off the legacy CR2[4:0] fallback onto SQR3 SQ1[4:0] (RM0008 §11.12.14),
+    # with ADC_SQR3 newly stored/readable @ 0x34; the same PR's NTC example
+    # firmware now enables ADC1EN. THIS BOARD'S ADC PATH IS UNTOUCHED: the H563
+    # maps to the L4/modern layout, and every non-test edit is inside F1AdcRegs
+    # or the F1-only advance_conversion channel pick — the L4/H7 arms and the
+    # synchronous L4 conversion path are byte-unchanged. The remaining diff is
+    # unit/differential test scripts. No register layout, reset value or byte
+    # path this board's capture pins moved; drift is the shared-file hash only.
+    # Re-capture pending (no H563 probe attached this session).
+    drift_ack: 2026-08-12
+    drift_ack_digest: ac762f3fb959172a6e267b6c9ef22580ace1d6a488e32ee8e083001cba2fc64c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1531,8 +1541,15 @@ boards:
     # Merged 2026-08-10: the discharge recorded above applies to the tree as it
     # stood at that live capture. The acks below cover model changes that
     # postdate it and are NOT evidenced by that capture.
-    drift_ack: 2026-08-10
-    drift_ack_digest: fe9aeec8dda6854ca6ba421e77bebbc1a10b5239429a8b3abc47303cac5e1f67
+    # 2026-08-12 (#959): peripherals/adc.rs — the F1 regular-channel select moved
+    # to SQR3 SQ1[4:0] (RM0008 §11.12.14) and ADC_SQR3 is newly stored @ 0x34;
+    # the same PR's NTC example firmware enables ADC1EN. The L4 ADC engine this
+    # board runs is byte-unchanged: every non-test edit is inside F1AdcRegs or
+    # the F1-only channel pick, and l476_mmio_diff/parity (RCC/GPIO/SPI1/TIM2)
+    # cannot observe the F1 arm at all. Drift is the shared-file hash only.
+    # Re-capture pending (no L476 probe attached this session).
+    drift_ack: 2026-08-12
+    drift_ack_digest: de6d9ab4938346d0ecaf976534becadb42ddb76ae58356cb9523c7ffa0402a02
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -1944,8 +1961,22 @@ boards:
     # Merged 2026-08-10: the discharge recorded above applies to the tree as it
     # stood at that live capture. The acks below cover model changes that
     # postdate it and are NOT evidenced by that capture.
-    drift_ack: 2026-08-10
-    drift_ack_digest: bf4bc6823001078d05c619850a228c985c16420a53de4df0afbc44317fba2529
+    # 2026-08-12 (#959): BEHAVIOURAL, deliberate — peripherals/adc.rs F1
+    # regular-channel select moved from the legacy CR2[4:0] fallback to SQR3
+    # SQ1[4:0] per RM0008 §11.12.14, and ADC_SQR3 @ 0x34 is now stored and
+    # readable (previously unmapped, read 0). The fallback always read >= 1 for
+    # any firmware holding ADON (CR2 bit 0), so a stimulus-seeded channel 0
+    # never reached DR: the ntc-thermistor-lab printed adc=0/4095 (unclocked
+    # ADC1EN — fixed by the same PR's firmware change) and would have printed a
+    # bare DR increment even clocked. The change moves the model TOWARD silicon:
+    # real F1 firmware selects the regular channel in SQR3, and SQR3 resetting
+    # to 0 keeps unwritten-sequence firmware on channel 0. The frozen capture is
+    # unaffected — the tier-1 ADC cell (gated-dead, then ADON/SWSTART -> EOC ->
+    # DR != 0) still converts channel 0 with nothing injected (DR = 1 as
+    # before), and the cell passes unchanged on this branch. ADC channel-select
+    # re-capture pending (no F103 probe attached this session).
+    drift_ack: 2026-08-12
+    drift_ack_digest: d0d040b86d23f01760e689262ee2498dd17cf3cd25e4696103be87cca885dd61
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -2616,8 +2647,18 @@ boards:
     # use. Recorded explicitly because `--write-ack-digests` re-stamps EVERY
     # ack, which would otherwise have widened this one to cover a change
     # nobody had written down.
+    # 2026-08-12 (#959): peripherals/adc.rs — the F1 regular-channel select moved
+    # to SQR3 SQ1[4:0] (RM0008 §11.12.14) and ADC_SQR3 is newly stored/readable
+    # @ 0x34. This board's ADC1 runs the F1 layout (no profile override in its
+    # chip yaml), so the arm IS reachable here — but the tier-1 fixture's adc
+    # cell (ADON/SWSTART -> EOC -> DR != 0, nothing injected) converts channel 0
+    # under the SQR3 reset value exactly as before, and DR = 1 either way.
+    # Recorded explicitly for the same reason as the 2026-08-09 note:
+    # `--write-ack-digests` re-stamps every ack, and this digest now covers the
+    # #959 adc.rs content. No silicon capture exists to re-run (sim-derived
+    # board); the tier-1 fixture lane is the evidence and passes unchanged.
     drift_ack: 2026-07-28
-    drift_ack_digest: 0d7b1c221e916cebed6f697e7f40e05ae3e0ec340e2c7df93e19625e4a61da55
+    drift_ack_digest: 1b88daa372c190647c0e4f4e9f80119760415b103e488884152566895d7edacf
     models:
       - configs/chips/stm32f411ceu6.yaml
       - crates/core/src/peripherals/rcc.rs
