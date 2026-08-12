@@ -20,7 +20,7 @@ use anyhow::{bail, Context, Result};
 use labwired_config::{DeviceDescriptor, RegisterAccess, RegisterSpec, SpiFraming};
 
 use super::declarative_regs::{leak_labs, register_read_bytes, unpack};
-use crate::peripherals::spi::SpiDevice;
+use crate::peripherals::spi::{SpiDevice, SpiSampling};
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
 pub struct GenericSpiDevice {
@@ -43,6 +43,10 @@ pub struct GenericSpiDevice {
 
     channels: &'static [InputChannel],
     component_id: Option<String>,
+    /// How this instance latches the wire. [`SpiSampling::Byte`] unless the
+    /// lab asked for edge-accurate sampling (`config.spi_mode`), so every
+    /// existing manifest keeps the byte-level path it always had.
+    sampling: SpiSampling,
 }
 
 impl GenericSpiDevice {
@@ -112,6 +116,7 @@ impl GenericSpiDevice {
             write_acc: Vec::with_capacity(4),
             channels,
             component_id: None,
+            sampling: SpiSampling::Byte,
         })
     }
 
@@ -119,6 +124,18 @@ impl GenericSpiDevice {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         let channels = super::declarative_i2c::leak_channels(&descriptor);
         Self::from_descriptor(&descriptor, cs_pin.to_string(), channels)
+    }
+
+    /// Strap this instance for edge-accurate sampling in the given SPI mode
+    /// (0..=3, bit 1 = CPOL, bit 0 = CPHA) — the part's own clock mode, as its
+    /// datasheet states it. Without this call the device stays on the default
+    /// byte-level path and never sees a clock edge.
+    pub fn set_spi_mode(&mut self, mode: u8) -> Result<()> {
+        if mode > 3 {
+            bail!("spi_mode {mode} is not a SPI mode (0..=3)");
+        }
+        self.sampling = SpiSampling::edge_mode(mode);
+        Ok(())
     }
 
     fn find_register(&self, addr: u8) -> Option<&RegisterSpec> {
@@ -196,6 +213,10 @@ impl GenericSpiDevice {
 }
 
 impl SpiDevice for GenericSpiDevice {
+    fn sampling(&self) -> SpiSampling {
+        self.sampling
+    }
+
     fn cs_pin(&self) -> &str {
         &self.cs_pin
     }
@@ -350,11 +371,18 @@ fn leak_metadata(
         .and_then(|m| m.summary.clone())
         .unwrap_or_else(|| "Declarative SPI device.".to_string());
     let config_keys: &'static [ConfigKey] = Box::leak(
-        vec![ConfigKey {
-            name: "cs_pin",
-            ty: ConfigType::Str,
-            doc: "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\").",
-        }]
+        vec![
+            ConfigKey {
+                name: "cs_pin",
+                ty: ConfigType::Str,
+                doc: "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\").",
+            },
+            ConfigKey {
+                name: "spi_mode",
+                ty: ConfigType::Int,
+                doc: "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange.",
+            },
+        ]
         .into_boxed_slice(),
     );
     Box::leak(Box::new(KitMetadata {
@@ -382,7 +410,18 @@ impl PeripheralKit for DeclarativeSpiKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        let device = GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels)?;
+        let mut device =
+            GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels)?;
+        // Opt-in, per lab: `config: { spi_mode: N }` straps this part for
+        // edge-accurate sampling in ITS mode, so a controller programmed for a
+        // different CPOL/CPHA corrupts the exchange the way silicon does.
+        // Absent — which is every manifest that exists today — leaves the
+        // byte-level path untouched.
+        if let Some(mode) = ctx.config_i64("spi_mode") {
+            let m = u8::try_from(mode)
+                .map_err(|_| anyhow::anyhow!("spi_mode {mode} is not a SPI mode (0..=3)"))?;
+            device.set_spi_mode(m)?;
+        }
         ctx.attach_spi_device(Box::new(device))
     }
 }

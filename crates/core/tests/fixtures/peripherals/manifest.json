@@ -1974,6 +1974,11 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange."
         }
       ],
       "labs": [],
@@ -2013,6 +2018,11 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange."
         }
       ],
       "labs": [
