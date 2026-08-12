@@ -206,7 +206,15 @@ fn build_node(flash: &[u8], lab: &LabAir, node_id: &str) -> Node {
             // Unpinned: each node is its own die, exactly as the browser builds
             // one bridge per MCU on the canvas.
             pinned_efuse_mac: None,
-            usb_serial_sink: None,
+            // The board contract builds native-USB ESP boards with
+            // ARDUINO_USB_CDC_ON_BOOT=1 (monorepo 26d37c11d: a SuperMini's USB-C
+            // is the C3's own USB-Serial-JTAG, so that is where `Serial`
+            // prints). UART0 then carries only the ROM/bootloader banner; every
+            // sketch byte this test asserts on comes out of the USB-CDC port,
+            // which natively has no sink unless wired here. Without this the
+            // console is the banner and nothing else — the #927 "empty
+            // console", which was a capture gap, not a boot failure.
+            usb_serial_sink: Some(serial.clone()),
         },
         |c| c,
     );

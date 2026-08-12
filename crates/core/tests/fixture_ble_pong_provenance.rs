@@ -55,11 +55,11 @@ fn sha256_hex(bytes: &[u8]) -> String {
 /// `c477f82961e86f601e7b908ae7e12311`, field `source_code` (identical to
 /// `firmware[0].source_code` — the lab's premise is ONE image on both chips).
 const SKETCH: &str = "esp32c3-ble-pong.ino";
-const SKETCH_SHA256: &str = "8dcfc4805a9f5ac08fba3a78c1bec142e45e8973bd6c9705724c7a823578d31a";
+const SKETCH_SHA256: &str = "3b4d793e9b129784e94002a04dd00dc1ba0a5191a8700e413a47d2301d69245f";
 
 /// The merged 4 MB flash the hosted PlatformIO toolchain builds from `SKETCH`.
 const FLASH: &str = "esp32c3-ble-pong-flash.bin";
-const FLASH_SHA256: &str = "f3cc324f64d6d8342c66c252ff886a4b79e3de575fb9d055b3c600137a21ad28";
+const FLASH_SHA256: &str = "1789ebcb62fcd6d72dd4eb88718a8efd2c6da74ff5df0793509e3892653f66e0";
 
 /// How to mint a new pair. Printed on failure, because a hash mismatch with no
 /// recipe just gets the constant hand-edited to whatever the file now hashes

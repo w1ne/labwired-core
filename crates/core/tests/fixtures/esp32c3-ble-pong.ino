@@ -219,9 +219,9 @@ static void draw() {
   oled.fillRect(0, drawLeftY, PADDLE_W, PADDLE_H, SSD1306_WHITE);
   oled.fillRect(W - PADDLE_W, drawRightY, PADDLE_W, PADDLE_H, SSD1306_WHITE);
   oled.fillRect(dbx, dby, 2, 2, SSD1306_WHITE);
-  oled.setTextSize(1);
+  oled.setTextSize(2);
   oled.setTextColor(SSD1306_WHITE);
-  oled.setCursor(W / 2 - 12, 0);
+  oled.setCursor(W / 2 - 18, 0);
   oled.print(dsh); oled.print(":"); oled.print(dsg);
   oled.display();
 }
