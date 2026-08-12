@@ -33,9 +33,10 @@
 //!
 //! * with escalation **on**, a run of valid accesses must pend nothing and leave
 //!   every fault status register at zero;
-//! * with escalation **off** (the default), the #880 abort contract must be
-//!   byte-for-byte what it is today — `Err(MemoryViolation)`, no exception, and
-//!   the fault status registers not even served by the SCB.
+//! * with escalation **off** (the `LABWIRED_CORTEXM_FAULTS=0` opt-out), the
+//!   #880 abort contract must be byte-for-byte what it is today —
+//!   `Err(MemoryViolation)`, no exception, and the fault status registers not
+//!   even served by the SCB.
 
 #[cfg(test)]
 mod tests {
