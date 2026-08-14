@@ -44,7 +44,7 @@ jobs:
       matrix:
         include:
           - { runner: macos-14,         label: macOS 14 arm64 }
-          - { runner: macos-13,         label: macOS 13 x86_64 }
+          - { runner: macos-15-intel,   label: macOS 15 x86_64 }
           - { runner: ubuntu-latest,    label: Ubuntu 24.04 x86_64 }
           - { runner: ubuntu-22.04,     label: Ubuntu 22.04 x86_64 }
           - { runner: ubuntu-24.04-arm, label: Ubuntu 24.04 arm64 }
@@ -176,8 +176,19 @@ jobs:
           '{"mcpServers":{"someone-elses":{"url":"https://example.invalid/mcp"}}}' |
             Set-Content "$env:USERPROFILE\.cursor\mcp.json" -Encoding utf8
 
-      - name: Run the published Windows one-liner
-        shell: ${{ matrix.ps }} {0}
+      # `shell:` cannot take an expression, so the two shells are two steps.
+      # Windows PowerShell 5.1 is the one that ships with Windows and the one
+      # the -AsHashtable merge used to destroy configs on.
+      - name: Run the published Windows one-liner (Windows PowerShell 5.1)
+        if: matrix.ps == 'powershell'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          irm https://labwired.com/mcp.ps1 | iex
+
+      - name: Run the published Windows one-liner (PowerShell 7)
+        if: matrix.ps == 'pwsh'
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           irm https://labwired.com/mcp.ps1 | iex
