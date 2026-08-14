@@ -63,6 +63,16 @@ check "picks v0.21.0 over a newer firmware-demos release (got '$selected')" \
 check "the selector in install.sh is the one under test here" \
   grep -Fq 's/.*"tag_name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$script"
 
+# The API allows 60 unauthenticated requests an hour per address, so resolving
+# through it makes an install fail on a shared address for reasons that have
+# nothing to do with the machine. The install canary hit exactly that on its
+# first run: macOS and Ubuntu 22.04 legs died with "could not resolve a CLI
+# release" while the identical Ubuntu 24.04 leg installed fine.
+check "latest resolves through the un-rate-limited web redirect first" \
+  grep -Fq 'releases/latest' "$script"
+check "the redirect is read from the effective URL, not a parsed body" \
+  grep -Fq 'url_effective' "$script"
+
 no_release="$(printf '[{"tag_name":"firmware-demos-v3"}]' | selector || true)"
 check "an API response with no CLI release selects nothing (got '$no_release')" \
   test -z "$no_release"
