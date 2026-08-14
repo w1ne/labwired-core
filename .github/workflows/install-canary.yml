@@ -145,6 +145,22 @@ jobs:
           labwired run --chip configs/chips/nrf52832.yaml --firmware tests/fixtures/tier1/nrf52832.elf --max-steps 3000000 | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "a clean run exited $LASTEXITCODE on Windows" }
 
+      # Without this, Windows is watched only while the workflow runs. The
+      # daily watchdog alerts on a platform going SILENT, and a platform that
+      # never spoke cannot go silent — so a Windows leg that stopped being
+      # scheduled would look exactly like a Windows leg that is fine.
+      - name: Heartbeat
+        if: success()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $body = '{"surface":"canary","event":"canary_ok","stage":"cli","platform":"windows-latest","channel":"install.sh"}'
+          try {
+            Invoke-RestMethod -Method Post -Uri $env:LABWIRED_TELEMETRY_URL -ContentType 'application/json' -Body $body -TimeoutSec 5 | Out-Null
+          } catch {
+            Write-Host "heartbeat not delivered: $_"
+          }
+
   # ── The distributions people actually run, not the one CI runs ───────────────
   cli-old-distros:
     name: CLI on ${{ matrix.image }} (${{ matrix.arch }})
