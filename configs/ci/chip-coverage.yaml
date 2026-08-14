@@ -1,0 +1,65 @@
+# Chips that ship but that NO CI gate executes firmware on, through the CLI.
+#
+# Enforced by scripts/ci/chip_coverage.py, which never reads this file to decide
+# what IS covered — coverage is derived from what the workflows actually run.
+# This file only carries the gaps, so it cannot be used to claim a chip is fine.
+#
+# The rules the gate enforces on this file:
+#   * a shipped chip with no CLI proof and no entry here FAILS the gate;
+#   * an entry for a chip that has since become covered FAILS (stale excuse);
+#   * an entry for a chip that no longer ships FAILS (stale row);
+#   * `max_uncovered` must EQUAL the number of entries, so closing a gap forces
+#     the ceiling down and it can never drift back up quietly.
+#
+# `kind:`
+#   pending — the path exists (model, fixture, example) and the work is wiring
+#             it into a gate. This is debt with a route out.
+#   waived  — no CLI path exists at all today, with the concrete reason.
+#
+# Same shrink-only contract as KNOWN_GAPS in crates/core/tests/board_coverage_ratchet.rs
+# and SMOKE_LESS_ALLOWLIST in crates/core/tests/strict_onboarding.rs. Do NOT add
+# a row to turn a red gate green — that re-opens the hole the gate exists to close.
+
+max_uncovered: 5
+
+uncovered:
+  esp32s3-zero:
+    kind: waived
+    reason: >-
+      Board variant of esp32s3 (Xtensa LX7). configs/systems/esp32s3-zero.yaml
+      exists but there is no esp32s3.yaml-compatible looping Xtensa fixture, so
+      a generic smoke faults at entry rather than reaching max_steps — the same
+      reason strict_onboarding.rs skips it. Xtensa execution is covered by the
+      hw-oracle Xtensa fixtures and the esp32s3 Arduino matrix cell; this
+      variant descriptor needs its own ELF before a CLI cell can be honest.
+
+  nrf5340:
+    kind: pending
+    reason: >-
+      Boots a real Zephyr ELF (tests/fixtures/nrf5340-zephyr-hello.elf) in
+      firmware_survival.rs, but in-process — nothing drives it through the CLI.
+      configs/systems/nrf5340dk.yaml and the ELF are both committed, so this
+      needs only an io-smoke.yaml plus a coverage-matrix cell.
+
+  rp2350:
+    kind: pending
+    reason: >-
+      crates/firmware-rp2350-demo builds, and rp2350_clkrst_profile.rs pins the
+      reset path, but there is no system manifest or smoke script for it — so
+      no script can be pointed at a gate yet. Needs examples/rp2350-*/ with a
+      system.yaml + io-smoke.yaml, then a matrix cell.
+
+  stm32f405:
+    kind: pending
+    reason: >-
+      examples/feather-f405/{io,uart}-smoke.yaml exist and no workflow runs
+      them. They point at firmware-f401-demo, another chip's ELF, so wiring
+      them in as-is would prove the F405 memory map loads, not that F405
+      firmware runs. Needs an F405-built ELF before the cell is meaningful.
+
+  stm32f767:
+    kind: pending
+    reason: >-
+      Same shape as stm32f405: examples/nucleo-f767zi/{io,uart}-smoke.yaml sit
+      in the tree unrun and reference firmware-f401-demo. Needs a Cortex-M7
+      ELF of its own, then a coverage-matrix cell.
