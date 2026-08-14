@@ -114,6 +114,41 @@ jobs:
           curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
           "$HOME/.local/bin/labwired" --version
 
+  # ── Every chip we document, run with the CLI a user can install ─────────────
+  chips:
+    name: Documented chips on ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Ubuntu 24.04 x86_64 }
+          - { runner: macos-14,      label: macOS 14 arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install with the documented one-liner
+        run: |
+          set -euo pipefail
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Firmware comes from the pinned demo release, so this is the experience
+      # of someone who installed the CLI and cloned the repo: no Rust, no
+      # cross toolchain, no build. Judged on what the firmware printed.
+      - name: Run every documented chip
+        run: bash scripts/ci/docs-runnable-chips.sh "$HOME/.local/bin/labwired"
+
+      - name: Every documented command is one the CLI accepts
+        run: python3 scripts/ci/docs-commands-gate.py "$HOME/.local/bin/labwired"
+
+      - name: Heartbeat
+        if: success()
+        continue-on-error: true
+        run: |
+          curl -fsS -m 5 -X POST "$LABWIRED_TELEMETRY_URL" -H 'content-type: application/json' \
+            -d "{\"surface\":\"canary\",\"event\":\"canary_ok\",\"stage\":\"run\",\"platform\":\"${{ matrix.runner }}\",\"channel\":\"install.sh\"}" || true
+
   # ── The agent one-liner, in every shell the docs' `| sh` can land in ─────────
   mcp-oneliner:
     name: mcp.sh under ${{ matrix.shell }}
@@ -240,7 +275,7 @@ jobs:
   # ── One issue, kept current, when any of the above goes red ─────────────────
   report:
     name: Raise the alarm
-    needs: [cli, cli-old-distros, mcp-oneliner, mcp-windows, packages]
+    needs: [cli, cli-old-distros, chips, mcp-oneliner, mcp-windows, packages]
     if: failure()
     runs-on: ubuntu-latest
     steps:

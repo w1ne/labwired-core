@@ -8,7 +8,7 @@ The GDB server is embedded within the `labwired-cli`. It listens on TCP port `33
 
 ### Starting the Server manually
 ```bash
-labwired --gdb --port 3333 --firmware firmware.elf --system system.yaml
+labwired --gdb 3333 --firmware firmware.elf --system system.yaml
 ```
 
 ## 2. Connecting with GDB

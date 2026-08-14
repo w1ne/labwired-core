@@ -137,7 +137,7 @@ cargo build --release -p labwired-cli
 ### From your terminal
 
 ```sh
-labwired run  --firmware path/to/firmware.elf --system configs/systems/<board>.yaml
+labwired run  --chip configs/chips/<chip>.yaml --firmware path/to/firmware.elf
 labwired test --script  path/to/test.yaml --junit report.xml
 ```
 
