@@ -295,6 +295,15 @@ jobs:
       - name: The shipped CLI is not far behind this tree
         run: bash scripts/ci/release-freshness.sh
 
+      # The endpoint that receives our failure beacons lives in another
+      # repository. A field renamed there, or a value invented here, breaks
+      # reporting in the quietest way available — the endpoint answers 400 to a
+      # caller that ignores the response. Checked on a schedule rather than per
+      # PR, because it is a contract between two repos and a PR here cannot
+      # break or fix the other side.
+      - name: install.sh and the CLI speak the schema the endpoint serves
+        run: bash scripts/ci/telemetry-schema-conformance.sh
+
       # The extension is a product with a distribution channel, and until it is
       # on a registry the only way to install it is downloading a .vsix by
       # hand. That is worth a red light rather than a note in a backlog.

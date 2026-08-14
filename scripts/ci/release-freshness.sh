@@ -16,6 +16,22 @@
 # cause the drift and cannot fix it; a scheduled red is the honest shape — the
 # repo is telling you a release is overdue, not that your change is wrong.
 #
+# Where the thresholds come from, because a gate with invented numbers is an
+# opinion with a red light. Measured over all 18 CLI tags to date:
+#
+#   gap between releases   median 2 days,  p90 32 days,  max 53 days
+#   commits between tags   median 41,      p90 999,      max 2251
+#
+# The cadence is bimodal — bursts of same-day patch tags, then droughts — so a
+# threshold near the median would fire constantly and mean nothing, and one
+# near the max would never fire at all. These are anchored instead to the one
+# drift known to have produced user-visible defects: 984 commits over 18 days,
+# which shipped examples the released CLI could not parse, a board it refused
+# to run, and a chip descriptor it could not read. 250 and 21 sit below that,
+# so the alarm precedes the damage rather than describing it. A policy choice
+# made with the history in view, not a measured optimum — move them when the
+# evidence moves.
+#
 # Usage: scripts/ci/release-freshness.sh [max_days] [max_commits]
 set -uo pipefail
 
@@ -41,6 +57,7 @@ commits="$(git rev-list --count "${latest_tag}..HEAD")"
 printf 'latest release   %s\n' "$latest_tag"
 printf 'age              %s days (limit %s)\n' "$days" "$MAX_DAYS"
 printf 'commits since    %s (limit %s)\n' "$commits" "$MAX_COMMITS"
+printf 'for reference    this repo has shipped every 2 days at the median, and gone 53 at its worst\n'
 
 fail=0
 if [ "$days" -gt "$MAX_DAYS" ]; then
