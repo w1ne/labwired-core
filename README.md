@@ -126,6 +126,24 @@ curl -fsSL https://labwired.com/install.sh -o install.sh   # review it, then:
 sh install.sh
 ```
 
+### Windows
+
+There is a native Windows build — `labwired.exe` and `labwired-dap.exe` — but
+no install script for it; the archive is unpacked by hand. PowerShell 5.1 and
+later have `tar` built in.
+
+```powershell
+$v = "v0.22.1"
+Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$v/labwired-$v-windows-x86_64.tar.gz" -OutFile labwired.tar.gz
+mkdir $env:LOCALAPPDATA\LabWired -Force
+tar -xzf labwired.tar.gz -C $env:LOCALAPPDATA\LabWired
+$env:PATH += ";$env:LOCALAPPDATA\LabWired"
+labwired --version
+```
+
+The VS Code extension does this for you on Windows — it downloads the same
+archive on first use. WSL2 also works and takes the Linux instructions above.
+
 Or build it yourself:
 
 ```sh

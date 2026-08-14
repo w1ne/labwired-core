@@ -85,6 +85,66 @@ jobs:
           curl -fsS -m 5 -X POST "$LABWIRED_TELEMETRY_URL" -H 'content-type: application/json' \
             -d "{\"surface\":\"canary\",\"event\":\"canary_ok\",\"stage\":\"cli\",\"platform\":\"${{ matrix.runner }}\",\"channel\":\"install.sh\"}" || true
 
+  # ── Windows: the archive we ship, run the way the README says to ────────────
+  #
+  # x86_64-pc-windows-msvc has been built and published since v0.22.0 and had
+  # never been EXECUTED anywhere — built, uploaded, downloadable, unproven.
+  # That is the same shape as the Linux archives that shipped needing a glibc
+  # no target distribution had: a green build is not evidence that a binary
+  # runs. The steps below are the README's Windows section, verbatim.
+  cli-windows:
+    name: CLI on Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the way the README says
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = (Invoke-RestMethod 'https://api.github.com/repos/w1ne/labwired-core/releases/latest').tag_name
+          Write-Host "latest release: $tag"
+          $asset = "labwired-$tag-windows-x86_64.tar.gz"
+          Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$tag/$asset" -OutFile labwired.tar.gz
+          New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\LabWired" | Out-Null
+          tar -xzf labwired.tar.gz -C "$env:LOCALAPPDATA\LabWired"
+          "$env:LOCALAPPDATA\LabWired" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: The binary starts, and so does the debug adapter
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = labwired --version
+          Write-Host $out
+          if ($out -notmatch '^labwired-cli \d+\.\d+\.\d+$') { throw "unexpected --version output: $out" }
+          labwired-dap --version
+
+      - name: The README quickstart prints what the README says it prints
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = labwired test --script examples/nrf54l15-dk/io-smoke.yaml 2>&1 | Out-String
+          Write-Host $out
+          foreach ($line in @(
+            'nRF54L15 boot OK',
+            'core=cortex-m33 rram=1524K ram=256K',
+            'uarte20@0x500C6000 gpio2@0x50050400',
+            'regs from MDK/SVD, not nRF52'
+          )) {
+            if (-not $out.Contains($line)) { throw "quickstart no longer prints: $line" }
+          }
+
+      # The change v0.22.1 exists for, on the platform least likely to have
+      # been checked: a fault must be visible in the exit status here too.
+      - name: A run that faults exits non-zero
+        shell: pwsh
+        run: |
+          labwired run --chip configs/chips/nrf52832.yaml --firmware tests/fixtures/tier1/stm32f407.elf --max-steps 200000 | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw "a faulting run exited 0 on Windows" }
+          Write-Host "faulting run exited $LASTEXITCODE"
+          labwired run --chip configs/chips/nrf52832.yaml --firmware tests/fixtures/tier1/nrf52832.elf --max-steps 3000000 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "a clean run exited $LASTEXITCODE on Windows" }
+
   # ── The distributions people actually run, not the one CI runs ───────────────
   cli-old-distros:
     name: CLI on ${{ matrix.image }} (${{ matrix.arch }})
