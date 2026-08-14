@@ -149,6 +149,13 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+    # I2C1 is clock-gated by RCC_APB1ENR.I2C1EN (bit 21) on this part, as
+    # it is on the F407 whose descriptor has always declared it. Without
+    # this the peripheral answers before it is enabled, and firmware that
+    # forgets the gate works here and hangs on silicon.
+    clock:
+      reg: "apb1enr"
+      bit: 21
     config:
       debug_schema: "../peripherals/stm32f767/i2c1.yaml"
       profile: "stm32l4"

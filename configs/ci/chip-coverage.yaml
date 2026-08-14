@@ -20,7 +20,7 @@
 # and SMOKE_LESS_ALLOWLIST in crates/core/tests/strict_onboarding.rs. Do NOT add
 # a row to turn a red gate green — that re-opens the hole the gate exists to close.
 
-max_uncovered: 5
+max_uncovered: 3
 
 uncovered:
   esp32s3-zero:
@@ -48,18 +48,3 @@ uncovered:
       reset path, but there is no system manifest or smoke script for it — so
       no script can be pointed at a gate yet. Needs examples/rp2350-*/ with a
       system.yaml + io-smoke.yaml, then a matrix cell.
-
-  stm32f405:
-    kind: pending
-    reason: >-
-      examples/feather-f405/{io,uart}-smoke.yaml exist and no workflow runs
-      them. They point at firmware-f401-demo, another chip's ELF, so wiring
-      them in as-is would prove the F405 memory map loads, not that F405
-      firmware runs. Needs an F405-built ELF before the cell is meaningful.
-
-  stm32f767:
-    kind: pending
-    reason: >-
-      Same shape as stm32f405: examples/nucleo-f767zi/{io,uart}-smoke.yaml sit
-      in the tree unrun and reference firmware-f401-demo. Needs a Cortex-M7
-      ELF of its own, then a coverage-matrix cell.

@@ -113,9 +113,9 @@
     },
     "stm32f405": {
       "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f407.elf",
-      "expect": "TIER1 clock PASS",
-      "note": "F4 family image; part-compatible, not part-specific."
+      "firmware": "tests/fixtures/tier1/stm32f405.elf",
+      "expect": "TIER1 i2c PASS",
+      "note": "Part-specific TIER1 fixture. Asserts the I2C class, which is where this part differed from its F4 sibling: I2C1 was ungated until the fixture proved it."
     },
     "stm32f407": {
       "how": "committed",
@@ -124,9 +124,9 @@
     },
     "stm32f767": {
       "how": "committed",
-      "firmware": "tests/fixtures/tier1/stm32f407.elf",
-      "expect": "TIER1 clock PASS",
-      "note": "No F7 fixture yet; the F4 TIER1 image exercises this model and prints its transcript."
+      "firmware": "tests/fixtures/tier1/stm32f767.elf",
+      "expect": "TIER1 i2c PASS",
+      "note": "Part-specific TIER1 fixture. Asserts the I2C class, which is where this part differed from its F4 sibling: I2C1 was ungated until the fixture proved it."
     },
     "stm32g474re": {
       "how": "committed",

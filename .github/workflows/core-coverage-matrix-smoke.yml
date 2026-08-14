@@ -121,6 +121,17 @@ jobs:
           - id: kw41z-cow-activity
             script: examples/kw41z-cow-activity/calm.yaml
             system: configs/systems/frdm-kw41z-lcd.yaml
+          # F405 and F767 had no cell at all: their only smokes borrowed
+          # firmware-f401-demo from a sibling part, which needs a build, so no
+          # workflow ran them. Their own TIER1 fixtures are committed blobs, so
+          # these two cells cost seconds and no toolchain — and they are what
+          # found I2C1 answering before its RCC gate on both parts.
+          - id: feather-f405
+            script: examples/feather-f405/tier1-smoke.yaml
+            system: examples/feather-f405/system.yaml
+          - id: nucleo-f767zi
+            script: examples/nucleo-f767zi/tier1-smoke.yaml
+            system: examples/nucleo-f767zi/system.yaml
 
     steps:
       - uses: actions/checkout@v4
