@@ -15,6 +15,10 @@ failures=0
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+# `grep -q` inverted, as a named helper: `check` takes a command, and a bare
+# `! grep …` cannot be passed as one.
+lacks() { ! grep -qi -- "$1" "$2"; }
+
 check() {
   local description=$1
   shift
@@ -82,8 +86,9 @@ set -e
 check "a missing archive exits non-zero" test "$code" -ne 0
 check "a missing archive asks before building from source" \
   grep -q "LABWIRED_FROM_SOURCE=1" <<<"$out"
+printf '%s' "$out" > "$tmp/missing-archive.out"
 check "a missing archive does not install rustup behind the user's back" \
-  bash -c '! grep -qi "installing via rustup" <<<"$0"' "$out"
+  lacks "installing via rustup" "$tmp/missing-archive.out"
 
 # ── 5. Verification runs the binary, and reports what it saw ────────────────
 check "the installer runs the binary it installed" grep -q 'verify_install' "$script"
