@@ -276,7 +276,7 @@ if [[ -f "$dockerignore" ]]; then
   done
 fi
 
-require_literal "$action" 'default: "v0.21.0"' 'core action defaults to the supported public release'
+require_literal "$action" 'default: "v0.22.0"' 'core action defaults to the supported public release'
 action_inputs=$(awk '
   /^inputs:$/ { inside = 1; next }
   inside && /^[^[:space:]]/ { exit }
@@ -525,9 +525,9 @@ require_literal docs/configuration_reference.md 'including `{}` and `null`' 'con
 require_literal docs/configuration_reference.md 'stop_when_assertions_pass' 'configuration reference documents world assertion completion'
 require_literal examples/egress-demo/README.md 'config` is a closed mapping' 'egress example documents its closed config mapping'
 require_literal examples/egress-demo/README.md 'positive integer' 'egress example documents buffer_max type validation'
-require_literal Cargo.toml 'version = "0.21.0"' 'workspace metadata uses the current release version'
+require_literal Cargo.toml 'version = "0.22.0"' 'workspace metadata uses the current release version'
 require_literal CHANGELOG.md '## [0.21.0] - 2026-07-27' 'changelog records the current release version'
-require_literal README.md 'LABWIRED_VERSION=v0.21.0' 'public README pins the current release version'
+require_literal README.md 'LABWIRED_VERSION=v0.22.0' 'public README pins the current release version'
 require_absent_literal README.md 'LABWIRED_VERSION=v0.20.0' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then
