@@ -1,0 +1,29 @@
+# LabWired — RP2350 boot + UART0 smoke test
+#
+# The last chip in configs/ci/chip-coverage.yaml. crates/firmware-rp2350-demo
+# built and rp2350_clkrst_profile.rs pinned the reset path, but there was no
+# system manifest and no script, so no workflow could execute the chip at all.
+#
+# What this proves that the reset-path test does not: a cortex-m-rt image boots
+# from the XIP flash base (0x1000_0000), reaches `main`, and its writes reach
+# the PL011 at the RP2350 UART0 base 0x4007_0000 — which is NOT the RP2040 base.
+# A descriptor that regressed to the RP2040 address map would still pass
+# rp2350_clkrst_profile.rs and would print nothing here.
+#
+# The firmware MUST be built from crates/firmware-rp2350-demo, not from the
+# workspace root: the linker script comes from that crate's own
+# .cargo/config.toml (`-C link-arg=-Tlink.x`), and cargo reads config from the
+# working directory's ancestors, not from the package being built. Built at the
+# root the ELF links with entry 0x0, boots nowhere, and prints nothing — so the
+# UART assertion below catches it, and the matrix cell checks the entry point
+# straight after the build so that failure says which mistake it was.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  # The firmware's own marker, out of UART0 at the RP2350 base.
+  - uart_contains: "RP2350_SMOKE_OK"
+  - expected_stop_reason: max_steps

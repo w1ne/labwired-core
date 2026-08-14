@@ -152,6 +152,30 @@ jobs:
           - id: nrf5340dk-zephyr
             script: examples/nrf5340dk/zephyr-smoke.yaml
             system: examples/nrf5340dk/system.yaml
+          # RP2350 — the last chip in configs/ci/chip-coverage.yaml. The model,
+          # the reset-path test and this firmware all existed; there was no
+          # system manifest, so no script could name them together and no
+          # workflow executed the chip.
+          #
+          # `build_dir` is not decoration: the linker script comes from the
+          # crate's OWN .cargo/config.toml (`-C link-arg=-Tlink.x`), and cargo
+          # reads config from the working directory's ancestors, not from the
+          # package it is building. Built from the workspace root the same
+          # command links entry 0x0 (measured, both ways) and the firmware
+          # boots nowhere. The entry-point guard below names that failure
+          # instead of leaving it as a silent empty UART.
+          #
+          # Non-vacuity checked: on the rp2040 descriptor — whose UART0 sits at
+          # 0x4003_4000, not the RP2350's 0x4007_0000 — the same script captures
+          # zero UART bytes and drops to 1/2.
+          - id: rp2350-demo
+            target: thumbv8m.main-none-eabi
+            crate: firmware-rp2350-demo
+            build_dir: crates/firmware-rp2350-demo
+            profile: release
+            profile_dir: release
+            script: examples/rp2350-demo/io-smoke.yaml
+            system: examples/rp2350-demo/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -159,7 +183,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,riscv32i-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -183,12 +207,33 @@ jobs:
 
       - name: Build matrix firmware
         if: matrix.crate != ''
+        # `build_dir` (default: the workspace root) is the directory cargo runs
+        # IN, which is not the same question as which package it builds. A crate
+        # whose linker script comes from its own .cargo/config.toml must be
+        # built from inside itself — see the rp2350-demo cell.
+        working-directory: ${{ matrix.build_dir || '.' }}
         run: |
           if [ "${{ matrix.profile }}" = "release" ]; then
             cargo build -p "${{ matrix.crate }}" --release --target "${{ matrix.target }}"
           else
             cargo build -p "${{ matrix.crate }}" --target "${{ matrix.target }}"
           fi
+
+      # A firmware that linked with entry 0x0 boots nowhere and prints nothing,
+      # so the smoke below fails with an empty UART and no clue why. Say it here.
+      - name: Firmware must not have linked with entry 0x0
+        if: matrix.crate != ''
+        run: |
+          set -euo pipefail
+          elf="target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}"
+          entry=$(python3 -c "import struct,sys;print(struct.unpack_from('<I',open(sys.argv[1],'rb').read(),0x18)[0])" "$elf")
+          if [ "$entry" -eq 0 ]; then
+            echo "::error::$elf linked with entry 0x0 — its linker script was not applied."
+            echo "::error::Cargo reads .cargo/config.toml from the working directory, not the package."
+            echo "::error::Set build_dir on this matrix cell to the crate's own directory."
+            exit 1
+          fi
+          printf 'entry point 0x%08x\n' "$entry"
 
       - name: Run matrix smoke
         run: |

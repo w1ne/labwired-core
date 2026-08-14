@@ -19,14 +19,14 @@
 # Same shrink-only contract as KNOWN_GAPS in crates/core/tests/board_coverage_ratchet.rs
 # and SMOKE_LESS_ALLOWLIST in crates/core/tests/strict_onboarding.rs. Do NOT add
 # a row to turn a red gate green — that re-opens the hole the gate exists to close.
+#
+# The file is EMPTY, and a ceiling of 0 is what keeps it that way: every chip in
+# configs/chips/ is executed by a CLI gate. A new descriptor therefore reddens
+# the gate on the PR that adds it, and the only way to green it is a script and
+# a cell that run the chip — which is the point. Raising `max_uncovered` to park
+# a chip here instead is a regression, not a workaround; it went 8 -> 5 -> 3 ->
+# 2 -> 1 -> 0 and has never gone the other way.
 
-max_uncovered: 1
+max_uncovered: 0
 
-uncovered:
-  rp2350:
-    kind: pending
-    reason: >-
-      crates/firmware-rp2350-demo builds, and rp2350_clkrst_profile.rs pins the
-      reset path, but there is no system manifest or smoke script for it — so
-      no script can be pointed at a gate yet. Needs examples/rp2350-*/ with a
-      system.yaml + io-smoke.yaml, then a matrix cell.
+uncovered: {}
