@@ -95,19 +95,72 @@
       "sha256": "7bb826e01c4118a475eda32279304279ef664b1a9d9cfde74a7f8dcdd517cd70",
       "expect": "KW41Z_LCD_OK"
     },
-
-    "nrf52832": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "nrf5340": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "rp2350": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "esp32s3-zero": { "how": "needs-build", "why": "board variant of esp32s3; no prebuilt firmware of its own" },
-    "stm32f401cdu6": { "how": "needs-build", "why": "board variant of stm32f401; no prebuilt firmware of its own" },
-    "stm32f405": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "stm32f407": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "stm32f767": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "stm32g474re": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "stm32l073": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "stm32wb55": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "stm32wba52": { "how": "needs-build", "why": "no prebuilt demo firmware for this part yet" },
-    "atmega328p": { "how": "needs-build", "why": "AVR firmware is built from examples/arduino-nano-blinky; no prebuilt asset" }
+    "nrf52832": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "nrf5340": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "rp2350": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "esp32s3-zero": {
+      "how": "asset",
+      "firmware": "demo-esp32s3-hello-world.elf",
+      "sha256": "31d8facfc6fc0faeb32a82166d13827a99e6eee77d438ee5a5da2fa9d12ca0ec",
+      "expect": "faithful ROM loaded",
+      "note": "Board variant of esp32s3, and it boots the same image."
+    },
+    "stm32f401cdu6": {
+      "how": "asset",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": "LabWired Playground",
+      "note": "Cortex-M4 STM32F4 built for F401. Family-compatible, not part-specific: it proves this chip model boots an image and talks over its USART, not that every F4 peripheral is exercised."
+    },
+    "stm32f405": {
+      "how": "asset",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": "LabWired Playground",
+      "note": "Cortex-M4 STM32F4 built for F401. Family-compatible, not part-specific: it proves this chip model boots an image and talks over its USART, not that every F4 peripheral is exercised."
+    },
+    "stm32f407": {
+      "how": "asset",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": "LabWired Playground",
+      "note": "Cortex-M4 STM32F4 built for F401. Family-compatible, not part-specific: it proves this chip model boots an image and talks over its USART, not that every F4 peripheral is exercised."
+    },
+    "stm32f767": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "stm32g474re": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "stm32l073": {
+      "how": "blocked",
+      "why": "the released CLI cannot read the shipped descriptor: `cannot parse chip YAML: peripherals[34].clock: invalid type: sequence`. configs/chips/stm32l073.yaml uses a schema newer than v0.21.0 \u2014 another face of the release lag. Re-check on the next release.",
+      "firmware": "demo-nucleo-f401.elf",
+      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
+      "expect": null
+    },
+    "stm32wb55": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "stm32wba52": {
+      "how": "needs-build",
+      "why": "no prebuilt demo firmware for this part yet"
+    },
+    "atmega328p": {
+      "how": "needs-build",
+      "why": "AVR firmware is built from examples/arduino-nano-blinky; no prebuilt asset"
+    }
   }
 }

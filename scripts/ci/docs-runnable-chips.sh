@@ -101,7 +101,11 @@ run_and_judge() { # $1 chip, $2 how, $3 firmware, $4 sha, $5 script, $6 expect â
   fi
   printf '%s' "$out" > "$work/log-$chip"
   grep -q "simulation error" "$work/log-$chip" && { echo "FAULT"; return; }
-  grep -qE "^error:|failed to build system bus" "$work/log-$chip" && { echo "REFUSED"; return; }
+  grep -qE "^error:|failed to build system bus|cannot parse chip YAML" "$work/log-$chip" && { echo "REFUSED"; return; }
+  # A bus fault or a CPU error is a failure even when the CLI keeps going and
+  # prints nothing else; without this, pairing a chip with firmware built for a
+  # different part reads as a silent pass.
+  grep -qE "ERROR .*labwired_core" "$work/log-$chip" && { echo "CHIP_ERROR"; return; }
   if [ -n "$expect" ] && ! grep -qF -- "$expect" "$work/log-$chip"; then echo "SILENT"; return; fi
   echo "OK"
 }
