@@ -418,8 +418,23 @@ jobs:
           python3 -m pytest -q \
             scripts/perf/test_board_perf.py \
             scripts/ci/test_board_matrix.py \
+            scripts/ci/test_chip_coverage.py \
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_generate_validation_status.py
+
+      # The perf gate above answers "is this chip measured". This answers "does
+      # any gate RUN FIRMWARE on it through the CLI", which nothing did: the
+      # Arduino matrix and the coverage matrix both name their cells inline, so
+      # a chip could land in configs/chips/ and be executed by no gate at all.
+      # 8 of 26 were in that state when this landed.
+      #
+      # It reads no list of its own — coverage is derived from the workflows and
+      # board manifests, so a cell deleted from a matrix reddens this on the PR
+      # that deletes it. configs/ci/chip-coverage.yaml carries only the gaps,
+      # with a ceiling that must equal the gap count, so closing one forces the
+      # ceiling down and it cannot creep back. Pure Python, seconds.
+      - name: Chip coverage — every chip executed by a CLI gate, or a written reason
+        run: python3 scripts/ci/chip_coverage.py --report
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the

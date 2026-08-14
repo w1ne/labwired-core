@@ -100,6 +100,27 @@ jobs:
             make: examples/f103-j1939-monitor/firmware
             script: examples/f103-j1939-monitor/j1939-replay.yaml
             system: examples/f103-j1939-monitor/replay-system.yaml
+          # Committed-ELF cells. No `crate`/`make`: the firmware is a checked-in
+          # fixture, so these need no cross toolchain and finish in seconds
+          # (measured 0.05s / 0.09s / 2.4s / 2.3s on this tree).
+          #
+          # All four were found by scripts/ci/chip_coverage.py, which derives
+          # per-chip coverage from what CI actually runs. Each smoke was already
+          # in the tree and PASSING, and executed by no workflow at all — the
+          # same shape as the h735 lab above. They are the only CLI proof for
+          # three chips: nrf54l15, stm32f411ceu6 and mkw41z4.
+          - id: nrf54l15-dk
+            script: examples/nrf54l15-dk/io-smoke.yaml
+            system: examples/nrf54l15-dk/system.yaml
+          - id: nrf54l15-smart-ring
+            script: examples/nrf54l15-smart-ring/io-smoke.yaml
+            system: examples/nrf54l15-smart-ring/system.yaml
+          - id: stm32f411ceu6-blackpill
+            script: examples/stm32f411ceu6-blackpill/io-smoke.yaml
+            system: examples/stm32f411ceu6-blackpill/system.yaml
+          - id: kw41z-cow-activity
+            script: examples/kw41z-cow-activity/calm.yaml
+            system: configs/systems/frdm-kw41z-lcd.yaml
 
     steps:
       - uses: actions/checkout@v4
