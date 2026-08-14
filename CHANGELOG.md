@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`labwired run` exits 3 when the run ends on a simulation fault.** It used to
+  print `simulation error: Memory access violation at 0x…` and exit **0**, so
+  `labwired run … && echo ok` printed `ok` for firmware that died on its second
+  instruction, and any harness judging by exit status read a fault as a pass.
+  Xtensa already exited non-zero on the same class of failure; ARM is now
+  consistent with it, in both the default and `--batched` loops. `--allow-sim-error`
+  restores the old behaviour for callers that own the verdict and read it from
+  the output — the TIER1 matrix takes the protocol lines on stdout as the result
+  and ignores the exit code either way.
+
 ## [0.22.0] - 2026-08-14
 
 The install release. Everything below was found by running the instructions we
