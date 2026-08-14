@@ -35,16 +35,33 @@ jobs:
         with:
           targets: thumbv7em-none-eabihf,thumbv8m.main-none-eabi
 
-      # One line per chip that gains a runnable claim. Keep the ELF name in the
-      # `demo-` shape the other assets use, so the map reads the same either way.
+      # Build each firmware FROM ITS OWN DIRECTORY. Cargo reads
+      # `.cargo/config.toml` from the working directory and its ancestors, not
+      # from the package being built, so `cargo build -p firmware-rp2350-demo`
+      # at the workspace root silently drops that crate's
+      # `-C link-arg=-Tlink.x` and produces an ELF with entry point 0x0 that
+      # faults at 0xfffffffe. Built from its own directory the same crate
+      # links at 0x10000801 and prints RP2350_SMOKE_OK.
+      #
+      # One block per chip that gains a runnable claim. Keep the ELF name in
+      # the `demo-` shape the other assets use, so the map reads the same
+      # either way.
       - name: Build
         run: |
           set -euo pipefail
           mkdir -p out
-          cargo build -p firmware-nrf52832-demo --release --target thumbv7em-none-eabihf
+          (cd crates/firmware-nrf52832-demo && cargo build --release --target thumbv7em-none-eabihf)
           cp target/thumbv7em-none-eabihf/release/firmware-nrf52832-demo out/demo-nrf52832-smoke.elf
-          cargo build -p firmware-rp2350-demo --release --target thumbv8m.main-none-eabi
+          (cd crates/firmware-rp2350-demo && cargo build --release)
           cp target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo out/demo-rp2350-smoke.elf
+
+          # An entry point of 0 means the linker script never applied. Catch it
+          # here rather than as a memory fault three steps later.
+          for elf in out/*.elf; do
+            entry="$(readelf -h "$elf" | awk '/Entry point/ {print $NF}')"
+            echo "$elf entry $entry"
+            [ "$entry" != "0x0" ] || { echo "::error::$elf linked with no entry point"; exit 1; }
+          done
 
       # An ELF that does not run on its own chip is not a demo. Prove it here,
       # with the same released CLI a reader would install, before it is
@@ -66,7 +83,7 @@ jobs:
             echo "ok  $1 <- $2"
           }
           check nrf52832 demo-nrf52832-smoke.elf NRF52832_SMOKE_OK
-          check rp2350   demo-rp2350-smoke.elf   ''
+          check rp2350   demo-rp2350-smoke.elf   RP2350_SMOKE_OK
           exit "$fail"
 
       - name: Digests for the chip map
