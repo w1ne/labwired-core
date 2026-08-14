@@ -76,7 +76,7 @@ Clone the repository, install the CLI, run a firmware. No cross-toolchain needed
 
 ```sh
 git clone https://github.com/w1ne/labwired-core && cd labwired-core
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.22.0 sh
 labwired test --script examples/nrf54l15-dk/io-smoke.yaml
 ```
 
@@ -110,7 +110,7 @@ UART output and `--json` stay on stdout, so pipes keep working.
 The install script covers Linux, macOS, and Windows via WSL2.
 
 ```sh
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.22.0 sh
 ```
 
 | Variable | Effect |
@@ -137,7 +137,7 @@ cargo build --release -p labwired-cli
 ### From your terminal
 
 ```sh
-labwired run  --firmware path/to/firmware.elf --system configs/systems/<board>.yaml
+labwired run  --chip configs/chips/<chip>.yaml --firmware path/to/firmware.elf
 labwired test --script  path/to/test.yaml --junit report.xml
 ```
 

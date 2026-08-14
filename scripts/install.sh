@@ -7,6 +7,7 @@
 #   LABWIRED_INSTALL_DIR=~/.local/bin - install directory
 #   LABWIRED_NO_MODIFY_PATH=1        - skip adding to PATH in shell rc
 #   LABWIRED_FROM_SOURCE=1           - skip prebuilt, always build from source
+#   LABWIRED_TELEMETRY=0             - do not report install failures (DO_NOT_TRACK also honoured)
 #
 # MIT License - Copyright (C) 2026 LabWired
 
@@ -18,6 +19,10 @@ DAP_BINARY_NAME="labwired-dap"
 INSTALL_DIR="${LABWIRED_INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${LABWIRED_VERSION:-latest}"
 FROM_SOURCE="${LABWIRED_FROM_SOURCE:-0}"
+TELEMETRY_URL="${LABWIRED_TELEMETRY_URL:-https://api.labwired.com/v1/telemetry/failure}"
+PLATFORM=""
+HOST_CLASS=""
+STAGE="start"
 
 # ── Colours ────────────────────────────────────────────────────────────────────
 red=""
@@ -38,7 +43,39 @@ fi
 info()  { printf '%s  %s%s\n' "${cyn}→${rst}" "$*" "${rst}"; }
 ok()    { printf '%s  %s%s\n' "${grn}✓${rst}" "$*" "${rst}"; }
 warn()  { printf '%s  %s%s\n' "${ylw}!${rst}" "$*" "${rst}"; }
-die()   { printf '%s  %s%s\n' "${red}✗${rst}" "$*" "${rst}" >&2; exit 1; }
+
+# ── Failure reporting ──────────────────────────────────────────────────────────
+# Every exit path reports one enumerated field set — no paths, no user data, no
+# free text. This is the only signal we have that an install broke on a machine
+# we do not own: the 2026-08 outage (a `latest` tag with no CLI archive, and a
+# Linux binary that needed a newer glibc than the distro shipped) was invisible
+# for two weeks because a failing install told nobody. `$1` is the event, `$2`
+# the enumerated class. Never blocks the install: 2 s budget, failures ignored.
+beacon() {
+  if [ "${LABWIRED_TELEMETRY:-1}" = "0" ] || [ -n "${DO_NOT_TRACK:-}" ]; then
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    return 0
+  fi
+  curl -fsS -m 2 -X POST "$TELEMETRY_URL" \
+    -H 'content-type: application/json' \
+    -d "{\"surface\":\"installer\",\"event\":\"$1\",\"stage\":\"${STAGE}\",\
+\"error_class\":\"$2\",\"platform\":\"${PLATFORM:-unknown}\",\
+\"release\":\"${VERSION:-unknown}\",\"host_class\":\"${HOST_CLASS:-unknown}\",\
+\"channel\":\"install.sh\"}" >/dev/null 2>&1 || true
+  return 0
+}
+
+# `die <error_class> <message>` — the class is enumerated and reported, the
+# message is for the human in front of the terminal only.
+die() {
+  _class="$1"
+  shift
+  beacon install_fail "$_class"
+  printf '%s  %s%s\n' "${red}✗${rst}" "$*" "${rst}" >&2
+  exit 1
+}
 # ── Banner ─────────────────────────────────────────────────────────────────────
 print_banner() {
   _c="${cyn}"
@@ -83,10 +120,20 @@ detect_platform() {
   else
     PLATFORM=""
   fi
+
+  # The host's C library / OS version. This is the field that names a
+  # "binary installed but will not start" failure without a bug report.
+  if [ "$_os_tag" = "linux" ]; then
+    HOST_CLASS="glibc-$(ldd --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+$' || echo unknown)"
+  elif [ "$_os_tag" = "darwin" ]; then
+    HOST_CLASS="macos-$(sw_vers -productVersion 2>/dev/null | cut -d. -f1 || echo unknown)"
+  else
+    HOST_CLASS="unknown"
+  fi
 }
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-need_cmd() { command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1 — please install it and retry."; }
+need_cmd() { command -v "$1" >/dev/null 2>&1 || die missing_command "Required command not found: $1 — please install it and retry."; }
 
 check_downloader() {
   if command -v curl >/dev/null 2>&1; then
@@ -94,7 +141,7 @@ check_downloader() {
   elif command -v wget >/dev/null 2>&1; then
     DOWNLOADER="wget"
   else
-    die "Neither curl nor wget found. Please install one and retry."
+    die no_downloader "Neither curl nor wget found. Please install one and retry."
   fi
 }
 
@@ -117,16 +164,59 @@ download_stdout() {
   fi
 }
 
+# Resolve "latest" to the newest CLI release — and ONLY to a CLI release.
+#
+# `/releases/latest` returns the newest non-prerelease of ANY kind. This repo
+# also publishes asset-only releases (`firmware-demos-vN`, playground demo
+# ELFs), and on 2026-08-01 one of those became "latest": every unpinned
+# `curl … | sh` then asked for labwired-firmware-demos-v3-<platform>.tar.gz,
+# got a 404, and silently escalated to a from-source build. So filter the
+# release list to vMAJOR.MINOR.PATCH here rather than trusting the endpoint —
+# the same guard `.github/actions/labwired-test/action.yml` already applies to
+# its `version` input.
 resolve_version() {
   if [ "$VERSION" = "latest" ]; then
+    STAGE="resolve"
     info "Resolving latest version..."
-    _api="https://api.github.com/repos/${REPO}/releases/latest"
-    _json="$(download_stdout "$_api" 2>/dev/null)" || true
-    VERSION="$(printf '%s' "$_json" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
-    if [ -z "$VERSION" ]; then
-      warn "Could not resolve latest version from GitHub API — will build from source."
-      VERSION=""
+
+    # First choice is the web redirect, NOT the API. `github.com/<repo>/releases/latest`
+    # redirects to `/releases/tag/<tag>`, needs no token, and — unlike a bare
+    # API call — is not rate limited per IP. That matters more than it sounds:
+    # the API allows 60 unauthenticated requests an hour per address, so on a
+    # shared address (CI, an office, a container host) an install can fail for
+    # reasons that have nothing to do with this machine. The redirect also
+    # excludes prereleases, which is how demo-firmware tags stay out of it.
+    _tag=""
+    if [ "$DOWNLOADER" = "curl" ]; then
+      _tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        "https://github.com/${REPO}/releases/latest" 2>/dev/null | sed 's#.*/tag/##')"
     fi
+    case "$_tag" in
+      v[0-9]*.[0-9]*.[0-9]*) VERSION="$_tag" ;;
+      *) _tag="" ;;
+    esac
+
+    # Fall back to the release list, filtered to CLI releases. Reached when the
+    # redirect is unavailable (wget, a proxy that eats redirects) or points at
+    # something that is not a CLI release.
+    if [ -z "$_tag" ]; then
+      _api="https://api.github.com/repos/${REPO}/releases?per_page=50"
+      _json="$(download_stdout "$_api" 2>/dev/null)" || true
+      VERSION="$(printf '%s' "$_json" \
+        | sed -n 's/.*"tag_name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
+        | head -1)"
+    fi
+
+    if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+      die no_cli_release "Could not resolve a CLI release (vMAJOR.MINOR.PATCH).
+     GitHub may be rate limiting this address. Pin a version instead:
+       curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh"
+    fi
+  else
+    case "$VERSION" in
+      v[0-9]*.[0-9]*.[0-9]*) : ;;
+      *) die bad_version_pin "LABWIRED_VERSION must be a release tag like v0.21.0, got: ${VERSION}" ;;
+    esac
   fi
 }
 
@@ -137,6 +227,7 @@ install_prebuilt() {
   _archive="${BINARY_NAME}-${_version}-${_platform}.tar.gz"
   _url="https://github.com/${REPO}/releases/download/${_version}/${_archive}"
 
+  STAGE="download"
   info "Downloading prebuilt binary: ${_archive}"
 
   _tmpdir="$(mktemp -d)"
@@ -147,6 +238,7 @@ install_prebuilt() {
     return 1
   fi
 
+  STAGE="extract"
   tar -xzf "$_archive_path" -C "$_tmpdir"
   rm "$_archive_path"
 
@@ -210,6 +302,7 @@ install_from_source() {
     _version_arg="--tag ${VERSION}"
   fi
 
+  STAGE="build"
   ensure_rust
   info "Building labwired from source (this takes a few minutes)..."
 
@@ -224,6 +317,34 @@ install_from_source() {
   INSTALL_DIR="${INSTALL_DIR%/bin}/.cargo/bin"
   [ -d "$INSTALL_DIR" ] || INSTALL_DIR="${HOME}/.cargo/bin"
   ok "Built and installed ${BINARY_NAME} → ${INSTALL_DIR}/${BINARY_NAME}"
+}
+
+# ── Post-install verification ──────────────────────────────────────────────────
+# An installed file is not an installed program. The v0.21.0 Linux archives were
+# built on a runner whose glibc was newer than the distros we tell people to use,
+# so the copy succeeded, the installer printed "Installation complete!", exited
+# 0, and the binary then died with `GLIBC_2.39 not found` the first time anyone
+# ran it. Run it here, while we still hold the context to explain what happened.
+verify_install() {
+  STAGE="verify"
+  _bin="${INSTALL_DIR}/${BINARY_NAME}"
+  [ -x "$_bin" ] || die missing_binary "Install finished but ${_bin} is not there."
+
+  if _out="$("$_bin" --version 2>&1)"; then
+    ok "Verified: ${_out}"
+    return 0
+  fi
+
+  case "$_out" in
+    *GLIBC*|*"libc.so"*|*"not found"*)
+      die glibc_missing "The installed binary cannot start on this system:
+       ${_out}
+     This build needs a newer C library than this distribution provides.
+     Please report it with your distro version: https://github.com/${REPO}/issues" ;;
+    *)
+      die binary_wont_run "The installed binary cannot start on this system:
+       ${_out}" ;;
+  esac
 }
 
 # ── PATH setup ─────────────────────────────────────────────────────────────────
@@ -263,20 +384,27 @@ main() {
 
     # Try prebuilt first
     _prebuilt_ok=0
-    if [ -n "$PLATFORM" ] && [ -n "$VERSION" ]; then
+    if [ -n "$PLATFORM" ]; then
       install_prebuilt "$PLATFORM" "$VERSION" && _prebuilt_ok=1 || true
     fi
 
+    # A missing archive used to fall through to `install_from_source`, which
+    # downloads a whole Rust toolchain and compiles the engine — minutes of
+    # work, gigabytes of disk, and none of it asked for. Building from source
+    # is a fine answer, but it is the user's answer to give.
     if [ "$_prebuilt_ok" = "0" ]; then
       if [ -z "$PLATFORM" ]; then
-        warn "Unsupported platform ($(uname -s)/$(uname -m)) — falling back to source build."
-      else
-        warn "No prebuilt binary available for ${PLATFORM} ${VERSION} — falling back to source build."
+        die unsupported_platform "No prebuilt binary for $(uname -s)/$(uname -m).
+     Build it yourself (installs Rust, takes a few minutes):
+       curl -fsSL https://labwired.com/install.sh | LABWIRED_FROM_SOURCE=1 sh"
       fi
-      install_from_source
+      die asset_404 "No prebuilt binary for ${PLATFORM} at ${VERSION}.
+     Pick another release:  https://github.com/${REPO}/releases
+     Or build from source:  curl -fsSL https://labwired.com/install.sh | LABWIRED_FROM_SOURCE=1 sh"
     fi
   fi
 
+  verify_install
   add_to_path
 
   printf '\n'

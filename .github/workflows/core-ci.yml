@@ -40,6 +40,23 @@ jobs:
       - name: Verify release runner contract
         run: bash scripts/ci/verify-release-runner-contract.sh
 
+      # scripts/install.sh is a shipped artifact — it is what
+      # https://labwired.com/install.sh serves — so it gets tested like one.
+      - name: Verify installer contract
+        run: bash scripts/ci/test-install-script.sh
+
+      # Docs are checked against the RELEASED CLI, not the workspace build:
+      # what a reader can run is whatever they were able to install. The README
+      # told people to pass `--system` to `labwired run` for months; that flag
+      # has never existed on that subcommand.
+      - name: Install the released CLI
+        run: |
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Every documented command is one the CLI accepts
+        run: python3 scripts/ci/docs-commands-gate.py "$HOME/.local/bin/labwired"
+
   # ── Formatting is APPLIED, not demanded (PR only) ─────────────────────────
   #
   # `cargo fmt --all -- --check` used to sit in `pr-gate`, i.e. a REQUIRED
@@ -369,6 +386,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # FIRST, and before the toolchain: this is a pure-Python scan of
+      # crates/**/*.rs with no build, measured at 0.17-0.44s locally. It is
+      # here rather than in core-board-ci.yml's `coverage-staleness` (where
+      # #966 first put it) because that workflow's PR trigger is path-filtered
+      # to configs/**, examples/**, hil/** and platformio/**, which excludes
+      # `crates/**` — so a PR adding a bare `#[ignore]` to a Rust test never
+      # started it. It ran once, on the PR that introduced it, because that PR
+      # edited the workflow file.
+      #
+      # This job is already close to its timeout and the comment above says not
+      # to grow it. That warning is about the multi-minute Rust steps; a
+      # sub-second step that needs no toolchain and runs before the toolchain
+      # is installed cannot move the wall clock. Putting it first also means a
+      # PR with an undocumented ignore fails in seconds, not ten minutes.
+      #
+      # `cargo test` reports ignored tests as a bare count, so which tests are
+      # switched off — and why — was recorded nowhere. An `#[ignore]` WITH a
+      # reason is free; a bare one fails here. The fix is to write the reason,
+      # not to raise the ceiling in the script.
+      - name: Ignored-test inventory is fresh and undocumented ignores have not grown
+        run: python3 scripts/generate_ignored_tests.py --check
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0

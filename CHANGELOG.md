@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`labwired run` exits 3 when the run ends on a simulation fault.** It used to
+  print `simulation error: Memory access violation at 0x…` and exit **0**, so
+  `labwired run … && echo ok` printed `ok` for firmware that died on its second
+  instruction, and any harness judging by exit status read a fault as a pass.
+  Xtensa already exited non-zero on the same class of failure; ARM is now
+  consistent with it, in both the default and `--batched` loops. `--allow-sim-error`
+  restores the old behaviour for callers that own the verdict and read it from
+  the output — the TIER1 matrix takes the protocol lines on stdout as the result
+  and ignores the exit code either way.
+
+## [0.22.0] - 2026-08-14
+
+The install release. Everything below was found by running the instructions we
+publish, on the platforms we claim, rather than by reading them.
+
+### Fixed
+- **The documented one-liner installs a CLI again.** `curl … install.sh | sh`
+  resolved "latest" to `firmware-demos-v3` — an asset-only demo release with no
+  CLI archive — 404'd, and silently escalated to downloading a Rust toolchain
+  and building from source. Dead from 2026-08-01 to 2026-08-14 on every
+  platform.
+- **The Linux archives start on the distributions people run.** They were built
+  on `ubuntu-latest` and required `GLIBC_2.39`, so they could not start on
+  Ubuntu 22.04 LTS, Debian 12 (every Raspberry Pi OS), RHEL 9 or Amazon Linux
+  2023. They are now built against a 2.31 floor, asserted with `readelf`, and
+  started in `debian:12`, `ubuntu:22.04` and `almalinux:9` before the release
+  job may publish.
+- **An install that produced an unusable binary reported success.** The
+  installer now runs what it installed and names the reason when it cannot
+  start.
+- Four documented commands could not run as written, including
+  `labwired run --system …` — that flag has never existed on that subcommand.
+
+### Added
+- **Windows.** `x86_64-pc-windows-msvc` archives ship from this release.
+  Nothing had blocked it; no leg of the release had ever asked for it.
+- **The runner image is published for arm64 as well**, and now carries the
+  released binary instead of a separate rebuild of the same commit. `docker
+  pull` failed outright on Apple Silicon before this.
+- Install failures are reported (enumerated fields only, `LABWIRED_TELEMETRY=0`
+  or `DO_NOT_TRACK` to opt out), and an install canary runs the published
+  instructions every six hours across nine platform legs.
+
+### Changed
+- Shipped binaries are stripped: the Linux archives went from 65 MB to 12 MB.
+
 ### Added
 - **`labwired run --batched`** drives ARM through
   `Machine::advance(AdvanceRequest::run(..))` — the call the browser makes from

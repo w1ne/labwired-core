@@ -145,17 +145,30 @@ for platform in linux-x86_64 linux-aarch64 darwin-x86_64 darwin-aarch64; do
   require_literal "$workflow" "platform: $platform" "archive matrix includes $platform"
 done
 require_literal "$workflow" 'ARCHIVE="labwired-${VERSION}-${PLATFORM}.tar.gz"' 'archive names include the release version and platform'
-require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired" dist/labwired' 'archive package copies the labwired binary'
+require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired${EXE}" "dist/labwired${EXE}"' 'archive package copies the labwired binary'
 # The DAP is the binary VS Code spawns for F5. It was absent from every release
 # through v0.19.2, which made editor debugging work only on machines that had
 # built core from source. Pin it so it cannot be dropped again unnoticed.
 require_literal "$workflow" 'cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }}' 'release builds both the CLI and the debug adapter'
-require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired-dap" dist/labwired-dap' 'archive package copies the labwired-dap binary'
-require_literal "$workflow" 'tar -czf "${ARCHIVE}" -C dist labwired labwired-dap' 'archive package contains both the CLI and the debug adapter'
+require_literal "$workflow" 'cp "target/${{ matrix.target }}/release/labwired-dap${EXE}" "dist/labwired-dap${EXE}"' 'archive package copies the labwired-dap binary'
+require_literal "$workflow" 'tar -czf "${ARCHIVE}" -C dist "labwired${EXE}" "labwired-dap${EXE}"' 'archive package contains both the CLI and the debug adapter'
 require_literal "$workflow" 'name: labwired-${{ matrix.platform }}' 'archive artifact names follow the platform matrix'
 
+# The two guards that would have caught the v0.21.0 Linux archives, which
+# installed fine and then died with `GLIBC_2.39 not found` on Debian 12 and
+# Ubuntu 22.04. Both are pinned here because a build-host bump is exactly the
+# kind of change that quietly removes them.
+require_literal "$workflow" 'container: rust:1.95-bullseye' 'Linux archives are built against an old glibc, not the runner default'
+require_literal "$workflow" 'glibc_max: GLIBC_2.31' 'the Linux glibc floor is declared'
+require_literal "$workflow" 'name: Assert glibc floor' 'the declared glibc floor is asserted on the built binary'
+smoke_block=$(job_block linux-smoke)
+require_block_literal "$smoke_block" "image: 'debian:12-slim'" 'archives are started on Debian 12 before release'
+require_block_literal "$smoke_block" "image: 'ubuntu:22.04'" 'archives are started on Ubuntu 22.04 LTS before release'
+
 release_block=$(job_block release)
-require_block_literal "$release_block" 'needs: build' 'release waits for all archive builds'
+# The release job must wait for the archives AND for the smoke run that proves
+# they start on an older distribution than the build host.
+require_block_literal "$release_block" 'needs: [build, linux-smoke]' 'release waits for all archive builds and the old-distro smoke'
 require_block_literal "$release_block" 'softprops/action-gh-release@v2' 'release creates the GitHub release with action-gh-release'
 require_block_literal "$release_block" 'files: dist/*.tar.gz' 'release uploads every generated archive asset'
 
@@ -163,6 +176,10 @@ require_literal "$workflow" 'packages: write' 'release workflow grants GHCR pack
 require_literal "$workflow" 'docker/setup-buildx-action@v3' 'publish job configures Docker Buildx'
 require_literal "$workflow" 'docker/login-action@v3' 'publish job logs into GHCR'
 require_literal "$workflow" 'docker/build-push-action@v6' 'publish job pushes the runner image'
+# The image is published for both Linux architectures. Publishing amd64 only
+# made `docker pull` fail outright on Apple Silicon and arm64 Linux, which is
+# not a degraded experience — it is no experience.
+require_literal "$workflow" 'platforms: linux/amd64,linux/arm64' 'runner image is published for both Linux architectures'
 
 release_line=$(job_line release || true)
 publish_line=$(job_line publish || true)
@@ -233,9 +250,14 @@ require_block_literal "$smoke_block" 'output-dir: out/release-action-smoke-secon
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/result.json' 'release smoke asserts the second action result JSON exists and is nonempty'
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/junit.xml' 'release smoke asserts the second action writes JUnit in its output directory'
 
-require_literal "$dockerfile" 'FROM rust:1.95-slim-bookworm AS builder' 'runner image builds with Rust 1.95 on bookworm'
-require_literal "$dockerfile" 'FROM debian:bookworm-slim' 'runner image runtime matches the builder libc baseline'
-require_literal "$dockerfile" 'RUN cargo build --release -p labwired-cli --locked' 'runner image builds only the CLI'
+# The image no longer compiles the CLI: it copies the binary out of the release
+# archive this tag published, so the image and the archive are the same bytes
+# and both Linux architectures cost one emulated `apt-get` rather than one
+# emulated Rust build. These three lines are what makes that true.
+require_literal "$dockerfile" 'FROM debian:bookworm-slim' 'runner image runtime is the same base the archives target'
+require_literal "$dockerfile" 'ARG TARGETARCH' 'runner image picks its binary by build platform'
+require_literal "$dockerfile" 'COPY dist/${TARGETARCH}/labwired /usr/local/bin/labwired' 'runner image ships the released binary, not a rebuild of it'
+require_absent_literal "$dockerfile" 'cargo build' 'runner image must not rebuild the CLI — the archive is the artifact'
 require_literal "$dockerfile" 'ARG VERSION' 'runner image accepts a release version build argument'
 require_literal "$dockerfile" 'ARG REVISION' 'runner image accepts a source revision build argument'
 require_literal "$dockerfile" 'org.opencontainers.image.source="https://github.com/w1ne/labwired-core"' 'runner image declares its OCI source label'
@@ -254,7 +276,7 @@ if [[ -f "$dockerignore" ]]; then
   done
 fi
 
-require_literal "$action" 'default: "v0.21.0"' 'core action defaults to the supported public release'
+require_literal "$action" 'default: "v0.22.0"' 'core action defaults to the supported public release'
 action_inputs=$(awk '
   /^inputs:$/ { inside = 1; next }
   inside && /^[^[:space:]]/ { exit }
@@ -383,8 +405,8 @@ require_literal "$backfill_workflow" 'examples/ci/dummy-max-steps.yaml' 'runner 
 require_literal RELEASE_PROCESS.md 'core-backfill-runner-image.yml' 'release process documents the one-time runner image backfill workflow'
 require_literal RELEASE_PROCESS.md 'v0.18.0' 'release process documents the initial v0.18.0 runner image backfill'
 
-safe_action_sha=bfd879522914b586223081c4c89ba315db4a97ed
-safe_action_version=v0.21.0
+safe_action_sha=163737266ff562814bd8c7e5b6271994f1e7c00e
+safe_action_version=v0.22.0
 safe_action_ref="w1ne/labwired-core/.github/actions/labwired-test@${safe_action_sha}"
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md docs/reference_client_flows.md .github/actions/labwired-test/README.md; do
   require_absent_literal "$doc" 'ghcr.io/w1ne/labwired:latest' "$doc does not recommend a mutable runner image tag"
@@ -394,7 +416,7 @@ for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templa
   require_absent_literal "$doc" 'fda6a7bfb0328d9909ee07ba53ed05c84901f627' "$doc does not retain the superseded action pin"
   require_absent_literal "$doc" 'version: v0.18.0' "$doc does not retain the superseded Core release version"
   require_absent_literal "$doc" 'version: v0.19.0' "$doc does not retain the superseded Core release version"
-  require_absent_literal "$doc" 'v0.20.0' "$doc does not retain the superseded Core release version"
+  require_absent_literal "$doc" 'v0.21.0' "$doc does not retain the superseded Core release version"
 done
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/README.md; do
   require_literal "$doc" '--user "$(id -u):$(id -g)"' "$doc keeps bind-mounted container artifacts writable by the caller"
@@ -436,7 +458,7 @@ else
     fail "immutable action-source commit $safe_action_sha contains its action README"
   fi
   if [[ -n "$pinned_action" ]]; then
-    require_block_literal "$pinned_action" 'default: "v0.21.0"' 'pinned action defaults to the supported public release'
+    require_block_literal "$pinned_action" 'default: "v0.22.0"' 'pinned action defaults to the supported public release'
     require_block_literal "$pinned_action" 'https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}' 'pinned action downloads the public release archive'
     pinned_action_inputs=$(awk '
       /^inputs:$/ { inside = 1; next }
@@ -457,7 +479,7 @@ else
     require_block_literal "$pinned_action" 'name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}' 'pinned action gives each invocation a unique artifact name'
   fi
   if [[ -n "$pinned_action_readme" ]]; then
-    require_block_literal "$pinned_action_readme" 'defaults to `v0.21.0`' 'pinned action README states the supported public release'
+    require_block_literal "$pinned_action_readme" 'defaults to `v0.22.0`' 'pinned action README states the supported public release'
     require_block_literal "$pinned_action_readme" '[CI integration guide](../../../docs/ci_integration.md)' 'pinned action README links the canonical consumer guide'
     require_block_literal "$pinned_action_readme" 'intentionally documents the action beside its implementation' 'pinned action README explains its source-local contract'
     require_block_absent_literal "$pinned_action_readme" 'uses: w1ne/labwired-core/.github/actions/labwired-test@' 'pinned action README does not recursively choose its own SHA'
@@ -503,9 +525,9 @@ require_literal docs/configuration_reference.md 'including `{}` and `null`' 'con
 require_literal docs/configuration_reference.md 'stop_when_assertions_pass' 'configuration reference documents world assertion completion'
 require_literal examples/egress-demo/README.md 'config` is a closed mapping' 'egress example documents its closed config mapping'
 require_literal examples/egress-demo/README.md 'positive integer' 'egress example documents buffer_max type validation'
-require_literal Cargo.toml 'version = "0.21.0"' 'workspace metadata uses the current release version'
+require_literal Cargo.toml 'version = "0.22.0"' 'workspace metadata uses the current release version'
 require_literal CHANGELOG.md '## [0.21.0] - 2026-07-27' 'changelog records the current release version'
-require_literal README.md 'LABWIRED_VERSION=v0.21.0' 'public README pins the current release version'
+require_literal README.md 'LABWIRED_VERSION=v0.22.0' 'public README pins the current release version'
 require_absent_literal README.md 'LABWIRED_VERSION=v0.20.0' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then

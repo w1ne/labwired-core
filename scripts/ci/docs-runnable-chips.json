@@ -1,0 +1,158 @@
+{
+  "_comment": [
+    "Every chip this repo documents, and how a person with nothing but the",
+    "installed CLI can run it. Read scripts/ci/docs-runnable-chips.sh for the",
+    "rules; the short version is that each chip must be in exactly one bucket,",
+    "and 'blocked' entries are re-run too so that a fix cannot sit unnoticed.",
+    "",
+    "Firmware comes from the firmware-demos release: prebuilt ELFs, pinned by",
+    "tag AND sha256, so nothing here needs a cross toolchain and a re-uploaded",
+    "asset cannot silently change what the gate proves.",
+    "",
+    "`expect` is a line the firmware itself prints. It is deliberately not an",
+    "exit code: `labwired run` treats a simulation error as a non-fatal end of",
+    "run and still exits 0, so exit status alone proves nothing here."
+  ],
+  "firmware_release": "firmware-demos-v3",
+  "chips": {
+    "esp32": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "esp32s3": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32s3.elf",
+      "expect": "TIER1"
+    },
+    "esp32c3": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32c3.elf",
+      "expect": "TIER1 gpio PASS"
+    },
+    "nrf52840": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/nrf52840.elf",
+      "expect": "TIER1 gpio PASS"
+    },
+    "nrf54l15": {
+      "how": "example",
+      "script": "examples/nrf54l15-dk/io-smoke.yaml",
+      "expect": "nRF54L15 boot OK",
+      "note": "The README quickstart. Firmware is committed, so a clone is enough."
+    },
+    "rp2040": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/rp2040.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32f103": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f103.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32f401": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f401.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32f411ceu6": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f411.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32h563": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32h563.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32h735": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32h735.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32l476": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32l476.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "mkw41z4": {
+      "how": "committed",
+      "firmware": "tests/fixtures/kw41z-smoke.elf",
+      "expect": "KW41Z_SMOKE_OK"
+    },
+    "nrf52832": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/nrf52832.elf",
+      "expect": "TIER1 gpio PASS"
+    },
+    "nrf5340": {
+      "how": "committed",
+      "firmware": "tests/fixtures/nrf5340-zephyr-hello.elf",
+      "expect": "Booting Zephyr OS",
+      "note": "Unmodified upstream Zephyr on the application core."
+    },
+    "rp2350": {
+      "how": "asset",
+      "release": "firmware-demos-v4",
+      "firmware": "demo-rp2350-smoke.elf",
+      "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
+      "expect": "RP2350_SMOKE_OK"
+    },
+    "esp32s3-zero": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32s3.elf",
+      "expect": "TIER1",
+      "note": "Board variant of esp32s3; runs the same TIER1 image."
+    },
+    "stm32f401cdu6": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f401.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Board variant of stm32f401."
+    },
+    "stm32f405": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "F4 family image; part-compatible, not part-specific."
+    },
+    "stm32f407": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32f767": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "No F7 fixture yet; the F4 TIER1 image exercises this model and prints its transcript."
+    },
+    "stm32g474re": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32g474re.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32l073": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32l073.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32wb55": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32wb55.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "stm32wba52": {
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32wba52.elf",
+      "expect": "TIER1 clock PASS"
+    },
+    "atmega328p": {
+      "how": "example",
+      "script": "examples/arduino-nano-blinky/io-smoke.yaml",
+      "expect": null,
+      "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
+    }
+  }
+}
