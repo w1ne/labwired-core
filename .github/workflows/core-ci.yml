@@ -15,9 +15,27 @@ on:
 # PR runs still cancel superseded PR heads. push / schedule / workflow_dispatch
 # each get their own group so a manual full-CI dispatch (or nightly) cannot
 # cancel the push-to-main integrity lane mid-flight (and vice versa).
+#
+# `cancel-in-progress` is now PR-ONLY. Superseding your own PR head is what this
+# is for; superseding a push to main is not. Two things are lost every time a
+# main run is cancelled, and both were happening several times an hour:
+#
+#   1. main's verdict. A cancelled run is not a failed run and not a passing one
+#      — the commit simply has no answer, which is how main sat red unnoticed.
+#   2. main's BUILD CACHE, which is worse than it sounds. `Swatinem/rust-cache`
+#      saves in a post step that a cancellation skips, and GitHub scopes caches
+#      by ref: a pull request can read a cache written on its BASE branch, but
+#      never one written on another PR. So with no `core-ci` cache on
+#      refs/heads/main, EVERY pull request compiles the whole workspace from
+#      scratch — measured at 8m00s of the 13m35s in `pr-workspace-tests` shard 1,
+#      paid three times over because each shard builds independently.
+#
+# Verified before changing this: `gh api .../actions/caches` listed 19 caches
+# and every `v0-rust-core-ci-*` entry was on a `refs/pull/N/merge` ref. Not one
+# on main.
 concurrency:
   group: core-ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.event_name) }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ── Static contract (always on PR; seconds) ────────────────────────────────
@@ -839,6 +857,37 @@ jobs:
   # protection once the timing proves out — requiring the matrix shards
   # individually would couple protection to the shard count.
   #
+  # ── THE TIMING, MEASURED 2026-08-14 (run 31836179346, PR #984) ──
+  #
+  #   shard 1  13m35s     shard 2  12m25s     shard 3  9m59s
+  #
+  # Already well balanced, so RESHARDING IS THE WRONG LEVER. Splitting shard 1
+  # showed where the time actually goes:
+  #
+  #   build   8m00s   (20:04:57 -> 20:12:56, "273 test binaries built")
+  #   tests   5m36s   (20:12:56 -> 20:18:32, 622 passed)
+  #
+  # The build is ~59% of the slowest shard AND is paid three times, because each
+  # shard runs `cargo test --workspace --no-run` independently. Going to 5 shards
+  # would divide only the 5m36s and multiply the 8m00s — roughly 10m best case,
+  # against ~13m now, for two extra runners' worth of compute.
+  #
+  # The build was cold because there was NO cache to restore: the log said
+  # "... Restoring cache ... No cache found.", and `gh api .../actions/caches`
+  # confirmed every `v0-rust-core-ci-*` entry lived on a `refs/pull/N/merge` ref
+  # with none on main. Three causes, all now addressed above:
+  #   * main's runs were cancelled by the next merge (post-step save skipped)
+  #     → `cancel-in-progress` is PR-only;
+  #   * a red `core-integrity` discarded a good target dir
+  #     → `cache-on-failure: true`;
+  #   * PR-ref caches nothing else can read were evicting main's under the
+  #     10 GB repo budget (11.27 GB in use) → this lane is `save-if: false`.
+  #
+  # PROMOTION CRITERION, so this does not stay "for now" forever: once a merge
+  # to main has populated the `core-ci` cache, a PR shard should restore it and
+  # land near the 5m36s test time rather than 13m35s. Confirm that on a real PR,
+  # then add the `pr-workspace-tests` context to branch protection.
+  #
   # Cache key matches `core-integrity` (`core-ci` + rustfmt/clippy components)
   # so the first PR run restores main's warm target dir; see the
   # `pr-scheduler-observable` comment for what happens when the components
@@ -895,10 +944,23 @@ jobs:
       - name: Add ARM target (wasm secure-boot repro firmware)
         run: rustup target add thumbv7em-none-eabi
 
+      # READ-ONLY. This lane restores main's `core-ci` target dir; it must not
+      # write one back, for a reason that is easy to miss: GitHub scopes caches
+      # by ref, so a cache written on `refs/pull/N/merge` can never be read by
+      # another pull request — it only ever helps a second push to the SAME PR —
+      # but it does count against the repo's 10 GB cache budget, and eviction is
+      # LRU across the whole repo.
+      #
+      # Measured while writing this: 11.27 GB in use against that 10 GB limit,
+      # with every single `v0-rust-core-ci-*` entry sitting on a `refs/pull/N`
+      # ref and none on main. Three shards per PR, several PRs a day, each
+      # writing a multi-gigabyte entry nothing else can read — that is what was
+      # evicting the one cache that actually matters. Restoring is still free.
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-ci
+          save-if: false
           workspaces: |
             . -> target
 
@@ -998,10 +1060,23 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # `cache-on-failure` matters more here than anywhere else in this file:
+      # this is the job that WRITES the `core-ci` cache every pull request then
+      # reads. rust-cache defaults to discarding the cache when the job fails,
+      # and a red `core-integrity` is a TEST failure — the compilation that
+      # produced the target dir succeeded, and that target dir is exactly what a
+      # PR needs. Throwing it away means main is red AND every PR is slow, with
+      # the second consequence invisible.
+      #
+      # That was the live state: no `v0-rust-core-ci-*` cache existed on
+      # refs/heads/main at all, so `pr-workspace-tests` logged
+      # "... Restoring cache ... No cache found." and cold-built the workspace in
+      # 8m00s — three times per PR, once per shard.
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-ci
+          cache-on-failure: true
           workspaces: |
             . -> target
 
