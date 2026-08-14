@@ -392,6 +392,28 @@ jobs:
         with:
           fetch-depth: 0
 
+      # FIRST, and before the toolchain: this is a pure-Python scan of
+      # crates/**/*.rs with no build, measured at 0.17-0.44s locally. It is
+      # here rather than in core-board-ci.yml's `coverage-staleness` (where
+      # #966 first put it) because that workflow's PR trigger is path-filtered
+      # to configs/**, examples/**, hil/** and platformio/**, which excludes
+      # `crates/**` — so a PR adding a bare `#[ignore]` to a Rust test never
+      # started it. It ran once, on the PR that introduced it, because that PR
+      # edited the workflow file.
+      #
+      # This job is already close to its timeout and the comment above says not
+      # to grow it. That warning is about the multi-minute Rust steps; a
+      # sub-second step that needs no toolchain and runs before the toolchain
+      # is installed cannot move the wall clock. Putting it first also means a
+      # PR with an undocumented ignore fails in seconds, not ten minutes.
+      #
+      # `cargo test` reports ignored tests as a bare count, so which tests are
+      # switched off — and why — was recorded nowhere. An `#[ignore]` WITH a
+      # reason is free; a bare one fails here. The fix is to write the reason,
+      # not to raise the ceiling in the script.
+      - name: Ignored-test inventory is fresh and undocumented ignores have not grown
+        run: python3 scripts/generate_ignored_tests.py --check
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:

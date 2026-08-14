@@ -22,6 +22,20 @@ What it does
 The ratchet only shrinks. Adding an `#[ignore]` WITH a reason is free — that is
 a documented decision. Adding a bare `#[ignore]` fails the build, and the fix is
 to write the reason, not to raise the number.
+
+Why the doc records a FILE and not a file:line
+----------------------------------------------
+The first version wrote `file:line`. Within the hour it went stale on an
+unrelated pull request: adding 38 lines near the top of `crates/wasm/src/lib.rs`
+shifted seven ignored tests down and the gate went red, with the same 114 tests,
+the same 28 undocumented, and the same reasons — nothing this file exists to
+protect had changed.
+
+That is worse than noise. A gate that fails for a reason unrelated to the change
+teaches the reflex "regenerate and commit until green", and once that reflex is
+trained it will sail past the day the number of undocumented ignores really did
+go up. Line numbers are also the least useful column here: the test NAME is what
+you grep for, and it survives the edit.
 """
 
 from __future__ import annotations
@@ -152,10 +166,10 @@ def render(entries: list[dict]) -> str:
         out.append("")
         out.append("Each of these is a test switched off with nothing saying why.")
         out.append("")
-        out.append("| test | location |")
+        out.append("| test | file |")
         out.append("| --- | --- |")
         for e in sorted(undocumented, key=lambda x: (x["file"], x["line"])):
-            out.append(f"| `{e['test']}` | `{e['file']}:{e['line']}` |")
+            out.append(f"| `{e['test']}` | `{e['file']}` |")
         out.append("")
 
     out.append("## Documented")
@@ -166,11 +180,11 @@ def render(entries: list[dict]) -> str:
             continue
         out.append(f"### {crate}")
         out.append("")
-        out.append("| test | reason | location |")
+        out.append("| test | reason | file |")
         out.append("| --- | --- | --- |")
         for e in sorted(documented, key=lambda x: (x["file"], x["line"])):
             reason = e["reason"].replace("|", "\\|")
-            out.append(f"| `{e['test']}` | {reason} | `{e['file']}:{e['line']}` |")
+            out.append(f"| `{e['test']}` | {reason} | `{e['file']}` |")
         out.append("")
 
     return "\n".join(out) + "\n"
