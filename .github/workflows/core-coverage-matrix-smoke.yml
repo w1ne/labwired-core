@@ -144,6 +144,14 @@ jobs:
           - id: esp32s3-zero
             script: examples/esp32s3-zero/tier1-smoke.yaml
             system: examples/esp32s3-zero/system.yaml
+          # nRF5340: real upstream Zephyr v3.7 hello_world on the application
+          # core. The ELF already booted in firmware_survival.rs, but IN
+          # PROCESS — no CLI ran it, which is why the chip sat in the coverage
+          # ledger. Non-vacuity checked: pointed at the nrf52840-dk system the
+          # same script drops to 1/3, with both banner assertions failing.
+          - id: nrf5340dk-zephyr
+            script: examples/nrf5340dk/zephyr-smoke.yaml
+            system: examples/nrf5340dk/system.yaml
 
     steps:
       - uses: actions/checkout@v4

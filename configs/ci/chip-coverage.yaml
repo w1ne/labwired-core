@@ -20,17 +20,9 @@
 # and SMOKE_LESS_ALLOWLIST in crates/core/tests/strict_onboarding.rs. Do NOT add
 # a row to turn a red gate green — that re-opens the hole the gate exists to close.
 
-max_uncovered: 2
+max_uncovered: 1
 
 uncovered:
-  nrf5340:
-    kind: pending
-    reason: >-
-      Boots a real Zephyr ELF (tests/fixtures/nrf5340-zephyr-hello.elf) in
-      firmware_survival.rs, but in-process — nothing drives it through the CLI.
-      configs/systems/nrf5340dk.yaml and the ELF are both committed, so this
-      needs only an io-smoke.yaml plus a coverage-matrix cell.
-
   rp2350:
     kind: pending
     reason: >-
