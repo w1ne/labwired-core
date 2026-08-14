@@ -1,0 +1,94 @@
+# Build the demo firmware the documented chips are proven with, and publish it.
+#
+# scripts/ci/docs-runnable-chips.json pairs every chip we document with a
+# prebuilt ELF, so that running a supported chip needs an install and nothing
+# else — no Rust, no cross toolchain, no vendor SDK. Chips with no prebuilt
+# firmware are stuck in the `needs-build` bucket, which is a polite way of
+# saying the front page's claim does not hold for them.
+#
+# This is how an ELF gets into that release. It is dispatch-only and additive:
+# a new tag never replaces assets on an existing one, because demo-assets.json
+# in the playground pins tag AND sha256, and an asset that changes underneath a
+# pin is a silent lie rather than an update.
+name: Publish demo firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create (must not already exist)"
+        required: true
+        default: "firmware-demos-v4"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust with the bare-metal targets
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv7em-none-eabihf,thumbv8m.main-none-eabi
+
+      # One line per chip that gains a runnable claim. Keep the ELF name in the
+      # `demo-` shape the other assets use, so the map reads the same either way.
+      - name: Build
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cargo build -p firmware-nrf52832-demo --release --target thumbv7em-none-eabihf
+          cp target/thumbv7em-none-eabihf/release/firmware-nrf52832-demo out/demo-nrf52832-smoke.elf
+          cargo build -p firmware-rp2350-demo --release --target thumbv8m.main-none-eabi
+          cp target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo out/demo-rp2350-smoke.elf
+
+      # An ELF that does not run on its own chip is not a demo. Prove it here,
+      # with the same released CLI a reader would install, before it is
+      # published — not after somebody reports it.
+      - name: Run each ELF on its chip with the released CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          CLI="$HOME/.local/bin/labwired"
+          fail=0
+          check() { # $1 chip, $2 elf, $3 expected marker ('' = must merely not fault)
+            "$CLI" run --chip "configs/chips/$1.yaml" --firmware "out/$2" --max-steps 3000000 > "out/$1.log" 2>&1 || true
+            if grep -qE "simulation error|ERROR .*labwired_core|^error:" "out/$1.log"; then
+              echo "::error::$2 faults on $1"; sed -n '1,5p' "out/$1.log"; fail=1; return
+            fi
+            if [ -n "$3" ] && ! grep -qF -- "$3" "out/$1.log"; then
+              echo "::error::$2 never printed '$3' on $1"; fail=1; return
+            fi
+            echo "ok  $1 <- $2"
+          }
+          check nrf52832 demo-nrf52832-smoke.elf NRF52832_SMOKE_OK
+          check rp2350   demo-rp2350-smoke.elf   ''
+          exit "$fail"
+
+      - name: Digests for the chip map
+        run: |
+          cd out && sha256sum ./*.elf | tee digests.txt
+          echo "Paste these into scripts/ci/docs-runnable-chips.json." >> "$GITHUB_STEP_SUMMARY"
+          sed 's/^/    /' digests.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::${{ inputs.tag }} already exists. Demo assets are pinned by tag AND sha256; publish a new tag instead of replacing one."
+            exit 1
+          fi
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ inputs.tag }}" out/*.elf \
+            --title "Playground demo firmware — ${{ inputs.tag }}" \
+            --notes "Prebuilt demo firmware for the documented chips. Pinned by tag and sha256 from scripts/ci/docs-runnable-chips.json and packages/playground/demo-assets.json." \
+            --prerelease

@@ -46,12 +46,13 @@ print(m['firmware_release'])
 for chip, e in m['chips'].items():
     print('\x1f'.join([
         chip, e.get('how',''), e.get('firmware',''), e.get('sha256',''),
-        e.get('script',''), e.get('expect') or '', e.get('why','')]))
+        e.get('script',''), e.get('expect') or '', e.get('why',''),
+        e.get('release', m['firmware_release'])]))
 "; }
 
 # bash 3.2 on macOS has no `mapfile`, and the canary runs this on macOS.
 read_map > "$work/map.tsv" || { echo "cannot read $MAP" >&2; exit 1; }
-release="$(head -1 "$work/map.tsv")"
+release_default="$(head -1 "$work/map.tsv")"
 tail -n +2 "$work/map.tsv" > "$work/entries.tsv"
 
 # ── The map has to cover the chips we ship ──────────────────────────────────
@@ -70,6 +71,10 @@ fi
 fetch_asset() {
   local name="$1"
   local want="$2"
+  # Per-chip release override: firmware for a chip that was added later lives
+  # on a later tag, and an existing tag is never re-uploaded — the playground
+  # pins these same assets by tag and digest.
+  local release="${3:-$release_default}"
   local dest="$work/$name"
   [ -f "$dest" ] && { printf '%s' "$dest"; return 0; }
   curl -fsSL --retry 3 -o "$dest" \
@@ -84,19 +89,20 @@ fetch_asset() {
 }
 
 # Judged on output, never on exit status alone.
-run_and_judge() { # $1 chip, $2 how, $3 firmware, $4 sha, $5 script, $6 expect → prints verdict
+run_and_judge() { # $1 chip, $2 how, $3 firmware, $4 sha, $5 script, $6 expect, $7 release → verdict
   local chip="$1"
   local how="$2"
   local fw="$3"
   local sha="$4"
   local script="$5"
   local expect="$6"
+  local release="${7:-$release_default}"
   local out=""
   local path=""
   if [ "$how" = example ]; then
     out="$("$CLI" test --script "$script" --output-dir "$work/out-$chip" 2>&1)"
   else
-    path="$(fetch_asset "$fw" "$sha")" || { echo "ASSET"; return; }
+    path="$(fetch_asset "$fw" "$sha" "$release")" || { echo "ASSET"; return; }
     out="$("$CLI" run --chip "configs/chips/${chip}.yaml" --firmware "$path" --max-steps 4000000 2>&1)"
   fi
   printf '%s' "$out" > "$work/log-$chip"
@@ -112,10 +118,10 @@ run_and_judge() { # $1 chip, $2 how, $3 firmware, $4 sha, $5 script, $6 expect �
 
 runnable=0; blocked=0; needs_build=0; failures=0
 printf '%-16s %-12s %s\n' CHIP HOW RESULT
-while IFS=$'\x1f' read -r chip how fw sha script expect why; do
+while IFS=$'\x1f' read -r chip how fw sha script expect why release; do
   case "$how" in
     asset|example)
-      verdict="$(run_and_judge "$chip" "$how" "$fw" "$sha" "$script" "$expect")"
+      verdict="$(run_and_judge "$chip" "$how" "$fw" "$sha" "$script" "$expect" "$release")"
       if [ "$verdict" = OK ]; then
         runnable=$((runnable + 1))
         printf '%-16s %-12s ok\n' "$chip" "$how"
@@ -128,7 +134,7 @@ while IFS=$'\x1f' read -r chip how fw sha script expect why; do
       ;;
     blocked)
       blocked=$((blocked + 1))
-      verdict="$(run_and_judge "$chip" asset "$fw" "$sha" "" "$expect")"
+      verdict="$(run_and_judge "$chip" asset "$fw" "$sha" "" "$expect" "$release")"
       if [ "$verdict" = OK ]; then
         failures=$((failures + 1))
         printf '%-16s %-12s FIXED — promote it\n' "$chip" "$how"
