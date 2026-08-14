@@ -76,8 +76,15 @@ fn test_gdb_rsp_basic_commands() {
         firmware_path
     );
 
-    // 1. Setup a machine and GDB server in a background thread
-    let port = 9001;
+    // 1. Setup a machine and GDB server in a background thread.
+    //
+    // Port 0, not 9001. A fixed port is a shared resource: two CI shards on one
+    // runner, or a developer with a stale process, collide — and the collision
+    // reads as a broken debugger rather than a busy socket. This test has gone
+    // red that way three times in a day. Bind first, learn the port the OS
+    // gave us, and connect to that.
+    let bound = GdbServer::bind(0).expect("bind an ephemeral port");
+    let port = bound.local_addr().port();
     thread::spawn(move || {
         let mut bus = SystemBus::new();
         let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
@@ -87,16 +94,26 @@ fn test_gdb_rsp_basic_commands() {
         let image = labwired_loader::load_elf(&firmware_path).unwrap();
         machine.load_firmware(&image).unwrap();
 
-        let server = GdbServer::new(port);
-        server.run(machine).unwrap();
+        bound.run(machine).unwrap();
     });
 
-    // Wait for server to start
-    thread::sleep(Duration::from_millis(100));
-
-    // 2. Connect client
+    // 2. Connect client. The socket is already listening — it was bound before
+    // the thread started — so this needs no sleep to be correct. The retries
+    // cover the moment between `accept` being reached and the OS scheduling us.
     println!("Connecting to GDB server on port {}...", port);
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap();
+    let mut stream = {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            match TcpStream::connect(format!("127.0.0.1:{}", port)) {
+                Ok(s) => break s,
+                Err(e) if std::time::Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(20));
+                    let _ = e;
+                }
+                Err(e) => panic!("could not reach the GDB server on port {port}: {e}"),
+            }
+        }
+    };
     stream
         .set_read_timeout(Some(Duration::from_secs(1)))
         .unwrap();

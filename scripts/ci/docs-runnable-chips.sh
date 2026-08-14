@@ -30,7 +30,9 @@ set -uo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root" || exit 1
 CLI="${1:-labwired}"
-MAP=scripts/ci/docs-runnable-chips.json
+# The map is overridable so the gate can be tested against a deliberately
+# broken one — a gate nobody has ever seen fail is a gate nobody should trust.
+MAP="${LABWIRED_CHIPS_MAP:-scripts/ci/docs-runnable-chips.json}"
 REPO=w1ne/labwired-core
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
