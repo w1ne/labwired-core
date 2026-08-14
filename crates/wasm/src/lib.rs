@@ -5,6 +5,9 @@ use labwired_core::console::{ConsoleCapture, HostConsole};
 // #124 Phase 4: browser-side JIT prototype. Runs the dominant
 // `0x400829cc` hot block through `js_sys::WebAssembly` instead of the
 // interpreter when `jit_enabled()` has been toggled on from JS.
+/// Ratchet: the wasm boundary must return errors, not `null`.
+#[cfg(test)]
+mod error_boundary_ratchet;
 mod inputs;
 mod inspect;
 mod install;
@@ -311,6 +314,23 @@ fn load_program_segments_without_reset(
     }
 
     Ok(())
+}
+
+impl WasmSimulator {
+    /// The machine, or a JS error if this simulator has none.
+    ///
+    /// Prefer this over `self.machine.as_ref().unwrap()` in anything reachable
+    /// from JS. A panic unwinds straight out of the wasm frame as a JS
+    /// exception, and JS exceptions do NOT run Rust destructors — the
+    /// wasm-bindgen borrow guard never drops and every later call fails with
+    /// "recursive use of an object". An `Err` return is an ordinary Rust
+    /// return: the guard drops, the glue throws afterwards, and the caller sees
+    /// one honest failure instead of a permanently bricked simulator.
+    fn machine_or_err(&self) -> Result<&Machine<Box<dyn Cpu>>, JsValue> {
+        self.machine
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("simulator has no machine"))
+    }
 }
 
 #[wasm_bindgen]
@@ -1196,26 +1216,44 @@ impl WasmSimulator {
     }
 
     #[wasm_bindgen]
-    pub fn get_pc(&self) -> u32 {
-        self.machine.as_ref().unwrap().cpu.get_pc()
+    pub fn get_pc(&self) -> Result<u32, JsValue> {
+        Ok(self.machine_or_err()?.cpu.get_pc())
     }
 
     #[wasm_bindgen]
-    pub fn get_register(&self, id: u8) -> u32 {
-        self.machine.as_ref().unwrap().cpu.get_register(id)
+    pub fn get_register(&self, id: u8) -> Result<u32, JsValue> {
+        Ok(self.machine_or_err()?.cpu.get_register(id))
     }
 
     #[wasm_bindgen]
-    pub fn get_register_names(&self) -> JsValue {
-        let names = self.machine.as_ref().unwrap().cpu.get_register_names();
-        serde_wasm_bindgen::to_value(&names).unwrap()
+    pub fn get_register_names(&self) -> Result<JsValue, JsValue> {
+        let names = self.machine_or_err()?.cpu.get_register_names();
+        serde_wasm_bindgen::to_value(&names)
+            .map_err(|error| JsValue::from_str(&format!("register names: {error}")))
     }
 
+    /// Read `len` bytes at `addr` through the real bus read path.
+    ///
+    /// Errors rather than substituting `0` for a byte the bus refused. The old
+    /// `unwrap_or(0)` made a failed read byte-identical to a register or memory
+    /// cell that genuinely reads zero, and `null`/`0` is exactly the answer a
+    /// verdict cannot tell apart from data. `WasmWorld::read_memory` has always
+    /// returned `Result`; this brings the single-machine path to the same
+    /// contract.
+    ///
+    /// Note this fires read side effects (it is a bus read, not a peek) — see
+    /// [`labwired_core::MachineTrait::read_memory`]. Use `peek`/`inspect` for
+    /// anything a human is merely looking at.
     #[wasm_bindgen]
-    pub fn read_memory(&self, addr: u32, len: u32) -> Vec<u8> {
-        let machine = self.machine.as_ref().unwrap();
+    pub fn read_memory(&self, addr: u32, len: u32) -> Result<Vec<u8>, JsValue> {
+        let machine = self.machine_or_err()?;
         (0..len)
-            .map(|i| machine.bus.read_u8(addr as u64 + i as u64).unwrap_or(0))
+            .map(|i| {
+                let at = addr as u64 + i as u64;
+                machine.bus.read_u8(at).map_err(|error| {
+                    JsValue::from_str(&format!("memory read failed at {at:#010x}: {error:?}"))
+                })
+            })
             .collect()
     }
 
@@ -2712,7 +2750,7 @@ external_devices:
     }
 
     fn dump(sim: &WasmSimulator, label: &str) {
-        let pc0 = sim.get_pc();
+        let pc0 = sim.get_pc().expect("machine present");
         let sec_pc = sim
             .machine
             .as_ref()
@@ -3081,4 +3119,70 @@ mod console_tap_tests {
              which would raise the alarm on every single run:\n{unheard}"
         );
     }
+}
+
+#[cfg(test)]
+mod cpu_inspector_boundary_tests {
+    use super::*;
+
+    /// The exact ELF the motor-parity test already boots, loaded through the
+    /// legacy Cortex-M constructor: flash at 0x0800_0000, RAM at 0x2000_0000.
+    fn sim() -> WasmSimulator {
+        let fw = include_bytes!("../tests/fixtures/firmware-l476-bldc-six-step.elf");
+        WasmSimulator::new(fw).expect("fixture ELF loads on the legacy Cortex-M bus")
+    }
+
+    /// Converting the CPU-inspector accessors to `Result` must not change what a
+    /// working board reports — only what an unanswerable read reports.
+    ///
+    /// Cross-checked against `peek`, which reaches the same bytes by a different
+    /// route (`Machine::peek`, side-effect free) than `read_memory` (the real
+    /// bus read path). Two independent paths agreeing on the flash image is a
+    /// byte-identity check, not a restatement of the implementation.
+    #[test]
+    fn a_working_board_still_reads_the_same_bytes() {
+        let sim = sim();
+
+        let via_bus = sim
+            .read_memory(0x0800_0000, 64)
+            .expect("mapped flash reads");
+        let via_peek = sim.peek(0x0800_0000, 64).expect("mapped flash peeks");
+        assert_eq!(
+            via_bus,
+            via_peek.to_vec(),
+            "read_memory and peek disagree on mapped flash"
+        );
+
+        // The reset vector: a real value, and specifically not the zeros the old
+        // `unwrap_or(0)` would have been indistinguishable from.
+        assert_ne!(&via_bus[..8], &[0u8; 8], "flash read came back all zeros");
+        assert_eq!(
+            sim.read_memory(0x2000_0000, 16)
+                .expect("mapped RAM reads")
+                .len(),
+            16
+        );
+    }
+
+    /// The register accessors used to `.unwrap()` on `self.machine`, which
+    /// panics out through the wasm frame and permanently poisons the
+    /// wasm-bindgen borrow guard. On a live machine they must simply answer.
+    #[test]
+    fn the_register_path_answers_on_a_live_machine() {
+        let sim = sim();
+        let pc = sim.get_pc().expect("live machine has a PC");
+        assert_ne!(pc, 0, "PC read back as 0");
+        sim.get_register(0).expect("live machine has r0");
+        // `get_register_names` is deliberately not called: it serializes through
+        // `serde_wasm_bindgen`, which is `unreachable!()` off wasm32. That was
+        // already true of the `.unwrap()` it used to do.
+    }
+
+    // The failure half of this contract — that an unmapped `read_memory` now
+    // returns `Err` instead of a page of fabricated zeros — cannot be asserted
+    // here. Building the error value calls `JsValue::from_str`, and `JsValue`
+    // is `unreachable!()` off the wasm32 target, so a native test panics inside
+    // wasm-bindgen before it can observe the `Err`. It is covered by the
+    // signature itself (`Result<Vec<u8>, JsValue>` has no way to express the
+    // old zero-fill) and by the `error_boundary_ratchet` scan.
 }

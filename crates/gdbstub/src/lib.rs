@@ -238,10 +238,65 @@ pub struct GdbServer {
     port: u16,
 }
 
+/// A GDB server whose socket is already open, and whose address is therefore
+/// knowable before a client tries to connect.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct BoundGdbServer {
+    listener: TcpListener,
+    addr: std::net::SocketAddr,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl BoundGdbServer {
+    /// The address the OS gave us. With port 0 this is the only way to learn it.
+    pub fn local_addr(&self) -> std::net::SocketAddr {
+        self.addr
+    }
+
+    /// Serve one session on the already-bound socket.
+    pub fn run<C: Cpu + 'static>(self, machine: Machine<C>) -> anyhow::Result<()>
+    where
+        LabwiredTarget<C>: Target<Error = Infallible, Arch: gdbstub::arch::Arch<Usize = u32>>,
+        GdbEventLoop<C>: gdbstub::stub::run_blocking::BlockingEventLoop<
+            Target = LabwiredTarget<C>,
+            Connection = TcpStream,
+            StopReason = BaseStopReason<(), u32>,
+        >,
+    {
+        tracing::info!("GDB server listening on {}", self.addr);
+        let (stream, peer) = self.listener.accept()?;
+        tracing::info!("GDB client connected from {}", peer);
+
+        let mut target = LabwiredTarget::new(machine);
+        let gdb = GdbStub::new(stream);
+        match gdb.run_blocking::<GdbEventLoop<C>>(&mut target) {
+            Ok(reason) => tracing::info!("GDB session ended: {:?}", reason),
+            Err(e) => tracing::error!("GDB session error: {:?}", e),
+        }
+        Ok(())
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 impl GdbServer {
     pub fn new(port: u16) -> Self {
         Self { port }
+    }
+
+    /// Bind now and report the port that was actually taken.
+    ///
+    /// `run` binds when it is called, which is fine for `labwired --gdb 3333`
+    /// where the user chose the number. It is not fine for a test: a fixed
+    /// port is a shared resource, and two jobs on one machine — two CI shards,
+    /// or a developer with a stale process — collide. The failure then reads as
+    /// a broken debugger rather than a busy socket.
+    ///
+    /// Binding to port 0 through this constructor lets the OS pick a free one
+    /// and hands it back, so nothing has to guess.
+    pub fn bind(port: u16) -> std::io::Result<BoundGdbServer> {
+        let listener = TcpListener::bind(format!("127.0.0.1:{port}"))?;
+        let addr = listener.local_addr()?;
+        Ok(BoundGdbServer { listener, addr })
     }
 
     pub fn run<C: Cpu + 'static>(&self, machine: Machine<C>) -> anyhow::Result<()>
