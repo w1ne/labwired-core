@@ -29,11 +29,11 @@
       "expect": "faithful ROM loaded"
     },
     "esp32c3": {
-      "how": "blocked",
+      "how": "asset",
       "firmware": "demo-esp32c3-blink.elf",
       "sha256": "aea04c8527eff25e8969b851dc9cc2436cf13e40c6019788741b7eecd5004789",
-      "expect": null,
-      "note": "v0.21.0 refuses the board: `UART type 'esp32c3_uart' has no register layout modelled yet`. Fixed on main; this entry flips to `asset` in the first release that carries the fix, and the gate fails if it starts passing while still marked blocked."
+      "expect": "C3 BLINKY BOOT",
+      "note": "Blocked until v0.22.0, which fixed `UART type esp32c3_uart has no register layout modelled yet`."
     },
     "nrf52840": {
       "how": "asset",
@@ -144,11 +144,8 @@
       "why": "no prebuilt demo firmware for this part yet"
     },
     "stm32l073": {
-      "how": "blocked",
-      "why": "the released CLI cannot read the shipped descriptor: `cannot parse chip YAML: peripherals[34].clock: invalid type: sequence`. configs/chips/stm32l073.yaml uses a schema newer than v0.21.0 \u2014 another face of the release lag. Re-check on the next release.",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null
+      "how": "needs-build",
+      "why": "v0.22.0 reads the descriptor (v0.21.0 could not parse it), but there is no published firmware for this part. firmware-l073-demo builds in this repo \u2014 publish it through the demo-firmware workflow and this becomes an `asset`."
     },
     "stm32wb55": {
       "how": "needs-build",
