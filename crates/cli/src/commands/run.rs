@@ -1380,15 +1380,26 @@ pub(crate) fn run_firmware_arm(
     // Splitting them puts each loop back in a frame whose codegen does not
     // depend on the other's existence, which is what "the default path is
     // unaffected" has to mean for a gate that measures instructions.
-    if args.batched {
-        run_arm_batched_loop(&mut machine, limit);
+    let faulted = if args.batched {
+        run_arm_batched_loop(&mut machine, limit)
     } else {
-        run_arm_step_loop(&mut machine, limit);
-    }
+        run_arm_step_loop(&mut machine, limit)
+    };
 
     // Flush stdout.
     let _ = std::io::stdout().flush();
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+
+    // A run that ended on a fault reports a fault. It used to print the error
+    // and exit 0, so `labwired run … && echo ok` printed ok for firmware that
+    // died on its second instruction, and any CI judging by exit status read a
+    // memory access violation as a pass. Xtensa already exited non-zero here;
+    // ARM is now consistent with it. `--allow-sim-error` restores the old
+    // behaviour for callers that own the verdict themselves — the TIER1 matrix
+    // reads protocol lines from stdout and ignores the exit code either way.
+    if faulted && !args.allow_sim_error {
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
     ExitCode::from(EXIT_PASS)
 }
 
@@ -1397,7 +1408,7 @@ pub(crate) fn run_firmware_arm(
 fn run_arm_step_loop(
     machine: &mut labwired_core::Machine<labwired_core::cpu::CortexM>,
     limit: u64,
-) {
+) -> bool {
     let dbg_trace: u64 = std::env::var("LABWIRED_ARM_TRACE")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -1420,11 +1431,15 @@ fn run_arm_step_loop(
             }
             Err(e) => {
                 eprintln!("labwired run (arm): simulation error: {e}");
-                // Non-fatal for TIER1: the protocol may already be complete.
-                break;
+                // The caller decides what this means. It ends the run either
+                // way; whether it ends the PROCESS with a failure is up to
+                // `--allow-sim-error`, because a TIER1 protocol may already
+                // have printed its verdict before the fault.
+                return true;
             }
         }
     }
+    false
 }
 
 /// One line of proof that the batched path ran, and how wide its batches were.
@@ -1476,8 +1491,10 @@ fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32
 fn run_arm_batched_loop(
     machine: &mut labwired_core::Machine<labwired_core::cpu::CortexM>,
     limit: u64,
-) {
+) -> bool {
     use labwired_core::{AdvanceRequest, AdvanceStop};
+
+    let mut faulted = false;
 
     let interval = machine.bus.max_safe_tick_interval();
     machine.config.peripheral_tick_interval = interval;
@@ -1495,10 +1512,9 @@ fn run_arm_batched_loop(
         let stop = match machine.advance(AdvanceRequest::run(Some(fuel))) {
             Ok(report) => Some(report.stop),
             Err(e) => {
-                // Same contract as the single-step loop above: a simulation
-                // error ends the run without failing it, because the TIER1
-                // protocol may already be complete.
+                // Same contract as the single-step loop above.
                 eprintln!("labwired run (arm, batched): simulation error: {e}");
+                faulted = true;
                 None
             }
         };
@@ -1514,6 +1530,7 @@ fn run_arm_batched_loop(
     }
 
     print_batched_summary(machine.step_profile(), interval);
+    faulted
 }
 
 pub(crate) fn run_interactive_arm(

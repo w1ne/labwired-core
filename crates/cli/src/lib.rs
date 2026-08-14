@@ -353,6 +353,15 @@ pub struct RunArgs {
     #[arg(long)]
     pub max_steps: Option<u64>,
 
+    /// Exit 0 even when the run ends on a simulation fault.
+    ///
+    /// A fault normally exits 3, the same as every other runtime error. Use
+    /// this when the caller owns the verdict and reads it from the output —
+    /// the TIER1 matrix, for instance, treats the protocol lines on stdout as
+    /// the result and a late fault as noise.
+    #[arg(long)]
+    pub allow_sim_error: bool,
+
     /// Optional path to write a JSON-line GPIO transition trace.
     /// Each line is `{"sim_cycle":N, "pin":P, "from":B, "to":B}`.
     #[arg(long)]
