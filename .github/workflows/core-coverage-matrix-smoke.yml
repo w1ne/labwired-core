@@ -132,6 +132,18 @@ jobs:
           - id: nucleo-f767zi
             script: examples/nucleo-f767zi/tier1-smoke.yaml
             system: examples/nucleo-f767zi/system.yaml
+          # The first CLI cell on an ESP32-S3. No S3 chip had one, because
+          # `labwired test` could not boot an S3 image: it recognised the part by
+          # an exact name (so every board variant took the generic builder and
+          # died with a memory violation) and then booted every S3 image on the
+          # factory-partition flash layout (so a bare-metal image's DROM reads
+          # landed on the wrong pages and it jumped to 0x0 at step 48). The
+          # Arduino matrix's esp32s3 cell could not see either defect — its
+          # images DO have a partition table and it never names a board variant.
+          # Committed fixture, no toolchain, 3.2s.
+          - id: esp32s3-zero
+            script: examples/esp32s3-zero/tier1-smoke.yaml
+            system: examples/esp32s3-zero/system.yaml
 
     steps:
       - uses: actions/checkout@v4

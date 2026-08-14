@@ -20,25 +20,9 @@
 # and SMOKE_LESS_ALLOWLIST in crates/core/tests/strict_onboarding.rs. Do NOT add
 # a row to turn a red gate green — that re-opens the hole the gate exists to close.
 
-max_uncovered: 3
+max_uncovered: 2
 
 uncovered:
-  esp32s3-zero:
-    kind: pending
-    reason: >-
-      NOT a missing fixture — re-diagnosed 2026-08-14. tests/fixtures/tier1/esp32s3.elf
-      runs on this descriptor and prints all eight TIER1 classes PASS, looping to
-      --max-steps, under `labwired run --chip configs/chips/esp32s3-zero.yaml`.
-      The blocker is that a CLI cell uses `labwired test`, and that path cannot
-      boot a flash-resident Xtensa image: the same ELF and chip stop at
-      `memory_violation` after ~25k instructions, because the flash-XIP windows
-      (flash_icache @0x42000000, flash_dcache @0x3c000000) are never populated
-      the way `run --chip` populates them via configure_xtensa_esp32s3. This
-      affects the WHOLE S3 family, not this board — the parent esp32s3 fails
-      identically — which is why no S3 chip has a CLI cell. Fixing the test
-      path's Xtensa boot closes this entry and unblocks a family-wide cell;
-      writing another ELF does not.
-
   nrf5340:
     kind: pending
     reason: >-

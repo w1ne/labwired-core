@@ -759,7 +759,20 @@ pub(crate) fn run_test(
             );
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
-        if let (Some(sys_path), Some(manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
+        // `inputs.chip: esp32s3-zero` must reach this path exactly as a
+        // `system:` manifest does. It used to require `system_path`, so a script
+        // that only NAMED the chip fell through to the generic builder, which
+        // loads none of an S3 image's segments — a memory violation ~20k steps
+        // in, for a chip that runs perfectly under `labwired run`. There is no
+        // manifest file in that case, so anchor relative paths at the resolved
+        // system's base directory (`.` for a built-in chip), which is what a
+        // manifest beside it would have resolved to anyway.
+        let sys_anchor: Option<PathBuf> = resolved_system.as_ref().map(|r| {
+            r.source_path()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_else(|| r.base_dir().join("system.yaml"))
+        });
+        if let (Some(sys_path), Some(manifest)) = (sys_anchor.as_ref(), esp32_manifest.as_ref()) {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
             // Load the ELF up front. The classic-Xtensa path fast-boots it into
             // memory and jumps to its entry; the faithful S3 ROM-boot path uses
@@ -798,7 +811,7 @@ pub(crate) fn run_test(
                     chip_dir,
                     &crate::plugin_chip_yaml(plugins),
                 )
-                .map(|c| c.name == "esp32s3")
+                .map(|c| c.is_esp32s3())
                 .unwrap_or(false)
             };
 
@@ -883,17 +896,39 @@ pub(crate) fn run_test(
                     // `ets_set_appcpu_boot_addr` + dual APP_CPU release the
                     // `s_cpu_up` spin (honest dual-core, not a firmware patch).
                     let mut bus = labwired_core::bus::SystemBus::new();
+                    // Which flash layout this image needs.
+                    //
+                    // A factory-partition app (Arduino / ESP-IDF, built by the
+                    // matrix) is linked to run from `app0` at flash 0x10000 and
+                    // calls `spi_flash_mmap` / `cache2phys`, so its XIP segments
+                    // must sit at factory offsets with the flash MMU seeded to
+                    // map them. A bare-metal image has no partition table and is
+                    // linked for the identity XIP windows — seeding the MMU for
+                    // it maps every DROM read to the wrong page, so a jump table
+                    // in `.rodata` reads back as zero and the firmware jumps to
+                    // 0x0. That is what `esp32s3-zero` did here while the same
+                    // ELF ran to completion under `labwired run`, which fast-boots
+                    // on identity XIP.
+                    //
+                    // The partition table beside the firmware is the honest
+                    // discriminator: an app that boots from a partition has one
+                    // (the same file this path seeds into the D-cache below), and
+                    // a bare fixture never does.
+                    let factory_layout =
+                        resolve_esp_partitions_bin(std::path::Path::new(&firmware_path)).is_some();
                     // Scoped: provision_rom_images checks this once.
                     let _fast = std::env::var_os("LABWIRED_ESP32S3_FASTBOOT");
                     std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
-                    // The matrix loads the app at the factory partition
-                    // (`factory_flash_base` below) and seeds the flash MMU via
+                    // A factory-partition app loads at `factory_flash_base`
+                    // below and seeds the flash MMU via
                     // `seed_factory_mmu_for_cache2phys` so `spi_flash_mmap` /
                     // `cache2phys` resolve — that requires the MMU-XIP window, so
-                    // request it explicitly (FASTBOOT alone no longer implies it,
-                    // to keep bare fast_boot fixtures on identity XIP).
+                    // request it explicitly (FASTBOOT alone does not imply it,
+                    // which is what keeps bare fixtures on identity XIP).
                     let _mmu_xip = std::env::var_os("LABWIRED_ESP32S3_MMU_XIP");
-                    std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
+                    if factory_layout {
+                        std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
+                    }
                     let opts = Esp32s3Opts::default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
@@ -964,10 +999,11 @@ pub(crate) fn run_test(
                                 // on. Name the cause instead of leaving the
                                 // caller to bisect a firmware image.
                                 eprintln!(
-                                    "labwired-cli test: warn: no partitions.bin beside {} — an \
-                                     Arduino/ESP-IDF app will abort in esp_partition (\"No MD5 \
-                                     found in partition table\") before printing anything. Place \
-                                     the partition table (flash 0x8000) next to the ELF.",
+                                    "labwired-cli test: no partitions.bin beside {} — booting on \
+                                     identity XIP (bare-metal layout). An Arduino/ESP-IDF app \
+                                     needs its partition table (flash 0x8000) next to the ELF or \
+                                     it aborts in esp_partition (\"No MD5 found in partition \
+                                     table\") before printing anything.",
                                     firmware_path.display()
                                 );
                             }
@@ -1003,7 +1039,7 @@ pub(crate) fn run_test(
                             stack_top_fallback: 0x3FCD_FFF0,
                             icache_backing: Some(wiring.icache_backing.clone()),
                             dcache_backing: Some(wiring.dcache_backing.clone()),
-                            factory_flash_base: Some(0x1_0000),
+                            factory_flash_base: factory_layout.then_some(0x1_0000),
                         },
                     ) {
                         let msg = format!("ESP32-S3 fast_boot: {e:#}");
@@ -1021,13 +1057,15 @@ pub(crate) fn run_test(
                     // Bootloader-equivalent MMU: factory app @ flash 0x10000 so
                     // `spi_flash_cache2phys` / OTA running-partition succeed
                     // (fast-boot never programs DR_REG_MMU_TABLE).
-                    labwired_core::boot::esp32s3::seed_factory_mmu_for_cache2phys(
-                        &mut bus, 4, // IROM ~0x22 KiB → 2 pages; pad
-                        8, // DROM window pages used by .flash.rodata @ 0x3C03_xxxx
-                    );
-                    eprintln!(
-                        "labwired-cli test: seeded S3 factory MMU for cache2phys (app0 @ 0x10000)"
-                    );
+                    if factory_layout {
+                        labwired_core::boot::esp32s3::seed_factory_mmu_for_cache2phys(
+                            &mut bus, 4, // IROM ~0x22 KiB → 2 pages; pad
+                            8, // DROM window pages used by .flash.rodata @ 0x3C03_xxxx
+                        );
+                        eprintln!(
+                            "labwired-cli test: seeded S3 factory MMU for cache2phys (app0 @ 0x10000)"
+                        );
+                    }
                     // Post-BROM flash-attach state: the ROM's flash-attach fills
                     // `rom_spiflash_legacy_data->chip.chip_size`; fast-boot skips
                     // it, so `spi_flash_mmap` (partition-table load) rejects every

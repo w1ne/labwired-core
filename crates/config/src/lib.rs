@@ -1188,6 +1188,22 @@ fn optional_nonempty_interconnect_string<'a>(
 }
 
 impl ChipDescriptor {
+    /// Is this an ESP32-S3 (Xtensa LX7) part?
+    ///
+    /// The S3 needs its own memory map — DROM 0x3C00_xxxx, DRAM 0x3FC8_xxxx,
+    /// IROM 0x4200_xxxx, IRAM 0x4037_xxxx — and the classic ESP32 (LX6) setup
+    /// loads none of an S3 image's segments. Every caller that has to choose
+    /// between those two setups asks this question, and the answer lives here
+    /// because it was previously answered twice, differently:
+    /// `crates/wasm` matched `name.starts_with("esp32s3")` and the CLI's `test`
+    /// command matched `name == "esp32s3"` exactly. So `esp32s3-zero` — a
+    /// shipped board variant — booted in the browser and died with a memory
+    /// violation under `labwired test`, and no S3 board variant could be
+    /// covered by a CLI gate at all.
+    pub fn is_esp32s3(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)?;

@@ -430,7 +430,7 @@ impl WasmSimulator {
                     Self::new_from_config_riscv(&chip, &manifest, firmware, &blob_map)
                 }
             }
-            MachineFamily::Xtensa if chip.name.starts_with("esp32s3") => {
+            MachineFamily::Xtensa if chip.is_esp32s3() => {
                 let blob_map = parse_named_blobs(&blobs);
                 Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
             }
