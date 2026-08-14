@@ -137,3 +137,11 @@ jobs:
             git --no-pager diff -- docs/coverage/tier1-scoreboard.md
             exit 1
           fi
+
+      # `cargo test` reports ignored tests as a bare count, so which tests are
+      # switched off — and why — was recorded nowhere. This keeps the inventory
+      # honest and ratchets the UNDOCUMENTED ones down: an `#[ignore]` with a
+      # reason is free, a bare one fails here. The fix is to write the reason,
+      # not to raise the ceiling in the script.
+      - name: Ignored-test inventory is fresh and undocumented ignores have not grown
+        run: python3 scripts/generate_ignored_tests.py --check
