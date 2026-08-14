@@ -178,14 +178,39 @@ resolve_version() {
   if [ "$VERSION" = "latest" ]; then
     STAGE="resolve"
     info "Resolving latest version..."
-    _api="https://api.github.com/repos/${REPO}/releases?per_page=50"
-    _json="$(download_stdout "$_api" 2>/dev/null)" || true
-    VERSION="$(printf '%s' "$_json" \
-      | sed -n 's/.*"tag_name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
-      | head -1)"
-    if [ -z "$VERSION" ]; then
-      die no_cli_release "Could not resolve a CLI release (vMAJOR.MINOR.PATCH) from the GitHub API.
-     Pin one instead:  curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh"
+
+    # First choice is the web redirect, NOT the API. `github.com/<repo>/releases/latest`
+    # redirects to `/releases/tag/<tag>`, needs no token, and — unlike a bare
+    # API call — is not rate limited per IP. That matters more than it sounds:
+    # the API allows 60 unauthenticated requests an hour per address, so on a
+    # shared address (CI, an office, a container host) an install can fail for
+    # reasons that have nothing to do with this machine. The redirect also
+    # excludes prereleases, which is how demo-firmware tags stay out of it.
+    _tag=""
+    if [ "$DOWNLOADER" = "curl" ]; then
+      _tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        "https://github.com/${REPO}/releases/latest" 2>/dev/null | sed 's#.*/tag/##')"
+    fi
+    case "$_tag" in
+      v[0-9]*.[0-9]*.[0-9]*) VERSION="$_tag" ;;
+      *) _tag="" ;;
+    esac
+
+    # Fall back to the release list, filtered to CLI releases. Reached when the
+    # redirect is unavailable (wget, a proxy that eats redirects) or points at
+    # something that is not a CLI release.
+    if [ -z "$_tag" ]; then
+      _api="https://api.github.com/repos/${REPO}/releases?per_page=50"
+      _json="$(download_stdout "$_api" 2>/dev/null)" || true
+      VERSION="$(printf '%s' "$_json" \
+        | sed -n 's/.*"tag_name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
+        | head -1)"
+    fi
+
+    if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+      die no_cli_release "Could not resolve a CLI release (vMAJOR.MINOR.PATCH).
+     GitHub may be rate limiting this address. Pin a version instead:
+       curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh"
     fi
   else
     case "$VERSION" in
