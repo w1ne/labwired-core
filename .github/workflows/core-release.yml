@@ -207,6 +207,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The two Linux archives this tag just published, unpacked into the
+      # per-architecture layout Dockerfile.ci copies from.
+      - name: Download the released Linux archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: labwired-linux-*
+          path: archives
+          merge-multiple: true
+
+      - name: Lay the binaries out by architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/amd64 dist/arm64
+          tar -xzf archives/labwired-${{ github.ref_name }}-linux-x86_64.tar.gz -C dist/amd64
+          tar -xzf archives/labwired-${{ github.ref_name }}-linux-aarch64.tar.gz -C dist/arm64
+          test -x dist/amd64/labwired && test -x dist/arm64/labwired
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -223,7 +244,7 @@ jobs:
           context: .
           file: ./Dockerfile.ci
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/w1ne/labwired:${{ github.ref_name }}
             ghcr.io/w1ne/labwired:latest

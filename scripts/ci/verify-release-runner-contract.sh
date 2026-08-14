@@ -176,6 +176,10 @@ require_literal "$workflow" 'packages: write' 'release workflow grants GHCR pack
 require_literal "$workflow" 'docker/setup-buildx-action@v3' 'publish job configures Docker Buildx'
 require_literal "$workflow" 'docker/login-action@v3' 'publish job logs into GHCR'
 require_literal "$workflow" 'docker/build-push-action@v6' 'publish job pushes the runner image'
+# The image is published for both Linux architectures. Publishing amd64 only
+# made `docker pull` fail outright on Apple Silicon and arm64 Linux, which is
+# not a degraded experience — it is no experience.
+require_literal "$workflow" 'platforms: linux/amd64,linux/arm64' 'runner image is published for both Linux architectures'
 
 release_line=$(job_line release || true)
 publish_line=$(job_line publish || true)
@@ -246,9 +250,14 @@ require_block_literal "$smoke_block" 'output-dir: out/release-action-smoke-secon
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/result.json' 'release smoke asserts the second action result JSON exists and is nonempty'
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/junit.xml' 'release smoke asserts the second action writes JUnit in its output directory'
 
-require_literal "$dockerfile" 'FROM rust:1.95-slim-bookworm AS builder' 'runner image builds with Rust 1.95 on bookworm'
-require_literal "$dockerfile" 'FROM debian:bookworm-slim' 'runner image runtime matches the builder libc baseline'
-require_literal "$dockerfile" 'RUN cargo build --release -p labwired-cli --locked' 'runner image builds only the CLI'
+# The image no longer compiles the CLI: it copies the binary out of the release
+# archive this tag published, so the image and the archive are the same bytes
+# and both Linux architectures cost one emulated `apt-get` rather than one
+# emulated Rust build. These three lines are what makes that true.
+require_literal "$dockerfile" 'FROM debian:bookworm-slim' 'runner image runtime is the same base the archives target'
+require_literal "$dockerfile" 'ARG TARGETARCH' 'runner image picks its binary by build platform'
+require_literal "$dockerfile" 'COPY dist/${TARGETARCH}/labwired /usr/local/bin/labwired' 'runner image ships the released binary, not a rebuild of it'
+require_absent_literal "$dockerfile" 'cargo build' 'runner image must not rebuild the CLI — the archive is the artifact'
 require_literal "$dockerfile" 'ARG VERSION' 'runner image accepts a release version build argument'
 require_literal "$dockerfile" 'ARG REVISION' 'runner image accepts a source revision build argument'
 require_literal "$dockerfile" 'org.opencontainers.image.source="https://github.com/w1ne/labwired-core"' 'runner image declares its OCI source label'
