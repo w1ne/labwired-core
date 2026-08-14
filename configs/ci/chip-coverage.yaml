@@ -24,14 +24,20 @@ max_uncovered: 3
 
 uncovered:
   esp32s3-zero:
-    kind: waived
+    kind: pending
     reason: >-
-      Board variant of esp32s3 (Xtensa LX7). configs/systems/esp32s3-zero.yaml
-      exists but there is no esp32s3.yaml-compatible looping Xtensa fixture, so
-      a generic smoke faults at entry rather than reaching max_steps — the same
-      reason strict_onboarding.rs skips it. Xtensa execution is covered by the
-      hw-oracle Xtensa fixtures and the esp32s3 Arduino matrix cell; this
-      variant descriptor needs its own ELF before a CLI cell can be honest.
+      NOT a missing fixture — re-diagnosed 2026-08-14. tests/fixtures/tier1/esp32s3.elf
+      runs on this descriptor and prints all eight TIER1 classes PASS, looping to
+      --max-steps, under `labwired run --chip configs/chips/esp32s3-zero.yaml`.
+      The blocker is that a CLI cell uses `labwired test`, and that path cannot
+      boot a flash-resident Xtensa image: the same ELF and chip stop at
+      `memory_violation` after ~25k instructions, because the flash-XIP windows
+      (flash_icache @0x42000000, flash_dcache @0x3c000000) are never populated
+      the way `run --chip` populates them via configure_xtensa_esp32s3. This
+      affects the WHOLE S3 family, not this board — the parent esp32s3 fails
+      identically — which is why no S3 chip has a CLI cell. Fixing the test
+      path's Xtensa boot closes this entry and unblocks a family-wide cell;
+      writing another ELF does not.
 
   nrf5340:
     kind: pending
