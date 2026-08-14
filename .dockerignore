@@ -2,8 +2,14 @@
 .git
 target
 out
-dist
 coverage
+
+# `dist/<arch>/labwired` IS the build context now: Dockerfile.ci copies the
+# binary out of the release archive instead of compiling one. Everything else
+# a local build drops in dist/ stays out.
+dist
+!dist/amd64/labwired
+!dist/arm64/labwired
 
 # Locally produced archives, logs, and OS metadata only enlarge the build context.
 *.tar.gz
