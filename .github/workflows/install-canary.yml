@@ -100,12 +100,18 @@ jobs:
           - { image: 'debian:12-slim', arch: aarch64, runner: ubuntu-24.04-arm }
           - { image: 'ubuntu:22.04',   arch: aarch64, runner: ubuntu-24.04-arm }
     steps:
+      # AlmaLinux ships `curl-minimal`, which PROVIDES curl and conflicts with
+      # the full package, so asking for `curl` there fails the job before it
+      # tests anything. Install only what is actually missing.
       - name: Bare-image prerequisites
         run: |
-          if command -v apt-get >/dev/null; then
+          if command -v curl >/dev/null 2>&1; then
+            echo "curl already present: $(curl --version | head -1)"
+          elif command -v apt-get >/dev/null; then
             apt-get -qq update && apt-get -qq install -y curl ca-certificates >/dev/null
           else
-            (yum install -y -q curl ca-certificates || dnf install -y -q curl ca-certificates) >/dev/null
+            (dnf install -y -q --allowerasing curl ca-certificates \
+              || yum install -y -q --allowerasing curl ca-certificates) >/dev/null
           fi
 
       - name: Install and start
