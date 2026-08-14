@@ -57,6 +57,11 @@ jobs:
       - name: Every documented command is one the CLI accepts
         run: python3 scripts/ci/docs-commands-gate.py "$HOME/.local/bin/labwired"
 
+      # The chips gate decides whether "every documented chip runs" is true, so
+      # it gets to prove it can say no. Four cut-down maps, five seconds.
+      - name: The chips gate fails when it should
+        run: bash scripts/ci/test-docs-runnable-chips.sh "$HOME/.local/bin/labwired"
+
   # ── Formatting is APPLIED, not demanded (PR only) ─────────────────────────
   #
   # `cargo fmt --all -- --check` used to sit in `pr-gate`, i.e. a REQUIRED
