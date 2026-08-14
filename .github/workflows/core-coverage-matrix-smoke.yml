@@ -152,10 +152,11 @@ jobs:
           - id: nrf5340dk-zephyr
             script: examples/nrf5340dk/zephyr-smoke.yaml
             system: examples/nrf5340dk/system.yaml
-          # RP2350 — the last chip in configs/ci/chip-coverage.yaml. The model,
-          # the reset-path test and this firmware all existed; there was no
-          # system manifest, so no script could name them together and no
-          # workflow executed the chip.
+          # RP2350 — the last chip that no gate ran, and the cell that emptied
+          # configs/ci/chip-coverage.yaml (the file is deleted; all 26 chips are
+          # covered). The model, the reset-path test and this firmware all
+          # existed; there was no system manifest, so no script could name them
+          # together and no workflow executed the chip.
           #
           # `build_dir` is not decoration: the linker script comes from the
           # crate's OWN .cargo/config.toml (`-C link-arg=-Tlink.x`), and cargo

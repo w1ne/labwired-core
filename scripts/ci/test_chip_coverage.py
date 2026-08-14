@@ -64,7 +64,10 @@ def build_tree(root: Path, *, chips, arduino_boards, matrix_ids, ledger, scripts
         )
 
     (root / "configs/ci").mkdir(parents=True, exist_ok=True)
-    (root / "configs/ci/chip-coverage.yaml").write_text(ledger)
+    # `ledger=None` builds a tree with NO ledger file — the state the repo is in
+    # once every chip is covered.
+    if ledger is not None:
+        (root / "configs/ci/chip-coverage.yaml").write_text(ledger)
 
 
 def run_gate(root: Path):
@@ -78,6 +81,38 @@ def run_gate(root: Path):
 
 
 EMPTY_LEDGER = "max_uncovered: 0\nuncovered: {}\n"
+
+
+def test_no_ledger_file_fails_closed_on_an_uncovered_chip(tmp_path):
+    """Deleting the ledger must make the gate stricter, not quieter.
+
+    The file goes when the last gap does, so its absence has to mean "nothing is
+    declared" — never "nothing is checked". A chip no gate runs must still be an
+    error with no file present, or deleting it would be the way around the gate.
+    """
+    build_tree(
+        tmp_path,
+        chips=["stm32f103", "rp2350"],
+        arduino_boards=[("stm32f103", "stm32f103")],
+        matrix_ids=["stm32f103"],
+        ledger=None,
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1, out
+    assert "rp2350" in out
+
+
+def test_no_ledger_file_passes_when_every_chip_is_covered(tmp_path):
+    """And with everything covered, the absent file is simply the end state."""
+    build_tree(
+        tmp_path,
+        chips=["stm32f103"],
+        arduino_boards=[("stm32f103", "stm32f103")],
+        matrix_ids=["stm32f103"],
+        ledger=None,
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
 
 
 def test_a_chip_in_the_matrix_is_covered(tmp_path):
@@ -247,4 +282,16 @@ def test_the_committed_tree_passes_its_own_gate():
     cc.set_root(REPO_ROOT)
     _, uncovered, errors = cc.evaluate()
     assert errors == [], errors
-    assert uncovered, "if nothing is uncovered, drop the ledger rather than keeping an empty one"
+    # The ledger exists exactly while there is something to declare. An empty
+    # one is a page of instructions for a list with nothing in it, and it reads
+    # like debt that is still owed; a missing one is the honest end state, and
+    # it fails closed — with no entries, any uncovered chip is an error.
+    if uncovered:
+        assert cc.ledger_path().is_file(), (
+            f"{sorted(uncovered)} are uncovered but there is no ledger to declare them in"
+        )
+    else:
+        assert not cc.ledger_path().is_file(), (
+            "nothing is uncovered — delete configs/ci/chip-coverage.yaml rather "
+            "than keeping an empty one"
+        )

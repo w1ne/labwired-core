@@ -492,9 +492,12 @@ jobs:
       #
       # It reads no list of its own — coverage is derived from the workflows and
       # board manifests, so a cell deleted from a matrix reddens this on the PR
-      # that deletes it. configs/ci/chip-coverage.yaml carries only the gaps,
-      # with a ceiling that must equal the gap count, so closing one forces the
-      # ceiling down and it cannot creep back. Pure Python, seconds.
+      # that deletes it. The gaps lived in configs/ci/chip-coverage.yaml, each
+      # with a reason and a ceiling that had to equal the gap count; that file
+      # is GONE now, because all 26 are covered and an empty ledger reads like
+      # debt still owed. Its absence fails closed: with nothing declared, any
+      # uncovered chip is an error, so a new descriptor reddens this on the PR
+      # that adds it. Pure Python, seconds.
       - name: Chip coverage — every chip executed by a CLI gate, or a written reason
         run: python3 scripts/ci/chip_coverage.py --report
 

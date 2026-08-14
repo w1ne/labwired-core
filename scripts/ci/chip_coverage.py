@@ -24,7 +24,9 @@ So coverage here is DERIVED, never declared:
 
 `configs/ci/chip-coverage.yaml` is then only for what is NOT proven, with a
 reason per chip and a ceiling that can only be lowered. A chip that becomes
-proven must leave the file, so the ledger cannot rot into a list of excuses.
+proven must leave the file, so the ledger cannot rot into a list of excuses —
+and when the last entry goes, so does the file. Its absence is not a hole: with
+no entries, every uncovered chip is an error, which is the whole gate.
 
     python3 scripts/ci/chip_coverage.py            # gate (exit 1 on drift)
     python3 scripts/ci/chip_coverage.py --report   # show who proves what
@@ -219,8 +221,17 @@ def harness_proofs() -> dict[str, set[str]]:
 
 
 def load_ledger() -> tuple[dict[str, dict], int]:
+    """(entries, ceiling). No file at all means no declared gaps.
+
+    That is the end state this gate was built to reach, and it fails CLOSED:
+    with zero entries, `evaluate` calls every uncovered chip an error, so
+    deleting the file to escape the gate makes it stricter, not quieter. An
+    empty file would say the same thing while leaving a page of instructions
+    for a list that has nothing in it, so the file goes when the last gap does
+    — see the committed-tree test in test_chip_coverage.py.
+    """
     if not ledger_path().is_file():
-        raise CoverageError(f"missing {ledger_path().relative_to(REPO_ROOT)}")
+        return {}, 0
     data = load_yaml(ledger_path())
     entries = data.get("uncovered") or {}
     ceiling = data.get("max_uncovered")
