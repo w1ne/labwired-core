@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-08-14
+
+A one-change release, because the change is one the last release made
+impossible to trust: with v0.22.0 in hand, a harness could not use the exit
+status of `labwired run` to tell a completed run from a firmware that faulted.
+
 ### Changed
 - **`labwired run` exits 3 when the run ends on a simulation fault.** It used to
   print `simulation error: Memory access violation at 0x…` and exit **0**, so

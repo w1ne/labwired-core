@@ -11,6 +11,7 @@ extern crate self as labwired_cli;
 
 pub mod bus_vcd;
 pub mod coverage;
+pub mod crash_report;
 pub mod faults;
 pub mod manifest;
 pub mod pc_coverage_report;
@@ -775,6 +776,10 @@ pub fn check_plugin_versions(
 /// The `labwired` binary with extra chip plugins linked in.
 /// Pass `&[]` for the stock open-catalog CLI.
 pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> ExitCode {
+    // A panic used to print a backtrace on the user's terminal and reach
+    // nobody else. Chains to the default hook, so what they see is unchanged.
+    crash_report::install();
+
     if let Err(msg) = check_plugin_versions(plugins) {
         eprintln!("{msg}");
         return ExitCode::FAILURE;

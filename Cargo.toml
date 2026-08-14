@@ -108,7 +108,7 @@ exclude = [
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
-version = "0.22.0"
+version = "0.22.1"
 edition = "2021"
 authors = ["Andrii Shylenko"]
 license = "MIT"

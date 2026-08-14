@@ -8,6 +8,7 @@ use labwired_core::console::{ConsoleCapture, HostConsole};
 /// Ratchet: the wasm boundary must return errors, not `null`.
 #[cfg(test)]
 mod error_boundary_ratchet;
+mod fidelity_surface;
 mod inputs;
 mod inspect;
 mod install;
@@ -339,6 +340,11 @@ impl WasmSimulator {
     /// Kept for backward compatibility with the existing landing page sandbox.
     #[wasm_bindgen(constructor)]
     pub fn new(firmware: &[u8]) -> Result<WasmSimulator, JsValue> {
+        // The fidelity log is THREAD-LOCAL, and the browser builds one machine
+        // after another on the same thread — open a second lab and it would
+        // inherit the first one's undecoded instructions. Scope it here so
+        // `fidelity_gaps()` always describes the machine you are looking at.
+        labwired_core::fidelity::reset();
         let mut bus = SystemBus::new();
         bus.flash = LinearMemory::new(128 * 1024, 0x0800_0000);
         bus.ram = LinearMemory::new(20 * 1024, 0x2000_0000);
@@ -389,6 +395,9 @@ impl WasmSimulator {
         firmware: &[u8],
         blobs: JsValue,
     ) -> Result<WasmSimulator, JsValue> {
+        // Same reason as `new()`: the fidelity log is thread-local and outlives
+        // the machine, so scope it to this one.
+        labwired_core::fidelity::reset();
         let manifest: SystemManifest = serde_yaml::from_str(system_yaml)
             .map_err(|e| JsValue::from_str(&format!("System YAML error: {}", e)))?;
         let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml)
@@ -1231,6 +1240,39 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&names)
             .map_err(|error| JsValue::from_str(&format!("register names: {error}")))
     }
+
+    /// Everything this machine failed to model so far, as a flat list of
+    /// [`labwired_core::fidelity::FidelityGap`].
+    ///
+    /// Phases 3.1-3.3 built the census — `record_undecoded` / `record_unmapped`
+    /// on the silent paths, `to_gaps()` to flatten it — and then only the CLI
+    /// ever read it. `to_gaps` had exactly three callers, all under `crates/cli`,
+    /// and the word "fidelity" appeared in this crate only inside comments. So
+    /// the engine knew precisely which instructions it had skipped and which
+    /// addresses nothing claimed, and the browser — where nearly every user
+    /// actually runs a lab — was never told. An undecoded instruction is a
+    /// silent no-op that leaves registers stale; it looks exactly like firmware
+    /// running correctly.
+    ///
+    /// Non-draining ON PURPOSE: this reads `report()`, not `take()`. A UI polls,
+    /// and `take()` would hand the gaps to whichever poll happened to land first
+    /// and show nothing to the next — a warning that blinks out is worse than no
+    /// warning. Scoping is done by resetting at construction instead, so the
+    /// list always means "gaps for the machine you are looking at".
+    #[wasm_bindgen]
+    pub fn fidelity_gaps(&self) -> Result<JsValue, JsValue> {
+        let gaps = labwired_core::fidelity::report().to_gaps();
+        serde_wasm_bindgen::to_value(&gaps)
+            .map_err(|error| JsValue::from_str(&format!("fidelity gaps: {error}")))
+    }
+
+    // A `fidelity_total_hits() -> u64` companion was written and then removed:
+    // it is a bare return type, so `error_boundary_ratchet` counted it as a new
+    // failure-blind boundary and went red (77 against a ceiling of 76). That
+    // ratchet is correct to complain and the ceiling only shrinks, so raising it
+    // for a convenience accessor would be the exact move its doc comment warns
+    // against. The count is `gaps.length` / a `reduce` over `count` on the JS
+    // side, from data `fidelity_gaps()` already returns.
 
     /// Read `len` bytes at `addr` through the real bus read path.
     ///
