@@ -40,6 +40,11 @@ jobs:
       - name: Verify release runner contract
         run: bash scripts/ci/verify-release-runner-contract.sh
 
+      # scripts/install.sh is a shipped artifact — it is what
+      # https://labwired.com/install.sh serves — so it gets tested like one.
+      - name: Verify installer contract
+        run: bash scripts/ci/test-install-script.sh
+
   # ── Formatting is APPLIED, not demanded (PR only) ─────────────────────────
   #
   # `cargo fmt --all -- --check` used to sit in `pr-gate`, i.e. a REQUIRED
