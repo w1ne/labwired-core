@@ -16,30 +16,24 @@
   "firmware_release": "firmware-demos-v3",
   "chips": {
     "esp32": {
-      "how": "asset",
-      "firmware": "demo-esp32-epaper-lab.elf",
-      "sha256": "b0db06a8f8bdb2c358a37101a3962c4de461a6f6fd97f944a557ffff867ac5c5",
-      "expect": null,
-      "note": "Runs to the step limit without a fault; this firmware drives a panel, not serial."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32.elf",
+      "expect": "TIER1 clock PASS"
     },
     "esp32s3": {
-      "how": "asset",
-      "firmware": "demo-esp32s3-hello-world.elf",
-      "sha256": "31d8facfc6fc0faeb32a82166d13827a99e6eee77d438ee5a5da2fa9d12ca0ec",
-      "expect": "faithful ROM loaded"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32s3.elf",
+      "expect": "TIER1"
     },
     "esp32c3": {
-      "how": "asset",
-      "firmware": "demo-esp32c3-blink.elf",
-      "sha256": "aea04c8527eff25e8969b851dc9cc2436cf13e40c6019788741b7eecd5004789",
-      "expect": "C3 BLINKY BOOT",
-      "note": "Blocked until v0.22.0, which fixed `UART type esp32c3_uart has no register layout modelled yet`."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32c3.elf",
+      "expect": "TIER1 gpio PASS"
     },
     "nrf52840": {
-      "how": "asset",
-      "firmware": "demo-nrf52840-secure-boot.elf",
-      "sha256": "11b2826640bde079880378c13faeae5ffbae1e8bca9c7e20bf23ad920a369a1b",
-      "expect": "ROT: PROVISIONED"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/nrf52840.elf",
+      "expect": "TIER1 gpio PASS"
     },
     "nrf54l15": {
       "how": "example",
@@ -48,63 +42,55 @@
       "note": "The README quickstart. Firmware is committed, so a clone is enough."
     },
     "rp2040": {
-      "how": "asset",
-      "firmware": "demo-rp2040-pico.elf",
-      "sha256": "09f70c83a434d5fa2fdd69807e543ace86cccd12be7f213e3291cf5c8edd1522",
-      "expect": "RP2040_SMOKE_OK"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/rp2040.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32f103": {
-      "how": "asset",
-      "firmware": "demo-f103-uds-ecu.elf",
-      "sha256": "ba9be0d0f82d301df56b0d5c927d7c8a94d04955a3136e961b5ad4d001dc95e1",
-      "expect": "F103-UDS-ECU"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f103.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32f401": {
-      "how": "asset",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": "LabWired Playground"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f401.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32f411ceu6": {
-      "how": "example",
-      "script": "examples/stm32f411ceu6-blackpill/io-smoke.yaml",
-      "expect": null
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f411.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32h563": {
-      "how": "asset",
-      "firmware": "demo-stm32h5-uds-ecu.elf",
-      "sha256": "d85a1b23d33f5347e774ffc38c98e25cfe92fda6c0f3df17734f91eb0275b1fe",
-      "expect": "H563-UDS-ECU"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32h563.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32h735": {
-      "how": "asset",
-      "firmware": "demo-h735-telematics-lab.elf",
-      "sha256": "9e8bef1a5c45d012e70977f1843dbf9c9b90192450a7f9c51310d50f0a1fd573",
-      "expect": "LabWired telematics"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32h735.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32l476": {
-      "how": "asset",
-      "firmware": "demo-stm32l476-blink.elf",
-      "sha256": "c426653a45e6a091ad9d39f50060804ca3e6bf01af06414901ef499aa736dba9",
-      "expect": null,
-      "note": "Blink: GPIO only, no serial output to assert on."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32l476.elf",
+      "expect": "TIER1 clock PASS"
     },
     "mkw41z4": {
-      "how": "asset",
-      "firmware": "demo-kw41z-lcd-activity.elf",
-      "sha256": "7bb826e01c4118a475eda32279304279ef664b1a9d9cfde74a7f8dcdd517cd70",
-      "expect": "KW41Z_LCD_OK"
+      "how": "committed",
+      "firmware": "tests/fixtures/kw41z-smoke.elf",
+      "expect": "KW41Z_SMOKE_OK"
     },
     "nrf52832": {
-      "how": "asset",
-      "release": "firmware-demos-v4",
-      "firmware": "demo-nrf52832-smoke.elf",
-      "sha256": "e1ad6b2d657b2c1dbd5767eef05e165b42d4e2cb9dade7835b0e20e66c325f8a",
-      "expect": "NRF52832_SMOKE_OK"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/nrf52832.elf",
+      "expect": "TIER1 gpio PASS"
     },
     "nrf5340": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "committed",
+      "firmware": "tests/fixtures/nrf5340-zephyr-hello.elf",
+      "expect": "Booting Zephyr OS",
+      "note": "Unmodified upstream Zephyr on the application core."
     },
     "rp2350": {
       "how": "asset",
@@ -114,56 +100,59 @@
       "expect": "RP2350_SMOKE_OK"
     },
     "esp32s3-zero": {
-      "how": "asset",
-      "firmware": "demo-esp32s3-hello-world.elf",
-      "sha256": "31d8facfc6fc0faeb32a82166d13827a99e6eee77d438ee5a5da2fa9d12ca0ec",
-      "expect": "faithful ROM loaded",
-      "note": "Board variant of esp32s3, and it boots the same image."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/esp32s3.elf",
+      "expect": "TIER1",
+      "note": "Board variant of esp32s3; runs the same TIER1 image."
     },
     "stm32f401cdu6": {
-      "how": "asset",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": "LabWired Playground",
-      "note": "Cortex-M4 STM32F4 built for F401. Family-compatible, not part-specific: it proves this chip model boots an image and talks over its USART, not that every F4 peripheral is exercised."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f401.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Board variant of stm32f401."
     },
     "stm32f405": {
-      "how": "asset",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": "LabWired Playground",
-      "note": "Cortex-M4 STM32F4 built for F401. Family-compatible, not part-specific: it proves this chip model boots an image and talks over its USART, not that every F4 peripheral is exercised."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "F4 family image; part-compatible, not part-specific."
     },
     "stm32f407": {
-      "how": "asset",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": "LabWired Playground",
-      "note": "Cortex-M4 STM32F4 built for F401. Family-compatible, not part-specific: it proves this chip model boots an image and talks over its USART, not that every F4 peripheral is exercised."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32f767": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "No F7 fixture yet; the F4 TIER1 image exercises this model and prints its transcript."
     },
     "stm32g474re": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32g474re.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32l073": {
-      "how": "needs-build",
-      "why": "v0.22.0 reads the descriptor (v0.21.0 could not parse it), but there is no published firmware for this part. firmware-l073-demo builds in this repo \u2014 publish it through the demo-firmware workflow and this becomes an `asset`."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32l073.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32wb55": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32wb55.elf",
+      "expect": "TIER1 clock PASS"
     },
     "stm32wba52": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32wba52.elf",
+      "expect": "TIER1 clock PASS"
     },
     "atmega328p": {
-      "how": "needs-build",
-      "why": "AVR firmware is built from examples/arduino-nano-blinky; no prebuilt asset"
+      "how": "example",
+      "script": "examples/arduino-nano-blinky/io-smoke.yaml",
+      "expect": null,
+      "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
     }
   }
 }
