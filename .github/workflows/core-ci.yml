@@ -40,6 +40,23 @@ jobs:
       - name: Verify release runner contract
         run: bash scripts/ci/verify-release-runner-contract.sh
 
+      # scripts/install.sh is a shipped artifact — it is what
+      # https://labwired.com/install.sh serves — so it gets tested like one.
+      - name: Verify installer contract
+        run: bash scripts/ci/test-install-script.sh
+
+      # Docs are checked against the RELEASED CLI, not the workspace build:
+      # what a reader can run is whatever they were able to install. The README
+      # told people to pass `--system` to `labwired run` for months; that flag
+      # has never existed on that subcommand.
+      - name: Install the released CLI
+        run: |
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Every documented command is one the CLI accepts
+        run: python3 scripts/ci/docs-commands-gate.py "$HOME/.local/bin/labwired"
+
   # ── Formatting is APPLIED, not demanded (PR only) ─────────────────────────
   #
   # `cargo fmt --all -- --check` used to sit in `pr-gate`, i.e. a REQUIRED
