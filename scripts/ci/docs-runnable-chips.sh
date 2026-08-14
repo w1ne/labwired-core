@@ -11,9 +11,13 @@
 # Rules, all enforced below:
 #   * every chip descriptor in configs/chips (minus CI fixtures) must appear in
 #     docs-runnable-chips.json — a new chip cannot arrive untested and silent;
-#   * `asset` and `example` entries are RUN, and judged on what the firmware
-#     printed. Not on exit status: `labwired run` deliberately treats a
+#   * `committed`, `asset` and `example` entries are RUN, and judged on what the
+#     firmware printed. Not on exit status: `labwired run` deliberately treats a
 #     simulation error as a non-fatal end of run and still exits 0;
+#   * `committed` is the preferred shape — the ELF is in this repo, so a clone
+#     plus an installed CLI is the whole prerequisite, and most of them are the
+#     TIER1 fixtures, whose transcript asserts real peripheral behaviour rather
+#     than "something booted";
 #   * prebuilt firmware is pinned by release tag AND sha256, so a re-uploaded
 #     asset cannot quietly change what this proves;
 #   * `blocked` entries are run too, and a blocked chip that now WORKS fails the
@@ -103,6 +107,10 @@ run_and_judge() { # $1 chip, $2 how, $3 firmware, $4 sha, $5 script, $6 expect, 
   local path=""
   if [ "$how" = example ]; then
     out="$("$CLI" test --script "$script" --output-dir "$work/out-$chip" 2>&1)"
+  elif [ "$how" = committed ]; then
+    # Firmware that ships in this repo: no download, no digest to pin.
+    if [ ! -f "$fw" ]; then echo "MISSING_FIXTURE"; return; fi
+    out="$("$CLI" run --chip "configs/chips/${chip}.yaml" --firmware "$fw" --max-steps 6000000 2>&1)"
   else
     path="$(fetch_asset "$fw" "$sha" "$release")" || { echo "ASSET"; return; }
     out="$("$CLI" run --chip "configs/chips/${chip}.yaml" --firmware "$path" --max-steps 4000000 2>&1)"
@@ -122,7 +130,7 @@ runnable=0; blocked=0; needs_build=0; failures=0
 printf '%-16s %-12s %s\n' CHIP HOW RESULT
 while IFS=$'\x1f' read -r chip how fw sha script expect why release; do
   case "$how" in
-    asset|example)
+    committed|asset|example)
       verdict="$(run_and_judge "$chip" "$how" "$fw" "$sha" "$script" "$expect" "$release")"
       if [ "$verdict" = OK ]; then
         runnable=$((runnable + 1))

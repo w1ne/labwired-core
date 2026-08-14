@@ -10,8 +10,8 @@
 extern crate self as labwired_cli;
 
 pub mod bus_vcd;
-pub mod crash_report;
 pub mod coverage;
+pub mod crash_report;
 pub mod faults;
 pub mod manifest;
 pub mod pc_coverage_report;

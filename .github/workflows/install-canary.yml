@@ -278,10 +278,44 @@ jobs:
           done
           docker run --rm --platform linux/amd64 ghcr.io/w1ne/labwired:latest --version
 
+  # ── Two claims that are not commands, but are still promises ────────────────
+  promises:
+    name: Release freshness and extension availability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # release-freshness.sh counts commits since the last tag
+
+      # A release that stops happening is invisible to every other check in
+      # this repo, because they all run against the working tree, which is by
+      # definition current. On 2026-08-14 main was 984 commits and 18 days
+      # ahead of the released CLI, and three separate "product defects" turned
+      # out to be that gap.
+      - name: The shipped CLI is not far behind this tree
+        run: bash scripts/ci/release-freshness.sh
+
+      # The extension is a product with a distribution channel, and until it is
+      # on a registry the only way to install it is downloading a .vsix by
+      # hand. That is worth a red light rather than a note in a backlog.
+      - name: The extension is installable from a registry
+        run: |
+          set -uo pipefail
+          fail=0
+          mk=$(curl -s -o /dev/null -w '%{http_code}' -L \
+            'https://marketplace.visualstudio.com/items?itemName=w1ne.labwired-vscode')
+          ovsx=$(curl -s -o /dev/null -w '%{http_code}' -L \
+            'https://open-vsx.org/api/w1ne/labwired-vscode')
+          echo "VS Code Marketplace: $mk"
+          echo "Open VSX:            $ovsx"
+          [ "$mk" = "200" ] || { echo "::error::Not on the VS Code Marketplace. Create the w1ne publisher and add VSCE_PAT to labwired-vscode."; fail=1; }
+          [ "$ovsx" = "200" ] || { echo "::error::Not on Open VSX — VSCodium, Cursor and Windsurf users cannot install it. Create the namespace and add OVSX_PAT."; fail=1; }
+          exit "$fail"
+
   # ── One issue, kept current, when any of the above goes red ─────────────────
   report:
     name: Raise the alarm
-    needs: [cli, cli-old-distros, chips, mcp-oneliner, mcp-windows, packages]
+    needs: [cli, cli-old-distros, chips, mcp-oneliner, mcp-windows, packages, promises]
     if: failure()
     runs-on: ubuntu-latest
     steps:

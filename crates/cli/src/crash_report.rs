@@ -88,9 +88,10 @@ fn report(location: &str) {
 pub fn install() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let location = info
-            .location()
-            .map_or_else(|| "unknown".to_string(), |l| format!("{}:{}", l.file(), l.line()));
+        let location = info.location().map_or_else(
+            || "unknown".to_string(),
+            |l| format!("{}:{}", l.file(), l.line()),
+        );
         report(&location);
         previous(info);
     }));
@@ -113,8 +114,15 @@ mod tests {
         // would recognise — never a bare `std::env::consts` value.
         let p = platform();
         assert!(
-            ["linux-x86_64", "linux-aarch64", "darwin-x86_64", "darwin-aarch64", "windows-x86_64", "unknown"]
-                .contains(&p),
+            [
+                "linux-x86_64",
+                "linux-aarch64",
+                "darwin-x86_64",
+                "darwin-aarch64",
+                "windows-x86_64",
+                "unknown"
+            ]
+            .contains(&p),
             "unexpected platform slug: {p}"
         );
     }
