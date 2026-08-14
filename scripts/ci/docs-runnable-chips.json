@@ -96,16 +96,22 @@
       "expect": "KW41Z_LCD_OK"
     },
     "nrf52832": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "asset",
+      "release": "firmware-demos-v4",
+      "firmware": "demo-nrf52832-smoke.elf",
+      "sha256": "e1ad6b2d657b2c1dbd5767eef05e165b42d4e2cb9dade7835b0e20e66c325f8a",
+      "expect": "NRF52832_SMOKE_OK"
     },
     "nrf5340": {
       "how": "needs-build",
       "why": "no prebuilt demo firmware for this part yet"
     },
     "rp2350": {
-      "how": "needs-build",
-      "why": "no prebuilt demo firmware for this part yet"
+      "how": "asset",
+      "release": "firmware-demos-v4",
+      "firmware": "demo-rp2350-smoke.elf",
+      "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
+      "expect": "RP2350_SMOKE_OK"
     },
     "esp32s3-zero": {
       "how": "asset",
