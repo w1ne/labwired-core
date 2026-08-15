@@ -99,7 +99,9 @@ fn resume_is_byte_equivalent_to_cold_boot_and_far_cheaper() {
     for step in 0..MAX_BOOT_STEPS {
         if APP_WINDOW.contains(&cold.cpu.get_pc()) {
             // Snapshot the LIVE machine mid-flight — a real boot state.
-            let mut snap = cold.take_runtime_snapshot();
+            let mut snap = cold
+                .take_runtime_snapshot()
+                .expect("the C3's RISC-V core models a runtime snapshot");
             // Self-key it exactly as `--capture-app-entry` does.
             let fw_sha = sha256(&flash_image());
             snap.set_self_key("esp32c3", fw_sha);

@@ -158,7 +158,7 @@ impl Cpu for CountingCpu {
         }
     }
 
-    fn runtime_snapshot(&self) -> (CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(CpuKind, Vec<u8>)> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&self.pc.to_le_bytes());
         bytes.extend_from_slice(&self.sp.to_le_bytes());
@@ -168,7 +168,7 @@ impl Cpu for CountingCpu {
         for word in &self.pending {
             bytes.extend_from_slice(&word.to_le_bytes());
         }
-        (CpuKind::ArmCortexM, bytes)
+        Some((CpuKind::ArmCortexM, bytes))
     }
 
     fn apply_runtime_snapshot(&mut self, kind: CpuKind, bytes: &[u8]) -> SimResult<()> {
@@ -331,7 +331,9 @@ fn counting_cpu_runtime_snapshot_round_trips() {
         push_level: None,
         ..Default::default()
     };
-    let (kind, bytes) = source.runtime_snapshot();
+    let (kind, bytes) = source
+        .runtime_snapshot()
+        .expect("CountingCpu models a runtime snapshot");
     let mut restored = CountingCpu::default();
 
     restored

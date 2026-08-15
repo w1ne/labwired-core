@@ -1490,11 +1490,7 @@ impl Cpu for RiscV {
         }
     }
 
-    fn supports_runtime_snapshot(&self) -> bool {
-        true
-    }
-
-    fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(crate::runtime_snapshot::CpuKind, Vec<u8>)> {
         use crate::runtime_snapshot::RiscVRuntimeSnapshot;
         let snap = RiscVRuntimeSnapshot {
             x: self.x,
@@ -1512,7 +1508,7 @@ impl Cpu for RiscV {
             reservation: self.reservation,
         };
         let bytes = bincode::serialize(&snap).expect("bincode serialize RiscVRuntimeSnapshot");
-        (crate::runtime_snapshot::CpuKind::RiscV, bytes)
+        Some((crate::runtime_snapshot::CpuKind::RiscV, bytes))
     }
 
     fn apply_runtime_snapshot(

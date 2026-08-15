@@ -3481,11 +3481,7 @@ impl Cpu for XtensaLx7 {
         }
     }
 
-    fn supports_runtime_snapshot(&self) -> bool {
-        true
-    }
-
-    fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(crate::runtime_snapshot::CpuKind, Vec<u8>)> {
         use crate::runtime_snapshot::XtensaLx7RuntimeSnapshot;
         let snap = XtensaLx7RuntimeSnapshot {
             pc: self.pc,
@@ -3497,7 +3493,7 @@ impl Cpu for XtensaLx7 {
             sr: self.sr.raw_storage().to_vec(),
         };
         let bytes = bincode::serialize(&snap).expect("bincode serialize XtensaLx7RuntimeSnapshot");
-        (crate::runtime_snapshot::CpuKind::XtensaLx7, bytes)
+        Some((crate::runtime_snapshot::CpuKind::XtensaLx7, bytes))
     }
 
     fn apply_runtime_snapshot(

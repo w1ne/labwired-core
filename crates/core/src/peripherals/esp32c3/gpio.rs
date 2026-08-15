@@ -1127,7 +1127,9 @@ chip: "../chips/esp32c3.yaml"
             .write_u32(IO_MUX_DATE, 0x0bad_c0de)
             .expect("write source IO_MUX DATE");
         assert_eq!(source.bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
-        let snapshot = source.take_runtime_snapshot();
+        let snapshot = source
+            .take_runtime_snapshot()
+            .expect("the C3's RISC-V core models a runtime snapshot");
 
         let mut resumed_bus =
             SystemBus::from_config(&chip, &manifest).expect("construct fresh C3 bus");

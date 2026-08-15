@@ -2564,20 +2564,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             let pc = machine.cpu.get_pc();
             let reached = cap.target_pc == Some(pc) || (0x4200_0000..0x4400_0000).contains(&pc);
             if reached {
-                // Same reason as `snapshot capture`: the trait default is now a
-                // non-panicking EMPTY blob, so an ungated call would write a
-                // resume file that restores no CPU state and still looks valid.
-                // Say so and write nothing. NOT a `continue` — the rest of this
-                // loop body is what actually advances the machine, so skipping
-                // it would hang the run instead of just declining the capture.
-                if !machine.cpu.supports_runtime_snapshot() {
-                    error!(
-                        "capture-app-entry: this CPU has no runtime-snapshot implementation \
-                         (supported: RISC-V, Xtensa LX7) — no snapshot written to {:?}",
-                        cap.path
-                    );
-                } else {
-                    let mut snap = machine.take_runtime_snapshot();
+                // Same reason as `snapshot capture`: a CPU that models no
+                // runtime snapshot answers `None`, and writing a resume file
+                // without a CPU half would produce something that still looks
+                // valid. Say so and write nothing. NOT a `continue` — the rest
+                // of this loop body is what actually advances the machine, so
+                // skipping it would hang the run instead of just declining the
+                // capture.
+                if let Some(mut snap) = machine.take_runtime_snapshot() {
                     snap.set_self_key(cap.chip, cap.fw_sha);
                     if let Some(parent) = cap.path.parent() {
                         let _ = std::fs::create_dir_all(parent);
@@ -2590,6 +2584,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         ),
                         Err(e) => error!("capture-app-entry: failed to write {:?}: {e}", cap.path),
                     }
+                } else {
+                    error!(
+                        "capture-app-entry: this CPU has no runtime-snapshot implementation \
+                         (supported: RISC-V, Xtensa LX7) — no snapshot written to {:?}",
+                        cap.path
+                    );
                 }
                 // Capture once; keep running so the cold invocation still
                 // produces the normal serial/cycle evidence.

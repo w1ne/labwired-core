@@ -315,39 +315,54 @@ pub trait Cpu: Send {
     fn snapshot(&self) -> snapshot::CpuSnapshot;
     fn apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot);
 
-    /// Whether this CPU can produce a runtime snapshot. FALSE by default:
-    /// only the arches that override `runtime_snapshot` say yes.
+    /// Full mid-flight CPU state for binary runtime snapshots: the arch tag
+    /// plus an opaque blob the matching CPU type knows how to parse, or
+    /// `None` when this core models no runtime snapshot at all.
     ///
-    /// Ask this BEFORE calling `runtime_snapshot`. It exists because the old
-    /// default was `unimplemented!()`, and in wasm a Rust panic lowers to an
-    /// `unreachable` TRAP. A trap runs no destructors, so wasm-bindgen's
-    /// borrow guard leaks and the WasmSimulator stays borrowed forever —
-    /// every later call, `step_batch` included, then fails with "recursive
-    /// use of an object". One snapshot attempt on an unsupported CPU bricked
-    /// the whole engine, which is exactly how every Cortex-M lab died a few
-    /// seconds into a run.
-    fn supports_runtime_snapshot(&self) -> bool {
-        false
+    /// `None` is the ONLY way to say "I cannot" — the return type carries no
+    /// arch tag to fabricate. That is the point. This method used to return
+    /// `(CpuKind::ArmCortexM, Vec::new())` for every core without an
+    /// implementation, so an AVR reported itself as a Cortex-M and a Cortex-M
+    /// reported a well-formed snapshot with an EMPTY body. Nothing downstream
+    /// could tell that apart from a real capture: `snapshot capture` wrote the
+    /// file, the browser handed the bytes to JS, and the resume restored no
+    /// registers while every layer reported success. A simulator sold as a
+    /// hardware oracle may decline to answer; it may not invent one.
+    ///
+    /// The default is deliberately a value and not a panic: in wasm a Rust
+    /// panic lowers to an `unreachable` TRAP, which runs no destructors, so
+    /// wasm-bindgen's borrow guard leaks and the `WasmSimulator` stays
+    /// borrowed forever — every later call, `step_batch` included, then fails
+    /// with "recursive use of an object". One snapshot attempt on an
+    /// unsupported CPU bricked the whole engine, which is how Cortex-M labs
+    /// died seconds into a run. `None` returns normally and leaves the module
+    /// healthy.
+    ///
+    /// A core that overrides this MUST also override
+    /// [`Self::apply_runtime_snapshot`] — a capture nothing can restore is
+    /// the same lie in the other direction. `cpu_runtime_snapshot_honesty`
+    /// fails the build if the two halves ever come apart.
+    fn runtime_snapshot(&self) -> Option<(runtime_snapshot::CpuKind, Vec<u8>)> {
+        None
     }
 
-    /// Full mid-flight CPU state for binary runtime snapshots. Returns the
-    /// arch tag + an opaque blob the matching CPU type knows how to parse.
+    /// Apply a previously-taken runtime snapshot.
     ///
-    /// Overridden by the arches that support it; the default answers empty
-    /// rather than panicking, so a stray call can never trap the module. Gate
-    /// real callers on `supports_runtime_snapshot()`.
-    fn runtime_snapshot(&self) -> (runtime_snapshot::CpuKind, Vec<u8>) {
-        (runtime_snapshot::CpuKind::ArmCortexM, Vec::new())
-    }
-
-    /// Apply a previously-taken runtime snapshot. Default no-op so
-    /// stub/test CPUs don't need to override.
+    /// The default REFUSES. It used to be `Ok(())` with the bytes dropped on
+    /// the floor, which made "restored" and "silently ignored" the same
+    /// observable outcome: `WasmSimulator::apply_runtime_snapshot` returned
+    /// success to JS after leaving the CPU cold and the peripherals warm — a
+    /// machine that never existed on silicon, reported as a good resume. A
+    /// core that models no restore says so, and the caller decides.
     fn apply_runtime_snapshot(
         &mut self,
-        _kind: runtime_snapshot::CpuKind,
+        kind: runtime_snapshot::CpuKind,
         _bytes: &[u8],
     ) -> SimResult<()> {
-        Ok(())
+        Err(SimulationError::NotImplemented(format!(
+            "apply_runtime_snapshot: this CPU models no runtime snapshot, so a \
+             {kind:?} blob cannot be restored onto it"
+        )))
     }
     fn get_register_names(&self) -> Vec<String>;
     fn index_of_register(&self, name: &str) -> Option<u8>;
@@ -471,10 +486,7 @@ impl Cpu for Box<dyn Cpu> {
     fn apply_snapshot(&mut self, s: &snapshot::CpuSnapshot) {
         (**self).apply_snapshot(s)
     }
-    fn supports_runtime_snapshot(&self) -> bool {
-        (**self).supports_runtime_snapshot()
-    }
-    fn runtime_snapshot(&self) -> (runtime_snapshot::CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(runtime_snapshot::CpuKind, Vec<u8>)> {
         (**self).runtime_snapshot()
     }
     fn apply_runtime_snapshot(
@@ -2329,13 +2341,21 @@ impl<C: Cpu> Machine<C> {
     /// on a freshly-constructed `Machine` with the same firmware loaded
     /// and the same bus topology.
     ///
+    /// `None` when this machine's CPU models no runtime snapshot
+    /// ([`Cpu::runtime_snapshot`]). A machine-level snapshot whose CPU half
+    /// is missing is not a cheaper snapshot, it is a resume that silently
+    /// starts from a cold core with warm RAM — so there is no such value to
+    /// return. Callers that used to gate on a separate capability query now
+    /// simply handle the `None`, which cannot disagree with what a capture
+    /// would actually contain.
+    ///
     /// Distinct from [`Self::snapshot`] (which produces a JSON value for
     /// the determinism gates) — this one is binary, captures everything
     /// needed for resume (full SR file, shadow stacks, RAM regions, etc.)
     /// and is what the playground uses to ship pre-warmed boot snapshots
     /// alongside firmware ELFs.
-    pub fn take_runtime_snapshot(&self) -> runtime_snapshot::MachineRuntimeSnapshot {
-        let (cpu_kind, cpu_data) = self.cpu.runtime_snapshot();
+    pub fn take_runtime_snapshot(&self) -> Option<runtime_snapshot::MachineRuntimeSnapshot> {
+        let (cpu_kind, cpu_data) = self.cpu.runtime_snapshot()?;
         let peripherals: Vec<(String, Vec<u8>)> = self
             .bus
             .peripherals
@@ -2366,7 +2386,7 @@ impl<C: Cpu> Machine<C> {
             }
             snap.memories = memories;
         }
-        snap
+        Some(snap)
     }
 
     /// Restore from a previously-taken runtime snapshot. Bus topology
@@ -2375,6 +2395,12 @@ impl<C: Cpu> Machine<C> {
     /// peripherals named in the snapshot but missing on the bus return
     /// `MissingPeripheral` so the caller can fail loudly instead of
     /// silently dropping state.
+    ///
+    /// The CPU half is restored FIRST and its error is propagated, so a core
+    /// that models no restore ([`Cpu::apply_runtime_snapshot`]'s default)
+    /// fails the whole call before a single peripheral is touched. That
+    /// ordering is deliberate: a partial restore that reported `Ok(())` gave
+    /// back a machine with warm peripherals and a cold CPU.
     pub fn apply_runtime_snapshot(
         &mut self,
         snap: &runtime_snapshot::MachineRuntimeSnapshot,
