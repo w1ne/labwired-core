@@ -9,6 +9,7 @@
 // `labwired_cli::...` paths the binary used valid inside the library.
 extern crate self as labwired_cli;
 
+pub mod baseline;
 pub mod bus_vcd;
 pub mod coverage;
 pub mod crash_report;
