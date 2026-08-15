@@ -560,6 +560,12 @@ impl Peripheral for Esp32c3Gpio {
         Ok(((word >> byte_off) & 0xFF) as u8)
     }
 
+    fn peek(&self, offset: u64) -> Option<u8> {
+        let word_off = offset & !3;
+        let byte_off = (offset & 3) * 8;
+        Some(((self.read_word(word_off) >> byte_off) & 0xFF) as u8)
+    }
+
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let word_off = offset & !3;
         let byte_off = offset & 3;
@@ -744,6 +750,17 @@ mod tests {
 
         gpio.write_u32(OUT_W1TC, 1 << 4).unwrap();
         assert_eq!(gpio.out_value(), 1 << 5);
+    }
+
+    #[test]
+    fn side_effect_free_peek_exposes_modeled_output_register() {
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.write_u32(OUT_W1TS, 1 << 8).unwrap();
+
+        let bytes = (0..4)
+            .map(|byte| gpio.peek(OUT + byte).expect("modeled GPIO OUT byte"))
+            .collect::<Vec<_>>();
+        assert_eq!(u32::from_le_bytes(bytes.try_into().unwrap()), 1 << 8);
     }
 
     #[test]
