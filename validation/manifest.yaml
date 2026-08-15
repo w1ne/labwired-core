@@ -2593,6 +2593,26 @@ boards:
     # attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
+    # 2026-08-15: configs/peripherals/esp32s3/interrupt_core0.yaml carried the
+    # ESP32-C3's register map, not the S3's — SPI_INTR_2_MAP at 0x4C (0x54 on
+    # this part), UART_INTR_MAP at 0x58 (0x6C), TG_T0_INT_MAP at 0xA0 (0xC8),
+    # source 0 named MAC_INTR_MAP (the C3's name for PRO_MAC_INTR_MAP), every
+    # *_MAP resetting to 0 where silicon resets it to 0x10, plus the C3's
+    # RISC-V INTC block (CPU_INT_ENABLE / CPU_INT_PRI_n / CPU_INT_THRESH),
+    # which an Xtensa LX7 part does not have. Corrected against the vendored
+    # SVD (tests/fixtures/svd/esp32s3.svd, INTERRUPT_CORE0) and gated by a new
+    # test that compares every register in the descriptor to it.
+    #
+    # THE NINE ANCHORED RESET REGISTERS DO NOT MOVE. The 2026-08-09 capture
+    # read UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM and
+    # RTC_CNTL; INTERRUPT_CORE0 is not among them, so no captured value is
+    # affected and a re-capture could not evidence this change either way.
+    # No S3 firmware run changes either: configure_xtensa_esp32s3 clears the
+    # from_config peripheral bank and installs the behavioural Rust model
+    # (crates/core/src/peripherals/esp32s3/intmatrix.rs), which already decodes
+    # at 4*source_id, so this descriptor is live only on from_config-built
+    # buses (chip_conformance, bus_visibility). Nothing is owed by this ack;
+    # the re-captures already owed above still are.
     # 2026-08-16: nine RESET VALUES corrected in configs/peripherals/esp32s3/
     # {timg0,gpio}.yaml — T0CONFIG/T1CONFIG, WDTCONFIG0, WDTCONFIG2..5,
     # RTCCALICFG and GPIO REG_DATE. Like the nRF52840 UARTE BAUDRATE ack above
@@ -2677,7 +2697,10 @@ boards:
     # 2026-08-12: chip yaml documents sar_adc_s3 + twai already registered by
     # configure_xtensa_esp32s3 (ESP32S3_PERIPHERALS). Address-map honesty only —
     # 9-reg reset-state silicon anchor unchanged. Arduino matrix L5/L8 green.
-    drift_ack_digest: ce851b8dd4e6a6e03c46521c4a0729321de66d29805e73b719b821da53edaf1d
+    # 2026-08-20: interrupt_core0.yaml now names the S3's own source-map
+    # offsets (SVD INTERRUPT_CORE0), not the C3's. Descriptor-only; the
+    # behavioural matrix and the 9-reg reset-state anchor are untouched.
+    drift_ack_digest: 6d1b78a03ba2a9c73fccb758fc80d80361d505d9562e7a7f96bc871bb8d3b62a
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
