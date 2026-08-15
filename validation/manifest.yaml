@@ -758,8 +758,15 @@ boards:
     # the 84/84 RESET_VALUES this capture pins cannot observe a Rust return
     # type. The source digest moved; the model did not. No live re-capture owed
     # for this change; any re-capture already owed above still is.
+    # 2026-08-15: esp32c3/gpio.rs gained a side-effect-free `peek` that returns
+    # the same already-modeled register bytes as `read`. This changes only the
+    # debugger/twin inspection surface from `null` to the live GPIO value; no
+    # MMIO read/write behavior, register layout, base, or reset value changed.
+    # The focused GPIO peek regression and existing ESP32-C3 GPIO suite pass.
+    # The reset-state silicon oracle is therefore unaffected; no live reset
+    # re-capture is warranted for this observer-only fix.
     drift_ack: 2026-08-15
-    drift_ack_digest: a79a88552908426ae843082500d5ecaafc06497f76c133d5b76596309e36585c
+    drift_ack_digest: 235cfa41817e6ee67bc719337ec0d261a9889745f98c02f05396a9564bcae9fd
     models:
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
