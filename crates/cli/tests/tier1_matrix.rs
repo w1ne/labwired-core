@@ -38,8 +38,7 @@ fn tier1_matrix_runs_all_available_fixtures() {
     // Every declared target is accounted for exactly once, as either exercised
     // or skipped. A target that appears in neither is a target the harness
     // quietly dropped.
-    let exercised: std::collections::BTreeSet<&str> =
-        matrix.0.keys().map(|s| s.as_str()).collect();
+    let exercised: std::collections::BTreeSet<&str> = matrix.0.keys().map(|s| s.as_str()).collect();
     let skipped_set: std::collections::BTreeSet<&str> =
         skipped.iter().map(|s| s.as_str()).collect();
     let unaccounted: Vec<&str> = tier1::TIER1_TARGETS

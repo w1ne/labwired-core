@@ -133,7 +133,10 @@ pub fn resolve(root: &Path, base_ref: &str, path: &str, what: &str) -> Result<Ba
     // non-zero, and collapsing the two would turn a new file into a hard error.
     if git(root, &["cat-file", "-e", &format!("{commit}:{path}")]).is_err() {
         return Ok(Baseline {
-            label: format!("{} (path absent at baseline)", &commit[..commit.len().min(12)]),
+            label: format!(
+                "{} (path absent at baseline)",
+                &commit[..commit.len().min(12)]
+            ),
             blob: None,
         });
     }
@@ -181,7 +184,12 @@ mod tests {
         git(&dir, &["branch", "trunk"]).unwrap();
         git(&dir, &["checkout", "-q", "-b", "work"]).unwrap();
         // The shape that used to slip through: change the artifact on the branch.
-        commit(&dir, "snap.json", "{\"v\":0}", "lower it and rewrite the snapshot");
+        commit(
+            &dir,
+            "snap.json",
+            "{\"v\":0}",
+            "lower it and rewrite the snapshot",
+        );
 
         let found = resolve(&dir, "trunk", "snap.json", "test gate").unwrap();
         assert_eq!(

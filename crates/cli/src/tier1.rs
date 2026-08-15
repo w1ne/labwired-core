@@ -460,7 +460,10 @@ pub fn resolve_baseline_matrix_against(
         return Ok((found.label, Tier1Matrix::default()));
     };
     let matrix: Tier1Matrix = serde_json::from_str(&blob).map_err(|e| {
-        format!("tier1 ratchet: baseline {MATRIX_PATH} at {} does not parse: {e}", found.label)
+        format!(
+            "tier1 ratchet: baseline {MATRIX_PATH} at {} does not parse: {e}",
+            found.label
+        )
     })?;
     Ok((found.label, matrix))
 }

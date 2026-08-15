@@ -36,13 +36,9 @@ fn esp32s3_coverage_does_not_regress() {
 
     let root = repo_root();
     let base_ref = labwired_cli::baseline::baseline_ref();
-    let found = labwired_cli::baseline::resolve(
-        &root,
-        &base_ref,
-        COVERAGE_PATH,
-        "svd coverage ratchet",
-    )
-    .expect("resolve the coverage baseline");
+    let found =
+        labwired_cli::baseline::resolve(&root, &base_ref, COVERAGE_PATH, "svd coverage ratchet")
+            .expect("resolve the coverage baseline");
 
     let Some(blob) = found.blob else {
         // The snapshot is new in this commit: nothing has been promised yet, so
@@ -52,7 +48,12 @@ fn esp32s3_coverage_does_not_regress() {
     };
 
     let snapshot: labwired_cli::coverage::CoverageMatrix = serde_json::from_str(&blob)
-        .unwrap_or_else(|e| panic!("baseline {COVERAGE_PATH} at {} does not parse: {e}", found.label));
+        .unwrap_or_else(|e| {
+            panic!(
+                "baseline {COVERAGE_PATH} at {} does not parse: {e}",
+                found.label
+            )
+        });
 
     let mut regressions: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     for (name, snap) in &snapshot.0 {
