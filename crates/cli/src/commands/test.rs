@@ -117,10 +117,10 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
 
 use super::esp32_boot_state::resolve_esp_partitions_bin;
 
-/// True when the system manifest at `sys_path` targets the ESP32-C3 (the only
-/// chip family with an ELF-less faithful rom-boot machine). Reads the manifest
-/// and its referenced chip descriptor; any load failure → false (fall back to
-/// requiring firmware). Mirrors the C3 detection used on the fast-boot path.
+/// True when the system manifest at `sys_path` targets the ESP32-C3. Reads the
+/// manifest and its referenced chip descriptor; any load failure → false (fall
+/// back to requiring firmware). Mirrors the C3 detection used on the fast-boot
+/// path.
 fn system_is_esp32c3(
     system: &labwired_config::ResolvedSystem,
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
@@ -129,6 +129,220 @@ fn system_is_esp32c3(
         .chip_with_plugins(&crate::plugin_chip_yaml(plugins))
         .map(|c| c.name == "esp32c3")
         .unwrap_or(false)
+}
+
+/// True when the system targets an ESP32-S3 die. `is_esp32s3` (not `== "esp32s3"`)
+/// so shipped board variants — `esp32s3-zero` &c. — resolve to the same silicon,
+/// exactly as the ELF-bearing rom-boot arm selects its machine.
+fn system_is_esp32s3(
+    system: &labwired_config::ResolvedSystem,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> bool {
+    system
+        .chip_with_plugins(&crate::plugin_chip_yaml(plugins))
+        .map(|c| c.is_esp32s3())
+        .unwrap_or(false)
+}
+
+/// Which chip family's ELF-less faithful rom-boot machine a firmware-less
+/// request selects. Every other missing-firmware case is still a config error:
+/// only these two families have a mask-ROM machine that can boot with the flash
+/// image alone.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum NoElfRomBootChip {
+    Esp32c3,
+    Esp32s3,
+}
+
+/// Select the ELF-less rom-boot family for this request, or `None` to fall
+/// through to the normal "firmware required" contract.
+///
+/// Both arms need the SAME two things: the chip's flash-image env pin set (the
+/// flash image is the program the mask ROM loads) and a manifest that resolves
+/// to that silicon. They differ in what a bare `--resume-snapshot` means:
+/// the C3 has a snapshot resume path, the S3 does not (see the Xtensa guard in
+/// `run_test`), so an S3 request must actually carry `--rom-boot`.
+fn no_elf_rom_boot_chip(
+    args: &TestArgs,
+    system: Option<&labwired_config::ResolvedSystem>,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> Option<NoElfRomBootChip> {
+    let system = system?;
+    if (args.rom_boot || args.resume_snapshot.is_some())
+        && std::env::var("LABWIRED_ESP32C3_FLASH").is_ok()
+        && system_is_esp32c3(system, plugins)
+    {
+        return Some(NoElfRomBootChip::Esp32c3);
+    }
+    if args.rom_boot
+        && std::env::var("LABWIRED_ESP32S3_FLASH").is_ok()
+        && system_is_esp32s3(system, plugins)
+    {
+        return Some(NoElfRomBootChip::Esp32s3);
+    }
+    None
+}
+
+/// Faithful ESP32-S3 (Xtensa LX7) rom-boot with NO debug ELF — the S3 twin of
+/// [`run_c3_rom_boot_no_elf`], and for the same production reason: the hosted
+/// compile ships flash images but no `firmware_ref` for rom-boot chips (a
+/// multi-MB debug ELF overflows the D1 blob row → SQLITE_TOOBIG), so the builder
+/// sends `labwired test --rom-boot` with `LABWIRED_ESP32S3_FLASH` and no ELF.
+///
+/// Nothing in the S3 machine needs the app ELF. This mirrors the `is_esp32s3 &&
+/// args.rom_boot` arm of `run_test` line for line: `configure_xtensa_esp32s3`
+/// with `real_reset_boot`, the manifest's external devices, the Faithful
+/// boot-mode check, faithful windowed registers. The mask ROM comes from
+/// `esp32s3_rom::provision_rom_images()` (explicit `LABWIRED_ESP32S3_ROM`/`_DROM`
+/// bins, else the toolchain's ROM ELF — the vendor's mask-ROM dump, not the
+/// firmware — else the vendored images embedded at build time), and the
+/// application comes out of the flash image through the SPI-flash controller.
+/// The ELF arm only ever used `firmware_bytes` for symbol/diagnostic context;
+/// here `execute_test_loop` gets an empty slice and those diagnostics degrade
+/// gracefully, exactly as on the C3 ELF-less path.
+#[allow(clippy::too_many_arguments)]
+fn run_s3_rom_boot_no_elf(
+    args: &TestArgs,
+    resolved_limits: &TestLimits,
+    system_path: Option<&std::path::PathBuf>,
+    system: Option<&labwired_config::ResolvedSystem>,
+    assertions: &[TestAssertion],
+    faults: &[labwired_config::FaultSpec],
+    require_fault_fired: bool,
+    stimuli: &[labwired_config::StimulusSpec],
+    uart_injections: &[labwired_config::UartInjectionSpec],
+    stack_paint: bool,
+    chip_mem: Option<crate::resource_report::ChipMemoryMap>,
+) -> ExitCode {
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
+
+    let fail = |msg: String| -> ExitCode {
+        error!("{}", msg);
+        write_config_error_outputs(args, None, system_path, None, Some(resolved_limits), msg);
+        ExitCode::from(EXIT_CONFIG_ERROR)
+    };
+
+    // Same guard the ELF Xtensa path carries: the S3 faithful machine populates
+    // app regions via bootloader copies during the cold boot, so resuming it
+    // needs cache re-derivation work that is deferred. Fail loudly rather than
+    // silently restore a partial state.
+    if args.resume_snapshot.is_some() {
+        return fail(
+            "--resume-snapshot is not yet supported for ESP32-S3 (Xtensa); \
+             cold-boot with --rom-boot instead"
+                .to_string(),
+        );
+    }
+
+    let Some(manifest) = system.map(|s| s.manifest.clone()) else {
+        return fail(
+            "ELF-less ESP32-S3 rom-boot needs a resolved system (set inputs.system or \
+             inputs.chip)"
+                .to_string(),
+        );
+    };
+
+    let uart_tx = Arc::new(Mutex::new(Vec::new()));
+    let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
+
+    let mut bus = labwired_core::bus::SystemBus::new();
+    let opts = Esp32s3Opts {
+        real_reset_boot: true,
+        ..Esp32s3Opts::default()
+    };
+    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+    // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
+    if let Err(e) =
+        labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+    {
+        return fail(format!("ESP32-S3 external_devices attach: {e:#}"));
+    }
+    bus.refresh_peripheral_index();
+    if wiring.boot_mode != Esp32s3BootMode::Faithful {
+        return fail(
+            "--rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
+             Install the ESP toolchain or set LABWIRED_ESP32S3_ROM_ELF \
+             (or pin LABWIRED_ESP32S3_ROM/_DROM)."
+                .to_string(),
+        );
+    }
+    let mut cpu = wiring.cpu;
+    cpu.faithful_windows = true;
+    bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.observers.push(metrics.clone());
+
+    let fault_evidence = handle_faults(&mut machine.bus, faults);
+
+    // No ELF: empty firmware bytes degrade symbol/hash diagnostics gracefully; a
+    // placeholder path is recorded as config.firmware in result.json.
+    let placeholder = std::path::PathBuf::from("<flash-image>");
+    let exit_code = execute_test_loop(
+        args,
+        &mut machine,
+        resolved_limits,
+        assertions,
+        &[],
+        &uart_tx,
+        &metrics,
+        &placeholder,
+        system_path,
+        faults,
+        require_fault_fired,
+        fault_evidence,
+        stimuli,
+        uart_injections,
+        // Xtensa is never JIT-eligible (the JIT is RISC-V only).
+        false,
+        labwired_core::Arch::XtensaLx7,
+        stack_paint,
+        chip_mem,
+    );
+    // Same readout the ELF-bearing S3 arm emits — a panel wired to this machine
+    // must report identically whether or not an ELF came with the request.
+    emit_device_block_readout(&machine.bus);
+    exit_code
+}
+
+/// Device-block render readout. Surfaces the attached panel block's REAL render
+/// state — refresh_gen AND black-plane ink — so a generic verify (e.g.
+/// proto.cat's device loop) can judge whether the device-block actually PAINTED,
+/// not merely refreshed. A refresh with a blank plane is a false positive (the
+/// DC-latch class of bug; see FIDELITY.md §E2). Emitted to stderr alongside the
+/// boot logs.
+///
+/// ONE home: both S3 rom-boot arms (ELF-bearing and ELF-less) call this, so the
+/// two cannot drift into reporting different things about the same panel.
+fn emit_device_block_readout(bus: &labwired_core::bus::SystemBus) {
+    use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
+    use labwired_core::peripherals::esp32::spi::Esp32Spi;
+    let Some(idx) = bus.find_peripheral_index_by_name("spi3") else {
+        return;
+    };
+    let Some(any) = bus.peripherals[idx].dev.as_any() else {
+        return;
+    };
+    let Some(spi3) = any.downcast_ref::<Esp32Spi>() else {
+        return;
+    };
+    for dev in &spi3.attached_devices {
+        let Some(a) = dev.as_any() else { continue };
+        if let Some(p) = a.downcast_ref::<Ssd1680Tricolor290>() {
+            let ink = p.black_plane().iter().filter(|&&b| b != 0xFF).count();
+            eprintln!(
+                "[device-block] ssd1680_tricolor_290 refresh_gen={} black_ink={}",
+                p.refresh_generation(),
+                ink
+            );
+        } else if let Some(p) = a.downcast_ref::<Uc8151dTricolor290>() {
+            let ink = p.black_plane().iter().filter(|&&b| b != 0xFF).count();
+            eprintln!(
+                "[device-block] uc8151d_tricolor_290 refresh_gen={} black_ink={}",
+                p.refresh_generation(),
+                ink
+            );
+        }
+    }
 }
 
 /// Faithful ESP32-C3 (RISC-V) rom-boot with NO debug ELF. The flash image
@@ -659,11 +873,11 @@ pub(crate) fn run_test(
     });
 
     // Resolve the firmware source. Normally an ELF is required (via --firmware or
-    // inputs.firmware). The ONE exception is the faithful ESP32-C3 (RISC-V)
-    // rom-boot path: the flash image (LABWIRED_ESP32C3_FLASH) is the program the
+    // inputs.firmware). The exception is a faithful rom-boot chip: the flash
+    // image (LABWIRED_ESP32C3_FLASH / LABWIRED_ESP32S3_FLASH) is the program the
     // real mask ROM loads, so no debug ELF is needed — the hosted compile
     // deliberately withholds it (a multi-MB ELF overflows the D1 blob row →
-    // SQLITE_TOOBIG). See run_c3_rom_boot_no_elf.
+    // SQLITE_TOOBIG). See run_c3_rom_boot_no_elf / run_s3_rom_boot_no_elf.
     let firmware_path_opt: Option<std::path::PathBuf> = match args.firmware.clone() {
         Some(p) => Some(p),
         None => script_firmware
@@ -672,37 +886,58 @@ pub(crate) fn run_test(
             .map(|s| resolve_script_path(&args.script, s)),
     };
 
-    // ELF-less C3 rom-boot: no firmware given, --rom-boot (or a --resume-snapshot
-    // cache-hit) requested, the flash image env pin is set, and the manifest's
-    // chip is esp32c3. Every other missing-firmware case is still a config error,
-    // and no other chip family has an ELF-less rom-boot machine.
-    let no_elf_rom_boot = firmware_path_opt.is_none()
-        && (args.rom_boot || args.resume_snapshot.is_some())
-        && std::env::var("LABWIRED_ESP32C3_FLASH").is_ok()
-        && resolved_system
-            .as_ref()
-            .map(|s| system_is_esp32c3(s, plugins))
-            .unwrap_or(false);
+    // ELF-less rom-boot: no firmware given, a rom-boot requested, the chip's
+    // flash image env pin set, and the manifest resolving to a chip that HAS a
+    // mask-ROM machine. Every other missing-firmware case is still a config
+    // error.
+    let no_elf_rom_boot = if firmware_path_opt.is_none() {
+        no_elf_rom_boot_chip(&args, resolved_system.as_ref(), plugins)
+    } else {
+        None
+    };
 
-    if no_elf_rom_boot {
-        eprintln!(
-            "labwired-cli test: no --firmware provided; faithful ESP32-C3 rom-boot from \
-             LABWIRED_ESP32C3_FLASH (the flash image is the program; ELF-less)"
-        );
-        let exit_code = run_c3_rom_boot_no_elf(
-            &args,
-            &resolved_limits,
-            system_path.as_ref(),
-            resolved_system.as_ref(),
-            &assertions,
-            &faults,
-            require_fault_fired,
-            &stimuli,
-            &uart_injections,
-            plugins,
-            stack_paint,
-            chip_mem,
-        );
+    if let Some(chip) = no_elf_rom_boot {
+        let exit_code = match chip {
+            NoElfRomBootChip::Esp32c3 => {
+                eprintln!(
+                    "labwired-cli test: no --firmware provided; faithful ESP32-C3 rom-boot from \
+                     LABWIRED_ESP32C3_FLASH (the flash image is the program; ELF-less)"
+                );
+                run_c3_rom_boot_no_elf(
+                    &args,
+                    &resolved_limits,
+                    system_path.as_ref(),
+                    resolved_system.as_ref(),
+                    &assertions,
+                    &faults,
+                    require_fault_fired,
+                    &stimuli,
+                    &uart_injections,
+                    plugins,
+                    stack_paint,
+                    chip_mem,
+                )
+            }
+            NoElfRomBootChip::Esp32s3 => {
+                eprintln!(
+                    "labwired-cli test: no --firmware provided; faithful ESP32-S3 rom-boot from \
+                     LABWIRED_ESP32S3_FLASH (the flash image is the program; ELF-less)"
+                );
+                run_s3_rom_boot_no_elf(
+                    &args,
+                    &resolved_limits,
+                    system_path.as_ref(),
+                    resolved_system.as_ref(),
+                    &assertions,
+                    &faults,
+                    require_fault_fired,
+                    &stimuli,
+                    &uart_injections,
+                    stack_paint,
+                    chip_mem,
+                )
+            }
+        };
         // Best-effort Pro-tier metering (no ELF → hash the empty program; the
         // no-key MCP path never meters). Mirrors the ELF paths' tail metering.
         if let Some(ref key) = api_key_opt {
@@ -1332,44 +1567,9 @@ pub(crate) fn run_test(
                 stack_paint,
                 chip_mem,
             );
-            // Device-block render readout. Surfaces the attached panel block's
-            // REAL render state — refresh_gen AND black-plane ink — so a generic
-            // verify (e.g. proto.cat's device loop) can judge whether the
-            // device-block actually PAINTED, not merely refreshed. A refresh with
-            // a blank plane is a false positive (the DC-latch class of bug; see
-            // FIDELITY.md §E2). Emitted to stderr alongside the boot logs.
-            {
-                use labwired_core::peripherals::components::{
-                    Ssd1680Tricolor290, Uc8151dTricolor290,
-                };
-                use labwired_core::peripherals::esp32::spi::Esp32Spi;
-                if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
-                    if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
-                        if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
-                            for dev in &spi3.attached_devices {
-                                let Some(a) = dev.as_any() else { continue };
-                                if let Some(p) = a.downcast_ref::<Ssd1680Tricolor290>() {
-                                    let ink =
-                                        p.black_plane().iter().filter(|&&b| b != 0xFF).count();
-                                    eprintln!(
-                                        "[device-block] ssd1680_tricolor_290 refresh_gen={} black_ink={}",
-                                        p.refresh_generation(),
-                                        ink
-                                    );
-                                } else if let Some(p) = a.downcast_ref::<Uc8151dTricolor290>() {
-                                    let ink =
-                                        p.black_plane().iter().filter(|&&b| b != 0xFF).count();
-                                    eprintln!(
-                                        "[device-block] uc8151d_tricolor_290 refresh_gen={} black_ink={}",
-                                        p.refresh_generation(),
-                                        ink
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Device-block render readout (see `emit_device_block_readout` —
+            // shared with the ELF-less S3 rom-boot arm).
+            emit_device_block_readout(&machine.bus);
             if let Some(ref key) = api_key_opt {
                 use sha2::{Digest, Sha256};
                 let mut hasher = Sha256::new();
