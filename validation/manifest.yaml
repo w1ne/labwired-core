@@ -743,8 +743,23 @@ boards:
     # attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
-    drift_ack: 2026-08-13
-    drift_ack_digest: f364ebc696e57daef3e0092e5697399c3c018db313aa4f44e830df1029836760
+    # 2026-08-15 (#991): `Cpu::runtime_snapshot` returns `Option<(CpuKind,
+    # Vec<u8>)>` instead of fabricating `(ArmCortexM, vec![])` for cores that
+    # model no snapshot, and the `supports_runtime_snapshot()` predicate — a
+    # second source of truth that could disagree with what a capture contained —
+    # is deleted. NOTHING THIS CAPTURE PINS MOVED. Read the whole diff for the
+    # two watched files rather than taking the summary: in
+    # crates/core/src/cpu/riscv.rs the override that returned `true` is removed
+    # and the return becomes `Some((CpuKind::RiscV, bytes))` — the SAME
+    # `CpuKind` over the SAME bincode bytes, so a C3 resume restores exactly
+    # what it restored before. In crates/core/src/peripherals/esp32c3/gpio.rs
+    # the only change is inside `#[cfg(test)]`: `.expect(...)` to unwrap the new
+    # Option. No register, reset value, or peripheral code path is touched, and
+    # the 84/84 RESET_VALUES this capture pins cannot observe a Rust return
+    # type. The source digest moved; the model did not. No live re-capture owed
+    # for this change; any re-capture already owed above still is.
+    drift_ack: 2026-08-15
+    drift_ack_digest: a79a88552908426ae843082500d5ecaafc06497f76c133d5b76596309e36585c
     models:
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
