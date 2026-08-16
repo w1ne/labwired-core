@@ -640,6 +640,14 @@ pub(crate) fn run_firmware(
     // select the MMU XIP model for it. Fast-boot uses identity per-window XIP.
     let opts = Esp32s3Opts {
         real_reset_boot: args.rom_boot,
+        // Size the flash backing from the chip descriptor, not the 4 MiB
+        // default: an N16R8 image puts data partitions well past 4 MiB (a WAD
+        // at 0x410000, say), and a short backing truncates them to 0xFF with no
+        // error — the partition table still reads fine, so it looks like a
+        // corrupt asset rather than a too-small model.
+        flash_size: labwired_config::ChipDescriptor::from_file(&args.chip)
+            .map(|c| c.flash.size as u32)
+            .unwrap_or(Esp32s3Opts::default().flash_size),
         ..Esp32s3Opts::default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);

@@ -23,6 +23,7 @@ pub mod lcd_cam;
 pub mod ledc;
 pub mod mcpwm;
 pub mod pcnt;
+pub mod psram_opi;
 pub mod rmt;
 pub mod rng;
 pub mod rsa;
