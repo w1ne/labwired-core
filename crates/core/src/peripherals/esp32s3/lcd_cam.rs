@@ -45,17 +45,19 @@
 //! | 0x04   | CAM_CTRL         | CAM clock / sampling-edge / mode config            |
 //! | 0x08   | CAM_CTRL1        | CAM_START=b30, CAM_RESET=b29, frame/line config    |
 //! | 0x0C   | CAM_RGB_YUV      | CAM RGB↔YUV color-conversion config                |
+//! | 0x10   | LCD_RGB_YUV      | LCD RGB↔YUV color-conversion config                |
 //! | 0x14   | LCD_USER         | LCD_START=b27, LCD_CMD=b26, LCD_DUMMY=b25, LCD_DOUT=b24, resets |
 //! | 0x18   | LCD_MISC        | LCD bus/CS timing, idle-level, AFIFO reset         |
 //! | 0x1C   | LCD_CTRL        | LCD RGB mode, h/v sync + de-output enables         |
 //! | 0x20   | LCD_CTRL1        | LCD RGB H/V front/back-porch + sync widths         |
 //! | 0x24   | LCD_CTRL2        | LCD sync pulse widths / polarity                   |
 //! | 0x28   | LCD_CMD_VAL      | LCD command value driven during the command phase  |
-//! | 0x2C   | LCD_DOUT_MODE    | LCD data-out bit-order / dly mode                  |
-//! | 0x34   | LC_DMA_INT_ENA   | interrupt enable mask                              |
-//! | 0x38   | LC_DMA_INT_RAW   | raw latched events (RO here)                       |
-//! | 0x3C   | LC_DMA_INT_ST    | INT_RAW & INT_ENA (RO)                             |
-//! | 0x40   | LC_DMA_INT_CLR   | W1C against INT_RAW                                |
+//! | 0x30   | LCD_DLY_MODE     | LCD output / D-C delay mode                        |
+//! | 0x38   | LCD_DATA_DOUT_MODE | per-data-line output delay mode                  |
+//! | 0x64   | LC_DMA_INT_ENA   | interrupt enable mask                              |
+//! | 0x68   | LC_DMA_INT_RAW   | raw latched events (RO here)                       |
+//! | 0x6C   | LC_DMA_INT_ST    | INT_RAW & INT_ENA (RO)                             |
+//! | 0x70   | LC_DMA_INT_CLR   | W1C against INT_RAW                                |
 //!
 //! Any other offset accepts writes silently and reads 0.
 
@@ -84,11 +86,27 @@ const REG_LCD_CTRL: u64 = 0x1C;
 const REG_LCD_CTRL1: u64 = 0x20;
 const REG_LCD_CTRL2: u64 = 0x24;
 const REG_LCD_CMD_VAL: u64 = 0x28;
-const REG_LCD_DOUT_MODE: u64 = 0x2C;
-const REG_LC_DMA_INT_ENA: u64 = 0x34;
-const REG_LC_DMA_INT_RAW: u64 = 0x38;
-const REG_LC_DMA_INT_ST: u64 = 0x3C;
-const REG_LC_DMA_INT_CLR: u64 = 0x40;
+/// LCD_DLY_MODE (0x30) — per-line output delay / D-C delay ticks.
+const REG_LCD_DLY_MODE: u64 = 0x30;
+/// LCD_DATA_DOUT_MODE (0x38) — per-data-line output delay mode.
+const REG_LCD_DOUT_MODE: u64 = 0x38;
+/// LCD_RGB_YUV (0x10) — the LCD-side colour converter. Distinct register from
+/// CAM_RGB_YUV at 0x0C.
+const REG_LCD_RGB_YUV: u64 = 0x10;
+// The LC_DMA interrupt block sits at 0x64..0x70, NOT at 0x34..0x40.
+// `soc/esp32s3/lcd_cam_reg.h`: LC_DMA_INT_ENA 0x64, _RAW 0x68, _ST 0x6c,
+// _CLR 0x70. Modelled 0x30 lower, every driver access missed:
+//   * `lcd_ll_enable_interrupt` (0x64) fell through to accept-and-ignore, so
+//     INT_ENA stayed 0 and INT_ST (RAW & ENA) could never be non-zero;
+//   * `lcd_ll_get_interrupt_status` (0x6c) read the unmapped-offset 0;
+//   * LCD_DATA_DOUT_MODE (0x38) landed on what the model called INT_RAW.
+// Net effect: `esp_lcd_new_i80_bus`'s
+//   while (!(lcd_ll_get_interrupt_status(dev) & LCD_LL_EVENT_TRANS_DONE)) {}
+// spun forever even with TRANS_DONE correctly latched in INT_RAW.
+const REG_LC_DMA_INT_ENA: u64 = 0x64;
+const REG_LC_DMA_INT_RAW: u64 = 0x68;
+const REG_LC_DMA_INT_ST: u64 = 0x6C;
+const REG_LC_DMA_INT_CLR: u64 = 0x70;
 
 // ── LCD_USER bits (TRM "LCD and Camera Controller"; soc/lcd_cam_reg.h) ──
 // The phase-enable bits are round-tripped as plain config and exercised by the
@@ -106,8 +124,13 @@ const LCD_DUMMY_BIT: u32 = 1 << 25;
 const LCD_CMD_BIT: u32 = 1 << 26;
 /// LCD_START — launch the configured transaction. Self-clears on completion.
 const LCD_START_BIT: u32 = 1 << 27;
-/// LCD_RESET — write-pulse reset of the LCD module. Self-clears.
-const LCD_RESET_BIT: u32 = 1 << 30;
+/// LCD_RESET — write-pulse reset of the LCD module (WO). Self-clears.
+///
+/// Bit **28**, per `soc/esp32s3/lcd_cam_struct.h` (`lcd_start[27]`,
+/// `lcd_reset[28]`, `lcd_dummy_cyclelen[30:29]`, `lcd_cmd_2_cycle_en[31]`).
+/// This used to be modelled at bit 30, which both accepted a reset that never
+/// arrived and *stripped* the low bit of `LCD_DUMMY_CYCLELEN` on every write.
+const LCD_RESET_BIT: u32 = 1 << 28;
 /// LCD_UPDATE — latch the LCD config into the working set. Write-pulse,
 /// self-clears.
 const LCD_UPDATE_BIT: u32 = 1 << 20;
@@ -153,6 +176,8 @@ pub struct Esp32s3LcdCam {
     lcd_clock: u32,
     cam_ctrl: u32,
     cam_rgb_yuv: u32,
+    lcd_rgb_yuv: u32,
+    lcd_dly_mode: u32,
     lcd_misc: u32,
     lcd_ctrl: u32,
     lcd_ctrl1: u32,
@@ -201,6 +226,8 @@ impl Esp32s3LcdCam {
             lcd_clock: 0,
             cam_ctrl: 0,
             cam_rgb_yuv: 0,
+            lcd_rgb_yuv: 0,
+            lcd_dly_mode: 0,
             lcd_misc: 0,
             lcd_ctrl: 0,
             lcd_ctrl1: 0,
@@ -285,6 +312,8 @@ impl Peripheral for Esp32s3LcdCam {
             REG_CAM_CTRL => self.cam_ctrl,
             REG_CAM_CTRL1 => self.cam_ctrl1 | if self.cam_running { CAM_START_BIT } else { 0 },
             REG_CAM_RGB_YUV => self.cam_rgb_yuv,
+            REG_LCD_RGB_YUV => self.lcd_rgb_yuv,
+            REG_LCD_DLY_MODE => self.lcd_dly_mode,
             // LCD_USER: stored config OR the live START (busy) bit. Pulse bits
             // were stripped on write so they read back 0.
             REG_LCD_USER => self.lcd_user | if self.lcd_busy { LCD_START_BIT } else { 0 },
@@ -317,6 +346,8 @@ impl Peripheral for Esp32s3LcdCam {
             REG_CAM_CTRL => self.cam_ctrl = value,
             REG_CAM_CTRL1 => self.write_cam_ctrl1(value),
             REG_CAM_RGB_YUV => self.cam_rgb_yuv = value,
+            REG_LCD_RGB_YUV => self.lcd_rgb_yuv = value,
+            REG_LCD_DLY_MODE => self.lcd_dly_mode = value,
             REG_LCD_USER => self.write_lcd_user(value),
             REG_LCD_MISC => self.lcd_misc = value,
             REG_LCD_CTRL => self.lcd_ctrl = value,
