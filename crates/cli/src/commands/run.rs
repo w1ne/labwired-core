@@ -139,8 +139,7 @@ pub(crate) fn run_firmware_riscv(
         // stack pointer before jumping to the app, so SP=0 and the app's first
         // prologue store faults near 0xffffffff. Seed SP at the top of DRAM
         // (16-byte aligned, RISC-V ABI) so real IDF apps can boot.
-        let sp_top =
-            (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+        let sp_top = (chip.ram.base + chip.ram.size) as u32;
         machine.cpu.set_sp(sp_top & !0xF);
         machine
     };

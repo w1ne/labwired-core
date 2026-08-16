@@ -2613,7 +2613,7 @@ impl<C: Cpu> Machine<C> {
                 FlashOp::SwapAndReset => {
                     // Swap the two architectural 1 MiB (0x100000) banks. The
                     // H563 flash buffer is sized to exactly 2 * BANK_SIZE by the
-                    // chip yaml (`size: "2MiB"`), so the same BANK_SIZE used by
+                    // chip yaml (`size: 2MiB`), so the same BANK_SIZE used by
                     // EraseSector above also bounds the swap — keeping erase and
                     // swap on one consistent bank-size notion (real silicon:
                     // bank 2 @ 0x08100000). swap_banks returns false if the

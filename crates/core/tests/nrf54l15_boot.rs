@@ -95,12 +95,13 @@ fn memory_map_is_rram_at_zero_with_256k_sram() {
     // RRAM, not flash: based at 0x0, and 1524 KB is the real (odd) size.
     assert_eq!(chip.flash.base, 0x0000_0000, "RRAM must be based at 0x0");
     assert_eq!(
-        chip.flash.size, "1524KB",
+        chip.flash.size,
+        1_524 * 1024,
         "nRF54L15 RRAM is 1524 KB (DT: cpuapp_rram), not 1.5 MB rounded"
     );
 
     assert_eq!(chip.ram.base, 0x2000_0000);
-    assert_eq!(chip.ram.size, "256KB");
+    assert_eq!(chip.ram.size, 256 * 1024);
 
     // Consequence that actually bites: the reset stack pointer. 256 KB at
     // 0x2000_0000 puts the initial SP at 0x2004_0000, which is exactly what

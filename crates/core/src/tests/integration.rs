@@ -406,11 +406,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -595,11 +595,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -682,11 +682,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -746,11 +746,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -816,11 +816,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -963,11 +963,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             memory_regions: Vec::new(),
             peripherals: vec![
@@ -1039,11 +1039,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -1106,11 +1106,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -1173,11 +1173,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -2402,11 +2402,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -2496,11 +2496,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -2563,11 +2563,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -2775,11 +2775,11 @@ pub mod integration_tests {
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -2939,11 +2939,11 @@ pub mod integration_tests {
                 core: None,
                 flash: MemoryRange {
                     base: 0x4200_0000,
-                    size: "4MB".to_string(),
+                    size: 4000000,
                 },
                 ram: MemoryRange {
                     base: 0x3FC8_0000,
-                    size: "400KB".to_string(),
+                    size: 400000,
                 },
                 reset_vector_offset: 0,
                 atomic_register_aliases: false,

@@ -332,8 +332,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
     }
 
     // 2. Memory Region Validation
-    let flash_size = labwired_config::parse_size(&chip.flash.size).unwrap_or(0);
-    let ram_size = labwired_config::parse_size(&chip.ram.size).unwrap_or(0);
+    let flash_size = chip.flash.size;
+    let ram_size = chip.ram.size;
 
     if flash_size == 0 {
         result.add_error(

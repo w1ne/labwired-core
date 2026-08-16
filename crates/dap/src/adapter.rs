@@ -1165,11 +1165,11 @@ mod tests {
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32000,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -1230,11 +1230,11 @@ mod tests {
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32000,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "gpiob".to_string(),
@@ -1309,11 +1309,11 @@ mod tests {
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32000,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "gpiob".to_string(),

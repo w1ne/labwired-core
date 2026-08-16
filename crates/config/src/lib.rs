@@ -75,11 +75,74 @@ pub enum Arch {
     Unknown,
 }
 
+/// Deserialize a memory size, in bytes, from the human form the chip YAMLs use.
+///
+/// The wire format is unchanged — `128KB`, `1.5 MiB`, `0x20000` and a bare
+/// `131072` all still load. What changed is that the parse happens HERE, once,
+/// at the boundary, instead of at each of the 39 places that used to call
+/// `parse_size(&chip.ram.size)` on a `String` field.
+///
+/// That mattered: 18 of those call sites ended `.unwrap_or(0)`. A size that
+/// failed to parse did not fail the run — it silently became **zero bytes of
+/// RAM**, and the eleven ESP32-C3 suites computing `sp_top = ram.base + size`
+/// got a stack pointer at the very bottom of RAM. Wrong, and green. Making the
+/// field a `u64` deletes the fallible read, so that state cannot be
+/// constructed: a bad size is now a load error naming the field.
+fn deserialize_size<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IntOrString {
+        Int(u64),
+        String(String),
+    }
+
+    match IntOrString::deserialize(deserializer)? {
+        IntOrString::Int(v) => Ok(v),
+        IntOrString::String(s) => parse_size(&s).map_err(serde::de::Error::custom),
+    }
+}
+
+/// Serialize a size back as a bare byte count.
+///
+/// Deliberately NOT re-rendered in a unit, because the units here do not mean
+/// what they look like. Measured against the real parser:
+///
+/// ```text
+///   1KB  -> 1024          1KiB -> 1024
+///   1MB  -> 1_000_000     1MiB -> 1_048_576
+/// ```
+///
+/// `KB` is BINARY and `MB` is DECIMAL — inconsistent with each other, inside
+/// one parser. So re-rendering `1048576` as `1MB` would read back as
+/// `1_000_000` and quietly shrink a chip's flash by 4.9% on every round trip.
+/// A bare byte count says exactly one thing and `parse_size` reads it back
+/// unchanged.
+///
+/// (The same asymmetry is a live fidelity bug in the committed chips: nine of
+/// them spell flash in `MB`, so e.g. esp32s3 models 16_000_000 bytes where the
+/// part has 16 MiB = 16_777_216. Not changed here — this commit is a refactor,
+/// and moving a flash boundary belongs with its own tests.)
+fn serialize_size<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u64(*value)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MemoryRange {
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
-    pub size: String, // e.g. "128KB"
+    /// Size in BYTES. Parsed from the YAML's human form at load time.
+    #[serde(
+        deserialize_with = "deserialize_size",
+        serialize_with = "serialize_size"
+    )]
+    pub size: u64,
 }
 
 /// An additional named RAM/ROM-backed memory window beyond the primary
@@ -91,7 +154,12 @@ pub struct NamedMemoryRange {
     pub name: String,
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
-    pub size: String,
+    /// Size in BYTES — same boundary parse as [`MemoryRange::size`].
+    #[serde(
+        deserialize_with = "deserialize_size",
+        serialize_with = "serialize_size"
+    )]
+    pub size: u64,
     /// Optional env var naming a path to a raw binary loaded into this region at
     /// `base` (e.g. a chip's mask ROM dump). Used for copyrighted vendor blobs
     /// that can't be committed — the region stays zero-filled if unset/missing.
@@ -2886,24 +2954,24 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             .get("FLASH")
             .map(|r| MemoryRange {
                 base: r.base,
-                size: format!("{}B", r.size),
+                // r.size is already a byte count; it used to be formatted to
+                // "<n>B" purely so this field could hold a String, then parsed
+                // straight back at every read. That round-trip is gone.
+                size: r.size,
             })
-            .unwrap_or(MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            });
+            .unwrap_or(MemoryRange { base: 0, size: 0 });
 
         let ram = ir
             .memory_regions
             .get("RAM")
             .map(|r| MemoryRange {
                 base: r.base,
-                size: format!("{}B", r.size),
+                // r.size is already a byte count; it used to be formatted to
+                // "<n>B" purely so this field could hold a String, then parsed
+                // straight back at every read. That round-trip is gone.
+                size: r.size,
             })
-            .unwrap_or(MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            });
+            .unwrap_or(MemoryRange { base: 0, size: 0 });
 
         Self {
             schema_version: default_schema_version(),
@@ -6103,6 +6171,68 @@ registers:
 }
 
 #[cfg(test)]
+mod memory_size_tests {
+    use super::*;
+
+    fn chip(flash: &str, ram: &str) -> Result<ChipDescriptor, serde_yaml::Error> {
+        serde_yaml::from_str(&format!(
+            "name: t\narch: arm\nflash: {{ base: 0, size: \"{flash}\" }}\n\
+             ram: {{ base: 0x20000000, size: \"{ram}\" }}\nperipherals: []\n"
+        ))
+    }
+
+    /// The wire format is unchanged: every spelling the chip yamls use still loads.
+    #[test]
+    fn the_human_forms_still_load() {
+        assert_eq!(chip("64KB", "16KiB").unwrap().flash.size, 64 * 1024);
+        assert_eq!(chip("64KB", "16KiB").unwrap().ram.size, 16 * 1024);
+        assert_eq!(chip("1MiB", "131072").unwrap().flash.size, 1024 * 1024);
+        assert_eq!(chip("1MiB", "131072").unwrap().ram.size, 131_072);
+    }
+
+    /// KB is BINARY and MB is DECIMAL, in the same parser. Pinned here because
+    /// it is the opposite of what the spelling suggests, it is load-bearing for
+    /// nine committed chips, and nothing else states it.
+    #[test]
+    fn kb_is_1024_and_mb_is_1000000() {
+        assert_eq!(chip("1KB", "1KB").unwrap().flash.size, 1024);
+        assert_eq!(chip("1MB", "1KB").unwrap().flash.size, 1_000_000);
+        assert_eq!(chip("1MiB", "1KB").unwrap().flash.size, 1_048_576);
+    }
+
+    /// The point of moving the parse to the boundary: a size that does not
+    /// parse is now a load error. It used to be stored verbatim and then hit
+    /// `parse_size(..).unwrap_or(0)` at the point of use — so a typo'd unit
+    /// gave the machine ZERO bytes of RAM and ran anyway.
+    #[test]
+    fn an_unparseable_size_fails_the_load_instead_of_becoming_zero() {
+        let err = chip("64K", "16KB").expect_err("a bare `K` is not a unit human_size accepts");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("flash"),
+            "the error must name the field: {msg}"
+        );
+        assert!(
+            msg.contains("Invalid size format"),
+            "the error must say what was wrong: {msg}"
+        );
+    }
+
+    /// Sizes round-trip through serde without changing value. They serialise as
+    /// a bare byte count precisely so this holds — re-rendering `1048576` as
+    /// `1MB` would read back as 1_000_000.
+    #[test]
+    fn a_size_round_trips_without_shrinking() {
+        let c = chip("1MiB", "192KB").unwrap();
+        let back: ChipDescriptor =
+            serde_yaml::from_str(&serde_yaml::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back.flash.size, c.flash.size);
+        assert_eq!(back.ram.size, c.ram.size);
+        assert_eq!(back.flash.size, 1_048_576);
+    }
+}
+
+#[cfg(test)]
 mod pin_map_tests {
     use super::*;
 
@@ -6111,8 +6241,8 @@ mod pin_map_tests {
         let yaml = r#"
 name: "test-chip"
 arch: "arm"
-flash: { base: 0, size: "64K" }
-ram: { base: 0x20000000, size: "16K" }
+flash: { base: 0, size: "64KB" }
+ram: { base: 0x20000000, size: "16KB" }
 peripherals: []
 pins:
   PC0: { gpio: gpioc, bit: 0, functions: [{ type: gpio, peripheral: gpioc }] }
@@ -6132,8 +6262,8 @@ pins:
         let yaml = r#"
 name: "no-pins"
 arch: "arm"
-flash: { base: 0, size: "64K" }
-ram: { base: 0x20000000, size: "16K" }
+flash: { base: 0, size: "64KB" }
+ram: { base: 0x20000000, size: "16KB" }
 peripherals: []
 "#;
         let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse");

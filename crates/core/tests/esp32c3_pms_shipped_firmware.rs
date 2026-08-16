@@ -148,7 +148,7 @@ fn boot_ble_pong() -> Machine<RiscV> {
                 .expect("load bootloader segment");
         }
     }
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    let sp_top = (chip.ram.base + chip.ram.size) as u32;
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(bootloader.entry_point as u32);
     let rec = machine.bus.max_safe_tick_interval();

@@ -1825,8 +1825,8 @@ pub(crate) fn run_test(
                             .unwrap_or_else(|| std::path::Path::new("."))
                             ;
                         if let Ok(chip) = labwired_config::ChipDescriptor::resolve_with(&manifest.chip, chip_dir, &crate::plugin_chip_yaml(plugins)) {
-                            if let Ok(ram_sz) = labwired_config::parse_size(&chip.ram.size) {
-                                let mut sp_top = (chip.ram.base + ram_sz) as u32;
+                            {
+                                let mut sp_top = (chip.ram.base + chip.ram.size) as u32;
                                 // ESP32-C3 boot stack placement:
                                 // - IDF `SOC_DRAM_HIGH` = 0x3FCE_0000; SP must
                                 //   be < that for `s_task_stack_is_sane_when_cache_frozen`.

@@ -664,8 +664,7 @@ impl WasmSimulator {
         load_program_segments_without_reset(&mut machine, &bootloader_image)
             .map_err(|e| JsValue::from_str(&format!("C3 flash fast-start load: {e}")))?;
 
-        let sp_top =
-            (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+        let sp_top = (chip.ram.base + chip.ram.size) as u32;
         machine.cpu.set_sp(sp_top & !0xF);
         machine.cpu.set_pc(bootloader_image.entry_point as u32);
 
@@ -825,8 +824,7 @@ impl WasmSimulator {
             .load_firmware(program_image)
             .map_err(|e| JsValue::from_str(&format!("Simulation Error: {}", e)))?;
 
-        let sp_top =
-            (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+        let sp_top = (chip.ram.base + chip.ram.size) as u32;
         machine.cpu.set_sp(sp_top & !0xF);
         machine.cpu.set_pc(program_image.entry_point as u32);
 

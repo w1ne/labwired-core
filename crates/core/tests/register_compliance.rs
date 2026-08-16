@@ -42,8 +42,8 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
     // Note: SystemBus::new() creates default memories. We resize them.
     // Actually, SystemBus::from_config uses chip.flash/ram directly, so we don't need to manually resize here.
     // We just need to ensure the values are valid.
-    let _flash_size = labwired_config::parse_size(&chip.flash.size)? as usize;
-    let _ram_size = labwired_config::parse_size(&chip.ram.size)? as usize;
+    let _flash_size = chip.flash.size as usize;
+    let _ram_size = chip.ram.size as usize;
 
     // Create Manual System Manifest
     let dummy_manifest = labwired_config::SystemManifest {

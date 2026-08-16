@@ -233,7 +233,7 @@ fn build_riscv_node(
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of RAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            let ram_size = labwired_config::parse_size(&chip.ram.size).unwrap_or(0);
+            let ram_size = chip.ram.size;
             let sp_top = (chip.ram.base + ram_size) as u32;
             machine.cpu.set_sp(sp_top & !0xF);
             Ok(Box::new(machine))
@@ -408,18 +408,10 @@ fn validate_cortex_m_firmware(
         );
     }
 
-    let flash_size = labwired_config::parse_size(&chip.flash.size).with_context(|| {
-        format!(
-            "node '{node_id}': invalid flash size for chip '{}'",
-            chip.name
-        )
-    })?;
-    let ram_size = labwired_config::parse_size(&chip.ram.size).with_context(|| {
-        format!(
-            "node '{node_id}': invalid RAM size for chip '{}'",
-            chip.name
-        )
-    })?;
+    // No parse and no error path: the sizes were validated when the chip
+    // deserialised, so "invalid flash size" is no longer reachable here.
+    let flash_size = chip.flash.size;
+    let ram_size = chip.ram.size;
     let vector_base = chip
         .flash
         .base

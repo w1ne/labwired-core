@@ -10,7 +10,7 @@ use crate::memory::LinearMemory;
 use crate::peripherals::gpio::GpioRegisterLayout;
 use crate::Peripheral;
 use anyhow::Context;
-use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
+use labwired_config::{ChipDescriptor, SystemManifest};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
@@ -137,12 +137,12 @@ impl SystemBus {
         // parse with `from_yaml`. Validating at load time only would mean two
         // of our three runtimes silently accept documents the third rejects.
         manifest.validate_parts()?;
-        let flash_size = parse_size(&chip.flash.size)?;
-        let ram_size = parse_size(&chip.ram.size)?;
+        let flash_size = chip.flash.size;
+        let ram_size = chip.ram.size;
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
         for region in &chip.memory_regions {
-            let size = parse_size(&region.size)?;
+            let size = region.size;
             let mut mem = LinearMemory::new(size as usize, region.base);
             // Optionally preload a raw binary image (e.g. a dumped mask ROM)
             // from a path given by an env var. Copyrighted vendor blobs are not
