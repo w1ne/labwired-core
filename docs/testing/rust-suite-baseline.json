@@ -2,8 +2,8 @@
   "_about": "Committed test-FUNCTION counts per target. Regenerate with scripts/ci/rust-suite-baseline.py --write. Read that file's preconditions before comparing numbers taken on different hosts.",
   "profile": "debug",
   "totals": {
-    "targets": 276,
-    "tests": 4981,
+    "targets": 277,
+    "tests": 4984,
     "ignored": 72
   },
   "targets": [
@@ -404,6 +404,14 @@
       "target": "labwired_codegen",
       "kind": "lib",
       "tests": 4,
+      "ignored": 0,
+      "release_only": false
+    },
+    {
+      "package": "labwired-config",
+      "target": "chip_pins_ratchet",
+      "kind": "test",
+      "tests": 3,
       "ignored": 0,
       "release_only": false
     },

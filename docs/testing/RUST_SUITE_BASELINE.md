@@ -1,6 +1,6 @@
 # Rust suite baseline
 
-**276 test targets, 4981 tests, 72 ignored** (debug profile, recorded 2026-08-16).
+**277 test targets, 4984 tests, 72 ignored** (debug profile, recorded 2026-08-16).
 
 Machine-readable: [`rust-suite-baseline.json`](rust-suite-baseline.json).
 Recorded and compared by [`scripts/ci/rust-suite-baseline.py`](../../scripts/ci/rust-suite-baseline.py).
@@ -34,14 +34,14 @@ $ cargo test -p labwired-core --lib no_vacuous
 test result: ok. 4 passed; 0 failed          <- existing gate: green
 
 $ python3 scripts/ci/rust-suite-baseline.py
-baseline: 276 targets, 4981 tests, 72 ignored
-now:      276 targets, 4979 tests, 72 ignored
+baseline: 277 targets, 4984 tests, 72 ignored
+now:      277 targets, 4982 tests, 72 ignored
 
 TARGETS THAT LOST TESTS — the case no existing gate catches:
   svd-ingestor/parsing_test[test]: 4 -> 2
 ```
 
-Target count unchanged at 276, so the shard classifier saw nothing either.
+Target count unchanged at 277, so the shard classifier saw nothing either.
 
 ## Why this is a report and not a gate
 
@@ -84,5 +84,18 @@ with no `#[cfg(test)]` module — cargo emits one per bin regardless — except 
 three `release_only` entries above. `no_vacuous_test_targets.rs` covers the
 `test` kind, where zero would be a real defect.
 
+## Cross-check against CI
+
+The PR shard aggregate on the same tree reports **258 targets / 4874 tests**;
+this file records **277 / 4984**. The gap is not a discrepancy — it is the
+cross-build-excluded suites plus the `lib` pseudo-targets the aggregate counts
+separately. Those exclusions are about *running*, not building, so they are
+present here and absent there. Reading either number as the other is the
+mistake this section exists to prevent.
+
+The +1 target / +3 tests over the first measurement of this file is
+`labwired-config/chip_pins_ratchet`, landed in core#999 between the two runs —
+which is the tool reporting exactly what it is for.
+
 The distribution is heavily skewed: `labwired-core`'s lib unittest binary alone
-holds 3223 of the 4981.
+holds 3223 of the 4984.
