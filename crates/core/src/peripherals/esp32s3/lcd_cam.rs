@@ -125,14 +125,23 @@ const CAM_START_BIT: u32 = 1 << 30;
 const CAM_CTRL1_PULSE_BITS: u32 = CAM_RESET_BIT;
 
 // ── LC_DMA_INT_* bit positions (RAW/ST/ENA/CLR share the layout) ──
+//
+// Consecutive bits 0..3, per `soc/esp32s3/lcd_cam_struct.h`
+// (`lcd_cam_lc_dma_int_raw_reg_t`: lcd_vsync[0], lcd_trans_done[1],
+// cam_vsync[2], cam_hs[3]). These were previously spaced two apart, so only
+// LCD_VSYNC landed on the right bit. That made every i80 transaction hang:
+// `esp_lcd_new_i80_bus` ends in
+//   while (!(lcd_ll_get_interrupt_status(dev) & LCD_LL_EVENT_TRANS_DONE)) {}
+// and `lcd_ll_get_interrupt_status` masks INT_ST with 0x03 — so a TRANS_DONE
+// latched at bit 2 is invisible to the driver and the poll never exits.
 /// LCD RGB-mode vertical-sync edge — bit 0.
 pub const INT_LCD_VSYNC: u32 = 1 << 0;
-/// LCD transaction finished (command/dummy/dout phases done) — bit 2.
-pub const INT_LCD_TRANS_DONE: u32 = 1 << 2;
-/// Camera vsync (frame boundary) — bit 4.
-pub const INT_CAM_VSYNC: u32 = 1 << 4;
-/// Camera hsync / line boundary — bit 6.
-pub const INT_CAM_HS: u32 = 1 << 6;
+/// LCD transaction finished (command/dummy/dout phases done) — bit 1.
+pub const INT_LCD_TRANS_DONE: u32 = 1 << 1;
+/// Camera vsync (frame boundary) — bit 2.
+pub const INT_CAM_VSYNC: u32 = 1 << 2;
+/// Camera hsync / line boundary — bit 3.
+pub const INT_CAM_HS: u32 = 1 << 3;
 /// Mask of all modeled interrupt bits.
 const INT_ALL_BITS: u32 = INT_LCD_VSYNC | INT_LCD_TRANS_DONE | INT_CAM_VSYNC | INT_CAM_HS;
 
