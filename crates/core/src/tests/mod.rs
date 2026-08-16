@@ -10,6 +10,10 @@ pub mod cortex_m_fault_escalation;
 pub mod cortex_m_memory_contract;
 #[cfg(test)]
 pub mod device_identity_one_home;
+
+/// Row 6.5: the runtime-downcast count may not grow.
+#[cfg(test)]
+pub mod downcast_ratchet;
 #[cfg(test)]
 pub mod esp32;
 #[cfg(test)]
