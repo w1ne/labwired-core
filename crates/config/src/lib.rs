@@ -1273,75 +1273,16 @@ pub fn is_builtin_chip_spec(spec: &str) -> bool {
         && !spec.ends_with(".json")
 }
 
-/// The chips bundled with the CLI, in the spelling a `chip:` field accepts.
-pub const BUILTIN_CHIP_NAMES: &[&str] = &[
-    "atmega328p",
-    "esp32",
-    "esp32c3",
-    "esp32s3",
-    "esp32s3-zero",
-    "mkw41z4",
-    "nrf52832",
-    "nrf52840",
-    "nrf5340",
-    "nrf54l15",
-    "rp2040",
-    "rp2350",
-    "stm32f103",
-    "stm32f401",
-    "stm32f401cdu6",
-    "stm32f405",
-    "stm32f407",
-    "stm32f767",
-    "stm32f411ceu6",
-    "stm32g474re",
-    "stm32h563",
-    "stm32h735",
-    "stm32l073",
-    "stm32l476",
-    "stm32wb55",
-    "stm32wba52",
-];
+// BUILTIN_CHIP_NAMES + embedded_chip_yaml(), generated from configs/chips/ by
+// build.rs. They used to be two hand-written lists that had to agree with each
+// other and with the directory; the directory is now the registry, so there is
+// nothing left to keep in step. See build.rs for why ci-fixture-* is excluded.
+include!(concat!(env!("OUT_DIR"), "/builtin_chips.rs"));
 
 /// Chips that moved to the private `labwired-ip` repo. Kept so users get a
 /// pointed error instead of "unknown chip". Empty until the first chip
 /// migrates; `resolve`/`resolve_with` check it before the unknown-chip error.
 pub const MOVED_CHIP_NAMES: &[&str] = &[];
-
-/// The embedded `configs/chips/*.yaml` descriptors, keyed by built-in name.
-/// `include_str!` bundles them so a released binary carries them and wasm
-/// builds (no `std::fs`) resolve them too.
-pub fn embedded_chip_yaml(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "atmega328p" => include_str!("../../../configs/chips/atmega328p.yaml"),
-        "esp32" => include_str!("../../../configs/chips/esp32.yaml"),
-        "esp32c3" => include_str!("../../../configs/chips/esp32c3.yaml"),
-        "esp32s3" => include_str!("../../../configs/chips/esp32s3.yaml"),
-        "esp32s3-zero" => include_str!("../../../configs/chips/esp32s3-zero.yaml"),
-        "mkw41z4" => include_str!("../../../configs/chips/mkw41z4.yaml"),
-        "nrf52832" => include_str!("../../../configs/chips/nrf52832.yaml"),
-        "nrf52840" => include_str!("../../../configs/chips/nrf52840.yaml"),
-        "nrf5340" => include_str!("../../../configs/chips/nrf5340.yaml"),
-        "nrf54l15" => include_str!("../../../configs/chips/nrf54l15.yaml"),
-        "rp2040" => include_str!("../../../configs/chips/rp2040.yaml"),
-        "rp2350" => include_str!("../../../configs/chips/rp2350.yaml"),
-        "stm32f103" => include_str!("../../../configs/chips/stm32f103.yaml"),
-        "stm32f401" => include_str!("../../../configs/chips/stm32f401.yaml"),
-        "stm32f401cdu6" => include_str!("../../../configs/chips/stm32f401cdu6.yaml"),
-        "stm32f405" => include_str!("../../../configs/chips/stm32f405.yaml"),
-        "stm32f767" => include_str!("../../../configs/chips/stm32f767.yaml"),
-        "stm32f407" => include_str!("../../../configs/chips/stm32f407.yaml"),
-        "stm32f411ceu6" => include_str!("../../../configs/chips/stm32f411ceu6.yaml"),
-        "stm32g474re" => include_str!("../../../configs/chips/stm32g474re.yaml"),
-        "stm32h563" => include_str!("../../../configs/chips/stm32h563.yaml"),
-        "stm32h735" => include_str!("../../../configs/chips/stm32h735.yaml"),
-        "stm32l073" => include_str!("../../../configs/chips/stm32l073.yaml"),
-        "stm32l476" => include_str!("../../../configs/chips/stm32l476.yaml"),
-        "stm32wb55" => include_str!("../../../configs/chips/stm32wb55.yaml"),
-        "stm32wba52" => include_str!("../../../configs/chips/stm32wba52.yaml"),
-        _ => return None,
-    })
-}
 
 impl SystemManifest {
     /// Parse a System Manifest from a YAML string. Unlike [`Self::from_file`]
