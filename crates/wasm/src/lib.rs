@@ -1140,7 +1140,16 @@ impl WasmSimulator {
         bus.refresh_peripheral_index();
 
         let boxed: Box<dyn Cpu> = Box::new(cpu);
-        let machine = Machine::new(boxed, bus);
+        // Real second core. An ESP-IDF image built dual-core (the default)
+        // stops dead at `cpu_start: Multicore app` without one: PRO_CPU spins in
+        // `main_task` on `s_other_cpu_startup_done`, which only the APP_CPU idle
+        // hook can set. The core starts halted and is released by the hardware
+        // edge the firmware drives (`SYSTEM_CORE_1_CONTROL_0.RESETING` 1->0),
+        // exactly as the native runner and `system::node::build_esp32s3_node`
+        // do — no forged handshake flags.
+        let app_cpu: Box<dyn Cpu> =
+            Box::new(labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu());
+        let machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
 
         Ok(WasmSimulator {
             machine: Some(machine),
