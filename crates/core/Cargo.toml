@@ -156,6 +156,11 @@ required-features = ["event-scheduler"]
 name = "census_probe"
 required-features = ["silent-census"]
 
+# #![cfg(feature = "silent-census")]
+[[test]]
+name = "undecoded_register_ratchet"
+required-features = ["silent-census"]
+
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
 name = "e2e_blinky"

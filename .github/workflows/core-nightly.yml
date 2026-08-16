@@ -531,11 +531,18 @@ jobs:
       # Through the wrapper, because that is the whole point: if a future
       # feature rename empties one of these binaries, the step must go RED
       # rather than back to the `0 passed` it spent its whole life reporting.
+      # `undecoded_register_ratchet` rides along here: same feature set, so it
+      # is a cache hit rather than a second compile, and the wrapper stops it
+      # from ever reporting `0 passed`. It replays every entry in
+      # docs/coverage/undecoded-registers.json against the real model and goes
+      # RED when one stops falling through — i.e. when the register got
+      # implemented and the entry should have been deleted.
       - name: Census probe + egress bridge (silent-census, net-tests)
         run: >
           scripts/ci/cargo-test-nonvacuous.sh
           -p labwired-core --features silent-census,net-tests,wifi-thunks
           --test census_probe --test egress_e2e
+          --test undecoded_register_ratchet
 
       # `wifi-thunks` gates ONE test and it is `#[ignore]`d, so a plain lane
       # would run zero of it and report green — a vacuous gate is worse than
