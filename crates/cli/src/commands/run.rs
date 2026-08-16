@@ -1596,7 +1596,7 @@ pub(crate) fn run_interactive_arm(
         );
     }
 
-    report_metrics(&cli, &machine.cpu, &metrics);
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -1659,7 +1659,7 @@ pub(crate) fn run_interactive_riscv(
         );
     }
 
-    report_metrics(&cli, &machine.cpu, &metrics);
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -1717,6 +1717,6 @@ pub(crate) fn run_interactive_xtensa(
         );
     }
 
-    report_metrics(&cli, &machine.cpu, &metrics);
+    crate::report::report_metrics(cli.json, &machine.cpu, &metrics);
     ExitCode::from(EXIT_PASS)
 }

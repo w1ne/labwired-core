@@ -9,7 +9,8 @@ use crate::artifacts::{
     AssertionResult, EnvironmentConfig, EnvironmentNodeProvenance, EnvironmentNodeSnapshot,
     EnvironmentTestResult, Snapshot,
 };
-use crate::{build_stop_reason_details, TestArgs, EXIT_CONFIG_ERROR};
+use crate::report::build_stop_reason_details;
+use crate::{TestArgs, EXIT_CONFIG_ERROR};
 use labwired_config::{EnvTestScript, EnvironmentManifest, StopReason, TestAssertion, TestLimits};
 use labwired_core::world::{MachineTrait, World};
 use sha2::{Digest, Sha256};

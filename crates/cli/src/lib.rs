@@ -17,6 +17,8 @@ pub mod faults;
 pub mod manifest;
 pub mod pc_coverage_report;
 pub mod regex;
+/// What a finished run reports (row 6.11: verdict / report / drive).
+mod report;
 pub mod test_support;
 pub mod tier1;
 pub mod verdict;
@@ -45,7 +47,7 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 use artifacts::{
-    AssertionEvidence, AssertionResult, NamedU64, Snapshot, StimulusOutcome, StopReasonDetails,
+    AssertionEvidence, AssertionResult, Snapshot, StimulusOutcome, StopReasonDetails,
     TestConfig, TestResult,
 };
 use labwired_config::{
@@ -1406,120 +1408,6 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
     }
 }
 
-fn report_metrics<C: labwired_core::Cpu>(
-    cli: &Cli,
-    cpu: &C,
-    metrics: &labwired_core::metrics::PerformanceMetrics,
-) {
-    if cli.json {
-        let report = serde_json::json!({
-            "status": "finished",
-            "final_pc": cpu.get_pc(),
-            "total_instructions": metrics.get_instructions(),
-            "total_cycles": metrics.get_cycles(),
-            "average_ips": metrics.get_ips(),
-        });
-        println!("{}", serde_json::to_string(&report).unwrap());
-    } else {
-        info!("Simulation loop finished.");
-        info!("Final PC: {:#x}", cpu.get_pc());
-        info!("Total Instructions: {}", metrics.get_instructions());
-        info!("Total Cycles: {}", metrics.get_cycles());
-        info!("Average IPS: {:.2}", metrics.get_ips());
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn build_stop_reason_details(
-    stop_reason: &StopReason,
-    limits: &TestLimits,
-    steps_executed: u64,
-    cycles: u64,
-    uart_bytes: u64,
-    stuck_steps: u64,
-    duration: std::time::Duration,
-    vcd_bytes: u64,
-) -> StopReasonDetails {
-    let (triggered_limit, observed) = match stop_reason {
-        StopReason::MaxSteps => (
-            Some(NamedU64 {
-                name: "max_steps".to_string(),
-                value: limits.max_steps,
-            }),
-            Some(NamedU64 {
-                name: "steps_executed".to_string(),
-                value: steps_executed,
-            }),
-        ),
-        StopReason::MaxCycles => (
-            limits.max_cycles.map(|v| NamedU64 {
-                name: "max_cycles".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "cycles".to_string(),
-                value: cycles,
-            }),
-        ),
-        StopReason::MaxUartBytes => (
-            limits.max_uart_bytes.map(|v| NamedU64 {
-                name: "max_uart_bytes".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "uart_bytes".to_string(),
-                value: uart_bytes,
-            }),
-        ),
-        StopReason::NoProgress => (
-            limits.no_progress_steps.map(|v| NamedU64 {
-                name: "no_progress_steps".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "stuck_steps".to_string(),
-                value: stuck_steps,
-            }),
-        ),
-        StopReason::WallTime => (
-            limits.wall_time_ms.map(|v| NamedU64 {
-                name: "wall_time_ms".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "elapsed_wall_time_ms".to_string(),
-                value: duration.as_millis().min(u128::from(u64::MAX)) as u64,
-            }),
-        ),
-        StopReason::MaxVcdBytes => (
-            limits.max_vcd_bytes.map(|v| NamedU64 {
-                name: "max_vcd_bytes".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "vcd_bytes".to_string(),
-                value: vcd_bytes,
-            }),
-        ),
-        StopReason::AssertionsPassed => (None, None),
-        // No limit triggered this one — the firmware chose to end the run. The
-        // exit code is reported separately as `firmware_exit_code`, not as a
-        // limit/observation pair.
-        StopReason::FirmwareExit => (None, None),
-        StopReason::MemoryViolation
-        | StopReason::DecodeError
-        | StopReason::Halt
-        | StopReason::Exception
-        | StopReason::ConfigError => (None, None),
-    };
-
-    StopReasonDetails {
-        triggered_stop_condition: stop_reason.clone(),
-        triggered_limit,
-        observed,
-    }
-}
-
 #[allow(clippy::if_same_then_else)]
 #[allow(clippy::too_many_arguments)]
 fn handle_load_error<C: labwired_core::Cpu>(
@@ -1535,7 +1423,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
 ) -> ExitCode {
     let err_msg = format!("Simulation error during load/reset: {}", e);
     error!("{}", err_msg);
-    let stop_reason_details = build_stop_reason_details(
+    let stop_reason_details = crate::report::build_stop_reason_details(
         &StopReason::Halt,
         resolved_limits,
         0,
@@ -3186,7 +3074,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     let duration = start.elapsed();
     let uart_bytes = uart_tx.lock().map(|g| g.len() as u64).unwrap_or(0);
-    let stop_reason_details = build_stop_reason_details(
+    let stop_reason_details = crate::report::build_stop_reason_details(
         &stop_reason,
         resolved_limits,
         steps_executed,
@@ -3687,7 +3575,7 @@ pub(crate) fn write_config_error_outputs(
     });
 
     let stop_reason = StopReason::ConfigError;
-    let stop_reason_details = build_stop_reason_details(
+    let stop_reason_details = crate::report::build_stop_reason_details(
         &stop_reason,
         &resolved_limits,
         0,
