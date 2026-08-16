@@ -9,7 +9,9 @@ registers:
     address_offset: 0x000
     size: 32
     access: "R/W"
-    reset_value: 0x60013000
+    # TRM v1.8 Register 12.1 (p.662): INCREASE=1 (b30), AUTORELOAD=1 (b29),
+    # DIVIDER=0x01 (b28:13). Everything else resets to 0.
+    reset_value: 0x60002000
     fields:
       - name: "USE_XTAL"
         bit_range: [9, 9]
@@ -78,7 +80,9 @@ registers:
     address_offset: 0x024
     size: 32
     access: "R/W"
-    reset_value: 0x60013000
+    # Same layout and same reset as T0CONFIG — TRM v1.8 documents both as
+    # TIMG_TxCONFIG_REG (x: 0-1), Register 12.1 (p.662).
+    reset_value: 0x60002000
 
   - id: "T1LO"
     address_offset: 0x028
@@ -102,7 +106,11 @@ registers:
     address_offset: 0x048
     size: 32
     access: "R/W"
-    reset_value: 0x00048D00
+    # TRM v1.8 Register 12.10 (p.665): CPU_RESET_LENGTH=0x1 (b20:18),
+    # SYS_RESET_LENGTH=0x1 (b17:15), FLASHBOOT_MOD_EN=1 (b14). Flash-boot
+    # protection is ARMED out of reset — a model that says 0 here claims the
+    # opposite.
+    reset_value: 0x0004C000
 
   - id: "WDTCONFIG1"
     address_offset: 0x04C
@@ -114,25 +122,29 @@ registers:
     address_offset: 0x050
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    # WDT_STG0_HOLD. TRM v1.8 Register 12.12 (p.666) states 26000000.
+    reset_value: 0x018CBA80
 
   - id: "WDTCONFIG3"
     address_offset: 0x054
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    # WDT_STG1_HOLD. TRM v1.8 Register 12.13 (p.666): 0x7ffffff.
+    reset_value: 0x07FFFFFF
 
   - id: "WDTCONFIG4"
     address_offset: 0x058
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    # WDT_STG2_HOLD. TRM v1.8 Register 12.14 (p.666): 0x0fffff.
+    reset_value: 0x000FFFFF
 
   - id: "WDTCONFIG5"
     address_offset: 0x05C
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    # WDT_STG3_HOLD. TRM v1.8 Register 12.15 (p.667): 0x0fffff.
+    reset_value: 0x000FFFFF
 
   - id: "WDTFEED"
     address_offset: 0x060
@@ -176,7 +188,9 @@ registers:
     address_offset: 0x068
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    # TRM v1.8 Register 12.18 (p.668): RTC_CALI_MAX=0x01 (b30:16),
+    # RTC_CALI_CLK_SEL=0x1 (b14:13), RTC_CALI_START_CYCLING=1 (b12).
+    reset_value: 0x00013000
 
   - id: "RTCCALICFG1"
     address_offset: 0x06C

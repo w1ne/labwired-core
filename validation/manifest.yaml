@@ -2593,6 +2593,40 @@ boards:
     # attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
+    # 2026-08-16: nine RESET VALUES corrected in configs/peripherals/esp32s3/
+    # {timg0,gpio}.yaml — T0CONFIG/T1CONFIG, WDTCONFIG0, WDTCONFIG2..5,
+    # RTCCALICFG and GPIO REG_DATE. Like the nRF52840 UARTE BAUDRATE ack above
+    # this is NOT digest-only churn: it changes numbers the model answers reads
+    # with. Unlike it, this one moves the model TOWARD what the 2026-08-09
+    # capture on this very board already read.
+    #
+    # Seven of the eight TIMG0 registers are in that capture
+    # (scripts/hw-oracle/captures/esp32s3/recapture-20260809T130700Z/
+    # reg_oracle.json) and the live ESP32-S3 reads exactly the new value:
+    # T0CONFIG 0x60002000, T1CONFIG 0x60002000, WDTCONFIG2 0x018CBA80,
+    # WDTCONFIG3 0x07FFFFFF, WDTCONFIG4 0x000FFFFF, WDTCONFIG5 0x000FFFFF,
+    # RTCCALICFG 0x00013000. Each was previously modelled 0x60013000 or 0x0.
+    # So a re-capture cannot move these against the change — it already did not.
+    #
+    # The eighth, WDTCONFIG0, reads 0x00000000 on that board and the model now
+    # says 0x0004C000. That is not a contradiction: the capture's own metadata
+    # records capture_state "reset halt (software core reset, post-ROM)", and
+    # WDTCONFIG0 is precisely the register the ROM + 2nd-stage bootloader clear
+    # when they disable the MWDT and drop flash-boot protection
+    # (TIMG_WDT_FLASHBOOT_MOD_EN, bit 14). WDTWPROTECT in the same capture is
+    # back at 0x50D83AA1, i.e. the write-key was re-armed after a write. The
+    # reset value itself is stated by the ESP32-S3 TRM v1.8 Register 12.10
+    # (p.665) and by the vendor SVD, which agree. Reading a cold WDTCONFIG0
+    # needs a power-on capture, not a `reset halt` — that is the one live read
+    # this change owes, and no S3 board is attached this session.
+    #
+    # GPIO REG_DATE (0x6FC) is NOT in the capture at all: the GPIO window stops
+    # at offset 0x0BC. It rests on TRM v1.8 Register 6.34 (p.512) alone, which
+    # states 0x1907040 and matches the vendor SVD; the old 0x02108190 is not
+    # this part's version stamp and is not any Espressif part's.
+    #
+    # The 9-register reset-state anchor is entirely I2C0
+    # (crates/hw-oracle/tests/esp32s3_reset_conformance.rs) and is untouched.
     # 2026-08-17 (#1008): octal PSRAM, dual-core startup and LCD_CAM i80 pixel
     # streaming, found by running real Doom on a physical ESP32-S3-N16R8 and
     # then in the twin. This is the LARGEST behavioural change to this board
@@ -2643,7 +2677,7 @@ boards:
     # 2026-08-12: chip yaml documents sar_adc_s3 + twai already registered by
     # configure_xtensa_esp32s3 (ESP32S3_PERIPHERALS). Address-map honesty only —
     # 9-reg reset-state silicon anchor unchanged. Arduino matrix L5/L8 green.
-    drift_ack_digest: 3c0fdf6ce23569b3158e409ff00a365a5be0e4bb7df684f5f50cb77bb78ec743
+    drift_ack_digest: ce851b8dd4e6a6e03c46521c4a0729321de66d29805e73b719b821da53edaf1d
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
