@@ -173,6 +173,11 @@ required-features = ["esp32s3-fixtures"]
 
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
+name = "e2e_esp32s3_flash_boot_no_elf"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
 name = "e2e_hello_world"
 required-features = ["esp32s3-fixtures"]
 
