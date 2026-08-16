@@ -170,23 +170,6 @@ pub enum IrAccess {
     Unknown,
 }
 
-#[cfg(feature = "config-interop")]
-impl IrAccess {
-    /// Converts IrAccess to labwired-config::Access
-    pub fn to_config_access(&self) -> Option<serde_yaml::Value> {
-        // This is a bit of a hack because labwired-config::Access is an enum.
-        // But since we are likely going to use this in a From implementation,
-        // it's better to just return the string or a real type.
-        // Let's assume we want the literal string that serde would expect.
-        match self {
-            IrAccess::ReadOnly => Some(serde_yaml::Value::String("RO".to_string())),
-            IrAccess::WriteOnly => Some(serde_yaml::Value::String("WO".to_string())),
-            IrAccess::ReadWrite => Some(serde_yaml::Value::String("R/W".to_string())),
-            _ => None,
-        }
-    }
-}
-
 /// Represents an interrupt definition associated with a peripheral.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrInterrupt {
