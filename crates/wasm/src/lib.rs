@@ -432,7 +432,21 @@ impl WasmSimulator {
             }
             MachineFamily::Xtensa if chip.is_esp32s3() => {
                 let blob_map = parse_named_blobs(&blobs);
-                Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
+                // Same trigger as the C3: the merged flash image
+                // (`bootloader@0x0 + partition-table@0x8000 + app@0x10000`)
+                // arriving as a named blob means boot the real mask ROM from
+                // the reset vector. Without it, `firmware` is a bare esp-hal
+                // ELF and the pre-existing fast-boot path runs.
+                //
+                // The hosted compiler ships flash images and NO ELF, so before
+                // this branch existed every hosted S3 run fell into fast_boot
+                // with nothing to load: the mask ROM printed its banner, jumped
+                // to the 2nd-stage bootloader, and the app never ran.
+                if blob_map.contains_key("esp32s3_flash") {
+                    Self::new_from_config_xtensa_esp32s3_flash(&manifest, &blob_map)
+                } else {
+                    Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
+                }
             }
             MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
             // Classic Arduino Nano / ATmega328P — same shape as `build_avr_node`.
@@ -1014,6 +1028,114 @@ impl WasmSimulator {
     /// ELF's segments (identity XIP) and synthesises post-bootloader CPU state.
     /// Serial output on the S3 esp-hal apps goes through USB_SERIAL_JTAG, so we
     /// route that peripheral's sink into the `uart_sink` the widget reads.
+    /// Faithful ESP32-S3 boot from a merged flash image, with **no ELF**.
+    ///
+    /// The Xtensa counterpart of `new_from_config_riscv_flash_fastboot`, and
+    /// the path every hosted S3 run needs: the hosted compiler produces flash
+    /// images (bootloader + partition table + app) and no ELF, so a
+    /// constructor that can only `fast_boot(elf)` has nothing to boot. What
+    /// that produced looked exactly like a hang — the mask ROM printed its
+    /// banner, jumped to the 2nd-stage bootloader, and stopped.
+    ///
+    /// The assembly is the native `--rom-boot` sequence, already proven on this
+    /// chip: `real_reset_boot` selects the MMU XIP model (both cache windows
+    /// alias one physical flash backing and translate through the table the
+    /// bootloader programs — identity XIP reads the wrong page and returns
+    /// zeros), the flash image is passed as bytes rather than through
+    /// `LABWIRED_ESP32S3_FLASH` (there is no env on wasm), and the CPU is left
+    /// at the BROM reset vector so the chip's own ROM loads the app and jumps
+    /// to it. No `fast_boot`, no synthesised post-bootloader state, no thunks.
+    fn new_from_config_xtensa_esp32s3_flash(
+        manifest: &SystemManifest,
+        blobs: &std::collections::HashMap<String, Vec<u8>>,
+    ) -> Result<WasmSimulator, JsValue> {
+        use labwired_core::boot::esp32s3_rom::RomImages;
+        use labwired_core::system::xtensa::{
+            configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts,
+        };
+
+        let flash = blobs.get("esp32s3_flash").ok_or_else(|| {
+            JsValue::from_str("ESP32-S3 flash boot needs the merged flash image blob esp32s3_flash")
+        })?;
+
+        // The real ROM is not optional here. Fast-boot may fall back to the
+        // thunk harness because it jumps straight into the app; this path IS
+        // the ROM, so a missing blob has to say so rather than boot nothing.
+        let (Some(irom), Some(drom)) = (blobs.get("esp32s3_irom"), blobs.get("esp32s3_drom"))
+        else {
+            return Err(JsValue::from_str(
+                "ESP32-S3 flash boot needs the boot ROM blobs: pass esp32s3_irom + esp32s3_drom",
+            ));
+        };
+
+        let mut bus = SystemBus::new();
+        let opts = Esp32s3Opts {
+            real_reset_boot: true,
+            rom_images: Some(RomImages {
+                irom: irom.clone(),
+                drom: drom.clone(),
+            }),
+            flash_image: Some(flash.clone()),
+            // A 16 MB N16R8 image must not be truncated into a 4 MB backing:
+            // the partition table addresses the app at its real offset, and a
+            // short backing reads 0xFF there.
+            flash_size: (flash.len() as u32).max(4 * 1024 * 1024),
+            ..Esp32s3Opts::default()
+        };
+        let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+        if wiring.boot_mode != Esp32s3BootMode::Faithful {
+            return Err(JsValue::from_str(
+                "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve",
+            ));
+        }
+        let cpu = wiring.cpu;
+
+        // Console selection is the rule every other ESP path uses: an
+        // undeclared manifest hears both consoles in one pane, a declared one
+        // is authoritative. Both taps matter here — the mask ROM prints on
+        // UART0 while an Arduino sketch built CDC-on-boot prints on
+        // USB-Serial-JTAG, so the boot banner and the sketch arrive on
+        // different peripherals of the same run.
+        let console = ConsoleCapture::for_manifest(manifest);
+        let uart_sink = console.heard_sink();
+        match console.tapped() {
+            HostConsole::Undeclared => {
+                bus.attach_usb_serial_jtag_sink(uart_sink.clone());
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+            tapped => {
+                if !tapped.is_usb_serial_jtag() {
+                    bus.attach_usb_serial_jtag_sink(console.unheard_sink());
+                }
+                bus.attach_host_console(tapped, uart_sink.clone())
+                    .map_err(|e| JsValue::from_str(&e))?;
+                if tapped.is_usb_serial_jtag() {
+                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
+                }
+            }
+        }
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
+            .map_err(|e| JsValue::from_str(&format!("ESP32-S3 external_devices: {:#}", e)))?;
+        bus.refresh_peripheral_index();
+
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let machine = Machine::new(boxed, bus);
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io: manifest.board_io.clone(),
+            uart_sink,
+            console,
+            uart_rx_bufs,
+            arch: MachineFamily::Xtensa,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        })
+    }
+
     fn new_from_config_xtensa_esp32s3(
         manifest: &SystemManifest,
         firmware: &[u8],
