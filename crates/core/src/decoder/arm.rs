@@ -1134,6 +1134,19 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
                 imm8: (opcode & 0xFF) as u8,
             };
         }
+        // cond 0xE (1101 1110 ...) is UDF — PERMANENTLY UNDEFINED (A7.7.194).
+        // The B T1 encoding (A7.7.12) excludes both 1110 and 1111 from `cond`;
+        // only 1111 was excluded here, so `UDF #imm8` decoded as a branch with
+        // cond = "always" and offset = imm8 << 1. `UDF #0` therefore became a
+        // 4-byte forward step that looked exactly like ordinary execution.
+        //
+        // This is the instruction compilers emit to trap on purpose:
+        // `__builtin_trap()`, an unreachable arm, a Rust panic in some
+        // configurations. Firmware saying "stop, this must never happen" was
+        // being simulated as "jump forward and keep going".
+        if cond == 0xE {
+            return Instruction::Unknown(opcode);
+        }
         let mut offset = (opcode & 0xFF) as i32;
         // Sign extend 8-bit to 32-bit
         if (offset & 0x80) != 0 {

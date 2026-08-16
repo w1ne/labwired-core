@@ -7,7 +7,8 @@
 use crate::bus::SystemBus;
 use crate::decoder::arm::{decode_thumb_16, decode_thumb_32, Instruction};
 use crate::peripherals::scb::{
-    ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, HFSR_FORCED, SHCSR_BUSFAULTENA,
+    ScbFaultState, CFSR_BFSR_BFARVALID, CFSR_BFSR_PRECISERR, CFSR_UFSR_UNDEFINSTR, HFSR_FORCED,
+    SHCSR_BUSFAULTENA, SHCSR_USGFAULTENA,
 };
 use crate::{Bus, Cpu, SimResult, SimulationConfig, SimulationError, SimulationObserver};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -130,6 +131,15 @@ pub struct CortexM {
     ///
     /// Only ever written on the error path, so a clean step costs nothing.
     pending_data_fault: Option<u32>,
+    /// Set when decode reached an instruction this model does not implement, so
+    /// `step_internal` can raise UsageFault instead of returning the bare
+    /// `DecodeError`.
+    ///
+    /// Separate from `pending_data_fault` because the two escalate differently:
+    /// a data fault names an address and targets BusFault, an undefined
+    /// instruction names none and targets UsageFault. Only ever written on the
+    /// error path.
+    pending_undef_instruction: bool,
     pub decode_cache: Box<[Option<DecodeCacheEntry>; 4096]>,
     /// FPU single-precision register file (VFPv4 single — S0..S31).
     /// Each S register is the IEEE-754 binary32 bit pattern; reads via
@@ -187,6 +197,7 @@ impl Default for CortexM {
             sysreset_signal: None,
             faults: None,
             pending_data_fault: None,
+            pending_undef_instruction: false,
             decode_cache: Box::new([None; 4096]),
             fpu_s: [0u32; 32],
             sleeping: false,
@@ -1182,6 +1193,49 @@ impl CortexM {
         true
     }
 
+    /// ARMv7-M B1.5.14 escalation for an **undefined instruction**.
+    ///
+    /// Same shape as [`CortexM::escalate_precise_data_fault`], with UsageFault
+    /// in place of BusFault and no fault address — UFSR has no companion to
+    /// BFAR:
+    ///
+    /// * `CFSR.UFSR.UNDEFINSTR` (B3.2.15) — the processor attempted to execute
+    ///   an instruction it does not define.
+    /// * `HFSR.FORCED` (B3.2.16) — set only when the fault escalates, i.e. when
+    ///   `SHCSR.USGFAULTENA` is clear or UsageFault cannot preempt.
+    ///
+    /// Returns `false` when even HardFault cannot be taken (LOCKUP on silicon,
+    /// B1.5.15). The caller then stops the run rather than pending an exception
+    /// that can never dispatch and spinning on the faulting instruction.
+    fn escalate_undefined_instruction(&mut self) -> bool {
+        let Some(faults) = self.faults.clone() else {
+            return false;
+        };
+        faults
+            .cfsr
+            .fetch_or(CFSR_UFSR_UNDEFINSTR, Ordering::Relaxed);
+
+        let usagefault_enabled = faults.shcsr.load(Ordering::Relaxed) & SHCSR_USGFAULTENA != 0;
+        let exec_prio = self.execution_priority();
+        let target = if usagefault_enabled && self.exception_priority(6) < exec_prio {
+            6
+        } else {
+            faults.hfsr.fetch_or(HFSR_FORCED, Ordering::Relaxed);
+            3
+        };
+        if self.exception_priority(target) >= exec_prio {
+            return false; // LOCKUP — see the doc comment.
+        }
+        if trace_exc_enabled() {
+            eprintln!(
+                "EXC undefined instruction -> exc={} pc=0x{:08X}",
+                target, self.pc
+            );
+        }
+        self.set_exception_pending(target);
+        true
+    }
+
     /// One instruction, with ARMv7-M fault escalation layered over
     /// [`CortexM::step_execute`].
     ///
@@ -1206,9 +1260,21 @@ impl CortexM {
             Err(e) => {
                 // `take` unconditionally: the latch must not survive into the
                 // next step even when escalation is off.
+                let undef = std::mem::take(&mut self.pending_undef_instruction);
                 match self.pending_data_fault.take() {
                     Some(addr)
                         if self.faults_enabled() && self.escalate_precise_data_fault(addr) =>
+                    {
+                        Ok(())
+                    }
+                    // An undefined instruction escalates to UsageFault, or to
+                    // HardFault when UsageFault is not enabled. Escalation
+                    // failing means LOCKUP on silicon, so the `Err` stands and
+                    // stops the run — which is still incomparably better than
+                    // the old behaviour of advancing the PC and continuing.
+                    _ if undef
+                        && self.faults_enabled()
+                        && self.escalate_undefined_instruction() =>
                     {
                         Ok(())
                     }
@@ -2478,7 +2544,9 @@ impl CortexM {
                             ((h1 as u64) << 16) | (h2 as u64),
                             "undecoded T32",
                         );
-                        pc_increment = 4;
+                        // As for T16 above: fault rather than skip.
+                        self.pending_undef_instruction = true;
+                        return Err(SimulationError::DecodeError(self.pc as u64));
                     }
                 }
 
@@ -3724,7 +3792,12 @@ impl CortexM {
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
                     crate::fidelity::record_undecoded(self.pc, op as u64, "undecoded T16");
-                    pc_increment = 2; // Skip 16-bit
+                    // Silicon raises UsageFault (UNDEFINSTR) here. This used to
+                    // `pc_increment = 2` and carry on, which left every register
+                    // stale and the run ending green — see the note on
+                    // `escalate_undefined_instruction`.
+                    self.pending_undef_instruction = true;
+                    return Err(SimulationError::DecodeError(self.pc as u64));
                 }
             }
         }
