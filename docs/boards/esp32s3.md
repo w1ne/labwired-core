@@ -47,6 +47,7 @@ There are two chip yamls for ESP32-S3 today:
 | GDMA             | 0x6003F000 | ✅ modeled          | 5 channels; M2M descriptor walks **and** peripheral-coupled byte movement (see below) |
 | SPI2 / SPI3      | 0x60024000 / 0x60025000 | ✅ modeled | GP-SPI master: CPU W-buffer path + GDMA-coupled DMA transactions; device attach surface (e-paper e2e) |
 | I²S0 / I²S1      | 0x6000F000 / 0x6002D000 | ✅ modeled | Config/control twin + GDMA-coupled sample streaming (`RXEOF_NUM` byte semantics) |
+| LCD_CAM          | 0x60041000 | ✅ modeled (LCD TX) | Config/control twin + i80 pixel streaming: `LCD_CMD_VAL` command phase and the GDMA outlink payload drive an attached parallel panel. RGB-mode sync generation and the camera (DVP) RX path are not modelled |
 | UART0/1/2        | 0x60000000 / 0x60010000 / 0x6002E000 | ✅ modeled | FIFO + STATUS + baud-paced drain; UART0 doubles as the UHCI0 DMA endpoint |
 
 The authoritative wiring (`configure_xtensa_esp32s3`) additionally registers
@@ -72,9 +73,16 @@ bytes:
   descriptor chains and the peripheral models — incremental 64-byte-per-tick
   pumps, per-descriptor owner/length writeback, per-direction EOF
   interrupts (sources 66–75).
-- Other peripheral ids (AES, SHA, ADC, RMT, LCD_CAM, unknown/unbound) keep
-  an auto-complete fallback: EOF latches without byte movement so polling
-  firmware progresses. LCD_CAM coupling is deferred by design.
+- **LCD_CAM OUT** (`OUT_PERI_SEL = 5`): pixel streaming for the `esp_lcd`
+  i80 driver. The outlink chain feeds the LCD_CAM i80 master, which drives
+  an attached 8080 parallel panel (`ili9341-16bit`) with the command word
+  from `LCD_CMD_VAL` and the DMA payload as data. The walk honours
+  `suc_eof`, and `LCD_TRANS_DONE` is withheld until the chain drains so the
+  driver cannot remount descriptors mid-transfer. The LCD_CAM **IN**
+  direction (camera RX) is still on the fallback below.
+- Other peripheral ids (AES, SHA, ADC, RMT, LCD_CAM-IN, unknown/unbound)
+  keep an auto-complete fallback: EOF latches without byte movement so
+  polling firmware progresses.
 
 ## Not yet modeled (commonly expected on ESP32-S3)
 

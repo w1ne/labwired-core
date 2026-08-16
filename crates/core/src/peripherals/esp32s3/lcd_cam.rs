@@ -31,10 +31,20 @@
 //!   (24) is emitted from `tick` while `INT_ST != 0` (level-triggered, matching
 //!   the timer-group / I2S twins).
 //!
-//! Pixel/line streaming on the S3 flows through GDMA (the LCD_CAM core has no
-//! CPU-visible pixel FIFO register) and is therefore **out of scope** — we model
-//! the MMIO control surface and the transaction-done event model, not the
-//! DMA-fed pixel clock.
+//! * **i80 pixel streaming** (`esp_lcd` i80 driver): a transaction drives the
+//!   attached 8080 parallel panel with the same word sequence silicon puts on
+//!   DB[15:0]. The command phase emits `LCD_CMD_VAL` with D/C at the
+//!   `LCD_MISC.CD_CMD_SET` level; the DOUT phase emits the payload GDMA fetched
+//!   from the outlink descriptor chain, with D/C at the `CD_DATA_SET` level.
+//!   The payload is pushed in by [`Esp32s3Gdma`](super::gdma::Esp32s3Gdma)'s
+//!   LCD pump ([`Self::dma_push_tx`]) — GDMA owns the descriptor walk, this
+//!   model owns the bus protocol and the panel handoff. TRANS_DONE is withheld
+//!   until the chain drains ([`Self::dma_finish`]), so a driver polling
+//!   `LC_DMA_INT_ST` cannot rearm the descriptors under an in-flight transfer.
+//!
+//! Line/frame timing is still not modelled: there is no pixel clock, no
+//! per-cycle DOUT length and no RGB-mode sync generator. A transaction moves
+//! the whole descriptor chain and then completes.
 //!
 //! ## Register map (ESP32-S3 TRM ch. "LCD and Camera Controller"; verified
 //! against `soc/esp32s3/register/soc/lcd_cam_reg.h`)
@@ -45,17 +55,19 @@
 //! | 0x04   | CAM_CTRL         | CAM clock / sampling-edge / mode config            |
 //! | 0x08   | CAM_CTRL1        | CAM_START=b30, CAM_RESET=b29, frame/line config    |
 //! | 0x0C   | CAM_RGB_YUV      | CAM RGB↔YUV color-conversion config                |
+//! | 0x10   | LCD_RGB_YUV      | LCD RGB↔YUV color-conversion config                |
 //! | 0x14   | LCD_USER         | LCD_START=b27, LCD_CMD=b26, LCD_DUMMY=b25, LCD_DOUT=b24, resets |
 //! | 0x18   | LCD_MISC        | LCD bus/CS timing, idle-level, AFIFO reset         |
 //! | 0x1C   | LCD_CTRL        | LCD RGB mode, h/v sync + de-output enables         |
 //! | 0x20   | LCD_CTRL1        | LCD RGB H/V front/back-porch + sync widths         |
 //! | 0x24   | LCD_CTRL2        | LCD sync pulse widths / polarity                   |
 //! | 0x28   | LCD_CMD_VAL      | LCD command value driven during the command phase  |
-//! | 0x2C   | LCD_DOUT_MODE    | LCD data-out bit-order / dly mode                  |
-//! | 0x34   | LC_DMA_INT_ENA   | interrupt enable mask                              |
-//! | 0x38   | LC_DMA_INT_RAW   | raw latched events (RO here)                       |
-//! | 0x3C   | LC_DMA_INT_ST    | INT_RAW & INT_ENA (RO)                             |
-//! | 0x40   | LC_DMA_INT_CLR   | W1C against INT_RAW                                |
+//! | 0x30   | LCD_DLY_MODE     | LCD output / D-C delay mode                        |
+//! | 0x38   | LCD_DATA_DOUT_MODE | per-data-line output delay mode                  |
+//! | 0x64   | LC_DMA_INT_ENA   | interrupt enable mask                              |
+//! | 0x68   | LC_DMA_INT_RAW   | raw latched events (RO here)                       |
+//! | 0x6C   | LC_DMA_INT_ST    | INT_RAW & INT_ENA (RO)                             |
+//! | 0x70   | LC_DMA_INT_CLR   | W1C against INT_RAW                                |
 //!
 //! Any other offset accepts writes silently and reads 0.
 
@@ -84,30 +96,68 @@ const REG_LCD_CTRL: u64 = 0x1C;
 const REG_LCD_CTRL1: u64 = 0x20;
 const REG_LCD_CTRL2: u64 = 0x24;
 const REG_LCD_CMD_VAL: u64 = 0x28;
-const REG_LCD_DOUT_MODE: u64 = 0x2C;
-const REG_LC_DMA_INT_ENA: u64 = 0x34;
-const REG_LC_DMA_INT_RAW: u64 = 0x38;
-const REG_LC_DMA_INT_ST: u64 = 0x3C;
-const REG_LC_DMA_INT_CLR: u64 = 0x40;
+/// LCD_DLY_MODE (0x30) — per-line output delay / D-C delay ticks.
+const REG_LCD_DLY_MODE: u64 = 0x30;
+/// LCD_DATA_DOUT_MODE (0x38) — per-data-line output delay mode.
+const REG_LCD_DOUT_MODE: u64 = 0x38;
+/// LCD_RGB_YUV (0x10) — the LCD-side colour converter. Distinct register from
+/// CAM_RGB_YUV at 0x0C.
+const REG_LCD_RGB_YUV: u64 = 0x10;
+// The LC_DMA interrupt block sits at 0x64..0x70, NOT at 0x34..0x40.
+// `soc/esp32s3/lcd_cam_reg.h`: LC_DMA_INT_ENA 0x64, _RAW 0x68, _ST 0x6c,
+// _CLR 0x70. Modelled 0x30 lower, every driver access missed:
+//   * `lcd_ll_enable_interrupt` (0x64) fell through to accept-and-ignore, so
+//     INT_ENA stayed 0 and INT_ST (RAW & ENA) could never be non-zero;
+//   * `lcd_ll_get_interrupt_status` (0x6c) read the unmapped-offset 0;
+//   * LCD_DATA_DOUT_MODE (0x38) landed on what the model called INT_RAW.
+// Net effect: `esp_lcd_new_i80_bus`'s
+//   while (!(lcd_ll_get_interrupt_status(dev) & LCD_LL_EVENT_TRANS_DONE)) {}
+// spun forever even with TRANS_DONE correctly latched in INT_RAW.
+const REG_LC_DMA_INT_ENA: u64 = 0x64;
+const REG_LC_DMA_INT_RAW: u64 = 0x68;
+const REG_LC_DMA_INT_ST: u64 = 0x6C;
+const REG_LC_DMA_INT_CLR: u64 = 0x70;
 
 // ── LCD_USER bits (TRM "LCD and Camera Controller"; soc/lcd_cam_reg.h) ──
-// The phase-enable bits are round-tripped as plain config and exercised by the
-// tests, but the transaction-done model does not branch on them (a single tick
-// completes whatever phases were programmed), so mark them allow(dead_code) for
-// the non-test build — matching the timer_group documentation-constant idiom.
-/// LCD_DOUT — enable the data-out phase.
-#[allow(dead_code)]
+/// LCD_DOUT — enable the data-out (payload) phase.
 const LCD_DOUT_BIT: u32 = 1 << 24;
-/// LCD_DUMMY — enable the dummy phase.
+/// LCD_DUMMY — enable the dummy phase. Round-tripped only: the dummy phase
+/// drives no bus words, so nothing downstream branches on it.
 #[allow(dead_code)]
 const LCD_DUMMY_BIT: u32 = 1 << 25;
 /// LCD_CMD — enable the command phase.
-#[allow(dead_code)]
 const LCD_CMD_BIT: u32 = 1 << 26;
 /// LCD_START — launch the configured transaction. Self-clears on completion.
 const LCD_START_BIT: u32 = 1 << 27;
-/// LCD_RESET — write-pulse reset of the LCD module. Self-clears.
-const LCD_RESET_BIT: u32 = 1 << 30;
+/// LCD_RESET — write-pulse reset of the LCD module (WO). Self-clears.
+///
+/// Bit **28**, per `soc/esp32s3/lcd_cam_struct.h` (`lcd_start[27]`,
+/// `lcd_reset[28]`, `lcd_dummy_cyclelen[30:29]`, `lcd_cmd_2_cycle_en[31]`).
+/// This used to be modelled at bit 30, which both accepted a reset that never
+/// arrived and *stripped* the low bit of `LCD_DUMMY_CYCLELEN` on every write.
+const LCD_RESET_BIT: u32 = 1 << 28;
+/// LCD_2BYTE_EN — 1: the LCD data bus is 16 bits wide; 0: 8 bits (bit 23).
+const LCD_2BYTE_EN_BIT: u32 = 1 << 23;
+/// LCD_BYTE_ORDER — invert the byte order of a 16-bit word (bit 22).
+const LCD_BYTE_ORDER_BIT: u32 = 1 << 22;
+/// LCD_BIT_ORDER — reverse the data bit order within a bus word (bit 21).
+const LCD_BIT_ORDER_BIT: u32 = 1 << 21;
+/// LCD_8BITS_ORDER — swap every two data bytes; valid in 8-bit mode (bit 19).
+const LCD_8BITS_ORDER_BIT: u32 = 1 << 19;
+/// LCD_CMD_2_CYCLE_EN — the command phase is 2 cycles instead of 1 (bit 31).
+const LCD_CMD_2_CYCLE_BIT: u32 = 1 << 31;
+
+// ── LCD_MISC D/C-line bits (`lcd_cam_lcd_misc_reg_t`) ──
+//
+// `lcd_ll_set_dc_level` encodes the four per-phase D/C levels as an idle
+// level plus three "differs from idle" flags, so the level driven during
+// phase P is `CD_IDLE_EDGE ^ CD_<P>_SET`.
+/// LCD_CD_DATA_SET — D/C during the DOUT phase differs from idle (bit 28).
+const MISC_CD_DATA_SET_BIT: u32 = 1 << 28;
+/// LCD_CD_CMD_SET — D/C during the CMD phase differs from idle (bit 30).
+const MISC_CD_CMD_SET_BIT: u32 = 1 << 30;
+/// LCD_CD_IDLE_EDGE — the D/C level while the bus is idle (bit 31).
+const MISC_CD_IDLE_EDGE_BIT: u32 = 1 << 31;
 /// LCD_UPDATE — latch the LCD config into the working set. Write-pulse,
 /// self-clears.
 const LCD_UPDATE_BIT: u32 = 1 << 20;
@@ -153,6 +203,8 @@ pub struct Esp32s3LcdCam {
     lcd_clock: u32,
     cam_ctrl: u32,
     cam_rgb_yuv: u32,
+    lcd_rgb_yuv: u32,
+    lcd_dly_mode: u32,
     lcd_misc: u32,
     lcd_ctrl: u32,
     lcd_ctrl1: u32,
@@ -184,6 +236,28 @@ pub struct Esp32s3LcdCam {
     /// One-tick latch mirroring `lcd_pending_done` for the camera path.
     cam_pending_vsync: bool,
 
+    /// True between an LCD_START that enabled the DOUT phase and the moment
+    /// the payload source reports the transfer finished. While this and
+    /// [`Self::dma_inflight`] are both set the transaction cannot complete.
+    dout_pending: bool,
+    /// True once GDMA has an outlink chain armed for this peripheral. Set by
+    /// [`Self::dma_arm`] from the GDMA LCD pump, cleared by [`Self::dma_finish`].
+    ///
+    /// This is what separates "DOUT phase fed by DMA" (wait for the chain)
+    /// from "DOUT phase with nothing behind it" (complete on the next tick, as
+    /// the model always did). Without it a bus that has no GDMA — every
+    /// LCD_CAM unit test, and any firmware that programs the phase bits
+    /// without arming a channel — would hang.
+    dma_inflight: bool,
+    /// Odd trailing byte carried between [`Self::dma_push_tx`] bursts in
+    /// 16-bit bus mode (a descriptor boundary can split a bus word).
+    dma_half_word: Option<u8>,
+
+    /// 8080 parallel panels this controller drives. Attached by the
+    /// `ili9341-16bit` kit when the manifest declares one; empty otherwise
+    /// (the register model then behaves exactly as before).
+    panels: Vec<std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>>,
+
     /// Bus-published cycle clock (walk-free deferred work).
     clock: Option<CycleClock>,
     /// Event armed for one-tick deferred work.
@@ -201,6 +275,8 @@ impl Esp32s3LcdCam {
             lcd_clock: 0,
             cam_ctrl: 0,
             cam_rgb_yuv: 0,
+            lcd_rgb_yuv: 0,
+            lcd_dly_mode: 0,
             lcd_misc: 0,
             lcd_ctrl: 0,
             lcd_ctrl1: 0,
@@ -215,9 +291,27 @@ impl Esp32s3LcdCam {
             lcd_pending_done: false,
             cam_running: false,
             cam_pending_vsync: false,
+            dout_pending: false,
+            dma_inflight: false,
+            dma_half_word: None,
+            panels: Vec::new(),
             clock: None,
             scheduled: false,
         }
+    }
+
+    /// Attach an 8080 parallel panel for the i80 pixel path. Called by the
+    /// `ili9341-16bit` kit at manifest-attach time.
+    pub fn attach_panel(
+        &mut self,
+        panel: std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>,
+    ) {
+        self.panels.push(panel);
+    }
+
+    /// Number of panels bound to the i80 pixel path (attach evidence).
+    pub fn panel_count(&self) -> usize {
+        self.panels.len()
     }
 }
 
@@ -245,15 +339,158 @@ impl Esp32s3LcdCam {
     /// pulse bits (RESET / UPDATE accepted then stripped), and act on
     /// LCD_START.
     fn write_lcd_user(&mut self, value: u32) {
+        // Store the value but strip START (reflected from lcd_busy on read) and
+        // the self-clearing pulse bits. Done first so the phase / bus-format
+        // bits this write carries are the ones the transaction below uses.
+        self.lcd_user = value & !(LCD_START_BIT | LCD_USER_PULSE_BITS);
+
         if value & LCD_START_BIT != 0 {
-            // Launch a transaction. Mark busy and arm the one-tick completion
-            // latch; the next `tick` latches TRANS_DONE and clears START.
+            // Launch a transaction. Mark busy and arm the completion latch; a
+            // later `tick` latches TRANS_DONE and clears START.
             self.lcd_busy = true;
             self.lcd_pending_done = true;
+            self.dma_half_word = None;
+
+            // Command phase: silicon drives LCD_CMD_VAL onto DB[15:0] with D/C
+            // at the CMD level. One cycle, or two with LCD_CMD_2_CYCLE_EN (the
+            // second cycle carries LCD_CMD_VAL[31:16]).
+            if value & LCD_CMD_BIT != 0 {
+                let dc = self.dc_level(MISC_CD_CMD_SET_BIT);
+                let cycles = if value & LCD_CMD_2_CYCLE_BIT != 0 {
+                    2
+                } else {
+                    1
+                };
+                for cycle in 0..cycles {
+                    let half = (self.lcd_cmd_val >> (16 * cycle)) as u16;
+                    let word = if self.bus_is_16bit() {
+                        half
+                    } else {
+                        // 8-bit bus: only D[7:0] leave the chip. This is why
+                        // `lcd_ll_set_command` spreads an 8-bit command as
+                        // `cmd | (cmd_hi << 16)`.
+                        half & 0x00FF
+                    };
+                    self.emit_word(dc, word);
+                }
+            }
+
+            // Data phase: the payload is DMA-fed, so nothing is emitted here.
+            // `dout_pending` holds TRANS_DONE back until the chain drains.
+            self.dout_pending = value & LCD_DOUT_BIT != 0;
         }
-        // Store the value but strip START (reflected from lcd_busy on read) and
-        // the self-clearing pulse bits.
-        self.lcd_user = value & !(LCD_START_BIT | LCD_USER_PULSE_BITS);
+    }
+
+    /// True when LCD_USER.LCD_2BYTE_EN selects the 16-bit data bus.
+    fn bus_is_16bit(&self) -> bool {
+        self.lcd_user & LCD_2BYTE_EN_BIT != 0
+    }
+
+    /// D/C (RS) level driven during the phase whose `LCD_MISC.CD_*_SET` bit is
+    /// `phase_set_bit`: `CD_IDLE_EDGE ^ CD_<phase>_SET`.
+    fn dc_level(&self, phase_set_bit: u32) -> bool {
+        let idle = self.lcd_misc & MISC_CD_IDLE_EDGE_BIT != 0;
+        let differs = self.lcd_misc & phase_set_bit != 0;
+        idle != differs
+    }
+
+    /// Apply the LCD_USER output-format bits to one bus word and hand it to
+    /// every attached panel.
+    fn emit_word(&self, dc_high: bool, word: u16) {
+        if self.panels.is_empty() {
+            return;
+        }
+        let mut w = word;
+        if self.lcd_user & LCD_BYTE_ORDER_BIT != 0 && self.bus_is_16bit() {
+            w = w.swap_bytes();
+        }
+        if self.lcd_user & LCD_BIT_ORDER_BIT != 0 {
+            w = if self.bus_is_16bit() {
+                w.reverse_bits()
+            } else {
+                u16::from((w as u8).reverse_bits())
+            };
+        }
+        for panel in &self.panels {
+            panel.i80_write_word(dc_high, w);
+        }
+    }
+
+    // ── GDMA handoff (called by `Esp32s3Gdma`'s LCD pump) ──────────────────
+
+    /// GDMA has an outlink chain armed for LCD_CAM. Until [`Self::dma_finish`]
+    /// the DOUT phase of a transaction is considered DMA-fed and TRANS_DONE is
+    /// withheld.
+    pub fn dma_arm(&mut self) {
+        self.dma_inflight = true;
+    }
+
+    /// True while a started transaction is waiting on its DMA payload — the
+    /// GDMA pump's signal to fetch the next burst. False before LCD_START (the
+    /// driver arms the descriptors first) and after the chain drains.
+    pub fn dma_wants_data(&self) -> bool {
+        self.lcd_busy && self.dout_pending
+    }
+
+    /// Push one burst of DOUT-phase payload bytes, as fetched from the GDMA
+    /// outlink descriptor chain, onto the panel bus.
+    ///
+    /// Byte→word packing follows `LCD_USER.LCD_2BYTE_EN`: a 16-bit bus takes
+    /// little-endian pairs (the order the DMA reads memory), an 8-bit bus one
+    /// byte per cycle. `LCD_8BITS_ORDER` swaps adjacent bytes of the byte
+    /// stream in 8-bit mode before packing.
+    pub fn dma_push_tx(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        let dc = self.dc_level(MISC_CD_DATA_SET_BIT);
+
+        if !self.bus_is_16bit() {
+            let swizzle = self.lcd_user & LCD_8BITS_ORDER_BIT != 0;
+            if swizzle {
+                for pair in bytes.chunks(2) {
+                    for b in pair.iter().rev() {
+                        self.emit_word(dc, u16::from(*b));
+                    }
+                }
+            } else {
+                for b in bytes {
+                    self.emit_word(dc, u16::from(*b));
+                }
+            }
+            return;
+        }
+
+        let mut it = bytes.iter().copied();
+        if let Some(lo) = self.dma_half_word.take() {
+            match it.next() {
+                Some(hi) => self.emit_word(dc, u16::from_le_bytes([lo, hi])),
+                None => {
+                    self.dma_half_word = Some(lo);
+                    return;
+                }
+            }
+        }
+        loop {
+            let Some(lo) = it.next() else { break };
+            match it.next() {
+                Some(hi) => self.emit_word(dc, u16::from_le_bytes([lo, hi])),
+                // Odd tail: carry it to the next burst rather than inventing a
+                // high byte.
+                None => {
+                    self.dma_half_word = Some(lo);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// The outlink chain drained: the DOUT phase is complete, so the pending
+    /// transaction may finish on the next tick.
+    pub fn dma_finish(&mut self) {
+        self.dout_pending = false;
+        self.dma_inflight = false;
+        self.dma_half_word = None;
     }
 
     /// Apply a write to CAM_CTRL1: latch config, self-clear CAM_RESET, act on
@@ -285,6 +522,8 @@ impl Peripheral for Esp32s3LcdCam {
             REG_CAM_CTRL => self.cam_ctrl,
             REG_CAM_CTRL1 => self.cam_ctrl1 | if self.cam_running { CAM_START_BIT } else { 0 },
             REG_CAM_RGB_YUV => self.cam_rgb_yuv,
+            REG_LCD_RGB_YUV => self.lcd_rgb_yuv,
+            REG_LCD_DLY_MODE => self.lcd_dly_mode,
             // LCD_USER: stored config OR the live START (busy) bit. Pulse bits
             // were stripped on write so they read back 0.
             REG_LCD_USER => self.lcd_user | if self.lcd_busy { LCD_START_BIT } else { 0 },
@@ -317,6 +556,8 @@ impl Peripheral for Esp32s3LcdCam {
             REG_CAM_CTRL => self.cam_ctrl = value,
             REG_CAM_CTRL1 => self.write_cam_ctrl1(value),
             REG_CAM_RGB_YUV => self.cam_rgb_yuv = value,
+            REG_LCD_RGB_YUV => self.lcd_rgb_yuv = value,
+            REG_LCD_DLY_MODE => self.lcd_dly_mode = value,
             REG_LCD_USER => self.write_lcd_user(value),
             REG_LCD_MISC => self.lcd_misc = value,
             REG_LCD_CTRL => self.lcd_ctrl = value,
@@ -339,8 +580,12 @@ impl Peripheral for Esp32s3LcdCam {
     fn tick(&mut self) -> PeripheralTickResult {
         // Complete any launched LCD transaction: latch TRANS_DONE and clear the
         // START/busy flag so polling firmware proceeds. A single tick is enough
-        // (the sim has no per-pixel timing model).
-        if self.lcd_pending_done {
+        // (the sim has no per-pixel timing model) — EXCEPT while the DOUT phase
+        // is still being fed from a GDMA outlink chain. Completing early there
+        // would let `panel_io_i80_tx_param`'s TRANS_DONE poll return while the
+        // descriptors are still in flight, and the driver would remount them
+        // under the running transfer.
+        if self.lcd_pending_done && !(self.dout_pending && self.dma_inflight) {
             self.lcd_pending_done = false;
             self.lcd_busy = false;
             self.int_raw |= INT_LCD_TRANS_DONE;
@@ -389,7 +634,9 @@ impl Peripheral for Esp32s3LcdCam {
         if !self.uses_scheduler() {
             return Vec::new();
         }
-        if self.lcd_pending_done || self.cam_pending_vsync && !self.scheduled {
+        // Parenthesised: without the grouping `lcd_pending_done` alone armed a
+        // fresh event on every call, even when one was already scheduled.
+        if (self.lcd_pending_done || self.cam_pending_vsync) && !self.scheduled {
             self.scheduled = true;
             return vec![(1, DEFERRED_WAKE_TOKEN)];
         }
