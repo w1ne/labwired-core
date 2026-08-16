@@ -581,6 +581,51 @@ impl FlashXipPeripheral {
         }
     }
 
+    /// Write consecutive bytes at `offset`, taking one translation and one
+    /// lock for the whole span when it stays inside a page (the common case —
+    /// a u16/u32 store never straddles a 64 KiB boundary unless it is
+    /// misaligned across one, which the per-byte fallback still handles).
+    fn write_span(&mut self, offset: u64, bytes: &[u8]) -> SimResult<()> {
+        let in_page = (offset % PAGE_SIZE as u64) as usize;
+        if in_page + bytes.len() > PAGE_BYTES {
+            for (i, b) in bytes.iter().enumerate() {
+                self.write(offset + i as u64, *b)?;
+            }
+            return Ok(());
+        }
+
+        match self.translate(offset) {
+            Some((XipTarget::Psram, phys)) => {
+                let Some(psram) = &self.psram else {
+                    return Err(SimulationError::MemoryViolation(self.base as u64 + offset));
+                };
+                let mut array = psram.lock().unwrap();
+                let i = phys as usize;
+                if i + bytes.len() <= array.len() {
+                    array[i..i + bytes.len()].copy_from_slice(bytes);
+                    Ok(())
+                } else {
+                    Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+                }
+            }
+            other => {
+                let phys = other.map(|(_, p)| p).unwrap_or(offset);
+                let mut b = self.backing.lock().unwrap();
+                let i = phys as usize;
+                if i + bytes.len() <= b.len() {
+                    b[i..i + bytes.len()].copy_from_slice(bytes);
+                    drop(b);
+                    // Only flash pages are mirrored; a PSRAM write above never
+                    // reaches here, so the mirror is not invalidated for it.
+                    self.invalidate_page_mirror();
+                    Ok(())
+                } else {
+                    Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+                }
+            }
+        }
+    }
+
     /// Drop every mirrored page (call if a future SPI path mutates flash bytes).
     #[allow(dead_code)]
     pub fn invalidate_page_mirror(&self) {
@@ -665,6 +710,19 @@ impl Peripheral for FlashXipPeripheral {
         } else {
             Err(SimulationError::MemoryViolation(self.base as u64 + offset))
         }
+    }
+
+    /// Bulk writes. Doom's renderer and zone heap live in PSRAM, so a
+    /// framebuffer blit is millions of stores through this path — and the
+    /// default `Peripheral::write_u32` splits every one into four calls, each
+    /// paying a translate plus a mutex acquire. Translating once and locking
+    /// once per access is a 4x cut on the hottest path a PSRAM firmware has.
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        self.write_span(offset, &value.to_le_bytes())
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_span(offset, &value.to_le_bytes())
     }
 
     fn legacy_tick_active(&self) -> bool {
