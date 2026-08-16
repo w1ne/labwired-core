@@ -1278,15 +1278,34 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
             Waiti { level } => {
-                // Set PS.INTLEVEL = level (real silicon does this before
-                // entering wait state). We don't model the actual wait —
-                // the CPU stays at this instruction (PC doesn't advance),
-                // so a caller poll-loop sees the same PC each step and
-                // can detect "halted" without us tracking extra state.
-                // `waiti_parked` lets later steps skip fetch/decode until a
-                // wake-capable IRQ arrives (dual-core APP idle win).
+                // Xtensa ISA RM, WAITI: PS.INTLEVEL ← level, then the core
+                // suspends. **WAITI retires before it waits** — the wait state
+                // sits between WAITI and its successor, so the interrupt that
+                // ends it is taken with EPC[level] = the address of the
+                // instruction AFTER the WAITI, and RFI/RFE resumes there.
+                //
+                // Advancing the PC here is load-bearing, not cosmetic. Parking
+                // *on* the WAITI made every wake re-enter it: dispatch_irq
+                // latched EPC1 = the WAITI's own address, the handler ran, and
+                // RFE dropped the core straight back into the wait. Code that
+                // must make forward progress after a wake therefore never did.
+                // ESP-IDF's SMP bring-up is exactly that shape — core 1's idle
+                // task calls esp_cpu_wait_for_intr() from
+                // esp_vApplicationIdleHook() and only reaches the registered
+                // idle hooks (which set `s_other_cpu_startup_done`) on the NEXT
+                // loop iteration, i.e. after the call returns. With the PC
+                // pinned, core 1 took its systimer tick hundreds of times and
+                // still never returned from the call, so core 0 spun forever in
+                // main_task's `while (!s_other_cpu_startup_done)`.
+                //
+                // `waiti_parked` is what models the wait itself: later steps
+                // skip fetch/decode (and let the idle fast-forward run) until a
+                // wake-capable IRQ arrives, at which point the pre-fetch
+                // interrupt check clears the park and dispatches with the PC
+                // already pointing past the WAITI.
                 self.ps.set_intlevel(level);
                 self.waiti_parked = true;
+                self.pc = self.pc.wrapping_add(len);
             }
             // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
             // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
