@@ -675,11 +675,23 @@ pub(crate) fn run_firmware(
 
     let mut cpu = wiring.cpu;
 
-    // Dual-core (SMP): the APP_CPU (core 1). Created halted at the ROM reset
-    // vector; released when the PRO_CPU clears CORE_1_RESETING (real hardware
-    // edge, signalled via APPCPU_RESET_RELEASED). The APP_CPU then boots the
-    // real ROM exactly like silicon — no firmware-symbol hooks. --rom-boot only.
-    let mut cpu1: Option<labwired_core::cpu::xtensa_lx7::XtensaLx7> = None;
+    // Dual-core (SMP): the APP_CPU (core 1), on BOTH boot paths — the same
+    // shape `system::node::build_esp32s3_node` builds, so the single-chip
+    // runner and the world runner share ONE bring-up mechanism.
+    //
+    //   * rom-boot: core 1 is created halted at the ROM reset vector and
+    //     released when the PRO_CPU clears CORE_1_RESETING (the real hardware
+    //     edge, surfaced by the SYSTEM_CORE_1_CONTROL peripheral as
+    //     APPCPU_RESET_RELEASED). It then boots the real ROM like silicon.
+    //   * fast-boot: there is no ROM to run, so core 1 is released by
+    //     `Machine`'s boundary when the `ets_set_appcpu_boot_addr` ROM thunk
+    //     hands over `call_start_cpu1` (APPCPU_BOOT_ADDR).
+    //
+    // Neither reads a firmware symbol. This replaces the handshake pre-paint
+    // the fast-boot path used to do (writing 1 into `s_cpu_inited`,
+    // `s_other_cpu_startup_done`, … resolved from the ELF) — a thunk that
+    // faked the *result* of a core-1 boot that never happened.
+    let mut cpu1 = Some(labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu());
     let mut appcpu_started = false;
 
     if args.rom_boot {
@@ -718,14 +730,13 @@ pub(crate) fn run_firmware(
         // stack save chain — so use the real per-access overflow / RETW
         // underflow path (no sim shadow stack).
         cpu.faithful_windows = true;
-        // Bring up the APP_CPU (halted at the ROM reset vector 0x40000400).
-        let mut c1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
-        c1.faithful_windows = true;
-        eprintln!(
-            "labwired-cli run: APP_CPU created (halted at reset vector 0x{:08x})",
-            c1.get_pc(),
-        );
-        cpu1 = Some(c1);
+        if let Some(c1) = cpu1.as_mut() {
+            c1.faithful_windows = true;
+            eprintln!(
+                "labwired-cli run: APP_CPU created (halted at reset vector 0x{:08x})",
+                c1.get_pc(),
+            );
+        }
     } else {
         // Fast-boot.
         let boot = match fast_boot(
@@ -749,25 +760,14 @@ pub(crate) fn run_firmware(
             "labwired-cli run: entry=0x{:08x} stack=0x{:08x} segments={}",
             boot.entry, boot.stack, boot.segments_loaded,
         );
-
-        // ESP-IDF dual-core handshake (legacy thunk-path stopgap). system_early_init
-        // busy-waits until both per-core init flags are set; the single-CPU run
-        // path pre-paints them. Superseded by the SMP phase of the chip model.
-        let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
-        for (sym, span) in [
-            ("s_cpu_inited", 2u32),
-            ("s_cpu_up", 2),
-            ("s_system_inited", 2),
-            ("s_resume_cores", 1),
-            ("s_other_cpu_startup_done", 1),
-        ] {
-            if let Some(&addr) = symbol_addrs.get(sym) {
-                for off in 0..span {
-                    let _ = bus.write_u8(addr as u64 + off as u64, 0x01);
-                }
-                eprintln!("labwired-cli run: handshake {sym} @0x{addr:08x} = 1");
-            }
-        }
+        // NOTE: no ESP-IDF dual-core handshake pre-paint here. The single-chip
+        // runner used to resolve `s_cpu_inited` / `s_cpu_up` / `s_system_inited`
+        // / `s_resume_cores` / `s_other_cpu_startup_done` out of the ELF and
+        // write 1 into each, because it ran ONE cpu and core 1 could never mark
+        // them itself. Core 1 is real on both paths now (see the `cpu1`
+        // construction above), so those flags are set by the firmware running on
+        // core 1 — including `s_other_cpu_startup_done`, which core 1's FreeRTOS
+        // idle hook writes only after its systimer tick wakes it out of WAITI.
     }
 
     // Run the step loop through the authoritative `Machine` lifecycle.
@@ -988,7 +988,6 @@ pub(crate) fn run_firmware(
             }
         }
         steps += 1;
-
         // SMP bring-up tracer (gated). Prints both cores' PCs periodically and
         // flags the first time each core enters app XIP code (>= 0x4200_0000,
         // where setup()/loop()/Unity live) — the signal that the FreeRTOS SMP
