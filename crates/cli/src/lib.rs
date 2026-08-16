@@ -47,8 +47,8 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 use artifacts::{
-    AssertionEvidence, AssertionResult, Snapshot, StimulusOutcome, StopReasonDetails,
-    TestConfig, TestResult,
+    AssertionEvidence, AssertionResult, Snapshot, StimulusOutcome, StopReasonDetails, TestConfig,
+    TestResult,
 };
 use labwired_config::{
     load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
