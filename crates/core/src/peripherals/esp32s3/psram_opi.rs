@@ -129,11 +129,7 @@ impl PsramDevice {
                 // Consecutive registers from `addr`, wrapping is not a thing:
                 // an out-of-range index reads 0, like an unimplemented MR.
                 for (i, b) in out.iter_mut().enumerate() {
-                    *b = self
-                        .mode_regs
-                        .get(addr as usize + i)
-                        .copied()
-                        .unwrap_or(0);
+                    *b = self.mode_regs.get(addr as usize + i).copied().unwrap_or(0);
                 }
             }
             OPI_REG_WRITE => {

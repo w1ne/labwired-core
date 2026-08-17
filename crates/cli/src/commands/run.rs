@@ -1128,7 +1128,6 @@ pub(crate) fn run_firmware(
                 if buf.len() > stop_scanned {
                     let from = stop_scanned.saturating_sub(pat.len());
                     if String::from_utf8_lossy(&buf[from..]).contains(pat.as_str()) {
-                        stop_scanned = buf.len();
                         drop(buf);
                         eprintln!("labwired-cli run: --stop-on {pat:?} matched at step {steps}");
                         break;

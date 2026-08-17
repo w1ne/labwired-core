@@ -18,11 +18,12 @@
 
 use labwired_config::SystemManifest;
 use labwired_core::bus::SystemBus;
+use labwired_core::cpu::XtensaLx7;
 use labwired_core::peripherals::esp32s3::lcd_cam::{Esp32s3LcdCam, LCD_CAM_BASE};
 use labwired_core::system::xtensa::{
     attach_esp32_external_devices, configure_xtensa_esp32s3, Esp32s3Opts,
 };
-use labwired_core::Bus;
+use labwired_core::{Bus, Machine};
 
 // ── LCD_CAM (0x6004_1000) ────────────────────────────────────────────────
 const LCD_USER: u64 = LCD_CAM_BASE as u64 + 0x14;
@@ -70,9 +71,55 @@ const DESC_SUC_EOF: u32 = 1 << 30;
 /// is then addressed 320 wide × 240 high.
 const MADCTL_LANDSCAPE: u8 = 0x28;
 
-fn build_bus() -> SystemBus {
+/// The bus under a real [`Machine`], with the CPU parked.
+///
+/// ⚠️ A bare `SystemBus` is **not** enough to drive LCD_CAM or GDMA. Both
+/// answer `uses_scheduler()` true as soon as a cycle clock is attached — which
+/// `add_peripheral` does to every peripheral — so under the `event-scheduler`
+/// feature the per-cycle walk deliberately skips them and they advance only
+/// through `sync_to` on MMIO access and the event drain in `Machine::step`.
+/// That drain lives on `Machine`, not on the bus.
+///
+/// This mattered: these tests originally ticked a bare bus, passed on default
+/// features, and went red the moment they ran under `cargo test --workspace`,
+/// where `crates/wasm` unifies `event-scheduler` in. The browser builds with
+/// that feature. So a bus-only harness was testing the one configuration the
+/// browser does *not* run, and the deferred-completion path LCD_CAM takes there
+/// had no coverage at all.
+///
+/// The CPU is halted rather than absent: there is no firmware here, every
+/// register write below is the driver sequence issued by hand, and a halted
+/// core still lets `advance` tick peripherals and drain the event queue exactly
+/// as it does under a running one.
+struct Rig {
+    machine: Machine<XtensaLx7>,
+}
+
+impl std::ops::Deref for Rig {
+    type Target = SystemBus;
+    fn deref(&self) -> &SystemBus {
+        &self.machine.bus
+    }
+}
+
+impl std::ops::DerefMut for Rig {
+    fn deref_mut(&mut self) -> &mut SystemBus {
+        &mut self.machine.bus
+    }
+}
+
+impl Rig {
+    /// One machine boundary: peripherals tick, scheduled events drain.
+    fn tick(&mut self) {
+        self.machine
+            .step()
+            .expect("parked machine advances cleanly");
+    }
+}
+
+fn build_bus() -> Rig {
     let mut bus = SystemBus::new();
-    let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
     let manifest: SystemManifest = serde_yaml::from_str(
         r#"
 name: "s3-i80-panel"
@@ -122,40 +169,41 @@ board_io: []
         .expect("lcd_cam is the LCD_CAM model")
         .panel_count();
     assert_eq!(panels, 1, "panel bound to LCD_CAM's i80 output");
-    bus
+
+    let mut cpu: XtensaLx7 = wiring.cpu;
+    cpu.halted = true;
+    Rig {
+        machine: Machine::new(cpu, bus),
+    }
 }
 
 /// One descriptor: DMA-owned, `suc_eof`, `len` bytes out of `buf`.
-fn write_desc(bus: &mut SystemBus, at: u64, len: u32, buf: u64, next: u64, eof: bool) {
+fn write_desc(bus: &mut Rig, at: u64, len: u32, buf: u64, next: u64, eof: bool) {
     let dw0 = DESC_OWNER_DMA | if eof { DESC_SUC_EOF } else { 0 } | (len << 12) | len;
     bus.write_u32(at, dw0).unwrap();
     bus.write_u32(at + 4, buf as u32).unwrap();
     bus.write_u32(at + 8, next as u32).unwrap();
 }
 
-/// Advance the bus until `done()` or `budget` ticks elapse. Returns the tick
+/// Advance the machine until `done()` or `budget` boundaries elapse. Returns the
 /// count actually used.
-fn tick_until(
-    bus: &mut SystemBus,
-    budget: usize,
-    mut done: impl FnMut(&mut SystemBus) -> bool,
-) -> usize {
+fn tick_until(bus: &mut Rig, budget: usize, mut done: impl FnMut(&mut Rig) -> bool) -> usize {
     for n in 0..budget {
         if done(bus) {
             return n;
         }
-        bus.tick_peripherals_with_costs();
+        bus.tick();
     }
     assert!(done(bus), "condition not reached within {budget} ticks");
     budget
 }
 
-fn trans_done(bus: &mut SystemBus) -> bool {
+fn trans_done(bus: &mut Rig) -> bool {
     bus.read_u32(LC_DMA_INT_ST).unwrap() & EVENT_TRANS_DONE != 0
 }
 
 /// Send one command byte with no parameters — command phase only, no DMA.
-fn send_cmd(bus: &mut SystemBus, cmd: u8) {
+fn send_cmd(bus: &mut Rig, cmd: u8) {
     bus.write_u32(LC_DMA_INT_CLR, EVENT_TRANS_DONE).unwrap();
     bus.write_u32(LCD_CMD_VAL, cmd as u32).unwrap();
     bus.write_u32(LCD_USER, LCD_2BYTE_EN | LCD_CMD | LCD_START)
@@ -167,7 +215,7 @@ fn send_cmd(bus: &mut SystemBus, cmd: u8) {
 /// 8-bit parameter to one 16-bit bus cycle in `format_buffer` (low byte carries
 /// the value), then streams the buffer through the same outlink chain the pixel
 /// path uses.
-fn send_cmd_params(bus: &mut SystemBus, cmd: u8, params: &[u8]) {
+fn send_cmd_params(bus: &mut Rig, cmd: u8, params: &[u8]) {
     let mut widened = Vec::with_capacity(params.len() * 2);
     for &p in params {
         widened.push(p);
@@ -178,7 +226,7 @@ fn send_cmd_params(bus: &mut SystemBus, cmd: u8, params: &[u8]) {
 
 /// The full `lcd_start_transaction` sequence: mount the payload on the outlink
 /// chain, `gdma_start`, then `lcd_ll_start`.
-fn send_dma_transaction(bus: &mut SystemBus, cmd: u8, payload: &[u8]) {
+fn send_dma_transaction(bus: &mut Rig, cmd: u8, payload: &[u8]) {
     assert!(
         payload.len() <= 4095,
         "one descriptor is enough for this test"
@@ -201,7 +249,7 @@ fn send_dma_transaction(bus: &mut SystemBus, cmd: u8, payload: &[u8]) {
 }
 
 /// Bring the panel up the way the firmware does: MADCTL, 16 bpp, display on.
-fn panel_init(bus: &mut SystemBus) {
+fn panel_init(bus: &mut Rig) {
     bus.write_u32(LCD_MISC, MISC_DC_LEVELS).unwrap();
     bus.write_u32(LC_DMA_INT_ENA, EVENT_TRANS_DONE).unwrap();
     send_cmd_params(bus, 0x36, &[MADCTL_LANDSCAPE]); // MADCTL
@@ -209,7 +257,7 @@ fn panel_init(bus: &mut SystemBus) {
     send_cmd(bus, 0x29); // DISPON
 }
 
-fn set_window(bus: &mut SystemBus, x0: u16, y0: u16, x1: u16, y1: u16) {
+fn set_window(bus: &mut Rig, x0: u16, y0: u16, x1: u16, y1: u16) {
     send_cmd_params(
         bus,
         0x2A,

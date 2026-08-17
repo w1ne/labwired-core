@@ -44,7 +44,9 @@ const MISO_DLEN: u64 = 0x28;
 /// which matters: a zero-initialised MISC would read as "PSRAM selected" and
 /// send every flash command to the wrong chip.
 const MISC: u64 = 0x34;
-const CS0_DIS: u32 = 1 << 0;
+/// Bit 0 is `CS0_DIS`. It is described above rather than declared: the model
+/// routes on CS1 alone (flash is the default target), so a `CS0_DIS` constant
+/// would be dead code the compiler warns about.
 const CS1_DIS: u32 = 1 << 1;
 /// `SPI_MEM_USER2_REG` bits[31:28] hold the command-phase length minus one.
 /// OPI commands are 16 bits (field = 15); ordinary SPI NOR commands are 8.
@@ -93,6 +95,32 @@ const CMD_WRDI: u8 = 0x04; // write disable
 const CMD_SFDP: u8 = 0x5A; // read SFDP
 const CMD_RDUID: u8 = 0x4B; // read unique ID (64-bit)
 const CMD_RDID: u8 = 0x9F; // read JEDEC id
+
+/// The smallest SPI flash part any board this controller serves is fitted with.
+/// Every ESP32 module in the catalog carries at least 4 MB, and the pre-2026-08
+/// model hardcoded exactly this value for all of them.
+const MIN_PART_BYTES: usize = 4 * 1024 * 1024;
+
+/// JEDEC RDID capacity byte — `log2` of the **part** size, which is not the
+/// same thing as the length of the image we were handed to back it.
+///
+/// A backing vector is a merged flash image: bootloader + partition table + app,
+/// and nothing after the last byte the build actually wrote. On the C3 that is
+/// often under 1 MiB while the app's own image header declares a 4 MB part, and
+/// `esp_flash`'s probe compares the two and aborts the boot
+/// ("Detected size(1024k) smaller than the size in the binary image
+/// header(4096k). Probe failed."). So the reported part is the backing rounded
+/// **up** to a power of two — a 6.2 MB image is an 8 MB part, never a 4 MB one —
+/// and floored at [`MIN_PART_BYTES`].
+///
+/// ⚠️ This controller is shared: `boot/esp32c3_rom.rs` registers the same model
+/// for the C3's SPIMEM0/1 because the two chips share the register layout. A
+/// change here is a change to every ESP32 chip in the workspace.
+fn part_capacity_byte(backing_len: usize) -> u32 {
+    let part = backing_len.max(MIN_PART_BYTES).next_power_of_two() as u64;
+    // 4 MiB -> 0x16, 8 MiB -> 0x17, 16 MiB -> 0x18.
+    (63 - part.leading_zeros() as u64) as u32
+}
 
 #[derive(Debug)]
 pub struct SpiMemFlash {
@@ -207,7 +235,10 @@ impl SpiMemFlash {
         }
 
         let out = match &self.psram {
-            Some(psram) => psram.lock().unwrap().exec(cmd, addr, &write_data, read_bytes),
+            Some(psram) => psram
+                .lock()
+                .unwrap()
+                .exec(cmd, addr, &write_data, read_bytes),
             None => vec![0u8; read_bytes],
         };
 
@@ -297,17 +328,13 @@ impl SpiMemFlash {
             CMD_RDSR2 => self.set_reg(W0, self.sr2 as u32),
             CMD_RDSR3 => self.set_reg(W0, self.sr3 as u32),
             CMD_RDID => {
-                // JEDEC id. The capacity byte is log2(bytes), derived from the
-                // backing rather than fixed: esp_flash compares it against the
-                // size in the image header and refuses to boot on a mismatch
-                // ("Detected size(4096k) smaller than the size in the binary
-                // image header(16384k)"), so a hardcoded 4 MB part fails every
-                // 8/16 MB image regardless of how big the model's flash is.
-                let capacity = {
-                    let len = self.flash.lock().unwrap().len().max(1) as u64;
-                    // 4 MiB -> 0x16, 8 MiB -> 0x17, 16 MiB -> 0x18.
-                    (63 - len.leading_zeros() as u64) as u32
-                };
+                // JEDEC id. The capacity byte is log2(bytes) of the *part*,
+                // derived from the backing rather than fixed: esp_flash compares
+                // it against the size in the image header and refuses to boot on
+                // a mismatch ("Detected size(4096k) smaller than the size in the
+                // binary image header(16384k)"), so a hardcoded 4 MB part fails
+                // every 8/16 MB image regardless of how big the model's flash is.
+                let capacity = part_capacity_byte(self.flash.lock().unwrap().len());
                 self.set_reg(W0, 0x0000_4020 | (capacity << 16));
             }
             // Read 64-bit unique ID. esp_flash rejects all-zero / all-ones as
@@ -405,6 +432,29 @@ mod tests {
 
     fn ctrl_with(flash: Vec<u8>) -> SpiMemFlash {
         SpiMemFlash::new(Arc::new(Mutex::new(flash)))
+    }
+
+    /// The regression that made eight ESP32-C3 targets red: a C3 rom-boot
+    /// backing is the merged image (well under 1 MiB), while the app's image
+    /// header declares the module's 4 MB part. Reporting `log2(backing)` made
+    /// `esp_flash` abort with "Detected size(1024k) smaller than the size in
+    /// the binary image header(4096k). Probe failed." before `app_main` ran.
+    #[test]
+    fn a_short_c3_image_still_reports_the_modules_4mb_part() {
+        assert_eq!(part_capacity_byte(700 * 1024), 0x16);
+        assert_eq!(part_capacity_byte(0), 0x16);
+    }
+
+    /// And the case that motivated deriving it at all: an N16R8 image that does
+    /// not fill its part must not understate the part it is flashed onto.
+    #[test]
+    fn a_bigger_image_rounds_up_to_the_next_part_size() {
+        // The Doom merged image: 8,455,860 bytes. Flooring log2 would call
+        // this an 8 MB part; the S3 backing is padded to 16 MiB upstream, and
+        // an unpadded one must still not round *down* past the image itself.
+        assert_eq!(part_capacity_byte(8_455_860), 0x18);
+        assert_eq!(part_capacity_byte(16 * 1024 * 1024), 0x18);
+        assert_eq!(part_capacity_byte(8 * 1024 * 1024), 0x17);
     }
 
     #[test]

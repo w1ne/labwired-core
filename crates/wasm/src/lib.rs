@@ -2147,7 +2147,10 @@ mod esp32s3_flash_backing_tests {
         let chip = 16 * 1024 * 1024;
         // The Doom merged image: bootloader + partition table + app + a 4 MB
         // WAD at 0x410000 = 8,455,860 bytes.
-        assert_eq!(esp32s3_flash_backing_size(chip, 8_455_860), 16 * 1024 * 1024);
+        assert_eq!(
+            esp32s3_flash_backing_size(chip, 8_455_860),
+            16 * 1024 * 1024
+        );
     }
 
     /// A chip YAML that understates the part must not truncate a bigger image.

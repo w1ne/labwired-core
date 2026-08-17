@@ -271,7 +271,7 @@ pub const MMU_FMT_C3: MmuFmt = MmuFmt {
     invalid_bit: 1 << 8,
     valid_val_mask: 0xFF,
     vaddr_mask: 0x7F_FFFF, // 8 MiB
-    spiram_bit: 0, // no PSRAM path on the C3
+    spiram_bit: 0,         // no PSRAM path on the C3
 };
 
 /// ESP32 classic (LX6) MMU format (`soc/esp32/ext_mem_defs.h`):
@@ -494,7 +494,10 @@ impl FlashXipPeripheral {
         }
         let phys_page = self.page_table[virt_page]?;
         // Fast-boot's static table only ever maps flash.
-        Some((XipTarget::Flash, phys_page as u64 * PAGE_SIZE as u64 + in_page))
+        Some((
+            XipTarget::Flash,
+            phys_page as u64 * PAGE_SIZE as u64 + in_page,
+        ))
     }
 
     /// Ensure some way holds `phys_page`, filling from `backing` on miss, and
