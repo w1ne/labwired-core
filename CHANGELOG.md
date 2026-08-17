@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`labwired run` exits 3 on a RISC-V simulation fault too.** v0.22.1 below
+  announces that "`labwired run` exits 3 when the run ends on a simulation
+  fault"; the change only landed on ARM. Both RISC-V loops kept
+  `tracing::debug!("… halt: {e}")` followed by `EXIT_PASS`, and `debug!` prints
+  nothing at the default log level — so a `MemoryViolation` or a `DecodeError`
+  on the ESP32-C3, the most-used board, produced **zero bytes of stderr and exit
+  0**. Both loops now name the fault and its PC on stderr and return
+  `EXIT_RUNTIME_ERROR`, the same as ARM and Xtensa. `--allow-sim-error` restores
+  exit 0 for callers that own the verdict and read it from the output.
+
 ## [0.22.1] - 2026-08-14
 
 A one-change release, because the change is one the last release made

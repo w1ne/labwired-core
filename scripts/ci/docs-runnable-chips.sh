@@ -12,8 +12,10 @@
 #   * every chip descriptor in configs/chips (minus CI fixtures) must appear in
 #     docs-runnable-chips.json — a new chip cannot arrive untested and silent;
 #   * `committed`, `asset` and `example` entries are RUN, and judged on what the
-#     firmware printed. Not on exit status: `labwired run` deliberately treats a
-#     simulation error as a non-fatal end of run and still exits 0;
+#     firmware printed, not on exit status. `labwired run` does now exit 3 on a
+#     simulation fault (on every architecture), but the interesting failures
+#     here are the ones that still exit 0 — firmware that boots, prints nothing
+#     and spins to the step limit — so the verdict is read out of the log;
 #   * `committed` is the preferred shape — the ELF is in this repo, so a clone
 #     plus an installed CLI is the whole prerequisite, and most of them are the
 #     TIER1 fixtures, whose transcript asserts real peripheral behaviour rather

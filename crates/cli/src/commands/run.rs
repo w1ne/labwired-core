@@ -330,6 +330,11 @@ pub(crate) fn run_firmware_riscv(
         eprintln!("[bridge] on; wifi_mac_idx={wifi_mac_idx:?}");
     }
 
+    // Set when the run ends because the simulation raised an error rather than
+    // because it ran out of steps. Read once, below the loop. See the policy
+    // note on `riscv_run_exit_code`.
+    let mut faulted = false;
+
     for i in 0..limit {
         // Periodic beacon so the STA's scan finds the AP (real APs beacon ~always).
         if bridge && i >= next_beacon_at {
@@ -440,14 +445,19 @@ pub(crate) fn run_firmware_riscv(
                 }
             }
             Err(e) => {
-                // Surface the halt (was a silent debug log): the fault PC + reason is
-                // the key signal when bringing real firmware up on the sim.
-                tracing::debug!("labwired-riscv: step {i} pc={pc:#010x} halt: {e}");
+                // A fault, reported as one. This used to be a `tracing::debug!`
+                // — invisible at the default log level, invisible with logging
+                // off — and the run then returned EXIT_PASS regardless, so a
+                // `MemoryViolation` or a `DecodeError` at instruction 12 of a
+                // hundred million produced no stderr and exit 0.
+                eprintln!(
+                    "labwired run (riscv): simulation error at pc={pc:#010x} (step {i}): {e}"
+                );
                 if !break_at.is_empty() {
-                    eprintln!("[halt] step {i} pc={pc:#010x} err={e}");
                     let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
                     eprintln!("[trail] {}", trail.join(" -> "));
                 }
+                faulted = true;
                 break;
             }
         }
@@ -455,6 +465,50 @@ pub(crate) fn run_firmware_riscv(
 
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     export_display_if_requested(&args.display_out, &machine.bus);
+    riscv_run_exit_code(faulted, args.allow_sim_error)
+}
+
+/// The one place a RISC-V `labwired run` turns "did the simulation fault?" into
+/// a process exit status. Both loops end here so they cannot drift apart again.
+///
+/// # Which errors are faults
+///
+/// All of them. `Machine::advance` returns `Ok` for every way a run ends
+/// normally — the fuel limit, `AdvanceStop::NoProgress`, a firmware-authored
+/// `FirmwareExit` — so an `Err` is never "the fixture finished". The comment
+/// this replaces ("a halt is the normal end of a fixture run") had it backwards:
+/// `SimulationError::Halt` is the firmware-reachable abort trap (a Cortex-M
+/// `bkpt`, which is what a Rust `panic!`/`abort` lowers to), and
+/// `crates/cli/tests/stop_conditions.rs::test_stop_when_assertions_pass_does_not_mask_crash`
+/// exists precisely to require that a run ending that way does NOT report
+/// `status: "pass"`. On RISC-V the question is moot in any case: the RV32IMC
+/// core constructs only `MemoryViolation`, `DecodeError` and `NotImplemented`,
+/// and nothing on its bus path constructs `Halt` or `BreakpointHit` at all.
+///
+/// So the policy here is the one `execute_test_loop` already applies for
+/// `labwired test` — every `SimulationError` sets `RunFacts`'
+/// `unrescued_runtime_error`, whose verdict is `Verdict::RuntimeError` and
+/// whose exit code is `EXIT_RUNTIME_ERROR` — and the one the ARM and Xtensa
+/// arms of this same file already apply for `labwired run`. Not a third one.
+///
+/// # What is deliberately NOT a fault here
+///
+/// `AdvanceStop::FirmwareExit` is the firmware stating its own result, not the
+/// simulator failing. It ends the run and is reported, and the exit status
+/// stays 0 — the same as the ARM loops. Translating a non-zero firmware code
+/// into a non-zero process status is `labwired test`'s job
+/// (`RunFacts::firmware_declared_failure` → `Verdict::AssertionFail` → exit 1);
+/// adopting that one fact of the verdict machinery here, on one architecture,
+/// would recreate exactly the per-architecture divergence this function exists
+/// to remove.
+///
+/// `--allow-sim-error` restores exit 0 for a caller that owns the verdict and
+/// reads it from the output rather than from `$?` — the TIER1 matrix takes the
+/// protocol lines on stdout as the result. The fault is still printed.
+fn riscv_run_exit_code(faulted: bool, allow_sim_error: bool) -> ExitCode {
+    if faulted && !allow_sim_error {
+        return ExitCode::from(EXIT_RUNTIME_ERROR);
+    }
     ExitCode::from(EXIT_PASS)
 }
 
@@ -468,8 +522,9 @@ pub(crate) fn run_firmware_riscv(
 /// The JIT is byte-identical to the single-step interpreter — proven on the
 /// real C3 OLED lab by tests/riscv_jit_c3_oled_differential.rs. It is default-ON
 /// here; set `LABWIRED_RISCV_JIT=0` to force the interpreter (the escape hatch).
-/// Preserves the single-step path's semantics: EXIT_PASS on completion, a halt
-/// ends the run, and the bus trace is exported if requested.
+/// Shares the single-step path's verdict: both end at
+/// [`riscv_run_exit_code`], so which loop a run took cannot change whether a
+/// fault is reported. The bus trace is exported either way.
 fn run_firmware_riscv_batched(
     mut machine: labwired_core::Machine<labwired_core::cpu::RiscV>,
     args: &RunArgs,
@@ -496,6 +551,7 @@ fn run_firmware_riscv_batched(
     // interval; we only cap the total instruction budget here.
     const CHUNK: u32 = 4_000_000;
     let mut ran: u64 = 0;
+    let mut faulted = false;
     while ran < limit {
         let n = if limit == u64::MAX {
             CHUNK
@@ -504,11 +560,27 @@ fn run_firmware_riscv_batched(
         };
         let before = machine.step_profile().cpu_instructions;
         match machine.run(Some(n)) {
+            // The firmware stated its own result. `DebugControl::run` is the
+            // only reader of that stop, and this loop used to drop it on the
+            // floor and keep issuing chunks — the single-step loop above breaks
+            // on it, so the two disagreed. Unreachable today (no RISC-V chip
+            // descriptor declares a `simctl` device, and this path synthesises
+            // its own manifest), which is why it is wired up rather than left
+            // to be discovered by the first board that does declare one.
+            Ok(labwired_core::StopReason::FirmwareExit(code)) => {
+                eprintln!("[firmware] {}", crate::firmware_exit_message(code));
+                break;
+            }
             Ok(_) => {}
             Err(e) => {
-                // A halt is the normal end of a fixture run; the fault PC/reason
-                // is only surfaced on the debug (--break-at) path.
-                tracing::debug!("labwired-riscv (batched): halt: {e}");
+                // Was `tracing::debug!("… halt: {e}")` under a comment claiming
+                // a halt is the normal end of a fixture run. It is not: a
+                // normal end arrives as `Ok`. See `riscv_run_exit_code`.
+                eprintln!(
+                    "labwired run (riscv, batched): simulation error at pc={:#010x}: {e}",
+                    machine.cpu.get_pc(),
+                );
+                faulted = true;
                 break;
             }
         }
@@ -548,7 +620,7 @@ fn run_firmware_riscv_batched(
 
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     export_display_if_requested(&args.display_out, &machine.bus);
-    ExitCode::from(EXIT_PASS)
+    riscv_run_exit_code(faulted, args.allow_sim_error)
 }
 
 /// Fast-boot an ESP32-classic (LX6) ELF and run the step loop.
