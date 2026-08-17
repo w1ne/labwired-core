@@ -17,7 +17,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `911aa0ddc97db339` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `7f49451fc56984bf` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `20b0f7311d064656` | ⚠ drift acked 2026-08-13 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `90dff2b2b3cd90e5` | ⚠ drift acked 2026-08-13 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `5f178fa6f25bec08` | ⚠ drift acked 2026-08-17 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `34f6ce9feaf742d8` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `fee07bbfa1540e26` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `a0b00c5f40ce5b0d` | no silicon capture |
@@ -109,7 +109,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on USB-JTAG built-in (USB 303a:1001, openocd-esp32 v0.12.0-esp32-20260703, both Tensilica taps 0x120034e5), board MAC 3c:0f:02:df:f3:c8 (QFN56 rev v0.2) — re-captured live 2026-08-09 on a SECOND physical S3 (MAC 3c:0f:02:df:f3:c8, QFN56 rev v0.2; the 2026-07-15 baseline came from an ESP32-S3-Zero, MAC 9c:13:9e:f4:40:c0, same rev) — cross-board corroboration, not a re-read of the same part. Both Xtensa taps (tap0+tap1) examined. 384 registers read across 10 windows (UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, RTC_CNTL): 9/9 RESET_VALUES matched, 0 mismatched. Scope is unchanged and still thin — this is a 9-register reset-state anchor, NOT a broad register or behavioural diff; see the KNOWN GAPS in `note`. Artifacts: scripts/hw-oracle/captures/esp32s3/recapture-20260809T130700Z/.
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **⚠ drift acked 2026-08-13 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-08-17 (re-capture pending)**
 
 ## `stm32f401` — 🟡 smoke-manual
 

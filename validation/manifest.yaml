@@ -2630,7 +2630,7 @@ boards:
     # 2026-08-12: chip yaml documents sar_adc_s3 + twai already registered by
     # configure_xtensa_esp32s3 (ESP32S3_PERIPHERALS). Address-map honesty only —
     # 9-reg reset-state silicon anchor unchanged. Arduino matrix L5/L8 green.
-    drift_ack_digest: 90dff2b2b3cd90e550c11d2d05d9dd698aa010f1608d4b0515e77a32951b2f51
+    drift_ack_digest: 5f178fa6f25bec08bf1a1bc474b6842ee0903925b44992529722ed894a023a58
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
