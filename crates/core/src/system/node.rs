@@ -291,13 +291,15 @@ fn build_xtensa_node(
 /// to `configure_xtensa_esp32s3` rather than read from `LABWIRED_ESP32S3_FLASH`,
 /// which is what lets two S3 nodes in one world run *different* firmware.
 ///
-/// Known limitation on the ELF path: the single-chip runner additionally
-/// pre-paints the ESP-IDF dual-core handshake flags (`s_cpu_inited` &c.) by
-/// looking up firmware symbols. That is a thunk over the boot sequence, it
-/// needs the `loader` crate (which depends on core, so core cannot use it), and
-/// it is superseded by the chip's SMP model — so it is deliberately not
-/// reproduced here. An ESP-IDF ELF node will therefore wait at that handshake;
-/// prefer the flash-image path, which boots the real ROM and does not need it.
+/// Both paths are dual-core, and the single-chip runner (`labwired run`) now
+/// builds the same shape. The ESP-IDF handshake flags (`s_cpu_inited`,
+/// `s_other_cpu_startup_done`, …) are written by the firmware running on core 1,
+/// not pre-painted from firmware symbols: core 1 is released by the real
+/// hardware edge (`SYSTEM_CORE_1_CONTROL_0.RESETING` 1→0 on the flash path, the
+/// `ets_set_appcpu_boot_addr` handover on the ELF path) and then executes the
+/// real bring-up. `s_other_cpu_startup_done` in particular is set by core 1's
+/// FreeRTOS idle hook, which only runs once a systimer tick wakes core 1 out of
+/// `WAITI` — see the `Waiti` arm in `cpu::xtensa_lx7`.
 fn build_esp32s3_node(
     id: &str,
     chip: &ChipDescriptor,

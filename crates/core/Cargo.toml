@@ -238,6 +238,11 @@ required-features = ["event-scheduler"]
 
 # #![cfg(feature = "event-scheduler")]
 [[test]]
+name = "esp32s3_smp_yield_latency"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
 name = "esp32s3_walk_differential"
 required-features = ["event-scheduler"]
 

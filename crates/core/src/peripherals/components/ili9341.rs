@@ -213,17 +213,39 @@ impl Ili9341 {
     /// shows up mirrored. This view reads back through the same mapping, so the
     /// host can paint row-major and get the right picture.
     pub fn oriented_framebuffer(&self) -> Vec<u8> {
-        let mut out = vec![0u8; FB_BYTES];
-        for col in 0..WIDTH as u16 {
-            for row in 0..HEIGHT as u16 {
-                let (x, y) = self.to_physical(col, row);
+        // Iterate the LOGICAL extents with the LOGICAL stride. Walking the
+        // physical 240x320 extents at a fixed 240-pixel stride (as this used to)
+        // is correct only in portrait: under `MADCTL_MV` the addressable frame
+        // is 320 wide x 240 high, so a 240 stride restarts each output row 80
+        // pixels early — a shear — and logical columns 240..=319 were never
+        // emitted at all. Same defect, same fix as the parallel twin's
+        // `Ili9341Parallel::oriented_framebuffer`.
+        let lw = self.addressable_width() as usize;
+        let lh = self.addressable_height() as usize;
+        let mut out = vec![0u8; lw * lh * 2];
+        for row in 0..lh {
+            for col in 0..lw {
+                let (x, y) = self.to_physical(col as u16, row as u16);
                 let src = (y * WIDTH + x) * 2;
-                let dst = (row as usize * WIDTH + col as usize) * 2;
-                out[dst] = self.framebuffer[src];
-                out[dst + 1] = self.framebuffer[src + 1];
+                let dst = (row * lw + col) * 2;
+                if src + 1 < self.framebuffer.len() {
+                    out[dst] = self.framebuffer[src];
+                    out[dst + 1] = self.framebuffer[src + 1];
+                }
             }
         }
         out
+    }
+
+    /// Addressable (logical) size under the current MADCTL — the extents the
+    /// firmware's CASET/PASET coordinates run over, and the dimensions
+    /// [`Self::oriented_framebuffer`] is indexed by. `MADCTL_MV` swaps them.
+    /// [`Self::dimensions`] stays the PHYSICAL 240x320 frame memory.
+    pub fn logical_dimensions(&self) -> (usize, usize) {
+        (
+            self.addressable_width() as usize,
+            self.addressable_height() as usize,
+        )
     }
 
     pub fn display_on(&self) -> bool {
@@ -515,7 +537,11 @@ impl SpiDevice for Ili9341 {
     ) -> Vec<crate::inspect::Artifact> {
         let fb = self.oriented_framebuffer();
         let painted = fb.iter().filter(|&&b| b != 0x00).count();
-        let (w, h) = self.dimensions();
+        // LOGICAL, not physical: `fb` is indexed by the firmware's CASET/PASET
+        // coordinates, so a landscape (MADCTL_MV) panel's artifact is 320x240.
+        // Reporting the physical 240x320 here told every viewer to unpack a
+        // 320-wide buffer at a 240 stride.
+        let (w, h) = self.logical_dimensions();
         // The most common non-black pixel: says WHAT was drawn, not merely that
         // something was. "6352 bytes changed" cannot be checked against a photo
         // of real silicon; "top colour 0x07E0" (RGB565 green) can.
@@ -832,6 +858,54 @@ mod tests {
         let oriented = dev.oriented_framebuffer();
         assert_eq!((oriented[0], oriented[1]), (0xF8, 0x00));
         assert_eq!((oriented[2], oriented[3]), (0x07, 0xE0));
+    }
+
+    /// A landscape (MADCTL_MV) frame must come out 320x240 with a 320-pixel
+    /// stride, not 240x320 with the rows sheared.
+    ///
+    /// Negative control: restore the old body (iterate `0..WIDTH` x `0..HEIGHT`
+    /// writing at `row * WIDTH + col`) and this fails twice — the pixel written
+    /// at logical (300, 0) never reaches the output at all, and (0, 1) lands 80
+    /// pixels off.
+    #[test]
+    fn oriented_framebuffer_is_not_sheared_in_landscape() {
+        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
+        cmd(&mut dev, 0x36, &[MADCTL_MV]);
+        assert_eq!(dev.logical_dimensions(), (320, 240));
+
+        // Logical (300, 0) — beyond the physical 240-pixel width, reachable
+        // only because MV swapped the axes.
+        cmd(&mut dev, 0x2A, &[0x01, 0x2C, 0x01, 0x2C]); // col 300..=300
+        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]); // row 0
+        dc_send(&mut dev, false, &[0x2C]);
+        dc_send(&mut dev, true, &[0xF8, 0x00]); // red
+
+        // Logical (0, 1) — the first pixel of the second logical row.
+        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x00]);
+        cmd(&mut dev, 0x2B, &[0x00, 0x01, 0x00, 0x01]);
+        dc_send(&mut dev, false, &[0x2C]);
+        dc_send(&mut dev, true, &[0x07, 0xE0]); // green
+
+        let out = dev.oriented_framebuffer();
+        assert_eq!(out.len(), 320 * 240 * 2, "landscape view is 320x240");
+
+        // Written through a helper rather than inline: `(0 * 320 + 300) * 2`
+        // says "row 0, column 300, two bytes per pixel" far better than the
+        // constant it folds to, and clippy rejects the multiply-by-zero.
+        let at = |row: usize, col: usize| (row * 320 + col) * 2;
+
+        let red = at(0, 300);
+        assert_eq!(
+            (out[red], out[red + 1]),
+            (0xF8, 0x00),
+            "logical (300,0) must appear at output index (row 0, col 300)"
+        );
+        let green = at(1, 0);
+        assert_eq!(
+            (out[green], out[green + 1]),
+            (0x07, 0xE0),
+            "logical (0,1) must start the second output row at a 320 stride"
+        );
     }
 
     #[test]

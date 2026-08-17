@@ -36,8 +36,14 @@ use std::path::{Path, PathBuf};
 /// Committed ceilings. LOWER these when a conversion lands; the test fails if
 /// you do not, so a shrink cannot go unrecorded and quietly leave headroom for
 /// the next regression.
-const MAX_AS_ANY: usize = 193;
-const MAX_DOWNCAST_REF: usize = 207;
+/// 193 → 194 / 207 → 208: `tests/esp32s3_lcd_i80_pixels.rs` reaches through
+/// `bus.peripherals[..].dev` to the concrete `Esp32s3LcdCam` to assert that the
+/// kit binds the parallel panel to LCD_CAM and not only to the GPIO observer.
+/// That is the "a test reaching into a concrete model" case the module doc
+/// above names as justified — the alternative is a public accessor that exists
+/// solely so one test need not downcast, which is worse design, not less debt.
+const MAX_AS_ANY: usize = 194;
+const MAX_DOWNCAST_REF: usize = 208;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

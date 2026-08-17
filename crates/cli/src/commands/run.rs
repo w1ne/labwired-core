@@ -9,6 +9,80 @@
 use crate::artifacts::{write_interactive_snapshot, InteractiveSnapshotInputs};
 use crate::*;
 
+/// Export every attached parallel-panel framebuffer, if `--display-out <path>`
+/// was given: a binary PPM per panel (`<path>` for the first, `<path>.<id>`
+/// for any others) plus a luma ASCII map on stderr.
+///
+/// Evidence, not decoration: a lit-pixel count alone cannot tell "the panel
+/// painted the frame" from "the panel painted noise", so the run prints
+/// something a human can compare against the firmware's own thumbnail.
+/// Non-fatal — a write error never changes the run's exit code.
+pub(crate) fn export_display_if_requested(
+    display_out: &Option<PathBuf>,
+    bus: &labwired_core::bus::SystemBus,
+) {
+    let Some(path) = display_out else {
+        return;
+    };
+    if bus.ili9341_parallel.is_empty() {
+        eprintln!("labwired-cli run: --display-out given but no parallel panel is attached");
+        return;
+    }
+    for (n, panel) in bus.ili9341_parallel.iter().enumerate() {
+        let (w, h) = panel.logical_dimensions();
+        let fb = panel.oriented_framebuffer();
+        let ink = fb.iter().filter(|&&b| b != 0).count();
+        eprintln!(
+            "labwired-cli run: panel '{}' {w}x{h} display_on={} ink_bytes={ink}/{}",
+            panel.id(),
+            panel.display_on(),
+            fb.len(),
+        );
+
+        // Luma ASCII map, 64 columns wide, aspect-corrected for a terminal.
+        const COLS: usize = 64;
+        const ROWS: usize = 24;
+        const RAMP: &[u8] = b" .:-=+*#%@";
+        for r in 0..ROWS {
+            let sy = r * h / ROWS;
+            let mut line = String::with_capacity(COLS);
+            for c in 0..COLS {
+                let sx = c * w / COLS;
+                let i = (sy * w + sx) * 2;
+                let px = u16::from_be_bytes([fb[i], fb[i + 1]]);
+                let (red, green, blue) = (
+                    ((px >> 11) & 0x1F) as u32 * 255 / 31,
+                    ((px >> 5) & 0x3F) as u32 * 255 / 63,
+                    (px & 0x1F) as u32 * 255 / 31,
+                );
+                let luma = (red * 77 + green * 150 + blue * 29) >> 8;
+                line.push(RAMP[(luma as usize * (RAMP.len() - 1)) / 255] as char);
+            }
+            eprintln!("|{line}|");
+        }
+
+        // RGB888 binary PPM.
+        let out_path = if n == 0 {
+            path.clone()
+        } else {
+            let mut p = path.clone().into_os_string();
+            p.push(format!(".{}", panel.id()));
+            PathBuf::from(p)
+        };
+        let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
+        for px in fb.chunks_exact(2) {
+            let v = u16::from_be_bytes([px[0], px[1]]);
+            ppm.push((((v >> 11) & 0x1F) as u32 * 255 / 31) as u8);
+            ppm.push((((v >> 5) & 0x3F) as u32 * 255 / 63) as u8);
+            ppm.push(((v & 0x1F) as u32 * 255 / 31) as u8);
+        }
+        match std::fs::write(&out_path, &ppm) {
+            Ok(()) => eprintln!("labwired-cli run: panel image -> {out_path:?}"),
+            Err(e) => eprintln!("error: cannot write --display-out {out_path:?}: {e}"),
+        }
+    }
+}
+
 /// Export the bus trace (logic analyzer) captured by `bus`, if
 /// `--bus-trace-out <path>` was given. Dispatches by extension: `.json`
 /// writes the raw event list, anything else writes VCD (GTKWave / PulseView
@@ -380,6 +454,7 @@ pub(crate) fn run_firmware_riscv(
     }
 
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -472,6 +547,7 @@ fn run_firmware_riscv_batched(
     }
 
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -558,6 +634,7 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
         machine.cpu.get_pc(),
     );
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -640,6 +717,14 @@ pub(crate) fn run_firmware(
     // select the MMU XIP model for it. Fast-boot uses identity per-window XIP.
     let opts = Esp32s3Opts {
         real_reset_boot: args.rom_boot,
+        // Size the flash backing from the chip descriptor, not the 4 MiB
+        // default: an N16R8 image puts data partitions well past 4 MiB (a WAD
+        // at 0x410000, say), and a short backing truncates them to 0xFF with no
+        // error — the partition table still reads fine, so it looks like a
+        // corrupt asset rather than a too-small model.
+        flash_size: labwired_config::ChipDescriptor::from_file(&args.chip)
+            .map(|c| c.flash.size as u32)
+            .unwrap_or(Esp32s3Opts::default().flash_size),
         ..Esp32s3Opts::default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
@@ -665,13 +750,75 @@ pub(crate) fn run_firmware(
         }
     }
 
+    // Manifest-declared board devices (`--system`). `configure_xtensa_esp32s3`
+    // builds the peripheral bank in Rust and never runs `from_config`'s
+    // peripheral loop, so the external devices are attached here through the
+    // same canonical resolver every other family uses.
+    if let Some(sys_path) = &args.system {
+        let manifest = match labwired_config::SystemManifest::from_file(sys_path) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("error: cannot read system manifest {sys_path:?}: {e}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+        if let Err(e) =
+            labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+        {
+            eprintln!("error: cannot attach external devices from {sys_path:?}: {e:#}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+        eprintln!(
+            "labwired-cli run: attached {} external device(s) from {:?}",
+            manifest.external_devices.len(),
+            sys_path
+        );
+    }
+
+    // `--stop-on`: mirror the USB-Serial-JTAG console into a buffer the run
+    // loop can search. `echo_stdout` stays true so the transcript still
+    // streams to stdout exactly as without the flag.
+    let stop_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>> =
+        args.stop_on.as_ref().and_then(|_| {
+            use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+            let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            for p in &mut bus.peripherals {
+                if p.name != labwired_core::console::USB_SERIAL_JTAG {
+                    continue;
+                }
+                if let Some(j) = p
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<UsbSerialJtag>())
+                {
+                    j.set_sink(Some(sink.clone()), true);
+                    return Some(sink);
+                }
+            }
+            eprintln!("error: --stop-on needs the USB-Serial-JTAG console; none found");
+            None
+        });
+    let mut stop_scanned: usize = 0;
+
     let mut cpu = wiring.cpu;
 
-    // Dual-core (SMP): the APP_CPU (core 1). Created halted at the ROM reset
-    // vector; released when the PRO_CPU clears CORE_1_RESETING (real hardware
-    // edge, signalled via APPCPU_RESET_RELEASED). The APP_CPU then boots the
-    // real ROM exactly like silicon — no firmware-symbol hooks. --rom-boot only.
-    let mut cpu1: Option<labwired_core::cpu::xtensa_lx7::XtensaLx7> = None;
+    // Dual-core (SMP): the APP_CPU (core 1), on BOTH boot paths — the same
+    // shape `system::node::build_esp32s3_node` builds, so the single-chip
+    // runner and the world runner share ONE bring-up mechanism.
+    //
+    //   * rom-boot: core 1 is created halted at the ROM reset vector and
+    //     released when the PRO_CPU clears CORE_1_RESETING (the real hardware
+    //     edge, surfaced by the SYSTEM_CORE_1_CONTROL peripheral as
+    //     APPCPU_RESET_RELEASED). It then boots the real ROM like silicon.
+    //   * fast-boot: there is no ROM to run, so core 1 is released by
+    //     `Machine`'s boundary when the `ets_set_appcpu_boot_addr` ROM thunk
+    //     hands over `call_start_cpu1` (APPCPU_BOOT_ADDR).
+    //
+    // Neither reads a firmware symbol. This replaces the handshake pre-paint
+    // the fast-boot path used to do (writing 1 into `s_cpu_inited`,
+    // `s_other_cpu_startup_done`, … resolved from the ELF) — a thunk that
+    // faked the *result* of a core-1 boot that never happened.
+    let mut cpu1 = Some(labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu());
     let mut appcpu_started = false;
 
     if args.rom_boot {
@@ -710,14 +857,13 @@ pub(crate) fn run_firmware(
         // stack save chain — so use the real per-access overflow / RETW
         // underflow path (no sim shadow stack).
         cpu.faithful_windows = true;
-        // Bring up the APP_CPU (halted at the ROM reset vector 0x40000400).
-        let mut c1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
-        c1.faithful_windows = true;
-        eprintln!(
-            "labwired-cli run: APP_CPU created (halted at reset vector 0x{:08x})",
-            c1.get_pc(),
-        );
-        cpu1 = Some(c1);
+        if let Some(c1) = cpu1.as_mut() {
+            c1.faithful_windows = true;
+            eprintln!(
+                "labwired-cli run: APP_CPU created (halted at reset vector 0x{:08x})",
+                c1.get_pc(),
+            );
+        }
     } else {
         // Fast-boot.
         let boot = match fast_boot(
@@ -741,25 +887,14 @@ pub(crate) fn run_firmware(
             "labwired-cli run: entry=0x{:08x} stack=0x{:08x} segments={}",
             boot.entry, boot.stack, boot.segments_loaded,
         );
-
-        // ESP-IDF dual-core handshake (legacy thunk-path stopgap). system_early_init
-        // busy-waits until both per-core init flags are set; the single-CPU run
-        // path pre-paints them. Superseded by the SMP phase of the chip model.
-        let symbol_addrs = labwired_loader::extract_arduino_esp32_thunks(&elf_bytes);
-        for (sym, span) in [
-            ("s_cpu_inited", 2u32),
-            ("s_cpu_up", 2),
-            ("s_system_inited", 2),
-            ("s_resume_cores", 1),
-            ("s_other_cpu_startup_done", 1),
-        ] {
-            if let Some(&addr) = symbol_addrs.get(sym) {
-                for off in 0..span {
-                    let _ = bus.write_u8(addr as u64 + off as u64, 0x01);
-                }
-                eprintln!("labwired-cli run: handshake {sym} @0x{addr:08x} = 1");
-            }
-        }
+        // NOTE: no ESP-IDF dual-core handshake pre-paint here. The single-chip
+        // runner used to resolve `s_cpu_inited` / `s_cpu_up` / `s_system_inited`
+        // / `s_resume_cores` / `s_other_cpu_startup_done` out of the ELF and
+        // write 1 into each, because it ran ONE cpu and core 1 could never mark
+        // them itself. Core 1 is real on both paths now (see the `cpu1`
+        // construction above), so those flags are set by the firmware running on
+        // core 1 — including `s_other_cpu_startup_done`, which core 1's FreeRTOS
+        // idle hook writes only after its systimer tick wakes it out of WAITI.
     }
 
     // Run the step loop through the authoritative `Machine` lifecycle.
@@ -911,6 +1046,7 @@ pub(crate) fn run_firmware(
             Err(SimulationError::BreakpointHit(pc)) => {
                 eprintln!("labwired-cli run: BREAK at 0x{pc:08x}");
                 export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+                export_display_if_requested(&args.display_out, &machine.bus);
                 return ExitCode::from(EXIT_PASS);
             }
             Err(SimulationError::ExceptionRaised { cause, pc }) => {
@@ -980,6 +1116,26 @@ pub(crate) fn run_firmware(
             }
         }
         steps += 1;
+
+        // `--stop-on <text>`: end the run as soon as the firmware's console
+        // says so. Makes end-of-run artifacts (`--display-out`) frame-exact —
+        // "stop right after the firmware printed its own frame thumbnail" is
+        // reproducible, a hand-tuned `--max-steps` is not. Scanned in slices
+        // from a cursor so a long run does not re-read the whole transcript.
+        if let (Some(sink), Some(pat)) = (&stop_sink, &args.stop_on) {
+            if steps.is_multiple_of(100_000) {
+                let buf = sink.lock().unwrap();
+                if buf.len() > stop_scanned {
+                    let from = stop_scanned.saturating_sub(pat.len());
+                    if String::from_utf8_lossy(&buf[from..]).contains(pat.as_str()) {
+                        drop(buf);
+                        eprintln!("labwired-cli run: --stop-on {pat:?} matched at step {steps}");
+                        break;
+                    }
+                    stop_scanned = buf.len();
+                }
+            }
+        }
 
         // SMP bring-up tracer (gated). Prints both cores' PCs periodically and
         // flags the first time each core enters app XIP code (>= 0x4200_0000,
@@ -1055,6 +1211,7 @@ pub(crate) fn run_firmware(
         machine.cpu.get_pc(),
     );
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -1388,6 +1545,7 @@ pub(crate) fn run_firmware_arm(
     // Flush stdout.
     let _ = std::io::stdout().flush();
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    export_display_if_requested(&args.display_out, &machine.bus);
 
     // A run that ended on a fault reports a fault. It used to print the error
     // and exit 0, so `labwired run … && echo ok` printed ok for firmware that

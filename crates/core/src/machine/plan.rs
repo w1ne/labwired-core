@@ -125,43 +125,35 @@ impl<C: Cpu> Machine<C> {
             };
             clamp!(count, binder, arm, 1);
         } else if secondary_parked {
-            // Coalesced dual-core idle batch: while APP sits in WAITI, let PRO
-            // retire a wider window than the strict 1:1 interleave — but NEVER
-            // wider than the peripheral tick boundary every other batch obeys.
+            // Coalesced dual-core idle batch: while the secondary core is
+            // WAITI-parked the primary may retire several instructions per
+            // machine boundary. Commit advances peripherals once with
+            // elapsed = primary_steps (see boundary.rs).
             //
-            // This arm used to clamp to a flat 1024 "even when tick_interval is
-            // 1", which is a fidelity exemption no single-core board gets: with
-            // the default `peripheral_tick_interval = 1` ("correctness by
-            // default") every other machine runs one instruction per window, so
-            // peripherals advance and interrupts are delivered between
-            // instructions. Inside a 1024-wide window neither happens, and the
-            // ESP32-S3 FreeRTOS boot does not survive it: the 13th such window
-            // corrupts a scheduler list (`vListInsert` walks onto a node whose
-            // `pxNext` is itself and spins at 0x4037cdb6 forever, with core 1
-            // stuck behind the spinlock PRO_CPU never releases). Every hosted S3
-            // run died there, printing the boot banner and nothing else.
+            // ⚠️ It may NOT run past the next peripheral tick boundary. This
+            // clause used to clamp at a flat 1024 and skip the tick clamp
+            // entirely — the comment even advertised "multi-instruction PRO
+            // windows even when tick_interval is 1". That is not a batching
+            // decision, it is a licence to stop observing peripherals: nothing
+            // between the two boundaries re-derives an interrupt level, so an
+            // IRQ raised at instruction 1 of the window is not seen by the CPU
+            // until instruction 1024, whatever the caller set the tick interval
+            // to. ESP-IDF's SMP FreeRTOS does not survive that — see the
+            // `sync_esp32s3_irq_write` write-choke note in `bus/routing.rs` for
+            // the deadlock it produces (`portYIELD_WITHIN_API` lands late,
+            // `xQueueReceive` re-blocks an already-blocked task, `vListInsert`
+            // links the event-list item to itself and spins forever with the
+            // queue spinlock held). Both halves are needed: the write choke
+            // makes an MMIO-raised level visible at the write, this clamp keeps
+            // a *timed* one visible within one tick interval.
             //
-            // Isolated by holding everything else fixed: keeping the 1024-wide
-            // window but ticking peripherals and delivering interrupts per
-            // retired instruction inside it boots and prints; widening it again
-            // hangs. Publishing the cycle without ticking is NOT enough, and
-            // ticking N times at the frozen window-start cycle is NOT enough —
-            // the peripherals have to advance interleaved with the instructions
-            // that read them.
-            //
-            // `apply_run_speed_opts` in the CLI already refuses to widen the
-            // tick interval for exactly this reason ("wide ticks have regressed
-            // ESP classic/S3/C3 FreeRTOS labs before"); this arm was widening it
-            // through a side door, for every dual-core ESP machine, unasked. A
-            // config that deliberately sets a wider interval still coalesces up
-            // to that width.
+            // The coalescing win survives wherever it was ever sound — at
+            // `tick_interval > 1` (the browser's `RECOMMENDED_TICK_INTERVAL`)
+            // the window is still hundreds of instructions wide. At interval 1
+            // the caller asked for per-cycle peripheral service and now gets it.
             let until_tick = tick_interval - (self.total_cycles % tick_interval);
-            clamp!(
-                count,
-                binder,
-                clause::SECONDARY_PARKED,
-                until_tick.min(1024)
-            );
+            clamp!(count, binder, clause::SECONDARY_PARKED, 1024);
+            clamp!(count, binder, clause::TICK_BOUNDARY, until_tick);
         } else {
             // Normal path: batch only up to the next peripheral tick boundary.
             let until_tick = tick_interval - (self.total_cycles % tick_interval);

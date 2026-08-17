@@ -310,6 +310,11 @@ impl crate::Bus for SystemBus {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
@@ -552,6 +557,11 @@ impl crate::Bus for SystemBus {
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
@@ -656,6 +666,11 @@ impl crate::Bus for SystemBus {
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).

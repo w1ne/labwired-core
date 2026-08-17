@@ -87,4 +87,6 @@ pub mod walk_starvation_contract;
 #[cfg(test)]
 pub mod xtensa_memory_contract;
 #[cfg(test)]
+pub mod xtensa_waiti_resume;
+#[cfg(test)]
 pub mod yaml_owned_base_contract;

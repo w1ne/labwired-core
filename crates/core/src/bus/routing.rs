@@ -495,6 +495,61 @@ impl SystemBus {
         }
     }
 
+    /// ESP32-S3 twin of [`Self::sync_esp32c3_irq_cache_write`]: re-derive the
+    /// routed per-core IRQ bitmap AT THE MMIO WRITE that changed an interrupt
+    /// level, instead of waiting for the next peripheral tick.
+    ///
+    /// **Why this has to exist.** The routed mask (`pending_cpu_irqs`, what the
+    /// Xtensa cores poll every instruction) used to be rebuilt in exactly one
+    /// place: the per-tick aggregation. That is invisible while the engine ticks
+    /// peripherals every cycle, and fatal the moment it does not. Two live paths
+    /// do not:
+    ///   * `peripheral_tick_interval > 1` — the browser's default on this bus
+    ///     (`max_safe_tick_interval` → `RECOMMENDED_TICK_INTERVAL`);
+    ///   * the dual-core coalesced idle batch (`plan.rs`, `SECONDARY_PARKED`),
+    ///     which runs the PRO core up to 1024 instructions between ticks *even
+    ///     at interval 1* while the APP core is WAITI-parked.
+    ///
+    /// ESP-IDF's `portYIELD_WITHIN_API()` is
+    /// `esp_crosscore_int_send_yield(xPortGetCoreID())`: it rings its OWN core's
+    /// `SYSTEM_CPU_INTR_FROM_CPU_n` doorbell from inside a critical section and
+    /// relies on the interrupt landing the instant `portEXIT_CRITICAL` re-enables
+    /// interrupts. Deferring that to the end of a 1024-instruction window lets
+    /// `xQueueReceive`'s `for(;;)` come round again and call
+    /// `vTaskPlaceOnEventList` a SECOND time for a task that is already on the
+    /// list — `vListInsert` then links the item to itself, and the next insert
+    /// walks that self-loop forever with the queue spinlock held while the other
+    /// core spins in `spinlock_acquire`. A hard SMP deadlock, from nothing but
+    /// interrupt-delivery latency.
+    ///
+    /// Same gating and the same cost profile as the C3 choke: only on a
+    /// walk-DELETED bus (where the per-cycle walk no longer derives levels at
+    /// all, so this recompute is the authoritative derivation rather than a
+    /// mid-tick perturbation of walk-emitted state), only when S3 matrix routing
+    /// is active, and only for a write that can actually move a level — a
+    /// scheduler-driven peripheral, or the interrupt matrix itself (a MAP/ENABLE
+    /// write re-routes every source). An ordinary register write pays nothing.
+    pub(crate) fn sync_esp32s3_irq_write(&mut self, idx: usize) {
+        #[cfg(feature = "event-scheduler")]
+        {
+            if !self.legacy_walk_disabled || !self.esp32s3_irq_routing {
+                return;
+            }
+            let relevant = Some(idx) == self.esp32s3_intmatrix_idx
+                || self
+                    .peripherals
+                    .get(idx)
+                    .is_some_and(|p| p.dev.uses_scheduler());
+            if !relevant {
+                return;
+            }
+            self.refresh_esp32s3_sched_sources();
+            self.recompute_esp32s3_irq_lines();
+        }
+        #[cfg(not(feature = "event-scheduler"))]
+        let _ = idx;
+    }
+
     pub fn refresh_peripheral_index(&mut self) {
         self.rebuild_peripheral_ranges();
     }

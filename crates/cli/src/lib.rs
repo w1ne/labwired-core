@@ -353,6 +353,30 @@ pub struct RunArgs {
     #[arg(long)]
     pub firmware: PathBuf,
 
+    /// Optional system manifest (YAML) whose `external_devices:` are attached
+    /// to the chip before the run — a display, a sensor, anything the board
+    /// carries. Without it the chip runs bare and firmware talking to a panel
+    /// has nothing on the far side of the bus.
+    ///
+    /// ESP32-S3 only for now (the path `--rom-boot` uses); other families
+    /// build their bus through `SystemBus::from_config` and already take a
+    /// manifest via the top-level `--system`.
+    #[arg(long)]
+    pub system: Option<PathBuf>,
+
+    /// Optional path for an end-of-run dump of every attached parallel panel:
+    /// a binary PPM at this path plus a luma ASCII map on stderr. Proves what
+    /// the display actually painted, not just that a transaction completed.
+    #[arg(long)]
+    pub display_out: Option<PathBuf>,
+
+    /// End the run as soon as this text appears on the firmware's console.
+    /// Makes end-of-run artifacts frame-exact: "stop right after the firmware
+    /// printed X" is reproducible where a hand-tuned `--max-steps` is not.
+    /// ESP32-S3 only (needs the USB-Serial-JTAG console).
+    #[arg(long)]
+    pub stop_on: Option<String>,
+
     /// Maximum number of simulator steps before exit (default: unlimited).
     #[arg(long)]
     pub max_steps: Option<u64>,

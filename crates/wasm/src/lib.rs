@@ -443,7 +443,7 @@ impl WasmSimulator {
                 // with nothing to load: the mask ROM printed its banner, jumped
                 // to the 2nd-stage bootloader, and the app never ran.
                 if blob_map.contains_key("esp32s3_flash") {
-                    Self::new_from_config_xtensa_esp32s3_flash(&manifest, &blob_map)
+                    Self::new_from_config_xtensa_esp32s3_flash(&chip, &manifest, &blob_map)
                 } else {
                     Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
                 }
@@ -1046,6 +1046,7 @@ impl WasmSimulator {
     /// at the BROM reset vector so the chip's own ROM loads the app and jumps
     /// to it. No `fast_boot`, no synthesised post-bootloader state, no thunks.
     fn new_from_config_xtensa_esp32s3_flash(
+        chip: &ChipDescriptor,
         manifest: &SystemManifest,
         blobs: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
@@ -1076,10 +1077,20 @@ impl WasmSimulator {
                 drom: drom.clone(),
             }),
             flash_image: Some(flash.clone()),
-            // A 16 MB N16R8 image must not be truncated into a 4 MB backing:
-            // the partition table addresses the app at its real offset, and a
-            // short backing reads 0xFF there.
-            flash_size: (flash.len() as u32).max(4 * 1024 * 1024),
+            // Size the backing from the CHIP descriptor, exactly like the
+            // native `--rom-boot` CLI (`commands/run.rs`) — never from the
+            // image's own byte count. The part's capacity is a property of the
+            // module, not of how much of it this build happens to fill, and the
+            // model publishes it as the JEDEC capacity byte
+            // (`spi_mem_flash.rs` CMD_RDID: `log2(backing.len())`). Sizing to
+            // the image made an 8,455,860-byte N16R8 image report an 8 MiB part
+            // while its own header declares 16 MB, and esp_flash refuses to
+            // boot on the mismatch:
+            //   E spi_flash: Detected size(8192k) smaller than the size in the
+            //   binary image header(16384k). Probe failed.
+            // The `.max(image len)` floor stays so a chip YAML that understates
+            // the part still cannot truncate the image itself.
+            flash_size: esp32s3_flash_backing_size(chip.flash.size, flash.len()),
             ..Esp32s3Opts::default()
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
@@ -1088,7 +1099,19 @@ impl WasmSimulator {
                 "ESP32-S3 flash boot needs the real boot ROM, but the injected images did not resolve",
             ));
         }
-        let cpu = wiring.cpu;
+        let mut cpu = wiring.cpu;
+        // Same reason the native `--rom-boot` CLI and `build_esp32s3_node` set
+        // it: the ROM and the app install the window overflow/underflow vectors
+        // and build a genuine stack save chain, so the CPU must use the real
+        // per-access spill/fill path rather than the simulator's shadow stack.
+        // This constructor was the only rom-boot entry point that left it off —
+        // an ESP-IDF app with deep call chains then faulted on a garbage
+        // address restored from the shadow stack.
+        cpu.faithful_windows = true;
+        // Read it back rather than re-typing `true` below: the APP core must
+        // use the SAME window-handling mode as the PRO core, and the only way
+        // that stays true through a later edit is to derive it from one place.
+        let primary_faithful_windows = cpu.faithful_windows;
 
         // Console selection is the rule every other ESP path uses: an
         // undeclared manifest hears both consoles in one pane, a declared one
@@ -1121,14 +1144,33 @@ impl WasmSimulator {
         bus.refresh_peripheral_index();
 
         let boxed: Box<dyn Cpu> = Box::new(cpu);
-        // The S3 is dual-core and an Arduino sketch's setup()/loop() run on
-        // core 1. Booting it single-core does not merely lose a core: ESP-IDF's
-        // `start_other_core` spins `while (!s_cpu_up[1]) ets_delay_us(100)`
-        // before app_main, so the run dies in the mask ROM with only the boot
-        // banner on the console — which is exactly how this constructor shipped.
-        // Starts halted at the ROM reset vector; `Machine` releases it on the
-        // SYSTEM_CORE_1_RESETING edge.
-        let app_cpu: Box<dyn Cpu> = Box::new(labwired_core::cpu::XtensaLx7::new_app_cpu());
+        // Real second core. An ESP-IDF image built dual-core (the default)
+        // stops dead at `cpu_start: Multicore app` without one: PRO_CPU spins in
+        // `main_task` on `s_other_cpu_startup_done`, which only the APP_CPU idle
+        // hook can set. The core starts halted and is released by the hardware
+        // edge the firmware drives (`SYSTEM_CORE_1_CONTROL_0.RESETING` 1->0),
+        // exactly as the native runner and `system::node::build_esp32s3_node`
+        // do — no forged handshake flags.
+        let mut app_cpu_lx7 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+        // ⚠️ The APP core needs `faithful_windows` for exactly the same reason
+        // the PRO core does, and this constructor set it on only one of them.
+        // Core 1 boots the real ROM from its own reset vector and then runs the
+        // same ESP-IDF image, so it spills and fills register windows through
+        // the firmware's own OF/UF vectors; left on the simulator shadow stack
+        // it restored a garbage SP and every window overflow stored near
+        // address 0 (`Memory access violation at 0xffffffe0`).
+        //
+        // That fault was INVISIBLE from the browser: `Sim::step_batch` reports
+        // `Ok(elapsed)` whenever the primary retired at least one cycle, so a
+        // secondary faulting on EVERY machine boundary looked like steady
+        // forward progress while core 1 never executed a single instruction of
+        // firmware. PRO_CPU then spins forever in
+        // `spi_flash_disable_interrupts_caches_and_other_cpu` waiting for a
+        // `spi_flash_op_block_func` on core 1 that can never run. The native
+        // `--rom-boot` runner has always set both (`commands/run.rs`), which is
+        // why this was a browser-only hang.
+        app_cpu_lx7.faithful_windows = primary_faithful_windows;
+        let app_cpu: Box<dyn Cpu> = Box::new(app_cpu_lx7);
         let machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
 
         Ok(WasmSimulator {
@@ -1685,7 +1727,10 @@ impl WasmSimulator {
     /// answer straight into `set_peripheral_tick_interval`.
     #[wasm_bindgen]
     pub fn recommended_tick_interval(&mut self) -> u32 {
-        self.machine().bus.max_safe_tick_interval()
+        // Machine-level, not bus-level: a dual-core machine must stay at 1 no
+        // matter how relaxable its peripherals are (see
+        // `Machine::max_safe_tick_interval` for the SMP deadlock this prevents).
+        self.machine().max_safe_tick_interval()
     }
 
     /// Total number of times the browser JIT has dispatched a
@@ -2045,6 +2090,23 @@ impl AirBus {
 /// This is the generic on-demand binary-blob channel: a board fetches only the
 /// assets it needs (e.g. the ESP32-S3 boot ROM) and passes them through
 /// `new_from_config`, so no per-board blob is baked into the shared wasm bundle.
+/// Size the ESP32-S3 flash backing for a merged-image (`--rom-boot`) run.
+///
+/// The chip descriptor is the authority — the part's capacity is a property of
+/// the module, not of how much of it this particular build fills. The model
+/// publishes that capacity as the JEDEC RDID capacity byte
+/// (`peripherals/esp32s3/spi_mem_flash.rs`, `log2(backing.len())`), and
+/// `esp_flash` compares it against the size in the app image header and aborts
+/// the boot on a mismatch. Deriving the backing from the image length instead
+/// made an 8,455,860-byte N16R8 image publish an 8 MiB part against its own
+/// 16 MB header. The image length is only a floor, so a chip YAML that
+/// understates the part cannot truncate the image itself.
+fn esp32s3_flash_backing_size(chip_flash_size: u64, image_len: usize) -> u32 {
+    let declared = u32::try_from(chip_flash_size).unwrap_or(u32::MAX);
+    let image = u32::try_from(image_len).unwrap_or(u32::MAX);
+    declared.max(image).max(4 * 1024 * 1024)
+}
+
 fn parse_named_blobs(blobs: &JsValue) -> std::collections::HashMap<String, Vec<u8>> {
     use wasm_bindgen::JsCast;
     let mut map = std::collections::HashMap::new();
@@ -2069,6 +2131,43 @@ fn parse_named_blobs(blobs: &JsValue) -> std::collections::HashMap<String, Vec<u
 // WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.
 // Restoring this requires `LabwiredTarget` to be implemented for an arch-erased
 // CPU type, which is the follow-up tracked alongside Phase 1.
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod esp32s3_flash_backing_tests {
+    use super::esp32s3_flash_backing_size;
+
+    /// The regression this guards: an ESP-IDF N16R8 image that does not fill
+    /// its 16 MiB part. Sizing the backing from the image made RDID report an
+    /// 8 MiB chip and the app aborted with
+    /// "Detected size(8192k) smaller than the size in the binary image
+    /// header(16384k). Probe failed." — before `app_main` ever ran.
+    #[test]
+    fn n16r8_image_smaller_than_the_part_still_gets_the_parts_capacity() {
+        // configs/chips/esp32s3.yaml declares 16384KB.
+        let chip = 16 * 1024 * 1024;
+        // The Doom merged image: bootloader + partition table + app + a 4 MB
+        // WAD at 0x410000 = 8,455,860 bytes.
+        assert_eq!(
+            esp32s3_flash_backing_size(chip, 8_455_860),
+            16 * 1024 * 1024
+        );
+    }
+
+    /// A chip YAML that understates the part must not truncate a bigger image.
+    #[test]
+    fn image_longer_than_the_declared_part_is_never_truncated() {
+        assert_eq!(
+            esp32s3_flash_backing_size(4 * 1024 * 1024, 8_455_860),
+            8_455_860
+        );
+    }
+
+    /// A chip descriptor with no usable flash size still gets the 4 MiB floor.
+    #[test]
+    fn missing_chip_flash_size_falls_back_to_the_four_mib_floor() {
+        assert_eq!(esp32s3_flash_backing_size(0, 0), 4 * 1024 * 1024);
+    }
+}
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod machine_advance_tests {

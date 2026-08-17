@@ -27,6 +27,8 @@ pub(crate) struct CountingCpu {
     push_level: Option<bool>,
     // Non-architectural execution probes; intentionally omitted from snapshots.
     zero_batch: bool,
+    // Non-architectural WAITI-park injection (dual-core coalesced-idle batching).
+    parked: bool,
     fail_batch_after: Option<u32>,
     idle_budget: Option<u64>,
     idle_skipped: u64,
@@ -92,6 +94,10 @@ impl Cpu for CountingCpu {
             }
         }
         Ok(max_count)
+    }
+
+    fn is_parked_idle(&self) -> bool {
+        self.parked && !self.halted
     }
 
     fn set_pc(&mut self, val: u32) {
@@ -536,6 +542,62 @@ fn unified_run_advances_both_cores_one_quantum_at_a_time() {
     assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 4);
     assert_eq!(machine.step_profile().cpu_instructions, 4);
     assert_eq!(machine.step_profile().cpu_batches, 4);
+}
+
+/// A WAITI-parked secondary lets the primary batch — but never past the next
+/// peripheral tick boundary.
+///
+/// At `peripheral_tick_interval == 1` the caller has asked for per-cycle
+/// peripheral service, so the coalesced dual-idle window collapses to one
+/// instruction per boundary: one CPU batch and one peripheral tick per retired
+/// instruction. `plan_cpu_window`'s `SECONDARY_PARKED` clause used to clamp at a
+/// flat 1024 and skip the tick clamp entirely, so this ran as a SINGLE batch of
+/// 64 with ONE peripheral boundary at the end — 63 instructions during which
+/// nothing re-derived an interrupt level. ESP-IDF SMP FreeRTOS deadlocks on
+/// exactly that (see `crates/core/tests/esp32s3_smp_yield_latency.rs`).
+///
+/// Negative control: change the clause back to a bare
+/// `clamp!(count, binder, clause::SECONDARY_PARKED, 1024)` and this fails with
+/// `cpu_batches = 1`.
+#[test]
+fn parked_secondary_batch_stays_inside_the_peripheral_tick_interval() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().parked = true;
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    assert_eq!(report.primary_steps, 64);
+    assert_eq!(
+        report.cpu_batches, 64,
+        "at tick interval 1 a parked secondary must not buy the primary a \
+         multi-instruction window: peripherals are serviced every cycle or the \
+         interval is a lie"
+    );
+    assert_eq!(
+        machine.step_profile().peripheral_ticks,
+        64,
+        "one peripheral boundary per retired instruction at interval 1"
+    );
+}
+
+/// The coalescing win itself is preserved wherever it was ever sound: at a
+/// relaxed tick interval the parked-secondary window is still wide.
+#[test]
+fn parked_secondary_still_coalesces_at_a_relaxed_tick_interval() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().parked = true;
+    machine.config.peripheral_tick_interval = 64;
+    machine.bus.config.peripheral_tick_interval = 64;
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    assert_eq!(report.primary_steps, 64);
+    assert_eq!(
+        report.cpu_batches, 1,
+        "at interval 64 the whole 64-instruction window is one batch"
+    );
 }
 
 #[test]

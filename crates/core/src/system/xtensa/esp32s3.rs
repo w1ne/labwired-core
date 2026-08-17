@@ -45,6 +45,13 @@ pub struct Esp32s3Opts {
     /// firmware; passing the bytes in is what makes multi-node S3 topologies
     /// expressible. `None` (default) keeps the env-var path unchanged.
     pub flash_image: Option<Vec<u8>>,
+    /// External octal PSRAM size in bytes, 0 for a module without PSRAM.
+    ///
+    /// Defaults to 8 MiB: the S3 part this chip config describes is the
+    /// WROOM-1 N16R8 (16 MiB flash + 8 MiB octal PSRAM), and an ESP-IDF image
+    /// built with `CONFIG_SPIRAM=y` refuses to boot at all if the probe finds
+    /// no chip. Set to 0 to model an N8/N16 module with the PSRAM unpopulated.
+    pub psram_size: u32,
 }
 
 impl Default for Esp32s3Opts {
@@ -56,6 +63,7 @@ impl Default for Esp32s3Opts {
             // firmware uses for deep FreeRTOS/RMT stacks.
             dram_size: 512 * 1024,
             flash_size: 4 * 1024 * 1024,
+            psram_size: 8 * 1024 * 1024,
             cpu_clock_hz: 80_000_000,
             real_reset_boot: false,
             rom_images: None,
@@ -124,6 +132,9 @@ struct Esp32s3MemMap {
     icache_backing: Arc<Mutex<Vec<u8>>>,
     dcache_backing: Arc<Mutex<Vec<u8>>>,
     shared_flash_backing: Arc<Mutex<Vec<u8>>>,
+    /// The octal PSRAM on MSPI CS1, when the module has one. Handed to the
+    /// SPIMEM1 controller so the ROM's mode-register probe reaches it.
+    psram: Option<Arc<Mutex<crate::peripherals::esp32s3::psram_opi::PsramDevice>>>,
 }
 
 /// Install the ESP32-S3 memory map: IRAM/DRAM/RTC SRAM banks, the flash-XIP
@@ -228,21 +239,40 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
         }
         Arc::new(Mutex::new(buf))
     };
+    // ── External PSRAM (MSPI CS1) ─────────────────────────────────────────
+    // Created before the cache windows because both of them map it: on the S3
+    // flash and PSRAM share one MMU table, and the SOC_MMU_ACCESS_SPIRAM bit in
+    // an entry decides which chip the page lands in.
+    let psram = if opts.psram_size > 0 {
+        Some(Arc::new(Mutex::new(
+            crate::peripherals::esp32s3::psram_opi::PsramDevice::new(),
+        )))
+    } else {
+        None
+    };
+    let psram_array = psram.as_ref().map(|p| p.lock().unwrap().array());
+
     // Backings exposed on Esp32s3Wiring. In the MMU model both windows alias
     // one physical flash backing; in fast-boot they stay independent.
     let (icache_backing, dcache_backing) = if mmu_model {
         let mmu_table = new_mmu_table();
         const XIP_WINDOW: u64 = 0x0200_0000; // 32 MiB linear MMU window
-        let icache = FlashXipPeripheral::new_mmu(
+        let mut icache = FlashXipPeripheral::new_mmu(
             shared_flash_backing.clone(),
             0x4200_0000,
             mmu_table.clone(),
         );
-        let dcache = FlashXipPeripheral::new_mmu(
+        let mut dcache = FlashXipPeripheral::new_mmu(
             shared_flash_backing.clone(),
             0x3C00_0000,
             mmu_table.clone(),
         );
+        if let Some(array) = &psram_array {
+            // Both windows: PSRAM is mapped into the data window for the heap
+            // and (with CONFIG_SPIRAM_FETCH_INSTRUCTIONS) the instruction one.
+            icache.attach_psram(array.clone());
+            dcache.attach_psram(array.clone());
+        }
         bus.add_peripheral(
             "flash_icache",
             0x4200_0000,
@@ -363,6 +393,7 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
         icache_backing,
         dcache_backing,
         shared_flash_backing,
+        psram,
     }
 }
 
@@ -394,6 +425,7 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         icache_backing,
         dcache_backing,
         shared_flash_backing,
+        psram,
     } = configure_esp32s3_memmap(bus, opts);
 
     // ── Interrupt Matrix (Plan 3) ────────────────────────────────────────
@@ -465,11 +497,17 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x6000_2000,
         0x100,
         None,
-        Box::new(
-            crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
+        Box::new({
+            let mut spimem1 = crate::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
                 shared_flash_backing.clone(),
-            ),
-        ),
+            );
+            // The PSRAM sits on this controller's second chip select; the boot
+            // ROM's `esp_rom_opiflash_exec_cmd` mode-register probe arrives here.
+            if let Some(psram) = &psram {
+                spimem1.attach_psram(psram.clone());
+            }
+            spimem1
+        }),
     );
 
     // ── SYSTEM / RTC_CNTL / EFUSE stubs ──────────────────────────────────

@@ -2580,7 +2580,45 @@ boards:
     # attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
-    drift_ack: 2026-08-13
+    # 2026-08-17 (#1008): octal PSRAM, dual-core startup and LCD_CAM i80 pixel
+    # streaming, found by running real Doom on a physical ESP32-S3-N16R8 and
+    # then in the twin. This is the LARGEST behavioural change to this board
+    # since the capture and it is NOT purely additive, so it is spelled out
+    # per file rather than waved through:
+    #   * NEW psram_opi.rs — an 8 MiB OPI PSRAM device on MSPI CS1. New
+    #     address space; nothing previously existed there to change.
+    #   * spi_mem_flash.rs — MISC.CS1_DIS now routes commands to PSRAM, and
+    #     RDID's JEDEC capacity byte is derived from the backing instead of a
+    #     hardcoded 4 MB (a 16 MB image aborted its own boot on the mismatch).
+    #     WARNING: THIS CONTROLLER IS SHARED WITH THE ESP32-C3
+    #     (boot/esp32c3_rom.rs registers it for the C3's SPIMEM0/1) and the
+    #     first cut of the change broke eight C3 targets — a short C3 image
+    #     reported a 1 MB part against its own 4 MB image header. The reported
+    #     part size is now floored at 4 MB and rounded up to a power of two.
+    #   * flash_xip.rs — the XIP windows gained a PSRAM target selected by the
+    #     MMU entry's SPIRAM bit; a flash-only MMU table translates as before.
+    #   * lcd_cam.rs / gdma.rs — the LC_DMA interrupt block moves from 0x34 to
+    #     its silicon offset 0x64 and its bits are corrected by one, and the
+    #     i80 DOUT phase now streams GDMA outlink bytes into an attached panel.
+    #     The old offsets were a modelling error, not an anchored value.
+    # WHAT THE ANCHOR PINS DID NOT MOVE. The 9 reset registers span UART0,
+    # GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM and RTC_CNTL.
+    # GDMA is the one captured window this change touches, and it is touched
+    # only in the LCD trigger path (OUT_PERI_SEL == 5) and the outlink walk,
+    # both post-reset and both reached only once firmware arms a transfer.
+    # LCD_CAM and SPIMEM are outside the captured windows entirely. Checked
+    # rather than argued: hw-oracle `esp32s3_reset_values_match_silicon` passes
+    # on this branch (1 passed), and the new behaviour has direct coverage —
+    # `esp32s3_lcd_i80_pixels` (5) drives the real ESP-IDF register sequence
+    # through the bus to panel pixels under BOTH feature sets,
+    # `esp32s3_smp_yield_latency` (3) and `xtensa_waiti_resume` (2) cover the
+    # dual-core path.
+    # An S3 board IS attached this session, but it is running the Doom image
+    # over its native USB port and a reset-state capture needs it cold under
+    # openocd. A live re-capture is owed and is tracked; this ack does not
+    # discharge it, and it is worth more than the earlier owed ones because
+    # this is the first change since the capture to reach a captured window.
+    drift_ack: 2026-08-17
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -2592,7 +2630,7 @@ boards:
     # 2026-08-12: chip yaml documents sar_adc_s3 + twai already registered by
     # configure_xtensa_esp32s3 (ESP32S3_PERIPHERALS). Address-map honesty only —
     # 9-reg reset-state silicon anchor unchanged. Arduino matrix L5/L8 green.
-    drift_ack_digest: 90dff2b2b3cd90e550c11d2d05d9dd698aa010f1608d4b0515e77a32951b2f51
+    drift_ack_digest: 00b4461832f677eef0c029610490c8512a886d562f2f70788a2887421d3db1a4
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
