@@ -279,8 +279,10 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 7ff611a215be6e82552c6a5dae1e87470f12b4c411a9e93da70ca9e85f7ce8b6
+    drift_ack_digest: 341fae03a1cdf9fb899fcf06aa25ddbbb953e33a98496d1e20866ef12d70bce1
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
 
@@ -434,8 +436,10 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 7ff611a215be6e82552c6a5dae1e87470f12b4c411a9e93da70ca9e85f7ce8b6
+    drift_ack_digest: 341fae03a1cdf9fb899fcf06aa25ddbbb953e33a98496d1e20866ef12d70bce1
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
 
@@ -688,9 +692,11 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 37b51e405aa2148064b2b8373b9b34c88ed9aca52cf20467e9252174b952e0df
+    drift_ack_digest: c87f437a19593a48f8af971f236fcb397fff6127fbb8eb98d8b3b8e5d1f46def
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -766,8 +772,10 @@ boards:
     # The reset-state silicon oracle is therefore unaffected; no live reset
     # re-capture is warranted for this observer-only fix.
     drift_ack: 2026-08-15
-    drift_ack_digest: 235cfa41817e6ee67bc719337ec0d261a9889745f98c02f05396a9564bcae9fd
+    drift_ack_digest: 24d69238f2dbe8666809ead591bd5402e332fd0eace6dde860638e09a43c3d7d
     models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
       # Shared TIMG model: hosts the C3 TIMG0 RTC_SLOW calibration feature
@@ -779,11 +787,8 @@ boards:
       # peripherals/esp_uart.rs — the register map itself lives there. Without
       # this entry a change to the C3's real UART layout could not trip drift.
       - crates/core/src/peripherals/esp_uart.rs
-      # RISC-V core: the C3 counterpart of the CPU entry esp32s3 already has
-      # (cpu/xtensa_jit). The drift notes below already acknowledge cpu/riscv.rs
-      # changes (2026-07-05 snapshot serialization), so it belongs in the watch
-      # list those acks are meant to cover.
-      - crates/core/src/cpu/riscv.rs
+      # RISC-V core: listed at the top of this models list (cpu/riscv.rs +
+      # decoder/riscv.rs) so the digest sees the core, not only peripherals.
       - configs/chips/esp32c3.yaml
       # THE silicon anchor. The C3's tier is a reset-state oracle, not a
       # behavioural diff: esp32c3_reset_values_match_silicon asserts descriptor
@@ -1621,9 +1626,11 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: d426d9ffbafaa97898118b0678fe94fcf696161c47f934b549b332a5f3f97080
+    drift_ack_digest: b5d821d9300a7ce3557c9c9572e15d81204e3d57ef3c53b85aaa36d960385f16
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -1818,9 +1825,11 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 911aa0ddc97db339660027e270f64b5daa42492bf947f364442939a741ef916a
+    drift_ack_digest: c6edd440f7d5291206007b2bd64c8c00856e8fded98dd32ce1d84f9b86d5d31f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -2068,9 +2077,11 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 7f49451fc56984bfbe2f4d27597e6e19d5a34cc3828e26543a9a3395750ab8b6
+    drift_ack_digest: d17e310c125d5612cd21eaa89e0a1d034077b5b780929156524f3aebb922e84c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
       - crates/core/src/peripherals/gpio.rs
@@ -2278,12 +2289,14 @@ boards:
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 20b0f7311d06465603ddb36136bb56f033cd81ddbc35ba189147e9276109dabd
+    drift_ack_digest: cba8077c91077c7584c9a0021b06ac4b1301e25e68f34635419e5f77bddef6c5
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
     # the silicon-pinned SPI/I2C/UART/GPIO set. Matrix L8 green; no live re-capture.
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
@@ -2630,8 +2643,10 @@ boards:
     # 2026-08-12: chip yaml documents sar_adc_s3 + twai already registered by
     # configure_xtensa_esp32s3 (ESP32S3_PERIPHERALS). Address-map honesty only —
     # 9-reg reset-state silicon anchor unchanged. Arduino matrix L5/L8 green.
-    drift_ack_digest: 00b4461832f677eef0c029610490c8512a886d562f2f70788a2887421d3db1a4
+    drift_ack_digest: 3c0fdf6ce23569b3158e409ff00a365a5be0e4bb7df684f5f50cb77bb78ec743
     models:
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
       # Shared Espressif UART twin — this file IS the relocated esp32s3/uart.rs
@@ -2650,6 +2665,8 @@ boards:
     tier: smoke-manual
     note: "UART2 'smoke pass' is a manual runbook (examples/nucleo-f401re/VALIDATION.md) + a CI build step — no automated UART assertion."
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f401.yaml
 
   - id: stm32wba52
@@ -2658,6 +2675,8 @@ boards:
     tier: smoke-manual
     note: "LPUART1 'smoke pass' is a manual runbook only; no automated test anywhere. Cortex-M33 TrustZone/radio/crypto not modeled."
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/stm32wba52.yaml
 
   - id: nrf52832
@@ -2666,6 +2685,8 @@ boards:
     tier: structural
     note: "Chip yaml declares UART0 only. UART0 smoke test + empty-assertion survival test exist; no silicon."
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/nrf52832.yaml
 
   - id: rp2040
@@ -2697,8 +2718,10 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 2480b05f7681ed812e0867cd9796bb5d0a561bf07378981b8114fb7fe195b477
+    drift_ack_digest: 3f48a4e4fa11c18b8db144e2aaf235e7ebd72859b467096433d8045103782c39
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/rp2040.yaml
       - crates/core/src/peripherals/rp2040
       - crates/core/src/peripherals/rp2040_clocks.rs
@@ -2710,6 +2733,8 @@ boards:
     tier: smoke-manual
     note: "Pico 2 / RP2350: UART0 smoke (examples/pico2) with firmware-rp2350-demo (M33 bare-metal). Reuses RP2040 behavioural models on the RP2350 APB map via clkrst profile rp2350. No TrustZone/bootrom/PIO v2/dual-core; no silicon bench."
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/rp2350.yaml
       - crates/core/src/peripherals/rp2040_clocks.rs
       - crates/core/src/peripherals/rp2040
@@ -2724,6 +2749,8 @@ boards:
       - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
       - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/nrf5340.yaml
       - crates/core/src/peripherals/nrf52
       - crates/core/src/peripherals/scb.rs
@@ -2776,8 +2803,10 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 6e8066344403540c9c5607a52a948c9b916aae00e40fba8ff6e4799ef337488a
+    drift_ack_digest: 6e165a2c71faa374def12600929e120f79772e84db6601c19c66662656743820
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/stm32h735.yaml
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -2845,8 +2874,10 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: f51aa6d65c014e1d097e1692c55af700b5a61785d27059d099081ce72204cbee
+    drift_ack_digest: 80e6c55db975df2dc1e2db69a37308886d8e13ff14e7cd6568ae6bf1f3cb8536
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/stm32f411ceu6.yaml
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -2866,6 +2897,8 @@ boards:
     tier: structural
     note: "Original ESP32 (dual-core Xtensa LX6). Exercised via the tier-1 fast-boot fixture only (tests/fixtures/tier1/esp32.elf); no dedicated firmware_survival case and no silicon bench."
     models:
+      - crates/core/src/cpu/xtensa_lx7.rs
+      - crates/core/src/decoder/xtensa.rs
       - configs/chips/esp32.yaml
 
   - id: mkw41z4
@@ -2909,8 +2942,10 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: f094f93912717a58376ddabb5503eb13c35669d06da1dbd514538653b23fa42f
+    drift_ack_digest: 851fdf6c3a317a0028b35c414e83799d0c3a1c9e249f7b52182eb14aa2dbfe79
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/mkw41z4.yaml
       - crates/core/src/peripherals/i2c.rs
       - configs/peripherals/mkw41z4
@@ -2923,6 +2958,8 @@ boards:
     offline_tests:
       - "firmware_survival::nrf54l15_smoke / nrf54l15_zephyr"
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/nrf54l15.yaml
 
   - id: stm32g474re
@@ -2933,6 +2970,8 @@ boards:
     offline_tests:
       - "firmware_survival::stm32g474_zephyr"
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/stm32g474re.yaml
 
   - id: stm32wb55
@@ -2943,6 +2982,8 @@ boards:
     offline_tests:
       - "firmware_survival::stm32wb55_zephyr"
     models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
       - configs/chips/stm32wb55.yaml
 
   - id: ci-fixture-riscv
@@ -2951,4 +2992,6 @@ boards:
     tier: structural
     note: "Synthetic RV32I fixture used only to exercise the RISC-V core in firmware_survival::riscv_ci_fixture; not a real board, no silicon claim of any kind."
     models:
+      - crates/core/src/cpu/riscv.rs
+      - crates/core/src/decoder/riscv.rs
       - configs/chips/ci-fixture-riscv.yaml
