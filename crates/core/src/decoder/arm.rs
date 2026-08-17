@@ -474,6 +474,108 @@ pub enum Instruction {
         rn: u8,
         rm: u8,
     }, // SEL Rd, Rn, Rm (per-byte select on APSR.GE)
+
+    /// Saturating pack — SSAT / SSAT16 / USAT / USAT16 (ARMv7-M A7.7.128-131).
+    ///
+    /// The third member of the family whose absence has now bitten three times
+    /// (see [`Instruction::SimdAddSub8`] and [`Instruction::SimdAddSub16`]).
+    /// `USAT` without a shift was the one form that worked, and only because
+    /// `cortex_m.rs` carried a hand-written special case for it in the
+    /// Unknown32 fallback; `SSAT`, both 16-bit lane forms, and *any* form with
+    /// a shift went to `record_undecoded` and left Rd stale. That is what a C
+    /// `constrain()` / Rust `clamp()` on a sensor reading compiles to, so a lab
+    /// that clamped a distance or an ADC count computed it from whatever was
+    /// last in the register.
+    ///
+    /// `sat_imm` is the raw encoded field: the signed forms saturate to
+    /// `sat_imm + 1` bits, the unsigned forms to `sat_imm` bits (A7.7.128 vs
+    /// A7.7.130). Callers must not "normalise" it.
+    Saturate {
+        rd: u8,
+        rn: u8,
+        sat_imm: u8,
+        /// Pre-shift applied to Rn. Always 0 for the halfword forms, which
+        /// have no shift field.
+        shift: u8,
+        /// Shift type: ASR when true, LSL when false.
+        asr: bool,
+        /// SSAT/SSAT16 when true, USAT/USAT16 when false.
+        signed: bool,
+        /// SSAT16/USAT16 — saturate each 16-bit lane independently.
+        halfword: bool,
+    },
+
+    /// Halfword multiply / multiply-accumulate — SMUL<x><y>, SMLA<x><y>,
+    /// SMULW<y>, SMLAW<y> (ARMv7-M A7.7.148-153).
+    ///
+    /// GCC reaches for these for any `int16_t` product, which is most fixed-point
+    /// sensor maths. The SMUL* forms encode Ra = 0b1111, which put a 1 in h2[15]
+    /// and so were swallowed whole by the old "B.W / BL … just in case" arm in
+    /// `cortex_m.rs` — consumed with no result AND no fidelity record.
+    HalfwordMul {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        /// Accumulator, or `0xF` for the plain SMUL*/SMULW* forms.
+        ra: u8,
+        /// Take Rn's high halfword (the `T` in SMLAT*).
+        n_high: bool,
+        /// Take Rm's high halfword (the `T` in SMLA*T).
+        m_high: bool,
+        /// SMULW<y>/SMLAW<y>: 32x16 product, result is bits [47:16].
+        wide: bool,
+    },
+
+    /// Dual multiply-add / multiply-subtract — SMUAD(X), SMUSD(X), SMLAD(X),
+    /// SMLSD(X) (ARMv7-M A7.7.145-147, A7.7.154).
+    DualMul {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        /// Accumulator, or `0xF` for SMUAD/SMUSD.
+        ra: u8,
+        /// The `X` suffix — swap Rm's halfwords before multiplying.
+        swap: bool,
+        /// Subtract the second product instead of adding it (SMUSD/SMLSD).
+        sub: bool,
+    },
+
+    /// Most-significant-word multiply — SMMUL(R), SMMLA(R), SMMLS(R)
+    /// (ARMv7-M A7.7.155-157). Result is bits [63:32] of the product.
+    TopWordMul {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        /// Accumulator, or `0xF` for SMMUL.
+        ra: u8,
+        /// The `R` suffix — add 0x8000_0000 before truncating to the top word.
+        round: bool,
+        /// SMMLS: accumulator minus product.
+        sub: bool,
+    },
+
+    /// 64-bit-accumulate halfword multiply — SMLAL<x><y> (ARMv7-M A7.7.139).
+    SmlalXY {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+        n_high: bool,
+        m_high: bool,
+    },
+
+    /// 64-bit-accumulate dual multiply — SMLALD(X) / SMLSLD(X)
+    /// (ARMv7-M A7.7.140, A7.7.142).
+    SmlaldSld {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+        /// The `X` suffix — swap Rm's halfwords before multiplying.
+        swap: bool,
+        /// SMLSLD: product1 minus product2.
+        sub: bool,
+    },
     Udiv {
         rd: u8,
         rn: u8,
@@ -1443,6 +1545,203 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             0x1 => return Instruction::Mls { rd, rn, rm, ra },
             _ => {}
         }
+    }
+
+    // Multiply / multiply-accumulate group, op1 = 001..110 (ARMv7-M A5.3.10).
+    //   h1 = 1111 1011 0 op1(3) Rn(4)
+    //   h2 = Ra(4) Rd(4) 00 op2(2) Rm(4)
+    // op1 = 000 is MUL/MLA/MLS, handled just above; the rest land here. h2[7:6]
+    // must be 00 — a nonzero pair is not in this group and must keep falling
+    // through rather than being decoded as a near-miss.
+    if (h1 & 0xFF80) == 0xFB00 && (h2 & 0x00C0) == 0x0000 {
+        let op1 = (h1 >> 4) & 0x7;
+        let rn = (h1 & 0xF) as u8;
+        let ra = ((h2 >> 12) & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let n_bit = (h2 & 0x0020) != 0;
+        let m_bit = (h2 & 0x0010) != 0;
+        match op1 {
+            // SMUL<x><y> (Ra == 0b1111) / SMLA<x><y>. op2 = N:M.
+            0b001 => {
+                return Instruction::HalfwordMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    n_high: n_bit,
+                    m_high: m_bit,
+                    wide: false,
+                }
+            }
+            // SMUAD(X) (Ra == 0b1111) / SMLAD(X). op2 = 0:X.
+            0b010 if !n_bit => {
+                return Instruction::DualMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    swap: m_bit,
+                    sub: false,
+                }
+            }
+            // SMULW<y> (Ra == 0b1111) / SMLAW<y>. op2 = 0:M.
+            0b011 if !n_bit => {
+                return Instruction::HalfwordMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    // SMULW<y>/SMLAW<y> always take the full 32-bit Rn.
+                    n_high: false,
+                    m_high: m_bit,
+                    wide: true,
+                };
+            }
+            // SMUSD(X) (Ra == 0b1111) / SMLSD(X). op2 = 0:X.
+            0b100 if !n_bit => {
+                return Instruction::DualMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    swap: m_bit,
+                    sub: true,
+                }
+            }
+            // SMMUL(R) (Ra == 0b1111) / SMMLA(R). op2 = 0:R.
+            0b101 if !n_bit => {
+                return Instruction::TopWordMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    round: m_bit,
+                    sub: false,
+                }
+            }
+            // SMMLS(R). op2 = 0:R. Has no Ra == 0b1111 short form.
+            0b110 if !n_bit => {
+                return Instruction::TopWordMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    round: m_bit,
+                    sub: true,
+                }
+            }
+            // 0b111 is USAD8/USADA8 — not implemented, left to fall through so
+            // it is *recorded* as undecoded rather than silently mis-decoded.
+            _ => {}
+        }
+    }
+
+    // Long multiply-accumulate, op1 = 100/101 (ARMv7-M A5.3.11).
+    //   h1 = 1111 1011 1 op1(3) Rn(4)
+    //   h2 = RdLo(4) RdHi(4) op2(4) Rm(4)
+    // op2 = 0000 (SMLAL/UMULL/…) and 0110 (UMAAL) are handled above; this picks
+    // up op2 = 10NM (SMLAL<x><y>) and 110X (SMLALD/SMLSLD).
+    if (h1 & 0xFF80) == 0xFB80 {
+        let op1 = (h1 >> 4) & 0x7;
+        let rn = (h1 & 0xF) as u8;
+        let rd_lo = ((h2 >> 12) & 0xF) as u8;
+        let rd_hi = ((h2 >> 8) & 0xF) as u8;
+        let op2 = ((h2 >> 4) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        match (op1, op2 & 0b1110) {
+            (0b100, 0b1000) | (0b100, 0b1010) => {
+                return Instruction::SmlalXY {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                    n_high: (op2 & 0b0010) != 0,
+                    m_high: (op2 & 0b0001) != 0,
+                }
+            }
+            (0b100, 0b1100) => {
+                return Instruction::SmlaldSld {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                    swap: (op2 & 0b0001) != 0,
+                    sub: false,
+                }
+            }
+            (0b101, 0b1100) => {
+                return Instruction::SmlaldSld {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                    swap: (op2 & 0b0001) != 0,
+                    sub: true,
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Hint space, 32-bit forms (ARMv7-M A5.3.4): NOP.W / YIELD.W / WFE.W /
+    // WFI.W / SEV.W / DBG.
+    //   h1 = 0xF3AF, h2 = 1000 0000 hint(8)
+    //
+    // `NOP.W` (0xF3AF_8000) is emitted by the STM32 vendor startup code, so it
+    // executes in EVERY STM32 Arduino sketch. It was landing in the old
+    // "B.W / BL … just in case" arm — h2[15] is set, which was that arm's whole
+    // test — and being consumed with nothing recorded. The *behaviour* was
+    // accidentally right, because skipping a NOP is what a NOP does; the
+    // problem was that a decoder gap in the busiest startup path on the
+    // platform was invisible. It surfaced the moment that arm started
+    // recording, which is the argument for the arm being gone.
+    //
+    // Same modelling as the 16-bit hints: only WFI suspends. No event register
+    // is modelled, so WFE/YIELD/SEV have no observable effect, and DBG is a
+    // debug hint with no architectural state behind it here.
+    if h1 == 0xF3AF && (h2 & 0xFF00) == 0x8000 {
+        return match h2 & 0xFF {
+            0x03 => Instruction::Wfi,
+            _ => Instruction::Nop,
+        };
+    }
+
+    // SSAT / SSAT16 / USAT / USAT16 (ARMv7-M A5.3.3, "plain binary immediate").
+    //   h1 = 11110 i 1 op(5) Rn(4)     with op = h1[8:4]
+    //   h2 = 0 imm3(3) Rd(4) imm2(2) 0 sat_imm(5)
+    // Four allocated op values: 10000 SSAT(LSL), 10010 SSAT(ASR)/SSAT16,
+    // 11000 USAT(LSL), 11010 USAT(ASR)/USAT16.
+    //
+    // The 16-bit-lane forms do NOT have their own opcode — SSAT16 *is* op=10010
+    // with the shift field zero, because ASR #0 is not encodable and the slot
+    // was reused. Decoding `halfword` from an opcode bit instead of from
+    // "shift == 0" turns every `SSAT Rd,#n,Rm,ASR #k` into a lane-wise
+    // saturation of the wrong operand, so the discriminator is the shift field.
+    //
+    // The mask pins bits[15:11]=11110, bit9=1, bit8=1, bit6=0, bit4=0 and
+    // leaves bit10 (i), bit7 (signed/unsigned) and bit5 (LSL/ASR) free. Bit 6
+    // is what separates this group from BFI/BFC/UBFX/SBFX, which share the
+    // 0xF3xx prefix.
+    if (h1 & 0xFB50) == 0xF300 && (h2 & 0x8000) == 0 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let imm3 = ((h2 >> 12) & 0x7) as u8;
+        let imm2 = ((h2 >> 6) & 0x3) as u8;
+        let sat_imm = (h2 & 0x1F) as u8;
+        let signed = (h1 & 0x0080) == 0;
+        let asr_slot = (h1 & 0x0020) != 0;
+        let shift = (imm3 << 2) | imm2;
+        let halfword = asr_slot && shift == 0;
+        return Instruction::Saturate {
+            rd,
+            rn,
+            sat_imm,
+            shift: if halfword { 0 } else { shift },
+            asr: asr_slot,
+            signed,
+            halfword,
+        };
     }
 
     // -------------------------------------------------------------

@@ -2292,3 +2292,64 @@ fn test_important_core_regression_matrix_is_complete() {
         );
     }
 }
+
+/// Every Cortex-M fixture must run to its cycle budget without the CPU hitting
+/// a single instruction it cannot decode.
+///
+/// The survival cases above assert that firmware *reaches* its banner. That is
+/// not the same claim: an undecoded instruction advances PC by 4 and leaves the
+/// destination register stale, so a firmware can print exactly the right banner
+/// while computing exactly the wrong thing on the way there. Three separate
+/// incidents have that shape — newlib's `strlen` on UADD8/SEL, `u16::saturating_add`
+/// on UQADD16, and the DSP multiply/saturate set — and in each one the UART
+/// output alone looked healthy.
+///
+/// `fidelity::record_undecoded` already logs these; nothing was reading the log.
+/// This reads it. A new gap fails here, in CI, on a fixture — instead of in a
+/// customer's run as "not proven on the twin" with no way to tell whose fault
+/// it is.
+///
+/// The gate is zero, not an allow-list. If a fixture legitimately needs an
+/// instruction this core does not model, implement the instruction — an
+/// allow-list here would re-create exactly the silence this replaces.
+#[test]
+fn cortex_m_corpus_records_no_undecoded_instructions() {
+    let mut offenders: Vec<String> = Vec::new();
+
+    for case in SURVIVAL_CASES.iter() {
+        if case.family != CpuFamily::CortexM {
+            continue;
+        }
+        let firmware = fixtures().join(case.fixture);
+        assert!(
+            firmware.exists(),
+            "firmware fixture not found: {firmware:?} (case {})",
+            case.name
+        );
+
+        labwired_core::fidelity::reset();
+        let _ = run_cortex_m_firmware(case.chip, case.system, firmware, case_cycles(case));
+
+        for gap in labwired_core::fidelity::take().to_gaps() {
+            if gap.kind == "undecoded_instruction" {
+                offenders.push(format!(
+                    "  {} ({}): opcode {} first seen at pc {}, {} hit(s) — {}",
+                    case.name,
+                    case.chip,
+                    gap.opcode.as_deref().unwrap_or("?"),
+                    gap.first_pc,
+                    gap.count,
+                    gap.detail,
+                ));
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "the Cortex-M decoder does not model {} instruction(s) reached by the fixture corpus.\n\
+         Each one silently skips 4 bytes and leaves its destination register stale:\n{}",
+        offenders.len(),
+        offenders.join("\n"),
+    );
+}

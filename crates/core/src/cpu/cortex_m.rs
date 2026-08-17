@@ -2094,27 +2094,6 @@ impl CortexM {
                             self.xpsr |= 1 << 27;
                         }
                         pc_increment = 4;
-                    } else if (h1 & 0xFFF0) == 0xF380 && (h2 & 0x00C0) == 0 {
-                        // ARMv7-M USAT without an optional shift.
-                        let rn = (h1 & 0xF) as u8;
-                        let rd = ((h2 >> 8) & 0xF) as u8;
-                        let sat = (h2 & 0x1F) as u32;
-                        let source = self.get_register(rn) as i32;
-                        let max = if sat == 32 {
-                            u32::MAX
-                        } else {
-                            (1u32 << sat) - 1
-                        };
-                        let value = if source < 0 {
-                            0
-                        } else {
-                            (source as u32).min(max)
-                        };
-                        if source < 0 || source as u32 > max {
-                            self.xpsr |= 1 << 27;
-                        }
-                        self.set_register(rd, value);
-                        pc_increment = 4;
                     } else if (h1 & 0xFFF0) == 0xE850 {
                         // LDREX
                         let rn = (h1 & 0xF) as u8;
@@ -2217,8 +2196,23 @@ impl CortexM {
                         }
                         pc_increment = 4;
                     } else if (h1 & 0xFE00) == 0xE800 {
-                        // Table branch, load/store multiple etc — not yet
-                        // modeled in full; advance past the 32-bit insn.
+                        // Load/store-multiple space. Every member this core can
+                        // actually execute (LDM/STM/LDMDB/STMDB, LDRD/STRD,
+                        // TBB/TBH, LDREX/STREX, TT) is decoded upstream or by an
+                        // arm above; anything still here is NOT modelled.
+                        //
+                        // This used to `pc_increment = 4` and say nothing, which
+                        // is the worst of both worlds: the register file silently
+                        // diverges from hardware AND fidelity::report() stays
+                        // empty, so the run is graded "proven" on state the model
+                        // never computed. Record it — an honest gap outranks a
+                        // clean-looking run. See the sibling note on the final
+                        // `else` arm.
+                        crate::fidelity::record_undecoded(
+                            self.pc,
+                            ((h1 as u64) << 16) | (h2 as u64),
+                            "undecoded T32 (load/store-multiple space)",
+                        );
                         pc_increment = 4;
                     } else if (h1 & 0xFE00) == 0xF800 {
                         // LDR/STR (immediate) T3/T4
@@ -2440,8 +2434,14 @@ impl CortexM {
                             if s {
                                 self.update_nz(result);
                             }
-                            pc_increment = 4;
+                        } else {
+                            crate::fidelity::record_undecoded(
+                                self.pc,
+                                ((h1 as u64) << 16) | (h2 as u64),
+                                "undecoded T32 (modified-immediate data-processing)",
+                            );
                         }
+                        pc_increment = 4;
                     } else if (h1 & 0xFB00) == 0xF100 && (h2 & 0x8000) == 0 {
                         // Data-processing (plain binary immediate)
                         let i = (h1 >> 10) & 0x1;
@@ -2461,12 +2461,34 @@ impl CortexM {
                                 self.write_reg(rd, op1.wrapping_sub(imm12 as u32));
                                 pc_increment = 4;
                             } // SUB
-                            _ => {}
+                            _ => {
+                                crate::fidelity::record_undecoded(
+                                    self.pc,
+                                    ((h1 as u64) << 16) | (h2 as u64),
+                                    "undecoded T32 (plain-immediate data-processing)",
+                                );
+                            }
                         }
-                    } else if (h1 & 0xF000) == 0xF000 && (h2 & 0x8000) == 0x8000 {
-                        // B.W / BL (handled elsewhere but just in case)
-                        pc_increment = 4;
                     } else {
+                        // Everything not modelled above.
+                        //
+                        // There used to be one more arm here — `(h1 & 0xF000) ==
+                        // 0xF000 && (h2 & 0x8000) == 0x8000`, labelled "B.W / BL
+                        // (handled elsewhere but just in case)" — that consumed
+                        // the encoding without recording anything. B.W/BL *are*
+                        // handled upstream in decode_thumb_32, so nothing correct
+                        // ever reached it. What did reach it was every multiply
+                        // whose Ra field is 0b1111, because that puts a 1 in
+                        // h2[15] and satisfies the mask: SMULBB/BT/TB/TT,
+                        // SMULWB/WT, SMUAD, SMUSD and SMMUL were all executed as
+                        // "advance 4, do nothing", leaving Rd holding its previous
+                        // value with no fault recorded and no warning logged.
+                        //
+                        // That is the UADD8/SEL strlen failure (see fidelity.rs)
+                        // with the alarm disconnected: wrong results that still
+                        // grade as a clean run. Those encodings are decoded for
+                        // real now, and this arm no longer exists — an encoding we
+                        // cannot execute must always leave a trace.
                         tracing::warn!(
                             "Unknown 32-bit instruction at {:#x}: {:#x} {:#x}",
                             self.pc,
@@ -3410,6 +3432,159 @@ impl CortexM {
                     self.write_reg(rd_hi, (new >> 32) as u32);
                     pc_increment = 4;
                 }
+                // ---- ARMv7E-M saturating pack + DSP multiplies ----------------
+                // These all set APSR.Q (bit 27) on saturation/overflow and never
+                // clear it — Q is sticky until an MSR writes it, per B1.4.2.
+                Instruction::Saturate {
+                    rd,
+                    rn,
+                    sat_imm,
+                    shift,
+                    asr,
+                    signed,
+                    halfword,
+                } => {
+                    let mut saturated = false;
+                    let value = if halfword {
+                        // SSAT16 / USAT16: each signed 16-bit lane, no shift.
+                        let src = self.read_reg(rn);
+                        let lane = |sh: u32, sat: &mut bool| -> u32 {
+                            let v = ((src >> sh) as u16) as i16 as i32;
+                            let clamped = saturate(v, sat_imm, signed, sat);
+                            ((clamped as u32) & 0xFFFF) << sh
+                        };
+                        lane(0, &mut saturated) | lane(16, &mut saturated)
+                    } else {
+                        let src = self.read_reg(rn) as i32;
+                        // LSL by the encoded amount, or ASR (which for shift == 0
+                        // only reaches here as the 32-bit form, never SSAT16).
+                        let operand = if asr {
+                            src >> shift.min(31)
+                        } else {
+                            ((src as u32) << shift) as i32
+                        };
+                        saturate(operand, sat_imm, signed, &mut saturated) as u32
+                    };
+                    self.write_reg(rd, value);
+                    if saturated {
+                        self.xpsr |= 1 << 27;
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::HalfwordMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    n_high,
+                    m_high,
+                    wide,
+                } => {
+                    let m = half(self.read_reg(rm), m_high);
+                    let product = if wide {
+                        // SMULW<y>/SMLAW<y>: bits [47:16] of a 32x16 product.
+                        (((self.read_reg(rn) as i32 as i64) * (m as i64)) >> 16) as i32
+                    } else {
+                        half(self.read_reg(rn), n_high).wrapping_mul(m)
+                    };
+                    // Ra == 0b1111 is the plain multiply form (SMUL*/SMULW*),
+                    // which has no accumulate and cannot set Q.
+                    let value = if ra == 0xF {
+                        product
+                    } else {
+                        let acc = self.read_reg(ra) as i32;
+                        let (sum, overflow) = acc.overflowing_add(product);
+                        if overflow {
+                            self.xpsr |= 1 << 27;
+                        }
+                        sum
+                    };
+                    self.write_reg(rd, value as u32);
+                    pc_increment = 4;
+                }
+                Instruction::DualMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    swap,
+                    sub,
+                } => {
+                    let (p1, p2) = dual_products(self.read_reg(rn), self.read_reg(rm), swap);
+                    // The two products are combined in 64-bit precision; only the
+                    // final accumulate can overflow into Q (A7.7.146/.154).
+                    let combined = if sub { p1 - p2 } else { p1 + p2 };
+                    let value = if ra == 0xF {
+                        combined
+                    } else {
+                        combined + (self.read_reg(ra) as i32 as i64)
+                    };
+                    if value != (value as i32) as i64 {
+                        self.xpsr |= 1 << 27;
+                    }
+                    self.write_reg(rd, value as u32);
+                    pc_increment = 4;
+                }
+                Instruction::TopWordMul {
+                    rd,
+                    rn,
+                    rm,
+                    ra,
+                    round,
+                    sub,
+                } => {
+                    let product = (self.read_reg(rn) as i32 as i64)
+                        .wrapping_mul(self.read_reg(rm) as i32 as i64);
+                    // SMMUL has no accumulator (Ra == 0b1111); SMMLA adds it and
+                    // SMMLS subtracts the product from it, both at bit 32.
+                    let acc = if ra == 0xF {
+                        0i64
+                    } else {
+                        (self.read_reg(ra) as i32 as i64) << 32
+                    };
+                    let mut total = if sub {
+                        acc.wrapping_sub(product)
+                    } else {
+                        acc.wrapping_add(product)
+                    };
+                    if round {
+                        total = total.wrapping_add(0x8000_0000);
+                    }
+                    self.write_reg(rd, (total >> 32) as u32);
+                    pc_increment = 4;
+                }
+                Instruction::SmlalXY {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                    n_high,
+                    m_high,
+                } => {
+                    let acc = ((self.read_reg(rd_hi) as u64) << 32) | (self.read_reg(rd_lo) as u64);
+                    let n = half(self.read_reg(rn), n_high) as i64;
+                    let m = half(self.read_reg(rm), m_high) as i64;
+                    let new = (acc as i64).wrapping_add(n.wrapping_mul(m)) as u64;
+                    self.write_reg(rd_lo, new as u32);
+                    self.write_reg(rd_hi, (new >> 32) as u32);
+                    pc_increment = 4;
+                }
+                Instruction::SmlaldSld {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                    swap,
+                    sub,
+                } => {
+                    let acc = ((self.read_reg(rd_hi) as u64) << 32) | (self.read_reg(rd_lo) as u64);
+                    let (p1, p2) = dual_products(self.read_reg(rn), self.read_reg(rm), swap);
+                    let combined = if sub { p1 - p2 } else { p1 + p2 };
+                    let new = (acc as i64).wrapping_add(combined) as u64;
+                    self.write_reg(rd_lo, new as u32);
+                    self.write_reg(rd_hi, (new >> 32) as u32);
+                    pc_increment = 4;
+                }
                 Instruction::Umlal {
                     rd_lo,
                     rd_hi,
@@ -3771,6 +3946,64 @@ impl CortexM {
 
         Ok(())
     }
+}
+
+/// Signed/unsigned saturation shared by SSAT/SSAT16/USAT/USAT16
+/// (ARMv7-M pseudocode `SignedSatQ` / `UnsignedSatQ`).
+///
+/// `sat_imm` is the RAW encoded field. The signed forms saturate to
+/// `sat_imm + 1` bits and the unsigned forms to `sat_imm` bits — the encoding
+/// is deliberately asymmetric (A7.7.128 vs A7.7.130) because a signed range
+/// needs the sign bit that an unsigned one spends on magnitude. Normalising the
+/// two to one convention is the easy way to get every SSAT off by a factor of
+/// two, so the asymmetry is handled here, once.
+///
+/// Sets `saturated` when the value was clamped; the caller turns that into
+/// APSR.Q. Q is sticky, so this never clears it.
+fn saturate(value: i32, sat_imm: u8, signed: bool, saturated: &mut bool) -> i32 {
+    let (min, max) = if signed {
+        // saturate_to = sat_imm + 1, in 1..=32.
+        let bits = (sat_imm as u32 + 1).min(32);
+        if bits >= 32 {
+            (i32::MIN as i64, i32::MAX as i64)
+        } else {
+            (-(1i64 << (bits - 1)), (1i64 << (bits - 1)) - 1)
+        }
+    } else {
+        // saturate_to = sat_imm, in 0..=31; the low bound is always 0.
+        let bits = (sat_imm as u32).min(32);
+        (0i64, (1i64 << bits) - 1)
+    };
+    let v = value as i64;
+    let clamped = v.clamp(min, max);
+    *saturated |= clamped != v;
+    clamped as i32
+}
+
+/// Sign-extend one halfword of `value` to i32. `high` picks bits [31:16]
+/// (the `T` in SMLAT*/SMLA*T) over bits [15:0].
+fn half(value: u32, high: bool) -> i32 {
+    let h = if high {
+        (value >> 16) as u16
+    } else {
+        value as u16
+    };
+    h as i16 as i32
+}
+
+/// The two halfword products shared by SMUAD/SMUSD/SMLAD/SMLSD/SMLALD/SMLSLD.
+///
+/// Returned as i64 so the caller can combine them without wrapping and then
+/// decide for itself whether the 32-bit result overflowed — the dual multiplies
+/// only set Q on the final accumulate, not on the intermediate sum.
+/// `swap` is the `X` suffix: exchange Rm's halfwords first.
+fn dual_products(rn: u32, rm: u32, swap: bool) -> (i64, i64) {
+    let m_lo = half(rm, swap);
+    let m_hi = half(rm, !swap);
+    (
+        (half(rn, false) as i64) * (m_lo as i64),
+        (half(rn, true) as i64) * (m_hi as i64),
+    )
 }
 
 // Thumb expand immediate - implements ARM's modified immediate constant expansion
@@ -5790,5 +6023,389 @@ mod tests {
                 "boxed CPU path should still leave the batch loop at WFI"
             );
         }
+    }
+
+    // ---- ARMv7E-M saturating pack + DSP multiplies ---------------------------
+    //
+    // Every encoding below reached `record_undecoded` (or, for the Ra == 0b1111
+    // forms, was swallowed by the old "B.W / BL … just in case" arm with no
+    // record at all) before these were implemented. The Q-flag bit is 27.
+
+    const Q_BIT: u32 = 1 << 27;
+
+    /// Assert the instruction was actually modelled — not consumed by a
+    /// fallback arm that advances PC and does nothing. Without this an
+    /// "expected == actual" on a register that happened to be preseeded with
+    /// the right value would pass against a no-op.
+    fn assert_no_fidelity_gap(label: &str) {
+        let report = crate::fidelity::report();
+        assert!(
+            report.is_empty(),
+            "{label}: expected the encoding to be modelled, but it recorded a fidelity gap: {report}"
+        );
+    }
+
+    fn sat_cpu() -> (CortexM, MockBus) {
+        crate::fidelity::reset();
+        let mut cpu = CortexM::new();
+        cpu.pc = 0x1000;
+        (cpu, MockBus::new())
+    }
+
+    #[test]
+    fn armv7em_ssat_clamps_signed_and_sets_q() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SSAT R0, #8, R1  -> signed range is 8 bits: [-128, 127].
+        cpu.r1 = 1000;
+        run_test_instr(&mut cpu, &mut bus, 0xF301_0007, true);
+        assert_no_fidelity_gap("SSAT");
+        assert_eq!(cpu.r0, 127, "1000 clamps to the 8-bit signed max");
+        assert_ne!(cpu.xpsr & Q_BIT, 0, "clamping must set Q");
+
+        // In range: no clamp, Q must not be newly set.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 100;
+        run_test_instr(&mut cpu, &mut bus, 0xF301_0007, true);
+        assert_eq!(cpu.r0, 100);
+        assert_eq!(cpu.xpsr & Q_BIT, 0);
+
+        // Negative side of the same range.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = (-1000i32) as u32;
+        run_test_instr(&mut cpu, &mut bus, 0xF301_0007, true);
+        assert_eq!(cpu.r0, (-128i32) as u32);
+        assert_ne!(cpu.xpsr & Q_BIT, 0);
+    }
+
+    #[test]
+    fn armv7em_usat_clamps_unsigned_including_negatives() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // USAT R0, #8, R1 -> unsigned range is 8 bits: [0, 255].
+        cpu.r1 = 1000;
+        run_test_instr(&mut cpu, &mut bus, 0xF381_0008, true);
+        assert_no_fidelity_gap("USAT");
+        assert_eq!(cpu.r0, 255);
+        assert_ne!(cpu.xpsr & Q_BIT, 0);
+
+        // A negative input saturates to 0, not to a huge unsigned value.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = (-1i32) as u32;
+        run_test_instr(&mut cpu, &mut bus, 0xF381_0008, true);
+        assert_eq!(cpu.r0, 0);
+        assert_ne!(cpu.xpsr & Q_BIT, 0);
+    }
+
+    /// SSAT saturates to `sat_imm + 1` bits and USAT to `sat_imm` bits. Same
+    /// encoded field, different widths — pin it so a future "simplification"
+    /// cannot quietly make one of them off by a factor of two.
+    #[test]
+    fn armv7em_sat_imm_width_is_asymmetric_between_ssat_and_usat() {
+        // SSAT R0, #8, R1 encodes sat_imm = 7 and yields max 127 = 2^7 - 1.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x7FFF_FFFF;
+        run_test_instr(&mut cpu, &mut bus, 0xF301_0007, true);
+        assert_eq!(cpu.r0, 127);
+
+        // USAT R0, #8, R1 encodes sat_imm = 8 and yields max 255 = 2^8 - 1.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x7FFF_FFFF;
+        run_test_instr(&mut cpu, &mut bus, 0xF381_0008, true);
+        assert_eq!(cpu.r0, 255);
+    }
+
+    #[test]
+    fn armv7em_ssat_applies_the_shift_before_saturating() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SSAT R0, #16, R1, LSL #4 : imm3:imm2 = 4, sat_imm = 15 -> [-32768, 32767].
+        // 0x100 << 4 = 0x1000 = 4096, which is in range.
+        cpu.r1 = 0x100;
+        run_test_instr(&mut cpu, &mut bus, 0xF301_100F, true);
+        assert_no_fidelity_gap("SSAT LSL");
+        assert_eq!(cpu.r0, 4096);
+        assert_eq!(cpu.xpsr & Q_BIT, 0);
+
+        // SSAT R0, #16, R1, ASR #4 : same range, 0x1000 >> 4 = 0x100.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x1000;
+        run_test_instr(&mut cpu, &mut bus, 0xF321_100F, true);
+        assert_no_fidelity_gap("SSAT ASR");
+        assert_eq!(cpu.r0, 0x100);
+    }
+
+    /// SSAT16 shares op = 10010 with `SSAT … ASR #n`; only a zero shift field
+    /// tells them apart. Decoding the lane form from an opcode bit instead
+    /// silently turns every shifted SSAT into a lane-wise saturation.
+    #[test]
+    fn armv7em_ssat16_saturates_each_lane_and_is_not_confused_with_ssat_asr() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SSAT16 R0, #4, R1 -> each signed halfword clamps to [-8, 7].
+        // low  = 1000 -> 7, high = -1000 -> -8.
+        cpu.r1 = 0xFC18_03E8;
+        run_test_instr(&mut cpu, &mut bus, 0xF321_0003, true);
+        assert_no_fidelity_gap("SSAT16");
+        assert_eq!(cpu.r0 & 0xFFFF, 7, "low lane clamps to +7");
+        assert_eq!((cpu.r0 >> 16) & 0xFFFF, 0xFFF8, "high lane clamps to -8");
+        assert_ne!(cpu.xpsr & Q_BIT, 0);
+    }
+
+    #[test]
+    fn armv7em_usat16_saturates_each_lane_to_unsigned() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // USAT16 R0, #4, R1 -> each lane clamps to [0, 15].
+        // low = 1000 -> 15, high = -1000 -> 0.
+        cpu.r1 = 0xFC18_03E8;
+        run_test_instr(&mut cpu, &mut bus, 0xF3A1_0004, true);
+        assert_no_fidelity_gap("USAT16");
+        assert_eq!(cpu.r0 & 0xFFFF, 15);
+        assert_eq!((cpu.r0 >> 16) & 0xFFFF, 0);
+        assert_ne!(cpu.xpsr & Q_BIT, 0);
+    }
+
+    /// SMULBB and friends encode Ra = 0b1111, which sets h2[15] and made the old
+    /// B.W/BL fallback arm claim them. They executed as "advance 4, do nothing":
+    /// Rd kept its previous value, and nothing was recorded.
+    #[test]
+    fn armv7em_smulxy_selects_the_right_halfwords() {
+        // Rn = 0x0003_0002 (high 3, low 2), Rm = 0x0005_0004 (high 5, low 4).
+        let cases: [(u32, u32, &str); 4] = [
+            (0xFB11_F002, 8, "SMULBB = 2*4"),
+            (0xFB11_F012, 10, "SMULBT = 2*5"),
+            (0xFB11_F022, 12, "SMULTB = 3*4"),
+            (0xFB11_F032, 15, "SMULTT = 3*5"),
+        ];
+        for (encoding, expected, label) in cases {
+            let (mut cpu, mut bus) = sat_cpu();
+            cpu.r0 = 0xDEAD_BEEF; // poison: a no-op leaves this behind
+            cpu.r1 = 0x0003_0002;
+            cpu.r2 = 0x0005_0004;
+            run_test_instr(&mut cpu, &mut bus, encoding, true);
+            assert_no_fidelity_gap(label);
+            assert_eq!(cpu.r0, expected, "{label}");
+        }
+    }
+
+    #[test]
+    fn armv7em_smulbb_sign_extends_each_halfword() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // low halfwords are -2 and 3 -> -6, sign-extended to 32 bits.
+        cpu.r1 = 0x0000_FFFE;
+        cpu.r2 = 0x0000_0003;
+        run_test_instr(&mut cpu, &mut bus, 0xFB11_F002, true);
+        assert_eq!(cpu.r0, (-6i32) as u32);
+    }
+
+    #[test]
+    fn armv7em_smlabb_accumulates_and_sets_q_on_overflow() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMLABB R0, R1, R2, R3 : 2*4 + 100 = 108.
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        cpu.r3 = 100;
+        run_test_instr(&mut cpu, &mut bus, 0xFB11_3002, true);
+        assert_no_fidelity_gap("SMLABB");
+        assert_eq!(cpu.r0, 108);
+        assert_eq!(cpu.xpsr & Q_BIT, 0);
+
+        // Accumulate overflow is what Q exists for.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x0000_0002;
+        cpu.r2 = 0x0000_0002;
+        cpu.r3 = 0x7FFF_FFFF;
+        run_test_instr(&mut cpu, &mut bus, 0xFB11_3002, true);
+        assert_ne!(
+            cpu.xpsr & Q_BIT,
+            0,
+            "signed overflow of the accumulate sets Q"
+        );
+    }
+
+    #[test]
+    fn armv7em_smulwb_takes_the_top_32_bits_of_a_32x16_product() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMULWB R0, R1, R2 : (0x0001_0000 * 4) >> 16 = 4.
+        cpu.r1 = 0x0001_0000;
+        cpu.r2 = 0x0000_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFB31_F002, true);
+        assert_no_fidelity_gap("SMULWB");
+        assert_eq!(cpu.r0, 4);
+    }
+
+    #[test]
+    fn armv7em_smuad_and_smusd_combine_both_halfword_products() {
+        // Rn = 0x0003_0002, Rm = 0x0005_0004: p1 = 2*4 = 8, p2 = 3*5 = 15.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFB21_F002, true);
+        assert_no_fidelity_gap("SMUAD");
+        assert_eq!(cpu.r0, 23, "SMUAD = 8 + 15");
+
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFB41_F002, true);
+        assert_no_fidelity_gap("SMUSD");
+        assert_eq!(cpu.r0, (-7i32) as u32, "SMUSD = 8 - 15");
+    }
+
+    /// The `X` suffix swaps Rm's halfwords before multiplying.
+    #[test]
+    fn armv7em_smuadx_swaps_the_second_operands_halfwords() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // p1 = Rn.lo * Rm.hi = 2*5 = 10, p2 = Rn.hi * Rm.lo = 3*4 = 12.
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFB21_F012, true);
+        assert_no_fidelity_gap("SMUADX");
+        assert_eq!(cpu.r0, 22);
+    }
+
+    #[test]
+    fn armv7em_smlad_accumulates_and_sets_q_on_overflow() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMLAD R0, R1, R2, R3 : 8 + 15 + 100 = 123.
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        cpu.r3 = 100;
+        run_test_instr(&mut cpu, &mut bus, 0xFB21_3002, true);
+        assert_no_fidelity_gap("SMLAD");
+        assert_eq!(cpu.r0, 123);
+        assert_eq!(cpu.xpsr & Q_BIT, 0);
+
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        cpu.r3 = 0x7FFF_FFFF;
+        run_test_instr(&mut cpu, &mut bus, 0xFB21_3002, true);
+        assert_ne!(cpu.xpsr & Q_BIT, 0);
+    }
+
+    #[test]
+    fn armv7em_smmul_returns_the_top_word_of_the_product() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMMUL R0, R1, R2 : (0x4000_0000 * 4) >> 32 = 1.
+        cpu.r1 = 0x4000_0000;
+        cpu.r2 = 4;
+        run_test_instr(&mut cpu, &mut bus, 0xFB51_F002, true);
+        assert_no_fidelity_gap("SMMUL");
+        assert_eq!(cpu.r0, 1);
+
+        // Signed: (-1 * 0x4000_0000) >> 32 = -1 (arithmetic shift).
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0xFFFF_FFFF;
+        cpu.r2 = 0x4000_0000;
+        run_test_instr(&mut cpu, &mut bus, 0xFB51_F002, true);
+        assert_eq!(cpu.r0, (-1i32) as u32);
+    }
+
+    #[test]
+    fn armv7em_smmulr_rounds_before_truncating() {
+        // 0x8000_0000 is exactly half of 2^32, so rounding carries into bit 32.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x4000_0000; // * 2 = 0x8000_0000
+        cpu.r2 = 2;
+        run_test_instr(&mut cpu, &mut bus, 0xFB51_F002, true);
+        assert_eq!(cpu.r0, 0, "SMMUL truncates");
+
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x4000_0000;
+        cpu.r2 = 2;
+        run_test_instr(&mut cpu, &mut bus, 0xFB51_F012, true);
+        assert_no_fidelity_gap("SMMULR");
+        assert_eq!(cpu.r0, 1, "SMMULR rounds up");
+    }
+
+    #[test]
+    fn armv7em_smmla_and_smmls_accumulate_at_bit_32() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMMLA R0, R1, R2, R3 : 5 + ((0x4000_0000 * 4) >> 32) = 5 + 1 = 6.
+        cpu.r1 = 0x4000_0000;
+        cpu.r2 = 4;
+        cpu.r3 = 5;
+        run_test_instr(&mut cpu, &mut bus, 0xFB51_3002, true);
+        assert_no_fidelity_gap("SMMLA");
+        assert_eq!(cpu.r0, 6);
+
+        // SMMLS R0, R1, R2, R3 : 5 - 1 = 4.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r1 = 0x4000_0000;
+        cpu.r2 = 4;
+        cpu.r3 = 5;
+        run_test_instr(&mut cpu, &mut bus, 0xFB61_3002, true);
+        assert_no_fidelity_gap("SMMLS");
+        assert_eq!(cpu.r0, 4);
+    }
+
+    #[test]
+    fn armv7em_smlalbb_accumulates_into_the_64_bit_pair() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMLALBB R0(lo), R3(hi), R1, R2 : acc = 1<<32, product = 2*4 = 8.
+        cpu.r0 = 0;
+        cpu.r3 = 1;
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFBC1_0382, true);
+        assert_no_fidelity_gap("SMLALBB");
+        assert_eq!(cpu.r0, 8, "low word");
+        assert_eq!(cpu.r3, 1, "high word unchanged");
+    }
+
+    #[test]
+    fn armv7em_smlalbb_carries_a_negative_product_into_the_high_word() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // acc = 0, product = (-2) * 3 = -6 -> the pair must read 0xFFFF_FFFF_FFFF_FFFA.
+        cpu.r0 = 0;
+        cpu.r3 = 0;
+        cpu.r1 = 0x0000_FFFE;
+        cpu.r2 = 0x0000_0003;
+        run_test_instr(&mut cpu, &mut bus, 0xFBC1_0382, true);
+        assert_eq!(cpu.r0, 0xFFFF_FFFA);
+        assert_eq!(cpu.r3, 0xFFFF_FFFF, "sign must propagate into RdHi");
+    }
+
+    #[test]
+    fn armv7em_smlald_and_smlsld_accumulate_both_products() {
+        let (mut cpu, mut bus) = sat_cpu();
+        // SMLALD R0(lo), R3(hi), R1, R2 : 0 + (8 + 15) = 23.
+        cpu.r0 = 0;
+        cpu.r3 = 0;
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFBC1_03C2, true);
+        assert_no_fidelity_gap("SMLALD");
+        assert_eq!(cpu.r0, 23);
+        assert_eq!(cpu.r3, 0);
+
+        // SMLSLD : 0 + (8 - 15) = -7.
+        let (mut cpu, mut bus) = sat_cpu();
+        cpu.r0 = 0;
+        cpu.r3 = 0;
+        cpu.r1 = 0x0003_0002;
+        cpu.r2 = 0x0005_0004;
+        run_test_instr(&mut cpu, &mut bus, 0xFBD1_03C2, true);
+        assert_no_fidelity_gap("SMLSLD");
+        assert_eq!(cpu.r0, 0xFFFF_FFF9);
+        assert_eq!(cpu.r3, 0xFFFF_FFFF);
+    }
+
+    /// The point of the whole change: an encoding this core cannot execute must
+    /// leave a trace. USAD8 is a real ARMv7E-M instruction that is still not
+    /// modelled, so it stands in for "the next gap" — if a future refactor
+    /// reintroduces a silent catch-all arm, this goes red.
+    #[test]
+    fn armv7em_unmodelled_encoding_records_a_fidelity_gap() {
+        crate::fidelity::reset();
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        // USAD8 R0, R1, R2 (op1 = 111) — not implemented.
+        run_test_instr(&mut cpu, &mut bus, 0xFB71_F002, true);
+        let report = crate::fidelity::report();
+        assert!(
+            !report.is_empty(),
+            "an unmodelled encoding must record a fidelity gap, not be silently skipped"
+        );
+        // And it must still advance past the 32-bit instruction.
+        assert_eq!(cpu.pc, 0x1004);
     }
 }
