@@ -269,7 +269,29 @@ fn run_s3_rom_boot_no_elf(
     let mut cpu = wiring.cpu;
     cpu.faithful_windows = true;
     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-    let mut machine = labwired_core::Machine::new(cpu, bus);
+    // The ESP32-S3 is a DUAL-core chip and an Arduino sketch's setup()/loop()
+    // run on core 1. Booting it single-core does not merely lose the second
+    // core: ESP-IDF's `start_other_core` spins `while (!s_cpu_up[1])
+    // ets_delay_us(100)` before it ever reaches app_main, so the whole run
+    // stalls in the mask ROM's `ets_delay_us` and the console shows only the
+    // boot banner. This is the ELF-less rom-boot arm; the `run` command's
+    // rom-boot arm has always attached one, which is why the same flash image
+    // printed there and stayed silent here.
+    //
+    // Halted at the ROM reset vector: PRO_CPU releases it by clearing
+    // SYSTEM_CORE_1_RESETING, and `Machine` acts on that edge.
+    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+    app_cpu.faithful_windows = true;
+    let mut machine = labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu);
+    // BOTH consoles, because the boot and the sketch do not share one. The mask
+    // ROM and the 2nd-stage bootloader talk on UART0 (attached above); an
+    // Arduino sketch built with ARDUINO_USB_CDC_ON_BOOT=1 — which is every
+    // native-USB S3 board we ship — talks on USB-Serial-JTAG. Tapping only
+    // UART0 captures the boot banner and nothing the firmware ever prints, so
+    // an assertion on the sketch's own output can only time out. `run` looked
+    // fine here only because the USB-Serial-JTAG block echoes to stdout on its
+    // own; a sink is what assertions read, and it had none.
+    machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone());
     machine.observers.push(metrics.clone());
 
     let fault_evidence = handle_faults(&mut machine.bus, faults);

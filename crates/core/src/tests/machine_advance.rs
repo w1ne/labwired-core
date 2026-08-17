@@ -283,6 +283,48 @@ fn counting_dual_core_machine() -> Machine<CountingCpu> {
         .with_secondary_cpu(CountingCpu::default())
 }
 
+/// The rom-boot reset edge releases the secondary core, and the MACHINE is what
+/// acts on it.
+///
+/// This lived in the CLI's `run` command loop. Every other driver of the same
+/// machine — `labwired test --rom-boot`, which is what the hosted builder
+/// spawns, and the wasm runtime — left core 1 in reset forever. On an ESP32-S3
+/// that is not a missing core, it is a dead run: ESP-IDF's `start_other_core`
+/// spins `while (!s_cpu_up[1]) ets_delay_us(100)` before app_main, so every
+/// hosted S3 run stopped inside the mask ROM's `ets_delay_us` at 0x40041a76
+/// with nothing on the console past the boot banner.
+///
+/// Deleting the release arm in `boundary.rs` must fail this test.
+#[test]
+fn rom_boot_reset_edge_releases_the_secondary_core() {
+    use crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED;
+
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().halted = true;
+
+    // No edge yet: a halted core stays halted, or the release is unconditional
+    // and this test proves nothing.
+    APPCPU_RESET_RELEASED.with(|s| s.set(false));
+    machine.step().expect("step should succeed");
+    assert!(
+        machine.cpu_secondary.as_ref().unwrap().halted,
+        "core 1 came out of reset with no reset edge to release it"
+    );
+
+    // The edge PRO_CPU raises by clearing SYSTEM_CORE_1_RESETING.
+    APPCPU_RESET_RELEASED.with(|s| s.set(true));
+    machine.step().expect("step should succeed");
+    assert!(
+        !machine.cpu_secondary.as_ref().unwrap().halted,
+        "core 1 is still in reset after the release edge — every non-`run` \
+         driver boots the S3 single-core and hangs in ets_delay_us"
+    );
+    assert!(
+        !APPCPU_RESET_RELEASED.with(|s| s.get()),
+        "the edge must be consumed, not left latched for the next machine"
+    );
+}
+
 #[test]
 fn step_adapter_advances_both_cores_once() {
     let mut machine = counting_dual_core_machine();

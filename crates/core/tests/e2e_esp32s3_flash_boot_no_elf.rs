@@ -76,13 +76,11 @@ fn flash_image_boots_the_app_without_an_elf() {
         out.contains("ESP-ROM:esp32s3"),
         "no mask-ROM banner — the ROM never ran at all. Got: {out:?}"
     );
-    // The distinguishing assertion. The broken path reached the banner too; it
-    // is the SECOND-stage bootloader, which only runs when the flash
-    // controller and the MMU serve real bytes, that it never reached.
-    assert!(
-        out.contains("boot:"),
-        "mask ROM ran but the 2nd-stage bootloader never printed — the app was never loaded. Got: {out:?}"
-    );
+    // NOT an assertion on "boot:" — the mask ROM's own reset line
+    // (`rst:0xc (RTC_SW_CPU_RST),boot:0x8 (SPI_FAST_FLASH_BOOT)`) already
+    // contains it, so such a check passes on a run that loads nothing. The
+    // distinguishing evidence is below: only a 2nd-stage bootloader served real
+    // bytes by the flash controller and the MMU prints it.
     assert!(
         out.contains("Loaded app from partition"),
         "bootloader ran but never loaded the app image. Got: {out:?}"

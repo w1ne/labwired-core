@@ -156,6 +156,31 @@ impl<C: Cpu> Machine<C> {
                 cpu1.set_sp(sp);
             }
             cpu1.unhalt();
+            return;
+        }
+
+        // The other way a core comes out of reset: the FAITHFUL rom-boot path,
+        // where nothing thunks `ets_set_appcpu_boot_addr`. There PRO_CPU clears
+        // SYSTEM_CORE_1_RESETING and the APP_CPU boots the real mask ROM from
+        // its own reset vector, so it needs neither a PC nor an SP from us —
+        // only the release. `core1_control.rs` raises the flag on that edge.
+        //
+        // This lived in the CLI's `run` command loop, which meant every OTHER
+        // driver of the same machine left core 1 in reset forever. The hosted
+        // path (`labwired test --rom-boot`) is one of them, and the failure it
+        // produced was silent and expensive to read: ESP-IDF's `start_other_core`
+        // spins `while (!s_cpu_up[1]) ets_delay_us(100)`, so every ESP32-S3 run
+        // stopped at 0x40041a76 inside the ROM's `ets_delay_us` with nothing on
+        // the console past the mask-ROM banner — indistinguishable from a hung
+        // sketch. Releasing a core is a property of the machine, not of whoever
+        // is driving it.
+        if crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED
+            .with(|s| s.take())
+        {
+            if std::env::var("LABWIRED_CCDBG").is_ok() {
+                eprintln!("machine: APP_CPU released from reset (rom-boot edge)");
+            }
+            cpu1.unhalt();
         }
     }
 

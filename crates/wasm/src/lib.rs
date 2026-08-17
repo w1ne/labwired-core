@@ -1121,7 +1121,15 @@ impl WasmSimulator {
         bus.refresh_peripheral_index();
 
         let boxed: Box<dyn Cpu> = Box::new(cpu);
-        let machine = Machine::new(boxed, bus);
+        // The S3 is dual-core and an Arduino sketch's setup()/loop() run on
+        // core 1. Booting it single-core does not merely lose a core: ESP-IDF's
+        // `start_other_core` spins `while (!s_cpu_up[1]) ets_delay_us(100)`
+        // before app_main, so the run dies in the mask ROM with only the boot
+        // banner on the console — which is exactly how this constructor shipped.
+        // Starts halted at the ROM reset vector; `Machine` releases it on the
+        // SYSTEM_CORE_1_RESETING edge.
+        let app_cpu: Box<dyn Cpu> = Box::new(labwired_core::cpu::XtensaLx7::new_app_cpu());
+        let machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
 
         Ok(WasmSimulator {
             machine: Some(machine),
