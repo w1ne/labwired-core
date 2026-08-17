@@ -2182,6 +2182,38 @@ impl<C: Cpu> Machine<C> {
         self
     }
 
+    /// The largest `peripheral_tick_interval` THIS MACHINE can run at without
+    /// losing fidelity. Wraps [`crate::bus::SystemBus::max_safe_tick_interval`]
+    /// and adds the one clause the bus cannot see: **a machine with a second
+    /// CPU must stay at 1.**
+    ///
+    /// The bus predicate answers "is every peripheral scheduler-driven", which
+    /// bounds *peripheral* observation error to one interval. On a single-core
+    /// machine that is the whole story. On an SMP machine it is not: the cores
+    /// synchronise through interrupts, and an interrupt-delivery skew of up to
+    /// one interval is not an observation error, it is a *semantic* one. ESP-IDF
+    /// SMP FreeRTOS implements `portYIELD_WITHIN_API()` as
+    /// `esp_crosscore_int_send_yield(xPortGetCoreID())` — ring your own core's
+    /// doorbell inside a critical section and be preempted the instant
+    /// `portEXIT_CRITICAL` re-enables interrupts. Land that late and the calling
+    /// task falls out of `xQueueReceive`'s `for(;;)` still runnable, blocks a
+    /// second time on an event list it is already on, and `vListInsert` links
+    /// the item to itself: the next insert walks the self-loop forever holding
+    /// the queue spinlock while the other core spins in `spinlock_acquire`.
+    /// Measured on the ESP32-S3 dual-core Doom lab — deadlock at interval 512,
+    /// `frame 1` at interval 1, same firmware, same engine, one variable. The
+    /// unicore build of the same firmware runs fine at 512, which is exactly the
+    /// line this clause draws.
+    ///
+    /// Frontends that batch (the browser's `recommended_tick_interval`) must ask
+    /// the MACHINE, not the bus.
+    pub fn max_safe_tick_interval(&self) -> u32 {
+        if self.cpu_secondary.is_some() {
+            return 1;
+        }
+        self.bus.max_safe_tick_interval()
+    }
+
     pub fn reset_step_profile(&mut self) {
         self.step_profile = StepProfile::default();
     }

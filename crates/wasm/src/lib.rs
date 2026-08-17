@@ -1108,6 +1108,10 @@ impl WasmSimulator {
         // an ESP-IDF app with deep call chains then faulted on a garbage
         // address restored from the shadow stack.
         cpu.faithful_windows = true;
+        // Read it back rather than re-typing `true` below: the APP core must
+        // use the SAME window-handling mode as the PRO core, and the only way
+        // that stays true through a later edit is to derive it from one place.
+        let primary_faithful_windows = cpu.faithful_windows;
 
         // Console selection is the rule every other ESP path uses: an
         // undeclared manifest hears both consoles in one pane, a declared one
@@ -1147,8 +1151,26 @@ impl WasmSimulator {
         // edge the firmware drives (`SYSTEM_CORE_1_CONTROL_0.RESETING` 1->0),
         // exactly as the native runner and `system::node::build_esp32s3_node`
         // do — no forged handshake flags.
-        let app_cpu: Box<dyn Cpu> =
-            Box::new(labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu());
+        let mut app_cpu_lx7 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+        // ⚠️ The APP core needs `faithful_windows` for exactly the same reason
+        // the PRO core does, and this constructor set it on only one of them.
+        // Core 1 boots the real ROM from its own reset vector and then runs the
+        // same ESP-IDF image, so it spills and fills register windows through
+        // the firmware's own OF/UF vectors; left on the simulator shadow stack
+        // it restored a garbage SP and every window overflow stored near
+        // address 0 (`Memory access violation at 0xffffffe0`).
+        //
+        // That fault was INVISIBLE from the browser: `Sim::step_batch` reports
+        // `Ok(elapsed)` whenever the primary retired at least one cycle, so a
+        // secondary faulting on EVERY machine boundary looked like steady
+        // forward progress while core 1 never executed a single instruction of
+        // firmware. PRO_CPU then spins forever in
+        // `spi_flash_disable_interrupts_caches_and_other_cpu` waiting for a
+        // `spi_flash_op_block_func` on core 1 that can never run. The native
+        // `--rom-boot` runner has always set both (`commands/run.rs`), which is
+        // why this was a browser-only hang.
+        app_cpu_lx7.faithful_windows = primary_faithful_windows;
+        let app_cpu: Box<dyn Cpu> = Box::new(app_cpu_lx7);
         let machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
 
         Ok(WasmSimulator {
@@ -1705,7 +1727,10 @@ impl WasmSimulator {
     /// answer straight into `set_peripheral_tick_interval`.
     #[wasm_bindgen]
     pub fn recommended_tick_interval(&mut self) -> u32 {
-        self.machine().bus.max_safe_tick_interval()
+        // Machine-level, not bus-level: a dual-core machine must stay at 1 no
+        // matter how relaxable its peripherals are (see
+        // `Machine::max_safe_tick_interval` for the SMP deadlock this prevents).
+        self.machine().max_safe_tick_interval()
     }
 
     /// Total number of times the browser JIT has dispatched a
