@@ -889,13 +889,18 @@ mod tests {
         let out = dev.oriented_framebuffer();
         assert_eq!(out.len(), 320 * 240 * 2, "landscape view is 320x240");
 
-        let red = (0 * 320 + 300) * 2;
+        // Written through a helper rather than inline: `(0 * 320 + 300) * 2`
+        // says "row 0, column 300, two bytes per pixel" far better than the
+        // constant it folds to, and clippy rejects the multiply-by-zero.
+        let at = |row: usize, col: usize| (row * 320 + col) * 2;
+
+        let red = at(0, 300);
         assert_eq!(
             (out[red], out[red + 1]),
             (0xF8, 0x00),
             "logical (300,0) must appear at output index (row 0, col 300)"
         );
-        let green = (1 * 320 + 0) * 2;
+        let green = at(1, 0);
         assert_eq!(
             (out[green], out[green + 1]),
             (0x07, 0xE0),

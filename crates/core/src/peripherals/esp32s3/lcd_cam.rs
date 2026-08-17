@@ -471,8 +471,7 @@ impl Esp32s3LcdCam {
                 }
             }
         }
-        loop {
-            let Some(lo) = it.next() else { break };
+        while let Some(lo) = it.next() {
             match it.next() {
                 Some(hi) => self.emit_word(dc, u16::from_le_bytes([lo, hi])),
                 // Odd tail: carry it to the next burst rather than inventing a
