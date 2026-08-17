@@ -145,9 +145,21 @@ require_block_literal "$ci_runner_image_block" 'docker run --rm labwired-ci-smok
 # comment that explains why the step exists, so asserting the bare path would
 # be satisfied by deleting the step and keeping the prose — which is precisely
 # the failure mode this whole block is here to stop.
-require_block_literal "$ci_runner_image_block" 'cp target/release/labwired dist/amd64/labwired' 'ci-runner-image stages the binary Dockerfile.ci copies (the job cannot build without it)'
+require_block_literal "$ci_runner_image_block" 'cp target-ci-runner-image/release/labwired dist/amd64/labwired' 'ci-runner-image stages the binary Dockerfile.ci copies (the job cannot build without it)'
 require_block_literal "$ci_runner_image_block" 'cargo build --release -p labwired-cli' 'ci-runner-image builds the CLI it stages, from the commit under test'
 require_literal "$dockerfile" 'COPY dist/${TARGETARCH}/labwired' 'Dockerfile.ci copies the staged binary (the path the smoke job must provide)'
+
+# The smoke must link the binary the way the RELEASE links it, or it proves
+# nothing about the image that ships. Built on the runner instead, the binary
+# picked up ubuntu-24.04's glibc and debian:bookworm-slim refused to start it
+# ("version `GLIBC_2.39' not found"). Both halves are asserted: the container
+# that sets the floor, and the check that the floor actually held.
+release_container="$(grep -oE 'rust:1\.95-bullseye' "$workflow" | head -1)"
+if [[ -z "$release_container" ]]; then
+  fail 'release workflow pins a build container (expected: rust:1.95-bullseye)'
+fi
+require_block_literal "$ci_runner_image_block" 'rust:1.95-bullseye' 'ci-runner-image builds in the same container core-release.yml uses, so the glibc floor matches'
+require_block_literal "$ci_runner_image_block" 'GLIBC_' 'ci-runner-image asserts the glibc floor of what it staged'
 
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
 require_literal "$workflow" "'v[0-9]+.[0-9]+.[0-9]+'" 'release workflow triggers vMAJOR.MINOR.PATCH tags'

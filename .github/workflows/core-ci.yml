@@ -1322,25 +1322,52 @@ jobs:
       # and its red never blocked anyone — the runner image has simply been
       # unsmoked. Build the binary this commit would ship and stage it where
       # the COPY looks.
-      - name: Install Rust (pinned — must match pr-gate)
-        uses: dtolnay/rust-toolchain@1.95.0
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ci-runner-image
-
+      #
+      # ⚠️ IN `rust:1.95-bullseye`, NOT ON THE RUNNER. core-release.yml builds
+      # both Linux targets in that container precisely so the shipped binaries
+      # keep a GLIBC_2.31 floor. Building on the runner instead produced a
+      # binary linked against the ubuntu-24.04 host glibc, and the image —
+      # `FROM debian:bookworm-slim`, glibc 2.36 — refused to run it:
+      #
+      #   labwired: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not
+      #   found (required by labwired)
+      #
+      # That is the second defect this job was hiding, and it is the one worth
+      # having: a smoke that compiles differently from the release proves
+      # nothing about the image that ships. Using the release's own container
+      # keeps one source of truth for how the shipped binary is linked.
       - name: Stage dist/amd64/labwired for the COPY
         run: |
           set -euo pipefail
-          cargo build --release -p labwired-cli --bin labwired
+          docker run --rm \
+            -v "$PWD":/src -w /src \
+            -e CARGO_TERM_COLOR=never \
+            -e CARGO_TARGET_DIR=/src/target-ci-runner-image \
+            rust:1.95-bullseye \
+            cargo build --release -p labwired-cli --bin labwired
           mkdir -p dist/amd64
-          cp target/release/labwired dist/amd64/labwired
+          cp target-ci-runner-image/release/labwired dist/amd64/labwired
           chmod +x dist/amd64/labwired
           # Fail here, loudly, rather than inside a docker layer: a missing or
           # non-executable binary is a staging bug, not a Dockerfile bug, and
           # the two read identically in buildkit's output.
           test -x dist/amd64/labwired
+
+      # Assert the floor rather than assume the container held it — the same
+      # check core-release.yml runs, for the same reason: without it the next
+      # base-image bump silently raises the floor again and the failure
+      # reappears at `RUN labwired --version` inside a buildkit layer.
+      - name: Assert glibc floor
+        run: |
+          set -euo pipefail
+          floor=GLIBC_2.31
+          max="$(readelf -V dist/amd64/labwired | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V -u | tail -1)"
+          echo "dist/amd64/labwired requires $max (floor $floor)"
+          newest="$(printf '%s\n%s\n' "$max" "$floor" | sort -V | tail -1)"
+          if [ "$newest" != "$floor" ]; then
+            echo "::error::the staged binary requires $max, above the $floor floor — it cannot start in debian:bookworm-slim, which is what Dockerfile.ci is FROM."
+            exit 1
+          fi
 
       # Only linux/amd64 is smoked. The arm64 half of the manifest is built
       # under emulation at release time from the arm64 archive; reproducing
