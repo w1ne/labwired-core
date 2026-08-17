@@ -30,6 +30,9 @@ pub(crate) struct CountingCpu {
     fail_batch_after: Option<u32>,
     idle_budget: Option<u64>,
     idle_skipped: u64,
+    // Non-architectural dual-core probe: report this core as WAITI-parked so
+    // the coalesced-idle planning arm can be exercised without a real Xtensa.
+    parked: bool,
 }
 
 impl Cpu for CountingCpu {
@@ -275,6 +278,10 @@ impl Cpu for CountingCpu {
 
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {
         self.idle_skipped += cycles;
+    }
+
+    fn is_parked_idle(&self) -> bool {
+        self.parked
     }
 }
 
@@ -1177,4 +1184,51 @@ fn unified_single_releases_and_steps_app_cpu() {
     assert!(!cpu1.halted);
     assert_eq!(cpu1.pc, 0x4008_0002);
     assert_eq!(cpu1.steps, 1);
+}
+
+/// A WAITI-parked secondary must never buy the primary a window WIDER than the
+/// peripheral tick boundary every other batch obeys.
+///
+/// This arm used to clamp to a flat 1024 "even when tick_interval is 1", which
+/// is a fidelity exemption no single-core board gets: at the default
+/// `peripheral_tick_interval = 1` every other machine runs one instruction per
+/// window, so peripherals advance and interrupts are delivered BETWEEN
+/// instructions. Inside a 1024-wide window neither happens.
+///
+/// The ESP32-S3 FreeRTOS boot does not survive that. The 13th such window
+/// corrupted a scheduler list — `vListInsert` ended up walking a node whose
+/// `pxNext` is itself and spun at 0x4037cdb6 forever, with core 1 stuck behind
+/// the spinlock PRO_CPU could then never release — so every hosted S3 run
+/// printed the boot banner and nothing else. Restoring per-instruction ticking
+/// inside the window, with everything else held fixed, boots and prints.
+///
+/// Restoring the flat `1024` clamp in `plan.rs` must fail this test.
+#[test]
+fn parked_secondary_never_widens_the_window_past_the_tick_boundary() {
+    for tick_interval in [1u32, 8, 64] {
+        let mut machine = counting_dual_core_machine();
+        machine.config.peripheral_tick_interval = tick_interval;
+        machine.bus.config.peripheral_tick_interval = tick_interval;
+        machine.cpu_secondary.as_mut().unwrap().parked = true;
+
+        let report = machine
+            .advance(
+                AdvanceRequest::run(Some(512))
+                    .with_batch_cap(NonZeroU32::new(4096).unwrap())
+                    .with_breakpoints(crate::BreakpointPolicy::Ignore),
+            )
+            .expect("advance should succeed");
+
+        assert_eq!(report.primary_steps, 512, "the whole budget must retire");
+        let widest = report.primary_steps.div_ceil(report.cpu_batches.max(1));
+        assert!(
+            widest <= u64::from(tick_interval),
+            "a parked secondary widened the primary window to ~{widest} instructions \
+             at peripheral_tick_interval={tick_interval}: peripherals cannot tick and \
+             interrupts cannot be delivered inside it \
+             ({} steps over {} batches)",
+            report.primary_steps,
+            report.cpu_batches,
+        );
+    }
 }

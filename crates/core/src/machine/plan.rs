@@ -125,10 +125,43 @@ impl<C: Cpu> Machine<C> {
             };
             clamp!(count, binder, arm, 1);
         } else if secondary_parked {
-            // Coalesced dual-core idle batch: allow multi-instruction PRO
-            // windows even when tick_interval is 1. Commit advances peripherals
-            // once with elapsed = primary_steps (see boundary.rs).
-            clamp!(count, binder, clause::SECONDARY_PARKED, 1024);
+            // Coalesced dual-core idle batch: while APP sits in WAITI, let PRO
+            // retire a wider window than the strict 1:1 interleave — but NEVER
+            // wider than the peripheral tick boundary every other batch obeys.
+            //
+            // This arm used to clamp to a flat 1024 "even when tick_interval is
+            // 1", which is a fidelity exemption no single-core board gets: with
+            // the default `peripheral_tick_interval = 1` ("correctness by
+            // default") every other machine runs one instruction per window, so
+            // peripherals advance and interrupts are delivered between
+            // instructions. Inside a 1024-wide window neither happens, and the
+            // ESP32-S3 FreeRTOS boot does not survive it: the 13th such window
+            // corrupts a scheduler list (`vListInsert` walks onto a node whose
+            // `pxNext` is itself and spins at 0x4037cdb6 forever, with core 1
+            // stuck behind the spinlock PRO_CPU never releases). Every hosted S3
+            // run died there, printing the boot banner and nothing else.
+            //
+            // Isolated by holding everything else fixed: keeping the 1024-wide
+            // window but ticking peripherals and delivering interrupts per
+            // retired instruction inside it boots and prints; widening it again
+            // hangs. Publishing the cycle without ticking is NOT enough, and
+            // ticking N times at the frozen window-start cycle is NOT enough —
+            // the peripherals have to advance interleaved with the instructions
+            // that read them.
+            //
+            // `apply_run_speed_opts` in the CLI already refuses to widen the
+            // tick interval for exactly this reason ("wide ticks have regressed
+            // ESP classic/S3/C3 FreeRTOS labs before"); this arm was widening it
+            // through a side door, for every dual-core ESP machine, unasked. A
+            // config that deliberately sets a wider interval still coalesces up
+            // to that width.
+            let until_tick = tick_interval - (self.total_cycles % tick_interval);
+            clamp!(
+                count,
+                binder,
+                clause::SECONDARY_PARKED,
+                until_tick.min(1024)
+            );
         } else {
             // Normal path: batch only up to the next peripheral tick boundary.
             let until_tick = tick_interval - (self.total_cycles % tick_interval);

@@ -7,6 +7,10 @@
     "sha256": "2529150975aa3021ddf6fd5f9a250fe810c39ff7183a495d4359245165533bcf",
     "source_rev": "f866a78d7594e4d939b9bd67c8b712b14bafe06a"
   },
+  "esp32s3-arduino-flash.bin": {
+    "sha256": "2664b7ba3bc27303cd5e48f028ea1b176a68c749230b42e0780a94710948e7c5",
+    "source": "hosted LabWired compile of an Arduino ESP32-S3 sketch (ARDUINO_USB_CDC_ON_BOOT=1) that prints SMOKE_OK; stored trimmed to its used extent and padded to 4 MiB by the test"
+  },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
