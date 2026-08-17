@@ -132,6 +132,23 @@ require_block_literal "$ci_runner_image_block" 'VERSION=ci-smoke' 'ci-runner-ima
 require_block_literal "$ci_runner_image_block" 'REVISION="$GITHUB_SHA"' 'ci-runner-image provides OCI revision metadata'
 require_block_literal "$ci_runner_image_block" 'docker run --rm labwired-ci-smoke:local --version' 'ci-runner-image executes the final image entrypoint'
 
+# Every assertion above describes what the job SAYS. None of them described
+# whether it could run, and that gap shipped: from the commit that made
+# Dockerfile.ci `COPY dist/${TARGETARCH}/labwired` until 2026-08-17 the job
+# built on a bare checkout and failed every single time with
+# `"/dist/amd64/labwired": not found`, while this contract stayed green because
+# the docker command still contained all the right words.
+#
+# So assert the input the COPY needs. A future edit that drops the staging step
+# fails here, on a PR, instead of on main where nobody is looking.
+# The literal is the COMMAND, not just the path: the path also appears in the
+# comment that explains why the step exists, so asserting the bare path would
+# be satisfied by deleting the step and keeping the prose — which is precisely
+# the failure mode this whole block is here to stop.
+require_block_literal "$ci_runner_image_block" 'cp target/release/labwired dist/amd64/labwired' 'ci-runner-image stages the binary Dockerfile.ci copies (the job cannot build without it)'
+require_block_literal "$ci_runner_image_block" 'cargo build --release -p labwired-cli' 'ci-runner-image builds the CLI it stages, from the commit under test'
+require_literal "$dockerfile" 'COPY dist/${TARGETARCH}/labwired' 'Dockerfile.ci copies the staged binary (the path the smoke job must provide)'
+
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
 require_literal "$workflow" "'v[0-9]+.[0-9]+.[0-9]+'" 'release workflow triggers vMAJOR.MINOR.PATCH tags'
 for target in \

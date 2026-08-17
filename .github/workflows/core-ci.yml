@@ -1304,9 +1304,48 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
+      # Dockerfile.ci does `COPY dist/${TARGETARCH}/labwired` — it ships a
+      # PREBUILT binary rather than compiling one, so that the image and the
+      # release archive of a tag are the same bytes and so arm64 needs no
+      # emulated Rust compile. core-release.yml satisfies that by extracting
+      # the published archives into dist/amd64 and dist/arm64.
+      #
+      # This job never did, and had no way to: it ran `docker build` on a bare
+      # checkout, so every run since the COPY landed failed with
+      #   failed to compute cache key: "/dist/amd64/labwired": not found
+      # As written it could not have passed once. Nothing noticed because the
+      # job is main-only and not a required check, so it is skipped on every PR
+      # and its red never blocked anyone — the runner image has simply been
+      # unsmoked. Build the binary this commit would ship and stage it where
+      # the COPY looks.
+      - name: Install Rust (pinned — must match pr-gate)
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-runner-image
+
+      - name: Stage dist/amd64/labwired for the COPY
+        run: |
+          set -euo pipefail
+          cargo build --release -p labwired-cli --bin labwired
+          mkdir -p dist/amd64
+          cp target/release/labwired dist/amd64/labwired
+          chmod +x dist/amd64/labwired
+          # Fail here, loudly, rather than inside a docker layer: a missing or
+          # non-executable binary is a staging bug, not a Dockerfile bug, and
+          # the two read identically in buildkit's output.
+          test -x dist/amd64/labwired
+
+      # Only linux/amd64 is smoked. The arm64 half of the manifest is built
+      # under emulation at release time from the arm64 archive; reproducing
+      # that here would cost a QEMU Rust build for no extra Dockerfile
+      # coverage, since both architectures run the identical COPY/ENTRYPOINT.
       - name: Smoke CI runner image
         run: |
           set -euo pipefail
