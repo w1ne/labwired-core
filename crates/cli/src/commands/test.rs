@@ -201,6 +201,15 @@ fn no_elf_rom_boot_chip(
 /// here `execute_test_loop` gets an empty slice and those diagnostics degrade
 /// gracefully, exactly as on the C3 ELF-less path.
 #[allow(clippy::too_many_arguments)]
+fn esp32s3_rom_boot_flash_size(system: &labwired_config::ResolvedSystem) -> u32 {
+    system
+        .chip()
+        .ok()
+        .and_then(|chip| u32::try_from(chip.flash.size).ok())
+        .filter(|size| *size > 0)
+        .unwrap_or_else(|| labwired_core::system::xtensa::Esp32s3Opts::default().flash_size)
+}
+
 fn run_s3_rom_boot_no_elf(
     args: &TestArgs,
     resolved_limits: &TestLimits,
@@ -234,13 +243,14 @@ fn run_s3_rom_boot_no_elf(
         );
     }
 
-    let Some(manifest) = system.map(|s| s.manifest.clone()) else {
+    let Some(system) = system else {
         return fail(
             "ELF-less ESP32-S3 rom-boot needs a resolved system (set inputs.system or \
              inputs.chip)"
                 .to_string(),
         );
     };
+    let manifest = system.manifest.clone();
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
@@ -248,6 +258,11 @@ fn run_s3_rom_boot_no_elf(
     let mut bus = labwired_core::bus::SystemBus::new();
     let opts = Esp32s3Opts {
         real_reset_boot: true,
+        // The hosted path receives a merged flash image but no ELF. It still
+        // has the resolved chip descriptor, so use its physical capacity just
+        // like `labwired run` and the Wasm constructor do. Falling back to the
+        // 4 MiB default makes the ROM reject every N8/N16 image before app_main.
+        flash_size: esp32s3_rom_boot_flash_size(system),
         ..Esp32s3Opts::default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
@@ -324,6 +339,23 @@ fn run_s3_rom_boot_no_elf(
     // must report identically whether or not an ELF came with the request.
     emit_device_block_readout(&machine.bus);
     exit_code
+}
+
+#[cfg(test)]
+mod esp32s3_rom_boot_tests {
+    use super::*;
+
+    #[test]
+    fn elf_less_s3_uses_the_descriptor_flash_capacity() {
+        let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
+            .expect("built-in ESP32-S3 descriptor");
+        assert_eq!(esp32s3_rom_boot_flash_size(&system), 16 * 1024 * 1024);
+        assert_ne!(
+            esp32s3_rom_boot_flash_size(&system),
+            labwired_core::system::xtensa::Esp32s3Opts::default().flash_size,
+            "the hosted ELF-less path must not collapse every S3 module to 4 MiB",
+        );
+    }
 }
 
 /// Device-block render readout. Surfaces the attached panel block's REAL render
