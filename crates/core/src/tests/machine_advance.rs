@@ -20,6 +20,7 @@ pub(crate) struct CountingCpu {
     sp: u32,
     steps: u32,
     pending: Vec<u64>,
+    first_pending_at_step: Option<u32>,
     halted: bool,
     // Non-architectural test injection; intentionally omitted from snapshots.
     fail_step: bool,
@@ -50,6 +51,9 @@ impl Cpu for CountingCpu {
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &SimulationConfig,
     ) -> SimResult<()> {
+        if self.first_pending_at_step.is_none() && self.pending.iter().any(|word| *word != 0) {
+            self.first_pending_at_step = Some(self.steps);
+        }
         if self.fail_step {
             return Err(SimulationError::Other(
                 "CountingCpu injected step failure".to_string(),
@@ -289,6 +293,26 @@ fn counting_dual_core_machine() -> Machine<CountingCpu> {
         .with_secondary_cpu(CountingCpu::default())
 }
 
+#[derive(Debug)]
+struct EveryTickIrq;
+
+impl crate::Peripheral for EveryTickIrq {
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
+    }
+
+    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+        Ok(())
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        crate::PeripheralTickResult {
+            irq: true,
+            ..Default::default()
+        }
+    }
+}
+
 #[test]
 fn step_adapter_advances_both_cores_once() {
     let mut machine = counting_dual_core_machine();
@@ -495,24 +519,18 @@ fn unified_run_advances_both_cores_one_quantum_at_a_time() {
     assert_eq!(machine.step_profile().cpu_batches, 4);
 }
 
-/// A WAITI-parked secondary lets the primary batch — but never past the next
-/// peripheral tick boundary.
-///
-/// At `peripheral_tick_interval == 1` the caller has asked for per-cycle
-/// peripheral service, so the coalesced dual-idle window collapses to one
-/// instruction per boundary: one CPU batch and one peripheral tick per retired
-/// instruction. `plan_cpu_window`'s `SECONDARY_PARKED` clause used to clamp at a
-/// flat 1024 and skip the tick clamp entirely, so this ran as a SINGLE batch of
-/// 64 with ONE peripheral boundary at the end — 63 instructions during which
-/// nothing re-derived an interrupt level. ESP-IDF SMP FreeRTOS deadlocks on
-/// exactly that (see `crates/core/tests/esp32s3_smp_yield_latency.rs`).
-///
-/// Negative control: change the clause back to a bare
-/// `clamp!(count, binder, clause::SECONDARY_PARKED, 1024)` and this fails with
-/// `cpu_batches = 1`.
+/// A WAITI-parked secondary keeps a wide primary batch while still servicing
+/// peripherals and re-deriving interrupts at every requested tick boundary.
 #[test]
-fn parked_secondary_batch_stays_inside_the_peripheral_tick_interval() {
+fn parked_secondary_batches_without_skipping_per_cycle_ticks() {
     let mut machine = counting_dual_core_machine();
+    machine.bus.add_peripheral(
+        "every-tick-irq",
+        0x5100_0000,
+        0x100,
+        Some(7),
+        Box::new(EveryTickIrq),
+    );
     machine.cpu_secondary.as_mut().unwrap().parked = true;
     machine.config.peripheral_tick_interval = 1;
     machine.bus.config.peripheral_tick_interval = 1;
@@ -521,15 +539,18 @@ fn parked_secondary_batch_stays_inside_the_peripheral_tick_interval() {
 
     assert_eq!(report.primary_steps, 64);
     assert_eq!(
-        report.cpu_batches, 64,
-        "at tick interval 1 a parked secondary must not buy the primary a \
-         multi-instruction window: peripherals are serviced every cycle or the \
-         interval is a lie"
+        report.cpu_batches, 1,
+        "per-cycle interrupt visibility must not collapse the parked-secondary batch"
     );
     assert_eq!(
         machine.step_profile().peripheral_ticks,
         64,
         "one peripheral boundary per retired instruction at interval 1"
+    );
+    assert_eq!(
+        machine.cpu.first_pending_at_step,
+        Some(1),
+        "the IRQ raised after instruction 1 must be visible before instruction 2"
     );
 }
 

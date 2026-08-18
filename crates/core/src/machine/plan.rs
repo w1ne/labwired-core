@@ -151,9 +151,7 @@ impl<C: Cpu> Machine<C> {
             // `tick_interval > 1` (the browser's `RECOMMENDED_TICK_INTERVAL`)
             // the window is still hundreds of instructions wide. At interval 1
             // the caller asked for per-cycle peripheral service and now gets it.
-            let until_tick = tick_interval - (self.total_cycles % tick_interval);
             clamp!(count, binder, clause::SECONDARY_PARKED, 1024);
-            clamp!(count, binder, clause::TICK_BOUNDARY, until_tick);
         } else {
             // Normal path: batch only up to the next peripheral tick boundary.
             let until_tick = tick_interval - (self.total_cycles % tick_interval);
