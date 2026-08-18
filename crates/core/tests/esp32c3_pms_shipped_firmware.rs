@@ -22,12 +22,10 @@
 //!
 //! # The independent corroboration
 //!
-//! The split line this firmware programs is asserted against `0x4039_0C00`,
-//! which was derived SEPARATELY — from the app-image segments of that same
-//! build (IRAM text ends at `0x4039_0A84`, `.data` starts at `0x3FC9_0C00`,
-//! and `gp = .data + 0x800` confirms the base), not from anything this engine
-//! computes. Two independent derivations of the same address agreeing is what
-//! makes the split-line decode credible rather than merely self-consistent.
+//! The split line this firmware programs is derived independently from the
+//! app-image segments of the shipped flash fixture, not from anything the PMS
+//! model computes. Two independent derivations of the same address agreeing is
+//! what makes the split-line decode credible rather than merely self-consistent.
 //!
 //! # The regression rail
 //!
@@ -61,11 +59,6 @@ const IRAM0_PMS_SOURCE: u64 = 56;
 const DRAM0_PMS_SOURCE: u64 = 57;
 const IRAM0_SRAM_LOW: u32 = 0x4038_0000;
 
-/// The split address derived from the app image's own segments — see the
-/// module docs. Everything below checks the firmware against THIS, not against
-/// whatever the engine happens to produce.
-const EXPECTED_SPLIT: u32 = 0x4039_0C00;
-
 /// Long enough for IDF startup to finish configuring memory protection (it
 /// arms at ~6.2M) plus a healthy margin of the sketch actually running.
 const BOOT_INSTRUCTIONS: usize = 12_000_000;
@@ -76,6 +69,28 @@ fn root() -> PathBuf {
 
 const ESP_IMAGE_HEADER_LEN: usize = 24;
 const ESP_IMAGE_MAGIC: u8 = 0xE9;
+const APP_IMAGE_OFFSET: usize = 0x10000;
+
+fn app_iram_split_from_segments(flash: &[u8]) -> u32 {
+    assert_eq!(
+        flash[APP_IMAGE_OFFSET], ESP_IMAGE_MAGIC,
+        "bad app image magic"
+    );
+    let segment_count = flash[APP_IMAGE_OFFSET + 1] as usize;
+    let mut cursor = APP_IMAGE_OFFSET + ESP_IMAGE_HEADER_LEN;
+    let mut iram_end = None::<u32>;
+    for _ in 0..segment_count {
+        let load_addr = u32::from_le_bytes(flash[cursor..cursor + 4].try_into().unwrap());
+        let len = u32::from_le_bytes(flash[cursor + 4..cursor + 8].try_into().unwrap());
+        cursor += 8;
+        if (0x4038_0000..0x403C_0000).contains(&load_addr) {
+            iram_end = Some(iram_end.unwrap_or(0).max(load_addr.saturating_add(len)));
+        }
+        cursor += len as usize;
+    }
+    let end = iram_end.expect("app image carries an IRAM segment");
+    end.saturating_add(0x1FF) & !0x1FF
+}
 
 fn esp32c3_bootloader_image(flash: &[u8]) -> ProgramImage {
     assert_eq!(flash[0], ESP_IMAGE_MAGIC, "bad bootloader image magic");
@@ -160,6 +175,9 @@ fn boot_ble_pong() -> Machine<RiscV> {
 
 #[test]
 fn shipped_ble_pong_image_arms_the_pms_exactly_as_silicon_does() {
+    let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin"))
+        .expect("read BLE Pong flash image");
+    let expected_split = app_iram_split_from_segments(&flash);
     let mut m = boot_ble_pong();
     let mut armed_at = None;
     for i in 0..BOOT_INSTRUCTIONS {
@@ -194,7 +212,7 @@ fn shipped_ble_pong_image_arms_the_pms_exactly_as_silicon_does() {
     ] {
         assert_eq!(
             decode_split_line(rd(off), IRAM0_SRAM_LOW),
-            Some(EXPECTED_SPLIT),
+            Some(expected_split),
             "{name} split line ({:#010x}) must decode to the address derived from \
              the image's own segments",
             rd(off)
@@ -203,7 +221,7 @@ fn shipped_ble_pong_image_arms_the_pms_exactly_as_silicon_does() {
     for (name, off) in [("DRAM line 0", 0x0A0u64), ("DRAM line 1", 0x0A4)] {
         assert_eq!(
             decode_split_line(rd(off), 0x3FC8_0000),
-            Some(map_iram_to_dram(EXPECTED_SPLIT)),
+            Some(map_iram_to_dram(expected_split)),
             "{name} must sit at the DRAM view of the same split"
         );
     }
