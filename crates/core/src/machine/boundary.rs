@@ -201,7 +201,7 @@ impl<C: Cpu> Machine<C> {
     ) -> SimResult<()> {
         let internally_committed_per_cycle_batch = mode == ExecutionMode::RunBatch
             && self.config.peripheral_tick_interval.max(1) == 1
-            && progress.primary_steps > 1
+            && progress.primary_steps > 0
             && progress.secondary_steps == progress.primary_steps;
         if mode == ExecutionMode::RunBatch && !internally_committed_per_cycle_batch {
             self.total_cycles += u64::from(progress.primary_steps);

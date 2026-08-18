@@ -554,6 +554,20 @@ fn parked_secondary_batches_without_skipping_per_cycle_ticks() {
     );
 }
 
+#[test]
+fn one_step_parked_secondary_batch_commits_once() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().parked = true;
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let report = machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+
+    assert_eq!(report.elapsed_cycles, 1);
+    assert_eq!(machine.total_cycles, 1);
+    assert_eq!(machine.step_profile().peripheral_ticks, 1);
+}
+
 /// The coalescing win itself is preserved wherever it was ever sound: at a
 /// relaxed tick interval the parked-secondary window is still wide.
 #[test]
