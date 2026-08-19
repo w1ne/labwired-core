@@ -1,7 +1,6 @@
 //! Machine / system YAML path for Arduino Nano golden ELF.
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::system::node::{build_node, NodeFirmware};
-use labwired_core::world::MachineTrait as _;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
