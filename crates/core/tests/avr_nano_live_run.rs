@@ -78,8 +78,16 @@ fn live_run_arduino_nano_blinky_sketch() {
             eprintln!("=== Arduino Nano live run SUCCESS ===");
             eprintln!("steps={step}");
             eprintln!("serial={serial:?}");
-            eprintln!("portb={:#04x} toggles={toggles} high={saw_high} low={saw_low}", cpu.portb());
-            eprintln!("pc={:#x} SP={:04x} cycles={}", cpu.get_pc(), cpu.sp, cpu.cycles);
+            eprintln!(
+                "portb={:#04x} toggles={toggles} high={saw_high} low={saw_low}",
+                cpu.portb()
+            );
+            eprintln!(
+                "pc={:#x} SP={:04x} cycles={}",
+                cpu.get_pc(),
+                cpu.sp,
+                cpu.cycles
+            );
             return;
         }
     }

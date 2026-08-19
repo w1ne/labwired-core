@@ -35,11 +35,18 @@ fn machine_path_runs_nano_ok() {
         let serial = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
         if serial.contains("nano-ok") {
             eprintln!("=== Machine path SUCCESS ===");
-            eprintln!("steps={step} cycles={} pc={:#x}", machine.total_cycles(), machine.get_pc());
+            eprintln!(
+                "steps={step} cycles={} pc={:#x}",
+                machine.total_cycles(),
+                machine.get_pc()
+            );
             eprintln!("serial={serial:?}");
             return;
         }
     }
     let serial = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
-    panic!("machine path failed serial={serial:?} pc={:#x}", machine.get_pc());
+    panic!(
+        "machine path failed serial={serial:?} pc={:#x}",
+        machine.get_pc()
+    );
 }
