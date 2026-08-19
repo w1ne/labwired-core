@@ -216,6 +216,17 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_kw41z_smoke_survival"),
     },
+    // Silicon Labs EFR32MG26 (Series-2, Cortex-M33). Register surface from the
+    // simplicity_sdk CMSIS headers (no public SVD exists); L1 smoke only —
+    // GPIO is a placeholder layout and CMU/TIMER0 are stubs. Smoke-validated
+    // via the brd2709a example (cli lane, `examples/brd2709a/uart-smoke.yaml`),
+    // not a firmware_survival case of its own yet.
+    ChipConf {
+        name: "efr32mg26",
+        yaml: "configs/chips/efr32mg26.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // Classic Arduino Nano / ATmega328P — sim-smoke twin (PORT/Timer0/USART0).
     // Behavior: PlatformIO nanoatmega328 golden (serial nano-ok + D13 toggle).
     // No silicon SWD capture yet → stays below L2 reg-match.

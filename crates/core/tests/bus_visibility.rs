@@ -96,6 +96,13 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
     // from_config address-map stubs: no real peripheral bank for the three
     // buses (see the board header). Edges cannot be produced on this path.
     (
+        "efr32mg26",
+        BusKind::Uart,
+        "the Efr32s2 layout models the console TX/RX byte path but captures no \
+         baud divisor (CLKDIV), so bit_time_cycles() is None and no wire \
+         waveform is narrated — there are no edges to decode",
+    ),
+    (
         "esp32",
         BusKind::Spi,
         "Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist \

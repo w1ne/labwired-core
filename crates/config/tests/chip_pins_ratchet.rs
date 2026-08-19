@@ -33,6 +33,11 @@ use std::path::PathBuf;
 /// into a set of excuses for chips that have since been transcribed.
 const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "atmega328p",
+    // EFR32 pin labels ARE the parse: Silicon Labs names GPIO pins P<bank><bit>
+    // (PB2 = port B, bit 2) straight through the datasheet and UG594, so the
+    // label-letter parse is the datasheet truth here, not a guess. There is no
+    // alternate package-label scheme to transcribe a `pins:` override from.
+    "efr32mg26",
     "esp32",
     "esp32c3",
     "esp32s3",

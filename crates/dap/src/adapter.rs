@@ -1064,6 +1064,12 @@ fn gpio_offsets_for_peripheral(
             idr_offset: 0x10,
             odr_offset: 0x00,
         }),
+        // Silicon Labs Series-2 EFR32 port struct: DOUT (output) at 0x10, DIN
+        // (input) at 0x14 (efr32mg26_gpio_port.h, GPIO_PORT_TypeDef).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Efr32s2 => Some(GpioOffsets {
+            idr_offset: 0x14,
+            odr_offset: 0x10,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,

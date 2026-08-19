@@ -1,0 +1,177 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Silicon Labs EFR32MG26B510F3200IM48-B — Series-2 "Mighty Gecko" wireless SoC
+# (Cortex-M33 / ARMv8-M, 78 MHz, 3200 KiB flash, 512 KiB SRAM), as fitted to
+# the BRD2709A xG26-EK2709A Explorer Kit.
+#
+# Source references (P0 grounding):
+# - Memory map, peripheral bases and IRQ numbers: Silicon Labs CMSIS device
+#   header, simplicity_sdk tag sisdk-2025.6,
+#   platform/Device/SiliconLabs/EFR32MG26/Include/efr32mg26b510f3200im48.h
+#   (https://raw.githubusercontent.com/SiliconLabs/simplicity_sdk/sisdk-2025.6/platform/Device/SiliconLabs/EFR32MG26/Include/efr32mg26b510f3200im48.h)
+#   and efr32mg26_usart.h / efr32mg26_gpio.h / efr32mg26_gpio_port.h from the
+#   same tag. Silicon Labs ships NO public SVD for this family — these headers
+#   are the authoritative register source.
+# - Board pinout (VCOM/LED/buttons): UG594, BRD2709A User's Guide
+#   (https://www.silabs.com/documents/public/user-guides/ug594-brd2709a-user-guide.pdf).
+# - Product page: https://www.silabs.com/wireless/zigbee/efr32mg26-series-2-socs
+# - Silicon identification: probe-rs SWD against the physical board (Energy
+#   Micro DP part 0x1013, CPUID PARTNO = Cortex-M33).
+#
+# Address-map note — the thing to get right on this part:
+#   Flash is based at 0x0800_0000, NOT 0x0 (unlike Series-1 EFR32 and nRF).
+#   The vector table and reset entry therefore live at 0x0800_0000.
+#   Peripherals are mapped at their SECURE alias (0x4xxx_xxxx), which is the
+#   default firmware view on this part; the NS alias at 0x5xxx_xxxx is not
+#   mapped.
+#
+# Known divergences from silicon (honest list, L1 smoke target):
+#   - CMU and TIMER0 are declared `type: stub` (windows decode, read as zero).
+#     No clock tree is modelled: the simulated core always runs at cpu_hz and
+#     no peripheral clock gate gates anything. Firmware that spins on a CMU
+#     status bit would hang; the smoke firmware only WRITES CMU_CLKEN0/CLKEN2
+#     (the gate bits real silicon needs before any APB access decodes), which
+#     the stub accepts as no-ops — the sim never gates on them.
+#   - GPIO is modelled with the dedicated Series-2 port layout (CTRL/MODEL/
+#     MODEH/DOUT/DIN per port): DOUT drives pins, DIN reads pin state, the
+#     4-bit mode nibble gates input vs output (open-drain WIREDOR pins only
+#     pull LOW). NOT modelled: the ROUTE pin-mux registers are a stub window
+#     (`gpio_route` below — a deliberate sim no-op, load-bearing on silicon),
+#     the EXTI/EM4WU interrupt path, drive-strength/slew fields (stored, no
+#     behaviour), and the WIREDAND open-source analog niceties (treated as
+#     push-pull).
+#   - The Series-2 SET/CLR/TGL register aliases (+0x1000/+0x2000/+0x3000 inside
+#     every peripheral block) are NOT mapped; only the base 4 KiB register view
+#     is. emlib code that bit-sets via `*_SET` aliases would hit unmapped MMIO.
+#   - USART1 is the only USART mapped (VCOM console). USART0/2 and the four
+#     EUSARTs are not declared.
+#   - MSC (flash controller), WDOG0/1, EMU, SMU, PRS, LDMA, radio (RAIL/
+#     RADIOAES), USERDATA (0x0FE0_0000) and DEVINFO (0x0FE0_8000) pages are not
+#     mapped; reads there fault the bus, deliberately loudly.
+#   - No `debug_schema` entries: Silicon Labs publishes no SVD for MG26 and the
+#     schema descriptors are SVD-ingested, so there is nothing honest to point
+#     at yet.
+schema_version: "1.0"
+name: "EFR32MG26"
+arch: "arm"
+core: "cortex-m33"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. EFR32MG26 maximum CPU
+# frequency, 78 MHz (datasheet; the part's PLL-less HFRCO top speed).
+cpu_hz: 78_000_000
+
+flash:
+  # FLASH_BASE 0x08000000 / FLASH_SIZE 0x00320000 (3200 KiB) — CMSIS header.
+  base: 0x08000000
+  size: "3200KB"
+ram:
+  # SRAM_BASE 0x20000000 / SRAM_SIZE 0x00080000 (512 KiB) — CMSIS header.
+  base: 0x20000000
+  size: "512KB"
+
+peripherals:
+  # ── VCOM console: USART1 ─────────────────────────────────────────────────
+  # BRD2709A routes the on-board J-Link OB virtual COM port to USART1
+  # (TX=PB02, RX=PB03, 115200 8N1 — UG594). The engine's UART model drives its
+  # TX sink directly, so the GPIO ROUTE programming that would carry the signal
+  # to PB02 on silicon is not needed (and the ROUTE registers are not modelled).
+  #
+  # This is a SERIES-2 USART: same flag semantics as Series 1 but a shifted
+  # register block — STATUS @0x18 (reset 0x2040 = TXBL|TXIDLE), TXDATA @0x38,
+  # RXDATA @0x24, EN @0x04, CLKDIV @0x1C (efr32mg26_usart.h, USART_TypeDef).
+  # The type routes to the dedicated `efr32s2` layout; the plain `efr32`
+  # (Series-1) layout would put STATUS/TXDATA 8/4 bytes lower and transmit
+  # nothing.
+  #
+  # IRQ: the NVIC exposes split RX/TX lines — USART1_RX_IRQn = 16,
+  # USART1_TX_IRQn = 17 (CMSIS header IRQn enum). The entry carries the TX
+  # line; the smoke path is polled and the model's TXEIE/TCIE masks are 0 for
+  # this layout, so no UART interrupt is ever pended either way.
+  - id: "usart1"
+    type: "efr32s2_usart"
+    base_address: 0x400A4000
+    size: "4KB"
+    irq: 17
+
+  # ── Clock management unit ────────────────────────────────────────────────
+  # CMU_S_BASE (CMU_IRQn = 63). Declared `stub`: the window decodes and reads
+  # zero, and the omission is deliberate — no clock tree is modelled (see the
+  # header comment). Out of reset the real part runs from FSRCO with the
+  # USART clocked, which is exactly the state the stub implies.
+  - id: "cmu"
+    type: "stub"
+    base_address: 0x40008000
+    size: "4KB"
+
+  # ── GPIO ports A–D ───────────────────────────────────────────────────────
+  # GPIO_S_BASE = 0x4003C000; the four port structs (GPIO_PORT_TypeDef, 0x30
+  # bytes each: CTRL/MODEL/MODEH/DOUT/DIN at +0x00/+0x04/+0x0C/+0x10/+0x14)
+  # start at block +0x30 — so PA @ 0x4003C030, PB @ 0x4003C060, PC @
+  # 0x4003C090, PD @ 0x4003C0C0 (efr32mg26_gpio.h GPIO_TypeDef P[4],
+  # efr32mg26_gpio_port.h). GPIO_PORT_x_WIDTH = 0x10 for all four ports.
+  # IRQs: GPIO_ODD_IRQn = 39, GPIO_EVEN_IRQn = 40.
+  #
+  # The type is the SERIES-2 port layout (`efr32s2` in GpioRegisterLayout):
+  # DOUT drives model pins, DIN reads them, and the board_io LED/button
+  # bindings are live. The bare `efr32_gpioport` name stays with the Series-0/1
+  # Renode-imported onboarding stubs (efr32mg12/13, sltb004a, …) whose silicon
+  # map this is NOT — do not "unify" them onto this type.
+  - id: "gpioa"
+    type: "efr32s2_gpioport"
+    base_address: 0x4003C030
+    size: "48B"
+  - id: "gpiob"
+    type: "efr32s2_gpioport"
+    base_address: 0x4003C060
+    size: "48B"
+  - id: "gpioc"
+    type: "efr32s2_gpioport"
+    base_address: 0x4003C090
+    size: "48B"
+  - id: "gpiod"
+    type: "efr32s2_gpioport"
+    base_address: 0x4003C0C0
+    size: "48B"
+
+  # ── GPIO pin-mux (ROUTE) ─────────────────────────────────────────────────
+  # The peripheral route registers live in the GPIO block head, far above the
+  # port structs: GPIO_USARTROUTE[0..2] at block +0x820/+0x840/+0x860 (0x20
+  # each — ROUTEEN, CS/CTS/RTS, RXROUTE, CLKROUTE, TXROUTE; offsets computed
+  # from efr32mg26_gpio.h GPIO_TypeDef). Explicit stub: firmware ROUTE writes
+  # decode and read back zero instead of faulting the bus. On the simulator
+  # this is a deliberate no-op — the UART model drives its TX sink directly
+  # and the board_io pins take their levels from the port DOUTs. On silicon
+  # the same writes are load-bearing (VCOM TX reach PB02 only through
+  # USART1ROUTE). See the bench note in docs/boards/brd2709a.md.
+  - id: "gpio_route"
+    type: "stub"
+    base_address: 0x4003C820
+    size: "96B"
+
+  # ── TIMER0 ───────────────────────────────────────────────────────────────
+  # TIMER0_S_BASE (TIMER0_IRQn = 4). Series-2 TIMER (WTIMER-class) shares no
+  # register layout with the engine's STM32 TIM model, so this is an explicit
+  # stub window rather than a wrong model. Not used on the smoke path.
+  - id: "timer0"
+    type: "stub"
+    base_address: 0x40048000
+    size: "4KB"
+
+  # ── SysTick ──────────────────────────────────────────────────────────────
+  # Architectural ARMv8-M SysTick in the SCS block (not a Silabs peripheral),
+  # declared so firmware gets a periodic core interrupt. Same treatment as the
+  # other Cortex-M33 chips (nrf54l15.yaml).
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base (stm32wba52.yaml pattern).
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"

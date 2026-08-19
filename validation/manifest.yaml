@@ -2944,6 +2944,14 @@ boards:
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/adc.rs
 
+  - id: brd2709a
+    doc: docs/boards/brd2709a.md
+    chip: configs/chips/efr32mg26.yaml
+    tier: smoke-manual
+    note: "Silicon Labs EFR32MG26 (Series-2, Cortex-M33) Explorer Kit. L1 smoke: deterministic UART + IO scripts (examples/brd2709a/uart-smoke.yaml, io-smoke.yaml) pass via the CLI test lane, printing 'brd2709a: MG26 OK' and the LED/button pin states over the modelled Series-2 USART1 + GPIO port layouts (DOUT drives pins, DIN reads them). CMU/TIMER0 are stub windows, GPIO ROUTE/EXTI unmodelled, no silicon register diff. Silicon smoke 2026-08-18 (J-Link OB 1366:0105:000440338937, probe-rs): the sim-built firmware-mg26-demo ELF flashes and prints the full banner + IO lines on the physical VCOM (115200 8N1, clean ASCII — confirming the 19 MHz EM01GRPA/HFRCO baud basis); USART1 STATUS reads 0x2062 and GPIOC DOUT 0x300 after the run (both bus-FAULT before the firmware's CMU clock enables — the Series-2 clock-gating wall the init sequence exists to climb)."
+    models:
+      - configs/chips/efr32mg26.yaml
+
   # ── Discovered by board_registry_consistency: these chips already had
   #     configs/chips/*.yaml + SURVIVAL_CASES/TIER1_TARGETS coverage but no
   #     manifest board entry. Added honestly at the tier the coverage actually

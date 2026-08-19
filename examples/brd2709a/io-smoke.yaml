@@ -1,0 +1,25 @@
+# LabWired - BRD2709A (xG26-EK2709A) IO smoke test
+#
+# Drives LED0/LED1 (PC08/PC09) through the Series-2 GPIO port model
+# (MODEH/DOUT/DIN) and reads BTN0/BTN1 (PB00/PB01). The pin levels the
+# firmware prints come from DIN reads — the pin path, not the DOUT latch —
+# and the final DOUT word is asserted directly at its MMIO address.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 2048
+assertions:
+  - uart_contains: "MG26-IO"
+  - uart_contains: "PC08=1 PC09=1"
+  - uart_contains: "PC08=0 PC09=0"
+  # BTN0/BTN1 are active-low (UG594), so an UNPRESSED button reads high on DIN.
+  - uart_contains: "BTN0=1 BTN1=1"
+  - uart_contains: "MG26-IO DONE"
+  # GPIOC DOUT (0x4003C090 + 0x10): final state has both LED bits set.
+  - memory_value:
+      address: 0x4003C0A0
+      expected_value: 0x00000300
+      mask: 0x00000300
+  - expected_stop_reason: max_steps

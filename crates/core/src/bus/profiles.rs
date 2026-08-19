@@ -284,6 +284,10 @@ impl SystemBus {
             DwApbUart
         } else if has("cadence") {
             Cadence
+        } else if has("efr32s2") || has("efr32_series2") || has("efr32xg2") {
+            // Series-2 (xG21+): Series-1 flag semantics, shifted register block
+            // (STATUS@0x18 / TXDATA@0x38). Must precede the bare "efr32" arm.
+            Efr32s2
         } else if has("efr32") {
             Efr32
         } else if has("efm32") {
@@ -396,6 +400,13 @@ impl SystemBus {
             // on the STM32F1 layout. Kept explicit (by type) so the choice is
             // visible rather than an omission-driven silent default.
             GpioRegisterLayout::Stm32F1
+        } else if has("efr32s2") || has("efr32_series2") || has("efr32xg2") {
+            // Silicon Labs Series-2 (xG21+): the per-port GPIO_PORT_TypeDef
+            // (DOUT @0x10, DIN @0x14). Must NOT catch the bare Series-0/1
+            // `efr32_gpioport` type — those Renode-imported onboarding stubs
+            // (efr32mg12/13, sltb004a, …) stay on the case-3b placeholder
+            // below, because their register map is the Series-1 one, not this.
+            GpioRegisterLayout::Efr32s2
         } else if raw == "gpio" {
             // 3a. The bare vendor-neutral "gpio" type with no profile is the
             //     dangerous case (real product chips: KW41Z / STM32 / nRF /

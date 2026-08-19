@@ -4,6 +4,10 @@
     "name": "atmega328p"
   },
   {
+    "buses": [],
+    "name": "efr32mg26"
+  },
+  {
     "buses": [
       "I2C",
       "UART"

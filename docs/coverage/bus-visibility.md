@@ -13,6 +13,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 * **atmega328p**
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+* **efr32mg26**
+  * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
   * SPI: Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist but the wire channel is unpublished on this model
 * **esp32s3**
@@ -43,6 +45,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
 | atmega328p | — | — | — |
+| efr32mg26 | — | — | — |
 | esp32 | ✓ | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32s3 | — | — | — |

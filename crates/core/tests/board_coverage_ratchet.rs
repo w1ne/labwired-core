@@ -444,6 +444,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // board and no silicon oracle. Promote when it ships in the playground
         // catalog and gains an executing-fidelity differential.
         "stm32h735",
+        // Silicon Labs EFR32MG26 (Series-2). L1 smoke, validated via the
+        // brd2709a example (uart + io scripts) and bench-proven on the
+        // physical board (VCOM banner, 2026-08-18): no catalog board, no
+        // silicon register oracle, CMU/TIMER0 are stubs. Promote when an
+        // executing-fidelity differential exists.
+        "efr32mg26",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

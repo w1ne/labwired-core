@@ -111,6 +111,26 @@
         "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
       }
     },
+    "efr32mg26": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/brd2709a/uart-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "the script PASSES locally via `labwired test --script examples/brd2709a/uart-smoke.yaml` (real firmware prints 'brd2709a: MG26 OK' over the modelled Series-2 USART1 TX path, plus expected_stop_reason) but runs in NO CI lane - no workflow invokes it, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model mapped on EFR32MG26 (the Series-2 USARTs can do SPI on silicon; not modelled).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C model mapped on EFR32MG26 (I2C1 exists on silicon; not modelled).",
+        "lane": "none"
+      }
+    },
     "mkw41z4": {
       "in_boards": false,
       "uart": {

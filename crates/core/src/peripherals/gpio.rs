@@ -48,6 +48,11 @@ pub enum GpioRegisterLayout {
     /// NXP Kinetis (KW41Z GPIOA/B/C): PDOR @0x0 (output), PSOR/PCOR/PTOR
     /// set/clear/toggle, PDIR @0x10 (input), PDDR @0x14 (direction).
     Kinetis,
+    /// Silicon Labs EFR32 Series 2 (xG21–xG29) GPIO port: the per-port
+    /// GPIO_PORT_TypeDef struct — CTRL @0x00, MODEL @0x04, MODEH @0x0C,
+    /// DOUT @0x10 (output), DIN @0x14 (input). Offsets from the vendor CMSIS
+    /// header (simplicity_sdk `efr32mg26_gpio_port.h`).
+    Efr32s2,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -60,8 +65,9 @@ impl FromStr for GpioRegisterLayout {
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
+            "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis, efr32s2",
                 value
             )),
         }
@@ -401,6 +407,120 @@ impl KinetisGpio {
     }
 }
 
+// ── Silicon Labs EFR32 Series 2 (xG21–xG29) ──────────────────────────────────
+// One port of the single GPIO block: GPIO_PORT_TypeDef (simplicity_sdk
+// efr32mg26_gpio_port.h, sisdk-2025.6). The block packs four of these structs
+// at a 0x30-byte stride starting at block+0x30; each port is modelled here as
+// its own window at the true struct base. Register map: CTRL @0x00, MODEL
+// @0x04 (pins 0..7), MODEH @0x0C (pins 8..15), DOUT @0x10, DIN @0x14.
+//
+// Mode is 4 bits per pin: 0 DISABLED, 1 INPUT, 2 INPUTPULL, 3 INPUTPULLFILTER,
+// 4 PUSHPULL, 5 PUSHPULLALT, 6 WIREDOR, 7 WIREDORPULLDOWN, 8..15 the WIREDAND
+// (open-source) family. This model implements the digital truth of that table:
+// outputs drive the pin, WIREDOR* pins only pull LOW, and DIN reads the pin —
+// the same contract the STM32 families above implement.
+//
+// NOT modelled (documented in configs/chips/efr32mg26.yaml): the block-level
+// SET/CLR/TGL aliases at +0x1000/+0x2000/+0x3000 (outside this port window),
+// the ROUTE pin-mux registers (they live in the GPIO block head, not in the
+// port struct), CTRL slew-rate/drive-strength fields (stored, no behaviour),
+// the WIREDAND pull-up/filter analog niceties (treated as push-pull), and the
+// EM4 wakeup / EXTI path (GPIO IF/IEN live in the block head).
+#[derive(Debug, serde::Serialize)]
+pub struct Efr32s2Gpio {
+    ctrl: u32,  // 0x00
+    model: u32, // 0x04
+    modeh: u32, // 0x0C
+    dout: u32,  // 0x10
+    din: u32,   // 0x14 — latched external (button/sensor) input
+}
+
+impl Default for Efr32s2Gpio {
+    fn default() -> Self {
+        Self {
+            // _GPIO_P_CTRL_RESETVALUE: slewrate fields reset non-zero.
+            ctrl: 0x0040_0040,
+            model: 0,
+            modeh: 0,
+            dout: 0,
+            din: 0,
+        }
+    }
+}
+
+impl Efr32s2Gpio {
+    /// The 4-bit mode field of `pin` (MODEL for pins 0..7, MODEH for 8..15).
+    fn mode_nibble(&self, pin: u32) -> u32 {
+        let reg = if pin < 8 { self.model } else { self.modeh };
+        (reg >> ((pin % 8) * 4)) & 0xF
+    }
+
+    /// Mask of pins configured as an output (any drive mode, nibble >= 4).
+    fn output_mask(&self) -> u32 {
+        let mut mask = 0u32;
+        for pin in 0..16u32 {
+            if self.mode_nibble(pin) >= 0x4 {
+                mask |= 1 << pin;
+            }
+        }
+        mask
+    }
+
+    /// Mask of output pins in a WIREDOR (open-drain) mode: 6 WIREDOR,
+    /// 7 WIREDORPULLDOWN. These only pull LOW; driving a 1 releases the pin.
+    fn open_drain_mask(&self) -> u32 {
+        let mut mask = 0u32;
+        for pin in 0..16u32 {
+            if matches!(self.mode_nibble(pin), 0x6 | 0x7) {
+                mask |= 1 << pin;
+            }
+        }
+        mask
+    }
+
+    /// DIN as silicon presents it: the *pin* level, not a bare latch. A
+    /// push-pull output drives its pin, so reading DIN returns what DOUT is
+    /// driving; a released open-drain pin and every input take the latched
+    /// external level. Same contract as V2Gpio::effective_idr.
+    fn effective_din(&self) -> u32 {
+        let out = self.output_mask();
+        let od = self.open_drain_mask();
+        let push_pull = out & !od;
+        let od_driven_low = od & !self.dout;
+        let driven = push_pull | od_driven_low;
+        ((self.dout & push_pull) | (self.din & !driven)) & 0xFFFF
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.ctrl,
+            0x04 => self.model,
+            0x0C => self.modeh,
+            0x10 => self.dout,
+            0x14 => self.effective_din(),
+            _ => {
+                crate::census_reg!("gpio:Efr32s2Gpio", offset, "read");
+                0
+            }
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.ctrl = value,
+            0x04 => self.model = value,
+            0x0C => self.modeh = value,
+            // DOUT/DIN are 16-bit on this part (GPIO_PORT_x_WIDTH = 0x10 for
+            // all four ports on the IM48). DIN is read-only for firmware —
+            // like silicon, a store to it is ignored; external input arrives
+            // via set_external_input.
+            0x10 => self.dout = value & 0xFFFF,
+            _ => {
+                crate::census_reg!("gpio:Efr32s2Gpio", offset, "write");
+            }
+        }
+    }
+}
+
 /// The per-family register set of a [`GpioPort`]. Register sets are fully
 /// isolated — a register from one family cannot exist on another.
 #[derive(Debug, serde::Serialize)]
@@ -409,6 +529,7 @@ pub enum GpioFamily {
     Stm32V2(V2Gpio),
     Nrf52(Nrf52Gpio),
     Kinetis(KinetisGpio),
+    Efr32s2(Efr32s2Gpio),
 }
 
 impl GpioFamily {
@@ -418,6 +539,7 @@ impl GpioFamily {
             Self::Stm32V2(g) => g.read_reg(offset),
             Self::Nrf52(g) => g.read_reg(offset),
             Self::Kinetis(g) => g.read_reg(offset),
+            Self::Efr32s2(g) => g.read_reg(offset),
         }
     }
 
@@ -427,6 +549,7 @@ impl GpioFamily {
             Self::Stm32V2(g) => g.write_reg(offset, value),
             Self::Nrf52(g) => g.write_reg(offset, value),
             Self::Kinetis(g) => g.write_reg(offset, value),
+            Self::Efr32s2(g) => g.write_reg(offset, value),
         }
     }
 
@@ -458,6 +581,8 @@ impl GpioFamily {
             Self::Nrf52(g) => apply(&mut g.idr),
             // Kinetis names its input latch PDIR.
             Self::Kinetis(g) => apply(&mut g.pdir),
+            // Series-2 EFR32 names it DIN.
+            Self::Efr32s2(g) => apply(&mut g.din),
         }
         true
     }
@@ -509,6 +634,10 @@ impl GpioFamily {
                     bit(g.read_reg(0x10))
                 })
             }
+            // The Series-2 DIN read already mixes DOUT-through-MODE with
+            // latched inputs — it IS the pad view (no AF tracking on this
+            // family: the ROUTE mux is not modelled).
+            Self::Efr32s2(g) => Some(bit(g.read_reg(0x14))),
         }
     }
 }
@@ -609,6 +738,7 @@ impl GpioPort {
             GpioRegisterLayout::Stm32V2 => GpioFamily::Stm32V2(V2Gpio::default()),
             GpioRegisterLayout::Nrf52 => GpioFamily::Nrf52(Nrf52Gpio::default()),
             GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
+            GpioRegisterLayout::Efr32s2 => GpioFamily::Efr32s2(Efr32s2Gpio::default()),
         })
     }
 
@@ -654,6 +784,7 @@ impl GpioPort {
             GpioFamily::Stm32V2(_) => 0x14,
             GpioFamily::Nrf52(_) => 0x504,
             GpioFamily::Kinetis(_) => 0x00,
+            GpioFamily::Efr32s2(_) => 0x10, // DOUT
         };
         family.saturating_sub(self.window_offset)
     }
@@ -667,6 +798,7 @@ impl GpioPort {
             GpioFamily::Stm32V2(_) => 0x10,
             GpioFamily::Nrf52(_) => 0x510,
             GpioFamily::Kinetis(_) => 0x10,
+            GpioFamily::Efr32s2(_) => 0x14, // DIN
         };
         family.saturating_sub(self.window_offset)
     }
@@ -703,6 +835,7 @@ impl GpioPort {
             GpioFamily::Stm32V2(_) => GpioRegisterLayout::Stm32V2,
             GpioFamily::Nrf52(_) => GpioRegisterLayout::Nrf52,
             GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
+            GpioFamily::Efr32s2(_) => GpioRegisterLayout::Efr32s2,
         }
     }
 
@@ -1019,6 +1152,16 @@ impl crate::Peripheral for GpioPort {
                     GpioMode::Input
                 }
             }
+            // Series-2 EFR32: 4-bit mode nibble per pin (MODEL/MODEH).
+            // 0 DISABLED is a hi-Z pin — closest to Analog here; 1..3 are the
+            // input modes; >= 4 the output modes. No AF verdict: the ROUTE
+            // pin-mux lives in the GPIO block head and is not modelled, so a
+            // peripheral-driven pad reports its GPIO mode (documented).
+            GpioFamily::Efr32s2(g) => match g.mode_nibble(u32::from(pin)) {
+                0 => GpioMode::Analog,
+                0x1..=0x3 => GpioMode::Input,
+                _ => GpioMode::Output,
+            },
         };
         // func: a pad whose AF routing resolves to a wired peripheral signal
         // names it ("SPI1_SCK", "I2C1_SDA"); otherwise STM32 V2 exposes the raw
@@ -1091,6 +1234,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Stm32V2(g) => serde_json::to_value(g),
             GpioFamily::Nrf52(g) => serde_json::to_value(g),
             GpioFamily::Kinetis(g) => serde_json::to_value(g),
+            GpioFamily::Efr32s2(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -1391,5 +1535,117 @@ mod idr_pin_level_tests {
             0,
             "input pin must not take its level from ODR"
         );
+    }
+}
+
+#[cfg(test)]
+mod efr32s2_tests {
+    use super::{GpioMode, GpioPort, GpioRegisterLayout};
+    use crate::Peripheral;
+
+    fn s2() -> GpioPort {
+        GpioPort::new_with_layout(GpioRegisterLayout::Efr32s2)
+    }
+
+    /// Silicon reset state (efr32mg26_gpio_port.h `_GPIO_P_*_RESETVALUE`):
+    /// CTRL carries non-zero slewrate defaults, everything else is 0 — every
+    /// pin DISABLED.
+    #[test]
+    fn efr32s2_reset_values() {
+        let g = s2();
+        assert_eq!(g.read_u32(0x00).unwrap(), 0x0040_0040, "CTRL reset");
+        assert_eq!(g.read_u32(0x04).unwrap(), 0, "MODEL reset");
+        assert_eq!(g.read_u32(0x0C).unwrap(), 0, "MODEH reset");
+        assert_eq!(g.read_u32(0x10).unwrap(), 0, "DOUT reset");
+        assert_eq!(g.read_u32(0x14).unwrap(), 0, "DIN reset");
+    }
+
+    /// DOUT drives the pin of a push-pull output, and DIN reads the pin —
+    /// so DIN mirrors DOUT for PUSHPULL pins. This is the path the BRD2709A
+    /// LEDs (PC08/PC09) take: MODEH nibbles 0/1 = PUSHPULL (0x4).
+    #[test]
+    fn efr32s2_dout_drives_din_for_push_pull_output() {
+        let mut g = s2();
+        // PC08/PC09 → MODEH nibbles 0 and 1 = PUSHPULL.
+        g.write_u32(0x0C, 0x4 | (0x4 << 4)).unwrap();
+        assert_eq!(g.gpio_routing(8).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.gpio_routing(9).unwrap().mode, GpioMode::Output);
+
+        g.write_u32(0x10, 1 << 8).unwrap(); // DOUT: LED0 on
+        assert_eq!(g.read_u32(0x10).unwrap() & (1 << 8), 1 << 8, "DOUT latch");
+        assert_eq!(
+            g.read_u32(0x14).unwrap() & (1 << 8),
+            1 << 8,
+            "DIN must report the driven HIGH level of a push-pull output"
+        );
+        assert_eq!(g.read_gpio_pad(8), Some(true));
+        assert_eq!(g.read_gpio_pad(9), Some(false), "PC09 still drives LOW");
+        assert_eq!(g.read_gpio_output(8), Some(true));
+
+        g.write_u32(0x10, 0).unwrap(); // LEDs off
+        assert_eq!(g.read_u32(0x14).unwrap() & (3 << 8), 0);
+        assert_eq!(g.read_gpio_pad(8), Some(false));
+    }
+
+    /// A DISABLED or INPUT pin ignores DOUT: its DIN bit is the latched
+    /// external level, which is how buttons (PB00/PB01) are read.
+    #[test]
+    fn efr32s2_input_pin_reads_external_level_not_dout() {
+        let mut g = s2();
+        // PB00 left DISABLED (MODE 0); PB01 = INPUT (MODEL nibble 1 = 0x1).
+        g.write_u32(0x04, 0x1 << 4).unwrap();
+        assert_eq!(g.gpio_routing(0).unwrap().mode, GpioMode::Analog);
+        assert_eq!(g.gpio_routing(1).unwrap().mode, GpioMode::Input);
+
+        g.write_u32(0x10, 0x3).unwrap(); // DOUT writes must not move inputs
+        assert_eq!(g.read_u32(0x14).unwrap() & 0x3, 0);
+
+        // The outside world (a button) drives the pins through the input path.
+        assert!(g.set_gpio_input(0, true));
+        assert!(g.set_gpio_input(1, true));
+        assert_eq!(g.read_u32(0x14).unwrap() & 0x3, 0x3, "DIN shows buttons");
+        assert_eq!(g.read_gpio_input(0), Some(true));
+        assert!(g.set_gpio_input(0, false));
+        assert_eq!(g.read_u32(0x14).unwrap() & 0x3, 0x2);
+    }
+
+    /// WIREDOR (open-drain) only pulls LOW: DOUT=1 releases the pin to the
+    /// latched input, DOUT=0 drives LOW.
+    #[test]
+    fn efr32s2_wiredor_only_pulls_low() {
+        let mut g = s2();
+        g.write_u32(0x04, 0x6).unwrap(); // pin 0 = WIREDOR
+        assert!(g.set_gpio_input(0, true)); // external pull holds it high
+
+        g.write_u32(0x10, 1).unwrap(); // release
+        assert_eq!(
+            g.read_u32(0x14).unwrap() & 1,
+            1,
+            "released open-drain pin floats to the latched input"
+        );
+        g.write_u32(0x10, 0).unwrap(); // pull low
+        assert_eq!(g.read_u32(0x14).unwrap() & 1, 0, "open-drain driving LOW");
+    }
+
+    /// DOUT is 16-bit on this part (GPIO_PORT_x_WIDTH = 0x10); DIN is
+    /// read-only for firmware.
+    #[test]
+    fn efr32s2_dout_is_16_bit_and_din_ignores_writes() {
+        let mut g = s2();
+        g.write_u32(0x10, 0xFFFF_FFFF).unwrap();
+        assert_eq!(g.read_u32(0x10).unwrap(), 0xFFFF, "DOUT masks to 16 bits");
+        g.write_u32(0x14, 0xFFFF).unwrap();
+        assert_eq!(g.read_u32(0x14).unwrap(), 0, "DIN store ignored");
+    }
+
+    /// Byte-granular MMIO must land in the same registers (the Peripheral
+    /// byte path decomposes to read-modify-write per byte).
+    #[test]
+    fn efr32s2_byte_writes_compose() {
+        let mut g = s2();
+        g.write(0x0D, 0x04).unwrap(); // MODEH byte 1: pin 10 nibble = PUSHPULL
+        g.write(0x11, 0x04).unwrap(); // DOUT byte 1: pin 10 high
+        assert_eq!(g.gpio_routing(10).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.read_gpio_pad(10), Some(true));
     }
 }
