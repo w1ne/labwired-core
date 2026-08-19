@@ -81,6 +81,12 @@
       "firmware": "tests/fixtures/kw41z-smoke.elf",
       "expect": "KW41Z_SMOKE_OK"
     },
+    "efr32mg26": {
+      "how": "committed",
+      "firmware": "tests/fixtures/mg26-smoke.elf",
+      "expect": "MG26 OK",
+      "note": "Bare-metal uart-smoke image for BRD2709A. Same ELF the example builds."
+    },
     "nrf52832": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/nrf52832.elf",

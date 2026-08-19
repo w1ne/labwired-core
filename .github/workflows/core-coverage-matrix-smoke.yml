@@ -121,6 +121,17 @@ jobs:
           - id: kw41z-cow-activity
             script: examples/kw41z-cow-activity/calm.yaml
             system: configs/systems/frdm-kw41z-lcd.yaml
+          # BRD2709A / EFR32MG26: first CLI cell for Series-2 Gecko. The
+          # uart-smoke ELF is also committed at tests/fixtures/mg26-smoke.elf
+          # for the install canary; this cell builds from source so a linker
+          # or USART-layout regression cannot hide behind a stale blob.
+          - id: brd2709a
+            target: thumbv7m-none-eabi
+            crate: firmware-mg26-demo
+            profile: release
+            profile_dir: release
+            script: examples/brd2709a/uart-smoke.yaml
+            system: examples/brd2709a/system.yaml
           # F405 and F767 had no cell at all: their only smokes borrowed
           # firmware-f401-demo from a sibling part, which needs a build, so no
           # workflow ran them. Their own TIER1 fixtures are committed blobs, so
