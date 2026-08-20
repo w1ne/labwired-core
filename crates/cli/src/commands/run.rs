@@ -1086,6 +1086,10 @@ pub(crate) fn run_firmware(
         );
     }
 
+    // Read once: this used to be a `std::env::var` call on EVERY guest
+    // instruction. `sample` on the S3 Doom run put `__findenv_locked` at 25%
+    // of the whole process — above the Xtensa interpreter itself.
+    let ccdbg = std::env::var("LABWIRED_CCDBG").is_ok();
     while steps < limit {
         let pc_before = machine.cpu.get_pc();
         pc_ring[ring_head] = pc_before;
@@ -1176,7 +1180,7 @@ pub(crate) fn run_firmware(
         // panic_abort(details) reason printer (gated): the ESP-IDF panic path
         // stores the assert/abort string ptr in a2 just before the trap. Helps
         // pinpoint firmware-level aborts during bring-up.
-        if std::env::var("LABWIRED_CCDBG").is_ok() {
+        if ccdbg {
             // Collect the string pointers first: reading them back needs
             // `&mut machine.bus`, so the core borrows have to be released.
             let panic_args: Vec<u32> = [Some(&machine.cpu), machine.cpu_secondary.as_ref()]
