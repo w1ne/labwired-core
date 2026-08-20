@@ -2311,7 +2311,7 @@ boards:
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml
     tier: silicon-verified
-    note: "Deep model: 35 peripheral models + full Xtensa LX7 JIT; boots real firmware in sim (green e2e i2c_tmp102/hello_world/xtensa_exec/e-paper). Silicon anchor is reset-state (9 regs) on the firmware-path bus. KNOWN GAPS: (1) broader register + behavioural silicon diff still future work; (2) declarative from_config path falls back to generic ARM peripherals for type:i2c — the coded S3 models only wire via configure_xtensa_esp32s3; (3) full-firmware bring-up rides ~60 boot/ROM/WiFi thunks (FIDELITY.md)."
+    note: "Deep model: 36 peripheral models + full Xtensa LX7 JIT; boots real firmware in sim (green e2e i2c_tmp102/hello_world/xtensa_exec/e-paper). WDEV Wi-Fi MAC at 0x60033000 attaches to wifi-ap. Silicon anchor is reset-state (9 regs) on the firmware-path bus. KNOWN GAPS: (1) broader register + behavioural silicon diff still future work; (2) declarative from_config path falls back to generic ARM peripherals for type:i2c — the coded S3 models only wire via configure_xtensa_esp32s3; (3) full-firmware bring-up still rides boot/ROM thunks (FIDELITY.md)."
     offline_tests:
       - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
       - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
@@ -2685,6 +2685,10 @@ boards:
     # openocd. A live re-capture is owed and is tracked; this ack does not
     # discharge it, and it is worth more than the earlier owed ones because
     # this is the first change since the capture to reach a captured window.
+    # 2026-08-20: WDEV Wi-Fi MAC on the S3 bus at 0x60033000 (same IP as C3,
+    # ETS source 0). The 9-reg reset-state capture never included the MAC
+    # window. Owner-acked without a new live capture this session; recapture
+    # of the MAC-ready bit at 0x60033D14 is owed on the board on the table.
     drift_ack: 2026-08-20
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
