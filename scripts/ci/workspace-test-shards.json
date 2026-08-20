@@ -2,76 +2,259 @@
   "schema": 1,
   "_about": "Classification data for scripts/ci/workspace_test_shard.py and workspace_test_aggregate.py, driven by the pr-workspace-tests jobs in .github/workflows/core-ci.yml. Every default-runnable test target in the workspace runs in one of the PR shards EXCEPT the cross_build_excluded entries below. A target not covered by either list is a hard error, so a new test file cannot silently miss the PR lane.",
   "shard_count": 3,
-
   "_cross_build_about": "Targets that cannot pass on a runner with no cross toolchain: they build firmware for thumbv*/xtensa at test time, or they panic when a pre-built cross ELF is missing. core-full (nightly / [full-ci] / dispatch) installs the five ARM targets, builds the fixtures, and runs these via plain `cargo test --workspace`, so excluding them from PR shards removes NO coverage — it moves it to the lane that can actually execute it. A graceful-skip entry is excluded anyway: a test that skips on every single PR provides no signal, and keeping it would train the skip channel to carry noise.",
   "cross_build_excluded": [
-    { "package": "labwired-core", "target": "e2e_stm32f407_i2c",
+    {
+      "package": "labwired-core",
+      "target": "e2e_stm32f407_i2c",
       "needs": "rustup target thumbv7em-none-eabi",
-      "reason": "Cross-builds the AHT20/BMP280 nucleo-f407-i2c firmware from source at test time." },
-    { "package": "labwired-core", "target": "e2e_nokia5110_invaders",
+      "reason": "Cross-builds the AHT20/BMP280 nucleo-f407-i2c firmware from source at test time."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_nokia5110_invaders",
       "needs": "rustup target thumbv7em-none-eabihf",
-      "reason": "Cross-builds nokia5110-invaders-lab (hard-float) at test time." },
-    { "package": "labwired-core", "target": "capture_nokia5110_frames",
+      "reason": "Cross-builds nokia5110-invaders-lab (hard-float) at test time."
+    },
+    {
+      "package": "labwired-core",
+      "target": "capture_nokia5110_frames",
       "needs": "rustup target thumbv7em-none-eabihf",
-      "reason": "Cross-builds nokia5110-invaders-lab (hard-float) at test time." },
-    { "package": "labwired-core", "target": "e2e_nrf52840_proximity",
+      "reason": "Cross-builds nokia5110-invaders-lab (hard-float) at test time."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_nrf52840_proximity",
       "needs": "rustup target thumbv7em-none-eabi",
-      "reason": "Cross-builds firmware-nrf52840-proximity at test time." },
-    { "package": "labwired-core", "target": "nucleo_l476rg",
+      "reason": "Cross-builds firmware-nrf52840-proximity at test time."
+    },
+    {
+      "package": "labwired-core",
+      "target": "nucleo_l476rg",
       "needs": "rustup target thumbv7em-none-eabihf",
-      "reason": "Cross-builds firmware-l476-bldc-six-step (hard-float) at test time." },
-    { "package": "labwired-core", "target": "e2e_epaper_tricolor",
+      "reason": "Cross-builds firmware-l476-bldc-six-step (hard-float) at test time."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_epaper_tricolor",
       "needs": "rustup target thumbv7m-none-eabi",
-      "reason": "Cross-builds epaper-tricolor-lab at test time." },
-    { "package": "labwired-core", "target": "strict_onboarding",
+      "reason": "Cross-builds epaper-tricolor-lab at test time."
+    },
+    {
+      "package": "labwired-core",
+      "target": "strict_onboarding",
       "needs": "rustup targets thumbv8m.main-none-eabi + others",
-      "reason": "Builds each example's io-smoke firmware with cargo at test time (RP2350/Cortex-M33 among them)." },
-    { "package": "labwired-core", "target": "rp2040_pio_onboarding",
+      "reason": "Builds each example's io-smoke firmware with cargo at test time (RP2350/Cortex-M33 among them)."
+    },
+    {
+      "package": "labwired-core",
+      "target": "rp2040_pio_onboarding",
       "needs": "rustup target thumbv6m-none-eabi",
-      "reason": "Skips gracefully without firmware-rp2040-pio-onboarding; core-full builds it and requires it via LABWIRED_REQUIRE_FIRMWARE." },
-    { "package": "labwired-core", "target": "world_multichip",
+      "reason": "Skips gracefully without firmware-rp2040-pio-onboarding; core-full builds it and requires it via LABWIRED_REQUIRE_FIRMWARE."
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_multichip",
       "needs": "make-built iolink ELFs",
-      "reason": "Skips via skip_or_fail_missing_firmware on every default lane; no lane builds the iolink ELFs by default." },
-    { "package": "labwired-core", "target": "world_station_services",
+      "reason": "Skips via skip_or_fail_missing_firmware on every default lane; no lane builds the iolink ELFs by default."
+    },
+    {
+      "package": "labwired-core",
+      "target": "world_station_services",
       "needs": "make-built iolink ELFs",
-      "reason": "Same as world_multichip." },
-    { "package": "labwired-core", "target": "e2e_esp32_epaper",
+      "reason": "Same as world_multichip."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_esp32_epaper",
       "needs": "esp (Xtensa) toolchain",
-      "reason": "Skips gracefully without the xtensa-esp32 ELF; even core-full does not install the +esp toolchain." },
-    { "package": "labwired-cli", "target": "e2e_uart_injection",
+      "reason": "Skips gracefully without the xtensa-esp32 ELF; even core-full does not install the +esp toolchain."
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_uart_injection",
       "needs": "rustup target thumbv6m-none-eabi",
-      "reason": "Cross-builds firmware-uart-echo-fixture at test time." },
-    { "package": "labwired-cli", "target": "demo_blinky",
+      "reason": "Cross-builds firmware-uart-echo-fixture at test time."
+    },
+    {
+      "package": "labwired-cli",
+      "target": "demo_blinky",
       "needs": "rustup target thumbv7m-none-eabi (pre-built release ELF)",
-      "reason": "Panics when the demo-blinky release ELF is missing; core-full builds it in the 'Build test firmware fixture' step." },
-    { "package": "labwired-dap", "target": "e2e",
+      "reason": "Panics when the demo-blinky release ELF is missing; core-full builds it in the 'Build test firmware fixture' step."
+    },
+    {
+      "package": "labwired-dap",
+      "target": "e2e",
       "needs": "rustup target thumbv7m-none-eabi (pre-built debug ELF)",
-      "reason": "Panics when the firmware-ci-fixture debug ELF is missing; core-full builds it in the 'Build test firmware fixture' step." }
+      "reason": "Panics when the firmware-ci-fixture debug ELF is missing; core-full builds it in the 'Build test firmware fixture' step."
+    }
   ],
-
   "_nightly_only_about": "Targets the repo has ALREADY decided are nightly-only for measured debug cost — scheduler_lane_coverage.rs's NIGHTLY_ONLY table, which runs them in core-full. The unified workspace build enables event-scheduler (via crates/wasm), so without this list the PR shards would drag them back onto every PR at the exact debug cost that table documented. Excluding them here keeps the existing decision: they run in core-full, nightly, and this file names where.",
   "nightly_only_excluded": [
-    { "package": "labwired-core", "target": "stm32f401_walk_differential",
-      "reason": "9.6s measured debug runtime; the four STM32 walk differentials are ~55s together. Runs in core-full (NIGHTLY_ONLY in scheduler_lane_coverage.rs)." },
-    { "package": "labwired-core", "target": "stm32h563_walk_differential",
-      "reason": "12.9s measured debug runtime; see stm32f401_walk_differential." },
-    { "package": "labwired-core", "target": "stm32l073_walk_differential",
-      "reason": "14.3s measured debug runtime; see stm32f401_walk_differential." },
-    { "package": "labwired-core", "target": "stm32l476_walk_differential",
-      "reason": "18.6s measured debug runtime; see stm32f401_walk_differential." },
-    { "package": "labwired-core", "target": "nrf54l15_idle_ff_speedup",
-      "reason": "43.6s measured debug runtime — the wall clock IS the assertion and cannot be shortened. Runs in core-full." }
+    {
+      "package": "labwired-core",
+      "target": "stm32f401_walk_differential",
+      "reason": "9.6s measured debug runtime; the four STM32 walk differentials are ~55s together. Runs in core-full (NIGHTLY_ONLY in scheduler_lane_coverage.rs)."
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32h563_walk_differential",
+      "reason": "12.9s measured debug runtime; see stm32f401_walk_differential."
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32l073_walk_differential",
+      "reason": "14.3s measured debug runtime; see stm32f401_walk_differential."
+    },
+    {
+      "package": "labwired-core",
+      "target": "stm32l476_walk_differential",
+      "reason": "18.6s measured debug runtime; see stm32f401_walk_differential."
+    },
+    {
+      "package": "labwired-core",
+      "target": "nrf54l15_idle_ff_speedup",
+      "reason": "43.6s measured debug runtime — the wall clock IS the assertion and cannot be shortened. Runs in core-full."
+    }
   ],
-
   "_known_red_about": "Tests that are RED ON MAIN TODAY for a known, tracked reason. A shard that sees one of these fail reports it as known, not new. An entry whose test PASSES is stale and FAILS the aggregate job — shrink this list in the PR that fixes the test. Exact (package, target, test-name) triples, one GitHub issue per entry: no patterns, so an unrelated failure in the same file can never hide behind an entry. Wave 0.1's suite-baseline.json never landed, so this list was measured directly (see the PR that introduced it).",
   "known_red": [
-    { "package": "labwired-core", "target": "cpu_trace_conformance",
+    {
+      "package": "labwired-core",
+      "target": "cpu_trace_conformance",
       "test": "every_cpu_core_is_covered_by_this_file",
       "issue": 961,
-      "reason": "The AVR Nano twin (#940/#951) added an Avr core without adding it to cores(); the standardized-trace conformance assertion diverged. Verified red on pristine origin/main." },
-    { "package": "labwired-core", "target": "e2e_nrf52840_obd2_scanner",
+      "reason": "The AVR Nano twin (#940/#951) added an Avr core without adding it to cores(); the standardized-trace conformance assertion diverged. Verified red on pristine origin/main."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_nrf52840_obd2_scanner",
       "test": "real_scanner_and_ecu_firmware_complete_the_obd2_workflow",
       "issue": 960,
-      "reason": "No lane builds examples/nrf52840-obd2-scanner, so the ELFs the test hard-expects never exist. Fails fast (file-not-found), so it costs the lane nothing while it waits for its fix." }
+      "reason": "No lane builds examples/nrf52840-obd2-scanner, so the ELFs the test hard-expects never exist. Fails fast (file-not-found), so it costs the lane nothing while it waits for its fix."
+    }
+  ],
+  "_runs_nothing_about": "Test binaries that execute ZERO tests in a PR shard because every test in them is `#[ignore]`d. THIS IS A SHRINK-ONLY BASELINE, not permission. no_vacuous_test_targets.rs already forbids a target reporting success while running nothing, but it catches only the `#![cfg(...)]` route, where the file compiles away. The `#[ignore]` route reaches the identical end state — 0 passed, exit 0, green tick — through a different door, and 20 targets were sitting in that gap. `covered_by: NOTHING` means exactly that: no workflow runs it, with or without `--ignored`. Those are not slow tests or manual tools, they are DEAD — a ratchet that never runs is not a ratchet. Every one of them is a bug to close by either running it or deleting it. Nothing may be ADDED to this list; the aggregate fails on a target that runs nothing and is not here, and equally on an entry here that has started running.",
+  "runs_nothing_in_pr": [
+    {
+      "package": "labwired-cli",
+      "target": "e2e_esp32c3_ble_arduino",
+      "covered_by": "core-nightly.yml, a `-- --ignored` step",
+      "note": ""
+    },
+    {
+      "package": "labwired-cli",
+      "target": "h5_demo",
+      "covered_by": "core-nightly.yml, a `-- --ignored` step",
+      "note": ""
+    },
+    {
+      "package": "labwired-cli",
+      "target": "tier1_matrix",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-cli",
+      "target": "tier1_matrix_ratchet",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "bench_walk_free_kw41z",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_c3_yield",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32_dual_core_boot",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32c3_boot",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32c3_panic",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32s3_boot",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "diag_esp32s3_l2",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_esp32c3_snapshot_resume",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "e2e_external_arduino_esp32_in_sim",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_clamped_full_state_differential",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_oled_profile",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32c3_shipped_lab_batch_gate",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "esp32s3_oled_profile",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "jit_lockstep",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-core",
+      "target": "logic_capture_bench",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    },
+    {
+      "package": "labwired-hw-oracle",
+      "target": "foreign_firmware_probe",
+      "covered_by": "NOTHING",
+      "note": "No workflow runs this binary, with or without --ignored. It compiles in every PR shard and executes nothing, anywhere."
+    }
   ]
 }

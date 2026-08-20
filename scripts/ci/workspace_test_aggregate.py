@@ -146,6 +146,57 @@ def aggregate(reports_dir, cfg):
     return failures, notices, totals, slowest
 
 
+def audit_runs_nothing(reports_dir, cfg, shard_count):
+    """Fail on a test binary that executed NOTHING and is not in the baseline.
+
+    `no_vacuous_test_targets.rs` already forbids a target reporting success
+    while running zero tests, but it catches only the `#![cfg(...)]` route,
+    where the file compiles away. The `#[ignore]` route reaches the identical
+    end state — `0 passed`, exit 0, green tick — through a different door, and
+    twenty targets were sitting in that gap. Eighteen of them are run by NO
+    workflow at all, with or without `--ignored`.
+
+    Shrink-only, in both directions:
+      * a target that runs nothing and is NOT baselined fails the aggregate, so
+        the gap cannot reopen;
+      * a baselined target that HAS started running also fails, so the list
+        cannot rot into an excuse for tests that were fixed long ago.
+    """
+    baseline = {
+        (e["package"], e["target"]): e for e in cfg.get("runs_nothing_in_pr", [])
+    }
+    ran_nothing, ran = set(), set()
+    found, _missing = find_reports(reports_dir, shard_count)
+    # Missing shards are already a hard failure in `aggregate`; this audit only
+    # judges what it can see, so a partial upload cannot invent a violation.
+    for path in found.values():
+        for t in json.loads(path.read_text(encoding="utf-8")).get("targets", []):
+            if t.get("kind") != "test":
+                continue
+            key = (t["package"], t["target"])
+            if t.get("passed", 0) == 0 and t.get("failed", 0) == 0 and t.get("ignored", 0) > 0:
+                ran_nothing.add(key)
+            elif t.get("passed", 0) or t.get("failed", 0):
+                ran.add(key)
+
+    problems = []
+    for pkg, target in sorted(ran_nothing - set(baseline)):
+        problems.append(
+            f"RUNS NOTHING: {pkg}/{target} executed 0 tests (every test in it is "
+            "#[ignore]d) and is not in `runs_nothing_in_pr`. A binary that reports "
+            "success without running anything is the exact thing "
+            "no_vacuous_test_targets.rs forbids. Run it, delete it, or baseline it "
+            "with an honest `covered_by`."
+        )
+    for pkg, target in sorted(ran & set(baseline)):
+        problems.append(
+            f"STALE BASELINE: {pkg}/{target} is listed in `runs_nothing_in_pr` but "
+            "now executes tests. Delete the entry — the list is shrink-only."
+        )
+    dead = [e for e in baseline.values() if e.get("covered_by") == "NOTHING"]
+    return problems, len(baseline), len(dead)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Aggregate the pr-workspace-tests shard reports into one verdict."
@@ -155,6 +206,11 @@ def main():
 
     cfg = load_config()
     failures, notices, totals, slowest = aggregate(args.reports, cfg)
+
+    unrun_problems, baselined, dead = audit_runs_nothing(
+        args.reports, cfg, cfg["shard_count"]
+    )
+    failures += unrun_problems
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     lines = [
@@ -173,6 +229,9 @@ def main():
         f"- skip notices printed: {totals['skips']} "
         "(a skip is not a pass; the cross-build suites are excluded from PR shards "
         "and run in core-full instead)",
+        "",
+        f"- binaries that ran NOTHING (all tests #[ignore]d): {baselined} baselined, "
+        f"of which {dead} are run by NO workflow at all — dead, not slow",
         "",
         "### Slowest 15 targets",
     ]
