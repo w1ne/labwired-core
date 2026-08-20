@@ -122,10 +122,11 @@ where
 /// A bare byte count says exactly one thing and `parse_size` reads it back
 /// unchanged.
 ///
-/// (The same asymmetry is a live fidelity bug in the committed chips: nine of
-/// them spell flash in `MB`, so e.g. esp32s3 models 16_000_000 bytes where the
-/// part has 16 MiB = 16_777_216. Not changed here — this commit is a refactor,
-/// and moving a flash boundary belongs with its own tests.)
+/// (That asymmetry was also a live fidelity bug: nine committed chips spelled
+/// flash in `MB`, so e.g. esp32s3 modelled 16_000_000 bytes where the part has
+/// 16 MiB = 16_777_216. All nine have since been rewritten in `KB`, and
+/// `labwired_core::tests::chip_memory_sizes` fails the build if a new chip
+/// reintroduces the spelling.)
 fn serialize_size<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -6191,8 +6192,17 @@ mod memory_size_tests {
     }
 
     /// KB is BINARY and MB is DECIMAL, in the same parser. Pinned here because
-    /// it is the opposite of what the spelling suggests, it is load-bearing for
-    /// nine committed chips, and nothing else states it.
+    /// it is the opposite of what the spelling suggests and nothing else states
+    /// it.
+    ///
+    /// No committed chip relies on the `MB` arm any more. Nine of them used to,
+    /// and every one modelled less flash than its part has; esp32s3 was
+    /// rewritten to `"16384KB"` first, and the remaining eight (esp32c3,
+    /// rp2040, rp2350, stm32f103/f405/f407/f767/l476, plus the C3's DROM
+    /// window) followed. The multipliers still cannot move — they are the wire
+    /// format every out-of-tree descriptor and every hosted manifest was
+    /// written against — so the spelling is policed instead, over the shipped
+    /// corpus, by `labwired_core::tests::chip_memory_sizes`.
     #[test]
     fn kb_is_1024_and_mb_is_1000000() {
         assert_eq!(chip("1KB", "1KB").unwrap().flash.size, 1024);
