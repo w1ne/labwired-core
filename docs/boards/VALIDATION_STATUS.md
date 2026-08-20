@@ -26,6 +26,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `5ede284717eebb1d` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `6e165a2c71faa374` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `80e6c55db975df2d` | no silicon capture |
+| `brd2709a` | 🟡 smoke-manual | — | `ab8b5a8489ebce56` | no silicon capture |
 | `esp32` | ⚪ structural | — | `1ffa6e4e6a27dd31` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `851fdf6c3a317a00` | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `f71093f24b509acf` | no silicon capture |
@@ -174,6 +175,13 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): io-smoke (examples/stm32f411ceu6-blackpill: asserts the TIER1 transcript over USART2)
   - offline (CI): chip_conformance (estate OK — no peripheral window faults)
   - offline (CI): register_coverage (scanned against the vendored modm-io SVD, 56 IRQs)
+- Drift status: **no silicon capture**
+
+## `brd2709a` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/brd2709a.md`](brd2709a.md)  ·  Chip: `configs/chips/efr32mg26.yaml`
+- Note: Silicon Labs EFR32MG26 (Series-2, Cortex-M33) Explorer Kit. L1 smoke: deterministic UART + IO scripts (examples/brd2709a/uart-smoke.yaml, io-smoke.yaml) pass via the CLI test lane, printing 'brd2709a: MG26 OK' and the LED/button pin states over the modelled Series-2 USART1 + GPIO port layouts (DOUT drives pins, DIN reads them). CMU/TIMER0 are stub windows, GPIO ROUTE/EXTI unmodelled, no silicon register diff. Silicon smoke 2026-08-18 (J-Link OB 1366:0105:000440338937, probe-rs): the sim-built firmware-mg26-demo ELF flashes and prints the full banner + IO lines on the physical VCOM (115200 8N1, clean ASCII — confirming the 19 MHz EM01GRPA/HFRCO baud basis); USART1 STATUS reads 0x2062 and GPIOC DOUT 0x300 after the run (both bus-FAULT before the firmware's CMU clock enables — the Series-2 clock-gating wall the init sequence exists to climb).
+- Silicon: none — not validated against real hardware.
 - Drift status: **no silicon capture**
 
 ## `esp32` — ⚪ structural
