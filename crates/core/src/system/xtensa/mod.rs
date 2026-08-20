@@ -280,6 +280,12 @@ mod tests {
         assert!(bus.read_u8(0x4200_0000).is_ok(), "flash I-cache");
         assert!(bus.read_u8(0x3C00_0000).is_ok(), "flash D-cache");
         assert!(bus.read_u8(0x6003_8000).is_ok(), "USB_SERIAL_JTAG");
+        assert!(bus.read_u8(0x6003_3000).is_ok(), "WIFI MAC");
+        assert_eq!(
+            bus.read_u32(0x6003_3D14).unwrap() & 1,
+            1,
+            "MAC-ready bit the HAL polls before mac_txrx_init"
+        );
         assert!(bus.read_u8(0x6002_3000).is_ok(), "SYSTIMER");
         assert!(bus.read_u8(0x600C_0000).is_ok(), "SYSTEM");
         assert!(bus.read_u8(0x6000_8000).is_ok(), "RTC_CNTL");

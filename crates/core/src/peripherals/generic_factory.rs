@@ -176,6 +176,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_uart",
     "esp32s3_usb_otg",
     "esp32s3_usb_serial_jtag",
+    "esp32s3_wifi_mac",
     // nRF52 behavioral models the factory builds but this table never named.
     // Alias spellings are deliberately NOT here -- `canonical_peripheral_type`
     // maps those to their canonical output, and listing an alias INPUT would

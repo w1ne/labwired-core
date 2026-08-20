@@ -1171,7 +1171,8 @@ impl WasmSimulator {
         // why this was a browser-only hang.
         app_cpu_lx7.faithful_windows = primary_faithful_windows;
         let app_cpu: Box<dyn Cpu> = Box::new(app_cpu_lx7);
-        let machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
+        let mut machine = Machine::new(boxed, bus).with_secondary_cpu(app_cpu);
+        Self::attach_wifi_ap(&mut machine, manifest);
 
         Ok(WasmSimulator {
             machine: Some(machine),
@@ -1263,7 +1264,8 @@ impl WasmSimulator {
         .map_err(|e| JsValue::from_str(&format!("ESP32-S3 fast_boot: {e}")))?;
 
         let boxed: Box<dyn Cpu> = Box::new(cpu);
-        let machine = Machine::new(boxed, bus);
+        let mut machine = Machine::new(boxed, bus);
+        Self::attach_wifi_ap(&mut machine, manifest);
 
         Ok(WasmSimulator {
             machine: Some(machine),

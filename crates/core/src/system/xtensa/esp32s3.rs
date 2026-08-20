@@ -927,6 +927,9 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
 #[rustfmt::skip]
 pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("usb_serial_jtag", "esp32s3_usb_serial_jtag", 0x6003_8000, 0x1000, None),
+    // WDEV Wi-Fi MAC. Same IP as the C3. RNG at 0x6003_5000 wins that slice
+    // (greatest-start). ETS_WIFI_MAC_INTR_SOURCE = 0.
+    ("wifi_mac",         "esp32s3_wifi_mac",        0x6003_3000, 0x3000, Some(0)),
     ("systimer",        "esp32s3_systimer",        0x6002_3000, 0x1000, None),
     ("gpio",            "esp32s3_gpio",            0x6000_4000, 0x0800, None),
     ("io_mux",          "esp32s3_io_mux",          0x6000_9000, 0x0100, None),
