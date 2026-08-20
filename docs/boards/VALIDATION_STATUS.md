@@ -11,12 +11,12 @@ The models column is a content digest over everything that board's `models` list
 |-------|------|----------------------|--------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `341fae03a1cdf9fb` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `341fae03a1cdf9fb` | ⚠ drift acked 2026-08-13 (re-capture pending) |
-| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `c87f437a19593a48` | ⚠ drift acked 2026-08-13 (re-capture pending) |
+| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `c1939de9fcdc2640` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `24d69238f2dbe866` | ⚠ drift acked 2026-08-15 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `b5d821d9300a7ce3` | ⚠ drift acked 2026-08-13 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `c6edd440f7d52912` | ⚠ drift acked 2026-08-13 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `d17e310c125d5612` | ⚠ drift acked 2026-08-13 (re-capture pending) |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `cba8077c91077c75` | ⚠ drift acked 2026-08-13 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `36e208a4147745a5` | ⚠ drift acked 2026-08-13 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `6133dbb43b2146b1` | ⚠ drift acked 2026-08-13 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `231a8d9a589b5f73` | ⚠ drift acked 2026-08-13 (re-capture pending) |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `26750bfeb2971fa2` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `6d1b78a03ba2a9c7` | ⚠ drift acked 2026-08-17 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `1944e48e1e75ed3b` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `a8c9baa90cb2a903` | no silicon capture |
@@ -24,8 +24,8 @@ The models column is a content digest over everything that board's `models` list
 | `rp2040` | ⚪ structural | — | `3f48a4e4fa11c18b` | no silicon capture |
 | `rp2350` | 🟡 smoke-manual | — | `e5fb3470b189ded7` | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `5ede284717eebb1d` | no silicon capture |
-| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `6e165a2c71faa374` | no silicon capture |
-| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `80e6c55db975df2d` | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `eea8419a6d3a49ec` | no silicon capture |
+| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `851ef7f5751cd033` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `1fa938917d9b8873` | no silicon capture |
 | `esp32` | ⚪ structural | — | `1ffa6e4e6a27dd31` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `851fdf6c3a317a00` | no silicon capture |
