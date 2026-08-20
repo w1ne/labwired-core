@@ -486,6 +486,16 @@ impl SystemBus {
             // not UART0. Route it into the same capture sink.
             if let Some(usb) = any.downcast_mut::<crate::peripherals::rp2040::usb::Rp2040Usb>() {
                 usb.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // ESP32-C3/S3 USB-Serial-JTAG: native-USB boards compile Arduino
+            // `Serial` to this block, not UART0. Same generic tap as RP2040 USB
+            // CDC — the twin finds the console, firmware does not special-case
+            // the board.
+            if let Some(jtag) = any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            {
+                jtag.set_sink(Some(sink.clone()), echo_stdout);
+                continue;
             }
         }
     }
@@ -621,6 +631,11 @@ impl SystemBus {
             if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(Some(sink));
                 uart.silence_stdout_echo_if(echo_stdout);
+                return true;
+            }
+            if let Some(jtag) = any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            {
+                jtag.set_sink(Some(sink), echo_stdout);
                 return true;
             }
             return false;
