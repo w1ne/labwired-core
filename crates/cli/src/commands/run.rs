@@ -1081,6 +1081,93 @@ pub(crate) fn run_firmware(
     // instruction. `sample` on the S3 Doom run put `__findenv_locked` at 25%
     // of the whole process — above the Xtensa interpreter itself.
     let ccdbg = std::env::var("LABWIRED_CCDBG").is_ok();
+
+    // APP_CPU park probe (env `LABWIRED_PARK_PROBE=1`). Answers one question:
+    // at each primary-CPU boundary, is the secondary core WAITI-parked or
+    // genuinely executing? That is the exact predicate `plan_cpu_window` reads
+    // through `Cpu::is_parked_idle` to choose between the 1-instruction
+    // `secondary_lockstep` clamp and the coalesced idle window, so the parked
+    // fraction bounds how much batching is available at all.
+    //
+    // Env is read ONCE, like `ccdbg` above: a `std::env::var` call inside this
+    // loop was measured at 25% of total process time.
+    let park_probe = std::env::var("LABWIRED_PARK_PROBE").is_ok();
+    // Steps below this are not sampled. Boot and steady state behave very
+    // differently; a long run set to skip boot reports steady state instead of
+    // blending the two into one misleading number.
+    let park_from: u64 = std::env::var("LABWIRED_PARK_FROM")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    // Periodic per-window parked% line, so the boot→steady transition is
+    // visible as a time series rather than inferred.
+    let park_window: u64 = std::env::var("LABWIRED_PARK_WINDOW")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10_000_000);
+    let mut park_seen: u64 = 0; // boundaries sampled (steps >= park_from)
+    let mut park_secondary_some: u64 = 0; // ... with `cpu_secondary` present
+    let mut park_parked: u64 = 0; // ... and `is_parked_idle()`
+                                  // `is_parked_idle()` is `waiti_parked && !halted`, so a core still in
+                                  // reset-hold reads as NOT parked and forces the same 1-instruction clamp
+                                  // as a running one. Counted apart: "held in reset" and "executing" are
+                                  // different facts about the workload even though the planner treats them
+                                  // alike.
+    let mut park_halted: u64 = 0;
+    let mut park_win_seen: u64 = 0;
+    let mut park_win_parked: u64 = 0;
+    let mut park_win_halted: u64 = 0;
+    // Diagnostic, not a hot path: a plain map is fine here.
+    let mut park_hist: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
+    macro_rules! park_report {
+        () => {
+            if park_probe {
+                let pct = |n: u64, d: u64| {
+                    if d == 0 {
+                        0.0
+                    } else {
+                        n as f64 * 100.0 / d as f64
+                    }
+                };
+                eprintln!(
+                    "PARK: sampled {park_seen} boundaries (from step {park_from}, ended at {steps})"
+                );
+                eprintln!(
+                    "PARK: cpu_secondary present on {park_secondary_some} ({:.2}%)",
+                    pct(park_secondary_some, park_seen)
+                );
+                eprintln!(
+                    "PARK: parked {park_parked} ({:.2}% of sampled, {:.2}% of secondary-present)",
+                    pct(park_parked, park_seen),
+                    pct(park_parked, park_secondary_some)
+                );
+                eprintln!(
+                    "PARK: halted (reset-hold) {park_halted} ({:.2}% of sampled)",
+                    pct(park_halted, park_seen)
+                );
+                let unparked = park_secondary_some
+                    .saturating_sub(park_parked)
+                    .saturating_sub(park_halted);
+                eprintln!(
+                    "PARK: executing {unparked} ({:.2}% of sampled), {} distinct APP_CPU PCs",
+                    pct(unparked, park_seen),
+                    park_hist.len()
+                );
+                eprintln!(
+                    "PARK: lockstep-forcing (executing + halted) {:.2}% of sampled",
+                    pct(unparked + park_halted, park_seen)
+                );
+                let mut top: Vec<(u32, u64)> = park_hist.iter().map(|(k, v)| (*k, *v)).collect();
+                top.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+                for (i, (pc, n)) in top.iter().take(20).enumerate() {
+                    eprintln!(
+                        "PARK: hot[{i:>2}] 0x{pc:08x} {n:>12}  ({:.2}% of executing)",
+                        pct(*n, unparked)
+                    );
+                }
+            }
+        };
+    }
     while steps < limit {
         let pc_before = machine.cpu.get_pc();
         pc_ring[ring_head] = pc_before;
@@ -1117,10 +1204,31 @@ pub(crate) fn run_firmware(
             );
         }
 
+        // Sample the secondary-core state the planner is about to read. Taken
+        // BEFORE `machine.step()` so it is the state `plan_cpu_window` sees for
+        // this boundary, not the state after the boundary retired.
+        if park_probe && steps >= park_from {
+            park_seen += 1;
+            park_win_seen += 1;
+            if let Some(sec) = machine.cpu_secondary.as_ref() {
+                park_secondary_some += 1;
+                if sec.is_parked_idle() {
+                    park_parked += 1;
+                    park_win_parked += 1;
+                } else if sec.halted {
+                    park_halted += 1;
+                    park_win_halted += 1;
+                } else {
+                    *park_hist.entry(sec.get_pc()).or_insert(0) += 1;
+                }
+            }
+        }
+
         match machine.step() {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(pc)) => {
                 eprintln!("labwired-cli run: BREAK at 0x{pc:08x}");
+                park_report!();
                 export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
                 export_display_if_requested(&args.display_out, &machine.bus);
                 return ExitCode::from(EXIT_PASS);
@@ -1142,6 +1250,7 @@ pub(crate) fn run_firmware(
                         eprintln!("  [{:2}] 0x{:08x}", i, pc_ring[idx]);
                     }
                 }
+                park_report!();
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
             Err(e) => {
@@ -1165,6 +1274,7 @@ pub(crate) fn run_firmware(
                         eprintln!("  [{:2}] 0x{:08x}", i, pc_ring[idx]);
                     }
                 }
+                park_report!();
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
@@ -1192,6 +1302,25 @@ pub(crate) fn run_firmware(
             }
         }
         steps += 1;
+
+        if park_probe && park_window > 0 && steps.is_multiple_of(park_window) {
+            eprintln!(
+                "PARK: window ending step {steps:>11}: sampled {park_win_seen:>10} parked {park_win_parked:>10} ({:.2}%) halted {park_win_halted:>10} ({:.2}%)",
+                if park_win_seen == 0 {
+                    0.0
+                } else {
+                    park_win_parked as f64 * 100.0 / park_win_seen as f64
+                },
+                if park_win_seen == 0 {
+                    0.0
+                } else {
+                    park_win_halted as f64 * 100.0 / park_win_seen as f64
+                }
+            );
+            park_win_seen = 0;
+            park_win_parked = 0;
+            park_win_halted = 0;
+        }
 
         // `--stop-on <text>`: end the run as soon as the firmware's console
         // says so. Makes end-of-run artifacts (`--display-out`) frame-exact —
@@ -1280,12 +1409,21 @@ pub(crate) fn run_firmware(
     let cpu1_pc = machine
         .cpu_secondary
         .as_ref()
-        .map(|c| format!(" appcpu_pc=0x{:08x}", c.get_pc()))
+        .map(|c| {
+            format!(
+                " appcpu_pc=0x{:08x} appcpu_halted={} appcpu_parked={}",
+                c.get_pc(),
+                c.halted,
+                c.is_parked_idle()
+            )
+        })
         .unwrap_or_default();
     eprintln!(
-        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
+        "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x} procpu_parked={}{cpu1_pc}",
         machine.cpu.get_pc(),
+        machine.cpu.is_parked_idle(),
     );
+    park_report!();
     export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     export_display_if_requested(&args.display_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
