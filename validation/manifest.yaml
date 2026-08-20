@@ -2715,12 +2715,41 @@ boards:
     # SYSTIMER/GDMA/SYSTEM/RTC_CNTL). Live re-capture still owed.
     # 2026-08-20: USB-Serial-JTAG generic UART sink tap. Additive capture
     # path; 9-reg reset-state windows untouched. Live re-capture still owed.
-    drift_ack_digest: 61660e987f8766e6e62395b62b2ab77ba2f9c3473cb91b3ef9ec1bf242f6f752
+    # 2026-08-20: the S3's core clock now comes from configs/chips/esp32s3.yaml
+    # (`cpu_hz: 240_000_000`) instead of an 80 MHz literal in Esp32s3Opts that
+    # nothing ever assigned. Unlike the entries above this one is NOT
+    # behaviour-neutral and does not claim to be: the SYSTIMER divides the CPU
+    # cycle stream by `cpu_clock_hz / 16 MHz`, so its divider goes 5 -> 15 and
+    # the S3's simulated wall clock — `sim_time_us`, what esp_timer and
+    # esp-hal's Delay read — slows by exactly 3x to real rate. It was fast by
+    # 3x before. MODELLED TIMING CHANGED. No register map, no reset value and
+    # none of the nine anchored reset registers move (the divider is runtime
+    # state, not a reset value), so esp32s3_reset_conformance is unaffected and
+    # still green; the anchor never covered rates in the first place. A live
+    # re-capture would not distinguish the two states — this defect is only
+    # observable against the datasheet, not against a reset-state read — so no
+    # re-capture is claimed here and the one already owed above still stands.
+    # Same commit adds system/xtensa/esp32s3.rs to `models:` below: the file
+    # that sets this clock and registers all 36 S3 peripherals was outside the
+    # watch list, so this very change would otherwise have moved the S3's time
+    # base with the drift gate green. Verified by control: editing it left the
+    # gate green; editing peripherals/esp32s3/systimer.rs turned it red.
+    # Evidence: cpu_hz_single_source 9/9 (incl. the new production-path
+    # SYSTIMER rate assertion), labwired-core --lib 3298/3298, and 20 S3
+    # targets green under --features jit,event-scheduler; the prebuilt Arduino
+    # flash image still boots and runs through the real BROM
+    # (e2e_esp32s3_flash_boot_no_elf 2/2, e2e_esp32s3_faithful_boot 1/1).
+    drift_ack_digest: 06b276fa3a55de8afb8b4dbb9dfcb2468f998c83c088f4056f4d6d5d11fb134a
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
+      # The S3's system glue: it registers all 36 peripheral models, owns the
+      # memory map, and carries the core clock the SYSTIMER divides down. It
+      # was unwatched until 2026-08-20, so an S3 timing change could land with
+      # this gate green.
+      - crates/core/src/system/xtensa/esp32s3.rs
       # Shared Espressif UART twin — this file IS the relocated esp32s3/uart.rs
       # (moved 2026-07-28 when the C3 started using the same IP), so the S3's
       # UART register map lived outside its own watch list from that date.
