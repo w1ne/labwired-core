@@ -404,6 +404,22 @@ jobs:
     if: failure()
     runs-on: ubuntu-latest
     steps:
+      # ⚠️ `-R` ON EVERY CALL, AND NO `actions/checkout`.
+      #
+      # This job never checked out the repo — it does not need the source to
+      # file an issue — so `gh` had nothing to infer the repository from and
+      # every call died with:
+      #
+      #   failed to run git: fatal: not a git repository
+      #
+      # So the canary could not raise the alarm. Between 2026-08-14 and
+      # 2026-08-20 it failed 28 times out of 31 runs and filed NOTHING; a
+      # search for its own issue title returns empty, so not one of those 28
+      # was ever seen. A canary that cannot alarm is not a canary.
+      #
+      # `-R "$GITHUB_REPOSITORY"` rather than adding a checkout: the fix should
+      # remove the dependency, not satisfy it by cloning a repo this job has no
+      # use for.
       - name: Open or update the canary issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -416,9 +432,14 @@ jobs:
           Run: $RUN
 
           Check the failing leg before anything else — this workflow only runs commands we publish."
-          existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || true)"
+          # No `|| true` on the list: it masked the git failure above as "no
+          # existing issue", so every run took the create branch and every
+          # create died too. A lookup that cannot run must stop the step, not
+          # quietly answer "none".
+          existing="$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+            --search "$title in:title" --json number --jq '.[0].number')"
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
+            gh issue comment "$existing" -R "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --title "$title" --body "$body" --label bug
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label bug
           fi
