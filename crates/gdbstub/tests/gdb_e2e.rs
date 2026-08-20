@@ -85,7 +85,7 @@ fn test_gdb_rsp_basic_commands() {
     // gave us, and connect to that.
     let bound = GdbServer::bind(0).expect("bind an ephemeral port");
     let port = bound.local_addr().port();
-    thread::spawn(move || {
+    let server = thread::spawn(move || {
         let mut bus = SystemBus::new();
         let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
         let mut machine = Machine::new(cpu, bus);
@@ -258,4 +258,11 @@ fn test_gdb_rsp_basic_commands() {
     send_packet(&mut stream, "m0,4");
     let resp = read_packet(&mut stream);
     assert!(!resp.contains("E01"), "GDB memory read failed");
+
+    // End the session before this test returns. An unsynchronized
+    // UnexpectedEof log from `run` can splice into libtest's
+    // `test result:` line; CI then treats a passed run as a hard error.
+    send_packet(&mut stream, "k");
+    drop(stream);
+    server.join().expect("GDB server thread panicked");
 }
