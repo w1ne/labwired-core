@@ -218,7 +218,7 @@ const CHIPS: &[ChipConf] = &[
     },
     // Silicon Labs EFR32MG26 (Series-2, Cortex-M33). Register surface from the
     // simplicity_sdk CMSIS headers (no public SVD exists); L1 smoke only —
-    // GPIO is a placeholder layout and CMU/TIMER0 are stubs. Smoke-validated
+    // GPIO is the Series-2 port layout, CMU/TIMER0 are stubs. Smoke-validated
     // via the brd2709a example (cli lane, `examples/brd2709a/uart-smoke.yaml`),
     // not a firmware_survival case of its own yet.
     ChipConf {

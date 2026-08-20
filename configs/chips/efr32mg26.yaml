@@ -24,7 +24,8 @@
 #
 # Address-map note — the thing to get right on this part:
 #   Flash is based at 0x0800_0000, NOT 0x0 (unlike Series-1 EFR32 and nRF).
-#   The vector table and reset entry therefore live at 0x0800_0000.
+#   The bootloader vector table lives at 0x0800_0000; browser-flashed apps
+#   link at +32 KiB (reset_vector_offset 0x8000).
 #   Peripherals are mapped at their SECURE alias (0x4xxx_xxxx), which is the
 #   default firmware view on this part; the NS alias at 0x5xxx_xxxx is not
 #   mapped.
@@ -67,6 +68,9 @@ flash:
   # FLASH_BASE 0x08000000 / FLASH_SIZE 0x00320000 (3200 KiB) — CMSIS header.
   base: 0x08000000
   size: "3200KB"
+# UART bootloader owns the first 32 KiB. Hosted Arduino / XMODEM images put
+# their vector table here; a full-flash demo ELF still boots from flash_base.
+reset_vector_offset: 0x8000
 ram:
   # SRAM_BASE 0x20000000 / SRAM_SIZE 0x00080000 (512 KiB) — CMSIS header.
   base: 0x20000000

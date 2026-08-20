@@ -111,19 +111,38 @@ def main() -> int:
     packets = encode_packets(payload)
     print(f"sending {len(payload)} bytes in {len(packets)} XMODEM-1K blocks", flush=True)
     for i, pkt in enumerate(packets):
-        write_all(fd, pkt)
-        ack = read_byte(fd, 10)
-        if ack != ACK:
-            print(f"block {i + 1} not ACKed (got {ack})", file=sys.stderr)
+        acked = False
+        for _ in range(3):
+            write_all(fd, pkt)
+            ack = read_byte(fd, 10)
+            if ack == ACK:
+                acked = True
+                break
+            if ack not in (NAK, None):
+                print(f"block {i + 1} not ACKed (got {ack})", file=sys.stderr)
+                return 1
+        if not acked:
+            print(f"block {i + 1} not ACKed after retries", file=sys.stderr)
             return 1
         print(f"  {i + 1}/{len(packets)}", flush=True)
     write_all(fd, bytes([EOT]))
     if read_byte(fd, 10) != ACK:
         print("EOT not ACKed", file=sys.stderr)
         return 1
-    print("OK — bootloader should jump to 0x08008000")
+    tail = bytearray()
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        b = read_byte(fd, 0.2)
+        if b is None:
+            continue
+        tail.append(b)
+        if b"OK" in tail:
+            print("OK — bootloader programmed and jumped to 0x08008000")
+            os.close(fd)
+            return 0
+    print("programmed but did not see OK banner (got %r)" % bytes(tail), file=sys.stderr)
     os.close(fd)
-    return 0
+    return 1
 
 
 if __name__ == "__main__":

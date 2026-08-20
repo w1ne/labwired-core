@@ -4,10 +4,8 @@
 # User's Guide) for the LED/button/VCOM pinout; configs/chips/efr32mg26.yaml
 # for the on-chip map.
 #
-# Note: the chip's GPIO ports currently run the engine's placeholder layout
-# (see the known-divergences block in the chip descriptor), so the LED/button
-# bindings below are declarative metadata — correct pins, not yet driven by a
-# faithful GPIO model.
+# GPIO ports use the Series-2 layout (DOUT/DIN/MODEH); LED/button bindings
+# are load-bearing. ROUTE pin-mux is still a stub (see the chip descriptor).
 name: "brd2709a"
 chip: "../chips/efr32mg26.yaml"
 external_devices: []
