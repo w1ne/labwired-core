@@ -2685,7 +2685,7 @@ boards:
     # openocd. A live re-capture is owed and is tracked; this ack does not
     # discharge it, and it is worth more than the earlier owed ones because
     # this is the first change since the capture to reach a captured window.
-    drift_ack: 2026-08-17
+    drift_ack: 2026-08-20
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -2700,7 +2700,11 @@ boards:
     # 2026-08-20: interrupt_core0.yaml now names the S3's own source-map
     # offsets (SVD INTERRUPT_CORE0), not the C3's. Descriptor-only; the
     # behavioural matrix and the 9-reg reset-state anchor are untouched.
-    drift_ack_digest: 6d1b78a03ba2a9c73fccb758fc80d80361d505d9562e7a7f96bc871bb8d3b62a
+    # 2026-08-20: WDEV Wi-Fi MAC (same IP as C3, 0x60033000, ETS source 0) is
+    # now attached on the S3 bus so wifi-ap labs bind the virtual AP. Outside
+    # the 9-reg reset-state windows (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/
+    # SYSTIMER/GDMA/SYSTEM/RTC_CNTL). Live re-capture still owed.
+    drift_ack_digest: 88842114f716f85a9421830d03851c3b8a2e0902667c5f678f2f1b1a00be7bbe
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
