@@ -589,6 +589,20 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(RtcCntlStub::new()),
     );
+    // EXPERIMENT ONLY (diag/s3-wifi-rom-spin): the analog I2C master /
+    // ANA_CONFIG block at 0x6000_E000. The mask-ROM PHY routine
+    // rom_pkdet_vol_start busy-polls +0x50 bits[26:24] for 0b111 (FSM
+    // idle/done); the rtc_cntl catch-all above answers 0, so it spins.
+    // The C3 models this (peripherals/esp32c3/ana_i2c.rs). Registered here to
+    // measure WHERE the S3 Wi-Fi bring-up stops next, not as a proposed fix.
+    {
+        use crate::Peripheral as _;
+        let mut ana = crate::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new();
+        // Keep RtcCntlStub's seed: I2C_MST_ANA_CONF0_REG (+0x40) bit24 =
+        // I2C_MST_BBPLL_CAL_DONE, which rtc_clk_bbpll_enable busy-polls.
+        let _ = ana.write_u32(0x40, 0x0100_0000);
+        bus.add_peripheral("rtc_i2c_ana", 0x6000_E000, 0x400, None, Box::new(ana));
+    }
     bus.add_peripheral(
         "efuse",
         0x6000_7000,
