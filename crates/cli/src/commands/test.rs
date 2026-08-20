@@ -433,18 +433,18 @@ fn run_c3_rom_boot_no_elf(
     // Load the manifest once: it drives both the UART sink selection (debug_uart)
     // and — the universal WiFi adapter — the `wifi_ap` attach below.
     let manifest_opt = system.map(|s| s.manifest.clone());
-    let debug_uart = manifest_opt.as_ref().and_then(|m| m.debug_uart.clone());
+    let console = manifest_opt
+        .as_ref()
+        .map(labwired_core::console::HostConsole::from_manifest)
+        .unwrap_or(labwired_core::console::HostConsole::Undeclared);
 
     // Console capture, mirroring the main flow: honour debug_uart, else all
     // UARTs, plus the IO-Link master log sink.
     //
-    // `debug_uart` names the console the board's USB socket is wired to, and on
-    // an ESP32-C3/S3 that can be the chip's USB-Serial-JTAG block rather than a
-    // UART (see docs/configuration_reference.md). This branch only ever asked
-    // `attach_uart_tx_sink_named`, so the documented value
-    // `debug_uart: "usb_serial_jtag"` could not resolve: it warned
-    // "did not resolve to a UART peripheral", fell back to the UARTs, and the
-    // CDC console was never tapped.
+    // Parse through HostConsole so `usb_serial_jtag` / `usb-serial-jtag` are
+    // the USB block, not a UART name that fails to resolve and silently falls
+    // back. USB-Serial-JTAG itself is attached AFTER the rom-boot machine is
+    // built — the pre-boot bus has no such block yet.
     //
     // That is the ELF-less rom-boot path — the one the hosted builder takes for
     // every ESP32-C3 Arduino build, which PlatformIO compiles with
@@ -454,22 +454,20 @@ fn run_c3_rom_boot_no_elf(
     // nothing else at 20M, 200M and 500M steps. The sibling ELF-bearing rom-boot
     // branch below already taps the CDC block; only this one did not.
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
-    let cdc_console = debug_uart.as_deref() == Some(labwired_core::console::USB_SERIAL_JTAG);
-    if cdc_console {
-        // Attached AFTER the rom-boot machine is built — `bus` here is the
-        // pre-boot bus and carries no USB-Serial-JTAG block yet, so asking it
-        // now can only produce a spurious "this chip has no USB-Serial-JTAG
-        // block" warning and a silent fallback to the UARTs.
-    } else if let Some(debug_uart) = debug_uart.as_deref() {
-        if !bus.attach_uart_tx_sink_named(debug_uart, uart_tx.clone(), !args.no_uart_stdout) {
-            warn!(
-                "debug_uart '{}' did not resolve to a UART peripheral; falling back to all UARTs",
-                debug_uart
-            );
+    match &console {
+        labwired_core::console::HostConsole::UsbSerialJtag => {}
+        labwired_core::console::HostConsole::Uart(name) => {
+            if !bus.attach_uart_tx_sink_named(name, uart_tx.clone(), !args.no_uart_stdout) {
+                warn!(
+                    "debug_uart '{}' did not resolve to a UART peripheral; falling back to all UARTs",
+                    name
+                );
+                bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+            }
+        }
+        labwired_core::console::HostConsole::Undeclared => {
             bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
         }
-    } else {
-        bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
     }
     bus.attach_iolink_master_log_sink(uart_tx.clone());
 
@@ -569,16 +567,22 @@ fn run_c3_rom_boot_no_elf(
     // the pre-boot bus above has none.
     //
     // Tap CDC when it is the declared console, AND when the console is
-    // undeclared. Wasm already captures both taps in the undeclared case; the
-    // ELF-bearing `test` path always mirrors CDC. Hosted playground yaml
-    // historically omitted `debug_uart`, so this ELF-less arm was the only one
-    // that left Arduino `Serial` (HWCDC on a native-USB C3) unheard — GPIO
-    // still toggled, `uart_contains` never saw the sketch. An explicit UART
-    // `debug_uart` stays UART-only so a bridge-chip board does not mix CDC
-    // into the assertion buffer.
-    let tap_cdc = cdc_console || debug_uart.is_none();
+    // undeclared. The ELF-bearing `test` path always mirrors CDC into uart_tx
+    // so `uart_contains` sees Arduino Serial; this arm now does the same when
+    // the yaml omitted `debug_uart` (the hosted playground shape that shipped
+    // silent C3 serial while GPIO still toggled). Mixing UART0 + CDC can
+    // duplicate the BROM banner in uart.log — substring `uart_contains` still
+    // matches; do not copy this mix onto wasm `attach_c3_flash_console`, which
+    // keeps one heard stream on purpose (undeclared = UART0 heard, CDC unheard).
+    // An explicit UART `debug_uart` stays UART-only so a bridge-chip board
+    // does not mix CDC into the assertion buffer.
+    let tap_cdc = matches!(
+        console,
+        labwired_core::console::HostConsole::UsbSerialJtag
+            | labwired_core::console::HostConsole::Undeclared
+    );
     if tap_cdc && !machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone()) {
-        if cdc_console {
+        if matches!(console, labwired_core::console::HostConsole::UsbSerialJtag) {
             warn!(
                 "debug_uart '{}' was declared but this machine has no USB-Serial-JTAG block; \
                  falling back to all UARTs",
