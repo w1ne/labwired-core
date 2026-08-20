@@ -16,11 +16,38 @@ use crate::peripherals::esp_xtensa_common::system_stub::{EfuseStub, RtcCntlStub,
 use crate::{Bus, Cpu};
 use std::sync::{Arc, Mutex};
 
+/// The ESP32-S3's core clock, in Hz.
+///
+/// NOT a second home for the number: `configs/chips/esp32s3.yaml`'s `cpu_hz`
+/// is the one home, and `esp_chip_descriptors_match_the_engine_constants`
+/// (crates/core/tests/cpu_hz_single_source.rs) fails the build if this and the
+/// descriptor disagree — the same pin the C3's `esp32c3::uart::CPU_CLOCK_HZ`
+/// carries. It exists because `Default` cannot read a YAML file, and the ~40
+/// `..Esp32s3Opts::default()` call sites need a number before any descriptor
+/// is in hand. A caller that HAS one should use [`Esp32s3Opts::for_chip`].
+///
+/// It read 80 MHz here for as long as the field existed while every descriptor,
+/// every board manifest and the TIMG0 factory fallback said 240 — and since the
+/// SYSTIMER divides the CPU cycle stream down by `cpu_clock_hz / 16 MHz`, the
+/// S3's simulated wall clock ran exactly three times too fast.
+pub const ESP32S3_CPU_CLOCK_HZ: u32 = 240_000_000;
+
 #[derive(Debug, Clone)]
 pub struct Esp32s3Opts {
     pub iram_size: u32,
     pub dram_size: u32,
     pub flash_size: u32,
+    /// Core clock in Hz. Sourced from [`ChipDescriptor::cpu_hz`] by
+    /// [`Esp32s3Opts::for_chip`]; [`ESP32S3_CPU_CLOCK_HZ`] otherwise.
+    ///
+    /// Reaches the SYSTIMER (and only the SYSTIMER) through the peripheral
+    /// config built in [`register_esp32s3_peripherals`]. The other ESP core-clock
+    /// constants in `peripherals/` — the UART divisor, the GP-SPI bit time, the
+    /// USB-Serial-JTAG SOF period — are still their own literals and several are
+    /// shared with the classic ESP32 or the C3; threading this through them is a
+    /// separate change with a wider blast radius.
+    ///
+    /// [`ChipDescriptor::cpu_hz`]: labwired_config::ChipDescriptor::cpu_hz
     pub cpu_clock_hz: u32,
     /// Select the flash-XIP model. `true` = real-reset boot (`--rom-boot`): the
     /// ROM + 2nd-stage bootloader program the hardware MMU, so both cache
@@ -64,10 +91,33 @@ impl Default for Esp32s3Opts {
             dram_size: 512 * 1024,
             flash_size: 4 * 1024 * 1024,
             psram_size: 8 * 1024 * 1024,
-            cpu_clock_hz: 80_000_000,
+            cpu_clock_hz: ESP32S3_CPU_CLOCK_HZ,
             real_reset_boot: false,
             rom_images: None,
             flash_image: None,
+        }
+    }
+}
+
+impl Esp32s3Opts {
+    /// Defaults with the core clock taken from the chip descriptor.
+    ///
+    /// Use this wherever a `ChipDescriptor` is already in hand: it is what
+    /// makes `cpu_hz:` in the chip YAML authoritative over the engine's
+    /// constant, so a variant part or an S3 board that runs at 160 MHz is
+    /// modelled at 160 MHz rather than at whatever the default happens to say.
+    ///
+    /// A descriptor written before the field existed parses `cpu_hz` as `0`
+    /// (see `ChipDescriptor::cpu_hz`); that is not a clock, so it falls back to
+    /// [`ESP32S3_CPU_CLOCK_HZ`] rather than dividing by zero downstream.
+    pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Self {
+        let cpu_clock_hz = u32::try_from(chip.cpu_hz)
+            .ok()
+            .filter(|hz| *hz > 0)
+            .unwrap_or(ESP32S3_CPU_CLOCK_HZ);
+        Self {
+            cpu_clock_hz,
+            ..Self::default()
         }
     }
 }
