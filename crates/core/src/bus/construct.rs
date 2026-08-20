@@ -492,7 +492,8 @@ impl SystemBus {
             // `Serial` to this block, not UART0. Same generic tap as RP2040 USB
             // CDC — the twin finds the console, firmware does not special-case
             // the board.
-            if let Some(jtag) = any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            if let Some(jtag) =
+                any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
             {
                 jtag.set_sink(Some(sink.clone()), echo_stdout);
                 continue;
@@ -633,7 +634,8 @@ impl SystemBus {
                 uart.silence_stdout_echo_if(echo_stdout);
                 return true;
             }
-            if let Some(jtag) = any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            if let Some(jtag) =
+                any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
             {
                 jtag.set_sink(Some(sink), echo_stdout);
                 return true;
