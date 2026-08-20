@@ -581,17 +581,18 @@ fn run_c3_rom_boot_no_elf(
         labwired_core::console::HostConsole::UsbSerialJtag
             | labwired_core::console::HostConsole::Undeclared
     );
-    if tap_cdc && !machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone()) {
-        if matches!(console, labwired_core::console::HostConsole::UsbSerialJtag) {
-            warn!(
-                "debug_uart '{}' was declared but this machine has no USB-Serial-JTAG block; \
-                 falling back to all UARTs",
-                labwired_core::console::USB_SERIAL_JTAG
-            );
-            machine
-                .bus
-                .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-        }
+    if tap_cdc
+        && !machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone())
+        && matches!(console, labwired_core::console::HostConsole::UsbSerialJtag)
+    {
+        warn!(
+            "debug_uart '{}' was declared but this machine has no USB-Serial-JTAG block; \
+             falling back to all UARTs",
+            labwired_core::console::USB_SERIAL_JTAG
+        );
+        machine
+            .bus
+            .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
     }
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
