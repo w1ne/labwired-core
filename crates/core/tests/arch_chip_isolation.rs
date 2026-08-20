@@ -29,6 +29,13 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "peripherals::esp32::spi::",
         "test-only: shared SPI register-bit constants",
     ),
+    // S3 WDEV MAC is the C3 IP. #1019 aliases the C3 model rather than forking
+    // a second register map; relocate to a chip-neutral module to drop this.
+    (
+        "esp32s3/wifi_mac.rs",
+        "peripherals::esp32c3::wifi_mac::",
+        "S3 WDEV MAC is the C3 IP; type alias until a chip-neutral module exists",
+    ),
 ];
 
 /// Strip a `//`-comment tail (best-effort; ignores `//` inside string literals,
