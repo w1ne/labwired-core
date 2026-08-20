@@ -2689,6 +2689,11 @@ boards:
     # ETS source 0). The 9-reg reset-state capture never included the MAC
     # window. Owner-acked without a new live capture this session; recapture
     # of the MAC-ready bit at 0x60033D14 is owed on the board on the table.
+    # 2026-08-20: USB-Serial-JTAG is now on the generic UART-TX sink tap
+    # (SystemBus::attach_uart_tx_sink), same rule as RP2040 USB CDC. Arduino
+    # Serial on native-USB C3/S3 lands on this block, not UART0. Capture-path
+    # only: no register map, reset values, or 9-reg silicon windows change.
+    # Live re-capture still owed.
     drift_ack: 2026-08-20
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
@@ -2708,7 +2713,9 @@ boards:
     # now attached on the S3 bus so wifi-ap labs bind the virtual AP. Outside
     # the 9-reg reset-state windows (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/
     # SYSTIMER/GDMA/SYSTEM/RTC_CNTL). Live re-capture still owed.
-    drift_ack_digest: 88842114f716f85a9421830d03851c3b8a2e0902667c5f678f2f1b1a00be7bbe
+    # 2026-08-20: USB-Serial-JTAG generic UART sink tap. Additive capture
+    # path; 9-reg reset-state windows untouched. Live re-capture still owed.
+    drift_ack_digest: 61660e987f8766e6e62395b62b2ab77ba2f9c3473cb91b3ef9ec1bf242f6f752
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
