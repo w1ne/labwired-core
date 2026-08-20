@@ -932,6 +932,82 @@ mod tests {
         assert_eq!(d.read_u32(0x80_0000).unwrap() & 0xFFFF, 0xADDE);
     }
 
+    /// H1 diagnosis for the ESP32-S3 Doom lab: does the IWAD mmap window
+    /// itself return flash bytes?
+    ///
+    /// Sourced from the shipped flash image
+    /// `packages/playground/public/wasm/demo-esp32s3-doom-lab-flash.bin`
+    /// (8,455,860 B, FNV-1a-64 0xeb9f_1b30_4ac0_8435): its partition table at
+    /// 0x8000 places a `wad` data partition (type 1, subtype 0x40) at flash
+    /// 0x41_0000, and the IWAD header there reads numlumps=1264,
+    /// infotableofs=0x3f_b7b4, i.e. 4,196,020 bytes. ESP-IDF maps that as
+    /// `div_ceil(4_196_020, 64 KiB)` = 65 D-cache pages at vaddr 0x3C88_0000,
+    /// which on the S3 format is MMU entries 0x88..=0xC8.
+    ///
+    /// Markers are planted at the first and the LAST word of the WAD, so the
+    /// last page has to translate too — a window that is short by one page
+    /// fails here rather than silently returning 0.
+    #[test]
+    fn doom_wad_mmap_window_returns_planted_bytes() {
+        const FLASH_SIZE: usize = 16 * 1024 * 1024;
+        const WAD_FLASH_OFF: usize = 0x41_0000;
+        const WAD_BYTES: usize = 4_196_020;
+        const WINDOW_OFF: u64 = 0x0088_0000; // vaddr 0x3C88_0000 - base 0x3C00_0000
+        const ENTRY0: usize = (WINDOW_OFF >> 16) as usize; // 0x88 == 136
+        const PHYS0: u32 = (WAD_FLASH_OFF >> 16) as u32; // 0x41
+
+        let wad_pages = WAD_BYTES.div_ceil(PAGE_SIZE as usize);
+        assert_eq!(
+            wad_pages, 65,
+            "4,196,020 B of IWAD is 65 64-KiB pages, not 64 and not 66"
+        );
+
+        let mut flash = vec![0xFFu8; FLASH_SIZE];
+        flash[WAD_FLASH_OFF..WAD_FLASH_OFF + 4].copy_from_slice(b"IWAD");
+        let last = WAD_FLASH_OFF + WAD_BYTES - 4;
+        flash[last..last + 4].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+
+        let backing = Arc::new(Mutex::new(flash));
+        let mmu = new_mmu_table();
+        {
+            let mut entries = mmu.entries.lock().unwrap();
+            for i in 0..wad_pages {
+                let entry_id = ENTRY0 + i;
+                assert!(entry_id < SOC_MMU_ENTRY_NUM);
+                // VALID on the S3 format is bit 14 CLEAR.
+                entries[entry_id] = (PHYS0 + i as u32) & MMU_FMT_S3.valid_val_mask;
+            }
+        }
+        mmu.generation.fetch_add(1, Ordering::Release);
+
+        let d = FlashXipPeripheral::new_mmu(backing, 0x3C00_0000, mmu);
+
+        // WAD header: byte path and word (instruction/XIP) path must agree.
+        assert_eq!(d.read(WINDOW_OFF).unwrap(), b'I');
+        assert_eq!(d.read(WINDOW_OFF + 1).unwrap(), b'W');
+        assert_eq!(d.read(WINDOW_OFF + 2).unwrap(), b'A');
+        assert_eq!(d.read(WINDOW_OFF + 3).unwrap(), b'D');
+        assert_eq!(
+            d.read_u32(WINDOW_OFF).unwrap(),
+            u32::from_le_bytes(*b"IWAD")
+        );
+
+        // Last word of the WAD — page 64 of 65 (entry 0xC8).
+        let last_off = WINDOW_OFF + WAD_BYTES as u64 - 4;
+        assert_eq!(last_off >> 16, (ENTRY0 + wad_pages - 1) as u64);
+        assert_eq!(d.read(last_off).unwrap(), 0xDE);
+        assert_eq!(d.read(last_off + 1).unwrap(), 0xAD);
+        assert_eq!(d.read(last_off + 2).unwrap(), 0xBE);
+        assert_eq!(d.read(last_off + 3).unwrap(), 0xEF);
+        assert_eq!(d.read_u32(last_off).unwrap(), 0xEFBE_ADDE);
+
+        // A page one PAST the mapped window is still invalid: the window is
+        // exactly 65 pages wide, it does not accidentally cover the rest of
+        // the 5 MiB partition.
+        let past = WINDOW_OFF + (wad_pages as u64) * u64::from(PAGE_SIZE);
+        assert_eq!(d.read(past).unwrap(), 0);
+    }
+
     #[test]
     fn mmu_invalid_entry_reads_zero() {
         let backing = Arc::new(Mutex::new(vec![0xFFu8; PAGE_SIZE as usize]));
