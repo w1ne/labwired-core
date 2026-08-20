@@ -19,6 +19,7 @@ pub mod dbgmcu;
 pub mod declarative;
 pub mod dma;
 pub mod dwt;
+pub mod efr32;
 pub mod esp32;
 pub mod esp32c3;
 pub mod esp32s3;

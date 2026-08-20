@@ -427,9 +427,11 @@ impl crate::Bus for SystemBus {
                 return Ok(((byte_val >> bit) & 1) as u32);
             }
         }
-        // RP2040 atomic register aliases: every alias of a register reads back
-        // the aligned base register (the op only affects writes).
-        if self.atomic_register_aliases {
+        // Atomic register aliases: every alias of a register reads back the
+        // aligned base register (the op only affects writes). True for both
+        // families — pico-sdk documents it, and the Series-2 RM says a read of
+        // a SET/CLR/TGL alias returns the register's value.
+        if self.atomic_register_aliases.is_enabled() {
             if let Some((base, _)) = self.atomic_alias_redirect(addr) {
                 return self.read_u32(base);
             }
@@ -584,11 +586,11 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.esp32c3_pms_gate_store(addr) {
             return r;
         }
-        // RP2040 atomic register aliases: a write to a +0x1000/0x2000/0x3000
-        // alias of a peripheral register is a read-modify-write (XOR/SET/CLR)
-        // on the aligned base register. The base access recurses into the
-        // normal path (its alias bits are clear), so there is no further alias.
-        if self.atomic_register_aliases {
+        // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of
+        // a peripheral register is a read-modify-write on the aligned base
+        // register. The base access recurses into the normal path (its alias
+        // bits are clear), so there is no further alias.
+        if self.atomic_register_aliases.is_enabled() {
             if let Some((base, op)) = self.atomic_alias_redirect(addr) {
                 let cur = self.read_u32(base)?;
                 let new = match op {

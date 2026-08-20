@@ -134,6 +134,14 @@ impl SystemBus {
         if t == "nrf_clock" || t == "nrf52_clock" || t == "nrf52840_clock" {
             return "nrf52_clock".to_string();
         }
+        // Silicon Labs Series-2 CMU. Intercepted BEFORE the generic `cmu`
+        // bin: that bin means "an STM32-shaped RCC" and resolving a Series-2
+        // CMU through `RccRegisterLayout` can only pick an STM32 family, which
+        // would put CLKEN0 at an offset this silicon uses for something else.
+        // The Series-0/1 `efm32_cmu` stubs keep going to the generic bin.
+        if t == "efr32s2_cmu" || t == "efr32_series2_cmu" || t == "efm32s2_cmu" {
+            return "efr32s2_cmu".to_string();
+        }
         if t.contains("rcc") || t.contains("cmu") {
             return "rcc".to_string();
         }

@@ -239,6 +239,7 @@ pub const MODEL_TYPES: &[&str] = &[
     // Further nRF54L factory arms.
     "nrf54l_clock",
     "nrf54l_grtc",
+    "efr32s2_cmu",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -265,6 +266,10 @@ pub fn try_build(
                 None => Box::new(crate::peripherals::systick::Systick::new()),
             }
         }
+        // Silicon Labs Series-2 CMU — its own model, NOT an `RccRegisterLayout`
+        // variant. `rcc.rs` is one struct per STM32 family by design, and this
+        // silicon shares no register with any of them.
+        "efr32s2_cmu" => Box::new(crate::peripherals::efr32::cmu::Efr32s2Cmu::new()),
         "rcc" => {
             let layout: RccRegisterLayout = SystemBus::parse_profile_or_default(p_cfg, "RCC")?;
             let mut rcc = crate::peripherals::rcc::Rcc::new_with_layout(layout);

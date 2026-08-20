@@ -45,9 +45,8 @@
 #     the EXTI/EM4WU interrupt path, drive-strength/slew fields (stored, no
 #     behaviour), and the WIREDAND open-source analog niceties (treated as
 #     push-pull).
-#   - The Series-2 SET/CLR/TGL register aliases (+0x1000/+0x2000/+0x3000 inside
-#     every peripheral block) are NOT mapped; only the base 4 KiB register view
-#     is. emlib code that bit-sets via `*_SET` aliases would hit unmapped MMIO.
+#   - (FIXED) The Series-2 SET/CLR/TGL register aliases are now decoded, see
+#     `atomic_register_aliases` below.
 #   - USART1 is the only USART mapped (VCOM console). USART0/2 and the four
 #     EUSARTs are not declared.
 #   - MSC (flash controller), WDOG0/1, EMU, SMU, PRS, LDMA, radio (RAIL/
@@ -71,6 +70,19 @@ flash:
 # UART bootloader owns the first 32 KiB. Hosted Arduino / XMODEM images put
 # their vector table here; a full-flash demo ELF still boots from flash_base.
 reset_vector_offset: 0x8000
+# Series-2 peripheral bit set/clear: every peripheral register is aliased three
+# more times inside its 16 KiB block — +0x1000 SET, +0x2000 CLR, +0x3000 TGL
+# (EFR32xG26 Reference Manual rev 1.0, "Peripheral Bit Set and Clear"). emlib
+# and the Gecko SDK write essentially every enable bit through them
+# (`CMU->CLKEN0_SET`, `GPIO->USARTROUTE[1].ROUTEEN_SET`, `USART1->CMD_SET`), so
+# without this an unmodified Silicon Labs image faults on the first one. Every
+# module in the RM's peripheral map is 16 KiB-aligned, so folding an alias with
+# `addr & !0x3000` lands on the same block it came from, never a neighbour.
+#
+# ⚠️ NOT the RP2040 order. There `+0x1000` is XOR and `+0x2000` is SET; here
+# `+0x1000` is SET and `+0x2000` is CLR. Naming the family is what keeps a
+# "clock enable" from decoding as a clock disable.
+atomic_register_aliases: "efr32s2"
 ram:
   # SRAM_BASE 0x20000000 / SRAM_SIZE 0x00080000 (512 KiB) — CMSIS header.
   base: 0x20000000
@@ -96,17 +108,26 @@ peripherals:
   # this layout, so no UART interrupt is ever pended either way.
   - id: "usart1"
     type: "efr32s2_usart"
+    # CMU_CLKEN2.USART1, bit 7 (`_CMU_CLKEN2_USART1_SHIFT`). USART1 is on
+    # CLKEN2, not CLKEN0 — the Series-2 CLKEN registers are not one flat space
+    # and USART0 (CLKEN0 bit 9) is a different word entirely.
+    clock: { reg: "clken2", bit: 7 }
     base_address: 0x400A4000
     size: "4KB"
     irq: 17
 
   # ── Clock management unit ────────────────────────────────────────────────
-  # CMU_S_BASE (CMU_IRQn = 63). Declared `stub`: the window decodes and reads
-  # zero, and the omission is deliberate — no clock tree is modelled (see the
-  # header comment). Out of reset the real part runs from FSRCO with the
-  # USART clocked, which is exactly the state the stub implies.
+  # CMU_S_BASE (CMU_IRQn = 63). A real register model — see
+  # `peripherals/efr32/cmu.rs` for the offsets (walked from `CMU_TypeDef` in
+  # efr32mg26_cmu.h) and the honest list of what it does not model. CLKEN0/1/2
+  # hold live state, which is what makes the `clock:` gates below mean
+  # something: a peripheral that firmware never clocked now reads back zero, as
+  # it does on silicon, instead of answering anyway.
+  #
+  # This peripheral's id is `cmu`, not `rcc` — the bus resolves the clock
+  # controller from a short list of vendor names (`CLOCK_CONTROLLER_IDS`).
   - id: "cmu"
-    type: "stub"
+    type: "efr32s2_cmu"
     base_address: 0x40008000
     size: "4KB"
 
@@ -125,18 +146,30 @@ peripherals:
   # map this is NOT — do not "unify" them onto this type.
   - id: "gpioa"
     type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
     base_address: 0x4003C030
     size: "48B"
   - id: "gpiob"
     type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
     base_address: 0x4003C060
     size: "48B"
   - id: "gpioc"
     type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
     base_address: 0x4003C090
     size: "48B"
   - id: "gpiod"
     type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
     base_address: 0x4003C0C0
     size: "48B"
 
@@ -152,6 +185,9 @@ peripherals:
   # USART1ROUTE). See the bench note in docs/boards/brd2709a.md.
   - id: "gpio_route"
     type: "stub"
+    # Same GPIO clock as the port structs — the ROUTE registers live in the
+    # same block.
+    clock: { reg: "clken0", bit: 26 }
     base_address: 0x4003C820
     size: "96B"
 

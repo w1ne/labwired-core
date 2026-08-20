@@ -82,7 +82,7 @@ impl SystemBus {
             peripheral_accesses: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
             ws2812: Vec::new(),
@@ -171,7 +171,7 @@ impl SystemBus {
             peripheral_accesses: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
             ws2812: Vec::new(),
@@ -729,24 +729,32 @@ impl SystemBus {
         }
     }
 
-    /// Decode an RP2040 atomic register-alias access. Returns the aligned base
-    /// register address and the atomic op when `addr` lands on a `+0x1000`
-    /// (XOR), `+0x2000` (SET) or `+0x3000` (CLR) alias of a peripheral register
-    /// in the APB/AHB-Lite peripheral window; `None` for a normal (`+0x0000`)
-    /// access or any address outside the window. Only consulted when
-    /// `atomic_register_aliases` is set, so it is a no-op for other parts.
+    /// Decode an atomic register-alias access. Returns the aligned base
+    /// register address and the atomic op when `addr` lands on a `+0x1000`,
+    /// `+0x2000` or `+0x3000` alias of a peripheral register in the peripheral
+    /// window; `None` for a normal (`+0x0000`) access or any address outside
+    /// the window. Which alias is which op is the chip's
+    /// [`AtomicAliasFlavour`]; the flavour is `None` for most parts, so this
+    /// costs one enum test on their hot path.
+    ///
+    /// The window spans both the RP2040 APB/AHB-Lite range and the Silicon Labs
+    /// Series-2 peripheral ranges, which are NOT one contiguous block: the RM's
+    /// peripheral map puts the bulk at `0x4000_0000`, but RADIOAES/SMU at
+    /// `0x4400_0000`, LETIMER0/IADC0/VDAC at `0x4900_0000`, HFXO at
+    /// `0x4A00_0000`, I2C0/WDOG/EUSART0 at `0x4B00_0000`, SEMAILBOX at
+    /// `0x4C00_0000` and MVP at `0x4D00_0000` (EFR32xG26 RM rev 1.0 §4.2.4.1).
+    /// A range that stopped at `0x5040_0000` still covers all of them, and the
+    /// non-secure aliases at `0x5xxx_xxxx` are a separate mapping this chip
+    /// does not declare.
     #[inline]
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
-        const APB_AHB: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
-        if !APB_AHB.contains(&addr) {
+        const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
+        if !PERIPHERAL_WINDOW.contains(&addr) {
             return None;
         }
-        let op = match (addr >> 12) & 0x3 {
-            0 => return None,
-            1 => AtomicAliasOp::Xor,
-            2 => AtomicAliasOp::Set,
-            _ => AtomicAliasOp::Clr,
-        };
+        let op = self
+            .atomic_register_aliases
+            .op_for_index((addr >> 12) & 0x3)?;
         Some((addr & !0x3000, op))
     }
 
@@ -830,14 +838,14 @@ impl SystemBus {
         &mut self,
         peripherals: &[labwired_config::PeripheralConfig],
     ) -> anyhow::Result<()> {
-        // Find the RCC model once (clock-gating requires one).
+        // Find the clock controller once (clock-gating requires one). Asked
+        // through `Peripheral::clock_gate_reg_offset`, not a downcast to one
+        // concrete model: a downcast to `rcc::Rcc` silently answered `None` for
+        // every other vendor's clock unit, so a Silicon Labs CMU could declare
+        // gates that never resolved.
         let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
             let idx = bus.rcc_idx?;
-            bus.peripherals[idx]
-                .dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
-                .and_then(|rcc| rcc.rcc_reg_offset(reg))
+            bus.peripherals[idx].dev.clock_gate_reg_offset(reg)
         };
         for p_cfg in peripherals {
             let Some(gates) = &p_cfg.clock else { continue };

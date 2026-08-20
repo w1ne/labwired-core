@@ -641,6 +641,21 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Clock-controller capability: resolve a symbolic clock-enable register
+    /// name from a peripheral's `clock:` declaration (`"apb1enr"`, `"clken2"`,
+    /// …) to its byte offset inside THIS peripheral.
+    ///
+    /// Only a chip's clock controller implements it. The alternative — the bus
+    /// downcasting to one concrete model — meant clock gating existed for
+    /// exactly the family that model belonged to, and a second vendor's clock
+    /// unit could not gate anything no matter what its yaml declared.
+    /// `None` for every other peripheral, and for a name this controller does
+    /// not have (which `resolve_clock_gates` turns into a hard config error
+    /// rather than a silently ungated peripheral).
+    fn clock_gate_reg_offset(&self, _name: &str) -> Option<u64> {
+        None
+    }
+
     /// GPIO capability: read the firmware-visible input level for `pin`.
     /// Non-GPIO peripherals return `None`.
     fn read_gpio_input(&self, _pin: u8) -> Option<bool> {

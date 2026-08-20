@@ -255,6 +255,100 @@ pub struct PinLoc {
     pub bit: u8,
 }
 
+/// Which family's atomic register aliases a chip implements.
+///
+/// Both families alias every peripheral register three more times at a 0x1000
+/// stride inside the peripheral's window, and both let firmware do a bit-level
+/// read-modify-write with one store. They do NOT agree on which alias means
+/// what, and the two orders overlap enough that using the wrong one is silent:
+/// an RP2040 SET (`+0x2000`) is an EFR32 CLR, so a driver "enabling" a clock
+/// would disable it and every later access to that block would read zero.
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AtomicAliasFlavour {
+    /// No aliases. An alias address is ordinary (usually unmapped) MMIO.
+    #[default]
+    None,
+    /// RP2040 / RP2350: `+0x1000` XOR, `+0x2000` SET, `+0x3000` CLR
+    /// (`hw_xor_bits` / `hw_set_bits` / `hw_clear_bits`, pico-sdk
+    /// `hardware/address_mapped.h`). The HAL drives nearly all register setup
+    /// through them, so without this an unmodified image faults on the first
+    /// `hw_set_bits`.
+    Rp2040,
+    /// Silicon Labs EFR32/EFM32 Series 2: `+0x1000` SET, `+0x2000` CLR,
+    /// `+0x3000` TGL (EFR32xG26 Reference Manual rev 1.0, "Peripheral Bit Set
+    /// and Clear"; `emlib` writes `PERIPH->REG_SET = mask`). Series-2 emlib and
+    /// the Gecko SDK use the aliases for essentially every enable bit — CMU
+    /// clock gating, GPIO ROUTEEN, USART/EUSART enables — so a Series-2 image
+    /// cannot configure a single peripheral without them.
+    Efr32s2,
+}
+
+impl AtomicAliasFlavour {
+    /// The op an alias index (`(addr >> 12) & 0x3`) means for this family, or
+    /// `None` for index 0 (the register itself) and for a chip with no aliases.
+    #[inline]
+    pub fn op_for_index(self, index: u64) -> Option<AtomicAliasOp> {
+        match (self, index) {
+            (Self::None, _) | (_, 0) => None,
+            (Self::Rp2040, 1) => Some(AtomicAliasOp::Xor),
+            (Self::Rp2040, 2) => Some(AtomicAliasOp::Set),
+            (Self::Rp2040, _) => Some(AtomicAliasOp::Clr),
+            (Self::Efr32s2, 1) => Some(AtomicAliasOp::Set),
+            (Self::Efr32s2, 2) => Some(AtomicAliasOp::Clr),
+            (Self::Efr32s2, _) => Some(AtomicAliasOp::Xor),
+        }
+    }
+
+    /// Whether this chip decodes atomic aliases at all.
+    #[inline]
+    pub fn is_enabled(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+/// The read-modify-write an atomic alias performs. `Xor` doubles as Series-2
+/// TGL: toggling IS an XOR of the written mask, and keeping one op spares the
+/// bus a second identical arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicAliasOp {
+    /// Write XORs the bits (RP2040 `+0x1000`, EFR32 Series-2 TGL `+0x3000`).
+    Xor,
+    /// Write sets (ORs) the bits.
+    Set,
+    /// Write clears (AND-NOTs) the bits.
+    Clr,
+}
+
+/// `false` / `true` / `"none"` / `"rp2040"` / `"efr32s2"`. The bool spelling is
+/// what every RP2040 descriptor in the tree already carries; `true` keeps
+/// meaning RP2040 rather than becoming ambiguous the day a second family
+/// arrived.
+fn deserialize_atomic_alias_flavour<'de, D>(d: D) -> Result<AtomicAliasFlavour, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrName {
+        Bool(bool),
+        Name(String),
+    }
+    match BoolOrName::deserialize(d)? {
+        BoolOrName::Bool(false) => Ok(AtomicAliasFlavour::None),
+        BoolOrName::Bool(true) => Ok(AtomicAliasFlavour::Rp2040),
+        BoolOrName::Name(name) => match name.trim().to_ascii_lowercase().as_str() {
+            "none" | "false" => Ok(AtomicAliasFlavour::None),
+            "rp2040" | "rp2350" | "true" => Ok(AtomicAliasFlavour::Rp2040),
+            "efr32s2" | "efm32s2" | "efr32_series2" | "efr32xg2" => Ok(AtomicAliasFlavour::Efr32s2),
+            other => Err(D::Error::custom(format!(
+                "unknown atomic_register_aliases '{other}'; expected false, true, rp2040 or efr32s2"
+            ))),
+        },
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -300,15 +394,15 @@ pub struct ChipDescriptor {
     /// the real reset vector when the flash-base vectors are not valid.
     #[serde(default, deserialize_with = "deserialize_u64_lax")]
     pub reset_vector_offset: u64,
-    /// RP2040-style atomic register aliases. When true, every 0x1000-strided
-    /// alias of a peripheral register in the APB window decodes as an atomic
-    /// op on the base register: `+0x0000` normal, `+0x1000` XOR, `+0x2000`
-    /// SET (bitwise OR), `+0x3000` CLR (bitwise AND-NOT). The RP2040 HAL drives
-    /// nearly all of its register setup through these aliases (`hw_set_bits`,
-    /// `hw_clear_bits`), so without them an unmodified image faults on the
-    /// first `hw_set_bits`. Default `false` (other Cortex-M parts).
-    #[serde(default)]
-    pub atomic_register_aliases: bool,
+    /// Atomic register aliases: the 0x1000-strided aliases of every peripheral
+    /// register that a family's HAL uses for read-modify-write without a
+    /// critical section. Two families do this with the SAME stride and
+    /// DIFFERENT ops, so the key names which — see [`AtomicAliasFlavour`].
+    /// Accepts `false`/`true` (historical spelling: `true` == `rp2040`) or the
+    /// flavour name. Default: none, i.e. an alias address is unmapped MMIO and
+    /// faults, which is correct for STM32/nRF/etc.
+    #[serde(default, deserialize_with = "deserialize_atomic_alias_flavour")]
+    pub atomic_register_aliases: AtomicAliasFlavour,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -2986,7 +3080,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             flash,
             ram,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals
