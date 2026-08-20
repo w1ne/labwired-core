@@ -112,3 +112,36 @@ fn s3_radio_window_coverage() {
         eprintln!("0x{base:08X}  owner={owner:<18} {what}");
     }
 }
+
+/// The SECOND wall, reached only once the ana-I2C FSM guard is released:
+/// esp-idf's `temperature_sensor_get_raw_value` (sar_periph_ctrl.c, linked
+/// into the Arduino core and called from `phy_rf_init` for TX-power
+/// calibration) sets SENS_SAR_TSENS_CTRL_REG bit 24 (dump-out) and then spins
+/// on bit 8 (TSENS_RDY_OUT):
+///   42028feb: l32r  a8, ->0x60008800 (SENS)
+///   42028ff4: l32i  a2, a8, 80        ; 0x6000_8850
+///   42028ff7: or    a2, a2, 0x01000000
+///   42028ffd: s32i  a2, a8, 80
+///   42029003: l32i  a2, a8, 80
+///   42029006: bbci  a2, 8, 42029000   ; loop until RDY_OUT
+/// Same shape, same cause: 0x6000_8850 is storage in the rtc_cntl catch-all,
+/// so bit 8 only ever holds what firmware wrote — never 1.
+#[test]
+fn s3_tsens_ready_bit_never_asserts() {
+    let mut bus = labwired_core::bus::SystemBus::new();
+    let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    const TSENS_CTRL: u64 = 0x6000_8850;
+    // Firmware's own read-modify-write: request a conversion.
+    let v = bus.read_u32(TSENS_CTRL).unwrap();
+    bus.write_u32(TSENS_CTRL, v | 0x0100_0000).unwrap();
+    let after = bus.read_u32(TSENS_CTRL).unwrap();
+    eprintln!(
+        "0x{TSENS_CTRL:08X} after dump-out request = 0x{after:08X} (bit8 RDY_OUT = {})",
+        (after >> 8) & 1
+    );
+    assert_eq!(
+        (after >> 8) & 1,
+        0,
+        "TSENS_RDY_OUT never asserts — the poll cannot exit"
+    );
+}
