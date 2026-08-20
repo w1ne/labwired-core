@@ -563,19 +563,31 @@ fn run_c3_rom_boot_no_elf(
         labwired_core::system::wifi::attach_configured_wifi_ap(&mut machine.bus, manifest);
     }
 
-    // The declared console, now that the rom-boot machine exists. `esp32c3_rom`
-    // constructs the USB-Serial-JTAG block (with its interrupt source) while
-    // building this machine, so this is the first point at which the block can
-    // be tapped — the pre-boot bus above has none.
-    if cdc_console && !machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone()) {
-        warn!(
-            "debug_uart '{}' was declared but this machine has no USB-Serial-JTAG block; \
-             falling back to all UARTs",
-            labwired_core::console::USB_SERIAL_JTAG
-        );
-        machine
-            .bus
-            .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    // The console, now that the rom-boot machine exists. `esp32c3_rom` constructs
+    // the USB-Serial-JTAG block (with its interrupt source) while building this
+    // machine, so this is the first point at which the block can be tapped —
+    // the pre-boot bus above has none.
+    //
+    // Tap CDC when it is the declared console, AND when the console is
+    // undeclared. Wasm already captures both taps in the undeclared case; the
+    // ELF-bearing `test` path always mirrors CDC. Hosted playground yaml
+    // historically omitted `debug_uart`, so this ELF-less arm was the only one
+    // that left Arduino `Serial` (HWCDC on a native-USB C3) unheard — GPIO
+    // still toggled, `uart_contains` never saw the sketch. An explicit UART
+    // `debug_uart` stays UART-only so a bridge-chip board does not mix CDC
+    // into the assertion buffer.
+    let tap_cdc = cdc_console || debug_uart.is_none();
+    if tap_cdc && !machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone()) {
+        if cdc_console {
+            warn!(
+                "debug_uart '{}' was declared but this machine has no USB-Serial-JTAG block; \
+                 falling back to all UARTs",
+                labwired_core::console::USB_SERIAL_JTAG
+            );
+            machine
+                .bus
+                .attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+        }
     }
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
