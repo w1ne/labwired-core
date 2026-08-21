@@ -27,6 +27,10 @@ def build_tree(root: Path, *, chips, arduino_boards, matrix_ids, ledger, scripts
 
     scripts: iterable of (workflow_name, script_rel, system_rel, chip) — a
     workflow that runs `labwired test` on a script whose system names a chip.
+
+    arduino_boards: (id, chip) pairs, or (id, chip, extra_yaml) where the third
+    element is appended verbatim under the entry — how the external-lane tests
+    below attach `external_compile:` / `lane:`.
     """
     (root / "configs/chips").mkdir(parents=True)
     for chip in chips:
@@ -34,7 +38,8 @@ def build_tree(root: Path, *, chips, arduino_boards, matrix_ids, ledger, scripts
 
     (root / "validation/arduino-matrix").mkdir(parents=True)
     boards = "boards:\n" + "".join(
-        f"  - id: {bid}\n    chip: {chip}\n" for bid, chip in arduino_boards
+        f"  - id: {b[0]}\n    chip: {b[1]}\n" + (b[2] if len(b) > 2 else "")
+        for b in arduino_boards
     )
     (root / "validation/arduino-matrix/boards.yaml").write_text(boards)
 
@@ -147,6 +152,75 @@ def test_a_boards_yaml_entry_the_workflow_never_names_is_not_coverage(tmp_path):
         chips=["stm32f103"],
         arduino_boards=[("stm32f103", "stm32f103")],
         matrix_ids=[],  # workflow lists no boards at all
+        ledger=EMPTY_LEDGER,
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert "does not name it, so nothing runs it" in out
+
+
+# ── external-compile lanes ────────────────────────────────────────────────
+#
+# One board cannot compile in this repo at all: BRD2709A's Arduino core is
+# hand-written and lives in the labwired monorepo, so `external_compile:` says
+# so and `lane:` names the workflow that does run it. Three rules, one for each
+# way that could become a hole.
+
+EXTERNAL = '    external_compile:\n      target: "silabs-arduino:v"\n'
+LANE = '    lane: "labwired/.github/workflows/x.yml"\n'
+
+
+def test_an_external_compile_board_with_a_lane_is_coverage(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=["efr32mg26"],
+        arduino_boards=[("brd2709a", "efr32mg26", EXTERNAL + LANE)],
+        matrix_ids=[],  # deliberately absent from THIS repo's matrix
+        ledger=EMPTY_LEDGER,
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
+
+
+def test_an_external_compile_board_with_no_lane_is_a_hole(tmp_path):
+    """Without a lane, nothing anywhere runs it — the exact failure this gate is for."""
+    build_tree(
+        tmp_path,
+        chips=["efr32mg26"],
+        arduino_boards=[("brd2709a", "efr32mg26", EXTERNAL)],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+    )
+    code, out = run_gate(tmp_path)
+    assert code != 0
+    assert "names no `lane:`" in out
+
+
+def test_an_external_compile_board_in_this_repos_matrix_is_refused(tmp_path):
+    """The job could only ever report toolchain_missing, and would burn a runner doing it."""
+    build_tree(
+        tmp_path,
+        chips=["efr32mg26"],
+        arduino_boards=[("brd2709a", "efr32mg26", EXTERNAL + LANE)],
+        matrix_ids=["brd2709a"],
+        ledger=EMPTY_LEDGER,
+    )
+    code, out = run_gate(tmp_path)
+    assert code != 0
+    assert "toolchain_missing" in out
+
+
+def test_a_lane_alone_does_not_excuse_an_ordinary_board(tmp_path):
+    """`lane:` is only meaningful with `external_compile:`.
+
+    Otherwise any board could be waved past the matrix by adding one line, which
+    would turn the rule above into a suggestion.
+    """
+    build_tree(
+        tmp_path,
+        chips=["stm32f103"],
+        arduino_boards=[("stm32f103", "stm32f103", LANE)],
+        matrix_ids=[],
         ledger=EMPTY_LEDGER,
     )
     code, out = run_gate(tmp_path)
