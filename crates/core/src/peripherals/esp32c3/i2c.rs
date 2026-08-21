@@ -75,12 +75,22 @@
 //!
 //! All other offsets accept writes silently and read 0.
 
-use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
+use crate::peripherals::esp_i2c_core::{
+    EspI2cCore, RouteGate, CMD_DONE_BIT, CTR_TRANS_START_BIT, FIFO_CAPACITY, FIFO_CONF_RX_RST,
+    FIFO_CONF_TX_RST, I2C_LINES, LINE_SCL, LINE_SDA, REG_CMD0, REG_CTR, REG_DATA, REG_FIFO_CONF,
+    REG_FIFO_ST, REG_INT_CLR, REG_INT_ENA, REG_INT_RAW, REG_INT_ST, REG_SLAVE_ADDR, REG_SR,
+};
 use crate::peripherals::i2c::I2cDevice;
 use crate::peripherals::pad_lines::PadLines;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+
+/// The family register offsets and interrupt bits, from the one place they are
+/// stated. What the C3 does NOT share — interrupt source 29, the cycle-accurate
+/// bit engine, the GPIO-matrix route gate on every slave and its own timing
+/// register file — stays below.
+pub use crate::peripherals::esp_i2c_core::{INT_END_DETECT, INT_NACK, INT_TRANS_COMPLETE};
 
 pub const I2C0_BASE: u32 = 0x6001_3000;
 pub const I2C0_SIZE: u64 = 0x1000;
@@ -191,18 +201,8 @@ impl C3I2cMatrixRouteState {
 
 pub(crate) type C3I2cMatrixRoute = Arc<Mutex<C3I2cMatrixRouteState>>;
 
-// Core FSM / status registers
-const REG_CTR: u64 = 0x04;
-const REG_SR: u64 = 0x08;
-const REG_SLAVE_ADDR: u64 = 0x10;
-const REG_FIFO_ST: u64 = 0x14;
-const REG_FIFO_CONF: u64 = 0x18;
-const REG_DATA: u64 = 0x1C;
-const REG_INT_RAW: u64 = 0x20;
-const REG_INT_CLR: u64 = 0x24;
-const REG_INT_ENA: u64 = 0x28;
-const REG_INT_ST: u64 = 0x2C;
-const REG_CMD0: u64 = 0x58;
+// The LAST command slot: 8 on this part, 16 on the classic ESP32. Everything
+// past it is a timing register here and a COMD slot there.
 const REG_CMD7: u64 = 0x74;
 // Read-only APB windows into the FIFO RAM (TXFIFO_START_ADDR / RXFIFO_START_ADDR
 // per C3 i2c0.yaml offsets 256 / 384). Reading shows the FIFO head byte without
@@ -229,7 +229,6 @@ const REG_SCL_SP_CONF: u64 = 0x80;
 const REG_SCL_STRETCH_CONF: u64 = 0x84;
 const REG_DATE: u64 = 0xF8;
 
-const CTR_TRANS_START_BIT: u32 = 1 << 5;
 /// CTR bit 10: FSM_RST — write-trigger master FSM reset.
 const CTR_FSM_RST: u32 = 1 << 10;
 /// CTR bit 11: CONF_UPGATE — self-clearing config-sync trigger.
@@ -243,17 +242,11 @@ const SR_RESP_REC: u32 = 1 << 0;
 /// `i2c0.yaml` SR field map).
 const SR_BUS_BUSY: u32 = 1 << 4;
 
-/// COMD bit 31: command_done. Set when a command finishes executing.
-const CMD_DONE_BIT: u32 = 1 << 31;
-
 /// INT_RAW bit 1: TXFIFO_WM — the TX FIFO is at/below its watermark threshold
 /// (asserted at reset, when the FIFO is empty). Real firmware's ISR services it
 /// to refill the FIFO mid-burst; the bit engine raises it when a WRITE command
 /// underruns so a refilling driver is signalled to feed the stalled transfer.
 pub const INT_TXFIFO_WM: u32 = 1 << 1;
-pub const INT_END_DETECT: u32 = 1 << 3;
-pub const INT_TRANS_COMPLETE: u32 = 1 << 7;
-pub const INT_NACK: u32 = 1 << 10;
 const SCL_RST_SLV_EN: u32 = 1 << 0;
 
 /// Event-scheduler token: advance the bit engine by one I²C module-clock tick.
@@ -265,9 +258,9 @@ const SCL_RST_SLV_EN: u32 = 1 << 0;
 /// armed it; see [`Esp32c3I2c::re_anchor`].
 const I2C_FIRST_ARM_SEQ: u32 = 1;
 
-/// ESP32-C3 has 8 COMD slots at offsets 0x58..0x78 (COMD0..COMD7 in the yaml).
+/// ESP32-C3 has 8 COMD slots at offsets 0x58..0x74 (COMD0..COMD7 in the yaml).
+/// The classic ESP32 has 16 and puts COMD8..COMD15 over the timing registers.
 const NUM_CMDS: usize = 8;
-const FIFO_CAPACITY: usize = 32;
 
 // COMD opcodes per ESP32-C3 TRM §16 / esp32c3 PAC `i2c0::comd`:
 //   1 = WRITE, 2 = STOP, 3 = READ, 4 = END, 6 = RSTART
@@ -307,11 +300,6 @@ pub struct I2cLineLevels {
     lines: std::sync::Arc<PadLines>,
 }
 
-/// Line order for [`I2cLineLevels`]; the accessors index by these constants.
-const I2C_LINES: &[&str] = &["SCL", "SDA"];
-const LINE_SCL: usize = 0;
-const LINE_SDA: usize = 1;
-
 impl I2cLineLevels {
     /// The underlying pad lines, for a GPIO port to bind pad routes to.
     /// The C3 keeps the named face because its matrix/ACK logic reads the
@@ -323,7 +311,7 @@ impl I2cLineLevels {
     fn new() -> Self {
         Self {
             // Open-drain with pull-ups: both lines rest high.
-            lines: std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])),
+            lines: crate::peripherals::esp_i2c_core::new_pad_lines(),
         }
     }
 
@@ -477,9 +465,11 @@ pub struct Esp32c3I2c {
     /// TX-FIFO read pointer (bytes consumed by the current command-list run).
     /// Surfaced as FIFO_ST.TXFIFO_RADDR; 0 at cold reset.
     tx_pop_count: usize,
-    rx_fifo: RefCell<std::collections::VecDeque<u8>>,
-    slaves: Vec<Box<dyn I2cDevice>>,
-    /// Physical pad route for each slave, parallel to `slaves`. `None` is an
+    /// Attached slaves, address resolution and the RX FIFO — the part of this
+    /// controller that is the same part on every Espressif I²C.
+    core: EspI2cCore,
+    /// Physical pad route for each slave, parallel to the core's slave list.
+    /// `None` is an
     /// intentional low-level/direct-test attachment; manifest-backed C3
     /// external devices always carry `Some` and are gated by the GPIO matrix.
     slave_routes: Vec<Option<C3I2cPadRoute>>,
@@ -567,8 +557,7 @@ impl Esp32c3I2c {
             cmds: [0; NUM_CMDS],
             tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
             tx_pop_count: 0,
-            rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
-            slaves: Vec::new(),
+            core: EspI2cCore::new(),
             slave_routes: Vec::new(),
             matrix_route: None,
             intr_source_id: I2C0_INTR_SOURCE_ID,
@@ -613,7 +602,7 @@ impl Esp32c3I2c {
     /// part of their electrical contract.
     #[cfg(test)]
     pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
-        self.slaves.push(slave);
+        self.core.push_slave(slave);
         self.slave_routes.push(None);
     }
 
@@ -625,7 +614,7 @@ impl Esp32c3I2c {
         slave: Box<dyn I2cDevice>,
         route: C3I2cPadRoute,
     ) {
-        self.slaves.push(slave);
+        self.core.push_slave(slave);
         self.slave_routes.push(Some(route));
     }
 
@@ -636,7 +625,7 @@ impl Esp32c3I2c {
     /// held directly (no `RefCell`) because the C3 engine never hands out interior
     /// mutable references during a transaction.
     pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
-        &self.slaves
+        self.core.slaves()
     }
 
     /// Mutable counterpart of [`Self::attached_slaves`], for callers that must
@@ -645,7 +634,7 @@ impl Esp32c3I2c {
     /// [`crate::Peripheral::for_each_attached_sim_input`]; this exists so tests
     /// can reach a device by a path independent of the walk they are gating.
     pub fn attached_slaves_mut(&mut self) -> &mut [Box<dyn I2cDevice>] {
-        &mut self.slaves
+        self.core.slaves_mut()
     }
 
     /// Share GPIO's live matrix state with this controller after both C3
@@ -654,11 +643,20 @@ impl Esp32c3I2c {
         self.matrix_route = Some(route);
     }
 
-    fn slave_route_active(&self, index: usize) -> bool {
-        let Some(Some(route)) = self.slave_routes.get(index).copied() else {
+    /// The route gate as a free function over the two fields it reads, so the
+    /// shared resolver in [`EspI2cCore`] can be handed it while it holds the
+    /// slave list mutably. A slave with no recorded route is a low-level or
+    /// direct-test attachment and is always reachable; a manifest-backed one
+    /// answers only while GPIO's live matrix state matches its declared pads.
+    fn route_active(
+        routes: &[Option<C3I2cPadRoute>],
+        matrix: &Option<C3I2cMatrixRoute>,
+        index: usize,
+    ) -> bool {
+        let Some(Some(route)) = routes.get(index).copied() else {
             return true;
         };
-        self.matrix_route
+        matrix
             .as_ref()
             .map(|state| {
                 state
@@ -679,11 +677,10 @@ impl Esp32c3I2c {
     /// unchanged and still applies to the switch itself, which is the only
     /// thing physically wired to the pads.
     fn find_slave_by_address(&mut self, address: u8) -> Option<usize> {
-        let idx = self.slaves.iter().enumerate().find_map(|(idx, slave)| {
-            (self.slave_route_active(idx) && slave.claims_address(address)).then_some(idx)
-        })?;
-        self.slaves[idx].select_address(address);
-        Some(idx)
+        let (routes, matrix) = (&self.slave_routes, &self.matrix_route);
+        let reachable = |idx: usize| Self::route_active(routes, matrix, idx);
+        self.core
+            .find_by_address(address, &RouteGate::Matrix(&reachable))
     }
 
     fn fifo_status(&self) -> u32 {
@@ -703,7 +700,7 @@ impl Esp32c3I2c {
         // RXFIFO_CNT, bits 14..15 STRETCH_CAUSE (reset 0b11 == yaml
         // reset_value 49152), bits 18..23 TXFIFO_CNT.
         const SR_STRETCH_CAUSE_RESET: u32 = 0x0000_C000;
-        let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
+        let rx = (self.core.rx_len() as u32) & 0x3F;
         let tx = (self.tx_fifo.len() as u32) & 0x3F;
         let busy = if self.engine_active() || self.engine.bus_held {
             SR_BUS_BUSY
@@ -714,14 +711,10 @@ impl Esp32c3I2c {
     }
 
     fn find_slave_from_slave_addr_register(&mut self) -> Option<usize> {
-        let raw = self.slave_addr & 0x7FFF;
-        if raw <= 0x7F {
-            if let Some(idx) = self.find_slave_by_address(raw as u8) {
-                return Some(idx);
-            }
-        }
-        let shifted = ((raw >> 1) & 0x7F) as u8;
-        self.find_slave_by_address(shifted)
+        let (routes, matrix) = (&self.slave_routes, &self.matrix_route);
+        let reachable = |idx: usize| Self::route_active(routes, matrix, idx);
+        self.core
+            .find_by_slave_addr_register(self.slave_addr, &RouteGate::Matrix(&reachable))
     }
 }
 
@@ -738,7 +731,7 @@ impl std::fmt::Debug for Esp32c3I2c {
             .field("slave_addr", &self.slave_addr)
             .field("int_raw", &self.int_raw)
             .field("int_ena", &self.int_ena)
-            .field("slaves_count", &self.slaves.len())
+            .field("slaves_count", &self.core.slave_count())
             .field("engine_state", &self.engine.state)
             .finish()
     }
@@ -766,7 +759,7 @@ impl Peripheral for Esp32c3I2c {
             REG_SR => self.status_register(),
             REG_TO => self.reg_to,
             REG_SLAVE_ADDR => self.slave_addr,
-            REG_DATA => self.rx_fifo.borrow_mut().pop_front().unwrap_or(0) as u32,
+            REG_DATA => u32::from(self.core.rx_pop()),
             REG_FIFO_CONF => self.fifo_conf,
             REG_INT_RAW => self.int_raw,
             REG_INT_CLR => 0,
@@ -793,7 +786,7 @@ impl Peripheral for Esp32c3I2c {
             REG_DATE => self.reg_date,
             // Read-only FIFO-RAM windows: peek the head byte, never consume.
             REG_TXFIFO_START => self.tx_fifo.front().copied().unwrap_or(0) as u32,
-            REG_RXFIFO_START => self.rx_fifo.borrow().front().copied().unwrap_or(0) as u32,
+            REG_RXFIFO_START => u32::from(self.core.rx_peek()),
             _ => {
                 crate::census_reg!("esp32c3.i2c:Esp32c3I2c", offset, "read");
                 0
@@ -847,14 +840,14 @@ impl Peripheral for Esp32c3I2c {
             REG_FIFO_CONF => {
                 self.fifo_conf = value;
                 // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
-                if value & (1 << 12) != 0 {
-                    self.rx_fifo.borrow_mut().clear();
+                if value & FIFO_CONF_RX_RST != 0 {
+                    self.core.rx_clear();
                 }
-                if value & (1 << 13) != 0 {
+                if value & FIFO_CONF_TX_RST != 0 {
                     self.tx_fifo.clear();
                     self.tx_pop_count = 0;
                 }
-                self.fifo_conf &= !((1 << 12) | (1 << 13));
+                self.fifo_conf &= !(FIFO_CONF_RX_RST | FIFO_CONF_TX_RST);
             }
             REG_INT_CLR => self.int_raw &= !value,
             REG_INT_ENA => self.int_ena = value,
@@ -1058,33 +1051,18 @@ impl Peripheral for Esp32c3I2c {
     }
 
     fn advance_attached_i2c_us(&mut self, us: u64) {
-        if us == 0 {
-            return;
-        }
-        for slave in self.slaves.iter_mut() {
-            slave.advance_time_us(us);
-        }
+        self.core.advance_time_us(us);
     }
 
     fn for_each_attached_sim_input(
         &mut self,
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
     ) -> bool {
-        for slave in self.slaves.iter_mut() {
-            // `for_each_sim_input`, not `as_sim_input_mut`: a container slave
-            // (TCA9548A mux) exposes the inputs of the devices behind it, which
-            // a single-surface accessor cannot represent.
-            if slave.for_each_sim_input(f) {
-                return true;
-            }
-        }
-        false
+        self.core.for_each_sim_input(f)
     }
 
     fn for_each_attached_device(&self, f: &mut dyn FnMut(crate::inspect::AttachedDeviceRef<'_>)) {
-        for dev in &self.slaves {
-            crate::inspect::visit_i2c_device(&**dev, f);
-        }
+        self.core.for_each_attached_device(f);
     }
 
     /// Custom inspection: generic register decode plus a `framebuffer` artifact
@@ -1346,7 +1324,7 @@ impl Esp32c3I2c {
                 OP_RSTART => {
                     // Frame boundary for the (trace-wrapped) previous slave.
                     if let Some(slave_idx) = self.active_slave {
-                        self.slaves[slave_idx].start();
+                        self.core.slave_mut(slave_idx).start();
                     }
                     self.active_slave = None;
                     self.expects_addr = true;
@@ -1409,7 +1387,7 @@ impl Esp32c3I2c {
         self.engine.addr_byte = self.expects_addr && !self.engine.cur_is_read;
         if self.engine.cur_is_read {
             self.engine.cur_byte = match self.active_slave {
-                Some(slave_idx) => self.slaves[slave_idx].read(),
+                Some(slave_idx) => self.core.slave_mut(slave_idx).read(),
                 None => 0,
             };
         } else {
@@ -1445,11 +1423,7 @@ impl Esp32c3I2c {
         if self.engine.cur_is_read {
             // Received byte lands in the RX FIFO; the master drives the ACK
             // level the command word asked for (COMD.ack_value).
-            let mut rx = self.rx_fifo.borrow_mut();
-            if rx.len() < FIFO_CAPACITY {
-                rx.push_back(self.engine.cur_byte);
-            }
-            drop(rx);
+            self.core.rx_push(self.engine.cur_byte);
             return self.engine.cur_ack_value;
         }
         let b = self.engine.cur_byte;
@@ -1462,7 +1436,7 @@ impl Esp32c3I2c {
                 // device — the bus-trace wrapper reconstructs the address
                 // frame from this call.
                 self.active_slave = Some(slave_idx);
-                self.slaves[slave_idx].start();
+                self.core.slave_mut(slave_idx).start();
                 self.sr |= SR_RESP_REC;
                 return false;
             }
@@ -1471,9 +1445,9 @@ impl Esp32c3I2c {
             // is real data and is delivered to the slave.
             if let Some(slave_idx) = self.find_slave_from_slave_addr_register() {
                 self.active_slave = Some(slave_idx);
-                self.slaves[slave_idx].start();
+                self.core.slave_mut(slave_idx).start();
                 self.sr |= SR_RESP_REC;
-                self.slaves[slave_idx].write(b);
+                self.core.slave_mut(slave_idx).write(b);
                 return false;
             }
             self.active_slave = None;
@@ -1482,7 +1456,7 @@ impl Esp32c3I2c {
         }
         // Data byte of a WRITE.
         if let Some(slave_idx) = self.active_slave {
-            self.slaves[slave_idx].write(b);
+            self.core.slave_mut(slave_idx).write(b);
             self.sr |= SR_RESP_REC;
             false
         } else {
@@ -1578,7 +1552,7 @@ impl Esp32c3I2c {
             }
             EngineState::StopHold => {
                 if let Some(slave_idx) = self.active_slave {
-                    self.slaves[slave_idx].stop();
+                    self.core.slave_mut(slave_idx).stop();
                 }
                 self.active_slave = None;
                 self.expects_addr = true;
