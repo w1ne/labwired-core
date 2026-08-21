@@ -515,7 +515,7 @@ impl SystemBus {
             }
         }
 
-        if !self.esp32c3_irq_routing {
+        if !self.irq_fabric.esp32c3.routing {
             // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
             // 0 and 1, diff against last-known state, and notify every
             // peripheral of changed pins. GPIOTE overrides observe_gpio_change
@@ -640,7 +640,7 @@ impl SystemBus {
         // HC-SR04 per-tick ECHO drive must run on every chip family — including
         // ESP32-C3, where the Nordic GPIO/GPIOTE block above is skipped.
         //
-        // Leaving these inside `!esp32c3_irq_routing` made every C3 freehand
+        // Leaving these inside `!irq_fabric.esp32c3.routing` made every C3 freehand
         // DHT lab print DHT_NAN forever: the write-hook armed the frame, but
         // `service_gpio_devices` never drove external_levels, so digitalRead
         // only ever saw idle/pull-up (live direct twin, 2026-08-11).
@@ -678,8 +678,8 @@ impl SystemBus {
     /// asserted source is routed to a CPU line via its INTERRUPT_CORE0 MAP
     /// register (0x600C2000 + source*4, low 5 bits), gated by CPU_INT_ENABLE
     /// and per-line priority vs CPU_INT_THRESH. The result lands in
-    /// `riscv_irq_lines`, which the core ORs into `mip`. No-op unless
-    /// `esp32c3_irq_routing` is set (only the C3 rom-boot path sets it).
+    /// `irq_fabric.esp32c3.irq_lines`, which the core ORs into `mip`. No-op unless
+    /// `irq_fabric.esp32c3.routing` is set (only the C3 rom-boot path sets it).
     ///
     /// This tick-time pass is no longer the only aggregation point: MMIO
     /// writes that change the routing inputs (INTC enable/threshold/priority/
@@ -692,7 +692,7 @@ impl SystemBus {
     /// tick-end rebuild below runs before the CPU's next instruction-boundary
     /// interrupt check, so behaviour is byte-identical to the pre-choke code.
     fn aggregate_esp32c3_irqs(&mut self, source_ids: &[u32]) {
-        if !self.esp32c3_irq_routing {
+        if !self.irq_fabric.esp32c3.routing {
             return;
         }
 
@@ -706,13 +706,13 @@ impl SystemBus {
                 asserted[idx] |= 1u64 << (src % 64);
             }
         }
-        self.esp32c3_asserted_sources = asserted;
+        self.irq_fabric.esp32c3.walk_sources = asserted;
         // Re-derive scheduler-driven peripheral levels (SYSTIMER once migrated
         // off the walk) so their level-sensitive matrix IRQ persists across
         // walk ticks and de-asserts the tick after firmware clears it.
         self.refresh_esp32c3_sched_sources();
 
-        if self.esp32c3_irq_cache.is_some() {
+        if self.irq_fabric.esp32c3.intc.is_some() {
             self.recompute_esp32c3_irq_lines();
             return;
         }
@@ -727,7 +727,9 @@ impl SystemBus {
             (0x600C_0034, 53),
         ];
         let read_intcore = |bus: &SystemBus, offset: u64| {
-            bus.esp32c3_interrupt_core0_idx
+            bus.irq_fabric
+                .esp32c3
+                .interrupt_core0_idx
                 .and_then(|idx| bus.read_cached_declarative_u32(idx, offset))
                 .or_else(|| bus.read_u32(INTMATRIX_BASE + offset).ok())
                 .unwrap_or(0)
@@ -757,7 +759,7 @@ impl SystemBus {
         }
         // Scheduler-driven peripheral levels (SYSTIMER off the walk) — refreshed
         // into the persistent bitmap above.
-        let sched = self.esp32c3_sched_asserted_sources;
+        let sched = self.irq_fabric.esp32c3.sched_sources;
         for (word, bits) in sched.iter().enumerate() {
             let mut bits = *bits;
             while bits != 0 {
@@ -768,7 +770,9 @@ impl SystemBus {
         }
         for (addr, src) in FROM_CPU {
             let from_cpu = self
-                .esp32c3_system_idx
+                .irq_fabric
+                .esp32c3
+                .system_idx
                 .and_then(|idx| {
                     let offset = addr.checked_sub(self.peripherals[idx].base)?;
                     self.read_cached_declarative_u32(idx, offset)
@@ -779,10 +783,10 @@ impl SystemBus {
                 route_source(src);
             }
         }
-        self.riscv_irq_lines = mask;
+        self.irq_fabric.esp32c3.irq_lines = mask;
     }
 
-    /// Rebuild `riscv_irq_lines` from the cached C3 routing state: the INTC
+    /// Rebuild `irq_fabric.esp32c3.irq_lines` from the cached C3 routing state: the INTC
     /// register cache (enable/threshold/priority/map — maintained at the MMIO
     /// write choke), the cached FROM_CPU IPI pending bits, and the peripheral
     /// sources recorded by the most recent tick. The single aggregation body
@@ -802,7 +806,7 @@ impl SystemBus {
         // Read before `cache` is borrowed so the two immutable borrows of
         // `self` do not overlap the closure below.
         let pms_sources = self.esp32c3_pms_sources();
-        let Some(cache) = &self.esp32c3_irq_cache else {
+        let Some(cache) = &self.irq_fabric.esp32c3.intc else {
             return;
         };
         let mut mask = 0u32;
@@ -820,9 +824,17 @@ impl SystemBus {
         };
 
         for (word, (&walk, (&sched, &pms))) in self
-            .esp32c3_asserted_sources
+            .irq_fabric
+            .esp32c3
+            .walk_sources
             .iter()
-            .zip(self.esp32c3_sched_asserted_sources.iter().zip(&pms_sources))
+            .zip(
+                self.irq_fabric
+                    .esp32c3
+                    .sched_sources
+                    .iter()
+                    .zip(&pms_sources),
+            )
             .enumerate()
         {
             // Union of walk-emitted level sources (rebuilt each tick),
@@ -843,7 +855,7 @@ impl SystemBus {
             route_source(FROM_CPU_SOURCE_BASE + slot);
             pending &= !(1 << slot);
         }
-        self.riscv_irq_lines = mask;
+        self.irq_fabric.esp32c3.irq_lines = mask;
     }
 
     /// Re-derive the C3 matrix sources asserted by SCHEDULER-driven peripherals
@@ -854,12 +866,12 @@ impl SystemBus {
     /// event path (`Machine::apply_event_result`, exact-cycle delivery) and the
     /// walk-tick aggregation (steady-state persistence + de-assert). No-op
     /// unless C3 routing is active. Does NOT recompute — the caller decides
-    /// when to fold this into `riscv_irq_lines`.
+    /// when to fold this into `irq_fabric.esp32c3.irq_lines`.
     pub(crate) fn refresh_esp32c3_sched_sources(&mut self) {
-        if !self.esp32c3_irq_routing {
+        if !self.irq_fabric.esp32c3.routing {
             return;
         }
-        self.esp32c3_sched_asserted_sources = self.poll_scheduler_matrix_sources();
+        self.irq_fabric.esp32c3.sched_sources = self.poll_scheduler_matrix_sources();
     }
 
     /// Shared per-fabric primitive: the interrupt-matrix source-ID bitmap
@@ -918,22 +930,22 @@ impl SystemBus {
     /// ESP32-S3 twin of [`Self::refresh_esp32c3_sched_sources`]: re-derive the
     /// intmatrix sources asserted by scheduler-driven peripherals (the SYSTIMER
     /// alarm once migrated off the walk) into the persistent
-    /// `esp32s3_sched_asserted_sources` bitmap. Rebuilt from scratch each call
+    /// `irq_fabric.esp32s3.sched_sources` bitmap. Rebuilt from scratch each call
     /// (level semantics), so a source drops out the poll after firmware writes
     /// INT_CLR. Called from the event path (`deliver_scheduled_irq_levels`,
     /// exact-cycle delivery) and the walk-tick aggregation (steady-state
     /// persistence + de-assert). No-op unless the S3 intmatrix is registered.
     pub(crate) fn refresh_esp32s3_sched_sources(&mut self) {
-        if !self.esp32s3_irq_routing {
+        if !self.irq_fabric.esp32s3.routing {
             return;
         }
-        self.esp32s3_sched_asserted_sources = self.poll_scheduler_matrix_sources();
+        self.irq_fabric.esp32s3.sched_sources = self.poll_scheduler_matrix_sources();
     }
 
     /// Rebuild the ESP32-S3 routed `pending_cpu_irqs` bitmap (per core) and the
     /// intmatrix `INTR_STATUS` mirror from the UNION of the walk-emitted level
-    /// sources (`esp32s3_asserted_sources`, rebuilt each walk tick) and the
-    /// scheduler-driven levels (`esp32s3_sched_asserted_sources`, re-derived
+    /// sources (`irq_fabric.esp32s3.walk_sources`, rebuilt each walk tick) and the
+    /// scheduler-driven levels (`irq_fabric.esp32s3.sched_sources`, re-derived
     /// from `matrix_irq_sources`). The S3 twin of
     /// [`Self::recompute_esp32c3_irq_lines`]: the single aggregation body shared
     /// by the per-tick walk pass (`aggregate_esp32s3_explicit_irqs`) and the
@@ -943,17 +955,17 @@ impl SystemBus {
     /// the mirror must see the same union as the routed bits. No-op unless the S3
     /// intmatrix is registered.
     pub(crate) fn recompute_esp32s3_irq_lines(&mut self) {
-        let Some(intmatrix_idx) = self.esp32s3_intmatrix_idx else {
+        let Some(intmatrix_idx) = self.irq_fabric.esp32s3.intmatrix_idx else {
             return;
         };
-        if !self.esp32s3_irq_routing {
+        if !self.irq_fabric.esp32s3.routing {
             return;
         }
         let mut routed = [0u32; 2];
         let mut intr_status = [0u32; 4];
-        for word in 0..self.esp32s3_asserted_sources.len() {
-            let mut bits =
-                self.esp32s3_asserted_sources[word] | self.esp32s3_sched_asserted_sources[word];
+        for word in 0..self.irq_fabric.esp32s3.walk_sources.len() {
+            let mut bits = self.irq_fabric.esp32s3.walk_sources[word]
+                | self.irq_fabric.esp32s3.sched_sources[word];
             while bits != 0 {
                 let bit = bits.trailing_zeros();
                 let source_id = word as u32 * 64 + bit;
@@ -991,7 +1003,7 @@ impl SystemBus {
     /// level into the fabric's routed state); this method specialises only where
     /// the interrupt fabric differs, and a new fabric slots in by adding ONE
     /// branch here:
-    ///   * ESP32-C3 (RISC-V interrupt matrix) → `riscv_irq_lines`;
+    ///   * ESP32-C3 (RISC-V interrupt matrix) → `irq_fabric.esp32c3.irq_lines`;
     ///   * ESP32-S3 (Xtensa interrupt matrix) → `pending_cpu_irqs` + INTR_STATUS.
     ///
     /// Returns `true` when a matrix fabric handled delivery; `false` on an NVIC
@@ -1000,11 +1012,11 @@ impl SystemBus {
     /// fabric is a documented TODO — see the PR body).
     #[cfg(feature = "event-scheduler")]
     pub(crate) fn deliver_scheduled_irq_levels(&mut self) -> bool {
-        if self.esp32c3_irq_routing {
+        if self.irq_fabric.esp32c3.routing {
             self.refresh_esp32c3_sched_sources();
             self.recompute_esp32c3_irq_lines();
             true
-        } else if self.esp32s3_irq_routing {
+        } else if self.irq_fabric.esp32s3.routing {
             self.refresh_esp32s3_sched_sources();
             self.recompute_esp32s3_irq_lines();
             true
@@ -1024,8 +1036,10 @@ impl SystemBus {
     /// Level-sensitive rebuild each tick (same contract as S3/C3). No-op when
     /// DPORT is absent. Does not touch S3/C3 routing flags.
     fn aggregate_esp32_classic_irqs(&mut self, source_ids: &[u32]) {
-        // Skip when S3/C3 fabrics own `pending_cpu_irqs`.
-        if self.esp32s3_irq_routing || self.esp32c3_irq_routing {
+        // Skip when a chip interrupt MATRIX already owns the routed CPU-interrupt
+        // state — the seam answers this without the classic-ESP32 path naming
+        // the two SoCs that could be holding it.
+        if self.irq_fabric.matrix_owns_cpu_irqs() {
             return;
         }
         let Some(idx) = self.dport_idx else {
@@ -1061,7 +1075,7 @@ impl SystemBus {
         // bus (ARM/RISC-V/nRF use the NVIC path and never read
         // `pending_cpu_irqs`) — return without touching any state so the
         // model stays fully self-contained and cannot influence other models.
-        if self.esp32s3_intmatrix_idx.is_none() || !self.esp32s3_irq_routing {
+        if self.irq_fabric.esp32s3.intmatrix_idx.is_none() || !self.irq_fabric.esp32s3.routing {
             return;
         }
         // Record the walk-emitted level sources asserting THIS tick (rebuilt
@@ -1078,7 +1092,7 @@ impl SystemBus {
                 asserted[idx] |= 1u64 << (src % 64);
             }
         }
-        self.esp32s3_asserted_sources = asserted;
+        self.irq_fabric.esp32s3.walk_sources = asserted;
         self.refresh_esp32s3_sched_sources();
         self.recompute_esp32s3_irq_lines();
     }
@@ -1250,7 +1264,7 @@ impl SystemBus {
         }
         let (mut interrupts, costs, pending_dma, dma_signals, explicit_source_ids) =
             self.tick_peripherals_phase1(force_scheduler_walk);
-        if self.esp32c3_irq_routing {
+        if self.irq_fabric.esp32c3.routing {
             self.aggregate_esp32c3_irqs(&explicit_source_ids);
             return (interrupts, costs);
         }
@@ -1671,7 +1685,7 @@ mod walk_free_campaign {
 /// A SYSTIMER migrated off the per-cycle walk delivers its alarm as a scheduled
 /// event; the C3 routing arm (`Machine::apply_event_result` → this module's
 /// `refresh_esp32c3_sched_sources` + `recompute_esp32c3_irq_lines`) must route
-/// that level to `riscv_irq_lines` EXACTLY as the legacy walk did when the
+/// that level to `irq_fabric.esp32c3.irq_lines` EXACTLY as the legacy walk did when the
 /// SYSTIMER re-emitted source 37 every tick (`aggregate_esp32c3_irqs`). This
 /// pins that equivalence at the bus level (the OLED-lab gate proves it
 /// end-to-end through the real FreeRTOS tick).
@@ -1703,7 +1717,7 @@ mod c3_systimer_matrix_routing {
 
         // Enable the RISC-V interrupt routing (the ROM-boot path sets this; the
         // from_config bus does not) and rebuild the INTC cache.
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
         bus.refresh_peripheral_index();
 
         // Swap the declarative SYSTIMER stub for the real scheduler model and
@@ -1745,7 +1759,7 @@ mod c3_systimer_matrix_routing {
     }
 
     /// The scheduler routing arm and the legacy walk aggregation produce the
-    /// SAME `riscv_irq_lines` for the SAME SYSTIMER level.
+    /// SAME `irq_fabric.esp32c3.irq_lines` for the SAME SYSTIMER level.
     #[test]
     fn scheduler_routing_matches_walk_routing_for_same_level() {
         let mut bus = setup();
@@ -1762,7 +1776,7 @@ mod c3_systimer_matrix_routing {
         // Scheduler routing arm (what `apply_event_result` runs on the C3 bus).
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
-        let scheduler_lines = bus.riscv_irq_lines;
+        let scheduler_lines = bus.irq_fabric.esp32c3.irq_lines;
         assert_eq!(
             scheduler_lines,
             1 << LINE,
@@ -1773,8 +1787,8 @@ mod c3_systimer_matrix_routing {
         // land on the identical line mask.
         bus.aggregate_esp32c3_irqs(&[SYSTIMER_TARGET0_SOURCE as u32]);
         assert_eq!(
-            bus.riscv_irq_lines, scheduler_lines,
-            "walk aggregation and scheduler routing must produce identical riscv_irq_lines"
+            bus.irq_fabric.esp32c3.irq_lines, scheduler_lines,
+            "walk aggregation and scheduler routing must produce identical esp32c3.irq_lines"
         );
     }
 
@@ -1787,7 +1801,7 @@ mod c3_systimer_matrix_routing {
         systimer_mut(&mut bus).sync_to(10_000);
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
-        assert_eq!(bus.riscv_irq_lines, 1 << LINE);
+        assert_eq!(bus.irq_fabric.esp32c3.irq_lines, 1 << LINE);
 
         // INT_CLR bit0 clears the pending latch → level drops.
         bus.write_u32(SYSTIMER_BASE + 0x6C, 1).unwrap();
@@ -1798,7 +1812,7 @@ mod c3_systimer_matrix_routing {
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
         assert_eq!(
-            bus.riscv_irq_lines, 0,
+            bus.irq_fabric.esp32c3.irq_lines, 0,
             "routed line must de-assert once the SYSTIMER level clears"
         );
     }
@@ -1956,7 +1970,7 @@ mod c3_level_peripheral_matrix_routing {
             SystemManifest::from_file(root.join("../../configs/systems/esp32c3-devkit.yaml"))
                 .expect("load esp32c3-devkit system yaml");
         let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 devkit bus");
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
         bus.refresh_peripheral_index();
         bus.write_u32(INTMATRIX + (source as u64) * 4, LINE)
             .unwrap();
@@ -2069,17 +2083,17 @@ mod c3_level_peripheral_matrix_routing {
         sched.tick_peripherals_with_costs();
         walk.tick_peripherals_with_costs();
         assert_eq!(
-            sched.riscv_irq_lines,
+            sched.irq_fabric.esp32c3.irq_lines,
             1 << LINE,
             "scheduler path must route {name} source {source} to CPU line {LINE}"
         );
         assert_eq!(
-            walk.riscv_irq_lines,
+            walk.irq_fabric.esp32c3.irq_lines,
             1 << LINE,
             "walk path must route {name} source {source} to CPU line {LINE}"
         );
         assert_eq!(
-            sched.riscv_irq_lines, walk.riscv_irq_lines,
+            sched.irq_fabric.esp32c3.irq_lines, walk.irq_fabric.esp32c3.irq_lines,
             "walk vs scheduler IRQ delivery for {name} must be byte-identical"
         );
 
@@ -2090,11 +2104,11 @@ mod c3_level_peripheral_matrix_routing {
         sched.tick_peripherals_with_costs();
         walk.tick_peripherals_with_costs();
         assert_eq!(
-            sched.riscv_irq_lines, 0,
+            sched.irq_fabric.esp32c3.irq_lines, 0,
             "scheduler path must de-assert {name} after INT_CLR"
         );
         assert_eq!(
-            walk.riscv_irq_lines, 0,
+            walk.irq_fabric.esp32c3.irq_lines, 0,
             "walk path must de-assert {name} after INT_CLR"
         );
     }
@@ -2166,7 +2180,7 @@ mod c3_ledc_matrix_routing {
             SystemManifest::from_file(root.join("../../configs/systems/esp32c3-devkit.yaml"))
                 .expect("load esp32c3-devkit system yaml");
         let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 devkit bus");
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
         bus.refresh_peripheral_index();
 
         // Route source 23 → line 9, priority 1, threshold 1, line enabled.
@@ -2195,7 +2209,7 @@ mod c3_ledc_matrix_routing {
     }
 
     /// The scheduler routing arm and the legacy walk aggregation produce the
-    /// SAME `riscv_irq_lines` for the SAME LEDC overflow level.
+    /// SAME `irq_fabric.esp32c3.irq_lines` for the SAME LEDC overflow level.
     #[test]
     fn scheduler_routing_matches_walk_routing_for_overflow() {
         let mut bus = setup();
@@ -2212,7 +2226,7 @@ mod c3_ledc_matrix_routing {
         // Scheduler routing arm (what `apply_event_result` runs on the C3 bus).
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
-        let scheduler_lines = bus.riscv_irq_lines;
+        let scheduler_lines = bus.irq_fabric.esp32c3.irq_lines;
         assert_eq!(
             scheduler_lines,
             1 << LINE,
@@ -2223,8 +2237,8 @@ mod c3_ledc_matrix_routing {
         // land on the identical line mask.
         bus.aggregate_esp32c3_irqs(&[LEDC_INTR_SOURCE_ID]);
         assert_eq!(
-            bus.riscv_irq_lines, scheduler_lines,
-            "walk aggregation and scheduler routing must produce identical riscv_irq_lines"
+            bus.irq_fabric.esp32c3.irq_lines, scheduler_lines,
+            "walk aggregation and scheduler routing must produce identical esp32c3.irq_lines"
         );
     }
 
@@ -2261,7 +2275,7 @@ mod c3_ledc_matrix_routing {
         bus.set_current_cycle(PAST_OVF);
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
-        assert_eq!(bus.riscv_irq_lines, 1 << LINE);
+        assert_eq!(bus.irq_fabric.esp32c3.irq_lines, 1 << LINE);
 
         // INT_CLR bit0 clears the LSTIMER0_OVF latch → level drops.
         bus.write_u32(LEDC_BASE as u64 + INT_CLR, 1).unwrap();
@@ -2272,7 +2286,7 @@ mod c3_ledc_matrix_routing {
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
         assert_eq!(
-            bus.riscv_irq_lines, 0,
+            bus.irq_fabric.esp32c3.irq_lines, 0,
             "routed line must de-assert once the LEDC overflow level clears"
         );
     }
@@ -2332,7 +2346,7 @@ mod c3_wifi_mac_matrix_routing {
             SystemManifest::from_file(root.join("../../configs/systems/esp32c3-devkit.yaml"))
                 .expect("load esp32c3-devkit system yaml");
         let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 devkit bus");
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
 
         // Swap the declarative wifi_mac for the real behavioral model at its base.
         let idx = bus
@@ -2366,7 +2380,7 @@ mod c3_wifi_mac_matrix_routing {
     }
 
     /// The scheduler routing arm and the legacy walk aggregation produce the
-    /// SAME `riscv_irq_lines` for the SAME pending MAC event level.
+    /// SAME `irq_fabric.esp32c3.irq_lines` for the SAME pending MAC event level.
     #[test]
     fn scheduler_routing_matches_walk_routing_for_mac_event() {
         let mut bus = setup(true);
@@ -2383,7 +2397,7 @@ mod c3_wifi_mac_matrix_routing {
         // Scheduler routing arm (what `apply_event_result` runs on the C3 bus).
         bus.refresh_esp32c3_sched_sources();
         bus.recompute_esp32c3_irq_lines();
-        let scheduler_lines = bus.riscv_irq_lines;
+        let scheduler_lines = bus.irq_fabric.esp32c3.irq_lines;
         assert_eq!(
             scheduler_lines,
             1 << LINE,
@@ -2394,8 +2408,8 @@ mod c3_wifi_mac_matrix_routing {
         // land on the identical line mask.
         bus.aggregate_esp32c3_irqs(&[MAC_SOURCE]);
         assert_eq!(
-            bus.riscv_irq_lines, scheduler_lines,
-            "walk aggregation and scheduler routing must produce identical riscv_irq_lines"
+            bus.irq_fabric.esp32c3.irq_lines, scheduler_lines,
+            "walk aggregation and scheduler routing must produce identical esp32c3.irq_lines"
         );
     }
 
@@ -2439,7 +2453,7 @@ mod c3_wifi_mac_matrix_routing {
         // a MAC-window write → the choke re-derives the scheduler level).
         bus.write_u32(MAC_BASE + EVENT_GET, EVENT_RX_DONE).unwrap();
         assert_eq!(
-            bus.riscv_irq_lines,
+            bus.irq_fabric.esp32c3.irq_lines,
             1 << LINE,
             "MAC event must route to the CPU line at the write, with NO walk tick"
         );
@@ -2452,7 +2466,7 @@ mod c3_wifi_mac_matrix_routing {
             "after EVENT_CLR the MAC asserts no matrix source"
         );
         assert_eq!(
-            bus.riscv_irq_lines, 0,
+            bus.irq_fabric.esp32c3.irq_lines, 0,
             "EVENT_CLR must de-assert the routed line at the write on a walk-deleted bus"
         );
     }
@@ -2519,7 +2533,7 @@ mod c3_wifi_mac_walk_differential {
             SystemManifest::from_file(root.join("../../configs/systems/esp32c3-devkit.yaml"))
                 .expect("load esp32c3-devkit system yaml");
         let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 devkit bus");
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
 
         let idx = bus
             .find_peripheral_index_by_name("wifi_mac")
@@ -2615,7 +2629,7 @@ mod c3_wifi_mac_walk_differential {
             *b = bus.read_u8(RX_BUF as u64 + 48 + i as u64).unwrap();
         }
         let event_word = bus.read_u32(MAC_BASE + 0xC3C).unwrap();
-        let line_while_pending = bus.riscv_irq_lines;
+        let line_while_pending = bus.irq_fabric.esp32c3.irq_lines;
         let tx_frames = wifi_mut(&mut bus).take_tx_frames();
 
         // Acknowledge every event (W1C) and confirm the routed line drops.
@@ -2624,7 +2638,7 @@ mod c3_wifi_mac_walk_differential {
         // on a scheduler/walk-deleted bus the write choke already did.
         bus.set_current_cycle(interval as u64 * 9);
         bus.tick_peripherals_with_costs();
-        let line_after_clear = bus.riscv_irq_lines;
+        let line_after_clear = bus.irq_fabric.esp32c3.irq_lines;
 
         SessionResult {
             rx_desc_w0,

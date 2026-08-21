@@ -126,7 +126,7 @@ impl SystemBus {
         self.refresh_pms_from_registers(&mut pms);
         self.esp32c3_pms_armed = pms.armed();
         self.esp32c3_pms = Some(pms);
-        if self.esp32c3_irq_routing {
+        if self.irq_fabric.esp32c3.routing {
             self.recompute_esp32c3_irq_lines();
         }
     }
@@ -201,7 +201,7 @@ impl SystemBus {
         }
         self.esp32c3_pms = Some(pms);
 
-        if self.esp32c3_irq_routing {
+        if self.irq_fabric.esp32c3.routing {
             self.recompute_esp32c3_irq_lines();
             let src = violation.port.intr_source();
             // Did the matrix actually route this source to an ENABLED line?
@@ -217,7 +217,7 @@ impl SystemBus {
     /// The CPU line `source` is routed to, if the interrupt matrix maps it to
     /// an enabled line that currently passes the priority threshold.
     fn esp32c3_pms_line_for_source(&self, source: u32) -> Option<u8> {
-        let cache = self.esp32c3_irq_cache.as_ref()?;
+        let cache = self.irq_fabric.esp32c3.intc.as_ref()?;
         let line = *cache.source_line.get(source as usize)?;
         if line == 0 || (cache.int_enable & (1u32 << line)) == 0 {
             return None;

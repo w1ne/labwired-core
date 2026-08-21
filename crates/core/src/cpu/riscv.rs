@@ -1961,9 +1961,9 @@ mod tests {
         bus.write_u32(0x4, 0x00000013).unwrap();
         // Line 5 vector (0x2000 + 5*4 = 0x2014): MRET.
         bus.write_u32(0x2014, 0x30200073).unwrap();
-        // Assert external line 5 (esp32c3_irq_routing stays false, so the C3
-        // aggregation leaves riscv_irq_lines untouched between ticks).
-        bus.riscv_irq_lines = 1 << 5;
+        // Assert external line 5 (irq_fabric.esp32c3.routing stays false, so the C3
+        // aggregation leaves irq_fabric.esp32c3.irq_lines untouched between ticks).
+        bus.irq_fabric.esp32c3.irq_lines = 1 << 5;
 
         cpu.pc = 0x0;
         let mut machine = Machine::new(cpu, bus);
@@ -1981,7 +1981,7 @@ mod tests {
         assert_eq!(machine.cpu.mstatus & (1 << 3), 0, "MIE cleared on trap");
         assert_ne!(machine.cpu.mstatus & (1 << 7), 0, "MPIE holds prior MIE");
         // Drop the line so MRET doesn't immediately re-trap, then MRET.
-        machine.bus.riscv_irq_lines = 0;
+        machine.bus.irq_fabric.esp32c3.irq_lines = 0;
         machine.step().unwrap();
         assert_ne!(
             machine.cpu.mstatus & (1 << 3),

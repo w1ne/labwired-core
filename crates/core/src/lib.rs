@@ -2907,7 +2907,7 @@ impl<C: Cpu> Machine<C> {
         // LEVEL-sensitive source at the exact firing cycle. Every MCU family
         // follows the same shape behind `deliver_scheduled_irq_levels`:
         //   * ESP32-C3 (RISC-V matrix)  → re-derive `matrix_irq_sources` into
-        //     `riscv_irq_lines`;
+        //     `irq_fabric.esp32c3.irq_lines`;
         //   * ESP32-S3 (Xtensa intmatrix) → re-derive into `pending_cpu_irqs` +
         //     the intmatrix INTR_STATUS mirror.
         // A matrix source ID must NEVER be pended as a Cortex-M NVIC exception

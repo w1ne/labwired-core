@@ -346,11 +346,11 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>())
                 .is_some()
         });
-        self.esp32c3_system_idx = self
+        self.irq_fabric.esp32c3.system_idx = self
             .peripherals
             .iter()
             .position(|p| p.name == "system" && p.base == 0x600C_0000);
-        self.esp32c3_interrupt_core0_idx = self
+        self.irq_fabric.esp32c3.interrupt_core0_idx = self
             .peripherals
             .iter()
             .position(|p| p.name == "interrupt_core0" && p.base == 0x600C_2000);
@@ -359,7 +359,7 @@ impl SystemBus {
         // model is a derived cache of that block's registers, so it is rebuilt
         // whenever the peripheral list changes.
         self.rebuild_esp32c3_pms();
-        self.esp32s3_intmatrix_idx = self.peripherals.iter().position(|p| {
+        self.irq_fabric.esp32s3.intmatrix_idx = self.peripherals.iter().position(|p| {
             p.dev
                 .as_any()
                 .and_then(|a| {
@@ -367,7 +367,7 @@ impl SystemBus {
                 })
                 .is_some()
         });
-        self.esp32s3_irq_routing = self.esp32s3_intmatrix_idx.is_some();
+        self.irq_fabric.esp32s3.routing = self.irq_fabric.esp32s3.intmatrix_idx.is_some();
         // Cache whether the per-cycle GPIO-edge/GPIOTE service pass has any
         // Nordic port to scan, so `tick_peripherals_fully` can early-out on
         // walk-free buses without scanning peripherals by name every cycle.
@@ -376,12 +376,12 @@ impl SystemBus {
     }
 
     pub(crate) fn rebuild_esp32c3_irq_cache(&mut self) {
-        let Some(int_idx) = self.esp32c3_interrupt_core0_idx else {
-            self.esp32c3_irq_cache = None;
+        let Some(int_idx) = self.irq_fabric.esp32c3.interrupt_core0_idx else {
+            self.irq_fabric.esp32c3.intc = None;
             return;
         };
 
-        let mut cache = crate::bus::Esp32c3IrqCache {
+        let mut cache = crate::bus::Esp32c3IntcCache {
             int_enable: self
                 .read_cached_declarative_u32(int_idx, 0x104)
                 .unwrap_or(0),
@@ -405,7 +405,7 @@ impl SystemBus {
                 & 0xF) as u8;
         }
 
-        if let Some(system_idx) = self.esp32c3_system_idx {
+        if let Some(system_idx) = self.irq_fabric.esp32c3.system_idx {
             for n in 0..4 {
                 let offset = 0x28 + (n as u64) * 4;
                 if self
@@ -419,10 +419,10 @@ impl SystemBus {
             }
         }
 
-        self.esp32c3_irq_cache = Some(cache);
+        self.irq_fabric.esp32c3.intc = Some(cache);
         // Keep the routed line mask coherent with the rebuilt cache (no-op
         // unless C3 routing is active — `recompute` early-outs without it).
-        if self.esp32c3_irq_routing {
+        if self.irq_fabric.esp32c3.routing {
             self.recompute_esp32c3_irq_lines();
         }
     }
@@ -440,16 +440,16 @@ impl SystemBus {
         // scheduler-driven peripheral (an ordinary register write pays nothing).
         //
         // Gated on `legacy_walk_disabled`: on a walk-ON bus the per-tick
-        // aggregation already owns level derivation and `esp32c3_asserted_sources`
+        // aggregation already owns level derivation and `irq_fabric.esp32c3.walk_sources`
         // carries the walk-emitted sources — recomputing mid-instruction from
         // that (stale until the next tick rebuilds it) would perturb routing, so
         // the choke stays off there. On a walk-DELETED bus the walk never runs,
-        // so `esp32c3_asserted_sources` is inert and the recompute is the clean,
+        // so `irq_fabric.esp32c3.walk_sources` is inert and the recompute is the clean,
         // authoritative level derivation. `recompute_esp32c3_irq_lines` also
         // no-ops without the INTC cache, keeping this inert on hand-built buses.
         #[cfg(feature = "event-scheduler")]
         if self.legacy_walk_disabled
-            && self.esp32c3_irq_routing
+            && self.irq_fabric.esp32c3.routing
             && self
                 .peripherals
                 .get(idx)
@@ -459,7 +459,7 @@ impl SystemBus {
             self.recompute_esp32c3_irq_lines();
         }
 
-        if self.esp32c3_irq_cache.is_none() {
+        if self.irq_fabric.esp32c3.intc.is_none() {
             return;
         }
 
@@ -469,8 +469,8 @@ impl SystemBus {
         };
 
         let mut inputs_changed = false;
-        if Some(idx) == self.esp32c3_interrupt_core0_idx {
-            if let Some(cache) = &mut self.esp32c3_irq_cache {
+        if Some(idx) == self.irq_fabric.esp32c3.interrupt_core0_idx {
+            if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
                 inputs_changed = true;
                 match aligned {
                     0x104 => cache.int_enable = value,
@@ -490,10 +490,12 @@ impl SystemBus {
                     _ => {}
                 }
             }
-        } else if Some(idx) == self.esp32c3_system_idx && (0x28..=0x34).contains(&aligned) {
+        } else if Some(idx) == self.irq_fabric.esp32c3.system_idx
+            && (0x28..=0x34).contains(&aligned)
+        {
             let slot = ((aligned - 0x28) / 4) as u8;
             if slot < 4 {
-                if let Some(cache) = &mut self.esp32c3_irq_cache {
+                if let Some(cache) = &mut self.irq_fabric.esp32c3.intc {
                     inputs_changed = true;
                     if value & 1 != 0 {
                         cache.from_cpu_pending |= 1 << slot;
@@ -505,14 +507,14 @@ impl SystemBus {
         }
 
         // Write-choke re-aggregation: a routing-input change (INTC config or
-        // FROM_CPU IPI) updates `riscv_irq_lines` at the write instruction
+        // FROM_CPU IPI) updates `irq_fabric.esp32c3.irq_lines` at the write instruction
         // instead of waiting for the next peripheral tick. At interval 1 the
         // tick-end rebuild recomputes the same mask before the CPU's next
         // interrupt check (byte-identical); at interval > 1 this removes the
         // up-to-one-interval delivery latency for yield/critical-section
         // transitions and lets a walk-free C3 bus keep IPI routing correct
         // with no per-cycle aggregation at all.
-        if inputs_changed && self.esp32c3_irq_routing {
+        if inputs_changed && self.irq_fabric.esp32c3.routing {
             self.recompute_esp32c3_irq_lines();
         }
     }
@@ -554,10 +556,10 @@ impl SystemBus {
     pub(crate) fn sync_esp32s3_irq_write(&mut self, idx: usize) {
         #[cfg(feature = "event-scheduler")]
         {
-            if !self.legacy_walk_disabled || !self.esp32s3_irq_routing {
+            if !self.legacy_walk_disabled || !self.irq_fabric.esp32s3.routing {
                 return;
             }
-            let relevant = Some(idx) == self.esp32s3_intmatrix_idx
+            let relevant = Some(idx) == self.irq_fabric.esp32s3.intmatrix_idx
                 || self
                     .peripherals
                     .get(idx)
