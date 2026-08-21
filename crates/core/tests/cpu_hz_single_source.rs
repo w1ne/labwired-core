@@ -278,4 +278,73 @@ fn esp_chip_descriptors_match_the_engine_constants() {
         u64::from(labwired_core::peripherals::nrf54l::grtc::CPU_HZ_DEFAULT),
         "nrf54l15.yaml vs peripherals/nrf54l/grtc.rs"
     );
+    // The S3's core clock does not live in a peripheral: it is carried by
+    // `Esp32s3Opts`, which every S3 construction site spreads from
+    // `..Esp32s3Opts::default()`. That default is therefore the S3's engine
+    // constant, and it is the number the SYSTIMER divides down — so it is
+    // pinned here exactly like the C3's.
+    assert_eq!(
+        clock("esp32s3.yaml"),
+        u64::from(labwired_core::system::xtensa::Esp32s3Opts::default().cpu_clock_hz),
+        "esp32s3.yaml vs Esp32s3Opts::default() in system/xtensa/esp32s3.rs"
+    );
+    assert_eq!(
+        clock("esp32s3.yaml"),
+        u64::from(labwired_core::system::xtensa::ESP32S3_CPU_CLOCK_HZ),
+        "esp32s3.yaml vs system/xtensa/esp32s3.rs ESP32S3_CPU_CLOCK_HZ"
+    );
+    // A board that declares its own clock must reach the opts, not just the
+    // descriptor: `for_chip` is the only path that carries it.
+    assert_eq!(
+        clock("esp32s3-zero.yaml"),
+        u64::from(
+            labwired_core::system::xtensa::Esp32s3Opts::for_chip(
+                &ChipDescriptor::from_file(configs_dir().join("chips").join("esp32s3-zero.yaml"))
+                    .expect("read chip descriptor")
+            )
+            .cpu_clock_hz
+        ),
+        "esp32s3-zero.yaml vs Esp32s3Opts::for_chip"
+    );
+}
+
+/// The S3's SYSTIMER must keep simulated time at the rate the part runs at.
+///
+/// This is the user-visible half of the pin above: SYSTIMER divides the CPU
+/// cycle stream by `cpu_clock_hz / 16 MHz`, and `sim_time_us` — the counter
+/// esp-idf's `esp_timer` and esp-hal's `Delay` read — is that tick count over
+/// 16. With the opts stuck at 80 MHz while the part (and TIMG0, and every
+/// board YAML) runs at 240, the divider was 5 instead of 15 and firmware saw
+/// every microsecond elapse three times too fast: a one-second delay returned
+/// after a third of a second of modelled time.
+///
+/// Asserted through the production wiring — `configure_xtensa_esp32s3` →
+/// peripheral config → factory → model — so a field that is set but never
+/// threaded still fails.
+#[test]
+fn esp32s3_systimer_keeps_time_at_the_declared_core_clock() {
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+
+    let chip = ChipDescriptor::from_file(configs_dir().join("chips").join("esp32s3.yaml"))
+        .expect("read chip descriptor");
+
+    let mut bus = SystemBus::new();
+    let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::for_chip(&chip));
+
+    // Exactly one second of CPU cycles at the clock the chip declares.
+    bus.set_current_cycle(chip.cpu_hz);
+
+    let systimer = bus
+        .peripherals
+        .iter()
+        .find(|p| p.name == "systimer")
+        .expect("configure_xtensa_esp32s3 registers a systimer");
+
+    assert_eq!(
+        systimer.dev.sim_time_us(),
+        Some(1_000_000),
+        "one second of CPU cycles at the declared {} Hz must read as 1 s of \
+         simulated time; a wrong divider makes esp_timer_get_time lie by that ratio",
+        chip.cpu_hz
+    );
 }

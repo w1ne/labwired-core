@@ -785,6 +785,8 @@ pub(crate) fn run_firmware(
 
     // Wire the bus + CPU.
     let mut bus = SystemBus::new();
+    // One read of the descriptor for every property this path takes from it.
+    let chip_desc = labwired_config::ChipDescriptor::from_file(&args.chip).ok();
     // `--rom-boot` runs the real ROM from reset, which programs the flash MMU;
     // select the MMU XIP model for it. Fast-boot uses identity per-window XIP.
     let opts = Esp32s3Opts {
@@ -794,10 +796,17 @@ pub(crate) fn run_firmware(
         // at 0x410000, say), and a short backing truncates them to 0xFF with no
         // error — the partition table still reads fine, so it looks like a
         // corrupt asset rather than a too-small model.
-        flash_size: labwired_config::ChipDescriptor::from_file(&args.chip)
+        flash_size: chip_desc
+            .as_ref()
             .map(|c| c.flash.size as u32)
             .unwrap_or(Esp32s3Opts::default().flash_size),
-        ..Esp32s3Opts::default()
+        // Same rule for the core clock: the YAML's `cpu_hz` is the one home,
+        // so the SYSTIMER divides the cycle stream by what this part actually
+        // runs at (`Esp32s3Opts::for_chip`).
+        ..chip_desc
+            .as_ref()
+            .map(Esp32s3Opts::for_chip)
+            .unwrap_or_default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     let boot_mode = wiring.boot_mode; // Copy before cpu is moved out of wiring
