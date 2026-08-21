@@ -628,3 +628,62 @@ jobs:
           else
             echo "::warning title=RISC-V JIT lockstep is GREEN::This step has been red since it landed. It passed. Drop continue-on-error in core-nightly.yml so it gates again."
           fi
+
+  # ⚠️ THE CONSTANT WHOSE PROOF HAD NEVER RUN.
+  #
+  # `RECOMMENDED_TICK_INTERVAL = 512` in crates/core/src/bus/mod.rs — the tick
+  # interval every fully scheduler-driven bus is tuned around — cites its
+  # licence BY NAME in the comment above the declaration: "SSD1306 framebuffer
+  # stays byte-identical to interval 1 at 512 (see
+  # `oled_lab_framebuffer_is_byte_identical_at_tick_512`)". That test had never
+  # executed in CI.
+  #
+  # `crates/core/tests/esp32c3_walk_differential.rs` holds 11 `#[test]`s, 10 of
+  # them `#[ignore]`d (each "runs the real C3 bootloader + app (~2-4x30M
+  # steps); run with --release --ignored"). The file is named in exactly one
+  # workflow line — the `--features jit,event-scheduler` step in core-ci.yml —
+  # with NO harness arguments, so that lane executes 1 of the 11
+  # (`esp32c3_irq_choke_reaggregates_on_write`) and reports the file green. All
+  # three tick-licensing differentials sat in the ignored 10.
+  #
+  # Both guards that should have caught it missed. `cargo-test-nonvacuous.sh`
+  # excluded the all-ignored class by design (it no longer does — it now
+  # subtracts `--list --ignored` from `--list` and gates on what EXECUTES), and
+  # the `NIGHTLY_ONLY` ratchet in crates/core/src/tests/scheduler_lane_coverage.rs
+  # counts this file as covered because core-ci NAMES it. Being named is not
+  # being run.
+  #
+  # `-- --ignored` is the only thing that executes these, and `--release` is
+  # not optional: 30M interpreted steps in debug do not finish inside a sane
+  # timeout. Only `event-scheduler` is needed — the file's `required-features`
+  # — so this lane skips the wasmtime dependency that `jit` drags in. Every
+  # input is a committed plain file (crates/core/roms/esp32c3/*.bin, the
+  # esp32c3-oled-demo flash fixture, configs/), so a default checkout is enough.
+  #
+  # Run through the wrapper deliberately: this step is `-- --ignored`, so it
+  # runs the ignored tests and NOTHING else. If someone un-ignores them, the
+  # step would execute zero and tick — the same silence one level up. The
+  # wrapper now counts that case and goes red.
+  tick-interval-licence:
+    name: C3 OLED tick-interval licence (#[ignore]d, --release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly-tick-interval-licence
+          workspaces: |
+            . -> target
+
+      - name: ESP32-C3 OLED walk differentials (the RECOMMENDED_TICK_INTERVAL proof)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh --release
+          -p labwired-core --features event-scheduler
+          --test esp32c3_walk_differential
+          -- --ignored --nocapture
