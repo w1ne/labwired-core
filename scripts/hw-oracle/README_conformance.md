@@ -25,6 +25,13 @@ a hidden gap.
 3. Commit `out/<chip>/reg_oracle.json` and point the chip's `reset_oracle` in
    `chip_conformance.rs` at it → the ratchet now diffs sim vs silicon (L1).
 4. Add/point a `behavior_gate` (a `firmware_survival` or exec-oracle case) → L2.
+   The value is **resolved against the tree**, not taken on trust: write it as
+   `"<test target>"` or `"<test target>::<test fn>"`, and
+   `crates/*/tests/<target>.rs` must exist and declare that test. A string that
+   names nothing fails `chip_conformance` — it is not a label, and a CI lane
+   name or a wished-for test is not a behavior gate. (Three chips —
+   stm32f401cdu6, stm32f411ceu6, stm32h735 — were carrying exactly such strings
+   and have been demoted.)
 5. Re-baseline: `UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance`.
 
 Transports: `openocd-esp32` (ESP32 USB-JTAG) implemented; ST-Link SWD / CMSIS-DAP
