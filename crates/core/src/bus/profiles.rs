@@ -134,6 +134,32 @@ impl SystemBus {
         if t == "nrf_clock" || t == "nrf52_clock" || t == "nrf52840_clock" {
             return "nrf52_clock".to_string();
         }
+        // Silicon Labs Series-2 TIMER. Intercepted BEFORE the generic `timer`
+        // bin, which resolves to the STM32 TIM model — a completely different
+        // register map.
+        if t == "efr32s2_timer" || t == "efr32_timer" {
+            return "efr32s2_timer".to_string();
+        }
+        // Silicon Labs Series-2 GPIO external interrupts. Intercepted BEFORE
+        // the `contains("gpio")` bin, which would resolve it as a PORT and put
+        // DOUT where EXTIPSELL lives.
+        if t == "efr32s2_gpio_exti" || t == "efr32_gpio_exti" {
+            return "efr32s2_gpio_exti".to_string();
+        }
+        // Silicon Labs Series-2 IADC. Intercepted BEFORE the generic `adc`
+        // bin, which means "an STM32-shaped ADC" and would resolve this
+        // through `AdcRegisterLayout` — every variant of which is an STM32.
+        if t == "efr32s2_iadc" || t == "efr32_iadc" {
+            return "efr32s2_iadc".to_string();
+        }
+        // Silicon Labs Series-2 CMU. Intercepted BEFORE the generic `cmu`
+        // bin: that bin means "an STM32-shaped RCC" and resolving a Series-2
+        // CMU through `RccRegisterLayout` can only pick an STM32 family, which
+        // would put CLKEN0 at an offset this silicon uses for something else.
+        // The Series-0/1 `efm32_cmu` stubs keep going to the generic bin.
+        if t == "efr32s2_cmu" || t == "efr32_series2_cmu" || t == "efm32s2_cmu" {
+            return "efr32s2_cmu".to_string();
+        }
         if t.contains("rcc") || t.contains("cmu") {
             return "rcc".to_string();
         }

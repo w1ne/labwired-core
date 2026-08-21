@@ -19,6 +19,7 @@ pub mod dbgmcu;
 pub mod declarative;
 pub mod dma;
 pub mod dwt;
+pub mod efr32;
 pub mod esp32;
 pub mod esp32c3;
 pub mod esp32s3;
@@ -74,6 +75,7 @@ pub mod tsc;
 pub mod uart;
 pub mod uart_waveform;
 pub mod usb_otg;
+pub mod virtual_ble;
 pub mod wave_plan;
 pub mod wwdg;
 

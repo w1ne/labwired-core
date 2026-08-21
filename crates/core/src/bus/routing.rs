@@ -7,6 +7,16 @@
 
 use super::*;
 
+/// Peripheral ids that name a chip's clock controller, in resolution order.
+/// A `clock:` gate in a chip yaml gives a register offset and a bit but not
+/// the block they belong to, so this list is how the bus finds that block.
+///
+/// Vendor names, not synonyms invented here: `rcc` is ST/GD's Reset and Clock
+/// Control, `cmu` is Silicon Labs' Clock Management Unit, `rcu` is GD32's
+/// Reset and Clock Unit. Extending it is how a new family gets clock gating —
+/// renaming that family's block to "rcc" is not.
+pub(crate) const CLOCK_CONTROLLER_IDS: &[&str] = &["rcc", "cmu", "rcu"];
+
 impl SystemBus {
     /// Parse a pin label into `(gpio peripheral id, bit)`. Accepts the STM32
     /// form "PC7" -> `("gpioc", 7)` and the Nordic form "P0.04" / "P1.15" ->
@@ -292,10 +302,22 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
                 .is_some()
         });
-        // Cache the "rcc" peripheral index so the clock-gate check on the hot
-        // read/write path is O(1). Matched by id, as the clock-gate config
-        // references the RCC by the conventional "rcc" peripheral id.
-        self.rcc_idx = self.peripherals.iter().position(|p| p.name == "rcc");
+        // Cache the clock-controller peripheral index so the clock-gate check
+        // on the hot read/write path is O(1).
+        //
+        // Matched by id, because a `clock:` gate names a register offset and a
+        // bit but not the peripheral they live in. `rcc` is the conventional
+        // id and stays first; `cmu` is the same role on Silicon Labs parts and
+        // `rcu` on GD32. Renaming an EFR32's CMU to "rcc" to satisfy a string
+        // compare would put a name on the chip yaml that appears in no Silicon
+        // Labs document — the id is what a user reads in an inspector.
+        //
+        // First match wins in that order, and a chip that somehow declared two
+        // would gate against the first: no in-tree chip does, and the
+        // `clock_controller_ids_are_unique_per_chip` gate keeps it that way.
+        self.rcc_idx = CLOCK_CONTROLLER_IDS
+            .iter()
+            .find_map(|id| self.peripherals.iter().position(|p| p.name == *id));
         // Cache whether any FLASH peripheral models hardware ops (H5 erase /
         // bank swap). Those ops are recorded as pending and must be drained and
         // applied per instruction, which only holds under cycle-accurate
@@ -757,7 +779,6 @@ impl SystemBus {
         cellular: crate::network::SimMqttFabric,
     ) {
         use crate::peripherals::components::QuectelBg770a;
-        use crate::peripherals::esp32c3::bt::Esp32c3Bt;
         use crate::peripherals::nrf52::radio::Nrf52Radio;
         use crate::peripherals::uart::Uart;
         let medium = nrf_air.medium_slot();
@@ -770,13 +791,12 @@ impl SystemBus {
                 radio.set_air(nrf_air.clone());
                 radio.set_node_id(node_id);
             }
-            if let Some(bt) = entry
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Esp32c3Bt>())
-            {
-                bt.set_air(ble_air.clone());
-            }
+            // Every BLE controller, asked through the trait: an ESP32-C3
+            // RW-BLE core, a LabWired `VirtualBle`, or whatever comes next.
+            // This used to downcast to `Esp32c3Bt`, which silently left any
+            // other controller on the process-global air — two labs in one
+            // process would then hear each other.
+            entry.dev.attach_ble_air(ble_air.clone());
             if let Some(uart) = entry
                 .dev
                 .as_any_mut()

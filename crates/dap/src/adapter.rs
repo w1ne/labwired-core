@@ -1163,7 +1163,7 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
             cpu_hz: 0,
@@ -1228,7 +1228,7 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
             cpu_hz: 0,
@@ -1307,7 +1307,7 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
             cpu_hz: 0,
