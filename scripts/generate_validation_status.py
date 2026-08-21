@@ -458,6 +458,46 @@ def render(manifest: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def print_digests(manifest: dict) -> int:
+    """Print every board's CURRENT model digest beside the ones it recorded.
+
+    The drift gate's whole argument for hashing content instead of comparing
+    dates (see `model_digest`) is that the digest "is the thing that IS knowable
+    pre-merge". That only holds if an author can actually print it, so this is
+    load-bearing documentation, not a convenience: the manifest header has told
+    people to run `--digests` since the gate landed, and the flag did not exist.
+
+    The verdict comes from `evaluate()`, the same function `--drift` and the
+    generated doc use, so this can never report a board differently from the
+    gate that fails it.
+
+    Read-only by construction: it reads the manifest and hashes files. Stamping
+    an ack is `--write-ack-digests`, and acking is a human act.
+    """
+    boards = manifest.get("boards", [])
+    if not boards:
+        print("manifest lists no boards")
+        return 0
+    width = max(len(board["id"]) for board in boards)
+
+    for board in boards:
+        verdict = evaluate(board)
+        digest = verdict["digest"] or "(no model path resolves; nothing to hash)"
+        print(f"{board['id']:<{width}}  {digest}  {verdict['status']}")
+
+        # Only when they disagree, so the common case stays one line per board.
+        # These are what a re-capture or a re-ack has to move.
+        captured = (board.get("silicon") or {}).get("models_digest")
+        acked = board.get("drift_ack_digest")
+        for label, recorded in (("capture", captured), ("ack", acked)):
+            if recorded and recorded != verdict["digest"]:
+                print(f"{'':<{width}}  {label} recorded {recorded}")
+
+    # A report, not a gate: `--drift` is what fails. Exit 0 even with failing
+    # boards, so this stays usable while investigating one.
+    return 0
+
+
 def write_ack_digests(manifest: dict) -> int:
     """Stamp `drift_ack_digest` next to every existing `drift_ack`.
 
@@ -525,6 +565,11 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="fail if committed doc is stale")
     ap.add_argument("--drift", action="store_true", help="fail if any board drifted past its ack")
     ap.add_argument(
+        "--digests",
+        action="store_true",
+        help="print each board's current model digest against what it recorded",
+    )
+    ap.add_argument(
         "--write-ack-digests",
         action="store_true",
         help="stamp drift_ack_digest for every board that already carries a drift_ack",
@@ -537,6 +582,9 @@ def main() -> int:
     require_full_history()
 
     manifest = yaml.safe_load(MANIFEST.read_text())
+
+    if args.digests:
+        return print_digests(manifest)
 
     if args.write_ack_digests:
         return write_ack_digests(manifest)

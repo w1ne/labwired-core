@@ -795,6 +795,12 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // `from_config` alone would be green in test and dark in production.
     bus.wire_esp32s3_spi_pads();
     bus.wire_esp32s3_uart_pads();
+
+    // Share the IO_MUX per-pad register bank with GPIO now that both models
+    // exist, so a `FUN_WPU` write (Arduino `INPUT_PULLUP`) changes the level a
+    // released pad reports. Without this the pad words are write-only storage
+    // and every button-to-GND lab reads permanently pressed.
+    bus.wire_esp32s3_pad_controls();
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.
