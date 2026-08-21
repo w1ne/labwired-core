@@ -2992,6 +2992,25 @@ boards:
     # Serial on native-USB C3/S3 lands on this block, not UART0. Capture-path
     # only: no register map, reset values, or 9-reg silicon windows change.
     # Live re-capture still owed.
+    # 2026-08-20: DELETION of the dead `Peripheral::write_word_32` contract
+    # (#1021). This is the unusual case where the ack rests on proof of
+    # UNREACHABILITY rather than on a judgement that a behavioural change is
+    # harmless — nothing was re-modelled, because nothing was ever calling the
+    # code removed. The trait default was documented as "the bus calls this
+    # after performing the four byte writes"; the bus does not. A 32-bit MMIO
+    # store dispatches through `dev.write_u32(off, value)` at
+    # crates/core/src/bus/accessors.rs:653, and `write_word_32` appears nowhere
+    # in crates/core/src/bus/. Repo-wide the method had exactly one call site,
+    # inside `#[cfg(test)]`. The two files hashed here — esp32s3/aes.rs and
+    # esp32s3/sar_adc.rs — each lost only their no-op override of that dead
+    # method; every `read`/`write`/`write_u32` body, register map, reset value
+    # and base address is byte-identical. No modelled behaviour changed, so the
+    # 2026-08-09 silicon capture remains valid, and the 9-reg reset-state
+    # windows (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/SYSTIMER/GDMA/SYSTEM/RTC_CNTL)
+    # are untouched. Evidence on this commit: 3121 lib tests pass and 3251 pass
+    # under --features event-scheduler (0 failed), clippy clean, fmt clean. No
+    # live re-capture, and this ack does not discharge the ones already owed
+    # above.
     drift_ack: 2026-08-21
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
@@ -3013,6 +3032,35 @@ boards:
     # SYSTIMER/GDMA/SYSTEM/RTC_CNTL). Live re-capture still owed.
     # 2026-08-20: USB-Serial-JTAG generic UART sink tap. Additive capture
     # path; 9-reg reset-state windows untouched. Live re-capture still owed.
+    # 2026-08-20: the S3's core clock now comes from configs/chips/esp32s3.yaml
+    # (`cpu_hz: 240_000_000`) instead of an 80 MHz literal in Esp32s3Opts that
+    # nothing ever assigned. Unlike the entries above this one is NOT
+    # behaviour-neutral and does not claim to be: the SYSTIMER divides the CPU
+    # cycle stream by `cpu_clock_hz / 16 MHz`, so its divider goes 5 -> 15 and
+    # the S3's simulated wall clock — `sim_time_us`, what esp_timer and
+    # esp-hal's Delay read — slows by exactly 3x to real rate. It was fast by
+    # 3x before. MODELLED TIMING CHANGED. No register map, no reset value and
+    # none of the nine anchored reset registers move (the divider is runtime
+    # state, not a reset value), so esp32s3_reset_conformance is unaffected and
+    # still green; the anchor never covered rates in the first place. A live
+    # re-capture would not distinguish the two states — this defect is only
+    # observable against the datasheet, not against a reset-state read — so no
+    # re-capture is claimed here and the one already owed above still stands.
+    # Same commit adds system/xtensa/esp32s3.rs to `models:` below: the file
+    # that sets this clock and registers all 36 S3 peripherals was outside the
+    # watch list, so this very change would otherwise have moved the S3's time
+    # base with the drift gate green. Verified by control: editing it left the
+    # gate green; editing peripherals/esp32s3/systimer.rs turned it red.
+    # Evidence: cpu_hz_single_source 9/9 (incl. the new production-path
+    # SYSTIMER rate assertion), labwired-core --lib 3298/3298, and 20 S3
+    # targets green under --features jit,event-scheduler; the prebuilt Arduino
+    # flash image still boots and runs through the real BROM
+    # (e2e_esp32s3_flash_boot_no_elf 2/2, e2e_esp32s3_faithful_boot 1/1).
+    # 2026-08-20: dead `write_word_32` overrides deleted from esp32s3/aes.rs
+    # and esp32s3/sar_adc.rs (#1021). Removal of an unreachable no-op — the bus
+    # dispatches 32-bit stores via `write_u32` (bus/accessors.rs:653) and never
+    # called it. Register maps, reset values and the 9-reg anchor unchanged.
+    # 3121 + 3251 lib tests green. Live re-capture still owed.
     # 2026-08-21: TEST-ONLY. The only change under `models` is a new #[cfg(test)]
     # case in peripherals/esp32s3/flash_xip.rs
     # (doom_wad_mmap_window_returns_planted_bytes), which reads the Doom IWAD
@@ -3040,12 +3088,17 @@ boards:
     # A live IO_MUX window read is now owed and is NOT covered by the
     # re-captures listed above. Until someone runs it, the S3's pad reset state
     # is SVD-verified, not silicon-verified.
-    drift_ack_digest: 768410642d3ff35844780fdc532dfe37651d6a676de52f86901dce117a83809d
+    drift_ack_digest: 34fb70cc53f0cf381336131faade4ee82569bc35158a8ad229ddaba91772e5ac
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
+      # The S3's system glue: it registers all 36 peripheral models, owns the
+      # memory map, and carries the core clock the SYSTIMER divides down. It
+      # was unwatched until 2026-08-20, so an S3 timing change could land with
+      # this gate green.
+      - crates/core/src/system/xtensa/esp32s3.rs
       # Shared Espressif UART twin — this file IS the relocated esp32s3/uart.rs
       # (moved 2026-07-28 when the C3 started using the same IP), so the S3's
       # UART register map lived outside its own watch list from that date.
@@ -3122,7 +3175,23 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: a7834ce20e176f1377bc89eb5cd406be9f499cdb6fe0d904a0f514a73f65a0f2
+    # 2026-08-20 (#1021): the dead `Peripheral::write_word_32` contract was
+    # deleted, taking with it the no-op override in
+    # crates/core/src/peripherals/rp2040/usb.rs — which this board watches as a
+    # directory, hence the moved digest. The override forwarded to
+    # `self.write_u32(offset, value)` and nothing ever invoked it: a 32-bit MMIO
+    # store dispatches through `dev.write_u32(off, value)` at
+    # crates/core/src/bus/accessors.rs:653, and `write_word_32` appears nowhere
+    # in crates/core/src/bus/. Deleting unreachable code cannot move a modelled
+    # value: no register read/write path, reset value, layout or base address
+    # changed, and the tier-1 fixture's clock/timer/gpio/spi/i2c PASS line is
+    # unaffected. This board is `structural` with no silicon bench, so as ever
+    # this is documentation rather than a re-capture claim. `drift_ack` moves to
+    # today because the digest is re-stamped today and the pair must name the
+    # same reading. Evidence: 3121 lib tests + 3251 under event-scheduler, 0
+    # failed; clippy and fmt clean.
+    drift_ack: 2026-08-20
+    drift_ack_digest: 3c647e77c7572f2fbaa2a65377a6eab5626effa1481cbef94f5c86fb887edd1b
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

@@ -579,13 +579,6 @@ pub trait Peripheral: std::fmt::Debug + Send {
         self.write(offset + 3, ((value >> 24) & 0xFF) as u8)?;
         Ok(())
     }
-    /// Plan 2: word-granular write path. The bus calls this after performing
-    /// the four byte writes, giving peripherals a single coherent 32-bit
-    /// view of the write. Default: no-op. Peripherals with 32-bit word
-    /// triggers (e.g. declarative configs with WriteWord triggers) override.
-    fn write_word_32(&mut self, _offset: u64, _value: u32) -> SimResult<()> {
-        Ok(())
-    }
     /// Side-effect-free value probe used for debug/observer bookkeeping.
     /// Implementations should return `None` when such probing is not supported.
     fn peek(&self, _offset: u64) -> Option<u8> {
