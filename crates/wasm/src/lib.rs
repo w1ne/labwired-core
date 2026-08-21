@@ -818,14 +818,25 @@ impl WasmSimulator {
                 bus.attach_uart_tx_sink(uart_sink.clone(), false);
             }
             tapped => {
-                if faithful_c3_rom && !tapped.is_usb_serial_jtag() {
+                // Record the console with no connector FIRST, then tap the one
+                // the Serial pane shows. Every console model holds ONE sink slot
+                // (`set_sink` is an assignment), so the LAST writer wins: taking
+                // the unheard sink last re-points the shown console at a buffer
+                // nothing renders and the pane stays empty forever. Same order
+                // as `attach_c3_flash_console`, which is why that path was never
+                // affected.
+                if tapped.is_usb_serial_jtag() {
+                    // `deploy.usb: native` board: UART0 exists and the firmware
+                    // may still print to it, but its pins reach no connector.
+                    // The generic walk also hits USB-Serial-JTAG here; the
+                    // `attach_host_console` below overwrites that with the sink
+                    // the pane reads.
+                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
+                } else if faithful_c3_rom {
                     bus.attach_usb_serial_jtag_sink(console.unheard_sink());
                 }
                 bus.attach_host_console(tapped, uart_sink.clone())
                     .map_err(|e| JsValue::from_str(&e))?;
-                if tapped.is_usb_serial_jtag() {
-                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
-                }
             }
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
@@ -1130,14 +1141,25 @@ impl WasmSimulator {
                 bus.attach_uart_tx_sink(uart_sink.clone(), false);
             }
             tapped => {
-                if !tapped.is_usb_serial_jtag() {
+                // Record the console with no connector FIRST, then tap the one
+                // the Serial pane shows. Every console model holds ONE sink slot
+                // (`set_sink` is an assignment), so the LAST writer wins: taking
+                // the unheard sink last re-points the shown console at a buffer
+                // nothing renders and the pane stays empty forever. Same order
+                // as `attach_c3_flash_console`, which is why that path was never
+                // affected.
+                if tapped.is_usb_serial_jtag() {
+                    // `deploy.usb: native` board: UART0 exists and the firmware
+                    // may still print to it, but its pins reach no connector.
+                    // The generic walk also hits USB-Serial-JTAG here; the
+                    // `attach_host_console` below overwrites that with the sink
+                    // the pane reads.
+                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
+                } else {
                     bus.attach_usb_serial_jtag_sink(console.unheard_sink());
                 }
                 bus.attach_host_console(tapped, uart_sink.clone())
                     .map_err(|e| JsValue::from_str(&e))?;
-                if tapped.is_usb_serial_jtag() {
-                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
-                }
             }
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
@@ -1237,14 +1259,25 @@ impl WasmSimulator {
                 bus.attach_uart_tx_sink(uart_sink.clone(), false);
             }
             tapped => {
-                if !tapped.is_usb_serial_jtag() {
+                // Record the console with no connector FIRST, then tap the one
+                // the Serial pane shows. Every console model holds ONE sink slot
+                // (`set_sink` is an assignment), so the LAST writer wins: taking
+                // the unheard sink last re-points the shown console at a buffer
+                // nothing renders and the pane stays empty forever. Same order
+                // as `attach_c3_flash_console`, which is why that path was never
+                // affected.
+                if tapped.is_usb_serial_jtag() {
+                    // `deploy.usb: native` board: UART0 exists and the firmware
+                    // may still print to it, but its pins reach no connector.
+                    // The generic walk also hits USB-Serial-JTAG here; the
+                    // `attach_host_console` below overwrites that with the sink
+                    // the pane reads.
+                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
+                } else {
                     bus.attach_usb_serial_jtag_sink(console.unheard_sink());
                 }
                 bus.attach_host_console(tapped, uart_sink.clone())
                     .map_err(|e| JsValue::from_str(&e))?;
-                if tapped.is_usb_serial_jtag() {
-                    bus.attach_uart_tx_sink(console.unheard_sink(), false);
-                }
             }
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
@@ -3463,4 +3496,209 @@ mod cpu_inspector_boundary_tests {
     // wasm-bindgen before it can observe the `Err`. It is covered by the
     // signature itself (`Result<Vec<u8>, JsValue>` has no way to express the
     // old zero-fill) and by the `error_boundary_ratchet` scan.
+}
+
+/// The console the Serial pane reads must be the LAST sink attached — on every
+/// construction path that serves a board whose USB-C socket IS the chip's
+/// USB-Serial-JTAG (`deploy.usb: native`: ESP32-S3-Zero, ESP32-C3 SuperMini,
+/// and every board the compiler emits `debug_uart: "usb_serial_jtag"` for).
+///
+/// The regression these guard shipped in #1020. That change taught the GENERIC
+/// `SystemBus::attach_uart_tx_sink` walk to find the USB-Serial-JTAG block, so
+/// an Arduino sketch on an undeclared manifest would finally be heard. But
+/// `UsbSerialJtag::set_sink` is a single slot — `self.sink = sink`, last writer
+/// wins — and the three constructors below took the UNHEARD sink through that
+/// same generic walk AFTER `attach_host_console` had pointed the block at the
+/// pane's sink. Every console byte then went into a buffer nothing renders, so
+/// the Serial pane read "No output yet…" forever at any cycle count.
+///
+/// Nothing caught it: `attach_c3_flash_console` (the C3 merged-flash path) taps
+/// unheard first and was unaffected, the native CLI's bundled manifests declare
+/// no `debug_uart` at all and so take the Undeclared arm, and the only
+/// end-to-end console tests in this file are `#[ignore]`d mask-ROM boots. These
+/// tests need no boot: they construct the simulator and emit one byte straight
+/// at the modelled console block, which is exactly the wiring under test.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod native_usb_console_tap_order_tests {
+    use super::*;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::memory::ProgramImage;
+    use labwired_core::Arch;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    /// `peripherals::esp32s3::usb_serial_jtag` register table: EP1 `0x00`
+    /// (write: the low byte is a TX FIFO byte), EP1_CONF `0x04` (write:
+    /// `WR_DONE`, bit 0, commits the packet). Identical on the C3 and the S3.
+    const OFF_EP1: u64 = 0x00;
+    const OFF_EP1_CONF: u64 = 0x04;
+    const EP1_CONF_WR_DONE: u32 = 1 << 0;
+
+    fn root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    fn read_repo(rel: &str) -> Vec<u8> {
+        std::fs::read(root().join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"))
+    }
+
+    fn chip(rel: &str) -> ChipDescriptor {
+        serde_yaml::from_str(&String::from_utf8(read_repo(rel)).expect("utf8 chip yaml"))
+            .unwrap_or_else(|e| panic!("parse {rel}: {e}"))
+    }
+
+    /// A system manifest, optionally carrying the console declaration the board
+    /// compiler emits for `deploy.protocol: esp-serial` + `deploy.usb: native`.
+    /// None of the in-repo system YAMLs declares `debug_uart`, so appending is
+    /// never a duplicate key.
+    fn manifest(rel: &str, console: Option<&str>) -> SystemManifest {
+        let mut yaml = String::from_utf8(read_repo(rel)).expect("utf8 system yaml");
+        if let Some(console) = console {
+            yaml.push_str(&format!("\ndebug_uart: \"{console}\"\n"));
+        }
+        serde_yaml::from_str(&yaml).unwrap_or_else(|e| panic!("parse {rel}: {e}"))
+    }
+
+    fn s3_blobs() -> HashMap<String, Vec<u8>> {
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            "esp32s3_irom".into(),
+            read_repo("../core/roms/esp32s3/esp32s3_rom.bin"),
+        );
+        blobs.insert(
+            "esp32s3_drom".into(),
+            read_repo("../core/roms/esp32s3/esp32s3_drom.bin"),
+        );
+        // The image is never parsed at construction time (the mask ROM reads it
+        // when the CPU runs, and these tests never step), so an erased part is
+        // enough to select the flash-boot constructor.
+        blobs.insert("esp32s3_flash".into(), vec![0xFF; 64 * 1024]);
+        blobs
+    }
+
+    fn c3_blobs() -> HashMap<String, Vec<u8>> {
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert(
+            "esp32c3_irom".into(),
+            read_repo("../core/roms/esp32c3/esp32c3_rom.bin"),
+        );
+        blobs.insert(
+            "esp32c3_drom".into(),
+            read_repo("../core/roms/esp32c3/esp32c3_drom.bin"),
+        );
+        blobs
+    }
+
+    /// Emit one byte on the modelled USB-Serial-JTAG block and report where it
+    /// landed: `(heard, unheard)` — the Serial pane's buffer, and the buffer the
+    /// twin records but never displays.
+    fn emit_on_usb_console(sim: &mut WasmSimulator, byte: u8) -> (Vec<u8>, Vec<u8>) {
+        let base = {
+            let bus = &sim.machine.as_ref().expect("machine").bus;
+            let idx = bus
+                .find_peripheral_index_by_name(labwired_core::console::USB_SERIAL_JTAG)
+                .expect("this bus carries no usb_serial_jtag block");
+            bus.peripherals[idx].base
+        };
+        {
+            let bus = &mut sim.machine.as_mut().expect("machine").bus;
+            bus.write_u32(base + OFF_EP1, byte as u32)
+                .expect("EP1 write");
+            bus.write_u32(base + OFF_EP1_CONF, EP1_CONF_WR_DONE)
+                .expect("EP1_CONF WR_DONE");
+        }
+        let heard = sim.uart_sink.lock().unwrap().clone();
+        let unheard = sim.console.unheard_sink().lock().unwrap().clone();
+        (heard, unheard)
+    }
+
+    /// THE assertion. A board that declares its console is one whose USB-C
+    /// socket is soldered to USB-Serial-JTAG, so a byte the firmware puts there
+    /// is a byte a real developer sees.
+    fn assert_usb_byte_is_heard(sim: &mut WasmSimulator, path: &str) {
+        let (heard, unheard) = emit_on_usb_console(sim, b'Z');
+        assert_eq!(
+            heard.as_slice(),
+            b"Z",
+            "{path}: the console this board's USB-C socket IS did not reach the Serial pane. \
+             heard={heard:?} unheard={unheard:?} — the unheard sink was attached AFTER the \
+             pane's sink, and `set_sink` keeps only the last one."
+        );
+        assert!(
+            unheard.is_empty(),
+            "{path}: the shown console's bytes were also filed as unheard: {unheard:?}"
+        );
+    }
+
+    // ---- ESP32-S3, hosted merged-flash images (the Doom lab) ----------------
+
+    #[test]
+    fn s3_flash_native_usb_board_is_heard() {
+        let mut sim = WasmSimulator::new_from_config_xtensa_esp32s3_flash(
+            &chip("../../configs/chips/esp32s3.yaml"),
+            &manifest(
+                "../../configs/systems/esp32s3-zero.yaml",
+                Some("usb_serial_jtag"),
+            ),
+            &s3_blobs(),
+        )
+        .expect("construct S3 flash-boot WasmSimulator");
+        assert_usb_byte_is_heard(&mut sim, "esp32s3 flash boot");
+    }
+
+    /// The other half of #1020, which must not regress while fixing this one:
+    /// an UNDECLARED manifest (every native-CLI lab, and every Arduino sketch
+    /// compiled before the board compiler emitted a console) still hears the
+    /// USB-Serial-JTAG block.
+    #[test]
+    fn s3_flash_undeclared_manifest_still_hears_the_usb_console() {
+        let mut sim = WasmSimulator::new_from_config_xtensa_esp32s3_flash(
+            &chip("../../configs/chips/esp32s3.yaml"),
+            &manifest("../../configs/systems/esp32s3-zero.yaml", None),
+            &s3_blobs(),
+        )
+        .expect("construct S3 flash-boot WasmSimulator");
+        let (heard, _) = emit_on_usb_console(&mut sim, b'Z');
+        assert_eq!(
+            heard.as_slice(),
+            b"Z",
+            "an undeclared manifest lost the USB-Serial-JTAG tap #1020 added"
+        );
+    }
+
+    // ---- ESP32-S3, fast boot (OpenAI Deck, doomlike lab, S3 OLED) -----------
+
+    #[test]
+    fn s3_fast_boot_native_usb_board_is_heard() {
+        let mut sim = WasmSimulator::new_from_config_xtensa_esp32s3(
+            &manifest(
+                "../../configs/systems/esp32s3-zero.yaml",
+                Some("usb_serial_jtag"),
+            ),
+            &read_repo("../../fixtures/xtensa-asm/fibonacci.elf"),
+            &HashMap::new(),
+        )
+        .expect("construct S3 fast-boot WasmSimulator");
+        assert_usb_byte_is_heard(&mut sim, "esp32s3 fast boot");
+    }
+
+    // ---- ESP32-C3, bare program image --------------------------------------
+
+    #[test]
+    fn c3_program_image_native_usb_board_is_heard() {
+        // A single `nop`; nothing is ever stepped, the image only has to load.
+        let mut image = ProgramImage::new(0x4038_0000, Arch::RiscV);
+        image.add_segment(0x4038_0000, 0x0000_0013u32.to_le_bytes().to_vec());
+        let mut sim = WasmSimulator::new_from_config_riscv_program_image(
+            &chip("../../configs/chips/esp32c3.yaml"),
+            &manifest(
+                "../../configs/systems/esp32c3-devkit.yaml",
+                Some("usb_serial_jtag"),
+            ),
+            &image,
+            &c3_blobs(),
+        )
+        .expect("construct C3 program-image WasmSimulator");
+        assert_usb_byte_is_heard(&mut sim, "esp32c3 program image");
+    }
 }
