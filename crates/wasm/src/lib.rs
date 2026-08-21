@@ -3671,6 +3671,7 @@ mod native_usb_console_tap_order_tests {
     #[test]
     fn s3_fast_boot_native_usb_board_is_heard() {
         let mut sim = WasmSimulator::new_from_config_xtensa_esp32s3(
+            &chip("../../configs/chips/esp32s3.yaml"),
             &manifest(
                 "../../configs/systems/esp32s3-zero.yaml",
                 Some("usb_serial_jtag"),
