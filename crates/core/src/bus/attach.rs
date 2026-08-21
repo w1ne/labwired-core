@@ -841,6 +841,41 @@ impl SystemBus {
         }
     }
 
+    /// Wire S3 IO_MUX per-pad controls into S3 GPIO after both models have
+    /// been constructed — the S3 counterpart of
+    /// [`Self::wire_esp32c3_pad_controls`]. The IO_MUX owns the shared
+    /// `IO_MUX_GPIOn_REG` bank; GPIO reads `FUN_WPU` from it to model Arduino
+    /// `INPUT_PULLUP`. Without this the S3's per-pad words were write-only
+    /// storage and a released `INPUT_PULLUP` pin read 0. No-op on any bus
+    /// without both S3 peripherals.
+    pub(crate) fn wire_esp32s3_pad_controls(&mut self) {
+        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
+
+        // Two type-scans rather than index-then-downcast: the concrete type
+        // decides identity either way, and this adds no new immutable-any call
+        // site (see `tests::downcast_ratchet` — remediation row 6.5). Scanning
+        // by type rather than by peripheral id keeps the wiring alive if the
+        // S3 tables ever rename `io_mux`/`gpio`; a silent no-op there would be
+        // invisible exactly the way the missing `wire_esp32s3_i2c_pads` call
+        // was.
+        let Some(controls) = self
+            .peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.as_any_mut()?.downcast_mut::<Esp32s3IoMux>())
+            .map(|io_mux| io_mux.pad_controls())
+        else {
+            return;
+        };
+        if let Some(gpio) = self
+            .peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.as_any_mut()?.downcast_mut::<Esp32s3Gpio>())
+        {
+            gpio.set_pad_controls(controls);
+        }
+    }
+
     /// Wire C3 IO_MUX per-pad controls into C3 GPIO after both models have
     /// been constructed. The IO_MUX owns the shared register bank; GPIO reads
     /// `FUN_WPU` from it to model Arduino `INPUT_PULLUP`. No-op on any bus
