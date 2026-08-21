@@ -263,7 +263,14 @@ fn run_s3_rom_boot_no_elf(
         // like `labwired run` and the Wasm constructor do. Falling back to the
         // 4 MiB default makes the ROM reject every N8/N16 image before app_main.
         flash_size: esp32s3_rom_boot_flash_size(system),
-        ..Esp32s3Opts::default()
+        // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
+        // YAML is the one home for it, and it is what the SYSTIMER divides the
+        // CPU cycle stream by to keep `esp_timer` time.
+        ..system
+            .chip()
+            .as_ref()
+            .map(Esp32s3Opts::for_chip)
+            .unwrap_or_default()
     };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
