@@ -7,7 +7,12 @@
 //! the datasheet defines (via `svd-ingestor`) and probes the simulator's bus to
 //! measure how many are actually modeled. It runs in CI as a **ratchet gate**
 //! (`register_coverage_ratchet`): a chip's modeled count may never regress.
-//! Chips whose newest-silicon SVDs aren't public yet are listed "SVD pending".
+//! Chips whose newest-silicon SVDs aren't public yet are listed "SVD pending" —
+//! and that is the *only* way to be pending. Everything else that used to make a
+//! chip quietly unmeasurable (an unreadable SVD, an unparseable SVD, a peripheral
+//! the ingestor chokes on, a chip absent from the baseline, an arch with no probe
+//! path) is now a hard failure. Each of those was a way for this gate to pass
+//! while measuring nothing.
 //!
 //! Per register we record three signals from the live bus:
 //!   * `mapped` — a read succeeds (the address lands in a modeled peripheral)
@@ -169,23 +174,56 @@ fn probe_register(bus: &mut SystemBus, addr: u64, reset: u32) -> Probe {
 }
 
 /// Enumerate every SVD register as (absolute address, reset value).
-/// Returns `None` if the SVD is missing or svd-parser cannot read it.
-fn svd_registers(svd_path: &str) -> Option<Vec<(u64, u32)>> {
-    let xml = std::fs::read_to_string(root(svd_path)).ok()?;
-    let device = svd_ingestor::parse_svd(&xml).ok()?;
+///
+/// Every failure here is **fatal**. This used to swallow three of them:
+///
+///   * an unreadable SVD file (`.ok()?`),
+///   * an unparseable SVD (`.ok()?`),
+///   * a peripheral the ingestor could not process (`Err(_) => continue`).
+///
+/// The first two turned into `measure_chip() == None`, which the ratchet loop
+/// then skipped — delete an SVD and that chip's gate vanished *green*. The third
+/// was worse than a skip: the dropped peripheral's registers left BOTH the
+/// numerator and the denominator, so `modeled/total` could *rise* while real
+/// coverage fell, and the ratchet (which compares absolute `modeled` counts)
+/// would only notice if the drop happened to cross the baseline.
+fn svd_registers(svd_path: &str) -> Vec<(u64, u32)> {
+    let abs = root(svd_path);
+    let xml = std::fs::read_to_string(&abs)
+        .unwrap_or_else(|e| panic!("read SVD {}: {e}\n{}", abs.display(), SVD_FATAL_NOTE));
+    let device = svd_ingestor::parse_svd(&xml)
+        .unwrap_or_else(|e| panic!("parse SVD {}: {e}\n{}", abs.display(), SVD_FATAL_NOTE));
     let mut out = Vec::new();
     for peripheral in &device.peripherals {
         let base = peripheral.base_address;
-        let desc = match svd_ingestor::process_peripheral(&device, peripheral) {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
+        let desc = svd_ingestor::process_peripheral(&device, peripheral).unwrap_or_else(|e| {
+            panic!(
+                "{}: peripheral `{}` (base 0x{base:08x}) cannot be processed: {e}\n\
+                 Skipping it would delete its registers from BOTH sides of the coverage \
+                 fraction, so the percentage could rise while coverage fell. Fix the \
+                 ingestor or the SVD; do not drop the peripheral.",
+                abs.display(),
+                peripheral.name
+            )
+        });
         for reg in &desc.registers {
             out.push((base + reg.address_offset, reg.reset_value));
         }
     }
-    Some(out)
+    assert!(
+        !out.is_empty(),
+        "{}: parsed but yielded zero registers — the ratchet would then compare 0 >= 0 \
+         forever.\n{}",
+        abs.display(),
+        SVD_FATAL_NOTE
+    );
+    out
 }
+
+const SVD_FATAL_NOTE: &str = "This is a ratchet input, not an optional extra: a chip whose SVD \
+    cannot be read used to be recorded as \"SVD pending\" and skipped, so its coverage gate \
+    disappeared silently and green. Restore the SVD, or delete the chip from CHIPS *and* from \
+    docs/coverage/register-modeling.json in the same commit.";
 
 fn probe_all(bus: &mut SystemBus, regs: &[(u64, u32)]) -> (usize, usize, usize) {
     let (mut mapped, mut reset_ok, mut modeled) = (0usize, 0usize, 0usize);
@@ -205,9 +243,9 @@ fn probe_all(bus: &mut SystemBus, regs: &[(u64, u32)]) -> (usize, usize, usize) 
 }
 
 /// One chip's measured coverage: (total SVD registers, mapped, reset_ok,
-/// modeled). `None` if the SVD cannot be parsed.
-fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
-    let regs = svd_registers(svd)?;
+/// modeled). Panics rather than returning "unmeasured" — see `svd_registers`.
+fn measure_chip(name: &str, yaml: &str, svd: &str) -> (usize, usize, usize, usize) {
+    let regs = svd_registers(svd);
     let total = regs.len();
     let chip = ChipDescriptor::from_file(root(yaml)).expect("chip yaml");
     let mut bus = SystemBus::from_config(&chip, &dummy_manifest(yaml)).expect("bus");
@@ -262,11 +300,19 @@ fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
             m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
-        // AVR P0: no SVD/register map probe yet — estate only until a capture lands.
-        Arch::Avr => (0, 0, 0),
-        Arch::Unknown => (0, 0, 0),
+        // No probe path exists for these. Returning (0,0,0) here was the fourth
+        // fail-open: a measured zero ratchets against a baseline zero forever, so
+        // the chip would sit in the table looking covered and gating nothing.
+        // AVR P0 has no SVD/register-map probe yet — such a chip belongs out of
+        // CHIPS (estate-only, tracked by chip_conformance) until one lands.
+        arch @ (Arch::Avr | Arch::Unknown) => panic!(
+            "{name}: arch {arch:?} has no register probe path, so its coverage would \
+             measure 0 and ratchet against 0 — a gate that can never fail. Remove it \
+             from CHIPS (and from docs/coverage/register-modeling.json) until a probe \
+             exists, or add one here."
+        ),
     };
-    Some((total, mapped, reset_ok, modeled))
+    (total, mapped, reset_ok, modeled)
 }
 
 /// CI gate: per-chip register-modeling coverage may never regress.
@@ -291,17 +337,19 @@ fn register_coverage_ratchet() {
     );
     println!("{}", "-".repeat(50));
     for &(name, yaml, svd) in CHIPS {
-        let measured = svd.and_then(|s| measure_chip(yaml, s));
-        let Some((total, mapped, reset_ok, modeled)) = measured else {
-            let why = if svd.is_none() {
-                "no public vendor SVD yet"
-            } else {
-                "SVD not parseable"
-            };
-            println!("{name:<11} {:>6}   (SVD pending — {why})", "-");
+        // `svd: None` is the ONLY legitimate "pending": a deliberate, committed
+        // statement that no public vendor SVD exists for this part. An SVD that
+        // is present but unreadable/unparseable now panics inside measure_chip
+        // instead of demoting the chip to "pending" and skipping its gate.
+        let Some(svd) = svd else {
+            println!(
+                "{name:<11} {:>6}   (SVD pending — no public vendor SVD yet)",
+                "-"
+            );
             current.insert(name.to_string(), serde_json::json!({"svd_pending": true}));
             continue;
         };
+        let (total, mapped, reset_ok, modeled) = measure_chip(name, yaml, svd);
         let pct = if total > 0 {
             modeled as f64 * 100.0 / total as f64
         } else {
@@ -331,13 +379,57 @@ fn register_coverage_ratchet() {
     )
     .expect("parse baseline");
 
+    // The measured chip set and the baseline key set must be IDENTICAL.
+    //
+    // Without this, `baseline[name]["modeled"].as_u64().unwrap_or(0)` silently
+    // ratcheted a chip missing from the baseline against zero: rename a chip, or
+    // add one, and it could never fail. The mirror hole let a chip disappear from
+    // CHIPS entirely while its baseline entry sat there unread. Adding or removing
+    // a chip is now a deliberate act that must touch both files in one commit.
+    let baseline_obj = baseline
+        .as_object()
+        .expect("baseline is a JSON object of chip -> {modeled,total}");
+    let measured_names: std::collections::BTreeSet<&str> =
+        current.keys().map(|s| s.as_str()).collect();
+    let baseline_names: std::collections::BTreeSet<&str> =
+        baseline_obj.keys().map(|s| s.as_str()).collect();
+    let missing_from_baseline: Vec<&&str> = measured_names.difference(&baseline_names).collect();
+    let missing_from_chips: Vec<&&str> = baseline_names.difference(&measured_names).collect();
+    assert!(
+        missing_from_baseline.is_empty() && missing_from_chips.is_empty(),
+        "chip set and baseline key set disagree — a chip outside the baseline ratchets \
+         against nothing:\n  measured but absent from {}: {missing_from_baseline:?}\n  \
+         in the baseline but not measured: {missing_from_chips:?}\n  \
+         (intentional? re-baseline with UPDATE_COVERAGE_BASELINE=1 in the same commit)",
+        baseline_path.display()
+    );
+
     let mut regressions = Vec::new();
     for (name, cur) in &current {
-        // SVD-pending chips have no measurement to ratchet.
+        let base = &baseline[name];
+        // A chip that HAD a measurement may not fall back to "pending". That
+        // transition is exactly what a deleted/corrupted SVD used to look like.
         let Some(cur_modeled) = cur["modeled"].as_u64() else {
+            if base["modeled"].as_u64().is_some() {
+                regressions.push(format!(
+                    "{name}: was measured in the baseline but is now SVD-pending — a \
+                     measured chip may not lose its gate"
+                ));
+            }
             continue;
         };
-        let base_modeled = baseline[name]["modeled"].as_u64().unwrap_or(0);
+        // No `unwrap_or(0)`: the key is guaranteed present by the set check
+        // above, and a present-but-shapeless entry is a corrupt baseline, not a
+        // free pass.
+        let Some(base_modeled) = base["modeled"].as_u64() else {
+            // Baseline says pending, we now measure it: that is new coverage, not
+            // a regression — but only if the baseline actually said so.
+            assert!(
+                base["svd_pending"].as_bool() == Some(true),
+                "{name}: baseline entry has neither `modeled` nor `svd_pending`: {base}"
+            );
+            continue;
+        };
         if cur_modeled < base_modeled {
             regressions.push(format!(
                 "{name}: modeled regressed {base_modeled} -> {cur_modeled}"
