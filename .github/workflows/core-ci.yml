@@ -1459,7 +1459,53 @@ jobs:
         # artifact this job never produces would fail it for the wrong reason.
         env:
           LABWIRED_REQUIRE_FIRMWARE: firmware-ci-fixture,firmware-rp2040-pio-onboarding
-        run: cargo test --workspace
+        # KNOWN-RED, FROM THE SAME LIST THE PR SHARDS USE.
+        #
+        # This step was plain `cargo test --workspace`, so it went red on
+        # `cpu_trace_conformance::every_cpu_core_is_covered_by_this_file` — a
+        # failure the project has already acknowledged and tracked as issue 961,
+        # and which `pr-workspace-tests` tolerates by reading `known_red` from
+        # scripts/ci/workspace-test-shards.json.
+        #
+        # One test, acknowledged in one lane and not the other, is why THIS job
+        # has been red on every scheduled run. That matters well beyond its own
+        # colour: `nightly_only_excluded` sends work HERE. Five targets already
+        # sit in that list believing this job covers them, so while this job
+        # cannot go green, that list is a deletion mechanism wearing a
+        # relocation's name.
+        #
+        # The skips are generated FROM the JSON, never typed here, so the two
+        # lanes cannot drift into disagreeing about what is known-red. The
+        # skipped tests are then run for real by the step below — skipped from
+        # the verdict, never from the log.
+        run: |
+          set -uo pipefail
+          # while-read, not `mapfile`: bash 3.2 has no mapfile, and a CI step
+          # that only works on the runner is a step nobody can reproduce.
+          skips=()
+          while IFS= read -r arg; do skips+=("$arg"); done \
+            < <(python3 scripts/ci/known_red.py --skip-args)
+          echo "known-red skips (from workspace-test-shards.json): ${skips[*]:-<none>}"
+          cargo test --workspace --no-fail-fast -- "${skips[@]}"
+
+      # The other half of the bargain: a test excused from the verdict must
+      # still RUN and still be reported, or "known red" becomes "never looked
+      # at" — which is how the list would quietly outlive the bugs in it.
+      # Annotates in BOTH directions: a known-red test that starts passing is
+      # news too, and says to delete its entry.
+      - name: Run the known-red tests anyway, and say where they stand
+        if: always()
+        run: |
+          set -uo pipefail
+          python3 scripts/ci/known_red.py --rows > /tmp/known-red.txt
+          while read -r pkg target test issue; do
+            [ -n "${pkg:-}" ] || continue
+            if cargo test -p "$pkg" --test "$target" -- --exact "$test"; then
+              echo "::warning title=known-red test now PASSES::${target}::${test} (issue ${issue}) passed. Delete its known_red entry in scripts/ci/workspace-test-shards.json so it gates again."
+            else
+              echo "::warning title=known-red test still red::${target}::${test} — tracked as issue ${issue}, not counted against this job."
+            fi
+          done < /tmp/known-red.txt
 
       - name: Feature tests — jit + event-scheduler
         run: cargo test -p labwired-core --features jit,event-scheduler
