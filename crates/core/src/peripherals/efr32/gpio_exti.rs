@@ -106,9 +106,6 @@ pub struct Efr32s2GpioExti {
     ien: u32,
     em4wuen: u32,
     em4wupol: u32,
-    /// Last level seen per (port, pin), so an edge is a CHANGE and not a
-    /// level. Index: `port * 16 + pin`.
-    last_level: [Option<bool>; 64],
 }
 
 impl Default for Efr32s2GpioExti {
@@ -128,7 +125,6 @@ impl Efr32s2GpioExti {
             ien: 0,
             em4wuen: 0,
             em4wupol: 0,
-            last_level: [None; 64],
         }
     }
 
@@ -223,26 +219,23 @@ impl Peripheral for Efr32s2GpioExti {
         true
     }
 
-    /// The bus hands every GPIO transition here. This is the whole model: an
+    /// The bus hands every GPIO TRANSITION here. This is the whole model: an
     /// edge on a pad a line watches, with the matching polarity armed, latches
     /// that line's flag.
+    ///
+    /// ⚠️ Every tuple in `changes` IS an edge — the bus diffs the ports itself
+    /// and adopts the boot levels as a silent baseline, so a pad that merely
+    /// STARTS high is never reported. `level` is therefore the direction: 1 is
+    /// a rising edge, 0 a falling one.
+    ///
+    /// Keeping a second previous-level table here does not add safety, it
+    /// breaks the model: the bus reports each transition exactly once, so a
+    /// local baseline swallows the FIRST edge of every pad — measured, on a
+    /// button whose only press never fired.
     fn observe_gpio_change(&mut self, changes: &[(u8, u8, u8)]) -> bool {
         let mut latched = false;
         for &(port, pin, level) in changes {
-            let idx = (port as usize) * 16 + (pin as usize);
-            let new = level != 0;
-            let prev = self.last_level.get(idx).copied().flatten();
-            if let Some(slot) = self.last_level.get_mut(idx) {
-                *slot = Some(new);
-            }
-            // With no previous level there is no edge — the first observation
-            // establishes the baseline. Otherwise a pad that merely STARTS
-            // high would look like a rising edge at boot.
-            let Some(prev) = prev else { continue };
-            if prev == new {
-                continue;
-            }
-            let rising = new;
+            let rising = level != 0;
 
             for line in 0..EXTI_LINES {
                 let (sel_port, sel_pin) = self.watched_pad(line);
@@ -325,9 +318,11 @@ mod tests {
         exti.write_word(off_pinsel, pinsel);
     }
 
-    /// Establish the baseline level, then drive the edge.
+    /// Drive one transition. `from` is only there to read as a direction at the
+    /// call site — the bus reports transitions, so `to` is what decides the
+    /// edge.
     fn edge(exti: &mut Efr32s2GpioExti, port: u8, pin: u8, from: u8, to: u8) {
-        exti.observe_gpio_change(&[(port, pin, from)]);
+        debug_assert_ne!(from, to, "a transition must change the level");
         exti.observe_gpio_change(&[(port, pin, to)]);
     }
 
@@ -458,15 +453,22 @@ mod tests {
         );
     }
 
-    /// A pad that is already high when first observed is not a rising edge.
-    /// Without a baseline every pull-up would fire its line at boot.
+    /// ⚠️ The FIRST transition a pad reports must fire, and this is the test
+    /// that says so.
+    ///
+    /// The bus diffs the ports itself and adopts the boot levels as a silent
+    /// baseline, so every tuple it delivers is already an edge. A model that
+    /// kept its own previous-level table would treat the first one as its
+    /// baseline and swallow it — which is exactly what happened: a button
+    /// whose only press was its first never fired its interrupt.
     #[test]
-    fn the_first_observation_establishes_a_baseline_and_is_not_an_edge() {
+    fn the_first_transition_a_pad_reports_is_an_edge_not_a_baseline() {
         let mut exti = Efr32s2GpioExti::new();
         select(&mut exti, 0, 1, 0);
-        exti.write_word(OFF_EXTIRISE, 1 << 0);
+        exti.write_word(OFF_EXTIFALL, 1 << 0);
 
-        exti.observe_gpio_change(&[(1, 0, 1)]);
-        assert_eq!(exti.read_word(OFF_IF), 0);
+        // One tuple, no prior observation of this pad at all.
+        assert!(exti.observe_gpio_change(&[(1, 0, 0)]));
+        assert_eq!(exti.read_word(OFF_IF) & 1, 1);
     }
 }

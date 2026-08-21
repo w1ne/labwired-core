@@ -2738,34 +2738,76 @@ impl CortexM {
                 Instruction::And { rd, rm } => {
                     let res = self.read_reg(rd) & self.read_reg(rm);
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nz(res);
+                    }
                 }
                 Instruction::Bic { rd, rm } => {
                     let res = self.read_reg(rd) & !self.read_reg(rm);
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nz(res);
+                    }
                 }
                 Instruction::Orr { rd, rm } => {
                     let res = self.read_reg(rd) | self.read_reg(rm);
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nz(res);
+                    }
                 }
                 Instruction::Eor { rd, rm } => {
                     let res = self.read_reg(rd) ^ self.read_reg(rm);
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nz(res);
+                    }
                 }
                 Instruction::Mvn { rd, rm } => {
                     let res = !self.read_reg(rm);
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nz(res);
+                    }
                 }
                 Instruction::Mul { rd, rn } => {
                     let op1 = self.read_reg(rd);
                     let op2 = self.read_reg(rn);
                     let res = op1.wrapping_mul(op2);
                     self.write_reg(rd, res);
-                    self.update_nz(res);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nz(res);
+                    }
                 }
                 Instruction::Mul32 { rd, rn, rm } => {
                     let op1 = self.read_reg(rn);
@@ -2899,7 +2941,14 @@ impl CortexM {
                     let carry_in = (self.xpsr >> 29) & 1;
                     let (res, c, v) = adc_with_flags(op1, op2, carry_in);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::Sbc { rd, rm } => {
                     let op1 = self.read_reg(rd);
@@ -2907,7 +2956,14 @@ impl CortexM {
                     let carry_in = (self.xpsr >> 29) & 1;
                     let (res, c, v) = sbc_with_flags(op1, op2, carry_in);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
                 Instruction::Ror { rd, rm } => {
                     // Register rotate: amount = Rm[7:0]. Carry = the rotated
@@ -2955,7 +3011,14 @@ impl CortexM {
                     let op1 = self.read_reg(rn);
                     let (res, c, v) = sub_with_flags(0, op1);
                     self.write_reg(rd, res);
-                    self.update_nzcv(res, c, v);
+                    // T1 encoding: setflags = !InITBlock(). Leaking flags
+                    // from inside an IT block corrupts the CONDITION of every
+                    // instruction still to run in that block — measured: an
+                    // `orrls` before a `strls` in the same `itt ls` cleared Z
+                    // and the store never happened.
+                    if !it_block_instruction {
+                        self.update_nzcv(res, c, v);
+                    }
                 }
 
                 // Memory Operations (Word)
@@ -3978,6 +4041,91 @@ mod tests {
             bus.write_u16(pc as u64, instr_bin as u16).unwrap();
         }
         cpu.step_internal(bus, &[], &bus.config.clone()).unwrap();
+    }
+
+    /// A 16-bit data-processing instruction inside an IT block must NOT set
+    /// flags: its `setflags` is `!InITBlock()`.
+    ///
+    /// Leaking them corrupts the CONDITION of every instruction still to run in
+    /// the same block, and the failure is invisible — the block simply does
+    /// less than the compiler intended.
+    ///
+    /// Measured on real compiler output. `attachInterrupt` compiled to
+    ///
+    /// ```text
+    ///   cmp   r2, #1        ; Z=1, C=1  → LS true
+    ///   itt   ls
+    ///   orrls r2, r1        ; leaked Z=0 …
+    ///   strls r2, [r3,#…]   ; … so LS was false here and the STORE VANISHED
+    /// ```
+    ///
+    /// The register write never happened and the peripheral was never armed.
+    /// LSL and the arithmetic forms already carried this guard, with a note
+    /// citing an earlier H563/WBA52 regression; the logical and multiply forms
+    /// did not.
+    #[test]
+    fn armv7m_sixteen_bit_dp_does_not_set_flags_inside_an_it_block() {
+        // ORR, the exact instruction that was measured, plus its siblings.
+        // Each is `<op> r2, r1` in its 16-bit T1 encoding.
+        for (name, encoding) in [
+            ("orr", 0x430Au16),
+            ("and", 0x400Au16),
+            ("eor", 0x404Au16),
+            ("bic", 0x438Au16),
+            ("mul", 0x434Au16),
+        ] {
+            let mut bus = MockBus::new();
+            let mut cpu = CortexM::new();
+            cpu.pc = 0x1000;
+
+            // Set Z=1 and C=1, the flags `cmp r2, #1` leaves when r2 == 1.
+            cpu.write_reg(1, 1);
+            cpu.write_reg(2, 1);
+            run_test_instr(&mut cpu, &mut bus, 0x2A01, false); // cmp r2, #1
+            assert!(((cpu.xpsr >> 30) & 1 == 1), "{name}: setup expects Z set");
+            let carry_before = cpu.get_carry();
+
+            // `itt ls` then the instruction under test.
+            run_test_instr(&mut cpu, &mut bus, 0xBF9C, false);
+            assert_ne!(cpu.it_state, 0, "{name}: IT block did not open");
+            run_test_instr(&mut cpu, &mut bus, encoding as u32, false);
+
+            assert!(
+                ((cpu.xpsr >> 30) & 1 == 1),
+                "{name} inside an IT block cleared Z — the next conditional \
+                 instruction in the block would be skipped"
+            );
+            assert_eq!(
+                cpu.get_carry(),
+                carry_before,
+                "{name} inside an IT block moved C"
+            );
+        }
+    }
+
+    /// ...and OUTSIDE an IT block the same encoding DOES set them. Without
+    /// this the guard could be a blanket "never set flags", which would break
+    /// every ordinary `orrs`.
+    #[test]
+    fn armv7m_sixteen_bit_dp_still_sets_flags_outside_an_it_block() {
+        let mut bus = MockBus::new();
+        let mut cpu = CortexM::new();
+        cpu.pc = 0x1000;
+
+        cpu.write_reg(1, 0);
+        cpu.write_reg(2, 1);
+        run_test_instr(&mut cpu, &mut bus, 0x2A01, false); // cmp r2, #1 → Z=1
+        assert!(((cpu.xpsr >> 30) & 1 == 1));
+
+        // `ands r2, r1` with r1 = 0 → result 0 … Z stays set. Use ORR with a
+        // non-zero result instead, which must CLEAR Z.
+        cpu.write_reg(1, 4);
+        run_test_instr(&mut cpu, &mut bus, 0x430A, false); // orrs r2, r1
+        assert_eq!(cpu.read_reg(2), 5);
+        assert!(
+            !((cpu.xpsr >> 30) & 1 == 1),
+            "orrs outside an IT block must update Z"
+        );
     }
 
     /// `MOV PC, Rm` is a branch (BXWritePC), not a register write.

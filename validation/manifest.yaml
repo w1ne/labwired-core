@@ -278,8 +278,26 @@ boards:
     # attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
-    drift_ack: 2026-08-13
-    drift_ack_digest: 341fae03a1cdf9fb899fcf06aa25ddbbb953e33a98496d1e20866ef12d70bce1
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
+    drift_ack: 2026-08-21
+    drift_ack_digest: 680599e36fe547487a2b30daf073f8b805ab30993f972fb60b0c361b63d52911
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -435,8 +453,26 @@ boards:
     # attach path (DHT22, HC-SR04, rotary encoder, WS2812), and no silicon
     # capture covers any of those. No live re-capture owed for this change;
     # any re-capture already owed above still is.
-    drift_ack: 2026-08-13
-    drift_ack_digest: 341fae03a1cdf9fb899fcf06aa25ddbbb953e33a98496d1e20866ef12d70bce1
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
+    drift_ack: 2026-08-21
+    drift_ack_digest: 680599e36fe547487a2b30daf073f8b805ab30993f972fb60b0c361b63d52911
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -716,8 +752,26 @@ boards:
     # `SPI_LINES` exactly as before and every STM32 register map, bit engine
     # and timing in the file is byte-identical. No live re-capture owed for
     # this change; any re-capture already owed above still is.
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
     drift_ack: 2026-08-21
-    drift_ack_digest: 7a13dff2c2dfecdf79b1e233409df36fdb651eaf8e66bf176a9330b4beecd307
+    drift_ack_digest: 25b73b59a71206c2f0d7cd54572aafbc824e5c3cf2673274170414c96db8c1e0
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1687,8 +1741,26 @@ boards:
     # `SPI_LINES` exactly as before and every STM32 register map, bit engine
     # and timing in the file is byte-identical. No live re-capture owed for
     # this change; any re-capture already owed above still is.
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
     drift_ack: 2026-08-21
-    drift_ack_digest: 0155e5420bf342831a89b4d8ae6bf20a9668548f2b7137fa4252e7c413e854a3
+    drift_ack_digest: 1c784bec0757b5f65c79b09b34745c2dae0acf3872c66bb8a11d2942bc783154
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1911,8 +1983,26 @@ boards:
     # `SPI_LINES` exactly as before and every STM32 register map, bit engine
     # and timing in the file is byte-identical. No live re-capture owed for
     # this change; any re-capture already owed above still is.
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
     drift_ack: 2026-08-21
-    drift_ack_digest: 75735517aadf956fa9f18fcdbe7ebdfa914b2407637f29f91928ab8cb037a422
+    drift_ack_digest: 6441420810614fcad00ec2761ee8224a4aeff6ee69fcae0c304f13afd81a979c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2188,8 +2278,26 @@ boards:
     # `SPI_LINES` exactly as before and every STM32 register map, bit engine
     # and timing in the file is byte-identical. No live re-capture owed for
     # this change; any re-capture already owed above still is.
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
     drift_ack: 2026-08-21
-    drift_ack_digest: 1d86340cc0c56620b651f9d294c4d52bb66e9c7ddb91d549b311e17ae05a75ad
+    drift_ack_digest: 3f525fd8eeaf83c0c01e2474dcc589f32bc90b222d3b56ec1a03c915953f14b7
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2425,8 +2533,26 @@ boards:
     # `SPI_LINES` exactly as before and every STM32 register map, bit engine
     # and timing in the file is byte-identical. No live re-capture owed for
     # this change; any re-capture already owed above still is.
+    # 2026-08-21 (CPU): `cpu/cortex_m.rs` — a CORRECTNESS FIX, not a
+    # refactor, and it changes what firmware does. The nine 16-bit T1
+    # data-processing encodings ADC/AND/BIC/EOR/MUL/MVN/ORR/RSB/SBC set flags
+    # unconditionally; their `setflags` is `!InITBlock()`. Leaking them
+    # corrupted the CONDITION of every instruction still to run in the same IT
+    # block. Measured on real gcc output: an `orrls` before a `strls` in one
+    # `itt ls` cleared Z, so the store never ran and a peripheral register was
+    # silently never written. LSL and the arithmetic forms already carried the
+    # guard (with a note citing an earlier H563/WBA52 regression); these nine
+    # did not.
+    #
+    # Why no re-capture is owed: what this board's capture PINS is a cold-reset
+    # REGISTER dump, not an execution trace, and no register's reset value
+    # moved. The behaviour gates that DO execute firmware — firmware_survival
+    # (61 passed), board_io_button_stimulus, the tier-1 suites — are unchanged
+    # by it. A future live re-capture should agree BETTER than the last one,
+    # since the CPU now runs IT blocks the way the silicon that produced the
+    # capture does.
     drift_ack: 2026-08-21
-    drift_ack_digest: 25ee5b3d68403b03afe2f7f8b336c3072685c69f52638644f05a4af2b8f326a8
+    drift_ack_digest: 3613bec2607201c8a5444de3ea0d06edb7f6c22fd3ea8a364b11aa59231d4f68
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -2927,7 +3053,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 3f48a4e4fa11c18b8db144e2aaf235e7ebd72859b467096433d8045103782c39
+    drift_ack_digest: 66682a21936e5ca5c1e3d710e61bc328bc01357131de21c203f844a069ac794f
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3012,7 +3138,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 64df06e346c2ca020495b1d5bcefa65350c0dc3639c9efe1df570ca129480f08
+    drift_ack_digest: a620298dbaadd226483ee1b82e917ba6f6e493bc0e496f0b1732d3e104746fea
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3083,7 +3209,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: ff3805fb464d6c8b75d9488fcb47a0bc952a040a98662718fb586ed3ff6304a2
+    drift_ack_digest: 828c75848d2e25bdd44543b064a16217cf274e162f8ad5d8439f43e523a71b62
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3159,7 +3285,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 305d56c87fef4e8337fc7ed71cc724529f63986828382d2742b9ac6dceb4b2ea
+    drift_ack_digest: 4484bbec6289e186132fe5bfd255cd1793c7571cc99d0f7390ebbe6000c3f440
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

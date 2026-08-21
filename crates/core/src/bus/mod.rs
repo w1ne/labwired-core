@@ -335,7 +335,7 @@ pub struct SystemBus {
     /// scheduler-driven models. `Option` rather than a companion flag so a
     /// construction site cannot silently spell "not yet sampled" as "sampled
     /// zero".
-    last_gpio_in: Option<[u32; 2]>,
+    last_gpio_in: Option<[u32; 4]>,
     /// Phase 2B.2 (issue #192): the current CPU cycle count, mirrored from
     /// `Machine::total_cycles` once per step. Read by the MMIO write path to
     /// lazily sync scheduler-driven peripherals (`uses_scheduler() == true`)
