@@ -2311,7 +2311,7 @@ boards:
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml
     tier: silicon-verified
-    note: "Deep model: 36 peripheral models + full Xtensa LX7 JIT; boots real firmware in sim (green e2e i2c_tmp102/hello_world/xtensa_exec/e-paper). WDEV Wi-Fi MAC at 0x60033000 attaches to wifi-ap. Silicon anchor is reset-state (9 regs) on the firmware-path bus. KNOWN GAPS: (1) broader register + behavioural silicon diff still future work; (2) declarative from_config path falls back to generic ARM peripherals for type:i2c — the coded S3 models only wire via configure_xtensa_esp32s3; (3) full-firmware bring-up still rides boot/ROM thunks (FIDELITY.md)."
+    note: "Deep model: 36 peripheral models + full Xtensa LX7 JIT; boots real firmware in sim (green e2e i2c_tmp102/hello_world/xtensa_exec/e-paper). WDEV Wi-Fi MAC at 0x60033000 attaches to wifi-ap, but see KNOWN GAPS (4) — that model is literally the C3's and is UNVERIFIED on S3 silicon. Silicon anchor is reset-state (9 regs) on the firmware-path bus. KNOWN GAPS: (1) broader register + behavioural silicon diff still future work; (2) declarative from_config path falls back to generic ARM peripherals for type:i2c — the coded S3 models only wire via configure_xtensa_esp32s3; (3) full-firmware bring-up still rides boot/ROM thunks (FIDELITY.md); (4) the Wi-Fi MAC is NOT an S3 model — peripherals/esp32s3/wifi_mac.rs re-exports Esp32c3WifiMac verbatim (tracked in the arch_chip_isolation ALLOWED list). The vendored esp32s3.svd carries no Wi-Fi MAC peripheral at all, every register offset (MAC-ready 0xD14, RX ring 0x88, event 0xC3C/0xC40, PLCP0 0xD08) was reverse-engineered on live C3 silicon, and captures/esp32s3/ holds no radio capture. Only interrupt-matrix source 0 is corroborated for the S3, from its own SVD. Treat S3 Wi-Fi as C3-derived and unmeasured until an S3 radio capture lands."
     offline_tests:
       - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
       - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
@@ -2694,7 +2694,7 @@ boards:
     # Serial on native-USB C3/S3 lands on this block, not UART0. Capture-path
     # only: no register map, reset values, or 9-reg silicon windows change.
     # Live re-capture still owed.
-    drift_ack: 2026-08-20
+    drift_ack: 2026-08-21
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -2715,7 +2715,34 @@ boards:
     # SYSTIMER/GDMA/SYSTEM/RTC_CNTL). Live re-capture still owed.
     # 2026-08-20: USB-Serial-JTAG generic UART sink tap. Additive capture
     # path; 9-reg reset-state windows untouched. Live re-capture still owed.
-    drift_ack_digest: 61660e987f8766e6e62395b62b2ab77ba2f9c3473cb91b3ef9ec1bf242f6f752
+    # 2026-08-21: TEST-ONLY. The only change under `models` is a new #[cfg(test)]
+    # case in peripherals/esp32s3/flash_xip.rs
+    # (doom_wad_mmap_window_returns_planted_bytes), which reads the Doom IWAD
+    # mmap window through the existing MMU path. `git diff` over the watched
+    # paths shows 0 lines changed outside `mod tests`: no register map, no reset
+    # value, no bus behaviour, and nothing inside the nine captured windows
+    # (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/SYSTIMER/GDMA/SYSTEM/RTC_CNTL) moves.
+    # Owner-acked without a live capture; the re-captures owed above are NOT
+    # discharged by this line and remain owed.
+    # 2026-08-21: IO_MUX FUN_WPU modelled, so INPUT_PULLUP reads high. Unlike
+    # most acks above this one DOES move reset values, and says so: the pad
+    # bank moves from offset 0 to 0x04 (SVD `GPIO%s`, dim 49 — the old model
+    # sat one register low across the whole bank, leaving IO_MUX_GPIO48_REG and
+    # DATE unreachable) and each pad's cold reset becomes 0x0000_0B00 instead
+    # of 0, per the SVD's resetValue for that array.
+    #
+    # IO_MUX is NOT one of the nine captured windows (UART0/GPIO/I2C0/RMT/
+    # MCPWM0/TIMG0/SYSTIMER/GDMA/SYSTEM/RTC_CNTL), so the 2026-08-09 live
+    # capture neither confirms nor contradicts these values — do not read this
+    # ack as silicon evidence. The authority is tests/fixtures/svd/esp32s3.svd,
+    # the same file svd_conformance and register_coverage already treat as the
+    # oracle for this block, and esp32s3_reset_conformance (the nine registers
+    # that ARE anchored to silicon) is unchanged and green.
+    #
+    # A live IO_MUX window read is now owed and is NOT covered by the
+    # re-captures listed above. Until someone runs it, the S3's pad reset state
+    # is SVD-verified, not silicon-verified.
+    drift_ack_digest: 768410642d3ff35844780fdc532dfe37651d6a676de52f86901dce117a83809d
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
@@ -2726,6 +2753,13 @@ boards:
       # UART register map lived outside its own watch list from that date.
       - crates/core/src/peripherals/esp_uart.rs
       - crates/core/src/cpu/xtensa_jit
+      # The S3's peripheral registration itself. The models above can be
+      # perfectly correct and still not be on the bus: this file decides which
+      # ones are constructed and how they are wired to each other, so an edit
+      # that deletes a wiring call un-models a peripheral without touching any
+      # file the list already watched. Added 2026-08-21 with the IO_MUX pad
+      # sharing, whose only wiring call lives here.
+      - crates/core/src/system/xtensa/esp32s3.rs
       - configs/chips/esp32s3.yaml
       # Declarative descriptors the chip yaml wires; the 9-reg reset-state
       # anchor is asserted against their reset_values.
