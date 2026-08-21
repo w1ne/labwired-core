@@ -2694,7 +2694,7 @@ boards:
     # Serial on native-USB C3/S3 lands on this block, not UART0. Capture-path
     # only: no register map, reset values, or 9-reg silicon windows change.
     # Live re-capture still owed.
-    drift_ack: 2026-08-20
+    drift_ack: 2026-08-21
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -2715,7 +2715,16 @@ boards:
     # SYSTIMER/GDMA/SYSTEM/RTC_CNTL). Live re-capture still owed.
     # 2026-08-20: USB-Serial-JTAG generic UART sink tap. Additive capture
     # path; 9-reg reset-state windows untouched. Live re-capture still owed.
-    drift_ack_digest: 61660e987f8766e6e62395b62b2ab77ba2f9c3473cb91b3ef9ec1bf242f6f752
+    # 2026-08-21: TEST-ONLY. The only change under `models` is a new #[cfg(test)]
+    # case in peripherals/esp32s3/flash_xip.rs
+    # (doom_wad_mmap_window_returns_planted_bytes), which reads the Doom IWAD
+    # mmap window through the existing MMU path. `git diff` over the watched
+    # paths shows 0 lines changed outside `mod tests`: no register map, no reset
+    # value, no bus behaviour, and nothing inside the nine captured windows
+    # (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/SYSTIMER/GDMA/SYSTEM/RTC_CNTL) moves.
+    # Owner-acked without a live capture; the re-captures owed above are NOT
+    # discharged by this line and remain owed.
+    drift_ack_digest: 4d606be758f78b6fb2900472b1a01aa5f5498ba0f25d43c4e01774da28323348
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
