@@ -781,8 +781,20 @@ boards:
     # The focused GPIO peek regression and existing ESP32-C3 GPIO suite pass.
     # The reset-state silicon oracle is therefore unaffected; no live reset
     # re-capture is warranted for this observer-only fix.
-    drift_ack: 2026-08-15
-    drift_ack_digest: 24d69238f2dbe8666809ead591bd5402e332fd0eace6dde860638e09a43c3d7d
+    # 2026-08-21: `peripherals/esp32c3/bt.rs` changed in two ways, neither of
+    # which alters a register, a bit position, a timing or a decode:
+    #   1. `next_node_id()` moved to `peripherals/ble_air.rs` and is imported
+    #      from there. It has to be ONE counter now that a second kind of BLE
+    #      controller can share an air — two counters would both start at 1,
+    #      the first controller of each kind would collide, and each would
+    #      swallow the other's frames as "its own transmission".
+    #   2. `set_air` is now also reachable as `Peripheral::attach_ble_air`, so
+    #      `SystemBus::attach_lab_air` stops downcasting to this concrete type
+    #      to find it. The body it runs is unchanged — it calls `set_air`.
+    # The RW-BLE model itself is byte-identical. No live re-capture owed for
+    # this change; any re-capture already owed above still is.
+    drift_ack: 2026-08-21
+    drift_ack_digest: cac13d2caf01b3587a971357c8e4f5a8951614b590b8d1832cb46bdeaf854e83
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs

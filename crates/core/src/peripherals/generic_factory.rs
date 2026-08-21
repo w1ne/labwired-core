@@ -240,6 +240,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf54l_clock",
     "nrf54l_grtc",
     "efr32s2_cmu",
+    "virtual_ble",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -266,6 +267,11 @@ pub fn try_build(
                 None => Box::new(crate::peripherals::systick::Systick::new()),
             }
         }
+        // LabWired virtual BLE controller. NOT a model of any silicon — see
+        // `peripherals/virtual_ble.rs` for why a part whose vendor documents no
+        // radio register anywhere gets a declared simulator device instead of
+        // an invented register map that would read as silicon in an inspector.
+        "virtual_ble" => Box::new(crate::peripherals::virtual_ble::VirtualBle::new_default()),
         // Silicon Labs Series-2 CMU — its own model, NOT an `RccRegisterLayout`
         // variant. `rcc.rs` is one struct per STM32 family by design, and this
         // silicon shares no register with any of them.

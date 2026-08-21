@@ -1126,6 +1126,41 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
 
+    /// Tell the peripheral the clock its system's core runs at, in Hz — the
+    /// effective `SystemBus::cpu_hz`, i.e. the manifest override if there is
+    /// one and otherwise `ChipDescriptor::cpu_hz`. Called from the same attach
+    /// choke points as [`Peripheral::attach_cycle_clock`].
+    ///
+    /// For a model whose behaviour is specified in WALL time but driven in
+    /// CPU cycles — a BLE controller told to advertise every 100 ms, say —
+    /// this is the conversion factor. Taking it here rather than from a
+    /// per-peripheral `config:` key keeps
+    /// [`labwired_config::ChipDescriptor::cpu_hz`] the single source of the
+    /// core clock: a yaml that restated the frequency next to the peripheral
+    /// would be a second place to change it, and the two would diverge.
+    ///
+    /// Default no-op. A model that never receives it must have a usable
+    /// default, since hand-built buses bypass the choke points.
+    fn attach_cpu_hz(&mut self, _hz: u64) {}
+
+    /// Move this peripheral onto a lab's own BLE air, replacing whatever air it
+    /// was minted with. Called by [`crate::bus::SystemBus::attach_lab_air`] for
+    /// every peripheral in a multi-node world.
+    ///
+    /// A BLE controller built by the ordinary factory joins the process-global
+    /// air, because the factory has no lab identity to hand it. That is right
+    /// for a single lab and wrong for two: without this, two labs in one
+    /// process — two worker threads, or two tests — hear each other's
+    /// advertisements as peer traffic.
+    ///
+    /// An implementation must also re-join the cursor at the new air's current
+    /// sequence. A radio has no history buffer, and an air outlives a
+    /// simulation restart, so a controller that kept a stale cursor would
+    /// replay the previous run's backlog as live packets.
+    ///
+    /// Default no-op: a peripheral with no radio has no air to move.
+    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
+
     /// Hand the peripheral the machine's ONE universal bus trace, plus the name
     /// it should stamp events with. Called from the same registration choke
     /// points as [`Peripheral::attach_cycle_clock`] and

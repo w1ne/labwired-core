@@ -75,6 +75,7 @@ pub mod tsc;
 pub mod uart;
 pub mod uart_waveform;
 pub mod usb_otg;
+pub mod virtual_ble;
 pub mod wave_plan;
 pub mod wwdg;
 

@@ -32,6 +32,7 @@ members = [
     "crates/firmware-l073-demo",
     "crates/firmware-l476-demo",
     "crates/firmware-mg26-demo",
+    "crates/firmware-mg26-ble",
     "crates/firmware-mg26-bootloader",
     "crates/firmware-nrf52832-demo",
     "crates/firmware-nrf52840-ble-collector",
@@ -231,6 +232,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-mg26-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-mg26-ble]
 codegen-units = 1
 opt-level = "s"
 

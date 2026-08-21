@@ -779,7 +779,6 @@ impl SystemBus {
         cellular: crate::network::SimMqttFabric,
     ) {
         use crate::peripherals::components::QuectelBg770a;
-        use crate::peripherals::esp32c3::bt::Esp32c3Bt;
         use crate::peripherals::nrf52::radio::Nrf52Radio;
         use crate::peripherals::uart::Uart;
         let medium = nrf_air.medium_slot();
@@ -792,13 +791,12 @@ impl SystemBus {
                 radio.set_air(nrf_air.clone());
                 radio.set_node_id(node_id);
             }
-            if let Some(bt) = entry
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<Esp32c3Bt>())
-            {
-                bt.set_air(ble_air.clone());
-            }
+            // Every BLE controller, asked through the trait: an ESP32-C3
+            // RW-BLE core, a LabWired `VirtualBle`, or whatever comes next.
+            // This used to downcast to `Esp32c3Bt`, which silently left any
+            // other controller on the process-global air — two labs in one
+            // process would then hear each other.
+            entry.dev.attach_ble_air(ble_air.clone());
             if let Some(uart) = entry
                 .dev
                 .as_any_mut()

@@ -200,6 +200,35 @@ peripherals:
     base_address: 0x40048000
     size: "4KB"
 
+  # ── BLE (LabWired virtual controller) ────────────────────────────────────
+  # ⚠️ THIS BLOCK IS NOT SILICON. There is no EFR32 radio peripheral at this
+  # address, or at any address, in anything Silicon Labs publishes:
+  #   - EFR32xG26 RM rev 1.0 chapter 5 "Radio Transceiver" is four pages of
+  #     prose with NO register documentation, while every other peripheral in
+  #     that manual gets a full register map.
+  #   - The CMSIS device headers ship 73 peripheral headers for this part and
+  #     none of them is rac/frc/modem/protimer/bufc/synth/agc.
+  #   - There is no SVD for the family.
+  # The radio is reachable only through the closed RAIL binary. So rather than
+  # invent EFR32-shaped register names — which would look like silicon in an
+  # inspector and be fiction — this is a DECLARED LabWired device, the same
+  # kind of thing as `simctl`. Its ID register reads ASCII "LWBL" so a dump
+  # says whose block it is.
+  #
+  # Consequence, stated where someone will read it: a sketch that drives this
+  # controller runs in the twin and NOT on the physical board. Silicon needs
+  # the vendor stack, which is a separate compile lane.
+  #
+  # Base 0x4F000000 is outside the RM's peripheral map entirely (which ends at
+  # MVP, 0x4D003FFF), so it can never collide with a block Silicon Labs adds.
+  # IRQ 93 is one past EXT_IRQ_COUNT (93 lines, 0..92 — CMSIS `IRQn_Type`), so
+  # it cannot shadow a real peripheral's vector either.
+  - id: "ble"
+    type: "virtual_ble"
+    base_address: 0x4F000000
+    size: "4KB"
+    irq: 93
+
   # ── SysTick ──────────────────────────────────────────────────────────────
   # Architectural ARMv8-M SysTick in the SCS block (not a Silabs peripheral),
   # declared so firmware gets a periodic core interrupt. Same treatment as the
