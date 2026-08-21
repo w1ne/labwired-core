@@ -17,7 +17,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `6133dbb43b2146b1` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `231a8d9a589b5f73` | ⚠ drift acked 2026-08-13 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `26750bfeb2971fa2` | ⚠ drift acked 2026-08-13 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `4d606be758f78b6f` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `768410642d3ff358` | ⚠ drift acked 2026-08-21 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `1944e48e1e75ed3b` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `a8c9baa90cb2a903` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `9637527458c15225` | no silicon capture |
