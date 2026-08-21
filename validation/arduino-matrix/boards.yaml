@@ -246,21 +246,9 @@ boards:
     led_min_edges: 2
     family: efr32
     notes: "Hand-written silabs-arduino core; Wire=I2C0 @0x4B000000, SPI=USART0 sync"
-    sketches_skip: [L4_spi_sensor, L6_pwm, L8_can]
+    sketches_skip: [L8_can]
     sketches_skip_reason:
       L8_can: "EFR32MG26 has no CAN controller"
-      # ⚠️ Both of these COMPILE and both HANG in the twin's `delay()`, spinning
-      # on TIMER0_CNT while CNT does not advance — measured stuck at
-      # delay+0x14 with r5=1000 (the 1 ms target) and CNT-start = 0 after 30M
-      # steps. They are skipped so the six real cells gate, and they are named
-      # here rather than dropped from the board, because a skip that says what
-      # it is remains a to-do and a deleted row does not.
-      #
-      # Neither reproduces from a hand-written sketch that does the same calls,
-      # so the trigger is narrower than "PWM is running" or "SPI is begun".
-      # See validation/arduino-matrix/PROBLEMS.md.
-      L4_spi_sensor: "hangs in delay() after SPI.begin — TIMER0_CNT stops advancing; not yet root-caused"
-      L6_pwm: "hangs in delay() after analogWrite — same TIMER0_CNT stall; analogWrite's waveform also does not reach a pad (GPIO_TIMERROUTE unmodelled)"
 
 
 sketches:
