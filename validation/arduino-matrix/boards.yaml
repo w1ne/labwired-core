@@ -230,9 +230,11 @@ boards:
   # So this board declares `external_compile:` instead of `pio:`, and the lane
   # that owns the core supplies the driver through $LW_EXTERNAL_COMPILE (see
   # run_matrix.py). ⚠️ With no driver the rows come back `toolchain_missing`,
-  # which is a FAILURE the gate counts — not a skip. `every_matrix_board_has_a_
-  # lane` in crates/core/tests/arduino_matrix_lanes.rs is what stops this board
-  # from sitting in boards.yaml with nothing anywhere running it.
+  # which is a FAILURE the gate counts — not a skip. `scripts/ci/chip_coverage.py`
+  # is what stops this board from sitting in boards.yaml with nothing anywhere
+  # running it: a board with `external_compile:` must NOT be in this repo's job
+  # matrix (that job could only report toolchain_missing) and MUST name a
+  # `lane:`, or the gate refuses the tree.
   - id: brd2709a
     chip: efr32mg26
     system: systems/brd2709a.yaml
