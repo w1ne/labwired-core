@@ -297,6 +297,11 @@ boards:
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
     #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
+    #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
@@ -476,6 +481,11 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
     #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
@@ -781,12 +791,17 @@ boards:
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
     #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
+    #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: ac2a5c021835795c3841b24eb65fb773cc98b4ddfe740289759e67ad4485ef7c
+    drift_ack_digest: 4e274f4079374a654a632714b3adcd1a282075a3e72f9030126cab0298824d8a
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1775,12 +1790,17 @@ boards:
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
     #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
+    #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 244307bb6898e5ecde4cde088f1153d5109ed012be31f3181a9b3eab5552aab3
+    drift_ack_digest: acdbec13cb07142fa9141b8bd9d9e3a2b019e00109e30ccf2fa25c52e9c361bf
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2022,12 +2042,17 @@ boards:
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
     #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
+    #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: e9c316efa8a21c9ffee1ad8a5c6b7813702881ec1c41ac4bdd5a070d9ba4fff4
+    drift_ack_digest: 89a4ecd33e0016b7d9fc1ae7a16fe57e00e8e01c46d40bdf494d60111461f095
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2322,12 +2347,17 @@ boards:
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
     #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
+    #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 369550884e54e5b5a67c8e42b14317f840833459e1075362670905df43644206
+    drift_ack_digest: 6c5b4ab6220fb2da0ea2f85fe1268ecb692f00c89f50d582a4797028d6ac1cc8
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2582,12 +2612,17 @@ boards:
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
     #
+    # Re-stamped again for the EFR32 silicon capture work: `i2c.rs` gained a
+    # `txc` and a `bus_idle_known` field and corrected `STATE`/`STATUS`/`IF`
+    # reset values — ALL inside `Efr32s2I2c`, whose variant these boards never
+    # construct. The STM32 arms are untouched; only the file's digest moved.
+    #
     # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 85c566ed4fb5a0802f4041b77dc1a71109f34146871504db4edbec3ba3bc9f9e
+    drift_ack_digest: 68ef073152bc0c289a2e9b260f67204762aeb0837082e1b52b838fd5027e06c2
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3276,7 +3311,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 606f614a7976da657ca3814311c2a2c014256a0bfa1ab125f0ebb68d9bc51705
+    drift_ack_digest: 6073d47d379bae4a026851bafb18c76e7a7798291f54c98d54d3fa8b33255035
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3347,7 +3382,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: eb4e8fc8cb1b2fdde2a5bd88b6dd83c4251871b92cf3c344bb62414e067f3d04
+    drift_ack_digest: 9dc33c269683700665434cb191fa1297a6d46d424904486ee1cfb22450c44cbd
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3423,7 +3458,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: df3fc619b0c8a1717c8d8ab474cef5612d7e4689ce3352f3fda20d915b8577cb
+    drift_ack_digest: 4c41ea6e5e8286eabca003e6acea7a3a4c1bd4c173b74de03a3d711d421787d8
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

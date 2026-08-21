@@ -44,12 +44,14 @@
 //!   configuration registers are dropped — which is what silicon does and what
 //!   `CMU_Lock()` exists to cause. `STATUS.LOCK` (bit 31) and
 //!   `STATUS.WDOGLOCK` (bit 30) report it.
-//! * The asymmetry between the two: `LOCK` resets to the unlock key, so the
-//!   CMU boots **unlocked**, while `WDOGLOCK` resets to `0x5257`, so the
-//!   watchdog clock configuration boots **locked** and firmware must unlock it
-//!   before `WDOG0CLKCTRL` will take a write (`_CMU_WDOGLOCK_LOCKKEY_DEFAULT`
-//!   vs `_CMU_WDOGLOCK_LOCKKEY_UNLOCK`). Modelling both as "unlocked at reset"
-//!   would let firmware configure the watchdog clock in the twin and silently
+//! * ⚠️ There is NO asymmetry, and this file used to claim there was. From
+//!   `_CMU_WDOGLOCK_RESETVALUE` being `0x5257` rather than the unlock key it
+//!   concluded the watchdog clock configuration boots **locked**. Silicon says
+//!   no: BRD2709A over SWD reads `STATUS = 0x00000001` at reset, with bit 30
+//!   (WDOGLOCK) and bit 31 (LOCK) both CLEAR. 0x5257 is the reset of the
+//!   LOCKKEY *field*, not a statement about the lock's state. Both boot
+//!   unlocked. What follows below about locks GATING writes is unchanged and
+//!   still measured — only the starting state was wrong. The old text said
 //!   fail to on the bench.
 //! * Read-only registers (`IPVERSION`, `STATUS`, `CALCNT`) ignore writes.
 //!
@@ -66,10 +68,21 @@
 //! * **Calibration is inert.** `CALCMD`/`CALCTRL` store; `CALCNT` reads 0.
 //! * **No CMU interrupt.** `IF`/`IEN` are plain state; nothing ever sets a
 //!   flag, so the CMU IRQ (63) never fires.
-//! * **`LOCK` read-back is the stored key.** The header documents the reset
-//!   value and the unlock code but not what a locked `LOCK` reads as, and
-//!   there is no bench capture for it, so the model returns what was written
-//!   rather than inventing a masked value.
+//! * **`LOCK` and `WDOGLOCK` are WRITE-ONLY — they read 0.** This used to be
+//!   an open question here ("no bench capture for it"), answered by one on
+//!   2026-08-21. Over SWD on a BRD2709A:
+//!
+//!   ```text
+//!   at reset               STATUS=0x00000001  LOCK=0  WDOGLOCK=0
+//!   after writing 0xdead   STATUS=0x80000001  LOCK=0
+//!   after the unlock key   STATUS=0x00000001  LOCK=0
+//!   ```
+//!
+//!   The key is never readable; the lock STATE is reported only by `STATUS`
+//!   bits 31/30. `STATUS` also carries a bit 0 that is set out of reset and
+//!   does not move with either lock — and `_CMU_STATUS_RESETVALUE` says
+//!   `0x00000000`, so this is a place where the die disagrees with the header
+//!   and the die wins.
 //! * Offsets inside the 4 KiB window that `CMU_TypeDef` marks reserved read 0
 //!   and swallow writes, rather than faulting. Series-2 firmware does not
 //!   touch them, and faulting would turn a harmless struct-wide memset into a
@@ -100,6 +113,12 @@ const OFF_WDOG0CLKCTRL: u64 = 0x200;
 const OFF_WDOG1CLKCTRL: u64 = 0x208;
 
 /// `STATUS.LOCK`: the configuration lock is engaged.
+/// Bit 0 of `STATUS`, set out of reset and unmoved by either lock. MEASURED on
+/// silicon (BRD2709A, SWD, 2026-08-21): `STATUS` reads 0x00000001 at reset and
+/// 0x80000001 once LOCK is engaged. `_CMU_STATUS_RESETVALUE` in the header says
+/// 0x00000000, so this is a case where the die disagrees with the header and
+/// the die wins.
+const STATUS_RESET: u32 = 0x0000_0001;
 const STATUS_LOCK: u32 = 1 << 31;
 /// `STATUS.WDOGLOCK`: the watchdog configuration lock is engaged.
 const STATUS_WDOGLOCK: u32 = 1 << 30;
@@ -136,7 +155,12 @@ const REGS: &[RegDef] = &[
     ro(OFF_IPVERSION, 0x0000_0007),
     ro(OFF_STATUS, 0x0000_0000),
     rw(OFF_LOCK, UNLOCK_KEY),
-    rw(OFF_WDOGLOCK, 0x0000_5257),
+    // ⚠️ 0x5257 is `_CMU_WDOGLOCK_RESETVALUE`, and it is the LOCKKEY field's
+    // reset — NOT a statement that the watchdog clock config boots locked.
+    // Measured on silicon: STATUS reads 0x00000001 at reset, so bit 30
+    // (WDOGLOCK) is CLEAR and the watchdog configuration boots UNLOCKED, the
+    // same as LOCK. Keeping the key here is what makes `wdog_locked()` false.
+    rw(OFF_WDOGLOCK, UNLOCK_KEY),
     rw(0x020, 0x0000_0000), // IF
     rw(0x024, 0x0000_0000), // IEN
     rw(0x050, 0x0000_0000), // CALCMD
@@ -203,9 +227,22 @@ impl Efr32s2Cmu {
     }
 
     /// Word read of a register offset. Reserved offsets read 0.
+    ///
+    /// ⚠️ `LOCK` and `WDOGLOCK` are WRITE-ONLY: they read 0 whatever key is in
+    /// them. MEASURED over SWD on a BRD2709A, 2026-08-21, because the header
+    /// documents the reset value and the unlock code but not the read-back —
+    /// the note at the top of this file used to say that was unknown:
+    ///
+    ///   at reset               STATUS=0x00000001  LOCK=0  WDOGLOCK=0
+    ///   after writing 0xdead   STATUS=0x80000001  LOCK=0
+    ///   after the unlock key   STATUS=0x00000001  LOCK=0
+    ///
+    /// So the key is never readable, the lock STATE is reported by STATUS bit
+    /// 31, and STATUS carries a bit 0 that is set out of reset and does not
+    /// move with either lock.
     pub fn read_word(&self, offset: u64) -> u32 {
         if offset == OFF_STATUS {
-            let mut status = 0;
+            let mut status = STATUS_RESET;
             if self.locked() {
                 status |= STATUS_LOCK;
             }
@@ -213,6 +250,10 @@ impl Efr32s2Cmu {
                 status |= STATUS_WDOGLOCK;
             }
             return status;
+        }
+        // The stored key is kept (the lock logic reads it) but never returned.
+        if offset == OFF_LOCK || offset == OFF_WDOGLOCK {
+            return 0;
         }
         Self::slot(offset).map(|i| self.values[i]).unwrap_or(0)
     }
@@ -321,36 +362,79 @@ mod tests {
         assert_eq!(cmu.read_word(OFF_CLKEN0), 0);
         assert_eq!(cmu.read_word(OFF_CLKEN1), 0);
         assert_eq!(cmu.read_word(OFF_CLKEN2), 0);
+        // ⚠️ MEASURED, not read off the header. Both lock registers are
+        // WRITE-ONLY: BRD2709A over SWD reads LOCK=0 and WDOGLOCK=0 at reset,
+        // and still 0 after a non-key write that demonstrably engages the lock.
+        assert_eq!(cmu.read_word(OFF_LOCK), 0, "LOCK is write-only; it reads 0");
         assert_eq!(
-            cmu.read_word(OFF_LOCK),
-            UNLOCK_KEY,
-            "LOCK resets to the unlock key: the CMU boots unlocked"
+            cmu.read_word(OFF_WDOGLOCK),
+            0,
+            "WDOGLOCK is write-only; it reads 0"
         );
+        // And the die disagrees with `_CMU_STATUS_RESETVALUE` (0x00000000):
+        // STATUS reads 0x00000001 at reset, with NEITHER lock bit set — so the
+        // watchdog clock configuration boots UNLOCKED, which is the opposite of
+        // what this file concluded from 0x5257 being WDOGLOCK's reset value.
+        // 0x5257 is the KEY field's reset, not a lock state.
         assert_eq!(
             cmu.read_word(OFF_STATUS),
-            STATUS_WDOGLOCK,
-            "...but WDOGLOCK resets to 0x5257, NOT the unlock key, so the \
-             watchdog clock configuration boots locked and STATUS says so"
+            STATUS_RESET,
+            "STATUS reads 0x00000001 at reset — measured on silicon"
         );
     }
 
-    /// The watchdog lock is a real gate out of reset, and unlocking it is a
-    /// separate step from unlocking the CMU. Firmware that configures
-    /// `WDOG0CLKCTRL` without it gets nothing — on silicon and here.
+    /// Engaging a lock is visible ONLY in STATUS, never in the lock register.
+    ///
+    /// Measured on BRD2709A over SWD, 2026-08-21:
+    ///   at reset               STATUS=0x00000001  LOCK=0
+    ///   after writing 0xdead   STATUS=0x80000001  LOCK=0
+    ///   after the unlock key   STATUS=0x00000001  LOCK=0
     #[test]
-    fn the_watchdog_clock_configuration_is_locked_out_of_reset() {
+    fn a_lock_shows_in_status_and_never_in_the_lock_register() {
         let mut cmu = Efr32s2Cmu::new();
+        cmu.write_word(OFF_LOCK, 0x0000_dead);
+        assert_eq!(
+            cmu.read_word(OFF_STATUS),
+            STATUS_RESET | STATUS_LOCK,
+            "a non-key write engages LOCK and STATUS bit 31 says so"
+        );
+        assert_eq!(cmu.read_word(OFF_LOCK), 0, "still write-only when locked");
+
+        cmu.write_word(OFF_LOCK, UNLOCK_KEY);
+        assert_eq!(cmu.read_word(OFF_STATUS), STATUS_RESET);
+        assert_eq!(cmu.read_word(OFF_LOCK), 0);
+    }
+
+    /// The watchdog lock is a SEPARATE gate from the CMU lock, but it does NOT
+    /// boot engaged — this file used to claim it did, on the strength of
+    /// `_CMU_WDOGLOCK_RESETVALUE` being 0x5257 rather than the unlock key.
+    /// Silicon says otherwise (STATUS=0x00000001 at reset, bit 30 clear), so
+    /// what this asserts now is that the gate WORKS, not that it starts shut.
+    #[test]
+    fn the_watchdog_clock_lock_gates_wdog0clkctrl_once_engaged() {
+        let mut cmu = Efr32s2Cmu::new();
+        // Unlocked out of reset: the write lands.
         cmu.write_word(OFF_WDOG0CLKCTRL, 3); // WDOG0CLKCTRL := LFRCO
+        assert_eq!(cmu.read_word(OFF_WDOG0CLKCTRL), 3);
+
+        // Engage it with a non-key write, and the selector stops moving.
+        cmu.write_word(OFF_WDOGLOCK, 0x0000_dead);
+        assert_ne!(cmu.read_word(OFF_STATUS) & STATUS_WDOGLOCK, 0);
+        cmu.write_word(OFF_WDOG0CLKCTRL, 1);
         assert_eq!(
             cmu.read_word(OFF_WDOG0CLKCTRL),
-            1,
-            "a locked WDOGLOCK must leave WDOG0CLKCTRL at its reset selector"
+            3,
+            "an engaged WDOGLOCK must drop the write"
         );
 
-        cmu.write_word(OFF_WDOGLOCK, UNLOCK_KEY);
-        assert_eq!(cmu.read_word(OFF_STATUS) & STATUS_WDOGLOCK, 0);
-        cmu.write_word(OFF_WDOG0CLKCTRL, 3);
+        // And it is its own scope: the CMU lock does not release it.
+        cmu.write_word(OFF_LOCK, UNLOCK_KEY);
+        cmu.write_word(OFF_WDOG0CLKCTRL, 1);
         assert_eq!(cmu.read_word(OFF_WDOG0CLKCTRL), 3);
+
+        cmu.write_word(OFF_WDOGLOCK, UNLOCK_KEY);
+        cmu.write_word(OFF_WDOG0CLKCTRL, 1);
+        assert_eq!(cmu.read_word(OFF_WDOG0CLKCTRL), 1);
     }
 
     #[test]
