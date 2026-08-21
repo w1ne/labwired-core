@@ -24,6 +24,7 @@ pub mod esp32;
 pub mod esp32c3;
 pub mod esp32s3;
 pub mod esp_gpspi_wire;
+pub mod esp_i2c_core;
 pub mod esp_uart;
 pub mod esp_xtensa_common;
 pub mod exti;
