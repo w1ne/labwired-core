@@ -100,21 +100,11 @@ impl SystemBus {
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
-            esp32c3_irq_routing: false,
-            riscv_irq_lines: 0,
-            esp32c3_system_idx: None,
-            esp32c3_interrupt_core0_idx: None,
-            esp32c3_irq_cache: None,
-            esp32c3_asserted_sources: [0; 2],
-            esp32c3_sched_asserted_sources: [0; 2],
+            irq_fabric: InterruptFabric::default(),
             esp32c3_sensitive_idx: None,
             esp32c3_pms: None,
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
-            esp32s3_irq_routing: false,
-            esp32s3_intmatrix_idx: None,
-            esp32s3_asserted_sources: [0; 2],
-            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -189,21 +179,11 @@ impl SystemBus {
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
-            esp32c3_irq_routing: false,
-            riscv_irq_lines: 0,
-            esp32c3_system_idx: None,
-            esp32c3_interrupt_core0_idx: None,
-            esp32c3_irq_cache: None,
-            esp32c3_asserted_sources: [0; 2],
-            esp32c3_sched_asserted_sources: [0; 2],
+            irq_fabric: InterruptFabric::default(),
             esp32c3_sensitive_idx: None,
             esp32c3_pms: None,
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
-            esp32s3_irq_routing: false,
-            esp32s3_intmatrix_idx: None,
-            esp32s3_asserted_sources: [0; 2],
-            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -370,7 +350,7 @@ impl SystemBus {
     /// `core_id` (0 = PRO_CPU, 1 = APP_CPU) via the registered interrupt
     /// matrix's per-core map table. None if unregistered or unbound.
     pub fn route_irq_source_to_cpu_irq_core(&self, source_id: u32, core_id: u8) -> Option<u8> {
-        let idx = self.esp32s3_intmatrix_idx?;
+        let idx = self.irq_fabric.esp32s3.intmatrix_idx?;
         self.peripherals
             .get(idx)?
             .dev

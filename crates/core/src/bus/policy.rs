@@ -187,8 +187,7 @@ impl SystemBus {
         self.legacy_walk_disabled
             && self.bus_tick_indices.is_empty()
             && !self.nordic_gpio_service
-            && (!self.esp32c3_irq_routing || self.esp32c3_irq_cache.is_some())
-            && !self.esp32s3_irq_routing
+            && self.irq_fabric.per_cycle_aggregation_free()
             && self.can_diagnostic_testers.is_empty()
             && self.can_uds_testers.is_empty()
             && self.can_log_players.is_empty()

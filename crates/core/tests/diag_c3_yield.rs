@@ -137,12 +137,12 @@ fn diag_c3_first_yield() {
         )),
     );
     bus.config.optimized_bus_access = false;
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
     bus.refresh_peripheral_index();
 
     eprintln!(
         "[diag] irq_routing={} external_lines={:#x}",
-        bus.esp32c3_irq_routing,
+        bus.irq_fabric.esp32c3.routing,
         bus.external_irq_lines()
     );
     // Probe SYSTEM FROM_CPU + INTMATRIX MAP for source 50 (reset defaults)

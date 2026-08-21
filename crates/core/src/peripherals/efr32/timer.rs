@@ -118,8 +118,13 @@ const CC_ICOF: u64 = 0x18;
 const OFF_DT_FIRST: u64 = 0xE0;
 const OFF_DT_LAST: u64 = 0xFC;
 
-const IPVERSION_RESET: u32 = 3;
-/// `_TIMER_TOP_RESETVALUE`.
+/// `_TIMER_IPVERSION_RESETVALUE` in `efr32mg26_timer.h`.
+///
+/// ⚠️ This was modelled as 3 — a guess. The header says 1 and BRD2709A reads 1
+/// over SWD.
+const IPVERSION_RESET: u32 = 1;
+/// `_TIMER_TOP_RESETVALUE`. Only observable once `EN.EN` is set — see
+/// [`Efr32s2Timer::read_word`].
 const TOP_RESET: u32 = 0x0000_FFFF;
 
 const EN_EN: u32 = 1 << 0;
@@ -191,7 +196,10 @@ impl Efr32s2Timer {
             iflag: 0,
             ien: 0,
             top: TOP_RESET,
-            topb: TOP_RESET,
+            // `_TIMER_TOPB_RESETVALUE` is 0, not TOP's 0xFFFF. The die cannot
+            // arbitrate — it reads 0 here either way while EN is clear — so
+            // the header is the source, and the header says 0.
+            topb: 0,
             cnt: 0,
             lock: 0,
             cc_cfg: [0; CC_COUNT],
@@ -276,6 +284,20 @@ impl Efr32s2Timer {
             }
             OFF_IF => self.iflag,
             OFF_IEN => self.ien,
+            // ⚠️ The counter block is held in reset while the module is
+            // disabled, and reads 0 — NOT `_TIMER_TOP_RESETVALUE`.
+            //
+            // Measured, not reasoned about: at `reset halt` with TIMER0/1
+            // clocked but `EN` clear, BRD2709A reads 0 at TOP and TOPB while
+            // the vendor header documents TOP's reset as 0xFFFF. IPVERSION is
+            // outside the enable domain and does read its 1. See
+            // `scripts/hw-oracle/captures/efr32mg26/`.
+            //
+            // The held value is what appears once EN is set, so a driver that
+            // writes TOP while disabled and enables afterwards — the normal
+            // Series-2 order, since CFG is disabled-only — is unaffected.
+            OFF_TOP if self.en & EN_EN == 0 => 0,
+            OFF_TOPB if self.en & EN_EN == 0 => 0,
             OFF_TOP => self.top,
             OFF_TOPB => self.topb,
             OFF_CNT => self.cnt,
@@ -512,11 +534,29 @@ mod tests {
 
     #[test]
     fn resets_to_the_header_values() {
-        let t = Efr32s2Timer::new(T0_BITS);
+        let mut t = Efr32s2Timer::new(T0_BITS);
         assert_eq!(t.read_word(OFF_IPVERSION), IPVERSION_RESET);
-        assert_eq!(t.read_word(OFF_TOP), TOP_RESET);
         assert_eq!(t.read_word(OFF_CNT), 0);
         assert_eq!(t.read_word(OFF_STATUS), 0, "not running out of reset");
+
+        // Disabled, the counter block reads 0 — this is what the die does.
+        assert_eq!(t.read_word(OFF_TOP), 0, "TOP is held in reset while EN=0");
+        assert_eq!(t.read_word(OFF_TOPB), 0, "TOPB likewise");
+
+        // Enabling releases it, and TOP presents its documented reset value.
+        t.write_word(OFF_EN, EN_EN);
+        assert_eq!(t.read_word(OFF_TOP), TOP_RESET);
+        assert_eq!(t.read_word(OFF_TOPB), 0, "_TIMER_TOPB_RESETVALUE");
+    }
+
+    /// A TOP written while the module is disabled — the normal Series-2 order,
+    /// because `CFG` may only be written with `EN` clear — survives the enable.
+    #[test]
+    fn a_top_written_while_disabled_appears_when_enabled() {
+        let mut t = Efr32s2Timer::new(T0_BITS);
+        t.write_word(OFF_TOP, 999);
+        t.write_word(OFF_EN, EN_EN);
+        assert_eq!(t.read_word(OFF_TOP), 999);
     }
 
     #[test]

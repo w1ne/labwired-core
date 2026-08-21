@@ -29,6 +29,7 @@ pub(crate) mod embedded_descriptors;
 pub(crate) mod external_devices;
 mod faults;
 mod from_config;
+pub mod interrupt_fabric;
 pub mod known_stubs;
 mod mmio_activity;
 mod mmio_words;
@@ -46,6 +47,7 @@ pub use can_devices::*;
 pub use resident_device::BusResidentDevice;
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
+pub use interrupt_fabric::{Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, InterruptFabric};
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
@@ -169,27 +171,6 @@ pub(crate) fn with_clr_alias_write<R>(f: impl FnOnce() -> R) -> R {
         c.set(prev);
         r
     })
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct Esp32c3IrqCache {
-    pub int_enable: u32,
-    pub int_thresh: u8,
-    pub source_line: [u8; 128],
-    pub line_pri: [u8; 32],
-    pub from_cpu_pending: u8,
-}
-
-impl Default for Esp32c3IrqCache {
-    fn default() -> Self {
-        Self {
-            int_enable: 0,
-            int_thresh: 0,
-            source_line: [0; 128],
-            line_pri: [0; 32],
-            from_cpu_pending: 0,
-        }
-    }
 }
 
 pub struct SystemBus {
@@ -464,41 +445,15 @@ pub struct SystemBus {
     /// pre-parsed frames into a named bxCAN/FDCAN peripheral at scheduled
     /// tick offsets. Empty by default → zero per-tick cost.
     pub can_log_players: Vec<CanLogPlayer>,
-    /// ESP32-C3 (RISC-V) interrupt routing: when true, each tick the bus routes
-    /// asserted peripheral sources and the SYSTEM FROM_CPU IPI registers
-    /// (0x600C0028..0x34) through the INTERRUPT_CORE0 matrix MAP registers into
-    /// `riscv_irq_lines`. Set by the C3 rom-boot setup; false everywhere else
-    /// so no other architecture's bus is affected.
-    pub esp32c3_irq_routing: bool,
-    /// ESP32-C3 level-sensitive bitmask of asserted CPU interrupt lines (1..31),
-    /// recomputed every tick by `aggregate_esp32c3_irqs`. Read by the RISC-V
-    /// core via `Bus::external_irq_lines`. 0 when `esp32c3_irq_routing` is false.
-    pub riscv_irq_lines: u32,
-    /// ESP32-C3 declarative interrupt banks. Cached separately from S3's
-    /// intmatrix so each chip keeps its own interrupt-controller abstraction.
-    esp32c3_system_idx: Option<usize>,
-    esp32c3_interrupt_core0_idx: Option<usize>,
-    esp32c3_irq_cache: Option<Esp32c3IrqCache>,
-    /// Bitmap (128 sources) of the interrupt-matrix source IDs asserted by the
-    /// most recent peripheral tick (`explicit_irqs` from the walk — e.g. the
-    /// SYSTIMER alarm on source 37). Stored so the write-choke re-aggregation
-    /// (`sync_esp32c3_irq_cache_write` → `recompute_esp32c3_irq_lines`) can
-    /// recombine them with the FROM_CPU/INTC state without waiting for the
-    /// next tick. Level semantics: rebuilt from scratch each tick, so a source
-    /// that stops asserting drops out at the next tick boundary (≤ one
-    /// `peripheral_tick_interval` — the same bound as the write path).
-    esp32c3_asserted_sources: [u64; 2],
-    /// C3 matrix sources asserted by SCHEDULER-driven peripherals (currently
-    /// the SYSTIMER alarm once migrated off the walk). The per-cycle walk
-    /// rebuilds `esp32c3_asserted_sources` from scratch each tick and skips
-    /// scheduler-driven peripherals, so their level would drop every tick;
-    /// this bitmap is re-derived from `Peripheral::matrix_irq_sources` at the
-    /// event path (`apply_event_result`) and the walk-tick aggregation, and
-    /// OR-ed with `esp32c3_asserted_sources` in `recompute_esp32c3_irq_lines`.
-    /// Same level semantics (a source that stops asserting drops out at the
-    /// next re-derivation), so delivery matches the legacy walk cycle-for-cycle
-    /// at a given tick interval.
-    esp32c3_sched_asserted_sources: [u64; 2],
+    /// Chip-specific interrupt-fabric state (ESP32-C3 RISC-V matrix, ESP32-S3
+    /// Xtensa matrix), behind ONE field instead of the eleven loose ones this
+    /// shared bus used to carry — three of them `pub`, two named for a chip.
+    ///
+    /// The fabrics keep their chip names and their separate state: a C3 routes
+    /// into a RISC-V line mask, an S3 into a per-core CPU-slot bitmap plus an
+    /// INTR_STATUS mirror, and that difference is silicon, not an abstraction
+    /// leak. What moved is WHERE it lives. See [`interrupt_fabric`].
+    pub irq_fabric: InterruptFabric,
     /// Index of the ESP32-C3 `SENSITIVE` peripheral (0x600C_1000), which owns
     /// the permission-control (PMS) register file. `None` on every other bus.
     esp32c3_sensitive_idx: Option<usize>,
@@ -518,29 +473,6 @@ pub struct SystemBus {
     /// never enables memory protection pays a single predictable branch and
     /// behaves byte-identically to before the PMS model existed.
     esp32c3_pms_armed: bool,
-    /// ESP32-S3 interrupt routing is present only when the S3 interrupt matrix
-    /// peripheral is registered. Cached separately from C3's RISC-V routing so
-    /// each chip model owns its own interrupt abstraction.
-    pub esp32s3_irq_routing: bool,
-    esp32s3_intmatrix_idx: Option<usize>,
-    /// Bitmap (128 sources) of the intmatrix source IDs asserted by the most
-    /// recent peripheral WALK tick (`explicit_irqs`, e.g. a not-yet-migrated
-    /// timer_group source). Persisted — mirror of C3's `esp32c3_asserted_sources`
-    /// — so the event path (`recompute_esp32s3_irq_lines`) can re-derive the
-    /// routed `pending_cpu_irqs` + intmatrix INTR_STATUS mirror from the union of
-    /// walk + scheduler levels without dropping a concurrent walk source. Level
-    /// semantics: rebuilt from scratch each walk tick, so a source that stops
-    /// asserting drops out at the next tick boundary.
-    esp32s3_asserted_sources: [u64; 2],
-    /// S3 intmatrix sources asserted by SCHEDULER-driven peripherals (the
-    /// SYSTIMER alarm once migrated off the walk). The per-cycle walk skips
-    /// scheduler-driven peripherals, so their level would never reach the
-    /// intmatrix; this bitmap is re-derived from `Peripheral::matrix_irq_sources`
-    /// at the event path (`apply_event_result` → `deliver_scheduled_irq_levels`)
-    /// and the walk-tick aggregation, and UNIONED with `esp32s3_asserted_sources`
-    /// in `recompute_esp32s3_irq_lines`. Same level semantics as the C3 field, so
-    /// delivery matches the legacy walk cycle-for-cycle at a given tick interval.
-    esp32s3_sched_asserted_sources: [u64; 2],
     /// True when a FLASH peripheral on this bus models hardware operations
     /// (H5 sector erase / bank swap) as pending ops that the machine layer must
     /// drain and apply per instruction. Cached in `rebuild_peripheral_ranges`

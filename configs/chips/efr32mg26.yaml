@@ -31,12 +31,12 @@
 #   mapped.
 #
 # Known divergences from silicon (honest list, L1 smoke target):
-#   - CMU and TIMER0 are declared `type: stub` (windows decode, read as zero).
-#     No clock tree is modelled: the simulated core always runs at cpu_hz and
-#     no peripheral clock gate gates anything. Firmware that spins on a CMU
-#     status bit would hang; the smoke firmware only WRITES CMU_CLKEN0/CLKEN2
-#     (the gate bits real silicon needs before any APB access decodes), which
-#     the stub accepts as no-ops — the sim never gates on them.
+#   - (FIXED) CMU and TIMER0 were `type: stub`. Both are real models now, and
+#     the clock gates gate. See `peripherals/efr32/{cmu,timer}.rs`.
+#   - Every register in the seven windows this part's silicon capture covers
+#     now reads what BRD2709A reads: 215/215, one exclusion, and that one is
+#     the attached debug probe's own footprint, not the chip. See
+#     `scripts/hw-oracle/captures/efr32mg26/` and `docs/coverage/`.
 #   - GPIO is modelled with the dedicated Series-2 port layout (CTRL/MODEL/
 #     MODEH/DOUT/DIN per port): DOUT drives pins, DIN reads pin state, the
 #     4-bit mode nibble gates input vs output (open-drain WIREDOR pins only
@@ -144,6 +144,17 @@ peripherals:
   # bindings are live. The bare `efr32_gpioport` name stays with the Series-0/1
   # Renode-imported onboarding stubs (efr32mg12/13, sltb004a, …) whose silicon
   # map this is NOT — do not "unify" them onto this type.
+  # The block head, below the port structs: GPIO_IPVERSION at +0x00 (reads 7 —
+  # measured on BRD2709A over SWD, and `_GPIO_IPVERSION_RESETVALUE` agrees),
+  # then eleven reserved words. Without this window a `GPIO->IPVERSION` read —
+  # the first thing a Series-2 driver does to identify the block — bus faults
+  # on the twin while silicon answers.
+  - id: "gpio_head"
+    type: "efr32s2_gpio_head"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C000
+    size: "48B"
+
   - id: "gpioa"
     type: "efr32s2_gpioport"
     # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share

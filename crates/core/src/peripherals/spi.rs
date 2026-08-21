@@ -818,7 +818,7 @@ impl FromStr for SpiPadMap {
 /// USART instance is one or the other, never both at once. The chip yaml must
 /// therefore declare a given instance as `uart` or as `spi`, not both, and
 /// USART1 on the BRD2709A is the VCOM console.
-#[derive(Debug, Default, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct Efr32s2SpiRegs {
     en: u32,
     ctrl: u32,
@@ -835,6 +835,33 @@ struct Efr32s2SpiRegs {
     master: bool,
     /// A received byte is waiting in `RXDATA`.
     rxdatav: bool,
+    /// `STATUS.TXC` — a transmission has completed. **Clear out of reset**:
+    /// silicon reads `STATUS = 0x2040` (TXBL | TXIDLE) with TXC low, because
+    /// nothing has been transmitted yet. Measured on BRD2709A over SWD.
+    txc: bool,
+}
+
+/// ⚠️ NOT `#[derive(Default)]`. Two of these fields have a non-zero silicon
+/// reset value, and a derived `Default` silently disagreed with the die on
+/// both — see the capture in `scripts/hw-oracle/captures/efr32mg26/`.
+impl Default for Efr32s2SpiRegs {
+    fn default() -> Self {
+        Self {
+            en: 0,
+            ctrl: 0,
+            frame: EFR_USART_FRAME_RESET,
+            trigctrl: 0,
+            clkdiv: 0,
+            iflag: EFR_USART_IF_RESET,
+            ien: 0,
+            rxdata: 0,
+            rx_enabled: false,
+            tx_enabled: false,
+            master: false,
+            rxdatav: false,
+            txc: false,
+        }
+    }
 }
 
 // Offsets, walked from `USART_TypeDef`.
@@ -868,9 +895,16 @@ const EFR_USART_STATUS_TXC: u32 = 1 << 5;
 const EFR_USART_STATUS_TXBL: u32 = 1 << 6;
 const EFR_USART_STATUS_RXDATAV: u32 = 1 << 7;
 
-/// `_USART_STATUS_RESETVALUE` = TXBL | TXIDLE.
+/// `_USART_STATUS_RESETVALUE` = TXBL | TXIDLE. TXC is **not** in it.
 const EFR_USART_STATUS_RESET: u32 = 0x0000_2040;
-const EFR_USART_IPVERSION_RESET: u32 = 2;
+/// `_USART_IPVERSION_RESETVALUE`. ⚠️ This was modelled as 2 — a guess, not the
+/// header. `efr32mg26_usart.h` says 0 and the die reads 0.
+const EFR_USART_IPVERSION_RESET: u32 = 0;
+/// `_USART_FRAME_RESETVALUE` = 8 data bits, 1 stop bit, no parity.
+const EFR_USART_FRAME_RESET: u32 = 0x0000_1005;
+/// `_USART_IF_RESETVALUE` = TXBL. The transmit buffer is empty out of reset, so
+/// its "level" flag is already up; the die confirms `IF = 0x2`.
+const EFR_USART_IF_RESET: u32 = EFR_USART_IF_TXBL;
 
 /// `IF.TXC` / `IF.TXBL` / `IF.RXDATAV`, the three a polled SPI driver watches.
 const EFR_USART_IF_TXC: u32 = 1 << 0;
@@ -879,8 +913,9 @@ const EFR_USART_IF_RXDATAV: u32 = 1 << 2;
 
 impl Efr32s2SpiRegs {
     fn status(&self) -> u32 {
-        // TXBL and TXC ride the reset word: a frame completes inside the
-        // TXDATA write here, so the shift register is never occupied.
+        // TXBL rides the reset word: a frame completes inside the TXDATA write
+        // here, so the shift register is never occupied. TXC does NOT — it
+        // means "a transmission finished", and out of reset none has.
         let mut s = EFR_USART_STATUS_RESET;
         if self.rx_enabled {
             s |= EFR_USART_STATUS_RXENS;
@@ -894,7 +929,10 @@ impl Efr32s2SpiRegs {
         if self.rxdatav {
             s |= EFR_USART_STATUS_RXDATAV;
         }
-        s | EFR_USART_STATUS_TXC | EFR_USART_STATUS_TXBL
+        if self.txc {
+            s |= EFR_USART_STATUS_TXC;
+        }
+        s | EFR_USART_STATUS_TXBL
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -1775,6 +1813,7 @@ impl Spi {
                     r.rxdata = miso as u32;
                     r.rxdatav = true;
                     r.iflag |= EFR_USART_IF_TXC | EFR_USART_IF_TXBL | EFR_USART_IF_RXDATAV;
+                    r.txc = true;
                 }
             }
             EFR_USART_IF => {
