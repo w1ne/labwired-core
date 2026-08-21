@@ -919,8 +919,29 @@ boards:
     #      to find it. The body it runs is unchanged — it calls `set_air`.
     # The RW-BLE model itself is byte-identical. No live re-capture owed for
     # this change; any re-capture already owed above still is.
-    drift_ack: 2026-08-21
-    drift_ack_digest: cac13d2caf01b3587a971357c8e4f5a8951614b590b8d1832cb46bdeaf854e83
+    #
+    # 2026-08-22: `InterruptFabric` seam (ledger row 6.6). Eleven chip-specific
+    # interrupt fields left `SystemBus` for one `irq_fabric` field, so every
+    # reference to them changed PATH. The only watched file in this list that
+    # moved is `crates/core/src/cpu/riscv.rs`, and its whole diff is:
+    #   * two field ASSIGNMENTS in a `#[cfg(test)]` fn — `bus.riscv_irq_lines =`
+    #     becomes `bus.irq_fabric.esp32c3.irq_lines =`, same u32, same values
+    #     (`1 << 5` then `0`);
+    #   * two comment lines naming the field.
+    # No non-test line of riscv.rs changed, and the other three watched entries
+    # (decoder/riscv.rs, peripherals/esp32c3, peripherals/esp_xtensa_common) are
+    # byte-identical. `Bus::external_irq_lines` still
+    # returns the same mask from the same computation (the assignment moved from
+    # `self.riscv_irq_lines` to `self.irq_fabric.esp32c3.irq_lines`, one field to
+    # one field). The INTERRUPT_CORE0 routing itself is untouched: MAP at
+    # 0x600C_2000 + s*4, CPU_INT_ENABLE 0x104, CPU_INT_PRI_n 0x114 + n*4,
+    # CPU_INT_THRESH 0x194, FROM_CPU doorbells as sources 50..53 — same offsets,
+    # same gating order, same level semantics. No register, reset value, source
+    # ID or interrupt number changed, so the 2026-08-09 reset-state capture (87
+    # regs, 366/423 overlap) is unaffected and no live re-capture is owed for
+    # this change. Re-captures already owed above still are.
+    drift_ack: 2026-08-22
+    drift_ack_digest: 4f22db3b82bcf418c24bae16f655e13745970e42f080eb4610eb08c82176ffba
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -3109,7 +3130,7 @@ boards:
     # under --features event-scheduler (0 failed), clippy clean, fmt clean. No
     # live re-capture, and this ack does not discharge the ones already owed
     # above.
-    drift_ack: 2026-08-21
+    drift_ack: 2026-08-22
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -3186,7 +3207,21 @@ boards:
     # A live IO_MUX window read is now owed and is NOT covered by the
     # re-captures listed above. Until someone runs it, the S3's pad reset state
     # is SVD-verified, not silicon-verified.
-    drift_ack_digest: 34fb70cc53f0cf381336131faade4ee82569bc35158a8ad229ddaba91772e5ac
+    #
+    # 2026-08-22: `InterruptFabric` seam (ledger row 6.6). The watched entry that
+    # moved is the DIRECTORY `crates/core/src/peripherals/esp32s3`, and exactly
+    # one file under it changed: `crosscore_ipi.rs`, and within it exactly one
+    # assertion, inside a `#[cfg(test)]` fn — `assert!(bus.esp32s3_irq_routing,
+    # ..)` becomes `assert!(bus.irq_fabric.esp32s3.routing, ..)` (rustfmt then
+    # wraps it across four lines). Same bool, same bus, same message. No
+    # production line under esp32s3/ changed at all.
+    # The intmatrix routing is untouched: per-core MAP tables, the routed
+    # `pending_cpu_irqs` slot bitmap, and the PRO_INTR_STATUS_REG_n mirror are
+    # computed by the same code from the same sources. No register, reset value
+    # or source ID changed, so the 9-register reset-state anchor from the
+    # 2026-08-09 capture is unaffected and no live re-capture is owed for this
+    # change. The IO_MUX window read owed above is still owed.
+    drift_ack_digest: b0cce7fc436b9a1e1b6bb8efc7c6590cb869be690134ac5e61df9d906a9825c6
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs

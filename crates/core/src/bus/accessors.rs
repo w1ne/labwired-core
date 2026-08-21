@@ -762,7 +762,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn external_irq_lines(&self) -> u32 {
-        self.riscv_irq_lines
+        self.irq_fabric.esp32c3.irq_lines
     }
 
     #[cfg(feature = "event-scheduler")]

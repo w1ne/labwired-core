@@ -648,7 +648,7 @@ pub fn run(args: DebugProbeArgs, plugins: &[&dyn labwired_core::plugin::ChipPlug
             let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
             let mut machine = labwired_core::Machine::new(cpu, bus);
             // FreeRTOS / ESP32-C3: keep peripheral ticks aligned with steps.
-            if machine.bus.esp32c3_irq_routing {
+            if machine.bus.irq_fabric.esp32c3.routing {
                 machine.config.batch_mode_enabled = false;
             }
             if let Err(e) = machine.load_firmware(&program) {
