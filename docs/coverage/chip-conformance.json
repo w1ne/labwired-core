@@ -35,16 +35,16 @@
     "reg_match": 0
   },
   {
-    "behavior": true,
+    "behavior": false,
     "excluded": 0,
-    "level": 1,
+    "level": 0,
     "name": "stm32f401cdu6",
     "reg_match": 0
   },
   {
-    "behavior": true,
+    "behavior": false,
     "excluded": 0,
-    "level": 1,
+    "level": 0,
     "name": "stm32f411ceu6",
     "reg_match": 0
   },
@@ -133,9 +133,9 @@
     "reg_match": 0
   },
   {
-    "behavior": true,
+    "behavior": false,
     "excluded": 0,
-    "level": 1,
+    "level": 0,
     "name": "stm32h735",
     "reg_match": 0
   },
