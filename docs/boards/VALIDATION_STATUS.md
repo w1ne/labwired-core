@@ -9,29 +9,29 @@ The models column is a content digest over everything that board's `models` list
 
 | Board | Tier | Last silicon capture | Models | Status |
 |-------|------|----------------------|--------|--------|
-| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `680599e36fe54748` | ⚠ drift acked 2026-08-21 (re-capture pending) |
-| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `680599e36fe54748` | ⚠ drift acked 2026-08-21 (re-capture pending) |
-| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `25b73b59a71206c2` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `ba3c4a67fbe80199` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `ba3c4a67fbe80199` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `ac2a5c021835795c` | ⚠ drift acked 2026-08-21 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `cac13d2caf01b358` | ⚠ drift acked 2026-08-21 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `1c784bec0757b5f6` | ⚠ drift acked 2026-08-21 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `6441420810614fca` | ⚠ drift acked 2026-08-21 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `3f525fd8eeaf83c0` | ⚠ drift acked 2026-08-21 (re-capture pending) |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `3613bec2607201c8` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `244307bb6898e5ec` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `e9c316efa8a21c9f` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `369550884e54e5b5` | ⚠ drift acked 2026-08-21 (re-capture pending) |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `85c566ed4fb5a080` | ⚠ drift acked 2026-08-21 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `61660e987f8766e6` | ⚠ drift acked 2026-08-20 (re-capture pending) |
-| `stm32f401` | 🟡 smoke-manual | — | `9963de8b6afae545` | no silicon capture |
-| `stm32wba52` | 🟡 smoke-manual | — | `29861aa2096ade2f` | no silicon capture |
-| `nrf52832` | ⚪ structural | — | `b21241f859fc4433` | no silicon capture |
-| `rp2040` | ⚪ structural | — | `66682a21936e5ca5` | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | `3e9477fff8e436e1` | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `1da54559fdaee155` | no silicon capture |
-| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `a620298dbaadd226` | no silicon capture |
-| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `828c75848d2e25bd` | no silicon capture |
+| `stm32f401` | 🟡 smoke-manual | — | `b6fef3a379137d96` | no silicon capture |
+| `stm32wba52` | 🟡 smoke-manual | — | `a28b3f47eb11df11` | no silicon capture |
+| `nrf52832` | ⚪ structural | — | `e18766783c36d18c` | no silicon capture |
+| `rp2040` | ⚪ structural | — | `a7834ce20e176f13` | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | `f527158fd51d46c8` | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `23e65628bdf33cf1` | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `606f614a7976da65` | no silicon capture |
+| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `eb4e8fc8cb1b2fdd` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `c2075d958cdb729d` | no silicon capture |
 | `esp32` | ⚪ structural | — | `1ffa6e4e6a27dd31` | no silicon capture |
-| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `4484bbec6289e186` | no silicon capture |
-| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `718fe30f03a58c18` | no silicon capture |
-| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `002c66e70eca3fb8` | no silicon capture |
-| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `b21771b80c304348` | no silicon capture |
+| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `df3fc619b0c8a171` | no silicon capture |
+| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `32cbdfcebf57531b` | no silicon capture |
+| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `45f00f00bf020d1a` | no silicon capture |
+| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `b1628f57714f60f9` | no silicon capture |
 | `ci-fixture-riscv` | ⚪ structural | — | `d18b75935f536164` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified

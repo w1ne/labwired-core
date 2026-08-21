@@ -296,8 +296,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 680599e36fe547487a2b30daf073f8b805ab30993f972fb60b0c361b63d52911
+    drift_ack_digest: ba3c4a67fbe801995f00d8fcb96ef7ad9062a8c176c9ce456b4f7e6c2fd338d4
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -471,8 +476,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 680599e36fe547487a2b30daf073f8b805ab30993f972fb60b0c361b63d52911
+    drift_ack_digest: ba3c4a67fbe801995f00d8fcb96ef7ad9062a8c176c9ce456b4f7e6c2fd338d4
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -770,8 +780,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 25b73b59a71206c2f0d7cd54572aafbc824e5c3cf2673274170414c96db8c1e0
+    drift_ack_digest: ac2a5c021835795c3841b24eb65fb773cc98b4ddfe740289759e67ad4485ef7c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1759,8 +1774,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 1c784bec0757b5f65c79b09b34745c2dae0acf3872c66bb8a11d2942bc783154
+    drift_ack_digest: 244307bb6898e5ecde4cde088f1153d5109ed012be31f3181a9b3eab5552aab3
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2001,8 +2021,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 6441420810614fcad00ec2761ee8224a4aeff6ee69fcae0c304f13afd81a979c
+    drift_ack_digest: e9c316efa8a21c9ffee1ad8a5c6b7813702881ec1c41ac4bdd5a070d9ba4fff4
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2296,8 +2321,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 3f525fd8eeaf83c0c01e2474dcc589f32bc90b222d3b56ec1a03c915953f14b7
+    drift_ack_digest: 369550884e54e5b5a67c8e42b14317f840833459e1075362670905df43644206
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2551,8 +2581,13 @@ boards:
     # by it. A future live re-capture should agree BETTER than the last one,
     # since the CPU now runs IT blocks the way the silicon that produced the
     # capture does.
+    #
+    # Digest re-stamped the same day for a follow-up commit that is TEST-ONLY:
+    # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
+    # match arm in i2c.rs, and a doc comment moved back onto the enum it
+    # documents in spi.rs. No executable path moved, so nothing above changes.
     drift_ack: 2026-08-21
-    drift_ack_digest: 3613bec2607201c8a5444de3ea0d06edb7f6c22fd3ea8a364b11aa59231d4f68
+    drift_ack_digest: 85c566ed4fb5a0802f4041b77dc1a71109f34146871504db4edbec3ba3bc9f9e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3053,7 +3088,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 66682a21936e5ca5c1e3d710e61bc328bc01357131de21c203f844a069ac794f
+    drift_ack_digest: a7834ce20e176f1377bc89eb5cd406be9f499cdb6fe0d904a0f514a73f65a0f2
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3138,7 +3173,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: a620298dbaadd226483ee1b82e917ba6f6e493bc0e496f0b1732d3e104746fea
+    drift_ack_digest: 606f614a7976da657ca3814311c2a2c014256a0bfa1ab125f0ebb68d9bc51705
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3209,7 +3244,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 828c75848d2e25bdd44543b064a16217cf274e162f8ad5d8439f43e523a71b62
+    drift_ack_digest: eb4e8fc8cb1b2fdde2a5bd88b6dd83c4251871b92cf3c344bb62414e067f3d04
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3285,7 +3320,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 4484bbec6289e186132fe5bfd255cd1793c7571cc99d0f7390ebbe6000c3f440
+    drift_ack_digest: df3fc619b0c8a1717c8d8ab474cef5612d7e4689ce3352f3fda20d915b8577cb
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
