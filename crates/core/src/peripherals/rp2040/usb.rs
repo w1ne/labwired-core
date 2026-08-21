@@ -585,10 +585,6 @@ impl Peripheral for Rp2040Usb {
         Ok(())
     }
 
-    fn write_word_32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        self.write_u32(offset, value)
-    }
-
     fn tick(&mut self) -> PeripheralTickResult {
         // Feature-off / direct-call path. Scheduler mode also uses this body
         // from `on_event` (one tick's worth of host work + level IRQ).
