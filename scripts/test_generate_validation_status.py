@@ -214,3 +214,46 @@ def test_write_ack_digests_never_acks_an_unacked_board(tmp_path, monkeypatch):
 
     gvs.write_ack_digests({"boards": [board]})
     assert "drift_ack_digest" not in manifest_path.read_text()
+
+
+def test_digests_reports_the_same_verdict_as_the_gate(tmp_path, monkeypatch, capsys):
+    """`--digests` exists because the manifest documents it, and it must not be
+    a second opinion: the manifest header tells authors to print the digest so
+    they can write an ack pre-merge, which only helps if what it prints is what
+    `--drift` will judge them on.
+    """
+    body = b"fn model() {}\n"
+    board, model = _board_with_digest(tmp_path, monkeypatch, body)
+    board["drift_ack_digest"] = gvs.model_digest(board["models"])
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+
+    # Covered by the ack: the digest prints, and the gate agrees it is not failing.
+    assert gvs.print_digests({"boards": [board]}) == 0
+    printed = capsys.readouterr().out
+    assert gvs.model_digest(board["models"]) in printed
+    assert gvs.evaluate(board)["status"] in printed
+    assert not gvs.evaluate(board)["failing"]
+
+    # The negative control. Move a byte of the model: the printed digest must
+    # change, the recorded ack must be shown as the thing that no longer
+    # matches, and the gate must now be failing.
+    model.write_bytes(body + b"// a real change\n")
+    assert gvs.print_digests({"boards": [board]}) == 0
+    printed = capsys.readouterr().out
+    assert gvs.model_digest(board["models"]) in printed
+    assert f"ack recorded {board['drift_ack_digest']}" in printed
+    assert gvs.evaluate(board)["failing"]
+
+
+def test_digests_never_writes(tmp_path, monkeypatch, capsys):
+    """A report, not a stamper. `--write-ack-digests` is the writing one."""
+    board, _ = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
+    manifest_path = tmp_path / "manifest.yaml"
+    original = "boards:\n  - id: demo\n    models:\n      - models/periph.rs\n"
+    manifest_path.write_text(original)
+    monkeypatch.setattr(gvs, "MANIFEST", manifest_path)
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+
+    gvs.print_digests({"boards": [board]})
+    capsys.readouterr()
+    assert manifest_path.read_text() == original
