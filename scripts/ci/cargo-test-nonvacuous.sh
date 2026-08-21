@@ -8,7 +8,7 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # A `cargo test` wrapper that refuses to report green for a test target which
-# contains ZERO tests.
+# EXECUTES zero tests under the invocation it was handed.
 #
 # THE FAILURE THIS EXISTS FOR. A libtest binary with no tests prints
 #
@@ -22,12 +22,37 @@
 # `board_batch_width` (3 tests) and `census_probe` (3 tests) were both caught
 # doing this by accident rather than by a gate.
 #
+# THE SECOND WAY TO EXECUTE NOTHING. A binary can hold plenty of tests and
+# still run none of them, because every one is `#[ignore]`d. libtest prints
+#
+#     running 0 tests
+#     test result: ok. 0 passed; 0 failed; 10 ignored; ...
+#
+# and exits 0 — the same green tick, one word apart. `esp32c3_walk_differential`
+# was in exactly that state: 11 tests, 10 ignored, named in one merge-gating
+# core-ci lane with no harness arguments, so the lane executed 1 of 11 and
+# reported the file covered. The `RECOMMENDED_TICK_INTERVAL = 512` constant in
+# crates/core/src/bus/mod.rs cites one of the ten BY NAME as its licence.
+#
 # HOW IT CHECKS. It does not parse `cargo test` stdout — the `Running <path>`
 # banner goes to stderr and the `0 passed` line to stdout, so pairing them is
 # an ordering guess. Instead it asks cargo, in JSON, which test executables the
-# invocation builds, then asks each executable how many tests it holds
-# (`--list`). A binary that lists nothing is the bug, named by path, before a
-# single test runs.
+# invocation builds, then asks each executable TWICE: `--list` for what it
+# declares, `--list --ignored` for the subset libtest would skip. The
+# difference is what this invocation will actually execute, and that is the
+# number the wrapper gates on. A target that declares tests but executes none
+# is named by path, before a single test runs.
+#
+# The harness arguments decide which way the subtraction goes, because they
+# decide which half libtest runs:
+#
+#     (no flag)           executed = declared - ignored
+#     -- --ignored        executed = ignored          (the ONLY tests that run)
+#     -- --include-ignored executed = declared
+#
+# so the `-- --ignored` nightly lanes are checked from the other side: a file
+# that stops being `#[ignore]`d empties those lanes, and the wrapper says so
+# instead of ticking.
 #
 # Doctests are deliberately out of scope: `cargo test --no-run` does not build
 # them, and a crate with no doc examples legitimately reports `0 passed`. That
@@ -44,11 +69,17 @@
 # the identical arguments and exits with ITS status. The second cargo call is a
 # cache hit, so the wrapper costs the `--list` calls and nothing else.
 #
-# WHAT IT DOES NOT COVER. A target whose every test is `#[ignore]`d also
-# executes nothing in a normal lane, but libtest's `--list` cannot distinguish
-# those (it lists ignored tests too), and this repo has lanes that legitimately
-# run such files with `-- --ignored`. That class is reasoned about by name in
-# `NIGHTLY_ONLY` in crates/core/src/tests/scheduler_lane_coverage.rs.
+# WHAT IT DOES NOT COVER. A harness NAME FILTER (`-- some_test`) narrows the
+# run further and is not modelled here: the counts below are what the target
+# would execute unfiltered. No lane in this repo filters by name, and a filter
+# that matches nothing is loud (`0 filtered out` is `0 passed` with a visible
+# cause) rather than silent, which is the class this script exists for.
+#
+# Which files are ALLOWED to be all-ignored, and which lane runs them with
+# `-- --ignored`, is a separate question answered by name in `NIGHTLY_ONLY` in
+# crates/core/src/tests/scheduler_lane_coverage.rs. This script does not decide
+# that; it refuses to let either arrangement report a green tick for zero
+# executed tests.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -130,23 +161,51 @@ if [ ${#executables[@]} -eq 0 ]; then
     exit 1
 fi
 
-vacuous=()
-total_tests=0
+# Which half of each binary this invocation will run, decided by the harness
+# arguments the caller passed after `--`. `--include-ignored` wins over
+# `--ignored` if a lane somehow passes both, matching libtest.
+run_mode=default
+for arg in ${harness_args[@]+"${harness_args[@]}"}; do
+    case "$arg" in
+        --include-ignored) run_mode=include-ignored ;;
+        --ignored) [ "$run_mode" = include-ignored ] || run_mode=ignored ;;
+    esac
+done
+
+empty=()          # declares no tests at all
+all_skipped=()    # declares tests, executes none of them under this invocation
+declared_total=0
+ignored_total=0
+executed_total=0
 for exe in "${executables[@]}"; do
-    n="$("$exe" --list --format terse 2>/dev/null | grep -c ': test$' || true)"
-    total_tests=$((total_tests + n))
-    if [ "$n" -eq 0 ]; then
-        vacuous+=("$exe")
+    declared="$("$exe" --list --format terse 2>/dev/null | grep -c ': test$' || true)"
+    ignored="$("$exe" --list --ignored --format terse 2>/dev/null | grep -c ': test$' || true)"
+
+    case "$run_mode" in
+        ignored)         executed="$ignored" ;;
+        include-ignored) executed="$declared" ;;
+        *)               executed=$((declared - ignored)) ;;
+    esac
+
+    declared_total=$((declared_total + declared))
+    ignored_total=$((ignored_total + ignored))
+    executed_total=$((executed_total + executed))
+
+    if [ "$declared" -eq 0 ]; then
+        empty+=("$exe")
+    elif [ "$executed" -eq 0 ]; then
+        all_skipped+=("$exe  ($declared declared, $ignored ignored)")
     fi
 done
 
-echo "==> ${#executables[@]} test target(s), $total_tests test(s) total"
+echo "==> ${#executables[@]} test target(s): $declared_total declared, \
+$executed_total executed by this invocation ($ignored_total ignored, run mode: $run_mode)"
 
-if [ ${#vacuous[@]} -gt 0 ]; then
+if [ ${#empty[@]} -gt 0 ]; then
     {
         echo
-        echo "FAIL: ${#vacuous[@]} test target(s) contain ZERO tests:"
-        printf '        %s\n' "${vacuous[@]}"
+        echo "FAIL: ${#empty[@]} test target(s) contain ZERO tests:"
+        printf '        %s\n' "${empty[@]}"
         echo
         echo "  A libtest binary with no tests prints \`test result: ok. 0 passed\`"
         echo "  and exits 0, so this step would have reported GREEN while checking"
@@ -160,6 +219,35 @@ if [ ${#vacuous[@]} -gt 0 ]; then
         echo "  block, and cargo will REFUSE to build it without the feature"
         echo "  instead of reporting it green. That contract is enforced by"
         echo "  crates/core/src/tests/no_vacuous_test_targets.rs."
+    } >&2
+    exit 1
+fi
+
+if [ ${#all_skipped[@]} -gt 0 ]; then
+    {
+        echo
+        echo "FAIL: ${#all_skipped[@]} test target(s) declare tests but EXECUTE NONE"
+        echo "      under this invocation (run mode: $run_mode):"
+        printf '        %s\n' "${all_skipped[@]}"
+        echo
+        if [ "$run_mode" = ignored ]; then
+            echo "  This lane passes \`-- --ignored\`, so it runs the ignored tests and"
+            echo "  NOTHING else. A target with no \`#[ignore]\`d tests left contributes"
+            echo "  \`0 passed\` to it — the ignore was probably removed, and the test now"
+            echo "  belongs in a default lane. Move it, or drop it from this step."
+        else
+            echo "  Every test in these targets is \`#[ignore]\`d, so libtest prints"
+            echo "  \`test result: ok. 0 passed; 0 failed; N ignored\` and exits 0. The"
+            echo "  step reports GREEN having run nothing — the same failure as an empty"
+            echo "  binary, one word apart in the log."
+            echo
+            echo "  Either run them where they can execute:"
+            echo "    cargo test --release <args> -- --ignored"
+            echo "  (see the \`-- --ignored\` steps in .github/workflows/core-nightly.yml),"
+            echo "  or stop naming the target in a lane that cannot run it. Whether a"
+            echo "  file is allowed to be nightly-only is decided by name in NIGHTLY_ONLY"
+            echo "  in crates/core/src/tests/scheduler_lane_coverage.rs."
+        fi
     } >&2
     exit 1
 fi
