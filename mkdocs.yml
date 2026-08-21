@@ -104,8 +104,6 @@ nav:
     - ESP32-C3: boards/esp32c3.md
     - ESP32-S3: boards/esp32s3.md
     - nRF52840: boards/nrf52840.md
-    - Arduino Nano 33 BLE: boards/arduino-nano-33-ble.md
-    - Arduino Nano 33 BLE Sense: boards/arduino-nano-33-ble-sense.md
     - XIAO nRF52840 Sense: boards/seeed-xiao-nrf52840-sense.md
     - RP2040: boards/rp2040.md
     - RP2350: boards/rp2350.md
