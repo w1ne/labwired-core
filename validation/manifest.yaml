@@ -701,8 +701,16 @@ boards:
     # existing STM32 gate resolution takes the identical path to the identical
     # answer. No live re-capture owed for this change; any re-capture already
     # owed above still is.
+    # 2026-08-21 (second change, same day): `peripherals/i2c.rs` gained an
+    # `Efr32s2I2c` FAMILY STRUCT and an `I2c::Efr32s2` enum variant, plus the
+    # dispatch arms the compiler demands for it. The file is on this board's
+    # models list, so its digest moved — but the STM32 register maps, state
+    # machines and timing in it are byte-identical: the new code is a sibling
+    # struct that this board's variant never reaches. `I2c::new()` still
+    # defaults to Stm32F1. No live re-capture owed for this change; any
+    # re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: edaf994306ffca10e5ae17a07e4ae8e05be76d0fc862f8b2a1ffde23f1d1a91f
+    drift_ack_digest: af5ad6bc0ffccb2787427e3bae483d29d565a444f2b7a4a9eb0c47241dceb0a8
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1657,8 +1665,16 @@ boards:
     # existing STM32 gate resolution takes the identical path to the identical
     # answer. No live re-capture owed for this change; any re-capture already
     # owed above still is.
+    # 2026-08-21 (second change, same day): `peripherals/i2c.rs` gained an
+    # `Efr32s2I2c` FAMILY STRUCT and an `I2c::Efr32s2` enum variant, plus the
+    # dispatch arms the compiler demands for it. The file is on this board's
+    # models list, so its digest moved — but the STM32 register maps, state
+    # machines and timing in it are byte-identical: the new code is a sibling
+    # struct that this board's variant never reaches. `I2c::new()` still
+    # defaults to Stm32F1. No live re-capture owed for this change; any
+    # re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: b0e80b2e3387722315e7531977f6c202539f5f044e341a8114b8c2156f95dd19
+    drift_ack_digest: 564464c1a87f98d77314d354f415e038ed08cb3129f46cdf7e3504c5cc206d86
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1866,8 +1882,16 @@ boards:
     # existing STM32 gate resolution takes the identical path to the identical
     # answer. No live re-capture owed for this change; any re-capture already
     # owed above still is.
+    # 2026-08-21 (second change, same day): `peripherals/i2c.rs` gained an
+    # `Efr32s2I2c` FAMILY STRUCT and an `I2c::Efr32s2` enum variant, plus the
+    # dispatch arms the compiler demands for it. The file is on this board's
+    # models list, so its digest moved — but the STM32 register maps, state
+    # machines and timing in it are byte-identical: the new code is a sibling
+    # struct that this board's variant never reaches. `I2c::new()` still
+    # defaults to Stm32F1. No live re-capture owed for this change; any
+    # re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: 934858735c6f7ce2d1fde8feaa0ef760bcdfc5dc3eb2549afb89d5c43a8e72c2
+    drift_ack_digest: 2d65bd52de29d5284e5978f33f1fba013f1b8cb8555ea3ea18ff38a160f04bf5
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2128,8 +2152,16 @@ boards:
     # existing STM32 gate resolution takes the identical path to the identical
     # answer. No live re-capture owed for this change; any re-capture already
     # owed above still is.
+    # 2026-08-21 (second change, same day): `peripherals/i2c.rs` gained an
+    # `Efr32s2I2c` FAMILY STRUCT and an `I2c::Efr32s2` enum variant, plus the
+    # dispatch arms the compiler demands for it. The file is on this board's
+    # models list, so its digest moved — but the STM32 register maps, state
+    # machines and timing in it are byte-identical: the new code is a sibling
+    # struct that this board's variant never reaches. `I2c::new()` still
+    # defaults to Stm32F1. No live re-capture owed for this change; any
+    # re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: 67a72301883c3065ddecbbba4e7ce07ae4dfc908dce7f5d65587917ace9a7c17
+    drift_ack_digest: 3159502e44bb2b1d2d23fa528fa0f2eb61657802b8c77cff2b0a2cfc71a8d8c1
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2350,8 +2382,16 @@ boards:
     # existing STM32 gate resolution takes the identical path to the identical
     # answer. No live re-capture owed for this change; any re-capture already
     # owed above still is.
+    # 2026-08-21 (second change, same day): `peripherals/i2c.rs` gained an
+    # `Efr32s2I2c` FAMILY STRUCT and an `I2c::Efr32s2` enum variant, plus the
+    # dispatch arms the compiler demands for it. The file is on this board's
+    # models list, so its digest moved — but the STM32 register maps, state
+    # machines and timing in it are byte-identical: the new code is a sibling
+    # struct that this board's variant never reaches. `I2c::new()` still
+    # defaults to Stm32F1. No live re-capture owed for this change; any
+    # re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: e49f1d212b94fe661997086e602d3445a6ad51c85dad89fd927835fb2e35820d
+    drift_ack_digest: 927bac0ad71f67af33bf86cd11f388ff336154627be273b62e7ae968b61e29f5
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -2937,7 +2977,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 93168a16bb766d5cca4b98c0265b527603ebf558161ffae0006a4467d144cb31
+    drift_ack_digest: 861716084694944b2b860e04cc292b3973640ad1165ad129dc4bb03ae9ebafcf
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3008,7 +3048,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 6635602601c091f45bc96374b6c5f3c8ef844f9807ab737665e396e9341d8823
+    drift_ack_digest: a882430a70242c45d50359379b4d4dab5b9317a280c95b78fc4e225d1f3769c6
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3084,7 +3124,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 851fdf6c3a317a0028b35c414e83799d0c3a1c9e249f7b52182eb14aa2dbfe79
+    drift_ack_digest: 305d56c87fef4e8337fc7ed71cc724529f63986828382d2742b9ac6dceb4b2ea
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

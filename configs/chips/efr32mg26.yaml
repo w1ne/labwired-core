@@ -225,6 +225,38 @@ peripherals:
     size: "4KB"
     irq: 5
 
+  # ── I2C0 / I2C1 ──────────────────────────────────────────────────────────
+  # ⚠️ The two instances are NOT neighbours. The RM's peripheral map puts I2C0
+  # in the low-energy group at 0x4B000000 (with WDOG0/1 and EUSART0) and
+  # I2C1..3 in the main block at 0x400B0000 + n*0x4000. A model that assumed a
+  # regular stride would put I2C0 on top of something else entirely.
+  # I2C0_IRQn = 41, I2C1_IRQn = 42 (CMSIS `IRQn_Type`).
+  #
+  # Clocks: CMU_CLKEN0.I2C0 bit 14, .I2C1 bit 15 (I2C2/3 are on CLKEN2 bits
+  # 9/10 — another place the numbering does not follow the instance).
+  #
+  # The register layout is the Silicon Labs one — CMD/STATE/STATUS/TXDATA/
+  # RXDATA with an IF flag per event, driven by emlib's `I2C_Transfer`. It
+  # shares nothing with the STM32 map, so the profile is load-bearing: without
+  # it the shared model would default to STM32F1 and put TXDATA where CTRL is.
+  #
+  # I2C2/I2C3 are deliberately NOT declared — nothing uses them, and an
+  # undeclared window faults loudly where a stub would answer zero.
+  - id: "i2c0"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken0", bit: 14 }
+    base_address: 0x4B000000
+    size: "4KB"
+    irq: 41
+  - id: "i2c1"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken0", bit: 15 }
+    base_address: 0x400B0000
+    size: "4KB"
+    irq: 42
+
   # ── GPIO external interrupts ─────────────────────────────────────────────
   # The EXTI registers live in the GPIO block HEAD, not in the port structs:
   # GPIO_S_BASE + 0x400 = EXTIPSELL, then EXTIPSELH/EXTIPINSELL/EXTIPINSELH/
