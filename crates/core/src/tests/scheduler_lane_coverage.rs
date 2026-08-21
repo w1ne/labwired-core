@@ -108,6 +108,17 @@ const NIGHTLY_ONLY: &[(&str, &str)] = &[
         "Every test in the file is #[ignore]d; see bench_walk_free_kw41z.",
     ),
     (
+        "esp32s3_doom_frame_oracle",
+        "The single test in the file is #[ignore]d: it ROM-boots the ESP32-S3 Doom \
+         lab through the real mask ROM + 2nd-stage bootloader + ESP-IDF bring-up to \
+         frame 1 — 73,781,248 interpreted Xtensa steps, 25.8s measured in --release \
+         — and its firmware input is an 8.5 MB flash image that lives in the monorepo, \
+         not in this repo (LABWIRED_ESP32S3_DOOM_FLASH). It is the pixel oracle that \
+         lets the engine be optimised safely, so it MUST be wired as an `-- --ignored` \
+         step in core-nightly.yml rather than left here: until it is, NOTHING runs it. \
+         See bench_walk_free_kw41z.",
+    ),
+    (
         "riscv_jit_c3_oled_differential",
         "Every test in the file is #[ignore]d, AND it needs `jit` as well as \
          `event-scheduler`; see bench_walk_free_kw41z.",
