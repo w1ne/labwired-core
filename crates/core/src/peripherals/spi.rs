@@ -880,6 +880,13 @@ const EFR_USART_IEN: u64 = 0x4C;
 
 const EFR_USART_EN_EN: u32 = 1 << 0;
 const EFR_USART_CTRL_SYNC: u32 = 1 << 0;
+/// `CTRL.CLKPOL` — the level SCK rests at between frames (SPI's CPOL).
+const EFR_USART_CTRL_CLKPOL: u32 = 1 << 8;
+/// `CTRL.CLKPHA` — which clock edge samples (SPI's CPHA).
+const EFR_USART_CTRL_CLKPHA: u32 = 1 << 9;
+/// `CTRL.MSBF` — MSB first. The narrator draws MSB-first only, so an LSB-first
+/// frame publishes no waveform rather than a wrong one.
+const EFR_USART_CTRL_MSBF: u32 = 1 << 10;
 const EFR_USART_CMD_RXEN: u32 = 1 << 0;
 const EFR_USART_CMD_RXDIS: u32 = 1 << 1;
 const EFR_USART_CMD_TXEN: u32 = 1 << 2;
@@ -988,6 +995,23 @@ pub struct Spi {
     rx_fifo: bool,
     /// Bytes sitting in the modelled RX FIFO (FIFO layout only).
     rx_fifo_level: u8,
+
+    /// MOSI bytes this EFR32 USART has shifted but not yet narrated, and the
+    /// cycle an earlier flush of this same wire already ran to.
+    ///
+    /// ⚠️ BUFFERED, not per byte. Narrating each `TXDATA` write on its own
+    /// looked right — firmware writes a Series-2 USART a byte at a time, so
+    /// each byte really does have its own moment — and it is wrong the moment
+    /// firmware writes two bytes without stepping the machine between them.
+    /// Every frame then lands on the same cycle and they stack: the
+    /// `bus_visibility` ratchet decoded three bytes as ONE (`[c1]` from
+    /// `[53, 1c, e1]`), which is a waveform describing a transfer that never
+    /// happened. Buffering and emitting the run between the cursor and now is
+    /// what the H5 path already does, for the same reason.
+    #[serde(skip)]
+    efr32_wire_bytes: Vec<u8>,
+    #[serde(skip)]
+    efr32_wave_cursor: u64,
 
     /// Classic/FIFO STM32 RXNE is **clear-on-DR-read** (RM0008 / RM0351).
     /// `Peripheral::read` is `&self`, so the flag lives in a `Cell` and SR
@@ -1160,13 +1184,25 @@ impl Spi {
             SpiRegisterLayout::KinetisDspi => SpiRegs::KinetisDspi(KinetisDspiRegs::default()),
             SpiRegisterLayout::Efr32s2Usart => SpiRegs::Efr32s2Usart(Efr32s2SpiRegs::default()),
         };
-        Self {
+        // ⚠️ The EFR32 line cell is created EAGERLY, unlike every other layout
+        // here. The others get theirs when GPIO routing calls
+        // `line_levels_arc()`, which is enough for a PAD probe — nothing is
+        // visible on a pad until one is muxed. The WIRE probe exists precisely
+        // so a bus can be measured with NO routing, and it can only resolve a
+        // cell that already exists: lazy here means `resolve_wire_source`
+        // succeeds and `logic_watch` hands back `None`.
+        let efr32 = matches!(regs, SpiRegs::Efr32s2Usart(_));
+        let mut spi = Self {
             regs,
             rx_fifo,
             rx_fifo_level: 0,
             cr2_mask,
             ..Default::default()
+        };
+        if efr32 {
+            let _ = spi.line_levels_arc();
         }
+        spi
     }
 
     pub fn set_loopback(&mut self, on: bool) {
@@ -1273,6 +1309,119 @@ impl Spi {
     /// bit-reversed byte — the single most damaging way to get a waveform
     /// wrong. A gap is honest; a reversed byte is not. LsbFirst joins the
     /// narrator when the narrator can draw it.
+    /// Frame shape for the EFR32 Series-2 USART in synchronous mode, read from
+    /// the live `CTRL`.
+    ///
+    /// Returns `None` when `MSBF` is clear: [`SpiNarrator`] draws MSB-first
+    /// only, and a bit order it cannot draw publishes nothing rather than a
+    /// waveform that decodes to a different byte than the one that moved.
+    fn efr32_framing(&self) -> Option<SpiFraming> {
+        let ctrl = match &self.regs {
+            SpiRegs::Efr32s2Usart(r) => r.ctrl,
+            _ => return None,
+        };
+        if ctrl & EFR_USART_CTRL_MSBF == 0 {
+            return None;
+        }
+        Some(SpiFraming {
+            cpol: ctrl & EFR_USART_CTRL_CLKPOL != 0,
+            cpha: ctrl & EFR_USART_CTRL_CLKPHA != 0,
+            // `FRAME.DATABITS` is modelled as the 8-bit reset value; this
+            // controller's transfer path is byte-wide, so a wider programmed
+            // frame would not have moved wider data either.
+            bits: 8,
+        })
+    }
+
+    /// Core cycles one SCK bit occupies, from `CLKDIV`.
+    ///
+    /// `f_SCK = f_PCLK / (2 * (1 + CLKDIV/256))` — the reference-manual form
+    /// emlib's `USART_BaudrateSyncSet` inverts. CLKDIV's fractional field lives
+    /// at bits 3..20, so the integer part of `CLKDIV/256` is `(clkdiv >> 8)`.
+    ///
+    /// ⚠️ The core:PCLK ratio is a CONSTANT here, exactly as the STM32L4 model
+    /// does it (`CORE_PER_KCLK`). On BRD2709A the descriptor declares
+    /// `cpu_hz` 78 MHz against a 19 MHz peripheral band, so 4. This governs
+    /// how WIDE the published waveform is on the timeline, never what it
+    /// decodes to — the bytes are the bytes the transfer moved.
+    fn efr32_sck_bit_cycles(&self) -> u64 {
+        let clkdiv = match &self.regs {
+            SpiRegs::Efr32s2Usart(r) => u64::from(r.clkdiv),
+            _ => return 2,
+        };
+        const CORE_PER_PCLK: u64 = 4;
+        let pclk_per_bit = 2 * (1 + (clkdiv >> 8));
+        (pclk_per_bit * CORE_PER_PCLK).max(2)
+    }
+
+    /// Publish one completed EFR32 byte onto the routed pads.
+    ///
+    /// ⚠️ Narrated PER BYTE, not per burst — the opposite of the nRF and H5
+    /// paths above, and for a reason that is a property of this controller.
+    /// Those move a whole DMA buffer inside one register write, so their frames
+    /// have no distinct moments to be placed at and are emitted as one run. A
+    /// Series-2 USART is written a byte at a time by firmware, so every byte
+    /// really does have its own moment, and the sketch's own delays between
+    /// them are real wire idle. Emitting per byte puts each frame where it
+    /// happened instead of collapsing a paced transfer into one block.
+    fn efr32_wire_push(&mut self, mosi: u8) {
+        if self.lines.is_none() || self.efr32_framing().is_none() {
+            return;
+        }
+        self.efr32_wire_bytes.push(mosi);
+        self.efr32_wire_flush();
+    }
+
+    /// Publish whatever is buffered, if the timeline has room for it.
+    ///
+    /// `emit_between` refuses to reach back past the cursor — the cycle the
+    /// last flush already drew to — so a burst written back-to-back stays
+    /// buffered until enough cycles have passed to draw it, and then goes out
+    /// as one contiguous run. That is the difference between a trace that
+    /// decodes to the bytes that moved and three frames stacked on one cycle.
+    fn efr32_wire_flush(&mut self) {
+        if self.efr32_wire_bytes.is_empty() {
+            return;
+        }
+        let Some(lines) = self.lines.clone() else {
+            self.efr32_wire_bytes.clear();
+            return;
+        };
+        let Some(framing) = self.efr32_framing() else {
+            return;
+        };
+        let pads = lines.pad_lines();
+        let now = pads.tap_clock().unwrap_or(0);
+        let mut wave = SpiNarrator::with_lines(
+            SpiSignal::Sck as usize,
+            SpiSignal::Mosi as usize,
+            // Series 2 can route a hardware CS, but the Arduino path drives it
+            // from a plain GPIO and no chip config maps the hardware one — so
+            // there is no CS wire to narrate rather than an assumed one.
+            None,
+            &[
+                pads.level(SpiSignal::Sck as usize),
+                pads.level(SpiSignal::Mosi as usize),
+                pads.level(SpiSignal::Miso as usize),
+            ],
+            self.efr32_sck_bit_cycles(),
+        );
+        for &byte in &self.efr32_wire_bytes {
+            wave.frame(u16::from(byte), framing);
+        }
+        match wave.emit_between(pads, self.efr32_wave_cursor, now) {
+            NarrationFit::LevelsOnly { .. } => {
+                // No room on the timeline yet: hold the bytes and try again
+                // once the machine has stepped. Drawing now would compress the
+                // run onto a single cycle.
+            }
+            _ => {
+                self.efr32_wave_cursor = now;
+                self.efr32_wire_bytes.clear();
+            }
+        }
+    }
+
     fn nrf52_framing(&self) -> Option<SpiFraming> {
         let config = match &self.regs {
             SpiRegs::Nrf52(r) => r.config,
@@ -1815,6 +1964,7 @@ impl Spi {
                     r.iflag |= EFR_USART_IF_TXC | EFR_USART_IF_TXBL | EFR_USART_IF_RXDATAV;
                     r.txc = true;
                 }
+                self.efr32_wire_push(mosi);
             }
             EFR_USART_IF => {
                 // Write-1-to-clear, the Series-2 convention.
@@ -2124,6 +2274,7 @@ impl Spi {
             let cpol = match &self.regs {
                 SpiRegs::Stm32(r) => r.cr1 & (1 << 1) != 0,
                 SpiRegs::Nrf52(r) => r.config & NRF52_CONFIG_CPOL != 0,
+                SpiRegs::Efr32s2Usart(r) => r.ctrl & EFR_USART_CTRL_CLKPOL != 0,
                 _ => false,
             };
             self.lines = Some(Arc::new(SpiLineLevels::new(cpol)));
@@ -2338,17 +2489,16 @@ impl Spi {
 }
 
 impl crate::Peripheral for Spi {
+    /// EVERY layout here publishes SCK/MOSI/MISO now.
+    ///
+    /// The EFR32 USART-as-SPI path was the last exception, and it did not
+    /// publish until 2026-08-22: a frame completed inside the `TXDATA` write
+    /// and no edge existed, so naming the lines would have been a pad-table row
+    /// promising a trace that stayed flat — which is what `bus_visibility`
+    /// exists to catch. `efr32_wire_flush` is what earns the names, and the
+    /// match this used to need went with it.
     fn line_names(&self) -> &'static [&'static str] {
-        match &self.regs {
-            // The EFR32 USART-as-SPI path owns no narration cell: a frame
-            // completes inside the TXDATA write and no SCK edge is published,
-            // so it publishes NO line names either. Naming lines it cannot
-            // drive is what `bus_visibility` exists to catch — a pad table row
-            // that answers "what could ever be seen here" while the trace stays
-            // flat. See the module header's idealisation list.
-            SpiRegs::Efr32s2Usart(_) => &[],
-            _ => SPI_LINES,
-        }
+        SPI_LINES
     }
 
     fn wire_lines(&self) -> Option<&PadLines> {
@@ -2776,6 +2926,15 @@ impl crate::Peripheral for Spi {
         // `h5_wire_pending_cycles`.
         if !self.h5_wire_words.is_empty() && self.h5_wire_pending_cycles() == 0 {
             self.h5_wire_flush(true);
+        }
+
+        // ── EFR32 Series-2 USART: publish any buffered SPI burst ─────────────
+        // The bytes are held until the timeline has room for them (see
+        // `efr32_wire_flush`), and firmware that writes a burst and then stops
+        // writing would otherwise never trigger a retry. Inert — one
+        // `is_empty` check — on every other layout.
+        if !self.efr32_wire_bytes.is_empty() {
+            self.efr32_wire_flush();
         }
 
         crate::PeripheralTickResult {
