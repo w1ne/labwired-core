@@ -240,6 +240,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf54l_clock",
     "nrf54l_grtc",
     "efr32s2_cmu",
+    "efr32s2_gpio_head",
     "efr32s2_gpio_exti",
     "efr32s2_iadc",
     "efr32s2_timer",
@@ -313,6 +314,21 @@ pub fn try_build(
         // variant. `rcc.rs` is one struct per STM32 family by design, and this
         // silicon shares no register with any of them.
         "efr32s2_cmu" => Box::new(crate::peripherals::efr32::cmu::Efr32s2Cmu::new()),
+        // The GPIO block HEAD — `GPIO_TypeDef`'s first twelve words, which sit
+        // BELOW the four port structs at +0x30. Only one of them is a
+        // register: `GPIO_IPVERSION` at +0x00, which reads 7.
+        //
+        // ⚠️ This window was not mapped at all, so `GPIO->IPVERSION` — the
+        // first thing a Series-2 driver touches to identify the block — bus
+        // faulted on the twin and returns 7 on silicon. It was invisible
+        // because the conformance ratchet dropped faulting reads on the floor
+        // (`Err(_) => {}`) instead of reporting them; twelve addresses were
+        // being counted as misses with no line saying why.
+        "efr32s2_gpio_head" => {
+            let mut s = crate::peripherals::stub::StubPeripheral::new(0x00);
+            s.values.insert(0x00, 0x0000_0007);
+            Box::new(s)
+        }
         "rcc" => {
             let layout: RccRegisterLayout = SystemBus::parse_profile_or_default(p_cfg, "RCC")?;
             let mut rcc = crate::peripherals::rcc::Rcc::new_with_layout(layout);
