@@ -188,7 +188,10 @@ mod integration {
     fn from_cpu_tick_sets_pending_when_mapped() {
         let mut bus = SystemBus::new();
         let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
-        assert!(bus.esp32s3_irq_routing, "S3 irq routing should be on");
+        assert!(
+            bus.irq_fabric.esp32s3.routing,
+            "S3 irq routing should be on"
+        );
         // Program intmatrix: source 79 -> cpu0 irq 1, source 80 -> cpu1 irq 1
         // CORE0 map @ 0x600C2000 + 4*src
         // CORE1 map @ 0x600C2000 + 0x800 + 4*src

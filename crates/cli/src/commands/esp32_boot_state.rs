@@ -182,8 +182,8 @@ pub fn install_esp32c3_fast_boot(bus: &mut SystemBus, firmware_path: &Path) {
         ),
     );
     bus.config.optimized_bus_access = false;
-    // FreeRTOS first yield needs FROM_CPU matrix → riscv_irq_lines.
-    bus.esp32c3_irq_routing = true;
+    // FreeRTOS first yield needs FROM_CPU matrix → irq_fabric.esp32c3.irq_lines.
+    bus.irq_fabric.esp32c3.routing = true;
     bus.refresh_peripheral_index();
 }
 

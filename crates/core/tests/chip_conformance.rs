@@ -247,13 +247,23 @@ const CHIPS: &[ChipConf] = &[
     },
     // Silicon Labs EFR32MG26 (Series-2, Cortex-M33). Register surface from the
     // simplicity_sdk CMSIS headers (no public SVD exists); L1 smoke only —
-    // GPIO is the Series-2 port layout, CMU/TIMER0 are stubs. Smoke-validated
-    // via the brd2709a example (cli lane, `examples/brd2709a/uart-smoke.yaml`),
-    // not a firmware_survival case of its own yet.
+    // Real silicon capture, taken over SWD from a BRD2709A on 2026-08-21 —
+    // the SECOND chip in this table to have one, after esp32c3. CMU, GPIO,
+    // TIMER0/1, USART0, IADC0 and I2C0 are modelled from the vendor CMSIS
+    // headers (Silicon Labs publishes no SVD for this family), and this is the
+    // capture that says the model agrees with the die.
+    //
+    // ⚠️ The capture state is `reset_halt+preamble`, not pure reset_halt, and
+    // that is a property of the silicon rather than a shortcut: a Series-2
+    // peripheral that is not clocked does not read as zero over the debug port,
+    // it FAULTS, and openocd abandons the rest of its command list. A bare
+    // `reset halt` capture returns the CMU window and dies at GPIO. The
+    // preamble writes CLKEN0 and nothing else, so every register below is
+    // still its reset value.
     ChipConf {
         name: "efr32mg26",
         yaml: "configs/chips/efr32mg26.yaml",
-        reset_oracle: None,
+        reset_oracle: Some("scripts/hw-oracle/captures/efr32mg26/20260821T163632Z/reg_oracle.json"),
         behavior_gate: None,
     },
     // Classic Arduino Nano / ATmega328P — sim-smoke twin (PORT/Timer0/USART0).
@@ -349,6 +359,34 @@ fn dynamic_excludes(name: &str) -> &'static [(u64, u64, &'static str)] {
                 "INTERRUPT_CORE: dynamic pending/status",
             ),
         ],
+        // ⚠️ ONE entry, and it is not the chip.
+        //
+        // The first pass at this capture excluded ten registers as
+        // "undocumented" or "warm". That was the wrong instinct. A register
+        // the vendor header calls RESERVED still has a value on the die, and a
+        // twin that answers 0 where silicon answers 0xC00000BC is wrong
+        // whether or not anybody wrote the answer down. Nine of the ten are
+        // now MODELLED at their measured values — CMU +0x40 and SYSCLKCTRL,
+        // the five undocumented IADC words at +0x30..0x40, and IADC +0x90 —
+        // and the header-documented gaps the pass had lumped in with them
+        // (IADC CFG/SCALE/FIFOCFG, TIMER/USART/I2C IPVERSION, USART
+        // FRAME/STATUS/IF, TIMER TOP/TOPB) were fixed, not excluded.
+        //
+        // What is left is the one value the die reported that the DIE did not
+        // author.
+        "efr32mg26" => &[(
+            0x4003c044,
+            0x4003c044,
+            "GPIO PORTA_DIN: the probe's own footprint. PA1 reads high with its \
+             port mode DISABLED, while PB0/PB1 — buttons, pulled up, also \
+             DISABLED — read 0 on the same board, so 'disabled reads 0' is the \
+             rule this one pin breaks. GPIO_DBGROUTEPEN enables the debug pins \
+             out of reset and they override the port mode; a J-Link was \
+             clocking SWD throughout the capture. Not asserted as PA1=SWCLK \
+             without the UG594 pinout in hand. Either way DIN is a pad read, \
+             not a reset value: the model reproduces the mechanism, and no \
+             probe is attached to the twin",
+        )],
         _ => &[],
     }
 }
@@ -641,6 +679,34 @@ fn measure(c: &ChipConf) -> Record {
     if let Some(oracle) = c.reset_oracle {
         if let Ok(text) = std::fs::read_to_string(root(oracle)) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                // ⚠️ REPLAY THE CAPTURE'S PREAMBLE INTO THE SIM.
+                //
+                // A capture may have had to write registers before it could
+                // read anything — on EFR32 a peripheral that is not clocked
+                // FAULTS the debug port rather than reading zero, so its oracle
+                // un-gates CLKEN0 first. Diffing that against a sim still in
+                // its cold reset state compares an un-gated die with a gated
+                // model, and every clock-gated peripheral reads 0 in the sim
+                // and non-zero on silicon. That is the gating working, not a
+                // model gap, and counting it as one buries the real gaps in
+                // noise.
+                //
+                // So the sim is put into the SAME state the capture was taken
+                // in. Nothing else about the comparison changes.
+                let mut bus = bus;
+                if let Some(pre) = json.get("preamble").and_then(|p| p.as_array()) {
+                    for step in pre {
+                        let Some(w) = step.get("write32") else {
+                            continue;
+                        };
+                        let addr = w.get("address").and_then(|a| a.as_str()).map(parse_hex);
+                        let val = w.get("value").and_then(|v| v.as_str()).map(parse_hex32);
+                        if let (Some(a), Some(v)) = (addr, val) {
+                            let _ = bus.write_u32(a, v);
+                        }
+                    }
+                }
+                let bus = bus;
                 if let Some(blocks) = json.get("blocks").and_then(|b| b.as_object()) {
                     for block in blocks.values() {
                         if let Some(words) = block.get("words").and_then(|w| w.as_object()) {
@@ -672,7 +738,14 @@ fn measure(c: &ChipConf) -> Record {
                                             );
                                         }
                                     }
-                                    Err(_) => {}
+                                    Err(_) => {
+                                        if report {
+                                            eprintln!(
+                                                "  [{}] BUS-FAULT 0x{a:08x}: silicon=0x{v:08x} (sim read faulted)",
+                                                c.name
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }

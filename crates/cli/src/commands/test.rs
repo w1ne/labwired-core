@@ -1833,7 +1833,7 @@ pub(crate) fn run_test(
             // Instruction batching freezes peripheral tick / IRQ delivery
             // across large step batches and strands the scheduler — same
             // reason rom-boot forces cycle-accurate stepping.
-            if machine.bus.esp32c3_irq_routing {
+            if machine.bus.irq_fabric.esp32c3.routing {
                 machine.config.batch_mode_enabled = false;
             }
             if let Err(e) = machine.load_firmware(&program) {
@@ -2187,7 +2187,7 @@ pub(crate) fn run_test(
                 // C3 has no standard CLINT (line 7 is an ESP matrix line).
                 // Default mtimecmp=0 self-pends MTIP and breaks FreeRTOS first
                 // yield via FROM_CPU — same disable as rom-boot.
-                if bus.esp32c3_irq_routing {
+                if bus.irq_fabric.esp32c3.routing {
                     cpu.mtimecmp = u64::MAX;
                 }
                 setup_and_run!(cpu)

@@ -1826,6 +1826,14 @@ pub struct Efr32s2I2c {
     busy: bool,
     /// The last address was not claimed by any attached device.
     nacked: bool,
+    /// A transfer has completed since reset — what `STATUS.TXC` reports. Out of
+    /// reset none has, which is why STATUS reads 0x80 (TXBL alone) and not 0xC0.
+    txc: bool,
+    /// The controller has seen the bus reach a known-idle state — a STOP or an
+    /// ABORT. FALSE out of reset, which is why `STATE` reads 0x1 (BUSY) on a
+    /// chip nothing has driven yet, and why emlib's `I2C_Init` opens with an
+    /// ABORT. Once set it stays set; BUSY then follows the transfer.
+    bus_idle_known: bool,
 
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
@@ -1841,10 +1849,15 @@ impl Default for Efr32s2I2c {
             clkdiv: 0,
             saddr: 0,
             saddrmask: 0,
-            // TXBL and TXC are set out of reset: the transmit buffer is empty
-            // and the last transfer (there was none) is complete. emlib's
-            // transfer loop waits on TXBL before its first write.
-            iflag: Cell::new(EFR_IF_TXBL | EFR_IF_TXC),
+            // ⚠️ `_I2C_IF_RESETVALUE` is 0, and a BRD2709A reads 0 over SWD at
+            // reset-halt. This used to seed TXBL|TXC on the theory that the
+            // buffer is empty and the last transfer completed — but IF is a
+            // FLAG register, and a flag that was never raised is not pending.
+            // STATUS is where "the buffer is free" lives, and that still reads
+            // TXBL out of reset.
+            iflag: Cell::new(0),
+            txc: false,
+            bus_idle_known: false,
             ien: 0,
             expect_address: false,
             is_reading: false,
@@ -1876,7 +1889,13 @@ const EFR_I2C_TXDOUBLE: u64 = 0x38;
 const EFR_I2C_IF: u64 = 0x3C;
 const EFR_I2C_IEN: u64 = 0x40;
 
-const EFR_I2C_IPVERSION_RESET: u32 = 3;
+/// `_I2C_IPVERSION_RESETVALUE` in `efr32mg26_i2c.h`.
+///
+/// ⚠️ This was modelled as 3 — a guess carried over from the IADC, whose
+/// IPVERSION really is 3. The header says 0 and the die reads 0. The test
+/// below was named after the header while asserting a value the header does
+/// not contain, which is exactly how a guess survives review.
+const EFR_I2C_IPVERSION_RESET: u32 = 0;
 
 // CMD bits.
 const EFR_CMD_START: u32 = 1 << 0;
@@ -1960,6 +1979,8 @@ impl Efr32s2I2c {
                     self.set_if(EFR_IF_NACK);
                 }
             }
+            self.txc = true;
+            self.txc = true;
             self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
             return;
         }
@@ -1970,6 +1991,7 @@ impl Efr32s2I2c {
             }
             None => self.set_if(EFR_IF_NACK),
         }
+        self.txc = true;
         self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
     }
 
@@ -2012,9 +2034,13 @@ impl Efr32s2I2c {
             self.rx_byte.set(None);
         }
         if value & EFR_CMD_CLEARTX != 0 {
+            self.txc = true;
             self.set_if(EFR_IF_TXBL | EFR_IF_TXC);
         }
         if value & (EFR_CMD_STOP | EFR_CMD_ABORT) != 0 {
+            // Either one tells the controller where the bus is, which is what
+            // clears the power-on BUSY. emlib issues ABORT for exactly this.
+            self.bus_idle_known = true;
             if let Some(idx) = self.current_target {
                 self.attached_devices[idx].borrow_mut().stop();
             }
@@ -2030,12 +2056,25 @@ impl Efr32s2I2c {
     }
 
     fn state_word(&self) -> u32 {
+        // ⚠️ BUSY is set OUT OF RESET, and stays set until firmware issues the
+        // ABORT that emlib's `I2C_Init` always sends. `_I2C_STATE_RESETVALUE`
+        // is 0x00000001 (BUSY alone) and a BRD2709A reads exactly that over SWD
+        // at reset-halt. It reads as a quirk and is not one: the controller
+        // cannot know the bus is idle until something drives it, so it comes up
+        // claiming the bus.
+        //
+        // This model previously returned 0 at reset and set TRANSMITTER
+        // unconditionally whenever it was not reading, which made a freshly
+        // reset controller read 0x4 — neither the header's value nor the die's.
         let mut s = 0;
-        if self.busy {
-            s |= EFR_STATE_BUSY | EFR_STATE_MASTER;
+        if self.busy || !self.bus_idle_known {
+            s |= EFR_STATE_BUSY;
         }
-        if !self.is_reading {
-            s |= EFR_STATE_TRANSMITTER;
+        if self.busy {
+            s |= EFR_STATE_MASTER;
+            if !self.is_reading {
+                s |= EFR_STATE_TRANSMITTER;
+            }
         }
         if self.nacked {
             s |= EFR_STATE_NACKED;
@@ -2044,10 +2083,17 @@ impl Efr32s2I2c {
     }
 
     fn status_word(&self) -> u32 {
-        // TXBL and TXC are always set: a byte completes synchronously here, so
-        // the transmit buffer is never occupied. That is the idealisation the
-        // header lists, not an accident.
-        let mut s = EFR_STATUS_TXBL | EFR_STATUS_TXC;
+        // TXBL is always set: a byte completes synchronously here, so the
+        // transmit buffer is never occupied.
+        //
+        // ⚠️ TXC is NOT. This used to set both and call it "the idealisation the
+        // header lists" — the header lists `_I2C_STATUS_RESETVALUE 0x00000080`,
+        // which is TXBL (bit 7) ALONE, and a BRD2709A reads 0x80 over SWD at
+        // reset-halt. TXC means a transfer has completed; out of reset none has.
+        let mut s = EFR_STATUS_TXBL;
+        if self.txc {
+            s |= EFR_STATUS_TXC;
+        }
         if self.rx_byte.get().is_some() {
             s |= EFR_STATUS_RXDATAV;
         }
@@ -4173,7 +4219,8 @@ mod efr32s2_tests {
     #[test]
     fn ipversion_reads_the_header_reset_value() {
         let i2c = I2c::new_with_layout(I2cRegisterLayout::Efr32s2);
-        assert_eq!(i2c.read_u32(EFR_I2C_IPVERSION).unwrap(), 3);
+        // `_I2C_IPVERSION_RESETVALUE` = 0, and BRD2709A reads 0 over SWD.
+        assert_eq!(i2c.read_u32(EFR_I2C_IPVERSION).unwrap(), 0);
     }
 
     /// The whole `Wire.beginTransmission / write / endTransmission` path.
@@ -4326,13 +4373,32 @@ mod efr32s2_tests {
         i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, false))
             .unwrap();
         assert_eq!(flags(&i2c), 0, "no START, no ACK, no NACK");
-        assert_eq!(i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY, 0);
+        // BUSY is still the power-on 1 here: a DISABLED controller cannot have
+        // driven the bus, so it has not learned the bus is idle either. What
+        // this case is about is that nothing else moved — see `flags` above and
+        // MASTER below, which a real START would have set.
+        let state = i2c.read_u32(EFR_I2C_STATE).unwrap();
+        assert_eq!(
+            state & EFR_STATE_MASTER,
+            0,
+            "a disabled controller never masters"
+        );
     }
 
     #[test]
     fn state_reports_busy_and_master_between_start_and_stop() {
         let mut i2c = enabled();
         i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        // ⚠️ BUSY is SET on a controller nothing has driven yet — measured on a
+        // BRD2709A over SWD, `_I2C_STATE_RESETVALUE` 0x00000001. It clears once
+        // the controller learns where the bus is, which is what emlib's opening
+        // ABORT is for.
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY,
+            EFR_STATE_BUSY,
+            "power-on BUSY, before any ABORT"
+        );
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_ABORT).unwrap();
         assert_eq!(i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY, 0);
 
         i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
