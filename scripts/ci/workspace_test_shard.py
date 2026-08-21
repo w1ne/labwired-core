@@ -271,6 +271,11 @@ def classify(cfg, targets):
     excluded |= {
         (e["package"], e["target"]) for e in cfg.get("nightly_only_excluded", [])
     }
+    # Cost-only exclusions, kept in their own list because they are revoked for
+    # a different reason than the scheduler ones — see `_pr_cost_about`.
+    excluded |= {
+        (e["package"], e["target"]) for e in cfg.get("pr_cost_excluded", [])
+    }
     known = {(e["package"], e["target"]) for e in cfg["known_red"]}
     problems = []
     for p, t in sorted(excluded - have):
@@ -401,7 +406,9 @@ def cmd_plan(args):
         f"run also picks up targets whose required-features feature "
         f"unification enables, e.g. event-scheduler); "
         f"{len(cfg['cross_build_excluded'])} cross-build-excluded, "
-        f"{len(cfg.get('nightly_only_excluded', []))} nightly-only-excluded; "
+        f"{len(cfg.get('nightly_only_excluded', []))} nightly-only-excluded, "
+        f"{len(cfg.get('pr_cost_excluded', []))} cost-excluded "
+        f"({sum(e.get('seconds', 0) for e in cfg.get('pr_cost_excluded', [])):.0f}s of measured PR time); "
         f"{len(runnable)} in the PR shards across {shard_count} shard(s)"
     )
     for k in range(1, shard_count + 1):
