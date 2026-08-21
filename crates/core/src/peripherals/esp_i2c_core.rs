@@ -263,6 +263,15 @@ impl EspI2cCore {
         self.rx_fifo.borrow_mut().clear();
     }
 
+    /// The whole RX FIFO, head first. For differentials that must compare two
+    /// controllers' state rather than just what the next DATA read returns —
+    /// the C3's per-cycle-walk vs event-scheduler equivalence check reads it,
+    /// which is the only caller and why this is gated to that feature.
+    #[cfg(all(test, feature = "event-scheduler"))]
+    pub(crate) fn rx_bytes(&self) -> Vec<u8> {
+        self.rx_fifo.borrow().iter().copied().collect()
+    }
+
     // -- iteration over attached devices ---------------------------------------
 
     /// Advance every attached device's own clock. The ESP controllers drive

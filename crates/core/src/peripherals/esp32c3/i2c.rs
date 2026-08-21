@@ -1870,8 +1870,8 @@ mod tests {
                 "{name}: SR diverges"
             );
             assert_eq!(walk.int_raw, sd.dev.int_raw, "{name}: INT_RAW diverges");
-            let walk_rx: Vec<u8> = walk.rx_fifo.borrow().iter().copied().collect();
-            let sched_rx: Vec<u8> = sd.dev.rx_fifo.borrow().iter().copied().collect();
+            let walk_rx: Vec<u8> = walk.core.rx_bytes();
+            let sched_rx: Vec<u8> = sd.dev.core.rx_bytes();
             assert_eq!(walk_rx, sched_rx, "{name}: RX FIFO diverges");
             if !walk_rx.is_empty() {
                 devices_with_rx += 1;
