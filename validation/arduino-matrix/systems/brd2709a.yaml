@@ -1,0 +1,25 @@
+# Arduino matrix system — Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26).
+#
+# ⚠️ This board does NOT compile through PlatformIO. Silicon Labs never
+# published an xG26 Arduino core, so LabWired's is hand-written and lives in
+# the labwired monorepo (`services/labwired-builder/silabs-arduino`). The
+# boards.yaml entry declares `external_compile:` and the lane that owns the
+# core supplies the driver — see run_matrix.py's EXTERNAL_COMPILE_ENV.
+name: "arduino-matrix-brd2709a"
+chip: "../../../configs/chips/efr32mg26.yaml"
+external_devices:
+  # L3_i2c_sensor: INA219 at 0x40. The Arduino core's `Wire` is I2C0 —
+  # ⚠️ 0x4B000000, in the low-energy group, NOT with I2C1..3 (Wire.cpp).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x40
+  # L4_spi_sensor: MAX31855 on the Arduino `SPI`, which is USART0 in
+  # synchronous mode — Series 2 has no separate SPI peripheral.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "PC00"
+board_io: []

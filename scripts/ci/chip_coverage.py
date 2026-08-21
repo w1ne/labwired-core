@@ -181,6 +181,23 @@ def arduino_proofs() -> tuple[dict[str, set[str]], list[str]]:
 
     A boards.yaml entry the workflow does not name is NOT coverage. Reporting
     it as coverage is exactly how a lab ends up in the tree gating nothing.
+
+    ⚠️ ONE board is legitimately absent from this repo's workflow matrix, and
+    it is not an exemption. `brd2709a` declares `external_compile:` because
+    Silicon Labs never published an xG26 Arduino core — LabWired's is
+    hand-written and lives in the labwired monorepo, so the compile CANNOT
+    happen here. Such a board must instead name the workflow, in the repo that
+    owns its toolchain, in `lane:`. Three rules, and all three are enforced:
+
+      * a board with no `external_compile:` must be in this repo's matrix;
+      * a board WITH it must NOT be in this repo's matrix (the job would burn a
+        runner to report `toolchain_missing`);
+      * a board with it MUST name a `lane:`, or it is claiming coverage that
+        exists nowhere — which is the failure this whole function is for.
+
+    The `lane:` string names a file in another repository, so this gate cannot
+    open it. What it CAN enforce is that the claim is made explicitly, and it
+    does.
     """
     if not arduino_boards().is_file() or not arduino_workflow().is_file():
         raise CoverageError("the Arduino matrix manifest or workflow is missing")
@@ -195,7 +212,23 @@ def arduino_proofs() -> tuple[dict[str, set[str]], list[str]]:
         bid, chip = board.get("id"), board.get("chip")
         if not bid or not chip:
             raise CoverageError(f"arduino board entry {bid!r} has no id/chip")
-        if bid in listed:
+        external = board.get("external_compile")
+        lane = board.get("lane")
+        if external:
+            if bid in listed:
+                raise CoverageError(
+                    f"arduino board '{bid}' declares external_compile: — its toolchain is "
+                    "not in this repo — but core-arduino-matrix-smoke.yml names it anyway. "
+                    "That job can only report toolchain_missing."
+                )
+            if not lane:
+                raise CoverageError(
+                    f"arduino board '{bid}' declares external_compile: but names no `lane:`. "
+                    "Nothing anywhere runs it, and boards.yaml is claiming coverage it does "
+                    "not have."
+                )
+            proofs.setdefault(chip, set()).add(f"arduino-matrix (external lane): {bid} -> {lane}")
+        elif bid in listed:
             proofs.setdefault(chip, set()).add(f"arduino-matrix: {bid}")
         else:
             unrun.append(bid)
