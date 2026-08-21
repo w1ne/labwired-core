@@ -1889,7 +1889,13 @@ const EFR_I2C_TXDOUBLE: u64 = 0x38;
 const EFR_I2C_IF: u64 = 0x3C;
 const EFR_I2C_IEN: u64 = 0x40;
 
-const EFR_I2C_IPVERSION_RESET: u32 = 3;
+/// `_I2C_IPVERSION_RESETVALUE` in `efr32mg26_i2c.h`.
+///
+/// ⚠️ This was modelled as 3 — a guess carried over from the IADC, whose
+/// IPVERSION really is 3. The header says 0 and the die reads 0. The test
+/// below was named after the header while asserting a value the header does
+/// not contain, which is exactly how a guess survives review.
+const EFR_I2C_IPVERSION_RESET: u32 = 0;
 
 // CMD bits.
 const EFR_CMD_START: u32 = 1 << 0;
@@ -1975,7 +1981,7 @@ impl Efr32s2I2c {
             }
             self.txc = true;
             self.txc = true;
-        self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
+            self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
             return;
         }
         match self.current_target {
@@ -4213,7 +4219,8 @@ mod efr32s2_tests {
     #[test]
     fn ipversion_reads_the_header_reset_value() {
         let i2c = I2c::new_with_layout(I2cRegisterLayout::Efr32s2);
-        assert_eq!(i2c.read_u32(EFR_I2C_IPVERSION).unwrap(), 3);
+        // `_I2C_IPVERSION_RESETVALUE` = 0, and BRD2709A reads 0 over SWD.
+        assert_eq!(i2c.read_u32(EFR_I2C_IPVERSION).unwrap(), 0);
     }
 
     /// The whole `Wire.beginTransmission / write / endTransmission` path.
@@ -4371,7 +4378,11 @@ mod efr32s2_tests {
         // this case is about is that nothing else moved — see `flags` above and
         // MASTER below, which a real START would have set.
         let state = i2c.read_u32(EFR_I2C_STATE).unwrap();
-        assert_eq!(state & EFR_STATE_MASTER, 0, "a disabled controller never masters");
+        assert_eq!(
+            state & EFR_STATE_MASTER,
+            0,
+            "a disabled controller never masters"
+        );
     }
 
     #[test]

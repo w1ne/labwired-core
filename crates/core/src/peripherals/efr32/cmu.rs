@@ -163,13 +163,28 @@ const REGS: &[RegDef] = &[
     rw(OFF_WDOGLOCK, UNLOCK_KEY),
     rw(0x020, 0x0000_0000), // IF
     rw(0x024, 0x0000_0000), // IEN
+    // ⚠️ RESERVED3 in `CMU_TypeDef` — the header documents no register here at
+    // all, and a model that leaves it out reads 0. The die does not: BRD2709A
+    // reads 0xC00000BC at `reset halt`. Modelled read-only at its measured
+    // value rather than excluded from the conformance count, because a twin
+    // that answers 0 where silicon answers 0xC00000BC is simply wrong, and
+    // "the vendor did not document it" does not make the die's answer optional.
+    //
+    // One board, so this could be per-die trim; if a second BRD2709A reads
+    // something else, this becomes an exclusion and we will know why.
+    ro(0x040, 0xC000_00BC),
     rw(0x050, 0x0000_0000), // CALCMD
     rw(0x054, 0x0000_0000), // CALCTRL
     ro(OFF_CALCNT, 0x0000_0000),
     rw(OFF_CLKEN0, 0x0000_0000),
     rw(OFF_CLKEN1, 0x0000_0000),
     rw(OFF_CLKEN2, 0x0000_0000),
-    rw(0x070, 0x0000_0001), // SYSCLKCTRL
+    // ⚠️ `_CMU_SYSCLKCTRL_RESETVALUE` is 0x1 (CLKSEL=FSRCO). The die reads 0x2
+    // (CLKSEL=HFRCODPLL) the moment a debugger can look at it, so 0x1 is a
+    // state no firmware ever observes — by the time the CM33 executes its
+    // first instruction SYSCLK has already moved. Measured on BRD2709A.
+    // The twin models what firmware sees, so it boots on HFRCODPLL too.
+    rw(0x070, 0x0000_0002), // SYSCLKCTRL
     rw(0x080, 0x0000_0001), // TRACECLKCTRL
     rw(0x090, 0x0000_0000), // EXPORTCLKCTRL
     rw(0x100, 0x0000_0000), // DPLLREFCLKCTRL
@@ -357,7 +372,16 @@ mod tests {
     fn resets_to_the_header_values() {
         let cmu = Efr32s2Cmu::new();
         assert_eq!(cmu.read_word(OFF_IPVERSION), 7);
-        assert_eq!(cmu.read_word(0x070), 1, "SYSCLKCTRL");
+        // ⚠️ NOT the header's 0x1. The header documents CLKSEL=FSRCO; BRD2709A
+        // reads CLKSEL=HFRCODPLL the first moment a debugger can look, so 0x1
+        // is a state no firmware ever observes. The die wins.
+        assert_eq!(cmu.read_word(0x070), 2, "SYSCLKCTRL reads HFRCODPLL");
+        // Undocumented in `CMU_TypeDef` — RESERVED3 — and non-zero on silicon.
+        assert_eq!(
+            cmu.read_word(0x040),
+            0xC000_00BC,
+            "measured, not documented"
+        );
         assert_eq!(cmu.read_word(0x120), 1, "EM01GRPACLKCTRL");
         assert_eq!(cmu.read_word(OFF_CLKEN0), 0);
         assert_eq!(cmu.read_word(OFF_CLKEN1), 0);

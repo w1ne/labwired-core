@@ -359,6 +359,34 @@ fn dynamic_excludes(name: &str) -> &'static [(u64, u64, &'static str)] {
                 "INTERRUPT_CORE: dynamic pending/status",
             ),
         ],
+        // ⚠️ ONE entry, and it is not the chip.
+        //
+        // The first pass at this capture excluded ten registers as
+        // "undocumented" or "warm". That was the wrong instinct. A register
+        // the vendor header calls RESERVED still has a value on the die, and a
+        // twin that answers 0 where silicon answers 0xC00000BC is wrong
+        // whether or not anybody wrote the answer down. Nine of the ten are
+        // now MODELLED at their measured values — CMU +0x40 and SYSCLKCTRL,
+        // the five undocumented IADC words at +0x30..0x40, and IADC +0x90 —
+        // and the header-documented gaps the pass had lumped in with them
+        // (IADC CFG/SCALE/FIFOCFG, TIMER/USART/I2C IPVERSION, USART
+        // FRAME/STATUS/IF, TIMER TOP/TOPB) were fixed, not excluded.
+        //
+        // What is left is the one value the die reported that the DIE did not
+        // author.
+        "efr32mg26" => &[(
+            0x4003c044,
+            0x4003c044,
+            "GPIO PORTA_DIN: the probe's own footprint. PA1 reads high with its \
+             port mode DISABLED, while PB0/PB1 — buttons, pulled up, also \
+             DISABLED — read 0 on the same board, so 'disabled reads 0' is the \
+             rule this one pin breaks. GPIO_DBGROUTEPEN enables the debug pins \
+             out of reset and they override the port mode; a J-Link was \
+             clocking SWD throughout the capture. Not asserted as PA1=SWCLK \
+             without the UG594 pinout in hand. Either way DIN is a pad read, \
+             not a reset value: the model reproduces the mechanism, and no \
+             probe is attached to the twin",
+        )],
         _ => &[],
     }
 }
@@ -668,7 +696,9 @@ fn measure(c: &ChipConf) -> Record {
                 let mut bus = bus;
                 if let Some(pre) = json.get("preamble").and_then(|p| p.as_array()) {
                     for step in pre {
-                        let Some(w) = step.get("write32") else { continue };
+                        let Some(w) = step.get("write32") else {
+                            continue;
+                        };
                         let addr = w.get("address").and_then(|a| a.as_str()).map(parse_hex);
                         let val = w.get("value").and_then(|v| v.as_str()).map(parse_hex32);
                         if let (Some(a), Some(v)) = (addr, val) {
@@ -708,7 +738,14 @@ fn measure(c: &ChipConf) -> Record {
                                             );
                                         }
                                     }
-                                    Err(_) => {}
+                                    Err(_) => {
+                                        if report {
+                                            eprintln!(
+                                                "  [{}] BUS-FAULT 0x{a:08x}: silicon=0x{v:08x} (sim read faulted)",
+                                                c.name
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }

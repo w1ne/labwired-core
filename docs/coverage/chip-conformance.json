@@ -176,10 +176,10 @@
   },
   {
     "behavior": false,
-    "excluded": 0,
+    "excluded": 1,
     "level": 1,
     "name": "efr32mg26",
-    "reg_match": 178
+    "reg_match": 215
   },
   {
     "behavior": true,

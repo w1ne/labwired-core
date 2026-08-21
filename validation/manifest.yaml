@@ -306,6 +306,15 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
     drift_ack_digest: ba3c4a67fbe801995f00d8fcb96ef7ad9062a8c176c9ce456b4f7e6c2fd338d4
     models:
@@ -491,6 +500,15 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
     drift_ack_digest: ba3c4a67fbe801995f00d8fcb96ef7ad9062a8c176c9ce456b4f7e6c2fd338d4
     models:
@@ -800,8 +818,17 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 4e274f4079374a654a632714b3adcd1a282075a3e72f9030126cab0298824d8a
+    drift_ack_digest: 0cb0ba8ff18835815aff0e617d44d8654c713531033211aeee1fad8bb6ea230f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1799,8 +1826,17 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: acdbec13cb07142fa9141b8bd9d9e3a2b019e00109e30ccf2fa25c52e9c361bf
+    drift_ack_digest: c53bfb723d8132ad9f6bc3fc3e93c2e516ef63ccb6e5813503181c9932d2f3cc
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2051,8 +2087,17 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 89a4ecd33e0016b7d9fc1ae7a16fe57e00e8e01c46d40bdf494d60111461f095
+    drift_ack_digest: 23bad02f3a29021e98c1a78e62b33b5260cea8cc0a314a539a36e2d975e0cdd9
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2356,8 +2401,17 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 6c5b4ab6220fb2da0ea2f85fe1268ecb692f00c89f50d582a4797028d6ac1cc8
+    drift_ack_digest: dcbab21d3b28969d46322a4e740edc71aac521436e1dbf76605532b4a3168d3c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2621,8 +2675,17 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
+    # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
+    # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
+    # for `Efr32s2SpiRegs` plus a `txc` flag so `STATUS` stops asserting TXC
+    # before anything has been transmitted. `SpiRegs::Stm32*` and the STM32 I2C
+    # layouts are not touched — these boards never construct the EFR32 variant,
+    # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
+    # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 68ef073152bc0c289a2e9b260f67204762aeb0837082e1b52b838fd5027e06c2
+    drift_ack_digest: 07889aa3ac482e376366f9f048c9d1134d5c597e87646e90b4c9728b3dbbb85e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3311,7 +3374,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 6073d47d379bae4a026851bafb18c76e7a7798291f54c98d54d3fa8b33255035
+    drift_ack_digest: de4ba3a1b0a624005abbf36a9347e4060c72ba510024f4dabfe95d8122247b74
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3382,7 +3445,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 9dc33c269683700665434cb191fa1297a6d46d424904486ee1cfb22450c44cbd
+    drift_ack_digest: 91b07c07b174ed1a10f85b51e6af3d5189cb552d900eb4dfdb393bb91422a2b4
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3458,7 +3521,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 4c41ea6e5e8286eabca003e6acea7a3a4c1bd4c173b74de03a3d711d421787d8
+    drift_ack_digest: e3d0199807bd82c8a634fd74d3ab987955ca67dc2cfab36ac9d557b571c35d90
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

@@ -91,12 +91,50 @@ const OFF_SCANFIFODATA: u64 = 0x84;
 const OFF_SCANFIFOSTAT: u64 = 0x88;
 const OFF_SCANDATA: u64 = 0x8C;
 const OFF_SINGLE: u64 = 0x98;
+/// ⚠️ `RESERVED0` + `RESERVED1` in `IADC_TypeDef` — five words the header
+/// documents as nothing at all, and which the die reads back non-zero.
+const OFF_UNDOC_FIRST: u64 = 0x30;
+const OFF_UNDOC_LAST: u64 = 0x40;
+/// `RESERVED3`, one more of the same.
+const OFF_UNDOC_RESERVED3: u64 = 0x90;
 /// `SCANTABLE[16]`, stride 0x04 — one `SCAN` word per entry.
 const OFF_SCANTABLE: u64 = 0xA0;
 const SCANTABLE_WORDS: u64 = 16;
 
-/// `IADC_IPVERSION` reset value.
+/// The six undocumented IADC words, in `OFF_UNDOC_FIRST..=OFF_UNDOC_LAST`
+/// order followed by `OFF_UNDOC_RESERVED3`.
+///
+/// MEASURED on BRD2709A over SWD at `reset halt` with IADC0 clocked (see
+/// `scripts/hw-oracle/captures/efr32mg26/`). The vendor CMSIS header calls all
+/// six `RESERVED` and documents no reset value, so there is nothing to derive
+/// — but the die answers, and a twin that answers 0 instead is wrong. The
+/// shape (0x00511252, 0x174964C0) reads like analog trim loaded out of
+/// DEVINFO, which would make it per-die.
+///
+/// ⚠️ ONE board. If a second BRD2709A disagrees, these become an exclusion
+/// with "per-die calibration" as the reason — and that measurement is the only
+/// thing that can settle it. Until then, reproducing what the one die we have
+/// actually said beats inventing zeros.
+const UNDOC_RESET: [u32; 5] = [
+    0x0000_1200,
+    0x8000_0600,
+    0x1000_0000,
+    0x0051_1252,
+    0x1749_64C0,
+];
+/// `RESERVED3` at +0x90, same provenance.
+const UNDOC_RESERVED3_RESET: u32 = 0x0000_0008;
+
+/// `IADC_IPVERSION` reset value. Confirmed on BRD2709A over SWD.
 const IPVERSION_RESET: u32 = 3;
+/// `_IADC_CFG_RESETVALUE` — ANALOGGAIN=1x, REFSEL=VBGR, OSRHS=2x, ADCMODE
+/// normal. Both `CFG[]` entries carry it.
+const CFG_RESET: u32 = 0x0000_2060;
+/// `_IADC_SCALE_RESETVALUE` — unity gain, offset zero (the sign bits are set).
+const SCALE_RESET: u32 = 0x8002_C000;
+/// `_IADC_SINGLEFIFOCFG_RESETVALUE` / `_IADC_SCANFIFOCFG_RESETVALUE` —
+/// ALIGNMENT right-12, DVL = 1 entry.
+const FIFOCFG_RESET: u32 = 0x0000_0030;
 
 // ── Field positions ────────────────────────────────────────────────────────
 /// `EN.EN`.
@@ -207,9 +245,18 @@ impl Efr32s2Iadc {
             iflag: 0,
             ien: 0,
             trigger: 0,
-            cfg: [0; (CFG_STRIDE / 4 * CFG_COUNT) as usize],
-            singlefifocfg: 0,
-            scanfifocfg: 0,
+            // ⚠️ Four of these eight words have a non-zero reset value and
+            // were all modelled as 0. `CFG[n]` is a flat window: word 0 is
+            // CFG, 1 reserved, 2 SCALE, 3 SCHED. Header and die agree on every
+            // one — see `scripts/hw-oracle/captures/efr32mg26/`.
+            //
+            // This is not cosmetic. A driver that read CFG expecting the
+            // reference and gain it did not write got 0, which decodes as
+            // ANALOGGAIN 0.5x on the VREF reference — a different volts-per-count
+            // than the part actually boots with.
+            cfg: [CFG_RESET, 0, SCALE_RESET, 0, CFG_RESET, 0, SCALE_RESET, 0],
+            singlefifocfg: FIFOCFG_RESET,
+            scanfifocfg: FIFOCFG_RESET,
             single: 0,
             scantable: [0; SCANTABLE_WORDS as usize],
             inputs: std::collections::HashMap::new(),
@@ -353,6 +400,10 @@ impl Efr32s2Iadc {
             OFF_SCANFIFODATA | OFF_SCANDATA => 0,
             OFF_SCANFIFOSTAT => 0,
             OFF_SINGLE => self.single,
+            o if (OFF_UNDOC_FIRST..=OFF_UNDOC_LAST).contains(&o) => {
+                UNDOC_RESET[((o - OFF_UNDOC_FIRST) / 4) as usize]
+            }
+            OFF_UNDOC_RESERVED3 => UNDOC_RESERVED3_RESET,
             o => {
                 if let Some(i) = Self::cfg_index(o) {
                     self.cfg[i]
@@ -746,7 +797,11 @@ mod tests {
         // CFG[1].SCALE is at 0x48 + 0x10 + 0x08.
         iadc.write_word(OFF_CFG + CFG_STRIDE + 0x08, 0xDEAD_BEEF);
         assert_eq!(iadc.read_word(OFF_CFG + CFG_STRIDE + 0x08), 0xDEAD_BEEF);
-        assert_eq!(iadc.read_word(OFF_CFG), 0, "CFG[0] is a different register");
+        assert_eq!(
+            iadc.read_word(OFF_CFG),
+            CFG_RESET,
+            "CFG[0] is a different register — untouched, so still at its reset"
+        );
 
         iadc.write_word(OFF_SCANTABLE + 15 * 4, 0x1234);
         assert_eq!(iadc.read_word(OFF_SCANTABLE + 15 * 4), 0x1234);
