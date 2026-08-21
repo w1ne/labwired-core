@@ -395,9 +395,24 @@ jobs:
     # job that is already at 92% of its timeout is how you get a red lane that
     # means nothing — the same mis-read this comment's first paragraph is about.
     #
-    # 12 is a stay of execution, not a fix. The lasting answer is still the one
-    # named above: move the browser layer (~100s) to its own job. Do that before
-    # bumping this number a third time.
+    # 12 was a stay of execution, and on 2026-08-21 it ran out: two runs on a
+    # WARM cache hit 12m15s and were killed inside the LAST step, `Firmware
+    # survival`, which reads as a firmware failure and is not one. A neighbour
+    # PR measured 11m16s against the same wall, so the job had ~44s of headroom
+    # for ANY change, not just the one that tripped it.
+    #
+    # The answer this note had been asking for was taken instead of a third
+    # bump: the browser layer moved to its own `browser-layer` job. It was 185s
+    # by then (clippy 36s + target add 2s + lib tests 147s), not the ~100s
+    # estimated here, which is most of the overrun. This job should now sit
+    # around 9m45s.
+    #
+    # ⚠️ If it approaches 12 again, do NOT bump. The two remaining costs are
+    # measured and named: `Unit tests (default-members lib)` at 212s and
+    # `Generated artifacts — regenerate and assert no drift` at 152s. Split one
+    # of those out the same way — and if you do, add the new job to main's
+    # required contexts in the SAME change, because `pr-gate` is one of only
+    # two and anything that leaves it stops blocking merges.
     timeout-minutes: 12
     steps:
       # Full history required: generate_validation_status.py uses
@@ -548,37 +563,6 @@ jobs:
       - name: AVR Nano golden survival
         run: cargo test -p labwired-core --test avr_nano_golden_survival -- --nocapture
 
-      # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
-      # (see `default-members` in the root Cargo.toml), so every step above
-      # resolves to a set that excludes it: `cargo clippy --all-targets` does not
-      # lint it and `cargo test --lib` does not build it. Before this step, NO
-      # pre-merge lane in this repo compiled the code the browser actually runs.
-      #
-      # That is not a theoretical hole, it is where this class of bug lives. The
-      # browser is the only consumer that goes through the wasm bindings, so a
-      # fork that exists ONLY there — an inlined device-type alias table, a
-      # per-model framebuffer accessor that drifted from the engine's registry —
-      # is invisible to every gate that stops at the workspace default set. A
-      # `gxepd2_290_c90c` panel attached, was driven, and rendered dark for
-      # exactly this reason, behind a fully green board.
-      #
-      # Host target on purpose: wasm-bindgen compiles for the host, and the
-      # failures worth catching pre-merge (type errors, a dropped match arm, a
-      # signature that no longer lines up with core) all surface here without
-      # needing the wasm32 toolchain on the runner. A wasm32 link is a heavier,
-      # separate concern and stays in the deploy path.
-      - name: Clippy + build the browser layer (crates/wasm)
-        run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
-
-      # playground_repro drives the secure-boot lab through the same entry
-      # points simulator-bridge.ts uses, so it needs that lab's firmware. It
-      # builds the ELF itself (ensure_firmware_built) and needs the target to
-      # do it. ~10s once, cached with the rest of the toolchain.
-      - name: Add ARM target (secure-boot lab firmware for the browser repro)
-        run: rustup target add thumbv7em-none-eabi
-      - name: Unit tests (browser layer)
-        run: cargo test -p labwired-wasm --lib
-
       # Walk-deletion honesty, on EVERY PR. The structural arm of this test
       # needs no firmware, no `event-scheduler` recompile and no fixtures — it
       # only asserts that a chip's `legacy_walk_disabled` is what the
@@ -713,6 +697,89 @@ jobs:
   # `core-integrity` runs the same test with `jit,event-scheduler`, which the
   # browser never builds — this lane is the faithful one. It does not replace
   # the integrity run; both stay.
+  browser-layer:
+    name: browser-layer
+    # Split out of `pr-gate` on 2026-08-21, which is what the note above that
+    # job's `timeout-minutes` had been asking for. The measurement that forced
+    # it: pr-gate ran 12m15s against a 12-minute wall and died inside its LAST
+    # step, `Firmware survival`, twice in a row on a warm cache. Per-step times
+    # from run 32480450041 — generated-artifacts 152s, default-members lib tests
+    # 212s, browser-layer tests 147s, default-members clippy 81s, browser clippy
+    # 36s. The browser steps are 185s of that, not the "~100s" the old note
+    # estimated; they had nearly doubled since it was written.
+    #
+    # Moving them here takes pr-gate to roughly 9m45s, so this is headroom
+    # rather than a third stay of execution, and the two run in PARALLEL so the
+    # PR's wall-clock does not grow.
+    #
+    # ⚠️ THIS JOB MUST BE A REQUIRED CONTEXT ON main. `pr-gate` and
+    # `release-runner-contract` were the only two, so a job split out of pr-gate
+    # stops blocking merges the moment it moves — the exact silent-weakening
+    # this repo keeps re-learning. Added to branch protection in the same change
+    # that landed this split; if you ever rename this job, update the required
+    # contexts in the SAME commit or the gate goes advisory without a diff to
+    # show for it.
+    #
+    # Same trigger set as pr-gate, and for the same reason: a dispatch is the
+    # only way out of a wedged concurrency group when a required context has to
+    # be reported against a head SHA.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Standalone this job pays for `labwired-core` itself, which pr-gate had
+    # already built by the time these steps ran there — so the 185s measured
+    # inside pr-gate is NOT what this costs alone. 20 is sized for the cold
+    # build, not for the incremental one.
+    timeout-minutes: 20
+    steps:
+      # Shallow checkout: this job runs no git-history-dependent gate.
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy
+
+      # Its OWN cache key. rust-cache folds the installed toolchain components
+      # into the key, so this job (clippy only) could never share pr-gate's
+      # (rustfmt + clippy) — pointing it at `core-pr-gate` would restore
+      # nothing and cost a pointless lookup, the same measurement
+      # pr-scheduler-observable records for its no-cache decision.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-browser-layer
+          workspaces: . -> target
+
+      # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
+      # (see `default-members` in the root Cargo.toml), so every step above
+      # resolves to a set that excludes it: `cargo clippy --all-targets` does not
+      # lint it and `cargo test --lib` does not build it. Before this step, NO
+      # pre-merge lane in this repo compiled the code the browser actually runs.
+      #
+      # That is not a theoretical hole, it is where this class of bug lives. The
+      # browser is the only consumer that goes through the wasm bindings, so a
+      # fork that exists ONLY there — an inlined device-type alias table, a
+      # per-model framebuffer accessor that drifted from the engine's registry —
+      # is invisible to every gate that stops at the workspace default set. A
+      # `gxepd2_290_c90c` panel attached, was driven, and rendered dark for
+      # exactly this reason, behind a fully green board.
+      #
+      # Host target on purpose: wasm-bindgen compiles for the host, and the
+      # failures worth catching pre-merge (type errors, a dropped match arm, a
+      # signature that no longer lines up with core) all surface here without
+      # needing the wasm32 toolchain on the runner. A wasm32 link is a heavier,
+      # separate concern and stays in the deploy path.
+      - name: Clippy + build the browser layer (crates/wasm)
+        run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
+
+      # playground_repro drives the secure-boot lab through the same entry
+      # points simulator-bridge.ts uses, so it needs that lab's firmware. It
+      # builds the ELF itself (ensure_firmware_built) and needs the target to
+      # do it. ~10s once, cached with the rest of the toolchain.
+      - name: Add ARM target (secure-boot lab firmware for the browser repro)
+        run: rustup target add thumbv7em-none-eabi
+      - name: Unit tests (browser layer)
+        run: cargo test -p labwired-wasm --lib
+
   pr-scheduler-observable:
     name: pr-scheduler-observable
     if: github.event_name == 'pull_request'

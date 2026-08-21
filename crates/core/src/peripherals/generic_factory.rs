@@ -239,6 +239,11 @@ pub const MODEL_TYPES: &[&str] = &[
     // Further nRF54L factory arms.
     "nrf54l_clock",
     "nrf54l_grtc",
+    "efr32s2_cmu",
+    "efr32s2_gpio_exti",
+    "efr32s2_iadc",
+    "efr32s2_timer",
+    "virtual_ble",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -265,6 +270,49 @@ pub fn try_build(
                 None => Box::new(crate::peripherals::systick::Systick::new()),
             }
         }
+        // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
+        // block, in the GPIO head at `GPIO_S_BASE + 0x400`. A separate window
+        // from the four port structs, which keep their own model.
+        "efr32s2_gpio_exti" => {
+            Box::new(crate::peripherals::efr32::gpio_exti::Efr32s2GpioExti::new())
+        }
+        // Silicon Labs Series-2 incremental ADC — the `analogRead` path.
+        // Its own model, NOT an `AdcRegisterLayout` variant: `adc.rs` is one
+        // struct per STM32 family by design and shares no register with this.
+        "efr32s2_iadc" => Box::new(crate::peripherals::efr32::iadc::Efr32s2Iadc::new()),
+        // Silicon Labs Series-2 TIMER. ⚠️ `counter_bits` is REQUIRED and per
+        // instance: TIMER0/1/8/9 are 32-bit and TIMER2..7 are 16-bit on this
+        // part (`TIMER_CNTWIDTH` in the device header). There is no safe
+        // default — guessing 32 gives a `micros()` that never wraps on a
+        // 16-bit instance, guessing 16 truncates a 32-bit one.
+        "efr32s2_timer" => {
+            let bits = p_cfg
+                .config
+                .get("counter_bits")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "peripheral '{}' (efr32s2_timer) must declare `config: {{ counter_bits: 16|32 }}`                          — the width is per instance on this family (TIMER_CNTWIDTH), not a family constant",
+                        p_cfg.id
+                    )
+                })? as u32;
+            let mut timer = crate::peripherals::efr32::timer::Efr32s2Timer::new(bits);
+            // ⚠️ The timebase is the PERIPHERAL clock, not `cpu_hz`. On this
+            // family they differ by 4.1x out of reset; see the model's header.
+            if let Some(hz) = p_cfg.config.get("peripheral_hz").and_then(|v| v.as_u64()) {
+                timer.set_peripheral_hz(hz);
+            }
+            Box::new(timer)
+        }
+        // LabWired virtual BLE controller. NOT a model of any silicon — see
+        // `peripherals/virtual_ble.rs` for why a part whose vendor documents no
+        // radio register anywhere gets a declared simulator device instead of
+        // an invented register map that would read as silicon in an inspector.
+        "virtual_ble" => Box::new(crate::peripherals::virtual_ble::VirtualBle::new_default()),
+        // Silicon Labs Series-2 CMU — its own model, NOT an `RccRegisterLayout`
+        // variant. `rcc.rs` is one struct per STM32 family by design, and this
+        // silicon shares no register with any of them.
+        "efr32s2_cmu" => Box::new(crate::peripherals::efr32::cmu::Efr32s2Cmu::new()),
         "rcc" => {
             let layout: RccRegisterLayout = SystemBus::parse_profile_or_default(p_cfg, "RCC")?;
             let mut rcc = crate::peripherals::rcc::Rcc::new_with_layout(layout);

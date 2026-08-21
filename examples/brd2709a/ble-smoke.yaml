@@ -1,0 +1,30 @@
+# LabWired - BRD2709A (xG26-EK2709A) BLE smoke test
+#
+# ⚠️ TWIN ONLY. This firmware drives the LabWired virtual BLE controller at
+# 0x4F00_0000, which does not exist on the physical board — see
+# crates/core/src/peripherals/virtual_ble.rs for why a part whose vendor
+# publishes no radio register map gets a declared simulator device. The other
+# two smokes in this directory (uart, io) DO run on real silicon; this one does
+# not, and the assertions below are the twin's, not the bench's.
+#
+# What it proves: firmware finds the controller by its ASCII id, stages a real
+# legacy advertising PDU, and starts advertising and scanning. That the PDU
+# then reaches a peer is proven at the model level in
+# `peripherals::virtual_ble::tests` and across two machines in
+# `crates/core/tests/efr32mg26_ble.rs`.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-ble"
+  system: "./system.yaml"
+limits:
+  max_steps: 4096
+assertions:
+  # The console still comes up the same way the dual-target demo does.
+  - uart_contains: "MG26 BLE"
+  # The controller answered with "LWBL". A board with no virtual BLE device
+  # prints "BLE NO CONTROLLER" instead and this fails — the firmware refuses to
+  # advertise into nowhere.
+  - uart_contains: "BLE ID LWBL"
+  - uart_contains: "BLE ADV"
+  - uart_contains: "BLE SCAN"
+  - expected_stop_reason: max_steps

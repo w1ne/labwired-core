@@ -413,7 +413,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -602,7 +602,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -689,7 +689,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart1".to_string(),
@@ -753,7 +753,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -823,7 +823,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart3".to_string(),
@@ -992,7 +992,7 @@ pub mod integration_tests {
             ],
             pins: Default::default(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         };
 
         let manifest = SystemManifest {
@@ -1046,7 +1046,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -1113,7 +1113,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -1180,7 +1180,7 @@ pub mod integration_tests {
                 size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -2409,7 +2409,7 @@ pub mod integration_tests {
                 size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "timg0".to_string(),
@@ -2503,7 +2503,7 @@ pub mod integration_tests {
                 size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpio".to_string(),
@@ -2570,7 +2570,7 @@ pub mod integration_tests {
                 size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -2782,7 +2782,7 @@ pub mod integration_tests {
                 size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -2946,7 +2946,7 @@ pub mod integration_tests {
                     size: 400000,
                 },
                 reset_vector_offset: 0,
-                atomic_register_aliases: false,
+                atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
                 memory_regions: Vec::new(),
                 peripherals,
                 pins: Default::default(),
