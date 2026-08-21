@@ -42,8 +42,14 @@ use std::path::{Path, PathBuf};
 /// That is the "a test reaching into a concrete model" case the module doc
 /// above names as justified — the alternative is a public accessor that exists
 /// solely so one test need not downcast, which is worse design, not less debt.
-const MAX_AS_ANY: usize = 194;
-const MAX_DOWNCAST_REF: usize = 208;
+///
+/// 194 → 193 / 208 → 207: clock-gate resolution stopped downcasting to
+/// `rcc::Rcc` and asks `Peripheral::clock_gate_reg_offset` instead. The
+/// downcast was not merely debt, it was a correctness ceiling: it answered
+/// `None` for any clock controller that is not an STM32 RCC, so an EFR32's CMU
+/// could declare `clock:` gates that silently never resolved.
+const MAX_AS_ANY: usize = 193;
+const MAX_DOWNCAST_REF: usize = 207;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

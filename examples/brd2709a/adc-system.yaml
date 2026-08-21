@@ -1,0 +1,14 @@
+# LabWired - BRD2709A with a potentiometer on PA05, for the analogRead smoke.
+#
+# The IADC addresses a pad by (port << 4) | pin, so PA05 is channel 5. That
+# index is LabWired's: the IADC has no "channel number" on silicon, it has a
+# PORTPOS/PINPOS mux, and this is how a system.yaml names the pad it drives.
+name: "brd2709a-adc"
+chip: "../../configs/chips/efr32mg26.yaml"
+external_devices:
+  - id: "pot"
+    type: "potentiometer"
+    connection: "iadc0"
+    config:
+      channel: 5
+board_io: []

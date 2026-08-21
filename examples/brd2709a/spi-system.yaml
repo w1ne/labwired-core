@@ -1,0 +1,10 @@
+# LabWired - BRD2709A with a MAX31855 thermocouple on USART0 in SPI mode.
+name: "brd2709a-spi"
+chip: "../../configs/chips/efr32mg26.yaml"
+external_devices:
+  - id: "thermocouple"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "PA4"
+board_io: []

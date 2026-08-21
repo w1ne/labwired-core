@@ -1462,10 +1462,11 @@ const CHAIN_REEVALUATE_HORIZON: u64 = 16 * CYCLES_PER_CLKN_TICK;
 /// path is hot and `std::env::var` is a syscall-backed lookup (same reasoning
 /// as the WiFi MAC's `rxbuf_trace_enabled`).
 /// Hand every controller instance a distinct identity on the shared air.
-fn next_node_id() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-}
+///
+/// Re-exported from [`crate::peripherals::ble_air`] rather than kept local:
+/// identities are compared between every controller sharing an air, and this
+/// model is no longer the only kind that can be on one.
+use crate::peripherals::ble_air::next_node_id;
 
 fn bt_trace_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -2472,6 +2473,13 @@ impl Esp32c3Bt {
 }
 
 impl Peripheral for Esp32c3Bt {
+    /// Move onto a lab's own air. Reached through the trait so
+    /// `SystemBus::attach_lab_air` does not have to downcast to this concrete
+    /// model to find it — see [`crate::Peripheral::attach_ble_air`].
+    fn attach_ble_air(&mut self, air: BleAirBus) {
+        self.set_air(air);
+    }
+
     /// Walk-free: once the bus hands over a cycle clock the comparators ride
     /// scheduled events (`take_scheduled_events` / `on_event`), so each
     /// deadline lands on its exact cycle and the walk has nothing to do. The

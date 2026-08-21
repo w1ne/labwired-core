@@ -141,17 +141,11 @@ pub struct PeripheralEntry {
     pub clock_gate: Option<ResolvedClockGate>,
 }
 
-/// RP2040 atomic register-alias operation (see
-/// [`SystemBus::atomic_alias_redirect`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AtomicAliasOp {
-    /// `+0x1000`: write XORs the bits, read returns the base register.
-    Xor,
-    /// `+0x2000`: write sets (ORs) the bits.
-    Set,
-    /// `+0x3000`: write clears (AND-NOT) the bits.
-    Clr,
-}
+/// Atomic register-alias operation (see [`SystemBus::atomic_alias_redirect`]).
+/// Which alias index means which op is a per-family fact and lives with the
+/// descriptor, in [`labwired_config::AtomicAliasFlavour`] — re-exported here
+/// because the bus is where it is applied.
+pub use labwired_config::{AtomicAliasFlavour, AtomicAliasOp};
 
 // True while SystemBus::write_u32 is applying an RP2040 CLR-alias (+0x3000)
 // as an absolute final value. Write-clear status registers (USB SIE_STATUS /
@@ -250,11 +244,12 @@ pub struct SystemBus {
     /// descriptor so `Machine::load_firmware` can relocate the reset vector
     /// past the stage-2 blob. See `ChipDescriptor::reset_vector_offset`.
     pub reset_vector_offset: u64,
-    /// RP2040 atomic register aliases enabled (see
-    /// `ChipDescriptor::atomic_register_aliases`). When set, word accesses in
-    /// the APB peripheral window whose offset has bits [13:12] set decode as
-    /// XOR/SET/CLR atomic ops on the aligned base register.
-    pub atomic_register_aliases: bool,
+    /// Which family's atomic register aliases this chip implements (see
+    /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
+    /// in the peripheral window whose address has bits [13:12] set decode as a
+    /// read-modify-write on the aligned base register; the flavour decides
+    /// which of the three aliases is SET, which CLR and which XOR/TGL.
+    pub atomic_register_aliases: AtomicAliasFlavour,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
@@ -340,7 +335,7 @@ pub struct SystemBus {
     /// scheduler-driven models. `Option` rather than a companion flag so a
     /// construction site cannot silently spell "not yet sampled" as "sampled
     /// zero".
-    last_gpio_in: Option<[u32; 2]>,
+    last_gpio_in: Option<[u32; 4]>,
     /// Phase 2B.2 (issue #192): the current CPU cycle count, mirrored from
     /// `Machine::total_cycles` once per step. Read by the MMIO write path to
     /// lazily sync scheduler-driven peripherals (`uses_scheduler() == true`)

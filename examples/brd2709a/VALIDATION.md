@@ -81,6 +81,86 @@ fails these lines. `BTN0=1 BTN1=1` is correct: the buttons are active-low
 
 Pass criteria: exit code 0, `PASS 7/7`.
 
+## C3) IADC smoke (analog: a potentiometer on PA05)
+
+```bash
+cargo build -p firmware-mg26-adc --target thumbv7m-none-eabi --release
+cargo run -p labwired-cli -- test --script examples/brd2709a/adc-smoke.yaml
+```
+
+Observed:
+
+```
+MG26-ADC
+code=2048
+PASS  3/3 checks · adc-smoke · 200000 steps · 0.05s
+```
+
+Pass criteria: exit code 0, `PASS 3/3`, and the code is **2048** specifically.
+The potentiometer in `adc-system.yaml` boots centred at 50 %, so its wiper is
+at 1650 mV of the 3300 mV AVDD reference and a 12-bit conversion is 2048. That
+number is the test: a model that ignored `SINGLE.PINPOS`, or converted against
+the wrong reference, or handed back a constant, does not produce it.
+
+This firmware runs on the physical board too — every register it touches is
+real silicon. On the bench PA05 reads whatever is wired to the EXP header.
+
+⚠️ `labwired run` will NOT reproduce this. That path builds a minimal manifest
+with `external_devices: []` and ignores the `--system` file's devices, so the
+pot never attaches and the conversion correctly reads 0 mV. Use `labwired
+test --script`, which is the path a lab takes.
+
+## C4) BLE smoke — ⚠️ TWIN ONLY, this one does NOT run on the board
+
+```bash
+cargo build -p firmware-mg26-ble --target thumbv7m-none-eabi --release
+cargo run -p labwired-cli -- test --script examples/brd2709a/ble-smoke.yaml
+```
+
+Observed:
+
+```
+INFO labwired_loader: ELF Entry Point: 0x8000017
+brd2709a: MG26 BLE
+BLE ID LWBL
+BLE ADV
+BLE SCAN
+PASS  5/5 checks · ble-smoke · 4096 steps · 0.00s
+```
+
+Pass criteria: exit code 0, `PASS 5/5`.
+
+**Read this before treating BLE as validated.** Unlike A–C2, this firmware
+does NOT run on the physical BRD2709A. It drives the LabWired virtual BLE
+controller at `0x4F00_0000`, and there is no peripheral at that address on
+EFR32MG26 silicon — an access there bus-faults. That is why it is a separate
+crate from `firmware-mg26-demo`, which stays dual-target.
+
+The controller is a declared LabWired device rather than a model of the radio
+because Silicon Labs publishes no radio register map for this part, at all.
+Verified 2026-08-21:
+
+* EFR32xG26 Reference Manual rev 1.0, chapter 5 "Radio Transceiver": four
+  pages of prose, no register documentation, while every other peripheral in
+  the manual gets a full register map and description.
+* The CMSIS device headers (`simplicity_sdk` tag `sisdk-2025.6`,
+  `platform/Device/SiliconLabs/EFR32MG26/Include/`) ship 73 peripheral
+  headers. None is `rac`, `frc`, `modem`, `protimer`, `bufc`, `synth` or
+  `agc` — the blocks that make up the radio. They are absent, not merely
+  undocumented.
+* There is no SVD for the family.
+
+So the radio is reachable only through Silicon Labs' closed RAIL binary.
+Inventing EFR32-shaped register names would look like silicon in an inspector
+and be fiction; `crates/core/src/peripherals/virtual_ble.rs` explains the
+choice and lists what the device does and does not model.
+
+What this DOES buy: a BRD2709A takes part in BLE labs on the same virtual air
+as every other LabWired BLE controller, so it can advertise to an ESP32-C3
+scanner in one lab, and the PDUs on that air are real BLE PDUs. What it does
+NOT buy: BLE on the bench. Closing that means shipping the vendor RAIL and
+link-layer libraries in the compile lane, which is separate work.
+
 ## D) Interactive run against the shipped system manifest
 
 ```bash

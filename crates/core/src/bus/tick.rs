@@ -525,23 +525,54 @@ impl SystemBus {
             // board inputs write the C3 GPIO register model directly. Skipping
             // this block is important because C3 ROM-boot needs very frequent
             // ticks for interrupt-matrix correctness.
-            let gpio_bases: [Option<u64>; 2] = [
-                self.find_peripheral_index_by_name("gpio0")
-                    .map(|i| self.peripherals[i].base),
-                self.find_peripheral_index_by_name("gpio1")
-                    .map(|i| self.peripherals[i].base),
+            // Which peripheral is which port. Numbered (Nordic) and lettered
+            // (Silicon Labs, ST) spellings map onto the same index space, so a
+            // chip's ports are 0..3 whatever it calls them — and the tuple a
+            // watcher receives means the same thing on both.
+            //
+            // ⚠️ Levels come from `Peripheral::read_gpio_input`, NOT from a
+            // hardcoded register offset. This pass used to read `base + 0x510`,
+            // which is the Nordic IN register and is DOUT on a Series-2 port —
+            // so an EFR32 edge was never observed at all and its EXTI could
+            // never fire. `read_gpio_input` asks each model for its own input
+            // register, and answers the identical value for the Nordic ports
+            // it already served.
+            const GPIO_PORT_IDS: [(&str, usize); 8] = [
+                ("gpio0", 0),
+                ("gpio1", 1),
+                ("gpio2", 2),
+                ("gpio3", 3),
+                ("gpioa", 0),
+                ("gpiob", 1),
+                ("gpioc", 2),
+                ("gpiod", 3),
             ];
+            let mut gpio_idx: [Option<usize>; 4] = [None; 4];
+            for (name, port) in GPIO_PORT_IDS {
+                if gpio_idx[port].is_none() {
+                    gpio_idx[port] = self.find_peripheral_index_by_name(name);
+                }
+            }
             let mut changes: Vec<(u8, u8, u8)> = Vec::new();
             // First pass ADOPTS the live levels as the baseline (see
             // `last_gpio_in`): nothing has transitioned yet, so `baseline` is
             // `None` and no change is reported for any pin the outside world
             // already holds.
             let baseline = self.last_gpio_in;
-            let mut current_in = baseline.unwrap_or([0; 2]);
-            for (port, base) in gpio_bases.iter().enumerate() {
-                let Some(base) = base else { continue };
-                // GPIO IN register is at offset 0x510 in the Nordic layout.
-                let cur = self.read_u32(*base + 0x510).unwrap_or(0);
+            let mut current_in = baseline.unwrap_or([0; 4]);
+            for (port, idx) in gpio_idx.iter().enumerate() {
+                let Some(idx) = idx else { continue };
+                let dev = &self.peripherals[*idx].dev;
+                let mut cur = 0u32;
+                for pin in 0..32u8 {
+                    match dev.read_gpio_input(pin) {
+                        Some(true) => cur |= 1 << pin,
+                        Some(false) => {}
+                        // A port narrower than 32 pins stops answering; the
+                        // rest of the word stays clear.
+                        None => break,
+                    }
+                }
                 current_in[port] = cur;
                 let Some(prev) = baseline.map(|b| b[port]) else {
                     continue;
