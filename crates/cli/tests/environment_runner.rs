@@ -1569,3 +1569,78 @@ assertions: []
         "expected the rom-boot ceiling to still bound the run, got: {message}"
     );
 }
+
+/// A world could assert only on memory. Both gates that enforced that said so
+/// loudly, so nothing was silently wrong — but `uart_regex` is the repo's
+/// primary assertion contract and a multi-MCU world could not use it at all,
+/// even though every node's TX is already captured into a sink.
+///
+/// Covers both directions in one run, because a test that only shows a UART
+/// assertion passing cannot tell "evaluated correctly" from "returns true".
+#[test]
+fn environment_runner_evaluates_uart_assertions_against_every_node() {
+    let dir = unique_dir("uart-assertions");
+    write_two_node_environment(&dir);
+
+    // The fixture firmware prints "OK" on both nodes.
+    let matching = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - uart_regex: "O+K"
+"#,
+        &[],
+    );
+    assert!(
+        output_is_pass(&matching),
+        "a UART assertion the world satisfies must pass: stdout={} stderr={}",
+        String::from_utf8_lossy(&matching.stdout),
+        String::from_utf8_lossy(&matching.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["assertions"][0]["passed"], true);
+    assert_eq!(result["assertions"][1]["passed"], true);
+
+    // The negative control. Exit 2 here would mean the script was refused
+    // rather than evaluated, which is the state this test exists to move off.
+    let absent = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NOTHING PRINTS THIS"
+"#,
+        &[],
+    );
+    assert_eq!(
+        absent.status.code(),
+        Some(1),
+        "an unsatisfied UART assertion must FAIL the world, not error or pass: stdout={} stderr={}",
+        String::from_utf8_lossy(&absent.stdout),
+        String::from_utf8_lossy(&absent.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["assertions"][0]["passed"], false);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn output_is_pass(output: &std::process::Output) -> bool {
+    output.status.success()
+}
