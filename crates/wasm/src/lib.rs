@@ -445,7 +445,7 @@ impl WasmSimulator {
                 if blob_map.contains_key("esp32s3_flash") {
                     Self::new_from_config_xtensa_esp32s3_flash(&chip, &manifest, &blob_map)
                 } else {
-                    Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
+                    Self::new_from_config_xtensa_esp32s3(&chip, &manifest, firmware, &blob_map)
                 }
             }
             MachineFamily::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
@@ -1102,7 +1102,10 @@ impl WasmSimulator {
             // The `.max(image len)` floor stays so a chip YAML that understates
             // the part still cannot truncate the image itself.
             flash_size: esp32s3_flash_backing_size(chip.flash.size, flash.len()),
-            ..Esp32s3Opts::default()
+            // Core clock from the same descriptor, for the same reason: the
+            // chip YAML is the one home for `cpu_hz` and the SYSTIMER divides
+            // the CPU cycle stream by it.
+            ..Esp32s3Opts::for_chip(chip)
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
         if wiring.boot_mode != Esp32s3BootMode::Faithful {
@@ -1210,6 +1213,7 @@ impl WasmSimulator {
     }
 
     fn new_from_config_xtensa_esp32s3(
+        chip: &ChipDescriptor,
         manifest: &SystemManifest,
         firmware: &[u8],
         blobs: &std::collections::HashMap<String, Vec<u8>>,
@@ -1233,7 +1237,10 @@ impl WasmSimulator {
         // native-CLI only) + the injected faithful ROM.
         let opts = Esp32s3Opts {
             rom_images,
-            ..Esp32s3Opts::default()
+            // Core clock from the chip descriptor, same as the flash-boot
+            // sibling above: `cpu_hz:` in the chip YAML is the one home, and it
+            // is what the SYSTIMER divides the CPU cycle stream by.
+            ..Esp32s3Opts::for_chip(chip)
         };
         let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
         let mut cpu = wiring.cpu;
@@ -3664,6 +3671,7 @@ mod native_usb_console_tap_order_tests {
     #[test]
     fn s3_fast_boot_native_usb_board_is_heard() {
         let mut sim = WasmSimulator::new_from_config_xtensa_esp32s3(
+            &chip("../../configs/chips/esp32s3.yaml"),
             &manifest(
                 "../../configs/systems/esp32s3-zero.yaml",
                 Some("usb_serial_jtag"),
