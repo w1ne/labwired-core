@@ -208,19 +208,30 @@ peripherals:
   #
   # Clocks: CMU_CLKEN0.TIMER0 bit 4, .TIMER1 bit 5.
   #
+  # ⚠️ `peripheral_hz` is NOT `cpu_hz`, and the difference is 4.1x. A TIMER
+  # counts on the EM01 group A peripheral clock, which out of reset selects the
+  # HFRCODPLL path at its startup band — 19 MHz (`HFRCODPLL_STARTUP_FREQ`,
+  # system_efr32mg26.c). That is the number firmware computes PRESC from (it is
+  # what this family's Arduino `boards.txt` publishes as F_CPU, and what the
+  # demo firmware's USART divisor is computed against). `cpu_hz` above is the
+  # part's 78 MHz MAXIMUM core frequency. Counting at that would give a
+  # `micros()` reading four times too many microseconds in the twin against the
+  # same firmware on the bench. Closing this properly means modelling the clock
+  # tree so CLKSEL and the HFRCO band decide it.
+  #
   # TIMER2..9 are deliberately NOT declared: nothing uses them yet, and an
   # undeclared window faults loudly where a stub would answer zero.
   - id: "timer0"
     type: "efr32s2_timer"
     clock: { reg: "clken0", bit: 4 }
-    config: { counter_bits: 32 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
     base_address: 0x40048000
     size: "4KB"
     irq: 4
   - id: "timer1"
     type: "efr32s2_timer"
     clock: { reg: "clken0", bit: 5 }
-    config: { counter_bits: 32 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
     base_address: 0x4004C000
     size: "4KB"
     irq: 5

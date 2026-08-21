@@ -64,8 +64,29 @@
 //!   silicon those registers protect a half-bridge.
 //! * **No `TOPB` buffering, no `LOCK`.** `TOPB` stores; `TOP` takes effect
 //!   immediately rather than at the next wrap.
-//! * **The timer clock is the core clock.** `CFG.CLKSEL` stores; there is no
-//!   clock tree to select from (see the CMU model).
+//! * **`CFG.CLKSEL` stores and selects nothing.** There is no clock tree to
+//!   select from (see the CMU model). The timebase is whatever the chip yaml
+//!   declares — see below.
+//!
+//! # ⚠️ The timebase is the PERIPHERAL clock, not the core clock
+//!
+//! Firmware computes `PRESC` from the clock the TIMER actually runs on, which
+//! is the EM01 group A peripheral clock. Out of reset `CMU_EM01GRPACLKCTRL`
+//! selects the HFRCODPLL path at its startup band — **19 MHz**
+//! (`HFRCODPLL_STARTUP_FREQ`, `system_efr32mg26.c`), which is also the value
+//! this core's `boards.txt` publishes as `F_CPU` and the value the demo
+//! firmware's USART divisor is computed against.
+//!
+//! `ChipDescriptor::cpu_hz` is a different number: the part's 78 MHz maximum
+//! CORE frequency. Counting at that instead would make every interval in the
+//! twin run 4.1x fast against the same firmware on the bench — a `micros()`
+//! that reads four times too many microseconds. So the timebase is
+//! `config: { peripheral_hz: … }`, defaulting to the attached `cpu_hz` for a
+//! chip whose two clocks are the same.
+//!
+//! Closing this properly means modelling the clock tree so `CLKSEL` and the
+//! HFRCO band decide the number. Until then it is one declared constant per
+//! instance, and the reason it is not `cpu_hz` is written here.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
@@ -124,6 +145,13 @@ pub struct Efr32s2Timer {
     /// Counter width in bits, from the instance's `TIMER_CNTWIDTH`. See the
     /// module header — this is per instance and not guessable.
     counter_bits: u32,
+    /// Timer clock in Hz — the PERIPHERAL clock, not the core clock. See the
+    /// module header for why the two differ on this part. `None` until the
+    /// chip yaml or the bus supplies one.
+    peripheral_hz: Option<u64>,
+    /// The core clock the bus attached, used only as the fallback timebase for
+    /// a chip that does not declare `peripheral_hz`.
+    cpu_hz: u64,
 
     en: u32,
     cfg: u32,
@@ -141,9 +169,12 @@ pub struct Efr32s2Timer {
     cc_ocb: [u32; CC_COUNT],
     dt: [u32; 8],
 
+    /// Core clocks not yet turned into timer clocks, so a peripheral clock
+    /// that is not a divisor of the core clock loses no fraction.
+    prescale_residue: u64,
     /// Timer clocks not yet turned into counter steps, so a prescaler larger
     /// than the tick interval does not lose the remainder.
-    prescale_residue: u64,
+    presc_residue: u64,
 }
 
 impl Efr32s2Timer {
@@ -151,6 +182,8 @@ impl Efr32s2Timer {
     pub fn new(counter_bits: u32) -> Self {
         Self {
             counter_bits: counter_bits.clamp(1, 32),
+            peripheral_hz: None,
+            cpu_hz: 1_000_000,
             en: 0,
             cfg: 0,
             ctrl: 0,
@@ -167,7 +200,19 @@ impl Efr32s2Timer {
             cc_ocb: [0; CC_COUNT],
             dt: [0; 8],
             prescale_residue: 0,
+            presc_residue: 0,
         }
+    }
+
+    /// Declare the timer clock in Hz, from `config: { peripheral_hz: … }`.
+    pub fn set_peripheral_hz(&mut self, hz: u64) {
+        self.peripheral_hz = Some(hz.max(1));
+    }
+
+    /// The timebase this instance counts on: the declared peripheral clock, or
+    /// the core clock when a chip's two are the same and it declares neither.
+    fn timer_hz(&self) -> u64 {
+        self.peripheral_hz.unwrap_or(self.cpu_hz)
     }
 
     /// Mask a value to this instance's counter width. A 16-bit timer handed a
@@ -367,15 +412,31 @@ impl Peripheral for Efr32s2Timer {
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         let mut result = PeripheralTickResult::default();
         if self.en & EN_EN != 0 && self.status_running {
+            // `cycles` counts CORE clocks. Convert to timer clocks first, at
+            // the ratio between the two — otherwise a chip whose peripheral
+            // clock is a quarter of its core clock counts four times too fast.
+            // The remainder carries in core clocks so no fraction is lost.
+            let timer_clocks = self.prescale_residue + cycles * self.timer_hz();
+            let per_timer_clock = self.cpu_hz.max(1);
+            let ticks = timer_clocks / per_timer_clock;
+            self.prescale_residue = timer_clocks % per_timer_clock;
+
             let divisor = self.prescale_divisor();
-            let total = self.prescale_residue + cycles;
-            self.prescale_residue = total % divisor;
+            let total = self.presc_residue + ticks;
+            self.presc_residue = total % divisor;
             self.advance(total / divisor);
         }
         if self.iflag & self.ien != 0 {
             result.irq = true;
         }
         result
+    }
+
+    /// The fallback timebase for a chip whose peripheral and core clocks are
+    /// the same. On this part they are NOT — see the module header — so the
+    /// chip yaml declares `peripheral_hz` and this only sets the ratio.
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        self.cpu_hz = hz.max(1);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -399,6 +460,54 @@ mod tests {
         t.write_word(OFF_EN, EN_EN);
         t.write_word(OFF_CMD, CMD_START);
         t
+    }
+
+    /// ⚠️ The timebase is the PERIPHERAL clock. On this part it is 19 MHz out
+    /// of reset while the core runs at up to 78 MHz, and counting at the core
+    /// clock would make every interval in the twin run 4.1x fast against the
+    /// same firmware on the bench.
+    #[test]
+    fn the_counter_runs_on_the_peripheral_clock_not_the_core_clock() {
+        let mut t = Efr32s2Timer::new(T0_BITS);
+        t.attach_cpu_hz(78_000_000);
+        t.set_peripheral_hz(19_000_000);
+        t.write_word(OFF_EN, EN_EN);
+        t.write_word(OFF_CMD, CMD_START);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+
+        // One second of CORE clocks must advance the counter by one second of
+        // TIMER clocks, not of core clocks.
+        t.tick_elapsed(78_000_000);
+        assert_eq!(t.read_word(OFF_CNT), 19_000_000);
+    }
+
+    /// The `micros()` setup as firmware actually writes it: PRESC from F_CPU,
+    /// which is the 19 MHz peripheral clock, giving a 1 MHz tick.
+    #[test]
+    fn a_presc_computed_from_f_cpu_gives_a_one_microsecond_tick() {
+        let mut t = Efr32s2Timer::new(T0_BITS);
+        t.attach_cpu_hz(78_000_000);
+        t.set_peripheral_hz(19_000_000);
+        t.write_word(OFF_EN, EN_EN);
+        t.write_word(OFF_CMD, CMD_START);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        t.write_word(OFF_CFG, 18 << CFG_PRESC_SHIFT); // 19 MHz / 19 = 1 MHz
+
+        t.tick_elapsed(78_000_000); // one second of core clocks
+        assert_eq!(t.read_word(OFF_CNT), 1_000_000, "one million microseconds");
+    }
+
+    /// A chip whose two clocks ARE the same declares no `peripheral_hz` and
+    /// counts on the core clock, which is the historical behaviour.
+    #[test]
+    fn without_a_declared_peripheral_clock_the_core_clock_is_the_timebase() {
+        let mut t = Efr32s2Timer::new(T0_BITS);
+        t.attach_cpu_hz(48_000_000);
+        t.write_word(OFF_EN, EN_EN);
+        t.write_word(OFF_CMD, CMD_START);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        t.tick_elapsed(48_000_000);
+        assert_eq!(t.read_word(OFF_CNT), 48_000_000);
     }
 
     #[test]

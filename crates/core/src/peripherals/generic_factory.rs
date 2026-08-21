@@ -296,7 +296,13 @@ pub fn try_build(
                         p_cfg.id
                     )
                 })? as u32;
-            Box::new(crate::peripherals::efr32::timer::Efr32s2Timer::new(bits))
+            let mut timer = crate::peripherals::efr32::timer::Efr32s2Timer::new(bits);
+            // ⚠️ The timebase is the PERIPHERAL clock, not `cpu_hz`. On this
+            // family they differ by 4.1x out of reset; see the model's header.
+            if let Some(hz) = p_cfg.config.get("peripheral_hz").and_then(|v| v.as_u64()) {
+                timer.set_peripheral_hz(hz);
+            }
+            Box::new(timer)
         }
         // LabWired virtual BLE controller. NOT a model of any silicon — see
         // `peripherals/virtual_ble.rs` for why a part whose vendor documents no
