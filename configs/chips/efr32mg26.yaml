@@ -191,14 +191,60 @@ peripherals:
     base_address: 0x4003C820
     size: "96B"
 
-  # ── TIMER0 ───────────────────────────────────────────────────────────────
-  # TIMER0_S_BASE (TIMER0_IRQn = 4). Series-2 TIMER (WTIMER-class) shares no
-  # register layout with the engine's STM32 TIM model, so this is an explicit
-  # stub window rather than a wrong model. Not used on the smoke path.
+  # ── TIMER0 / TIMER1 ──────────────────────────────────────────────────────
+  # TIMER0_S_BASE = 0x40048000 (TIMER0_IRQn = 4), TIMER1 at +0x4000
+  # (TIMER1_IRQn = 5). Series-2 TIMER shares no register layout with the
+  # engine's STM32 TIM model, so it has its own — see
+  # `peripherals/efr32/timer.rs`.
+  #
+  # ⚠️ `counter_bits` is per INSTANCE and is not the obvious four. From
+  # `TIMER_CNTWIDTH` in efr32mg26b510f3200im48.h:
+  #   TIMER0 32, TIMER1 32, TIMER2 16, TIMER3 16, TIMER4 16,
+  #   TIMER5 16, TIMER6 16, TIMER7 16, TIMER8 32, TIMER9 32
+  # The 32-bit ones are 0, 1, 8 and 9. The datasheet summary says "4x 32-bit"
+  # without saying which, and the reference manual defers to the datasheet, so
+  # a guess of 0..3 would give TIMER2 a `micros()` that never wraps. The model
+  # REQUIRES the key rather than defaulting.
+  #
+  # Clocks: CMU_CLKEN0.TIMER0 bit 4, .TIMER1 bit 5.
+  #
+  # TIMER2..9 are deliberately NOT declared: nothing uses them yet, and an
+  # undeclared window faults loudly where a stub would answer zero.
   - id: "timer0"
-    type: "stub"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 4 }
+    config: { counter_bits: 32 }
     base_address: 0x40048000
     size: "4KB"
+    irq: 4
+  - id: "timer1"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 5 }
+    config: { counter_bits: 32 }
+    base_address: 0x4004C000
+    size: "4KB"
+    irq: 5
+
+  # ── GPIO external interrupts ─────────────────────────────────────────────
+  # The EXTI registers live in the GPIO block HEAD, not in the port structs:
+  # GPIO_S_BASE + 0x400 = EXTIPSELL, then EXTIPSELH/EXTIPINSELL/EXTIPINSELH/
+  # EXTIRISE/EXTIFALL (+0x04..+0x14), IF/IEN (+0x20/+0x24) and the EM4 wake
+  # pair (+0x2C/+0x30) — offsets walked from `GPIO_TypeDef` in efr32mg26_gpio.h
+  # with the port group resolved from efr32mg26_gpio_port.h (stride 0x30).
+  #
+  # ⚠️ Line n cannot watch an arbitrary pin: RM §24.3.10.1 fixes
+  # `p = 4 * int(n/4)` and EXTIPINSEL only chooses within that group of four.
+  # See `peripherals/efr32/gpio_exti.rs`.
+  #
+  # IRQs: GPIO_EVEN_IRQn = 40 for even lines, GPIO_ODD_IRQn = 39 for odd — the
+  # model raises whichever the flagged line belongs to, so the entry's `irq`
+  # is the even vector and the odd one arrives as an explicit IRQ.
+  - id: "gpio_exti"
+    type: "efr32s2_gpio_exti"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C400
+    size: "64B"
+    irq: 40
 
   # ── IADC0: the incremental ADC ───────────────────────────────────────────
   # IADC0_S_BASE = 0x49004000, IADC_IRQn = 65 (CMSIS `efr32mg26b510f3200im48.h`

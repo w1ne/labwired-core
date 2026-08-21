@@ -1,0 +1,640 @@
+// LabWired - Firmware Simulation Platform
+// SPDX-License-Identifier: MIT
+
+//! Silicon Labs EFR32 Series-2 **TIMER** — the counter behind `micros()` and
+//! `analogWrite()`.
+//!
+//! # Sources
+//!
+//! Offsets walked from `TIMER_TypeDef` in `efr32mg26_timer.h` (`simplicity_sdk`
+//! tag `sisdk-2025.6`), with the `CC[3]` group resolved from
+//! `TIMER_CC_TypeDef` (stride `0x20`: CFG, CTRL, OC, reserved, OCB, ICF, ICOF,
+//! reserved). Field positions and reset values are the `_TIMER_…_SHIFT` /
+//! `_RESETVALUE` defines from the same header. `IPVERSION_SET` lands at exactly
+//! `+0x1000`, which is the check that the group stride is right.
+//!
+//! # ⚠️ The counter width is per instance, and it is not the obvious four
+//!
+//! `TIMER_CNTWIDTH` in the device header
+//! (`efr32mg26b510f3200im48.h`) says:
+//!
+//! | instance | width |   | instance | width |
+//! |----------|-------|---|----------|-------|
+//! | TIMER0   | 32    |   | TIMER5   | 16    |
+//! | TIMER1   | 32    |   | TIMER6   | 16    |
+//! | TIMER2   | 16    |   | TIMER7   | 16    |
+//! | TIMER3   | 16    |   | TIMER8   | 32    |
+//! | TIMER4   | 16    |   | TIMER9   | 32    |
+//!
+//! The 32-bit ones are **0, 1, 8 and 9** — not 0..3. The datasheet's summary
+//! line ("4x 32-bit, 3-ch") gives the count but not which, and the reference
+//! manual explicitly defers to the datasheet. Guessing 0..3 gives a `micros()`
+//! that wraps 65536× too early on TIMER2 and never on TIMER8. So the width is
+//! a required `config: { counter_bits: … }` on the chip yaml rather than a
+//! constant here, and each instance carries its own.
+//!
+//! # Faithfully modelled
+//!
+//! * `EN.EN` gates everything; `CMD.START`/`CMD.STOP` run and halt the
+//!   counter, and `STATUS.RUNNING` reports it.
+//! * `CFG.PRESC` divides: the counter advances once per `PRESC + 1` timer
+//!   clocks, which is what makes a 1 MHz `micros()` tick out of a 78 MHz core.
+//! * `CNT` counts up to `TOP` (reset `0xFFFF`) and wraps to 0, setting
+//!   `IF.OF`. `TOP` and `CNT` are masked to the instance's width, so a 16-bit
+//!   timer cannot hold a 17-bit value even if firmware writes one.
+//! * The three compare/capture channels in OUTPUTCOMPARE or PWM mode: a
+//!   channel whose `OC` the counter passes sets `IF.CC[n]`.
+//! * PWM duty: in `CC_CFG.MODE = PWM` the channel's output is high while
+//!   `CNT < OC`, which is what `analogWrite` sets up, and
+//!   [`Self::pwm_duty_percent`] exposes it.
+//! * `IF` is write-1-to-clear and `IEN` gates the interrupt.
+//!
+//! # Idealised — present, but not physical
+//!
+//! * **Up-count only.** `CFG.MODE` stores; down and up/down counting, the
+//!   quadrature decoder and 2× count mode are not modelled, and a firmware
+//!   that selects one gets an up-counter.
+//! * **The PWM waveform does not reach a pad.** The output state is modelled
+//!   and readable, but `GPIO_TIMERROUTE` is not, so nothing drives a GPIO.
+//!   An LED on a `analogWrite` pin does not dim in a board view yet.
+//! * **No input capture.** `ICF`/`ICOF` read 0 and `MODE = INPUTCAPTURE`
+//!   captures nothing.
+//! * **No dead-time insertion.** The whole `DT*` block stores and does
+//!   nothing, which is safe here only because nothing drives a pad; on
+//!   silicon those registers protect a half-bridge.
+//! * **No `TOPB` buffering, no `LOCK`.** `TOPB` stores; `TOP` takes effect
+//!   immediately rather than at the next wrap.
+//! * **The timer clock is the core clock.** `CFG.CLKSEL` stores; there is no
+//!   clock tree to select from (see the CMU model).
+
+use crate::{Peripheral, PeripheralTickResult, SimResult};
+
+// ── Register offsets, walked from `TIMER_TypeDef` ──────────────────────────
+const OFF_IPVERSION: u64 = 0x00;
+const OFF_CFG: u64 = 0x04;
+const OFF_CTRL: u64 = 0x08;
+const OFF_CMD: u64 = 0x0C;
+const OFF_STATUS: u64 = 0x10;
+const OFF_IF: u64 = 0x14;
+const OFF_IEN: u64 = 0x18;
+const OFF_TOP: u64 = 0x1C;
+const OFF_TOPB: u64 = 0x20;
+const OFF_CNT: u64 = 0x24;
+const OFF_LOCK: u64 = 0x2C;
+const OFF_EN: u64 = 0x30;
+/// `CC[3]`, stride 0x20.
+const OFF_CC: u64 = 0x60;
+const CC_STRIDE: u64 = 0x20;
+const CC_COUNT: usize = 3;
+/// Within a `TIMER_CC_TypeDef`.
+const CC_CFG: u64 = 0x00;
+const CC_CTRL: u64 = 0x04;
+const CC_OC: u64 = 0x08;
+const CC_OCB: u64 = 0x10;
+const CC_ICF: u64 = 0x14;
+const CC_ICOF: u64 = 0x18;
+/// The dead-time insertion block, `DTCFG`..`DTLOCK`.
+const OFF_DT_FIRST: u64 = 0xE0;
+const OFF_DT_LAST: u64 = 0xFC;
+
+const IPVERSION_RESET: u32 = 3;
+/// `_TIMER_TOP_RESETVALUE`.
+const TOP_RESET: u32 = 0x0000_FFFF;
+
+const EN_EN: u32 = 1 << 0;
+const CMD_START: u32 = 1 << 0;
+const CMD_STOP: u32 = 1 << 1;
+const STATUS_RUNNING: u32 = 1 << 0;
+const IF_OF: u32 = 1 << 0;
+/// `IF.CC0` is bit 4, so channel `n` is bit `4 + n`.
+const IF_CC0_SHIFT: u32 = 4;
+
+/// `_TIMER_CFG_PRESC_MASK` = 0x0FFC_0000, i.e. a 10-bit field at bit 18.
+const CFG_PRESC_SHIFT: u32 = 18;
+const CFG_PRESC_MASK: u32 = 0x3FF;
+
+/// `CC_CFG.MODE`.
+const CC_MODE_MASK: u32 = 0x3;
+const CC_MODE_OUTPUTCOMPARE: u32 = 0x2;
+const CC_MODE_PWM: u32 = 0x3;
+
+/// EFR32 Series-2 general purpose timer.
+#[derive(Debug)]
+pub struct Efr32s2Timer {
+    /// Counter width in bits, from the instance's `TIMER_CNTWIDTH`. See the
+    /// module header — this is per instance and not guessable.
+    counter_bits: u32,
+
+    en: u32,
+    cfg: u32,
+    ctrl: u32,
+    status_running: bool,
+    iflag: u32,
+    ien: u32,
+    top: u32,
+    topb: u32,
+    cnt: u32,
+    lock: u32,
+    cc_cfg: [u32; CC_COUNT],
+    cc_ctrl: [u32; CC_COUNT],
+    cc_oc: [u32; CC_COUNT],
+    cc_ocb: [u32; CC_COUNT],
+    dt: [u32; 8],
+
+    /// Timer clocks not yet turned into counter steps, so a prescaler larger
+    /// than the tick interval does not lose the remainder.
+    prescale_residue: u64,
+}
+
+impl Efr32s2Timer {
+    /// `counter_bits` must be the instance's real width — 16 or 32.
+    pub fn new(counter_bits: u32) -> Self {
+        Self {
+            counter_bits: counter_bits.clamp(1, 32),
+            en: 0,
+            cfg: 0,
+            ctrl: 0,
+            status_running: false,
+            iflag: 0,
+            ien: 0,
+            top: TOP_RESET,
+            topb: TOP_RESET,
+            cnt: 0,
+            lock: 0,
+            cc_cfg: [0; CC_COUNT],
+            cc_ctrl: [0; CC_COUNT],
+            cc_oc: [0; CC_COUNT],
+            cc_ocb: [0; CC_COUNT],
+            dt: [0; 8],
+            prescale_residue: 0,
+        }
+    }
+
+    /// Mask a value to this instance's counter width. A 16-bit timer handed a
+    /// 32-bit `TOP` keeps the low half, as the silicon's narrower register
+    /// does.
+    fn mask(&self, value: u32) -> u32 {
+        if self.counter_bits >= 32 {
+            value
+        } else {
+            value & ((1u32 << self.counter_bits) - 1)
+        }
+    }
+
+    /// Counter steps per timer clock denominator: `PRESC + 1`.
+    fn prescale_divisor(&self) -> u64 {
+        (((self.cfg >> CFG_PRESC_SHIFT) & CFG_PRESC_MASK) as u64) + 1
+    }
+
+    fn cc_mode(&self, ch: usize) -> u32 {
+        self.cc_cfg[ch] & CC_MODE_MASK
+    }
+
+    /// The duty cycle channel `ch` is programmed for, in percent, or `None`
+    /// when the channel is not in PWM mode. `analogWrite` is exactly this
+    /// number, and a lab or a UI can read it without decoding registers.
+    pub fn pwm_duty_percent(&self, ch: usize) -> Option<u32> {
+        if ch >= CC_COUNT || self.cc_mode(ch) != CC_MODE_PWM {
+            return None;
+        }
+        let top = self.top.max(1);
+        Some((self.cc_oc[ch].min(top) * 100) / top)
+    }
+
+    /// Whether channel `ch`'s PWM output is high right now: high while
+    /// `CNT < OC`.
+    pub fn pwm_output_high(&self, ch: usize) -> bool {
+        ch < CC_COUNT && self.cc_mode(ch) == CC_MODE_PWM && self.cnt < self.cc_oc[ch]
+    }
+
+    fn cc_index(offset: u64) -> Option<(usize, u64)> {
+        if !(OFF_CC..OFF_CC + CC_STRIDE * CC_COUNT as u64).contains(&offset) {
+            return None;
+        }
+        let rel = offset - OFF_CC;
+        Some(((rel / CC_STRIDE) as usize, rel % CC_STRIDE))
+    }
+
+    fn read_word(&self, offset: u64) -> u32 {
+        match offset {
+            OFF_IPVERSION => IPVERSION_RESET,
+            OFF_CFG => self.cfg,
+            OFF_CTRL => self.ctrl,
+            // CMD is write-only: every bit is a command, none is state.
+            OFF_CMD => 0,
+            OFF_STATUS => {
+                if self.status_running {
+                    STATUS_RUNNING
+                } else {
+                    0
+                }
+            }
+            OFF_IF => self.iflag,
+            OFF_IEN => self.ien,
+            OFF_TOP => self.top,
+            OFF_TOPB => self.topb,
+            OFF_CNT => self.cnt,
+            OFF_LOCK => self.lock,
+            OFF_EN => self.en,
+            o if (OFF_DT_FIRST..=OFF_DT_LAST).contains(&o) => {
+                self.dt[((o - OFF_DT_FIRST) / 4) as usize]
+            }
+            o => match Self::cc_index(o) {
+                Some((ch, CC_CFG)) => self.cc_cfg[ch],
+                Some((ch, CC_CTRL)) => self.cc_ctrl[ch],
+                Some((ch, CC_OC)) => self.cc_oc[ch],
+                Some((ch, CC_OCB)) => self.cc_ocb[ch],
+                // Input capture is not modelled; both capture registers read 0
+                // rather than a stale or invented sample.
+                Some((_, CC_ICF)) | Some((_, CC_ICOF)) => 0,
+                _ => 0,
+            },
+        }
+    }
+
+    fn write_word(&mut self, offset: u64, value: u32) {
+        match offset {
+            OFF_EN => {
+                self.en = value & EN_EN;
+                if self.en == 0 {
+                    self.status_running = false;
+                    self.cnt = 0;
+                }
+            }
+            OFF_CFG => self.cfg = value,
+            OFF_CTRL => self.ctrl = value,
+            OFF_CMD => {
+                // STOP wins when both are written in one word: silicon
+                // resolves it that way and it is the safe reading.
+                if value & CMD_START != 0 && self.en & EN_EN != 0 {
+                    self.status_running = true;
+                }
+                if value & CMD_STOP != 0 {
+                    self.status_running = false;
+                }
+            }
+            OFF_IF => self.iflag &= !value,
+            OFF_IEN => self.ien = value,
+            OFF_TOP => self.top = self.mask(value),
+            OFF_TOPB => self.topb = self.mask(value),
+            OFF_CNT => self.cnt = self.mask(value),
+            OFF_LOCK => self.lock = value,
+            o if (OFF_DT_FIRST..=OFF_DT_LAST).contains(&o) => {
+                self.dt[((o - OFF_DT_FIRST) / 4) as usize] = value;
+            }
+            o => {
+                if let Some((ch, reg)) = Self::cc_index(o) {
+                    match reg {
+                        CC_CFG => self.cc_cfg[ch] = value,
+                        CC_CTRL => self.cc_ctrl[ch] = value,
+                        CC_OC => self.cc_oc[ch] = self.mask(value),
+                        CC_OCB => self.cc_ocb[ch] = self.mask(value),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    /// Advance the counter by `steps`, raising overflow and compare flags on
+    /// the way. Split out so the wrap logic is one place and a multi-wrap
+    /// advance (a big tick interval, a large prescaler) cannot skip a flag.
+    fn advance(&mut self, steps: u64) {
+        if steps == 0 {
+            return;
+        }
+        let period = self.top as u64 + 1;
+        // A compare fires when the counter PASSES its value. Over an advance
+        // that wraps, every channel whose OC lies anywhere in the span fires —
+        // stepping by more than one count must not silently skip a match, or a
+        // large tick interval would drop compares a small one catches.
+        let from = self.cnt as u64;
+        let wrapped = from + steps >= period;
+        for ch in 0..CC_COUNT {
+            let mode = self.cc_mode(ch);
+            if mode != CC_MODE_OUTPUTCOMPARE && mode != CC_MODE_PWM {
+                continue;
+            }
+            let oc = self.cc_oc[ch] as u64;
+            let hit = if wrapped {
+                // The span covers [from, period) plus [0, remainder].
+                oc >= from || oc <= (from + steps) % period
+            } else {
+                oc > from && oc <= from + steps
+            };
+            if hit {
+                self.iflag |= 1 << (IF_CC0_SHIFT + ch as u32);
+            }
+        }
+        if wrapped {
+            self.iflag |= IF_OF;
+        }
+        self.cnt = self.mask(((from + steps) % period) as u32);
+    }
+}
+
+impl Peripheral for Efr32s2Timer {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let word = self.read_word(offset & !3);
+        Ok(((word >> ((offset % 4) * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let shift = (offset % 4) * 8;
+        let merged = (self.read_word(reg) & !(0xFFu32 << shift)) | ((value as u32) << shift);
+        self.write_word(reg, merged);
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_word(offset))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_word(offset, value);
+        Ok(())
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        self.read(offset).ok()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        true
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        let mut result = PeripheralTickResult::default();
+        if self.en & EN_EN != 0 && self.status_running {
+            let divisor = self.prescale_divisor();
+            let total = self.prescale_residue + cycles;
+            self.prescale_residue = total % divisor;
+            self.advance(total / divisor);
+        }
+        if self.iflag & self.ien != 0 {
+            result.irq = true;
+        }
+        result
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// TIMER0's width, from `TIMER0_CNTWIDTH`.
+    const T0_BITS: u32 = 32;
+    /// TIMER2's width. Deliberately used in the width tests, because TIMER2
+    /// being 16-bit is the fact a "timers 0..3 are the 32-bit ones" guess gets
+    /// wrong.
+    const T2_BITS: u32 = 16;
+
+    fn running(bits: u32) -> Efr32s2Timer {
+        let mut t = Efr32s2Timer::new(bits);
+        t.write_word(OFF_EN, EN_EN);
+        t.write_word(OFF_CMD, CMD_START);
+        t
+    }
+
+    #[test]
+    fn resets_to_the_header_values() {
+        let t = Efr32s2Timer::new(T0_BITS);
+        assert_eq!(t.read_word(OFF_IPVERSION), IPVERSION_RESET);
+        assert_eq!(t.read_word(OFF_TOP), TOP_RESET);
+        assert_eq!(t.read_word(OFF_CNT), 0);
+        assert_eq!(t.read_word(OFF_STATUS), 0, "not running out of reset");
+    }
+
+    #[test]
+    fn a_stopped_timer_does_not_count() {
+        let mut t = Efr32s2Timer::new(T0_BITS);
+        t.write_word(OFF_EN, EN_EN);
+        t.tick_elapsed(1000);
+        assert_eq!(t.read_word(OFF_CNT), 0);
+
+        // ...and neither does a started timer that was never enabled.
+        let mut t = Efr32s2Timer::new(T0_BITS);
+        t.write_word(OFF_CMD, CMD_START);
+        t.tick_elapsed(1000);
+        assert_eq!(t.read_word(OFF_CNT), 0);
+        assert_eq!(t.read_word(OFF_STATUS) & STATUS_RUNNING, 0);
+    }
+
+    #[test]
+    fn a_running_timer_counts_one_per_clock_at_prescaler_zero() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        t.tick_elapsed(1234);
+        assert_eq!(t.read_word(OFF_CNT), 1234);
+    }
+
+    /// The `micros()` setup: 78 MHz core, PRESC 77, so one count is one
+    /// microsecond.
+    #[test]
+    fn the_prescaler_divides_by_presc_plus_one() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        t.write_word(OFF_CFG, 77 << CFG_PRESC_SHIFT);
+        t.tick_elapsed(78_000_000); // one second at 78 MHz
+        assert_eq!(t.read_word(OFF_CNT), 1_000_000, "1 MHz tick");
+    }
+
+    /// A prescaler bigger than one tick interval must not lose the remainder,
+    /// or a slow timer stops entirely under a fine tick.
+    #[test]
+    fn the_prescaler_remainder_carries_across_ticks() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        t.write_word(OFF_CFG, 999 << CFG_PRESC_SHIFT); // divide by 1000
+        for _ in 0..1000 {
+            t.tick_elapsed(1);
+        }
+        assert_eq!(t.read_word(OFF_CNT), 1);
+    }
+
+    #[test]
+    fn the_counter_wraps_at_top_and_sets_the_overflow_flag() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 9);
+        t.tick_elapsed(9);
+        assert_eq!(t.read_word(OFF_CNT), 9);
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, 0, "not yet");
+
+        t.tick_elapsed(1);
+        assert_eq!(t.read_word(OFF_CNT), 0, "wrapped to zero");
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, IF_OF);
+    }
+
+    /// ⚠️ The fact a "TIMER0..3 are the 32-bit ones" guess gets wrong: TIMER2
+    /// is 16-bit, so it cannot hold a 32-bit TOP.
+    #[test]
+    fn a_sixteen_bit_instance_masks_top_and_cnt() {
+        let mut t = running(T2_BITS);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        assert_eq!(t.read_word(OFF_TOP), 0xFFFF, "a 16-bit TOP register");
+
+        t.write_word(OFF_CNT, 0x1_2345);
+        assert_eq!(t.read_word(OFF_CNT), 0x2345);
+    }
+
+    #[test]
+    fn a_thirty_two_bit_instance_holds_the_whole_value() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 0xFFFF_FFFF);
+        assert_eq!(t.read_word(OFF_TOP), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn a_compare_channel_flags_when_the_counter_passes_it() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 100);
+        t.write_word(OFF_CC + CC_CFG, CC_MODE_OUTPUTCOMPARE);
+        t.write_word(OFF_CC + CC_OC, 40);
+
+        t.tick_elapsed(39);
+        assert_eq!(t.read_word(OFF_IF) & (1 << IF_CC0_SHIFT), 0);
+        t.tick_elapsed(1);
+        assert_eq!(t.read_word(OFF_IF) & (1 << IF_CC0_SHIFT), 1 << IF_CC0_SHIFT);
+    }
+
+    /// A big advance must not step over a compare. Under a coarse
+    /// `peripheral_tick_interval` the counter moves in jumps, and a naive
+    /// `cnt == oc` test would fire only when the jump landed exactly.
+    #[test]
+    fn a_compare_is_not_skipped_by_a_large_advance() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 1000);
+        t.write_word(OFF_CC + CC_CFG, CC_MODE_OUTPUTCOMPARE);
+        t.write_word(OFF_CC + CC_OC, 500);
+
+        t.tick_elapsed(999);
+        assert_eq!(
+            t.read_word(OFF_IF) & (1 << IF_CC0_SHIFT),
+            1 << IF_CC0_SHIFT,
+            "the advance stepped over 500 and must still flag it"
+        );
+    }
+
+    /// ...and one that wraps must flag a compare on the far side of the wrap.
+    #[test]
+    fn a_compare_after_a_wrap_still_flags() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 99);
+        t.write_word(OFF_CC + CC_CFG, CC_MODE_OUTPUTCOMPARE);
+        t.write_word(OFF_CC + CC_OC, 10);
+        t.write_word(OFF_CNT, 90);
+
+        t.tick_elapsed(30); // 90 → 20, passing 0 and 10
+        assert_eq!(t.read_word(OFF_IF) & (1 << IF_CC0_SHIFT), 1 << IF_CC0_SHIFT);
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, IF_OF);
+    }
+
+    #[test]
+    fn a_channel_that_is_off_never_flags() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 100);
+        t.write_word(OFF_CC + CC_OC, 40); // OC set, but MODE stays OFF
+        t.tick_elapsed(100);
+        assert_eq!(t.read_word(OFF_IF) & (1 << IF_CC0_SHIFT), 0);
+    }
+
+    /// Channels are independent, and channel n's flag is bit 4+n.
+    #[test]
+    fn each_channel_has_its_own_compare_and_its_own_flag() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 100);
+        for ch in 0..CC_COUNT as u64 {
+            t.write_word(OFF_CC + ch * CC_STRIDE + CC_CFG, CC_MODE_OUTPUTCOMPARE);
+            t.write_word(OFF_CC + ch * CC_STRIDE + CC_OC, 10 + ch as u32 * 20);
+        }
+        t.tick_elapsed(15);
+        let iflag = t.read_word(OFF_IF);
+        assert_eq!(iflag & (1 << 4), 1 << 4, "CC0 at 10 fired");
+        assert_eq!(iflag & (1 << 5), 0, "CC1 at 30 did not");
+        assert_eq!(iflag & (1 << 6), 0, "CC2 at 50 did not");
+    }
+
+    #[test]
+    fn pwm_duty_is_oc_over_top() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 255);
+        t.write_word(OFF_CC + CC_CFG, CC_MODE_PWM);
+        t.write_word(OFF_CC + CC_OC, 64);
+        assert_eq!(t.pwm_duty_percent(0), Some(25));
+
+        t.write_word(OFF_CC + CC_OC, 255);
+        assert_eq!(t.pwm_duty_percent(0), Some(100));
+        t.write_word(OFF_CC + CC_OC, 0);
+        assert_eq!(t.pwm_duty_percent(0), Some(0));
+    }
+
+    #[test]
+    fn a_channel_not_in_pwm_mode_reports_no_duty() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_CC + CC_CFG, CC_MODE_OUTPUTCOMPARE);
+        assert_eq!(t.pwm_duty_percent(0), None);
+    }
+
+    #[test]
+    fn the_pwm_output_is_high_below_the_compare_value() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 99);
+        t.write_word(OFF_CC + CC_CFG, CC_MODE_PWM);
+        t.write_word(OFF_CC + CC_OC, 50);
+
+        assert!(t.pwm_output_high(0), "CNT 0 < OC 50");
+        t.tick_elapsed(50);
+        assert!(!t.pwm_output_high(0), "CNT 50 is not below OC 50");
+    }
+
+    #[test]
+    fn the_interrupt_follows_ien_and_the_flag_is_write_one_to_clear() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 9);
+
+        t.tick_elapsed(10);
+        assert!(!t.tick_elapsed(0).irq, "IEN clear: no interrupt");
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, IF_OF);
+
+        t.write_word(OFF_IEN, IF_OF);
+        assert!(t.tick_elapsed(0).irq);
+
+        t.write_word(OFF_IF, IF_OF);
+        assert_eq!(t.read_word(OFF_IF) & IF_OF, 0);
+        assert!(!t.tick_elapsed(0).irq);
+    }
+
+    #[test]
+    fn disabling_stops_and_zeroes_the_counter() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_TOP, 0xFFFF);
+        t.tick_elapsed(100);
+        assert_eq!(t.read_word(OFF_CNT), 100);
+
+        t.write_word(OFF_EN, 0);
+        assert_eq!(t.read_word(OFF_CNT), 0);
+        assert_eq!(t.read_word(OFF_STATUS) & STATUS_RUNNING, 0);
+    }
+
+    #[test]
+    fn cc_channels_are_addressed_as_a_group_not_flat_words() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_CC + 2 * CC_STRIDE + CC_OC, 0x1234);
+        assert_eq!(t.read_word(OFF_CC + 2 * CC_STRIDE + CC_OC), 0x1234);
+        assert_eq!(t.read_word(OFF_CC + CC_OC), 0, "CC0 is a different channel");
+    }
+
+    #[test]
+    fn input_capture_registers_read_zero_rather_than_a_stale_sample() {
+        let mut t = running(T0_BITS);
+        t.write_word(OFF_CC + CC_CFG, 1); // INPUTCAPTURE
+        t.tick_elapsed(100);
+        assert_eq!(t.read_word(OFF_CC + CC_ICF), 0);
+        assert_eq!(t.read_word(OFF_CC + CC_ICOF), 0);
+    }
+}

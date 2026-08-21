@@ -134,6 +134,18 @@ impl SystemBus {
         if t == "nrf_clock" || t == "nrf52_clock" || t == "nrf52840_clock" {
             return "nrf52_clock".to_string();
         }
+        // Silicon Labs Series-2 TIMER. Intercepted BEFORE the generic `timer`
+        // bin, which resolves to the STM32 TIM model — a completely different
+        // register map.
+        if t == "efr32s2_timer" || t == "efr32_timer" {
+            return "efr32s2_timer".to_string();
+        }
+        // Silicon Labs Series-2 GPIO external interrupts. Intercepted BEFORE
+        // the `contains("gpio")` bin, which would resolve it as a PORT and put
+        // DOUT where EXTIPSELL lives.
+        if t == "efr32s2_gpio_exti" || t == "efr32_gpio_exti" {
+            return "efr32s2_gpio_exti".to_string();
+        }
         // Silicon Labs Series-2 IADC. Intercepted BEFORE the generic `adc`
         // bin, which means "an STM32-shaped ADC" and would resolve this
         // through `AdcRegisterLayout` — every variant of which is an STM32.

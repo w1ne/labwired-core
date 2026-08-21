@@ -20,4 +20,6 @@
 //! the reason this chip has no `debug_schema` entries.
 
 pub mod cmu;
+pub mod gpio_exti;
 pub mod iadc;
+pub mod timer;
