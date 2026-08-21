@@ -112,7 +112,7 @@ pub struct Efuse {
     base: u32,
     /// Backing word store. Indexed by 4-byte-aligned offset.
     regs: HashMap<u32, u32>,
-    /// One-shot pending CMD value. Set by `write_word_32` of EFUSE_CMD;
+    /// One-shot pending CMD value. Set by `write_u32` of EFUSE_CMD;
     /// returned by the next `read_u32` and then cleared. Mirrors the
     /// hardware behaviour where CMD bit clears after the eFuse FSM
     /// finishes its read/program cycle (effectively immediately in sim).

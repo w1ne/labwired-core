@@ -422,20 +422,4 @@ impl WasmSimulator {
             .map(|snap| snap.to_bytes())
             .ok_or_else(|| JsValue::from_str("runtime snapshot is not supported for this CPU"))
     }
-
-    /// Re-write the dual-core handshake bytes. Call every ~10k steps from JS
-    /// — firmware boot code revisits these and we need them to stay 1.
-    #[wasm_bindgen]
-    pub fn keep_alive_esp32_dual_core(&mut self) {
-        let machine = match self.machine.as_mut() {
-            Some(m) => m,
-            None => return,
-        };
-        let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
-    }
 }
