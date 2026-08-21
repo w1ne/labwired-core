@@ -217,6 +217,51 @@ boards:
     sketches_skip_reason:
       L8_can: "ATmega328P has no CAN controller"
 
+  # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
+  #
+  # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon
+  # Labs never published an xG26 Arduino core, so LabWired's is hand-written
+  # and lives in the labwired monorepo at
+  # `services/labwired-builder/silabs-arduino`. Its compile flags were derived
+  # on real silicon (hard/soft float split, the 0x08008000 app slot, -nostdlib)
+  # and they have exactly one home — copying them into this repo would give
+  # them two, and the two would drift.
+  #
+  # So this board declares `external_compile:` instead of `pio:`, and the lane
+  # that owns the core supplies the driver through $LW_EXTERNAL_COMPILE (see
+  # run_matrix.py). ⚠️ With no driver the rows come back `toolchain_missing`,
+  # which is a FAILURE the gate counts — not a skip. `every_matrix_board_has_a_
+  # lane` in crates/core/tests/arduino_matrix_lanes.rs is what stops this board
+  # from sitting in boards.yaml with nothing anywhere running it.
+  - id: brd2709a
+    chip: efr32mg26
+    system: systems/brd2709a.yaml
+    external_compile:
+      target: "silabs-arduino:xg26explorerkit"
+    lane: "labwired/.github/workflows/brd2709a-arduino-matrix.yml"
+    max_steps: 3000000
+    budget_reason: "Cortex-M33 at the 19 MHz HFRCODPLL startup band; L0 boots in ~30k, L3/L4 need Wire/SPI headroom"
+    # LED0 = PC08, active-high (variants/xg26explorerkit/pins_arduino.h).
+    led_watch: "gpioc:8"
+    led_min_edges: 2
+    family: efr32
+    notes: "Hand-written silabs-arduino core; Wire=I2C0 @0x4B000000, SPI=USART0 sync"
+    sketches_skip: [L4_spi_sensor, L6_pwm, L8_can]
+    sketches_skip_reason:
+      L8_can: "EFR32MG26 has no CAN controller"
+      # ⚠️ Both of these COMPILE and both HANG in the twin's `delay()`, spinning
+      # on TIMER0_CNT while CNT does not advance — measured stuck at
+      # delay+0x14 with r5=1000 (the 1 ms target) and CNT-start = 0 after 30M
+      # steps. They are skipped so the six real cells gate, and they are named
+      # here rather than dropped from the board, because a skip that says what
+      # it is remains a to-do and a deleted row does not.
+      #
+      # Neither reproduces from a hand-written sketch that does the same calls,
+      # so the trigger is narrower than "PWM is running" or "SPI is begun".
+      # See validation/arduino-matrix/PROBLEMS.md.
+      L4_spi_sensor: "hangs in delay() after SPI.begin — TIMER0_CNT stops advancing; not yet root-caused"
+      L6_pwm: "hangs in delay() after analogWrite — same TIMER0_CNT stall; analogWrite's waveform also does not reach a pad (GPIO_TIMERROUTE unmodelled)"
+
 
 sketches:
   - id: L0_serial_boot
