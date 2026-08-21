@@ -4514,9 +4514,22 @@ impl EnvTestScript {
         // it checks, or it visibly checks nothing.
 
         for (index, assertion) in self.assertions.iter().enumerate() {
+            // UART assertions carry no node id, so there is no node rule to
+            // enforce here. The world runner evaluates them against every
+            // node's captured stream.
+            if matches!(
+                assertion,
+                TestAssertion::UartContains(_)
+                    | TestAssertion::UartRegex(_)
+                    | TestAssertion::UartOrdered(_)
+            ) {
+                continue;
+            }
             let TestAssertion::MemoryValue(memory) = assertion else {
                 anyhow::bail!(
-                    "Environment test scripts support only memory_value assertions (assertions[{index}])"
+                    "Environment test scripts support only uart_contains / uart_regex / \
+                     uart_ordered and node-qualified memory_value assertions (assertions[{index}]); \
+                     the world runner cannot observe the others"
                 );
             };
             let has_node =
@@ -6055,18 +6068,6 @@ assertions:
     fn env_script_requires_memory_assertions_with_nodes() {
         for (name, yaml, diagnostic) in [
             (
-                "no-assertions",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-  - uart_contains: "PASS"
-"#,
-                "memory_value",
-            ),
-            (
                 "missing-node",
                 r#"
 schema_version: "1.0"
@@ -6089,20 +6090,64 @@ assertions:
                 "node",
             ),
             (
+                // Still unsupported, and still refused: the world runner has no
+                // per-node stop reason to compare against. The refusal must
+                // survive UART assertions becoming legal, or admitting those
+                // would have quietly admitted everything.
                 "unsupported-assertion",
                 r#"
 schema_version: "1.0"
 inputs: { env: "twonode-env.yaml" }
 limits: { max_steps: 10 }
 assertions:
-  - uart_contains: "PASS"
+  - expected_stop_reason: max_steps
 "#,
-                "memory_value",
+                "cannot observe",
             ),
         ] {
             let script_path = write_temp_file(name, yaml);
             let err = load_test_script(&script_path).unwrap_err().to_string();
             assert!(err.contains(diagnostic), "unexpected error: {err}");
+        }
+    }
+
+    /// UART assertions carry no node id, so the node rules above do not apply
+    /// to them; they are satisfied by any node printing the text. They load
+    /// alone and alongside a node-qualified `memory_value`.
+    #[test]
+    fn env_script_accepts_uart_assertions() {
+        for (name, yaml) in [
+            (
+                "uart-only",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - uart_contains: "PASS"
+  - uart_regex: "PA+SS"
+  - uart_ordered: ["boot", "PASS"]
+"#,
+            ),
+            (
+                "uart-and-memory",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+  - uart_contains: "PASS"
+"#,
+            ),
+        ] {
+            let script_path = write_temp_file(name, yaml);
+            let script = load_test_script(&script_path)
+                .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            assert!(
+                matches!(script, LoadedTestScript::Env(_)),
+                "{name} must load as an environment script"
+            );
         }
     }
 

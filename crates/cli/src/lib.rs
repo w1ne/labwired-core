@@ -1492,12 +1492,17 @@ fn handle_load_error<C: labwired_core::Cpu>(
     verdict.exit_code()
 }
 
-fn assertion_currently_passes(
-    assertion: &TestAssertion,
-    uart_text: &str,
-    machine: &labwired_core::Machine<impl labwired_core::Cpu>,
-) -> bool {
-    match assertion {
+/// The assertions decided by captured UART text alone, and nothing else.
+///
+/// Returns `None` for any assertion that needs the machine — that is the
+/// caller's signal to keep matching, not a failure.
+///
+/// Shared deliberately: the single-machine runner and the multi-MCU world
+/// runner must agree on what `uart_contains` means, and the world runner has
+/// no `Machine<impl Cpu>` to hand to [`assertion_currently_passes`]. Two
+/// copies of `uart_text.contains(..)` is exactly how one of them drifts.
+pub(crate) fn uart_assertion_passes(assertion: &TestAssertion, uart_text: &str) -> Option<bool> {
+    Some(match assertion {
         TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
         TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, uart_text),
         TestAssertion::UartOrdered(a) => {
@@ -1510,6 +1515,23 @@ fn assertion_currently_passes(
                 true
             })
         }
+        _ => return None,
+    })
+}
+
+fn assertion_currently_passes(
+    assertion: &TestAssertion,
+    uart_text: &str,
+    machine: &labwired_core::Machine<impl labwired_core::Cpu>,
+) -> bool {
+    if let Some(passed) = uart_assertion_passes(assertion, uart_text) {
+        return passed;
+    }
+    match assertion {
+        // Handled above by `uart_assertion_passes`.
+        TestAssertion::UartContains(_)
+        | TestAssertion::UartRegex(_)
+        | TestAssertion::UartOrdered(_) => unreachable!("decided by uart_assertion_passes"),
         TestAssertion::MotorSpeedReached(a) => machine.bus.motor_snapshots().iter().any(|motor| {
             let speed = motor.speed_rpm.abs();
             motor.id == a.motor_speed_reached.id
@@ -2857,9 +2879,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     for (assertion_index, assertion) in assertions.iter().enumerate() {
         let (passed, evidence) = match assertion {
-            TestAssertion::UartContains(a) => (uart_text.contains(&a.uart_contains), None),
-            TestAssertion::UartRegex(a) => (simple_regex_is_match(&a.uart_regex, &uart_text), None),
-            TestAssertion::UartOrdered(_)
+            TestAssertion::UartContains(_)
+            | TestAssertion::UartRegex(_)
+            | TestAssertion::UartOrdered(_)
             | TestAssertion::MotorState(_)
             | TestAssertion::MqttFabric(_) => (
                 assertion_currently_passes(assertion, &uart_text, machine),
