@@ -1203,6 +1203,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-mg26-adc"
+version = "0.22.1"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-mg26-ble"
 version = "0.22.1"
 dependencies = [

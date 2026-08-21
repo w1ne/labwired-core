@@ -20,3 +20,4 @@
 //! the reason this chip has no `debug_schema` entries.
 
 pub mod cmu;
+pub mod iadc;

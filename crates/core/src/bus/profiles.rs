@@ -134,6 +134,12 @@ impl SystemBus {
         if t == "nrf_clock" || t == "nrf52_clock" || t == "nrf52840_clock" {
             return "nrf52_clock".to_string();
         }
+        // Silicon Labs Series-2 IADC. Intercepted BEFORE the generic `adc`
+        // bin, which means "an STM32-shaped ADC" and would resolve this
+        // through `AdcRegisterLayout` — every variant of which is an STM32.
+        if t == "efr32s2_iadc" || t == "efr32_iadc" {
+            return "efr32s2_iadc".to_string();
+        }
         // Silicon Labs Series-2 CMU. Intercepted BEFORE the generic `cmu`
         // bin: that bin means "an STM32-shaped RCC" and resolving a Series-2
         // CMU through `RccRegisterLayout` can only pick an STM32 family, which

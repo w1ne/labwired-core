@@ -240,6 +240,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf54l_clock",
     "nrf54l_grtc",
     "efr32s2_cmu",
+    "efr32s2_iadc",
     "virtual_ble",
 ];
 
@@ -267,6 +268,10 @@ pub fn try_build(
                 None => Box::new(crate::peripherals::systick::Systick::new()),
             }
         }
+        // Silicon Labs Series-2 incremental ADC — the `analogRead` path.
+        // Its own model, NOT an `AdcRegisterLayout` variant: `adc.rs` is one
+        // struct per STM32 family by design and shares no register with this.
+        "efr32s2_iadc" => Box::new(crate::peripherals::efr32::iadc::Efr32s2Iadc::new()),
         // LabWired virtual BLE controller. NOT a model of any silicon — see
         // `peripherals/virtual_ble.rs` for why a part whose vendor documents no
         // radio register anywhere gets a declared simulator device instead of

@@ -1161,6 +1161,20 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Default no-op: a peripheral with no radio has no air to move.
     fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
 
+    /// Drive the analog level, in millivolts, on one of this peripheral's ADC
+    /// input channels. Returns whether it took it.
+    ///
+    /// The seam a `system.yaml` analog source (a potentiometer, an NTC) uses
+    /// to move what firmware converts. `false` for a peripheral that is not an
+    /// ADC, and for a channel this one does not have.
+    ///
+    /// New ADC models implement this; the five that predate it are still found
+    /// by a downcast chain in `bus::sim_inputs`, which this is the replacement
+    /// for. See the note there.
+    fn set_adc_channel_input(&mut self, _channel: u8, _millivolts: u16) -> bool {
+        false
+    }
+
     /// Hand the peripheral the machine's ONE universal bus trace, plus the name
     /// it should stamp events with. Called from the same registration choke
     /// points as [`Peripheral::attach_cycle_clock`] and

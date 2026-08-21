@@ -81,7 +81,36 @@ fails these lines. `BTN0=1 BTN1=1` is correct: the buttons are active-low
 
 Pass criteria: exit code 0, `PASS 7/7`.
 
-## C3) BLE smoke — ⚠️ TWIN ONLY, this one does NOT run on the board
+## C3) IADC smoke (analog: a potentiometer on PA05)
+
+```bash
+cargo build -p firmware-mg26-adc --target thumbv7m-none-eabi --release
+cargo run -p labwired-cli -- test --script examples/brd2709a/adc-smoke.yaml
+```
+
+Observed:
+
+```
+MG26-ADC
+code=2048
+PASS  3/3 checks · adc-smoke · 200000 steps · 0.05s
+```
+
+Pass criteria: exit code 0, `PASS 3/3`, and the code is **2048** specifically.
+The potentiometer in `adc-system.yaml` boots centred at 50 %, so its wiper is
+at 1650 mV of the 3300 mV AVDD reference and a 12-bit conversion is 2048. That
+number is the test: a model that ignored `SINGLE.PINPOS`, or converted against
+the wrong reference, or handed back a constant, does not produce it.
+
+This firmware runs on the physical board too — every register it touches is
+real silicon. On the bench PA05 reads whatever is wired to the EXP header.
+
+⚠️ `labwired run` will NOT reproduce this. That path builds a minimal manifest
+with `external_devices: []` and ignores the `--system` file's devices, so the
+pot never attaches and the conversion correctly reads 0 mV. Use `labwired
+test --script`, which is the path a lab takes.
+
+## C4) BLE smoke — ⚠️ TWIN ONLY, this one does NOT run on the board
 
 ```bash
 cargo build -p firmware-mg26-ble --target thumbv7m-none-eabi --release

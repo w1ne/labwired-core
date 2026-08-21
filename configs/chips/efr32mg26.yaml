@@ -200,6 +200,25 @@ peripherals:
     base_address: 0x40048000
     size: "4KB"
 
+  # ── IADC0: the incremental ADC ───────────────────────────────────────────
+  # IADC0_S_BASE = 0x49004000, IADC_IRQn = 65 (CMSIS `efr32mg26b510f3200im48.h`
+  # — note the enum spells it IADC_IRQn, not IADC0_IRQn, though the base is
+  # IADC0_S_BASE; the part has IADC_COUNT = 1).
+  #
+  # ⚠️ The IADC is NOT in the 0x4000_0000 block with the digital peripherals.
+  # The RM's peripheral map puts the analog group at 0x4900_0000 (LETIMER0,
+  # IADC0, ACMP0/1, VDAC0/1, PCNT0). It is still inside the peripheral window
+  # the Series-2 alias decode covers, and 0x49004000 is 16 KiB-aligned, so its
+  # SET/CLR/TGL aliases fold correctly like every other block's.
+  #
+  # Clock: CMU_CLKEN0.IADC0, bit 10 (`_CMU_CLKEN0_IADC0_SHIFT`).
+  - id: "iadc0"
+    type: "efr32s2_iadc"
+    clock: { reg: "clken0", bit: 10 }
+    base_address: 0x49004000
+    size: "4KB"
+    irq: 65
+
   # ── BLE (LabWired virtual controller) ────────────────────────────────────
   # ⚠️ THIS BLOCK IS NOT SILICON. There is no EFR32 radio peripheral at this
   # address, or at any address, in anything Silicon Labs publishes:
