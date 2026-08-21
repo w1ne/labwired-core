@@ -709,8 +709,15 @@ boards:
     # struct that this board's variant never reaches. `I2c::new()` still
     # defaults to Stm32F1. No live re-capture owed for this change; any
     # re-capture already owed above still is.
+    # 2026-08-21 (third change, same day): `peripherals/spi.rs` gained an
+    # `Efr32s2SpiRegs` struct, an `SpiRegs::Efr32s2Usart` variant and its
+    # dispatch arms, plus a `line_names()` that now answers per variant so the
+    # EFR32 path publishes no wire it cannot drive. The STM32 arms return
+    # `SPI_LINES` exactly as before and every STM32 register map, bit engine
+    # and timing in the file is byte-identical. No live re-capture owed for
+    # this change; any re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: af5ad6bc0ffccb2787427e3bae483d29d565a444f2b7a4a9eb0c47241dceb0a8
+    drift_ack_digest: 7a13dff2c2dfecdf79b1e233409df36fdb651eaf8e66bf176a9330b4beecd307
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1673,8 +1680,15 @@ boards:
     # struct that this board's variant never reaches. `I2c::new()` still
     # defaults to Stm32F1. No live re-capture owed for this change; any
     # re-capture already owed above still is.
+    # 2026-08-21 (third change, same day): `peripherals/spi.rs` gained an
+    # `Efr32s2SpiRegs` struct, an `SpiRegs::Efr32s2Usart` variant and its
+    # dispatch arms, plus a `line_names()` that now answers per variant so the
+    # EFR32 path publishes no wire it cannot drive. The STM32 arms return
+    # `SPI_LINES` exactly as before and every STM32 register map, bit engine
+    # and timing in the file is byte-identical. No live re-capture owed for
+    # this change; any re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: 564464c1a87f98d77314d354f415e038ed08cb3129f46cdf7e3504c5cc206d86
+    drift_ack_digest: 0155e5420bf342831a89b4d8ae6bf20a9668548f2b7137fa4252e7c413e854a3
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1890,8 +1904,15 @@ boards:
     # struct that this board's variant never reaches. `I2c::new()` still
     # defaults to Stm32F1. No live re-capture owed for this change; any
     # re-capture already owed above still is.
+    # 2026-08-21 (third change, same day): `peripherals/spi.rs` gained an
+    # `Efr32s2SpiRegs` struct, an `SpiRegs::Efr32s2Usart` variant and its
+    # dispatch arms, plus a `line_names()` that now answers per variant so the
+    # EFR32 path publishes no wire it cannot drive. The STM32 arms return
+    # `SPI_LINES` exactly as before and every STM32 register map, bit engine
+    # and timing in the file is byte-identical. No live re-capture owed for
+    # this change; any re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: 2d65bd52de29d5284e5978f33f1fba013f1b8cb8555ea3ea18ff38a160f04bf5
+    drift_ack_digest: 75735517aadf956fa9f18fcdbe7ebdfa914b2407637f29f91928ab8cb037a422
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2160,8 +2181,15 @@ boards:
     # struct that this board's variant never reaches. `I2c::new()` still
     # defaults to Stm32F1. No live re-capture owed for this change; any
     # re-capture already owed above still is.
+    # 2026-08-21 (third change, same day): `peripherals/spi.rs` gained an
+    # `Efr32s2SpiRegs` struct, an `SpiRegs::Efr32s2Usart` variant and its
+    # dispatch arms, plus a `line_names()` that now answers per variant so the
+    # EFR32 path publishes no wire it cannot drive. The STM32 arms return
+    # `SPI_LINES` exactly as before and every STM32 register map, bit engine
+    # and timing in the file is byte-identical. No live re-capture owed for
+    # this change; any re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: 3159502e44bb2b1d2d23fa528fa0f2eb61657802b8c77cff2b0a2cfc71a8d8c1
+    drift_ack_digest: 1d86340cc0c56620b651f9d294c4d52bb66e9c7ddb91d549b311e17ae05a75ad
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2390,8 +2418,15 @@ boards:
     # struct that this board's variant never reaches. `I2c::new()` still
     # defaults to Stm32F1. No live re-capture owed for this change; any
     # re-capture already owed above still is.
+    # 2026-08-21 (third change, same day): `peripherals/spi.rs` gained an
+    # `Efr32s2SpiRegs` struct, an `SpiRegs::Efr32s2Usart` variant and its
+    # dispatch arms, plus a `line_names()` that now answers per variant so the
+    # EFR32 path publishes no wire it cannot drive. The STM32 arms return
+    # `SPI_LINES` exactly as before and every STM32 register map, bit engine
+    # and timing in the file is byte-identical. No live re-capture owed for
+    # this change; any re-capture already owed above still is.
     drift_ack: 2026-08-21
-    drift_ack_digest: 927bac0ad71f67af33bf86cd11f388ff336154627be273b62e7ae968b61e29f5
+    drift_ack_digest: 25ee5b3d68403b03afe2f7f8b336c3072685c69f52638644f05a4af2b8f326a8
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -2977,7 +3012,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 861716084694944b2b860e04cc292b3973640ad1165ad129dc4bb03ae9ebafcf
+    drift_ack_digest: 64df06e346c2ca020495b1d5bcefa65350c0dc3639c9efe1df570ca129480f08
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3048,7 +3083,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: a882430a70242c45d50359379b4d4dab5b9317a280c95b78fc4e225d1f3769c6
+    drift_ack_digest: ff3805fb464d6c8b75d9488fcb47a0bc952a040a98662718fb586ed3ff6304a2
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs

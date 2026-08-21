@@ -225,6 +225,24 @@ peripherals:
     size: "4KB"
     irq: 5
 
+  # ── USART0 as SPI ────────────────────────────────────────────────────────
+  # ⚠️ Series 2 has NO separate SPI peripheral. SPI is a USART with
+  # `CTRL.SYNC` set and `CMD.MASTEREN` issued — the SAME register block the
+  # VCOM console uses, and an instance is one or the other, never both. So
+  # USART0 is declared as `spi` here and USART1 stays the console; declaring
+  # one instance twice would give it two models fighting over one window.
+  #
+  # USART0_S_BASE = 0x400A0000, CMU_CLKEN0.USART0 bit 9. The NVIC splits this
+  # USART into two vectors, USART0_RX_IRQn = 14 and USART0_TX_IRQn = 15; the
+  # entry carries TX, which is the one a polled SPI driver would arm.
+  - id: "spi0"
+    type: "spi"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken0", bit: 9 }
+    base_address: 0x400A0000
+    size: "4KB"
+    irq: 15
+
   # ── I2C0 / I2C1 ──────────────────────────────────────────────────────────
   # ⚠️ The two instances are NOT neighbours. The RM's peripheral map puts I2C0
   # in the low-energy group at 0x4B000000 (with WDOG0/1 and EUSART0) and

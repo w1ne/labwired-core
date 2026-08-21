@@ -35,6 +35,7 @@ members = [
     "crates/firmware-mg26-ble",
     "crates/firmware-mg26-adc",
     "crates/firmware-mg26-i2c",
+    "crates/firmware-mg26-spi",
     "crates/firmware-mg26-bootloader",
     "crates/firmware-nrf52832-demo",
     "crates/firmware-nrf52840-ble-collector",
@@ -246,6 +247,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-mg26-i2c]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-mg26-spi]
 codegen-units = 1
 opt-level = "s"
 

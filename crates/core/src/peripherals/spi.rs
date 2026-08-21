@@ -148,6 +148,12 @@ pub enum SpiRegisterLayout {
     /// `fsl_dspi` blocking path polls SR.TFFF before the push and SR.TCF after.
     /// See [`KinetisDspiRegs`].
     KinetisDspi,
+    /// Silicon Labs EFR32/EFM32 Series-2 **USART in synchronous mode** — the
+    /// same block as the console UART, with `CTRL.SYNC` set and
+    /// `CMD.MASTEREN` issued. There is no separate SPI peripheral on this
+    /// family; a frame is a `TXDATA` write answered on `RXDATA`. See
+    /// [`Efr32s2SpiRegs`].
+    Efr32s2Usart,
 }
 
 impl FromStr for SpiRegisterLayout {
@@ -162,6 +168,7 @@ impl FromStr for SpiRegisterLayout {
             "stm32h5" => Ok(Self::Stm32H5),
             "nrf52" | "nrf52_spim" | "nrf_spim" | "nordic" => Ok(Self::Nrf52Spim),
             "kinetis" | "dspi" | "kinetis_dspi" | "nxp_dspi" | "kw41z" => Ok(Self::KinetisDspi),
+            "efr32s2" | "efr32" | "efm32" | "gecko" | "efr32s2_usart" => Ok(Self::Efr32s2Usart),
             _ => Err(format!(
                 "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, stm32h5, nrf52, kinetis",
                 value
@@ -800,12 +807,127 @@ impl FromStr for SpiPadMap {
 
 /// Family-isolated SPI register state. STM32 and nRF register sets cannot
 /// coexist on one instance.
+
+/// Silicon Labs EFR32 Series-2 USART registers, synchronous (SPI) mode.
+///
+/// # Sources
+///
+/// Offsets walked from `USART_TypeDef` in `efr32mg26_usart.h` (`simplicity_sdk`
+/// tag `sisdk-2025.6`); bit positions and `STATUS`'s `0x2040` reset value are
+/// the `_USART_…_SHIFT` / `_RESETVALUE` defines from the same header.
+///
+/// ⚠️ This is the SAME register block the console UART model drives — Series 2
+/// has no separate SPI peripheral. `CTRL.SYNC` is what makes it SPI, and a
+/// USART instance is one or the other, never both at once. The chip yaml must
+/// therefore declare a given instance as `uart` or as `spi`, not both, and
+/// USART1 on the BRD2709A is the VCOM console.
+#[derive(Debug, Default, Clone, serde::Serialize)]
+struct Efr32s2SpiRegs {
+    en: u32,
+    ctrl: u32,
+    frame: u32,
+    trigctrl: u32,
+    clkdiv: u32,
+    iflag: u32,
+    ien: u32,
+    /// Last byte clocked back on MISO. 0 for a write-only device.
+    rxdata: u32,
+    /// `CMD` latches these: RX/TX enabled, and master mode.
+    rx_enabled: bool,
+    tx_enabled: bool,
+    master: bool,
+    /// A received byte is waiting in `RXDATA`.
+    rxdatav: bool,
+}
+
+// Offsets, walked from `USART_TypeDef`.
+const EFR_USART_IPVERSION: u64 = 0x00;
+const EFR_USART_EN: u64 = 0x04;
+const EFR_USART_CTRL: u64 = 0x08;
+const EFR_USART_FRAME: u64 = 0x0C;
+const EFR_USART_TRIGCTRL: u64 = 0x10;
+const EFR_USART_CMD: u64 = 0x14;
+const EFR_USART_STATUS: u64 = 0x18;
+const EFR_USART_CLKDIV: u64 = 0x1C;
+const EFR_USART_RXDATA: u64 = 0x24;
+const EFR_USART_TXDATA: u64 = 0x3C;
+const EFR_USART_IF: u64 = 0x48;
+const EFR_USART_IEN: u64 = 0x4C;
+
+const EFR_USART_EN_EN: u32 = 1 << 0;
+const EFR_USART_CTRL_SYNC: u32 = 1 << 0;
+const EFR_USART_CMD_RXEN: u32 = 1 << 0;
+const EFR_USART_CMD_RXDIS: u32 = 1 << 1;
+const EFR_USART_CMD_TXEN: u32 = 1 << 2;
+const EFR_USART_CMD_TXDIS: u32 = 1 << 3;
+const EFR_USART_CMD_MASTEREN: u32 = 1 << 4;
+const EFR_USART_CMD_MASTERDIS: u32 = 1 << 5;
+const EFR_USART_CMD_CLEARRX: u32 = 1 << 11;
+
+const EFR_USART_STATUS_RXENS: u32 = 1 << 0;
+const EFR_USART_STATUS_TXENS: u32 = 1 << 1;
+const EFR_USART_STATUS_MASTER: u32 = 1 << 2;
+const EFR_USART_STATUS_TXC: u32 = 1 << 5;
+const EFR_USART_STATUS_TXBL: u32 = 1 << 6;
+const EFR_USART_STATUS_RXDATAV: u32 = 1 << 7;
+
+/// `_USART_STATUS_RESETVALUE` = TXBL | TXIDLE.
+const EFR_USART_STATUS_RESET: u32 = 0x0000_2040;
+const EFR_USART_IPVERSION_RESET: u32 = 2;
+
+/// `IF.TXC` / `IF.TXBL` / `IF.RXDATAV`, the three a polled SPI driver watches.
+const EFR_USART_IF_TXC: u32 = 1 << 0;
+const EFR_USART_IF_TXBL: u32 = 1 << 1;
+const EFR_USART_IF_RXDATAV: u32 = 1 << 2;
+
+impl Efr32s2SpiRegs {
+    fn status(&self) -> u32 {
+        // TXBL and TXC ride the reset word: a frame completes inside the
+        // TXDATA write here, so the shift register is never occupied.
+        let mut s = EFR_USART_STATUS_RESET;
+        if self.rx_enabled {
+            s |= EFR_USART_STATUS_RXENS;
+        }
+        if self.tx_enabled {
+            s |= EFR_USART_STATUS_TXENS;
+        }
+        if self.master {
+            s |= EFR_USART_STATUS_MASTER;
+        }
+        if self.rxdatav {
+            s |= EFR_USART_STATUS_RXDATAV;
+        }
+        s | EFR_USART_STATUS_TXC | EFR_USART_STATUS_TXBL
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            EFR_USART_IPVERSION => EFR_USART_IPVERSION_RESET,
+            EFR_USART_EN => self.en,
+            EFR_USART_CTRL => self.ctrl,
+            EFR_USART_FRAME => self.frame,
+            EFR_USART_TRIGCTRL => self.trigctrl,
+            EFR_USART_CMD => 0, // write-only
+            EFR_USART_STATUS => self.status(),
+            EFR_USART_CLKDIV => self.clkdiv,
+            EFR_USART_RXDATA => self.rxdata,
+            EFR_USART_IF => self.iflag,
+            EFR_USART_IEN => self.ien,
+            _ => {
+                crate::census_reg!("spi:Efr32s2SpiRegs", offset, "read");
+                0
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 enum SpiRegs {
     Stm32(Stm32SpiRegs),
     Stm32H5(Stm32H5SpiRegs),
     Nrf52(Nrf52SpiRegs),
     KinetisDspi(KinetisDspiRegs),
+    Efr32s2Usart(Efr32s2SpiRegs),
 }
 
 impl Default for SpiRegs {
@@ -999,6 +1121,7 @@ impl Spi {
             SpiRegisterLayout::Stm32H5 => SpiRegs::Stm32H5(Stm32H5SpiRegs::reset()),
             SpiRegisterLayout::Nrf52Spim => SpiRegs::Nrf52(Nrf52SpiRegs::default()),
             SpiRegisterLayout::KinetisDspi => SpiRegs::KinetisDspi(KinetisDspiRegs::default()),
+            SpiRegisterLayout::Efr32s2Usart => SpiRegs::Efr32s2Usart(Efr32s2SpiRegs::default()),
         };
         Self {
             regs,
@@ -1552,6 +1675,126 @@ impl Spi {
         }
     }
 
+    /// EFR32 Series-2 USART (synchronous mode) register write.
+    ///
+    /// A `TXDATA` write clocks ONE frame out and back: the byte goes to every
+    /// attached device and the last non-zero answer lands in `RXDATA`, which is
+    /// the same broadcast rule the Kinetis DSPI path uses. `emlib`'s
+    /// `USART_SpiTransfer` is exactly this — write TXDATA, wait `STATUS.TXC`,
+    /// read RXDATA.
+    ///
+    /// ⚠️ A frame is only clocked when the USART is ENABLED and in SYNC mode
+    /// with TX enabled. A driver that forgot `CTRL.SYNC` or `CMD.TXEN` gets
+    /// nothing, here and on the bench — this block is a UART until told
+    /// otherwise, and silently transferring anyway would hide the single most
+    /// common way an EFR32 SPI bring-up fails.
+    fn write_efr32s2_usart_reg(&mut self, offset: u64, value: u32) {
+        // Read the gating state before borrowing mutably for the transfer.
+        let (enabled, sync, tx_enabled) = match &self.regs {
+            SpiRegs::Efr32s2Usart(r) => (
+                r.en & EFR_USART_EN_EN != 0,
+                r.ctrl & EFR_USART_CTRL_SYNC != 0,
+                r.tx_enabled,
+            ),
+            _ => (false, false, false),
+        };
+
+        match offset {
+            EFR_USART_EN => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.en = value & EFR_USART_EN_EN;
+                    if r.en == 0 {
+                        r.rx_enabled = false;
+                        r.tx_enabled = false;
+                        r.master = false;
+                        r.rxdatav = false;
+                    }
+                }
+            }
+            EFR_USART_CTRL => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.ctrl = value;
+                }
+            }
+            EFR_USART_FRAME => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.frame = value;
+                }
+            }
+            EFR_USART_TRIGCTRL => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.trigctrl = value;
+                }
+            }
+            EFR_USART_CLKDIV => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.clkdiv = value;
+                }
+            }
+            EFR_USART_CMD => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    if value & EFR_USART_CMD_RXEN != 0 {
+                        r.rx_enabled = true;
+                    }
+                    if value & EFR_USART_CMD_RXDIS != 0 {
+                        r.rx_enabled = false;
+                    }
+                    if value & EFR_USART_CMD_TXEN != 0 {
+                        r.tx_enabled = true;
+                    }
+                    if value & EFR_USART_CMD_TXDIS != 0 {
+                        r.tx_enabled = false;
+                    }
+                    if value & EFR_USART_CMD_MASTEREN != 0 {
+                        r.master = true;
+                    }
+                    if value & EFR_USART_CMD_MASTERDIS != 0 {
+                        r.master = false;
+                    }
+                    if value & EFR_USART_CMD_CLEARRX != 0 {
+                        r.rxdatav = false;
+                        r.rxdata = 0;
+                    }
+                }
+            }
+            EFR_USART_TXDATA => {
+                if !(enabled && sync && tx_enabled) {
+                    return;
+                }
+                let mosi = (value & 0xFF) as u8;
+                let mut miso: u8 = 0;
+                for dev in &mut self.attached_devices {
+                    let resp = dev.transfer(mosi);
+                    if resp != 0 {
+                        miso = resp;
+                    }
+                }
+                if self.loopback && self.attached_devices.is_empty() {
+                    miso = mosi;
+                }
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.rxdata = miso as u32;
+                    r.rxdatav = true;
+                    r.iflag |= EFR_USART_IF_TXC | EFR_USART_IF_TXBL | EFR_USART_IF_RXDATAV;
+                }
+            }
+            EFR_USART_IF => {
+                // Write-1-to-clear, the Series-2 convention.
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.iflag &= !value;
+                }
+            }
+            EFR_USART_IEN => {
+                if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                    r.ien = value;
+                }
+            }
+            _ => {
+                crate::census_reg!("spi:Spi", offset, "write");
+            }
+        }
+    }
+
     /// STM32H5 ("SPI v3") register write with transfer-engine side effects.
     /// Only called on the `Stm32H5` variant. Behavioural rules pinned by
     /// silicon capture 2026-06-11 (NUCLEO-H563ZI) unless noted otherwise.
@@ -2058,7 +2301,16 @@ impl Spi {
 
 impl crate::Peripheral for Spi {
     fn line_names(&self) -> &'static [&'static str] {
-        SPI_LINES
+        match &self.regs {
+            // The EFR32 USART-as-SPI path owns no narration cell: a frame
+            // completes inside the TXDATA write and no SCK edge is published,
+            // so it publishes NO line names either. Naming lines it cannot
+            // drive is what `bus_visibility` exists to catch — a pad table row
+            // that answers "what could ever be seen here" while the trace stays
+            // flat. See the module header's idealisation list.
+            SpiRegs::Efr32s2Usart(_) => &[],
+            _ => SPI_LINES,
+        }
     }
 
     fn wire_lines(&self) -> Option<&PadLines> {
@@ -2072,6 +2324,7 @@ impl crate::Peripheral for Spi {
             SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
             SpiRegs::KinetisDspi(r) => r.read_reg(reg_offset),
             SpiRegs::Stm32H5(r) => r.read_reg(reg_offset),
+            SpiRegs::Efr32s2Usart(r) => r.read_reg(reg_offset),
             // Widen u16→u32 before the shift: byte accesses at offsets 2/3 read
             // the upper byte of the next halfword; `(u16 as u32) >> 16` is 0
             // without an overflow panic under the CI release profile.
@@ -2151,6 +2404,20 @@ impl crate::Peripheral for Spi {
             return Ok(());
         }
 
+        // EFR32 Series-2 USART: 32-bit registers. Read-modify-write the byte
+        // then hand the full word over, so a byte write of TXDATA still clocks
+        // exactly one frame.
+        if let SpiRegs::Efr32s2Usart(_) = &self.regs {
+            let cur = match &self.regs {
+                SpiRegs::Efr32s2Usart(r) => r.read_reg(reg_offset),
+                _ => 0,
+            };
+            let mask: u32 = 0xFF << (byte_offset * 8);
+            let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
+            self.write_efr32s2_usart_reg(reg_offset, new);
+            return Ok(());
+        }
+
         // Kinetis DSPI: 32-bit registers, read-modify-write the byte then hand
         // the full word to the register handler (PUSHR reads back 0, so a byte
         // write degenerates to the shifted byte).
@@ -2215,6 +2482,12 @@ impl crate::Peripheral for Spi {
         // (write-1-to-clear) must see the full mask in a single access.
         if let SpiRegs::Stm32H5(_) = &self.regs {
             self.write_stm32h5_reg(offset & !3, value);
+            return Ok(());
+        }
+        // EFR32 Series-2 USART: a word write of TXDATA is ONE frame. Byte
+        // splitting would clock four.
+        if let SpiRegs::Efr32s2Usart(_) = &self.regs {
+            self.write_efr32s2_usart_reg(offset & !3, value);
             return Ok(());
         }
         // Kinetis DSPI: PUSHR is one 32-bit frame push — must be atomic (byte
@@ -3731,5 +4004,196 @@ mod tests {
         spi.write(0x40, 0xA5).unwrap(); // CRCPOLY low byte (reset 0x107)
         spi.write(0x41, 0x5A).unwrap(); // CRCPOLY byte 1
         assert_eq!(h5_read(&spi, 0x40), 0x0000_5AA5, "bytes merged in place");
+    }
+}
+
+#[cfg(test)]
+mod efr32s2_spi_tests {
+    use super::*;
+    use crate::Peripheral;
+
+    /// A slave that answers with the complement of what it was sent, so a test
+    /// can tell a real exchange from a zero.
+    #[derive(Debug, Default)]
+    struct EchoSlave {
+        seen: Vec<u8>,
+    }
+
+    impl SpiDevice for EchoSlave {
+        fn cs_pin(&self) -> &str {
+            // No pad routing in these tests: the controller broadcasts to
+            // every attached device, exactly as the Kinetis DSPI path does.
+            ""
+        }
+        fn transfer(&mut self, byte: u8) -> u8 {
+            self.seen.push(byte);
+            !byte
+        }
+    }
+
+    fn controller() -> Spi {
+        Spi::new_with_layout(SpiRegisterLayout::Efr32s2Usart)
+    }
+
+    /// The `emlib` bring-up: enable, SYNC, master, TX/RX on.
+    fn ready() -> Spi {
+        let mut spi = controller();
+        spi.write_u32(EFR_USART_EN, EFR_USART_EN_EN).unwrap();
+        spi.write_u32(EFR_USART_CTRL, EFR_USART_CTRL_SYNC).unwrap();
+        spi.write_u32(
+            EFR_USART_CMD,
+            EFR_USART_CMD_MASTEREN | EFR_USART_CMD_TXEN | EFR_USART_CMD_RXEN,
+        )
+        .unwrap();
+        spi
+    }
+
+    fn status(spi: &Spi) -> u32 {
+        spi.read_u32(EFR_USART_STATUS).unwrap()
+    }
+
+    #[test]
+    fn the_layout_resolves_by_name() {
+        assert_eq!(
+            "efr32s2".parse::<SpiRegisterLayout>().unwrap(),
+            SpiRegisterLayout::Efr32s2Usart
+        );
+    }
+
+    #[test]
+    fn status_reads_the_header_reset_value_before_any_command() {
+        let spi = controller();
+        // TXBL | TXIDLE | TXC — the transmit side is idle and ready.
+        assert_eq!(status(&spi) & 0x2040, 0x2040);
+        assert_eq!(status(&spi) & EFR_USART_STATUS_MASTER, 0, "not master yet");
+        assert_eq!(status(&spi) & EFR_USART_STATUS_RXDATAV, 0);
+    }
+
+    #[test]
+    fn cmd_latches_master_and_the_enables_into_status() {
+        let spi = ready();
+        let s = status(&spi);
+        assert_eq!(s & EFR_USART_STATUS_MASTER, EFR_USART_STATUS_MASTER);
+        assert_eq!(s & EFR_USART_STATUS_TXENS, EFR_USART_STATUS_TXENS);
+        assert_eq!(s & EFR_USART_STATUS_RXENS, EFR_USART_STATUS_RXENS);
+    }
+
+    #[test]
+    fn a_txdata_write_clocks_one_frame_and_the_answer_lands_in_rxdata() {
+        let mut spi = ready();
+        spi.push_device(Box::new(EchoSlave::default()));
+
+        spi.write_u32(EFR_USART_TXDATA, 0xA5).unwrap();
+        assert_eq!(
+            status(&spi) & EFR_USART_STATUS_RXDATAV,
+            EFR_USART_STATUS_RXDATAV
+        );
+        assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0x5A, "!0xA5");
+    }
+
+    /// ⚠️ The single most common EFR32 SPI bring-up failure: this block is a
+    /// UART until `CTRL.SYNC` says otherwise. Clocking a frame anyway would
+    /// hide it.
+    #[test]
+    fn nothing_is_clocked_without_sync_mode() {
+        let mut spi = controller();
+        spi.write_u32(EFR_USART_EN, EFR_USART_EN_EN).unwrap();
+        spi.write_u32(EFR_USART_CMD, EFR_USART_CMD_MASTEREN | EFR_USART_CMD_TXEN)
+            .unwrap();
+        spi.push_device(Box::new(EchoSlave::default()));
+
+        spi.write_u32(EFR_USART_TXDATA, 0xA5).unwrap();
+        assert_eq!(status(&spi) & EFR_USART_STATUS_RXDATAV, 0);
+        assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0);
+    }
+
+    #[test]
+    fn nothing_is_clocked_without_txen() {
+        let mut spi = controller();
+        spi.write_u32(EFR_USART_EN, EFR_USART_EN_EN).unwrap();
+        spi.write_u32(EFR_USART_CTRL, EFR_USART_CTRL_SYNC).unwrap();
+        spi.write_u32(EFR_USART_CMD, EFR_USART_CMD_MASTEREN)
+            .unwrap();
+        spi.push_device(Box::new(EchoSlave::default()));
+
+        spi.write_u32(EFR_USART_TXDATA, 0xA5).unwrap();
+        assert_eq!(status(&spi) & EFR_USART_STATUS_RXDATAV, 0);
+    }
+
+    #[test]
+    fn nothing_is_clocked_while_the_usart_is_disabled() {
+        let mut spi = controller();
+        spi.write_u32(EFR_USART_CTRL, EFR_USART_CTRL_SYNC).unwrap();
+        spi.write_u32(EFR_USART_CMD, EFR_USART_CMD_MASTEREN | EFR_USART_CMD_TXEN)
+            .unwrap();
+        spi.push_device(Box::new(EchoSlave::default()));
+
+        spi.write_u32(EFR_USART_TXDATA, 0xA5).unwrap();
+        assert_eq!(status(&spi) & EFR_USART_STATUS_RXDATAV, 0);
+    }
+
+    /// A word write is ONE frame. Byte-splitting TXDATA would clock four, and a
+    /// display would see three stray bytes per pixel word.
+    #[test]
+    fn a_word_write_of_txdata_is_one_frame_not_four() {
+        let mut spi = ready();
+        spi.push_device(Box::new(EchoSlave::default()));
+        spi.write_u32(EFR_USART_TXDATA, 0x0000_00A5).unwrap();
+        assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0x5A);
+    }
+
+    /// ...and so is a byte write, which is how an 8-bit driver spells it.
+    #[test]
+    fn a_byte_write_of_txdata_is_also_one_frame() {
+        let mut spi = ready();
+        spi.push_device(Box::new(EchoSlave::default()));
+        spi.write(EFR_USART_TXDATA, 0xA5).unwrap();
+        assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0x5A);
+    }
+
+    #[test]
+    fn a_stream_of_frames_reaches_the_slave_in_order() {
+        let mut spi = ready();
+        spi.push_device(Box::new(EchoSlave::default()));
+        for b in [0x01u8, 0x02, 0x03, 0xFF] {
+            spi.write_u32(EFR_USART_TXDATA, b as u32).unwrap();
+            assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), (!b) as u32);
+        }
+    }
+
+    #[test]
+    fn the_flag_register_is_write_one_to_clear() {
+        let mut spi = ready();
+        spi.push_device(Box::new(EchoSlave::default()));
+        spi.write_u32(EFR_USART_TXDATA, 0x11).unwrap();
+
+        let f = spi.read_u32(EFR_USART_IF).unwrap();
+        assert_eq!(f & EFR_USART_IF_TXC, EFR_USART_IF_TXC);
+        assert_eq!(f & EFR_USART_IF_RXDATAV, EFR_USART_IF_RXDATAV);
+
+        spi.write_u32(EFR_USART_IF, 0xFFFF_FFFF).unwrap();
+        assert_eq!(spi.read_u32(EFR_USART_IF).unwrap(), 0);
+    }
+
+    #[test]
+    fn clearrx_drops_a_pending_byte() {
+        let mut spi = ready();
+        spi.push_device(Box::new(EchoSlave::default()));
+        spi.write_u32(EFR_USART_TXDATA, 0x11).unwrap();
+        assert_ne!(status(&spi) & EFR_USART_STATUS_RXDATAV, 0);
+
+        spi.write_u32(EFR_USART_CMD, EFR_USART_CMD_CLEARRX).unwrap();
+        assert_eq!(status(&spi) & EFR_USART_STATUS_RXDATAV, 0);
+        assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0);
+    }
+
+    #[test]
+    fn disabling_the_usart_drops_master_and_the_enables() {
+        let mut spi = ready();
+        spi.write_u32(EFR_USART_EN, 0).unwrap();
+        let s = status(&spi);
+        assert_eq!(s & EFR_USART_STATUS_MASTER, 0);
+        assert_eq!(s & EFR_USART_STATUS_TXENS, 0);
+        assert_eq!(s & EFR_USART_STATUS_RXENS, 0);
     }
 }

@@ -1235,6 +1235,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-mg26-spi"
+version = "0.22.1"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nrf52832-demo"
 version = "0.1.0"
 dependencies = [
