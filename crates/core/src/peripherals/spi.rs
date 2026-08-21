@@ -805,9 +805,6 @@ impl FromStr for SpiPadMap {
     }
 }
 
-/// Family-isolated SPI register state. STM32 and nRF register sets cannot
-/// coexist on one instance.
-
 /// Silicon Labs EFR32 Series-2 USART registers, synchronous (SPI) mode.
 ///
 /// # Sources
@@ -921,6 +918,8 @@ impl Efr32s2SpiRegs {
     }
 }
 
+/// Family-isolated SPI register state. STM32 and nRF register sets cannot
+/// coexist on one instance.
 #[derive(Debug, Clone, serde::Serialize)]
 enum SpiRegs {
     Stm32(Stm32SpiRegs),

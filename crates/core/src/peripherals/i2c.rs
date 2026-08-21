@@ -3660,6 +3660,10 @@ mod kinetis_scheduler {
             I2c::Stm32F1(i) => i.clock.clone(),
             I2c::Stm32L4(i) => i.clock.clone(),
             I2c::Kinetis(i) => i.clock.clone(),
+            // The EFR32 controller has no cycle clock at all: it completes a
+            // transfer inside the register write and never schedules an event,
+            // so it is not one of the variants this harness can drive.
+            I2c::Efr32s2(_) => panic!("EFR32 I2C is not a scheduler-mode variant"),
         }
         .expect("scheduler-mode instance has a clock")
     }

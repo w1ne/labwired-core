@@ -4115,7 +4115,7 @@ mod tests {
         cpu.write_reg(1, 0);
         cpu.write_reg(2, 1);
         run_test_instr(&mut cpu, &mut bus, 0x2A01, false); // cmp r2, #1 → Z=1
-        assert!(((cpu.xpsr >> 30) & 1 == 1));
+        assert!((cpu.xpsr >> 30) & 1 == 1);
 
         // `ands r2, r1` with r1 = 0 → result 0 … Z stays set. Use ORR with a
         // non-zero result instead, which must CLEAR Z.
@@ -4123,7 +4123,7 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0x430A, false); // orrs r2, r1
         assert_eq!(cpu.read_reg(2), 5);
         assert!(
-            !((cpu.xpsr >> 30) & 1 == 1),
+            (cpu.xpsr >> 30) & 1 != 1,
             "orrs outside an IT block must update Z"
         );
     }
