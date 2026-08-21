@@ -2713,7 +2713,7 @@ boards:
     # under --features event-scheduler (0 failed), clippy clean, fmt clean. No
     # live re-capture, and this ack does not discharge the ones already owed
     # above.
-    drift_ack: 2026-08-20
+    drift_ack: 2026-08-21
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -2739,7 +2739,16 @@ boards:
     # dispatches 32-bit stores via `write_u32` (bus/accessors.rs:653) and never
     # called it. Register maps, reset values and the 9-reg anchor unchanged.
     # 3121 + 3251 lib tests green. Live re-capture still owed.
-    drift_ack_digest: 211c052bac56ba86a07e8735e87ddac697c646bfdead30c84b4978b2a109cc56
+    # 2026-08-21: TEST-ONLY. The only change under `models` is a new #[cfg(test)]
+    # case in peripherals/esp32s3/flash_xip.rs
+    # (doom_wad_mmap_window_returns_planted_bytes), which reads the Doom IWAD
+    # mmap window through the existing MMU path. `git diff` over the watched
+    # paths shows 0 lines changed outside `mod tests`: no register map, no reset
+    # value, no bus behaviour, and nothing inside the nine captured windows
+    # (UART0/GPIO/I2C0/RMT/MCPWM0/TIMG0/SYSTIMER/GDMA/SYSTEM/RTC_CNTL) moves.
+    # Owner-acked without a live capture; the re-captures owed above are NOT
+    # discharged by this line and remain owed.
+    drift_ack_digest: bd4e63a7f95538d45cbd159e42f2392150a3c97e438cf12989d57a13853d5ab8
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
