@@ -3033,6 +3033,12 @@ impl XtensaLx7 {
                 bus.clear_cpu_irq_pending(self.core_id(), slot);
             }
         }
+        // A cleared ROUTED bit is not a cleared SOURCE. The source is still
+        // asserting until the ISR's INT_CLR, so the routed level comes straight
+        // back — implicitly on a bus that aggregates every cycle, and here on
+        // one that does not. Without this the ISR reads `RSR.INTERRUPT` as zero
+        // for the source it was just dispatched for.
+        bus.resettle_cpu_irq_levels();
 
         Ok(())
     }

@@ -34,7 +34,14 @@ fn esp32s3_walk_blockers() {
     println!("legacy tick entries      : {}", legacy.len());
     println!("scheduler-driven         : {} {:?}", sched.len(), sched);
     println!("walk-independent (inert) : {} {:?}", inert.len(), inert);
-    println!("WALK BLOCKERS            : {} {:?}", blockers.len(), blockers);
-    println!("esp32s3_irq_routing      : {}", bus.esp32s3_irq_routing);
+    println!(
+        "WALK BLOCKERS            : {} {:?}",
+        blockers.len(),
+        blockers
+    );
+    println!(
+        "esp32s3 matrix routing   : {}",
+        bus.irq_fabric.esp32s3.routing
+    );
     println!("legacy_walk_disabled     : {}", bus.legacy_walk_disabled);
 }

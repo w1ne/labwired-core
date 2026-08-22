@@ -75,13 +75,47 @@ impl InterruptFabric {
     /// True when no active fabric needs the per-cycle walk to aggregate
     /// interrupt levels — i.e. the walk-free per-cycle tick can skip it.
     ///
+    /// `walk_deleted` is the caller's `SystemBus::legacy_walk_disabled`. Both
+    /// arms depend on it and neither can read it: a fabric holds interrupt
+    /// state, not the bus's walk policy. It is a PARAMETER rather than an
+    /// unstated precondition because the two escape hatches below are only
+    /// sound on a walk-DELETED bus — on a walk-ON bus the per-tick aggregation
+    /// still owns level derivation (`irq_fabric.*.walk_sources` is rebuilt from
+    /// the walk's emitted source IDs every tick) and skipping it would drop
+    /// every walk-emitted source. The sole caller
+    /// (`SystemBus::per_cycle_tick_is_trivial`) already required this; passing
+    /// it makes the predicate answerable on its own terms instead of true-by-
+    /// convention.
+    ///
     /// An active C3 fabric qualifies once its declarative INTC cache is
     /// populated, because levels are then re-derived at the MMIO write choke
-    /// and the event path instead of at the tick. An active S3 fabric never
-    /// qualifies: its walk-emitted source bitmap is still rebuilt per tick.
+    /// (`sync_esp32c3_irq_cache_write`) and the event path
+    /// (`deliver_scheduled_irq_levels`) instead of at the tick. Without the
+    /// cache `aggregate_esp32c3_irqs` reads the routing registers directly and
+    /// is the ONLY aggregation point, so the tick has to keep running.
+    ///
+    /// An active S3 fabric qualifies with no extra condition, and the asymmetry
+    /// is real rather than an oversight. The C3's `intc` cache exists because
+    /// its `INTERRUPT_CORE0` bank is a DECLARATIVE peripheral: routing has to
+    /// decode `MAP`/`CPU_INT_ENABLE`/`CPU_INT_PRI_n`/`CPU_INT_THRESH` out of a
+    /// register file, and `intc.is_some()` is exactly "that decode exists".
+    /// The S3 intmatrix is a NATIVE model
+    /// ([`Esp32s3IntMatrix`](crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix))
+    /// that already holds its per-core routing as decoded `[Option<u8>; 99]`
+    /// tables maintained at its own `write`, and `route_irq_source_to_cpu_irq_core`
+    /// is an array index into them. There is nothing left to cache: a mirror on
+    /// this fabric would be a SECOND copy of the MAP tables with its own
+    /// invalidation to get wrong, buying an array read that is already O(1) and
+    /// that the walk-free path performs only at a write choke or a scheduler
+    /// event, never per cycle. So the S3 arm gates on the same thing the C3 arm
+    /// really gates on — "the routed state is derived at the choke, not at the
+    /// tick" — which on the S3 is true as soon as the walk is deleted.
     #[inline]
-    pub fn per_cycle_aggregation_free(&self) -> bool {
-        (!self.esp32c3.routing || self.esp32c3.intc.is_some()) && !self.esp32s3.routing
+    pub fn per_cycle_aggregation_free(&self, walk_deleted: bool) -> bool {
+        if !walk_deleted {
+            return !self.matrix_owns_cpu_irqs();
+        }
+        !self.esp32c3.routing || self.esp32c3.intc.is_some()
     }
 }
 
@@ -188,4 +222,81 @@ impl Default for Esp32c3IntcCache {
             from_cpu_pending: 0,
         }
     }
+}
+
+/// Differential audit of the ESP32-S3 walk-free interrupt path.
+///
+/// # Why this exists
+///
+/// Opening [`InterruptFabric::per_cycle_aggregation_free`] for the S3 is a
+/// claim: that the routed state left behind by the write choke and the event
+/// path is, at EVERY bus boundary, bit-identical to what re-polling every
+/// scheduler-driven peripheral would have produced. That claim is exactly the
+/// kind that is easy to assert and easy to get wrong in a way no functional
+/// test notices — a level that de-asserts one boundary late still renders the
+/// same pixels, right up to the run where it does not.
+///
+/// So it is measured instead of asserted. With an audit installed
+/// (`SystemBus::install_esp32s3_irq_audit`) every walk-free boundary computes
+/// the answer BOTH ways: the CACHED one already sitting in `pending_cpu_irqs`
+/// and the intmatrix `INTR_STATUS` mirror, against the POLLED one from a fresh
+/// `poll_scheduler_matrix_sources` and recompute. Any disagreement is recorded
+/// with the cycle it happened on. `esp32s3_irq_cache_differential` runs real S3
+/// firmware with the audit on and fails if this is non-empty.
+///
+/// The audit LEAVES the polled answer in place, so an audited run behaves as
+/// the pre-optimisation build did. It is a measurement harness, not a
+/// fallback: divergence is reported, never repaired.
+#[derive(Debug, Default, Clone)]
+pub struct Esp32s3IrqAudit {
+    /// Walk-free bus boundaries audited. Zero means the gate never ran —
+    /// a fully-skipped audit reads exactly like a passing one, so tests assert
+    /// on this too.
+    pub boundaries: u64,
+    /// Boundaries at which the routed per-core slot bitmap was NON-ZERO, i.e.
+    /// an interrupt was actually pending at the cores. Anti-vacuity: a run that
+    /// never routes an interrupt agrees with a re-poll trivially, so a gate
+    /// that only checked `divergences.is_empty()` would pass on a workload
+    /// whose interrupt path never came up.
+    pub boundaries_with_routed_irq: u64,
+    /// Boundaries at which at least one scheduler-driven matrix SOURCE was
+    /// asserting. Reported so a workload that turns out never to raise an
+    /// interrupt says so out loud instead of passing quietly.
+    pub boundaries_with_sched_sources: u64,
+    /// Union over the run of every scheduler-driven matrix source seen
+    /// asserting — a bitmap of source IDs, so a failure names the peripherals
+    /// that were actually live.
+    pub sched_source_union: [u64; 2],
+    /// Every boundary at which the cached and polled answers disagreed, capped
+    /// at [`Self::MAX_RECORDED`] so a systematically broken build reports the
+    /// first failures instead of exhausting memory.
+    pub divergences: Vec<Esp32s3IrqDivergence>,
+    /// Total disagreements, including those past [`Self::MAX_RECORDED`].
+    pub divergence_count: u64,
+}
+
+impl Esp32s3IrqAudit {
+    /// How many divergences are retained in full. Past this only the count
+    /// grows.
+    pub const MAX_RECORDED: usize = 16;
+}
+
+/// One boundary at which the cached and polled S3 routed state disagreed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Esp32s3IrqDivergence {
+    /// `SystemBus::current_cycle` at the audited boundary.
+    pub cycle: u64,
+    /// Per-core CPU-interrupt slot bitmap the walk-free path had left behind.
+    pub cached_routed: [u32; 2],
+    /// The same bitmap re-derived by polling every scheduler-driven peripheral.
+    pub polled_routed: [u32; 2],
+    /// `INTR_STATUS` mirror the walk-free path had left behind.
+    pub cached_intr_status: [u32; 4],
+    /// The same mirror re-derived by polling.
+    pub polled_intr_status: [u32; 4],
+    /// Scheduler-driven matrix source bitmap the walk-free path had cached.
+    pub cached_sched_sources: [u64; 2],
+    /// The same bitmap re-derived by polling — the ROOT input, so a divergence
+    /// here names a peripheral whose level moved with no write and no event.
+    pub polled_sched_sources: [u64; 2],
 }

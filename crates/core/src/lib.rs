@@ -1319,6 +1319,24 @@ pub trait Bus {
     /// Plan 3: clear the pending bit for cpu IRQ `slot` on `core_id`.
     fn clear_cpu_irq_pending(&mut self, _core_id: u8, _slot: u8) {}
 
+    /// Re-derive the routed CPU-interrupt levels after an interrupt dispatch
+    /// cleared the slots it took, once per dispatch.
+    ///
+    /// `clear_cpu_irq_pending` clears a ROUTED bit, not the peripheral source
+    /// behind it. The source is level-sensitive and generally still asserting —
+    /// the firmware ISR de-asserts it later with an INT_CLR write — so the
+    /// routed bit has to come straight back. Until the walk-free ESP32-S3 path
+    /// landed that happened implicitly: the per-cycle aggregation rebuilt the
+    /// whole routed bitmap from the live source levels on the very next tick.
+    /// A bus that no longer aggregates per cycle must re-derive HERE instead,
+    /// or a level the guest can read back (`RSR.INTERRUPT` on Xtensa is
+    /// `pending_cpu_irqs` OR-ed in) reads zero for the whole ISR.
+    ///
+    /// Called once after the dispatch clear loop, not per slot. Default no-op:
+    /// on an NVIC bus the pending bit is owned by the NVIC, and on a bus that
+    /// still aggregates per cycle the next tick does this anyway.
+    fn resettle_cpu_irq_levels(&mut self) {}
+
     /// ESP32-C3 (RISC-V) external-interrupt delivery: the level-sensitive
     /// bitmask of CPU interrupt lines (1..31) currently asserted, after the bus
     /// has routed asserted peripheral sources (and the SYSTEM FROM_CPU IPI

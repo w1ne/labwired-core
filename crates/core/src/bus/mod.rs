@@ -47,7 +47,10 @@ pub use can_devices::*;
 pub use resident_device::BusResidentDevice;
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
-pub use interrupt_fabric::{Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, InterruptFabric};
+pub use interrupt_fabric::{
+    Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
+    InterruptFabric,
+};
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
@@ -88,6 +91,27 @@ impl SystemBus {
                 .peripherals
                 .iter()
                 .all(|p| p.dev.uses_scheduler() || !p.dev.legacy_tick_active())
+    }
+
+    /// Arm the ESP32-S3 walk-free interrupt differential audit on this bus.
+    ///
+    /// From here every walk-free bus boundary computes the routed S3 state both
+    /// the CACHED way (what the write choke and the event path left behind) and
+    /// the POLLED way (a fresh poll of every scheduler-driven peripheral), and
+    /// records disagreements. Test harness only — see [`Esp32s3IrqAudit`] for
+    /// what the audit is for and why it does not repair what it finds.
+    #[doc(hidden)]
+    pub fn install_esp32s3_irq_audit(&mut self) {
+        self.esp32s3_irq_audit = Some(Box::default());
+    }
+
+    /// Read the audit's findings so far, leaving it armed. `None` if
+    /// [`Self::install_esp32s3_irq_audit`] was never called — which a gate must
+    /// distinguish from "armed and clean", because an audit that never ran
+    /// reads exactly like one that found nothing.
+    #[doc(hidden)]
+    pub fn esp32s3_irq_audit(&self) -> Option<&Esp32s3IrqAudit> {
+        self.esp32s3_irq_audit.as_deref()
     }
 }
 
@@ -367,6 +391,12 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
+    /// Differential audit of the walk-free ESP32-S3 interrupt path, installed
+    /// only by [`Self::install_esp32s3_irq_audit`]. `None` in every production
+    /// build and every other test, where the cost is one null check per
+    /// walk-free boundary. See [`Esp32s3IrqAudit`].
+    #[doc(hidden)]
+    pub esp32s3_irq_audit: Option<Box<Esp32s3IrqAudit>>,
     /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. The echo window
     /// is armed by the TRIG GPIO write-hook (`maybe_arm_hcsr04`); a cheap
     /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,

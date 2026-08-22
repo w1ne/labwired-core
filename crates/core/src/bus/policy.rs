@@ -156,14 +156,18 @@ impl SystemBus {
     /// cycle. Only meaningful under the `event-scheduler` feature (the walk is
     /// never deleted otherwise).
     ///
-    /// ESP32-C3 IRQ routing no longer pins this to `false` when the cached
-    /// aggregation is available: on a walk-deleted C3 bus there are no
-    /// tick-produced peripheral sources (nothing walks), and the remaining
-    /// routing inputs — INTC config + FROM_CPU IPI — are re-aggregated at
-    /// their MMIO write choke (`sync_esp32c3_irq_cache_write`), so the
-    /// per-cycle tick genuinely has nothing left to do. Without the cache
-    /// (hand-built buses) the per-tick register-read fallback is the only
-    /// aggregation point, so it keeps the walk-era behaviour.
+    /// Neither ESP32 interrupt-matrix fabric pins this to `false` any more.
+    /// On a walk-DELETED bus there are no tick-produced peripheral sources
+    /// (nothing walks — `irq_fabric.*.walk_sources` is rebuilt from an empty
+    /// list every tick), and every remaining routing input is re-derived where
+    /// it changes: at the MMIO write choke (`sync_esp32c3_irq_cache_write` /
+    /// `sync_esp32s3_irq_write`) and on the event path
+    /// (`deliver_scheduled_irq_levels`). So the per-cycle tick genuinely has
+    /// nothing left to do. The C3 additionally needs its declarative INTC cache
+    /// (hand-built buses without it fall back to a per-tick register read,
+    /// which is then the only aggregation point); the S3 intmatrix is a native
+    /// model that is always decoded, so it needs no such condition. See
+    /// [`InterruptFabric::per_cycle_aggregation_free`](crate::bus::InterruptFabric::per_cycle_aggregation_free).
     ///
     /// `gpio_devices` counts as work. A bus-resident device (keypad, rotary
     /// encoder, DHT22) DRIVES pins the firmware samples, and
@@ -187,7 +191,9 @@ impl SystemBus {
         self.legacy_walk_disabled
             && self.bus_tick_indices.is_empty()
             && !self.nordic_gpio_service
-            && self.irq_fabric.per_cycle_aggregation_free()
+            && self
+                .irq_fabric
+                .per_cycle_aggregation_free(self.legacy_walk_disabled)
             && self.can_diagnostic_testers.is_empty()
             && self.can_uds_testers.is_empty()
             && self.can_log_players.is_empty()

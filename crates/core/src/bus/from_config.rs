@@ -260,6 +260,7 @@ impl SystemBus {
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
             irq_fabric: InterruptFabric::default(),
+            esp32s3_irq_audit: None,
             esp32c3_sensitive_idx: None,
             esp32c3_pms: None,
             pms_write_bypass: false,
