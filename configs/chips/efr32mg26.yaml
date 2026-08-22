@@ -194,6 +194,24 @@ peripherals:
   # and the board_io pins take their levels from the port DOUTs. On silicon
   # the same writes are load-bearing (VCOM TX reach PB02 only through
   # USART1ROUTE). See the bench note in docs/boards/brd2709a.md.
+  #
+  # ⚠️ TIMERROUTE is NOT in this window, and that is the whole reason
+  # `analogWrite`'s waveform reaches no pad in the twin. Derived from
+  # GPIO_TypeDef the same way the USARTROUTE offsets above were, and
+  # cross-checked against them — the derivation puts USARTROUTE at exactly the
+  # +0x820 this entry already uses, which is what makes the rest believable:
+  #
+  #   GPIO_TIMERROUTE[10]  block +0x6E0, stride 0x20  (TIMER0 at 0x4003C6E0,
+  #                                                    TIMER1 at 0x4003C700)
+  #     ROUTEEN   +0x00   CC0ROUTE +0x04   CC1ROUTE +0x08   CC2ROUTE +0x0C
+  #     CDTI0ROUTE +0x10  CDTI1ROUTE +0x14  CDTI2ROUTE +0x18
+  #
+  # Modelling it is what would make `analogWrite` drive a pad and a PWM trace
+  # measurable. The duty IS already programmed into real TIMER1 CC registers
+  # and is correct on silicon once a route is set; what is missing is the
+  # route, not the timer. Deliberately not modelled here yet — the offsets are
+  # recorded so the next attempt does not re-derive them, and re-deriving is
+  # where a wrong number would come from.
   - id: "gpio_route"
     type: "stub"
     # Same GPIO clock as the port structs — the ROUTE registers live in the

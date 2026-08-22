@@ -1835,6 +1835,16 @@ pub struct Efr32s2I2c {
     /// ABORT. Once set it stays set; BUSY then follows the transfer.
     bus_idle_known: bool,
 
+    /// The routed pads' live SCL/SDA levels, when a GPIO model points at this
+    /// controller. `None` until something routes them, and the narration path
+    /// then costs one branch.
+    #[serde(skip)]
+    lines: Option<std::sync::Arc<PadLines>>,
+    /// Bytes this transaction has put on the wire, `(byte, acked)`, buffered
+    /// until STOP — see [`Efr32s2I2c::wire_flush`].
+    #[serde(skip)]
+    wire_frames: Vec<(u8, bool)>,
+
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
@@ -1858,6 +1868,15 @@ impl Default for Efr32s2I2c {
             iflag: Cell::new(0),
             txc: false,
             bus_idle_known: false,
+            // ⚠️ EAGER, unlike the STM32 models' lazy `pad_lines_arc()`. Those
+            // create the cell when GPIO routing asks for it, which is fine for
+            // a PAD probe — there is nothing to see until a pad is muxed. The
+            // WIRE probe is the channel that exists precisely so a bus can be
+            // measured with no routing at all, and it can only resolve a cell
+            // that is already there. Lazy here means `resolve_wire_source`
+            // succeeds and `logic_watch` hands back `None`.
+            lines: Some(std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true]))),
+            wire_frames: Vec::new(),
             ien: 0,
             expect_address: false,
             is_reading: false,
@@ -1942,6 +1961,83 @@ impl Efr32s2I2c {
     }
 
     /// Resolve `addr` to an attached device index, through `claims_address`.
+    /// The narration cell for this controller's SCL/SDA, created on first use.
+    /// An I²C bus with pull-ups idles high on both lines. Mirrors
+    /// [`L4I2c::pad_lines_arc`].
+    pub(crate) fn pad_lines_arc(&mut self) -> std::sync::Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .clone()
+    }
+
+    pub(crate) fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
+    /// Record a byte this transaction put on the wire. Buffered, not published.
+    fn wire_push(&mut self, byte: u8, acked: bool) {
+        if self.lines.is_some() {
+            self.wire_frames.push((byte, acked));
+        }
+    }
+
+    /// Core cycles one SCL bit occupies, from `CLKDIV`.
+    ///
+    /// emlib's `I2C_BusFreqSet` inverts
+    /// `f_SCL = f_PCLK / ((N_low + N_high) * (DIV + 1) + 4)`, so one bit is
+    /// `(N_low + N_high) * (DIV + 1) + 4` peripheral clocks. `N_low`/`N_high`
+    /// come from `CTRL.CLHR`: 4:4 standard, 6:3 asymmetric, 11:6 fast.
+    ///
+    /// ⚠️ The core:PCLK ratio is a CONSTANT, exactly as the STM32L4 model does
+    /// it (`CORE_PER_KCLK`). On BRD2709A the descriptor declares `cpu_hz`
+    /// 78 MHz against a 19 MHz peripheral band, so 4. It governs how WIDE the
+    /// published waveform is, never what it decodes to.
+    fn bit_time_cycles(&self) -> u64 {
+        const CORE_PER_PCLK: u64 = 4;
+        // `CTRL.CLHR` is a 2-bit field at bit 4 (`_I2C_CTRL_CLHR_SHIFT`).
+        let (n_low, n_high) = match (self.ctrl >> 4) & 0x3 {
+            1 => (6u64, 3u64),  // ASYMMETRIC
+            2 => (11u64, 6u64), // FAST
+            _ => (4u64, 4u64),  // STANDARD, and the reset value
+        };
+        let div = u64::from(self.clkdiv & 0x1FF);
+        (((n_low + n_high) * (div + 1) + 4) * CORE_PER_PCLK).max(2)
+    }
+
+    /// Publish the completed transaction's waveform onto the routed pads.
+    ///
+    /// The phase model has already exchanged the bytes; this narrates the wire
+    /// activity they imply, so the bus can be MEASURED and not only decoded.
+    ///
+    /// Emitted as one contiguous run ending at the present cycle, for the same
+    /// reason [`L4I2c::wire_flush`] does it: this controller charges no wire
+    /// time at all — every byte crosses inside its register write — so there is
+    /// no room on the timeline to place each frame where it happened. One run
+    /// ending at completion has the right shape, bit rate and contents.
+    /// Narrating byte by byte would stamp later frames in the future, where the
+    /// capture layer collapses them onto a single cycle.
+    fn wire_flush(&mut self) {
+        let Some(lines) = self.lines.clone() else {
+            self.wire_frames.clear();
+            return;
+        };
+        if self.wire_frames.is_empty() {
+            return;
+        }
+        let mut wave = I2cNarrator::new(LINE_SCL, LINE_SDA, self.bit_time_cycles());
+        wave.start();
+        for &(byte, acked) in &self.wire_frames {
+            wave.frame(byte, acked);
+        }
+        wave.stop();
+        self.wire_frames.clear();
+        let now = lines.tap_clock().unwrap_or(0);
+        // A transfer this early in a run has less history behind it than the
+        // waveform needs; the narrator compresses to fit rather than emitting a
+        // spike. The bytes still decode; only the timebase gives.
+        let _fit = wave.emit_ending_at(&lines, now);
+    }
+
     fn resolve(&self, addr: u8) -> Option<usize> {
         self.attached_devices
             .iter()
@@ -1953,6 +2049,10 @@ impl Efr32s2I2c {
         if !self.enabled() {
             return;
         }
+        // A read transaction's first data byte is fetched inside the address
+        // phase, so it is captured here and narrated after the address frame —
+        // the order it goes onto the wire.
+        let mut read_back: Option<u8> = None;
         if self.expect_address {
             self.expect_address = false;
             let addr = byte >> 1;
@@ -1969,6 +2069,7 @@ impl Efr32s2I2c {
                         let b = self.attached_devices[idx].borrow_mut().read();
                         self.rx_byte.set(Some(b));
                         self.set_if(EFR_IF_RXDATAV);
+                        read_back = Some(b);
                     }
                 }
                 None => {
@@ -1980,10 +2081,17 @@ impl Efr32s2I2c {
                 }
             }
             self.txc = true;
-            self.txc = true;
             self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
+            self.wire_push(byte, !self.nacked);
+            if let Some(b) = read_back {
+                // The CONTROLLER acks a byte it takes from the slave; the
+                // narrator draws SDA either way, and the ack bit is what a
+                // decoder reports.
+                self.wire_push(b, true);
+            }
             return;
         }
+        let acked = self.current_target.is_some();
         match self.current_target {
             Some(idx) => {
                 self.attached_devices[idx].borrow_mut().write(byte);
@@ -1993,6 +2101,7 @@ impl Efr32s2I2c {
         }
         self.txc = true;
         self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
+        self.wire_push(byte, acked);
     }
 
     /// A `RXDATA` read: hand over the pending byte. Reading consumes it, so
@@ -2026,6 +2135,7 @@ impl Efr32s2I2c {
                     let b = self.attached_devices[idx].borrow_mut().read();
                     self.rx_byte.set(Some(b));
                     self.set_if(EFR_IF_RXDATAV);
+                    self.wire_push(b, true);
                 }
             }
         }
@@ -2052,6 +2162,9 @@ impl Efr32s2I2c {
             if value & EFR_CMD_STOP != 0 {
                 self.set_if(EFR_IF_MSTOP);
             }
+            // STOP or ABORT ends the transaction, which is when the whole
+            // waveform can be placed on the timeline at once.
+            self.wire_flush();
         }
     }
 
@@ -2208,10 +2321,8 @@ impl I2c {
         match self {
             Self::Stm32F1(i) => Some(i.pad_lines_arc()),
             Self::Stm32L4(i) => Some(i.pad_lines_arc()),
+            Self::Efr32s2(i) => Some(i.pad_lines_arc()),
             Self::Kinetis(_) => None,
-            // No wire model yet: a byte transfers instantly and no SCL edge is
-            // published, so this controller cannot be probed.
-            Self::Efr32s2(_) => None,
         }
     }
 
@@ -2335,13 +2446,10 @@ impl I2c {
 impl crate::Peripheral for I2c {
     fn line_names(&self) -> &'static [&'static str] {
         match self {
+            Self::Stm32F1(_) | Self::Stm32L4(_) | Self::Efr32s2(_) => I2C_LINES,
             // The Kinetis I2C model owns no narration cell, so it publishes no
             // wire — an honest empty answer, not a guess at SCL/SDA.
-            Self::Stm32F1(_) | Self::Stm32L4(_) => I2C_LINES,
-            // Neither the Kinetis nor the EFR32 model owns a narration cell,
-            // so neither publishes a wire — an honest empty answer, not a
-            // guess at SCL/SDA.
-            Self::Kinetis(_) | Self::Efr32s2(_) => &[],
+            Self::Kinetis(_) => &[],
         }
     }
 
@@ -2349,10 +2457,8 @@ impl crate::Peripheral for I2c {
         match self {
             Self::Stm32F1(i) => i.wire_lines(),
             Self::Stm32L4(i) => i.wire_lines(),
+            Self::Efr32s2(i) => i.wire_lines(),
             Self::Kinetis(_) => None,
-            // No wire model yet: a byte transfers instantly and no SCL edge is
-            // published, so this controller cannot be probed.
-            Self::Efr32s2(_) => None,
         }
     }
 
