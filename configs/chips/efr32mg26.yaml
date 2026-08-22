@@ -50,11 +50,14 @@
 #     push-pull).
 #   - (FIXED) The Series-2 SET/CLR/TGL register aliases are now decoded, see
 #     `atomic_register_aliases` below.
-#   - USART1 is the only USART mapped (VCOM console). USART0/2 and the four
-#     EUSARTs are not declared.
-#   - MSC (flash controller), WDOG0/1, EMU, SMU, PRS, LDMA, radio (RAIL/
-#     RADIOAES), USERDATA (0x0FE0_0000) and DEVINFO (0x0FE0_8000) pages are not
-#     mapped; reads there fault the bus, deliberately loudly.
+#   - (FIXED) USART0 (as `spi0`), USART1 (VCOM console) and USART2 are mapped,
+#     as are TIMER0..9 and I2C0..3. The four EUSARTs are still not declared.
+#   - MSC (flash controller), WDOG0/1, EMU, PRS, LDMA, radio (RAIL/RADIOAES),
+#     USERDATA (0x0FE0_0000) and DEVINFO (0x0FE0_8000) pages are not mapped;
+#     reads there fault the bus, deliberately loudly.
+#   - (MAPPED) SMU is declared — `SystemInit` writes it three instructions in,
+#     so an unmapped block faulted a vendor image before `main`. Registers
+#     only: no protection is enforced and the alias move is not modelled.
 #   - No `debug_schema` entries: Silicon Labs publishes no SVD for MG26 and the
 #     schema descriptors are SVD-ingested, so there is nothing honest to point
 #     at yet.
@@ -405,6 +408,30 @@ peripherals:
     base_address: 0x400B8000
     size: "4KB"
     irq: 44
+
+  # ── SMU (Security Management Unit) ───────────────────────────────────────
+  # SMU_S_BASE = 0x44008000, CMU_CLKEN1.SMU bit 16, SMU_SECURE_IRQn = 66.
+  #
+  # ⚠️ This is the FIRST peripheral any vendor-built image touches. Three
+  # instructions into `SystemInit` (system_efr32mg26.c, sisdk-2025.6):
+  #     CMU->CLKEN1_SET   = CMU_CLKEN1_SMU;
+  #     SMU->PPUSATD0_CLR = _SMU_PPUSATD0_MASK;   ...and PPUSATD1/2, IF, IEN
+  # Unmapped, that is a bus fault before `main`, so a Simplicity-SDK image
+  # could not begin. It is mapped for that reason and not because the twin
+  # models security.
+  #
+  # ⚠️ NO PROTECTION IS ENFORCED. The registers store and read back; nothing is
+  # refused and PPUFS never latches. Consequently the peripheral ALIAS MOVE is
+  # not modelled either — on silicon, marking peripherals non-secure moves them
+  # to 0x5000_0000 and this descriptor maps the secure alias only. Same
+  # registers either way, so firmware runs; the address in a trace is the thing
+  # to be careful about. See peripherals/efr32/smu.rs.
+  - id: "smu"
+    type: "efr32s2_smu"
+    clock: { reg: "clken1", bit: 16 }
+    base_address: 0x44008000
+    size: "4KB"
+    irq: 66
 
   # ── GPIO external interrupts ─────────────────────────────────────────────
   # The EXTI registers live in the GPIO block HEAD, not in the port structs:

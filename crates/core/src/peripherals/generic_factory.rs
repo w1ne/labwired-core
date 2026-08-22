@@ -241,6 +241,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf54l_grtc",
     "efr32s2_cmu",
     "efr32s2_gpio_head",
+    "efr32s2_smu",
     "efr32s2_timerroute",
     "efr32s2_gpio_exti",
     "efr32s2_iadc",
@@ -325,6 +326,9 @@ pub fn try_build(
         // because the conformance ratchet dropped faulting reads on the floor
         // (`Err(_) => {}`) instead of reporting them; twelve addresses were
         // being counted as misses with no line saying why.
+        // The Security Management Unit — the first peripheral a vendor-built
+        // image touches, three instructions into `SystemInit`.
+        "efr32s2_smu" => Box::new(crate::peripherals::efr32::smu::Efr32s2Smu::new()),
         // The GPIO block's TIMER pin-mux. A real model, not a stub: it is the
         // difference between a PWM duty that is correct in a register and a
         // waveform that reaches a pad.
