@@ -189,6 +189,10 @@ const SPI_NRF52_EASYDMA_TOKEN: u32 = 1;
 /// the sequence wraps.
 const SPI_H5_WIRE_TOKEN_FLAG: u32 = 0x8000_0000;
 
+/// Same idea for the EFR32 burst: a flag bit that cannot collide with the
+/// small tokens above.
+const SPI_EFR32_WIRE_TOKEN: u32 = 0x4000_0000;
+
 const fn h5_wire_token(seq: u32) -> u32 {
     SPI_H5_WIRE_TOKEN_FLAG | (seq & 0x7FFF_FFFF)
 }
@@ -1012,6 +1016,9 @@ pub struct Spi {
     efr32_wire_bytes: Vec<u8>,
     #[serde(skip)]
     efr32_wave_cursor: u64,
+    /// A publication wakeup is already armed for the held burst.
+    #[serde(skip)]
+    efr32_scheduled: bool,
 
     /// Classic/FIFO STM32 RXNE is **clear-on-DR-read** (RM0008 / RM0351).
     /// `Peripheral::read` is `&self`, so the flag lives in a `Cell` and SR
@@ -1364,6 +1371,28 @@ impl Spi {
     /// really does have its own moment, and the sketch's own delays between
     /// them are real wire idle. Emitting per byte puts each frame where it
     /// happened instead of collapsing a paced transfer into one block.
+    /// Cycles the held EFR32 burst still needs before the wire could have
+    /// carried it. 0 when it is due now or nothing is held.
+    fn efr32_wire_pending_cycles(&self) -> u64 {
+        if self.efr32_wire_bytes.is_empty() {
+            return 0;
+        }
+        let Some(lines) = self.lines.as_ref() else {
+            return 0;
+        };
+        let Some(framing) = self.efr32_framing() else {
+            return 0;
+        };
+        let Some(now) = lines.pad_lines().tap_clock() else {
+            return 0;
+        };
+        let duration =
+            self.efr32_wire_bytes.len() as u64 * framing.frame_bits() * self.efr32_sck_bit_cycles();
+        self.efr32_wave_cursor
+            .saturating_add(duration)
+            .saturating_sub(now)
+    }
+
     fn efr32_wire_push(&mut self, mosi: u8) {
         if self.lines.is_none() || self.efr32_framing().is_none() {
             return;
@@ -1418,6 +1447,7 @@ impl Spi {
             _ => {
                 self.efr32_wave_cursor = now;
                 self.efr32_wire_bytes.clear();
+                self.efr32_scheduled = false;
             }
         }
     }
@@ -2784,6 +2814,17 @@ impl crate::Peripheral for Spi {
             self.h5_scheduled = true;
             return vec![(self.h5_wire_ready_in(), h5_wire_token(self.h5_arm_seq))];
         }
+        // ⚠️ The EFR32 burst needs the SAME wakeup, and for a reason that only
+        // shows up under `event-scheduler`: with the feature on, the legacy
+        // walk skips this model, so the `tick_elapsed` retry never runs and a
+        // burst written back-to-back stays held forever. Measured — the
+        // `bus_visibility` ratchet decoded ONE byte of three (`[53]` of
+        // `[53, 1c, e1]`) with the feature on and all three with it off, which
+        // is a feature flag changing what a trace says.
+        if !self.efr32_wire_bytes.is_empty() && !self.efr32_scheduled {
+            self.efr32_scheduled = true;
+            return vec![(self.efr32_wire_pending_cycles(), SPI_EFR32_WIRE_TOKEN)];
+        }
         Vec::new()
     }
 
@@ -2798,6 +2839,17 @@ impl crate::Peripheral for Spi {
                 self.do_nrf52_easydma(bus);
             }
             return crate::sched::EventResult::default();
+        }
+        if event_token == SPI_EFR32_WIRE_TOKEN {
+            self.efr32_wire_flush();
+            let pending = !self.efr32_wire_bytes.is_empty();
+            self.efr32_scheduled = pending;
+            return crate::sched::EventResult {
+                // Ask for the wire time the burst still needs, floored at one
+                // cycle so a held burst always converges instead of spinning.
+                reschedule_delay: pending.then(|| self.efr32_wire_pending_cycles().max(1)),
+                ..Default::default()
+            };
         }
         if event_token & SPI_H5_WIRE_TOKEN_FLAG != 0 {
             if event_token != h5_wire_token(self.h5_arm_seq) {
