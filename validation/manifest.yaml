@@ -849,7 +849,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: c15842fb89f44fa342c10aafa93611f24c2d7b19f7dd319615f1cb894ba51ef6
+    drift_ack_digest: ecf3c94808a1c1c01478907261a8e9a796574edfb24872a8e3735c7299be123b
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1885,7 +1885,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 47fe1e6359927e483783367e7622ada480e49e9e134b34ed8199331215c3eb58
+    drift_ack_digest: 9b7d5c1b978677c572ac6f0e7d3f0bb12bd7295d5333cb5787b8b7ae6f8f9c64
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2153,7 +2153,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 5a6d8034822a4abfdd80f1de3438eeb33dfd86f1ce18615bd266098e3ffa784c
+    drift_ack_digest: 99e8a47c91fec9c2d645815ae01065cd4dd0d713f026d2b456a3488482987f3f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2474,7 +2474,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: c80ebff5bd9b5e7776c34894266ee2643d12b844f55e1fed1109db84679095e1
+    drift_ack_digest: ffa229051d49861a8356abf8b897191bab1acc4af5bd3aeb01b555c6b6df008e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2755,7 +2755,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: fb64424960222e1e05e2cb56bc451418787fc62b80d201315c9f6a409b45e8b7
+    drift_ack_digest: 6544fb6e994ae2162df4d48ce5f7391dc3873d85bd6fbd60a767b1689a156716
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3458,7 +3458,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: d3630909318c38167fec550b91fff98bec1611a36e080e8ed8f49401fa60f983
+    drift_ack_digest: 01e8f135a697a5529da1371b837f851a6792ce1211db2bd7583fed234bfd1dd4
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3529,7 +3529,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 49fadd52344a306a272f68865f7d62223991b452543afa78eff7f4abee333c52
+    drift_ack_digest: b2c3b4e4f95d92d2d855f10988489e93a0c38970713fdec1cc5df37a6ad7135c
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
