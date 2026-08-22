@@ -31,6 +31,9 @@
 #   mapped.
 #
 # Known divergences from silicon (honest list, L1 smoke target):
+#   - (FIXED) `analogWrite`'s waveform reaches a PAD. `GPIO_TIMERROUTE` is a
+#     real model, so a TIMER compare output is connected to the pin its route
+#     names — the last of the three gaps this board's onboarding note listed.
 #   - (FIXED) CMU and TIMER0 were `type: stub`. Both are real models now, and
 #     the clock gates gate. See `peripherals/efr32/{cmu,timer}.rs`.
 #   - Every register in the seven windows this part's silicon capture covers
@@ -106,6 +109,15 @@ peripherals:
   # USART1_TX_IRQn = 17 (CMSIS header IRQn enum). The entry carries the TX
   # line; the smoke path is polled and the model's TXEIE/TCIE masks are 0 for
   # this layout, so no UART interrupt is ever pended either way.
+  # USART2, the third instance. CLKEN2 bit 8; `irq` names the TX vector, the
+  # same choice usart1 makes.
+  - id: "usart2"
+    type: "efr32s2_usart"
+    clock: { reg: "clken2", bit: 8 }
+    base_address: 0x400A8000
+    size: "4KB"
+    irq: 19
+
   - id: "usart1"
     type: "efr32s2_usart"
     # CMU_CLKEN2.USART1, bit 7 (`_CMU_CLKEN2_USART1_SHIFT`). USART1 is on
@@ -206,12 +218,19 @@ peripherals:
   #     ROUTEEN   +0x00   CC0ROUTE +0x04   CC1ROUTE +0x08   CC2ROUTE +0x0C
   #     CDTI0ROUTE +0x10  CDTI1ROUTE +0x14  CDTI2ROUTE +0x18
   #
-  # Modelling it is what would make `analogWrite` drive a pad and a PWM trace
-  # measurable. The duty IS already programmed into real TIMER1 CC registers
-  # and is correct on silicon once a route is set; what is missing is the
-  # route, not the timer. Deliberately not modelled here yet — the offsets are
-  # recorded so the next attempt does not re-derive them, and re-deriving is
-  # where a wrong number would come from.
+  # (FIXED) That block is modelled now — `gpio_timerroute` above. `analogWrite`
+  # drives a pad, proven end to end in crates/core/tests/efr32mg26_pwm_pad.rs
+  # against this very yaml. What remains a stub here is USARTROUTE, whose
+  # writes still decode and read back zero.
+  # The TIMER route block: REAL, not a stub. This is what makes a timer's
+  # compare output reach a pin — `analogWrite` programmed the correct duty into
+  # real CC registers and lit nothing until this existed.
+  - id: "gpio_timerroute"
+    type: "efr32s2_timerroute"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C6E0
+    size: "320B"
+
   - id: "gpio_route"
     type: "stub"
     # Same GPIO clock as the port structs — the ROUTE registers live in the
@@ -248,8 +267,15 @@ peripherals:
   # same firmware on the bench. Closing this properly means modelling the clock
   # tree so CLKSEL and the HFRCO band decide it.
   #
-  # TIMER2..9 are deliberately NOT declared: nothing uses them yet, and an
-  # undeclared window faults loudly where a stub would answer zero.
+  # TIMER2..9 ARE declared now, below. They were not, on the reasoning that an
+  # undeclared window faults loudly where a stub would answer zero — which is
+  # right for a peripheral with no model, and wrong for one whose model is
+  # already here. `GPIO_TIMERROUTE` routes all ten; leaving eight of them
+  # unmapped meant a sketch that reached for a second PWM timer hit a bus fault
+  # instead of the model sitting next to the two that worked.
+  #
+  # ⚠️ The clock bits do NOT follow the instance number. TIMER0..4 are CLKEN0
+  # bits 4..8; TIMER5..9 are CLKEN2 bits 0..4. Same trap as I2C0 vs I2C2/3.
   - id: "timer0"
     type: "efr32s2_timer"
     clock: { reg: "clken0", bit: 4 }
@@ -262,6 +288,54 @@ peripherals:
     clock: { reg: "clken0", bit: 5 }
     config: { counter_bits: 32, peripheral_hz: 19_000_000 }
     base_address: 0x4004C000
+    size: "4KB"
+  - id: "timer2"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 6 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40050000
+    size: "4KB"
+  - id: "timer3"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 7 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40054000
+    size: "4KB"
+  - id: "timer4"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 8 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40058000
+    size: "4KB"
+  - id: "timer5"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 0 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x4005C000
+    size: "4KB"
+  - id: "timer6"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 1 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40060000
+    size: "4KB"
+  - id: "timer7"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 2 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40064000
+    size: "4KB"
+  - id: "timer8"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 3 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
+    base_address: 0x40068000
+    size: "4KB"
+  - id: "timer9"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
+    base_address: 0x4006C000
     size: "4KB"
     irq: 5
 
@@ -314,6 +388,23 @@ peripherals:
     base_address: 0x400B0000
     size: "4KB"
     irq: 42
+  # ⚠️ I2C2/3 are on CLKEN2 (bits 9, 10) while I2C0/1 are on CLKEN0 (14, 15).
+  # The clock bit does not follow the instance number on this family, and I2C0
+  # is not even in the same address group — see its entry above.
+  - id: "i2c2"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken2", bit: 9 }
+    base_address: 0x400B4000
+    size: "4KB"
+    irq: 43
+  - id: "i2c3"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken2", bit: 10 }
+    base_address: 0x400B8000
+    size: "4KB"
+    irq: 44
 
   # ── GPIO external interrupts ─────────────────────────────────────────────
   # The EXTI registers live in the GPIO block HEAD, not in the port structs:

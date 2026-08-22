@@ -46,6 +46,7 @@ pub mod noise;
 pub mod nrf52;
 pub mod nrf54l;
 pub mod nvic;
+pub mod pad_claims;
 pub mod pad_lines;
 pub mod pad_routing;
 pub mod pio;

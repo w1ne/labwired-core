@@ -958,6 +958,11 @@ impl SystemBus {
         // publish which pin they claim and the port reads it. No-op for every
         // other chip.
         bus.wire_nrf52_pads();
+        // EFR32 Series 2: same shape as the Nordic pass above and for the same
+        // reason — the pad has no function register, so `GPIO_TIMERROUTE` names
+        // the pin and the port reads that claim. This is what makes
+        // `analogWrite` reach a pad. No-op for every other chip.
+        bus.wire_efr32_timer_pads();
         // Resolve declared per-peripheral RCC clock-gates now that every
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.

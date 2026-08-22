@@ -241,6 +241,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf54l_grtc",
     "efr32s2_cmu",
     "efr32s2_gpio_head",
+    "efr32s2_timerroute",
     "efr32s2_gpio_exti",
     "efr32s2_iadc",
     "efr32s2_timer",
@@ -324,6 +325,12 @@ pub fn try_build(
         // because the conformance ratchet dropped faulting reads on the floor
         // (`Err(_) => {}`) instead of reporting them; twelve addresses were
         // being counted as misses with no line saying why.
+        // The GPIO block's TIMER pin-mux. A real model, not a stub: it is the
+        // difference between a PWM duty that is correct in a register and a
+        // waveform that reaches a pad.
+        "efr32s2_timerroute" => {
+            Box::new(crate::peripherals::efr32::gpio_route::Efr32s2TimerRoute::new())
+        }
         "efr32s2_gpio_head" => {
             let mut s = crate::peripherals::stub::StubPeripheral::new(0x00);
             s.values.insert(0x00, 0x0000_0007);

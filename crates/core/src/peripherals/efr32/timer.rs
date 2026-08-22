@@ -88,6 +88,7 @@
 //! HFRCO band decide the number. Until then it is one declared constant per
 //! instance, and the reason it is not `cpu_hz` is written here.
 
+use crate::peripherals::pad_lines::PadLines;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 // ── Register offsets, walked from `TIMER_TypeDef` ──────────────────────────
@@ -154,6 +155,9 @@ pub struct Efr32s2Timer {
     /// module header for why the two differ on this part. `None` until the
     /// chip yaml or the bus supplies one.
     peripheral_hz: Option<u64>,
+    /// The routed pads' live CC levels, when `GPIO_TIMERROUTE` points a pad at
+    /// this timer. `None` until something routes them.
+    lines: Option<std::sync::Arc<PadLines>>,
     /// The core clock the bus attached, used only as the fallback timebase for
     /// a chip that does not declare `peripheral_hz`.
     cpu_hz: u64,
@@ -188,6 +192,7 @@ impl Efr32s2Timer {
         Self {
             counter_bits: counter_bits.clamp(1, 32),
             peripheral_hz: None,
+            lines: None,
             cpu_hz: 1_000_000,
             en: 0,
             cfg: 0,
@@ -260,6 +265,37 @@ impl Efr32s2Timer {
         ch < CC_COUNT && self.cc_mode(ch) == CC_MODE_PWM && self.cnt < self.cc_oc[ch]
     }
 
+    /// Line order for this timer's [`PadLines`]: one per CC channel, named the
+    /// way the reference manual and `GPIO_TIMERROUTE` name them.
+    pub const CC_LINES: &'static [&'static str] = &["CC0", "CC1", "CC2"];
+
+    /// The narration cell this timer's CC outputs publish into, created on
+    /// first use. A PWM output rests LOW: `CNT` starts at 0 and `OC` at 0, so
+    /// `CNT < OC` is false until firmware programs a duty.
+    pub(crate) fn pad_lines_arc(&mut self) -> std::sync::Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| {
+                std::sync::Arc::new(PadLines::new(Self::CC_LINES, &[false; CC_COUNT]))
+            })
+            .clone()
+    }
+
+    /// Publish every channel's current PWM level.
+    ///
+    /// ⚠️ Called after ANYTHING that can move a level — a counter advance, a
+    /// duty write, a mode change, an enable. Cheap and idempotent:
+    /// `PadLines::set_line` is a relaxed store that records an edge only on a
+    /// real transition, and the whole call is one `is_none` check on a bus
+    /// where no pad is routed here.
+    fn publish_cc(&self) {
+        let Some(lines) = self.lines.as_ref() else {
+            return;
+        };
+        for ch in 0..CC_COUNT {
+            lines.set_line(ch, self.pwm_output_high(ch));
+        }
+    }
+
     fn cc_index(offset: u64) -> Option<(usize, u64)> {
         if !(OFF_CC..OFF_CC + CC_STRIDE * CC_COUNT as u64).contains(&offset) {
             return None;
@@ -320,6 +356,14 @@ impl Efr32s2Timer {
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
+        self.write_word_inner(offset, value);
+        // A duty, a mode, an enable or a manual CNT can all move an output
+        // level without the counter advancing. Publishing here means a pad
+        // follows `analogWrite` immediately rather than at the next tick.
+        self.publish_cc();
+    }
+
+    fn write_word_inner(&mut self, offset: u64, value: u32) {
         match offset {
             OFF_EN => {
                 self.en = value & EN_EN;
@@ -397,6 +441,7 @@ impl Efr32s2Timer {
             self.iflag |= IF_OF;
         }
         self.cnt = self.mask(((from + steps) % period) as u32);
+        self.publish_cc();
     }
 }
 
@@ -462,6 +507,15 @@ impl Peripheral for Efr32s2Timer {
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    /// ⚠️ Needed by the pad-wiring pass, which reaches this model MUTABLY to
+    /// hand it a narration cell — and the trait's mutable accessor DEFAULTS TO
+    /// `None`. Implementing only the shared one compiles, passes every unit
+    /// test, and silently wires nothing: this exact miss cost two debugging
+    /// rounds in one change, once here and once on the route block.
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
 }

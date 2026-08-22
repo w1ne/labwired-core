@@ -307,6 +307,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -323,7 +331,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: ba3c4a67fbe801995f00d8fcb96ef7ad9062a8c176c9ce456b4f7e6c2fd338d4
+    drift_ack_digest: 762bfb5d5ab8f5193ec539eadbbc338ee97e5d77faa33d16e743c3c9a2f536a9
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -508,6 +516,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -524,7 +540,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: ba3c4a67fbe801995f00d8fcb96ef7ad9062a8c176c9ce456b4f7e6c2fd338d4
+    drift_ack_digest: 762bfb5d5ab8f5193ec539eadbbc338ee97e5d77faa33d16e743c3c9a2f536a9
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -833,6 +849,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -849,7 +873,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: ecf3c94808a1c1c01478907261a8e9a796574edfb24872a8e3735c7299be123b
+    drift_ack_digest: aff74ffd315a4a6ba81b7824564de3d0fd0df469be6e2b61da1aec77a16b40ca
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1869,6 +1893,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -1885,7 +1917,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 9b7d5c1b978677c572ac6f0e7d3f0bb12bd7295d5333cb5787b8b7ae6f8f9c64
+    drift_ack_digest: d9b8554536440be436350f9f55110432c8ff3975400c9208fc5bbe853e9b589a
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2137,6 +2169,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -2153,7 +2193,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 99e8a47c91fec9c2d645815ae01065cd4dd0d713f026d2b456a3488482987f3f
+    drift_ack_digest: 4f89a3042e273f1d36c9a99001466aa030c3b09f01f9afedd374623a740bb7b9
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2458,6 +2498,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -2474,7 +2522,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: ffa229051d49861a8356abf8b897191bab1acc4af5bd3aeb01b555c6b6df008e
+    drift_ack_digest: c5e22a24189525a675d0b15e299e648645024c9bffe4e1f71c79f965caee9c76
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2739,6 +2787,14 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 a THIRD time, for GPIO_TIMERROUTE. The shared
+    # pad-claim table moved out of the Nordic module (`NrfPinClaims` is now an
+    # alias for `PadClaims`) and `GpioPort`'s claim field was generalised, so
+    # `gpio.rs` and the nRF files moved. ⚠️ Behaviour on these boards is
+    # unchanged: the nRF52 pad tests, the STM32 AFR path and every `bus_
+    # visibility` row pass untouched — an STM32 pad still answers from its own
+    # AFR nibble and never consults a claim table.
+    #
     # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
     # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
     # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
@@ -2755,7 +2811,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 6544fb6e994ae2162df4d48ce5f7391dc3873d85bd6fbd60a767b1689a156716
+    drift_ack_digest: f81da1efe594ea7203a0fd079cd1e769e96b0949a88229401898bfe737369db9
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3458,7 +3514,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 01e8f135a697a5529da1371b837f851a6792ce1211db2bd7583fed234bfd1dd4
+    drift_ack_digest: 1784454ab3aaa18d6cce5fd95ae54de633644ef7deb52b00f8097b5e78be31ab
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3529,7 +3585,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: b2c3b4e4f95d92d2d855f10988489e93a0c38970713fdec1cc5df37a6ad7135c
+    drift_ack_digest: 0fb27d55c48c66a5483209c4f7fa029280227b36ea0b24b928d4527b74fceeed
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
