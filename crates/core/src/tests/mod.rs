@@ -4,6 +4,10 @@ pub mod builtin_chip_self_contained;
 pub mod bus_proof_matrix;
 #[cfg(test)]
 pub mod bus_trace_one_home;
+
+/// A chip may not declare a memory size no silicon has (decimal-MB trap).
+#[cfg(test)]
+pub mod chip_memory_sizes;
 #[cfg(test)]
 pub mod cortex_m_fault_escalation;
 #[cfg(test)]
