@@ -26,7 +26,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `23e65628bdf33cf1` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `01e8f135a697a552` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `b2c3b4e4f95d92d2` | no silicon capture |
-| `brd2709a` | 🟡 smoke-manual | — | `4a1984fd9d8c2d8a` | no silicon capture |
+| `brd2709a` | 🟡 smoke-manual | — | `052d4a49ff8f968a` | no silicon capture |
 | `esp32` | ⚪ structural | — | `1ffa6e4e6a27dd31` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `3ab34d0f42e59464` | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `32cbdfcebf57531b` | no silicon capture |
