@@ -1571,6 +1571,16 @@ pub struct Machine<C: Cpu> {
     /// `release_secondary_cpu_if_requested` so a core is never released
     /// without a stack.
     pub secondary_boot_sp: Option<u32>,
+    /// The secondary CPU has no ROM to boot: release it only on an explicit
+    /// entry point (`APPCPU_BOOT_ADDR`), never on the reset-release edge.
+    ///
+    /// A faithful ROM boot constructs core 1 sitting on its reset vector and
+    /// lets `SYSTEM_CORE_1_CONTROL_0.RESETING` 1->0 start it, exactly like
+    /// silicon. The fast-boot frontends do not: they replace the mask ROM with
+    /// a thunk harness, so that same vector holds no startup code and a core
+    /// released there executes the harness and collapses to PC 0. Those
+    /// frontends set this, and hand core 1 over at `call_start_cpu1` instead.
+    pub secondary_awaits_boot_addr: bool,
 
     // Debug state
     pub breakpoints: std::collections::HashSet<u32>,
@@ -2159,6 +2169,7 @@ impl<C: Cpu> Machine<C> {
             bus,
             observers: Vec::new(),
             secondary_boot_sp: None,
+            secondary_awaits_boot_addr: false,
             breakpoints: HashSet::new(),
             last_breakpoint: None,
             total_cycles: 0,

@@ -1461,6 +1461,10 @@ pub(crate) fn run_test(
                     app_cpu.set_sp(0x3FCD_8000);
                     let mut machine =
                         labwired_core::Machine::new(pro_cpu, bus).with_secondary_cpu(app_cpu);
+                    // Fast boot: the mask ROM is a thunk harness, so core 1's
+                    // reset vector holds no startup code. Wait for
+                    // `ets_set_appcpu_boot_addr`.
+                    machine.secondary_awaits_boot_addr = true;
                     machine.observers.push(metrics.clone());
                     eprintln!(
                         "labwired-cli test: ESP32-S3 fast-boot entry=0x{:08x} (dual-core APP_CPU)",
