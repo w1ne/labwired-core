@@ -70,8 +70,18 @@ impl<C: Cpu> Machine<C> {
             // flag here is harmless for a frontend that also checks it (the
             // first taker wins and both unhalt the same core) and a no-op on
             // every chip that never sets it.
+            //
+            // Not, however, when the secondary has no ROM to boot. A fast-boot
+            // frontend swaps the mask ROM for a thunk harness, so the reset
+            // vector core 1 is constructed on holds no startup code: releasing
+            // it there runs the harness and faults as `cause=0 at pc=0x0` a few
+            // hundred steps in. Such frontends set `secondary_awaits_boot_addr`
+            // and hand core 1 over at `call_start_cpu1` (`APPCPU_BOOT_ADDR`)
+            // instead, which is what `release_secondary_cpu_if_requested` acts
+            // on. Drain the flag either way so it cannot fire later.
             if crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED
                 .with(|s| s.take())
+                && !self.secondary_awaits_boot_addr
             {
                 if let Some(cpu1) = self.cpu_secondary.as_mut() {
                     cpu1.unhalt();
