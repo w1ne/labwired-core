@@ -1001,18 +1001,36 @@ impl SystemBus {
     /// or all-zero on a bus with no intmatrix. The second half of the S3
     /// fabric's routed output (the first is `pending_cpu_irqs`), read back so
     /// the audit compares the WHOLE result.
+    ///
+    /// Read out of the intmatrix's own register file at
+    /// `PRO_INTR_STATUS_REG_0..3` (offset 0x18C) rather than by downcasting to
+    /// the model: this is the same four words esp-hal's `__level_*_interrupt`
+    /// loads to discover which source fired, so the audit checks the bytes the
+    /// GUEST would see and not an internal field that happens to back them.
     #[cfg(feature = "event-scheduler")]
     fn esp32s3_intr_status_mirror(&self) -> [u32; 4] {
-        self.irq_fabric
+        /// `PRO_INTR_STATUS_REG_0` offset within the intmatrix bank.
+        const INTR_STATUS_BASE: u64 = 0x18C;
+        let Some(p) = self
+            .irq_fabric
             .esp32s3
             .intmatrix_idx
             .and_then(|idx| self.peripherals.get(idx))
-            .and_then(|p| p.dev.as_any())
-            .and_then(|a| {
-                a.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-            })
-            .map(|m| m.pending_sources())
-            .unwrap_or_default()
+        else {
+            return [0; 4];
+        };
+        let mut out = [0u32; 4];
+        for (reg, word) in out.iter_mut().enumerate() {
+            let mut bytes = [0u8; 4];
+            for (i, b) in bytes.iter_mut().enumerate() {
+                *b = p
+                    .dev
+                    .read(INTR_STATUS_BASE + (reg as u64) * 4 + i as u64)
+                    .unwrap_or(0);
+            }
+            *word = u32::from_le_bytes(bytes);
+        }
+        out
     }
 
     /// Compare the S3 routed interrupt state the walk-free path LEFT BEHIND

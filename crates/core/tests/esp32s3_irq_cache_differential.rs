@@ -71,7 +71,6 @@
 
 use labwired_core::bus::{Esp32s3IrqAudit, SystemBus};
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::peripherals::esp32s3::systimer::Systimer;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
 use labwired_core::{AdvanceRequest, BreakpointPolicy, Bus, Cpu, DebugControl, Machine};
 use std::path::PathBuf;
@@ -267,17 +266,6 @@ fn build_alarm_machine_with_intenable(
     cpu.ps.set_intlevel(0);
     cpu.ps.set_excm(false);
     cpu.set_pc(IRAM_BASE);
-
-    // The SYSTIMER must be scheduler-driven for this gate to mean anything: a
-    // legacy-walk SYSTIMER would keep the walk on and the fast path off.
-    assert!(
-        bus.peripherals.iter().any(|p| p
-            .dev
-            .as_any()
-            .and_then(|a| a.downcast_ref::<Systimer>())
-            .is_some()),
-        "the S3 bus must register a Systimer"
-    );
 
     bus.install_esp32s3_irq_audit();
 

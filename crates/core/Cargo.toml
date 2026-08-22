@@ -161,6 +161,11 @@ required-features = ["silent-census"]
 name = "undecoded_register_ratchet"
 required-features = ["silent-census"]
 
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32s3_irq_cache_differential"
+required-features = ["event-scheduler"]
+
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
 name = "e2e_blinky"
