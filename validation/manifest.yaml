@@ -985,8 +985,14 @@ boards:
     # ID or interrupt number changed, so the 2026-08-09 reset-state capture (87
     # regs, 366/423 overlap) is unaffected and no live re-capture is owed for
     # this change. Re-captures already owed above still are.
+      # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+      # only model file that moved for this board is its chip descriptor, and the
+      # only field that changed is flash `size`, respelled from MB to KB because
+      # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+      # real one. No register layout, reset value or peripheral behaviour is
+      # touched, which is what the silicon capture asserts, so the capture stands.
     drift_ack: 2026-08-22
-    drift_ack_digest: 4f22db3b82bcf418c24bae16f655e13745970e42f080eb4610eb08c82176ffba
+    drift_ack_digest: 0db6a85a5800d66c4b1a1f78a5a050b1f211513e54a81d7defeeb0af142e906f
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -1916,8 +1922,14 @@ boards:
     # layouts are not touched — these boards never construct the EFR32 variant,
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
-    drift_ack: 2026-08-21
-    drift_ack_digest: d9b8554536440be436350f9f55110432c8ff3975400c9208fc5bbe853e9b589a
+      # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+      # only model file that moved for this board is its chip descriptor, and the
+      # only field that changed is flash `size`, respelled from MB to KB because
+      # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+      # real one. No register layout, reset value or peripheral behaviour is
+      # touched, which is what the silicon capture asserts, so the capture stands.
+    drift_ack: 2026-08-22
+    drift_ack_digest: 028d2a8a44b6f7a837f361181d2f5dcbd990c3502049aa245d20dcd148204da8
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2521,8 +2533,14 @@ boards:
     # layouts are not touched — these boards never construct the EFR32 variant,
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
-    drift_ack: 2026-08-21
-    drift_ack_digest: c5e22a24189525a675d0b15e299e648645024c9bffe4e1f71c79f965caee9c76
+      # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+      # only model file that moved for this board is its chip descriptor, and the
+      # only field that changed is flash `size`, respelled from MB to KB because
+      # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+      # real one. No register layout, reset value or peripheral behaviour is
+      # touched, which is what the silicon capture asserts, so the capture stands.
+    drift_ack: 2026-08-22
+    drift_ack_digest: f5554f202059a1ceacf23ec1014c9ceb2e2f7a07e55c9b5758169af15bd331de
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2810,8 +2828,14 @@ boards:
     # layouts are not touched — these boards never construct the EFR32 variant,
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
-    drift_ack: 2026-08-21
-    drift_ack_digest: f81da1efe594ea7203a0fd079cd1e769e96b0949a88229401898bfe737369db9
+      # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+      # only model file that moved for this board is its chip descriptor, and the
+      # only field that changed is flash `size`, respelled from MB to KB because
+      # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+      # real one. No register layout, reset value or peripheral behaviour is
+      # touched, which is what the silicon capture asserts, so the capture stands.
+    drift_ack: 2026-08-22
+    drift_ack_digest: 5ee5241dca313ed484b6a2ca01255eb828208f68c6544d8e68ec16a72f730b8f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3428,8 +3452,14 @@ boards:
     # today because the digest is re-stamped today and the pair must name the
     # same reading. Evidence: 3121 lib tests + 3251 under event-scheduler, 0
     # failed; clippy and fmt clean.
-    drift_ack: 2026-08-20
-    drift_ack_digest: 3c647e77c7572f2fbaa2a65377a6eab5626effa1481cbef94f5c86fb887edd1b
+      # Re-stamped 2026-08-22 for the flash-size correction in this branch. The
+      # only model file that moved for this board is its chip descriptor, and the
+      # only field that changed is flash `size`, respelled from MB to KB because
+      # `parse_size` reads MB as 10^6 — the modelled part grows to the size of the
+      # real one. No register layout, reset value or peripheral behaviour is
+      # touched, which is what the silicon capture asserts, so the capture stands.
+    drift_ack: 2026-08-22
+    drift_ack_digest: 7862c68a44c27a503d02baad5a8ec795474c0a8c9c691e0e940be7c3fd5af062
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
