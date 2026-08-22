@@ -307,6 +307,13 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+    #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
     # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
@@ -500,6 +507,13 @@ boards:
     # a `!(x == 1)` simplification in the IT-block test itself, a feature-gated
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
+    #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
     #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
@@ -819,6 +833,13 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+    #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
     # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
@@ -828,7 +849,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 0cb0ba8ff18835815aff0e617d44d8654c713531033211aeee1fad8bb6ea230f
+    drift_ack_digest: ecf3c94808a1c1c01478907261a8e9a796574edfb24872a8e3735c7299be123b
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1848,6 +1869,13 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+    #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
     # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
@@ -1857,7 +1885,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: c53bfb723d8132ad9f6bc3fc3e93c2e516ef63ccb6e5813503181c9932d2f3cc
+    drift_ack_digest: 9b7d5c1b978677c572ac6f0e7d3f0bb12bd7295d5333cb5787b8b7ae6f8f9c64
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2109,6 +2137,13 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+    #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
     # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
@@ -2118,7 +2153,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 23bad02f3a29021e98c1a78e62b33b5260cea8cc0a314a539a36e2d975e0cdd9
+    drift_ack_digest: 99e8a47c91fec9c2d645815ae01065cd4dd0d713f026d2b456a3488482987f3f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2423,6 +2458,13 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+    #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
     # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
@@ -2432,7 +2474,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: dcbab21d3b28969d46322a4e740edc71aac521436e1dbf76605532b4a3168d3c
+    drift_ack_digest: ffa229051d49861a8356abf8b897191bab1acc4af5bd3aeb01b555c6b6df008e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2697,6 +2739,13 @@ boards:
     # match arm in i2c.rs, and a doc comment moved back onto the enum it
     # documents in spi.rs. No executable path moved, so nothing above changes.
     #
+    # Re-stamped 2026-08-22 AGAIN, for the EFR32 I²C/SPI wire narration: both
+    # `i2c.rs` and `spi.rs` gained a `PadLines` cell and a narrator call on the
+    # `Efr32s2*` arms, plus `Efr32s2SpiRegs` fields. The STM32 arms are
+    # untouched, these boards never construct the EFR32 variants, and the STM32
+    # waveform gates (`stm32h5_reset_values_match_silicon`, the L4 I²C
+    # narration tests, `bus_visibility` for every stm32 row) pass unchanged.
+    #
     # Re-stamped 2026-08-22 for the EFR32MG26 reset-value corrections. `i2c.rs`
     # and `spi.rs` both moved, and both edits are confined to their `Efr32s2*`
     # arms: the I2C IPVERSION constant, and in spi.rs a hand-written `Default`
@@ -2706,7 +2755,7 @@ boards:
     # and the STM32 reset-value tests (`stm32h5_reset_values_match_silicon`,
     # `test_i2c_reset_values`) pass unchanged.
     drift_ack: 2026-08-21
-    drift_ack_digest: 07889aa3ac482e376366f9f048c9d1134d5c597e87646e90b4c9728b3dbbb85e
+    drift_ack_digest: 6544fb6e994ae2162df4d48ce5f7391dc3873d85bd6fbd60a767b1689a156716
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3409,7 +3458,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: de4ba3a1b0a624005abbf36a9347e4060c72ba510024f4dabfe95d8122247b74
+    drift_ack_digest: 01e8f135a697a5529da1371b837f851a6792ce1211db2bd7583fed234bfd1dd4
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3480,7 +3529,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: 91b07c07b174ed1a10f85b51e6af3d5189cb552d900eb4dfdb393bb91422a2b4
+    drift_ack_digest: b2c3b4e4f95d92d2d855f10988489e93a0c38970713fdec1cc5df37a6ad7135c
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3556,7 +3605,7 @@ boards:
     # this ack names content a human actually read; no live re-capture owed for
     # this change, and any already owed above still is.
     drift_ack: 2026-08-13
-    drift_ack_digest: e3d0199807bd82c8a634fd74d3ab987955ca67dc2cfab36ac9d557b571c35d90
+    drift_ack_digest: 3ab34d0f42e59464cff72293c291bc1af218bb8176e431d7638748772c1917d7
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
