@@ -125,9 +125,32 @@ impl<C: Cpu> Machine<C> {
             };
             clamp!(count, binder, arm, 1);
         } else if secondary_parked {
-            // Coalesced dual-core idle batch: allow multi-instruction PRO
-            // windows even when tick_interval is 1. Commit advances peripherals
-            // once with elapsed = primary_steps (see boundary.rs).
+            // Coalesced dual-core idle batch: while the secondary core is
+            // WAITI-parked the primary may retire several instructions per
+            // machine boundary. Commit advances peripherals once with
+            // elapsed = primary_steps (see boundary.rs).
+            //
+            // ⚠️ It may NOT run past the next peripheral tick boundary. This
+            // clause used to clamp at a flat 1024 and skip the tick clamp
+            // entirely — the comment even advertised "multi-instruction PRO
+            // windows even when tick_interval is 1". That is not a batching
+            // decision, it is a licence to stop observing peripherals: nothing
+            // between the two boundaries re-derives an interrupt level, so an
+            // IRQ raised at instruction 1 of the window is not seen by the CPU
+            // until instruction 1024, whatever the caller set the tick interval
+            // to. ESP-IDF's SMP FreeRTOS does not survive that — see the
+            // `sync_esp32s3_irq_write` write-choke note in `bus/routing.rs` for
+            // the deadlock it produces (`portYIELD_WITHIN_API` lands late,
+            // `xQueueReceive` re-blocks an already-blocked task, `vListInsert`
+            // links the event-list item to itself and spins forever with the
+            // queue spinlock held). Both halves are needed: the write choke
+            // makes an MMIO-raised level visible at the write, this clamp keeps
+            // a *timed* one visible within one tick interval.
+            //
+            // The coalescing win survives wherever it was ever sound — at
+            // `tick_interval > 1` (the browser's `RECOMMENDED_TICK_INTERVAL`)
+            // the window is still hundreds of instructions wide. At interval 1
+            // the caller asked for per-cycle peripheral service and now gets it.
             clamp!(count, binder, clause::SECONDARY_PARKED, 1024);
         } else {
             // Normal path: batch only up to the next peripheral tick boundary.

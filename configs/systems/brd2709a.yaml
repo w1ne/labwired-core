@@ -1,0 +1,38 @@
+# LabWired - Silicon Labs BRD2709A (xG26-EK2709A Explorer Kit) System Configuration
+#
+# Board-level wiring for the EFR32MG26 Explorer Kit. Sources: UG594 (BRD2709A
+# User's Guide) for the LED/button/VCOM pinout; configs/chips/efr32mg26.yaml
+# for the on-chip map.
+#
+# GPIO ports use the Series-2 layout (DOUT/DIN/MODEH); LED/button bindings
+# are load-bearing. ROUTE pin-mux is still a stub (see the chip descriptor).
+name: "brd2709a"
+chip: "../chips/efr32mg26.yaml"
+external_devices: []
+board_io:
+  # LED0 = PC08, LED1 = PC09; both active-high (UG594 §board controllers).
+  - id: "led0_pc08"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 8
+    signal: "output"
+    active_high: true
+  - id: "led1_pc09"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 9
+    signal: "output"
+    active_high: true
+  # BTN0 = PB00, BTN1 = PB01; both active-low (pressed = pin pulled low).
+  - id: "btn0_pb00"
+    kind: "button"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "input"
+    active_high: false
+  - id: "btn1_pb01"
+    kind: "button"
+    peripheral: "gpiob"
+    pin: 1
+    signal: "input"
+    active_high: false

@@ -447,11 +447,6 @@ impl Peripheral for Esp32s3SarAdc {
         Ok(())
     }
 
-    fn write_word_32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        self.write_reg(offset & !3, value);
-        Ok(())
-    }
-
     fn tick(&mut self) -> PeripheralTickResult {
         // Emit the APB_ADC interrupt source while any enabled+raw flag is set.
         if self.int_st() != 0 {

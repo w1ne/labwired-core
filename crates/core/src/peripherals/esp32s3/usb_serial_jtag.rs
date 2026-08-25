@@ -690,6 +690,32 @@ mod tests {
         assert_eq!(sink.lock().unwrap().as_slice(), b"H");
     }
 
+    #[test]
+    fn attach_uart_tx_sink_captures_usb_serial_jtag() {
+        // Same rule as RP2040 USB CDC: if the bus has this console block, the
+        // generic UART tap must hear it. Architect prints `Serial.println` on
+        // every chip; the twin owns discovering where those bytes land.
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut bus = SystemBus::new();
+        const TEST_BASE: u64 = 0x1000_0000;
+        bus.add_peripheral(
+            "usb_serial_jtag",
+            TEST_BASE,
+            0x100,
+            None,
+            Box::new(UsbSerialJtag::new()),
+        );
+        bus.attach_uart_tx_sink(sink.clone(), false);
+        bus.write_u32(TEST_BASE + OFF_EP1, 0x0000_0048).unwrap();
+        bus.write_u32(TEST_BASE + OFF_EP1_CONF, EP1_CONF_WR_DONE)
+            .unwrap();
+        assert_eq!(
+            sink.lock().unwrap().as_slice(),
+            b"H",
+            "USB-Serial-JTAG must be on the generic console tap, not a per-board firmware fork"
+        );
+    }
+
     /// Back-pressure, as measured: `WR_DONE` drops DATA_FREE and
     /// SERIAL_IN_EMPTY together; host pickup returns both together; and a store
     /// while busy is ignored rather than silently buffered.

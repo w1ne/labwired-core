@@ -3,6 +3,11 @@ name: "nrf52832"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 50
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# nRF52832 runs its Cortex-M4F at a fixed 64 MHz.
+cpu_hz: 64_000_000
+
 flash:
   base: 0x00000000
   size: "512KB"

@@ -6,9 +6,21 @@
 
 name: "esp32s3"
 arch: "xtensa-lx7"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Matches the engine's S3 constants: esp32s3/gpspi.rs CPU_CLOCK_HZ and
+# esp32s3/usb_serial_jtag.rs ESP32S3_CPU_CLOCK_HZ are both 240 MHz.
+cpu_hz: 240_000_000
+
 flash:
   base: 0x42000000
-  size: "16MB"
+  # 16 MiB, written in KB on purpose: `parse_size` treats KB as binary (1024)
+  # but MB as decimal (1e6), so "16MB" is 16,000,000 bytes — 777,216 short of
+  # the real part. That shortfall is invisible until an image uses the top of
+  # flash: the JEDEC capacity byte then reports an 8 MiB chip and esp_flash
+  # aborts with "Detected size(8192k) smaller than the size in the binary image
+  # header(16384k)".
+  size: "16384KB"
 ram:
   base: 0x3FC88000
   size: "512KB"

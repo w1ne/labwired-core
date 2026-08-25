@@ -33,6 +33,7 @@ fn dummy_manifest(path: &str) -> SystemManifest {
         schema_version: "1.0".into(),
         name: "uart-parity".into(),
         chip: path.into(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

@@ -6,6 +6,13 @@
   {
     "buses": [
       "I2C",
+      "SPI"
+    ],
+    "name": "efr32mg26"
+  },
+  {
+    "buses": [
+      "I2C",
       "UART"
     ],
     "name": "esp32"
@@ -53,6 +60,10 @@
   {
     "buses": [],
     "name": "nrf54l15"
+  },
+  {
+    "buses": [],
+    "name": "nrf54lm20a"
   },
   {
     "buses": [

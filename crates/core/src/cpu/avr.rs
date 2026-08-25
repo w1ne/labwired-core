@@ -759,17 +759,44 @@ impl Avr {
         Ok(true)
     }
 
+    /// Raw encoding at `pc`, for the trace only.
+    ///
+    /// Read at the SAME widths the fetch path uses, so an observed run touches
+    /// exactly the bytes an unobserved one does — a trace that perturbs the run
+    /// it measures is useless. Returns the word count too, because AVR mixes
+    /// 16- and 32-bit instructions and a trace that reported only the first
+    /// word of `JMP` could not be disassembled back.
+    ///
+    /// The four 32-bit families are recognised by the same masks the decoder
+    /// below uses: LDS 0xFE0F/0x9000, STS 0xFE0F/0x9200, JMP 0xFE0E/0x940C,
+    /// CALL 0xFE0E/0x940E. A fetch that would fault reports 0 rather than
+    /// propagating: the trace must not turn a readable run into an error.
+    fn raw_word_for_trace(&self, pc: u32) -> (u32, u32) {
+        let Ok(lo) = self.fetch_word(pc) else {
+            return (0, 2);
+        };
+        let is_32 = (lo & 0xFE0F) == 0x9000
+            || (lo & 0xFE0F) == 0x9200
+            || (lo & 0xFE0E) == 0x940C
+            || (lo & 0xFE0E) == 0x940E;
+        if !is_32 {
+            return (u32::from(lo), 2);
+        }
+        match self.fetch_word(pc.wrapping_add(2)) {
+            // Little-endian in flash, so the second word is the high half —
+            // the same order `expected_opcode` is assembled in by
+            // cpu_trace_conformance.
+            Ok(hi) => ((u32::from(hi) << 16) | u32::from(lo), 4),
+            Err(_) => (u32::from(lo), 2),
+        }
+    }
+
     fn step_inner(
         &mut self,
         bus: &mut dyn Bus,
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &SimulationConfig,
     ) -> SimResult<()> {
-        if self.try_take_irq(bus)? {
-            self.cycles += 4;
-            return Ok(());
-        }
-
         let pc = self.pc;
         let op = self.fetch_word(pc)?;
         let mut next = pc.wrapping_add(2);
@@ -1815,6 +1842,21 @@ impl Cpu for Avr {
         Ok(())
     }
 
+    /// One instruction, plus the standardized instruction trace.
+    ///
+    /// The trace contract is documented on `SimulationObserver`:
+    /// `on_step_start(pc, opcode)`, then `InstructionRetired`, then
+    /// `on_step_end(cycles, registers)` whose register slice ends `[.., SP, PC]`
+    /// with PC already advanced. It is proven per core by
+    /// `crates/core/tests/cpu_trace_conformance.rs`.
+    ///
+    /// This core used to ignore `observers` entirely — the same defect that
+    /// file was written after finding on Xtensa. `--trace` produced an empty
+    /// file for every AVR chip and nothing failed, because nothing checked.
+    ///
+    /// The interrupt is taken HERE rather than inside `step_inner` so that this
+    /// method can tell the two cases apart: vectoring to a handler retires no
+    /// instruction, so it must emit no `InstructionRetired`.
     fn step(
         &mut self,
         bus: &mut dyn Bus,
@@ -1822,8 +1864,51 @@ impl Cpu for Avr {
         config: &SimulationConfig,
     ) -> SimResult<()> {
         let before = self.cycles;
+
+        if self.try_take_irq(bus)? {
+            self.cycles += 4;
+            let delta = self.cycles.saturating_sub(before) as u32;
+            self.tick_timer0(delta.max(1));
+            return Ok(());
+        }
+
+        // Building the register snapshot is pure waste when nothing observes
+        // it, and this runs on every instruction — so all of it is gated.
+        let observed = !observers.is_empty();
+        let pc = self.pc;
+        let opcode = if observed {
+            self.raw_word_for_trace(pc).0
+        } else {
+            0
+        };
+        if observed {
+            for obs in observers {
+                obs.on_step_start(pc, opcode);
+            }
+        }
+
         self.step_inner(bus, observers, config)?;
+
         let delta = self.cycles.saturating_sub(before) as u32;
+
+        if observed {
+            // 32 general registers, then the standard trailer: SP, then PC.
+            let mut registers = [0u32; 34];
+            for (slot, value) in registers.iter_mut().zip(self.r.iter()) {
+                *slot = u32::from(*value);
+            }
+            registers[32] = u32::from(self.sp);
+            registers[33] = self.pc;
+
+            crate::emit_trace_event(
+                observers,
+                labwired_hw_trace::TraceEvent::InstructionRetired { pc, opcode },
+            );
+            for obs in observers {
+                obs.on_step_end(delta, &registers);
+            }
+        }
+
         self.tick_timer0(delta.max(1));
         Ok(())
     }

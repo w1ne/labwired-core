@@ -233,7 +233,7 @@ fn build_riscv_node(
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of RAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            let ram_size = labwired_config::parse_size(&chip.ram.size).unwrap_or(0);
+            let ram_size = chip.ram.size;
             let sp_top = (chip.ram.base + ram_size) as u32;
             machine.cpu.set_sp(sp_top & !0xF);
             Ok(Box::new(machine))
@@ -291,13 +291,15 @@ fn build_xtensa_node(
 /// to `configure_xtensa_esp32s3` rather than read from `LABWIRED_ESP32S3_FLASH`,
 /// which is what lets two S3 nodes in one world run *different* firmware.
 ///
-/// Known limitation on the ELF path: the single-chip runner additionally
-/// pre-paints the ESP-IDF dual-core handshake flags (`s_cpu_inited` &c.) by
-/// looking up firmware symbols. That is a thunk over the boot sequence, it
-/// needs the `loader` crate (which depends on core, so core cannot use it), and
-/// it is superseded by the chip's SMP model — so it is deliberately not
-/// reproduced here. An ESP-IDF ELF node will therefore wait at that handshake;
-/// prefer the flash-image path, which boots the real ROM and does not need it.
+/// Both paths are dual-core, and the single-chip runner (`labwired run`) now
+/// builds the same shape. The ESP-IDF handshake flags (`s_cpu_inited`,
+/// `s_other_cpu_startup_done`, …) are written by the firmware running on core 1,
+/// not pre-painted from firmware symbols: core 1 is released by the real
+/// hardware edge (`SYSTEM_CORE_1_CONTROL_0.RESETING` 1→0 on the flash path, the
+/// `ets_set_appcpu_boot_addr` handover on the ELF path) and then executes the
+/// real bring-up. `s_other_cpu_startup_done` in particular is set by core 1's
+/// FreeRTOS idle hook, which only runs once a systimer tick wakes core 1 out of
+/// `WAITI` — see the `Waiti` arm in `cpu::xtensa_lx7`.
 fn build_esp32s3_node(
     id: &str,
     chip: &ChipDescriptor,
@@ -408,18 +410,10 @@ fn validate_cortex_m_firmware(
         );
     }
 
-    let flash_size = labwired_config::parse_size(&chip.flash.size).with_context(|| {
-        format!(
-            "node '{node_id}': invalid flash size for chip '{}'",
-            chip.name
-        )
-    })?;
-    let ram_size = labwired_config::parse_size(&chip.ram.size).with_context(|| {
-        format!(
-            "node '{node_id}': invalid RAM size for chip '{}'",
-            chip.name
-        )
-    })?;
+    // No parse and no error path: the sizes were validated when the chip
+    // deserialised, so "invalid flash size" is no longer reachable here.
+    let flash_size = chip.flash.size;
+    let ram_size = chip.ram.size;
     let vector_base = chip
         .flash
         .base

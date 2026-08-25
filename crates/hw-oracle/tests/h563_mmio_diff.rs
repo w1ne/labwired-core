@@ -993,6 +993,7 @@ fn build_sim_bus() -> SystemBus {
         schema_version: "1.0".to_string(),
         name: "h563-mmio-diff".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

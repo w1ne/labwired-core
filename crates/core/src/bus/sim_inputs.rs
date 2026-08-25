@@ -65,6 +65,19 @@ impl SystemBus {
     }
 
     fn seed_adc_at(&mut self, idx: usize, channel: u8, millivolts: u16) -> bool {
+        // Ask through the trait first. `Peripheral::set_adc_channel_input` is
+        // where an ADC model says "this is my channel and I took it"; the
+        // downcast chain below is the five models that predate the hook, and
+        // it shrinks by one every time one of them implements it. A downcast
+        // chain is not merely debt here: a new ADC that nobody remembered to
+        // add an arm for is silently undrivable, and its lab shows a flat
+        // line with no error anywhere.
+        if self.peripherals[idx]
+            .dev
+            .set_adc_channel_input(channel, millivolts)
+        {
+            return true;
+        }
         let Some(any) = self.peripherals[idx].dev.as_any_mut() else {
             return false;
         };

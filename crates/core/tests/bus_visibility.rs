@@ -96,6 +96,13 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
     // from_config address-map stubs: no real peripheral bank for the three
     // buses (see the board header). Edges cannot be produced on this path.
     (
+        "efr32mg26",
+        BusKind::Uart,
+        "the Efr32s2 layout models the console TX/RX byte path but captures no \
+         baud divisor (CLKDIV), so bit_time_cycles() is None and no wire \
+         waveform is narrated — there are no edges to decode",
+    ),
+    (
         "esp32",
         BusKind::Spi,
         "Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist \
@@ -160,6 +167,36 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "nrf5340",
         BusKind::Uart,
         "nRF5340 serial bank not yet edge-gated on from_config",
+    ),
+    // nRF54LM20A: the ports decline the nRF52 pad-claim wiring on purpose.
+    // `wire_nrf52_pads` installs the PSEL claim table only for
+    // GpioRegisterLayout::Nrf52, because that engine's PSEL field decode is
+    // verified on the nRF52840 alone -- and this family widened PSEL.PORT from
+    // one bit to three (SVD GLOBAL_SPIM00.PSEL.SCK, PORT [7:5]) to address four
+    // ports. With no claim table there is no PadLines cell, so the models
+    // publish line NAMES but no wire channel and there are no edges to decode.
+    // Lifting these three means teaching the claim engine the wider PORT field,
+    // not relaxing the gate.
+    (
+        "nrf54lm20a",
+        BusKind::I2c,
+        "nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the \
+         claim engine decodes the nRF52840 1-bit field only, so no PadLines \
+         cell is installed and no wire waveform is narrated",
+    ),
+    (
+        "nrf54lm20a",
+        BusKind::Spi,
+        "nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the \
+         claim engine decodes the nRF52840 1-bit field only, so no PadLines \
+         cell is installed and no wire waveform is narrated",
+    ),
+    (
+        "nrf54lm20a",
+        BusKind::Uart,
+        "nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the \
+         claim engine decodes the nRF52840 1-bit field only, so no PadLines \
+         cell is installed and no wire waveform is narrated",
     ),
     (
         "nrf54l15",
@@ -239,6 +276,8 @@ fn dummy_manifest(path: &str) -> SystemManifest {
         wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
+        // No override: these harnesses take whatever the chip declares.
+        cpu_hz: None,
     }
 }
 
@@ -353,7 +392,17 @@ fn enable_clock(machine: &mut Machine<CortexM>, peri_name: &str) {
     let Some(gate) = machine.bus.peripherals[idx].clock_gate.as_ref() else {
         return;
     };
-    let Some(rcc_idx) = machine.bus.find_peripheral_index_by_name("rcc") else {
+    // ⚠️ NOT just "rcc". The engine's own list is `CLOCK_CONTROLLER_IDS`
+    // (`bus/routing.rs`) — rcc / cmu / rcu — and a gate offset is relative to
+    // whichever of those a chip actually declares. Looking only for "rcc"
+    // silently returned here on a Silicon Labs part, so `enable_clock` was a
+    // no-op, the peripheral stayed gated and mute, and the ratchet reported
+    // "named line(s) produced no edges" — which reads as a broken narrator
+    // rather than a harness that never turned the clock on.
+    let Some(rcc_idx) = ["rcc", "cmu", "rcu"]
+        .iter()
+        .find_map(|id| machine.bus.find_peripheral_index_by_name(id))
+    else {
         return;
     };
     let rcc_base = machine.bus.peripherals[rcc_idx].base;
@@ -546,6 +595,10 @@ enum Family {
     Nrf52,
     Esp32c3,
     Esp32,
+    /// Silicon Labs EFR32 Series 2. ⚠️ "SPI" here is a USART with `CTRL.SYNC` —
+    /// the part has no separate SPI peripheral — so both kinds land in the same
+    /// arm and drive different register blocks of the same shape.
+    Efr32s2,
     Unknown,
 }
 
@@ -567,6 +620,8 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32c3
     } else if chip == "esp32" {
         Family::Esp32
+    } else if chip.starts_with("efr32") {
+        Family::Efr32s2
     } else {
         Family::Unknown
     }
@@ -729,6 +784,20 @@ fn drive_uart(
                 .write_u32(inst.base, (1 << 0) | (1 << 3) | (1 << 2)); // CR1 if V2
             2082u64 // 694 * 240/80
         }
+        Family::Efr32s2 => {
+            // Not reached today: `efr32mg26`'s UART carries an EXCLUSIONS row,
+            // and `is_excluded` is consulted before this function. Kept, and
+            // saying the same thing that row says, so that deleting the row
+            // (the day the async path narrates) fails with the real reason
+            // rather than "no UART bring-up for family of chip".
+            return KindResult::Unsupported {
+                instance: inst.name.clone(),
+                reason: "EFR32 Series-2 USART in ASYNC mode narrates nothing — only the \
+                         SYNC (SPI) path publishes a wire, and no baud divisor is \
+                         captured, so there is no bit time to decode against"
+                    .into(),
+            };
+        }
         Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
@@ -876,6 +945,9 @@ fn transmit_uart_bytes(machine: &mut Machine<CortexM>, data_reg: u64) -> bool {
 /// into a no-op while still compiling (see DoD item 5).
 fn transmit_uart(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstance) -> bool {
     match family {
+        // Never reached: `drive_uart` returns Unsupported for this family
+        // before the transmit step.
+        Family::Efr32s2 => false,
         Family::Stm32F1 | Family::Stm32V2 | Family::Stm32H5 => {
             // Covered by drive_uart_stm32 / transmit_uart_bytes.
             transmit_uart_bytes(machine, inst.base + 0x28)
@@ -1054,6 +1126,15 @@ fn drive_spi(
             let _ = machine.bus.write_u32(inst.base + 0x1C, 1 << 27); // USR_MOSI
             let _ = machine.bus.write_u32(inst.base + 0x34, 0); // PIN
         }
+        Family::Efr32s2 => {
+            // ⚠️ `CTRL.SYNC` is what makes this USART a SPI at all, and MSBF is
+            // the only bit order the narrator draws. CMD then enables master +
+            // TX. `GPIO_USARTROUTE` is deliberately NOT written.
+            let _ = machine.bus.write_u32(inst.base + 0x04, 1); // EN
+            let _ = machine.bus.write_u32(inst.base + 0x08, 1 | (1 << 10)); // CTRL SYNC|MSBF
+            let _ = machine.bus.write_u32(inst.base + 0x14, (1 << 4) | (1 << 2));
+            // CMD
+        }
         Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
@@ -1084,6 +1165,14 @@ fn drive_spi(
 
 fn transmit_spi(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstance) -> bool {
     match family {
+        Family::Efr32s2 => {
+            // A frame completes inside the TXDATA write and is narrated there,
+            // so each byte is one write and no status poll is needed.
+            for &b in &PAYLOAD {
+                let _ = machine.bus.write_u32(inst.base + 0x3C, u32::from(b));
+            }
+            true
+        }
         Family::Stm32F1 | Family::Stm32V2 => {
             let dr = inst.base + 0x0C;
             let sr = inst.base + 0x08;
@@ -1286,6 +1375,13 @@ fn drive_i2c(
             let _ = machine.bus.write_u32(inst.base, 400); // SCL_LOW
             let _ = machine.bus.write_u32(inst.base + 0x38, 400); // SCL_HIGH
         }
+        Family::Efr32s2 => {
+            // CLKDIV at reset is 0, which the model reads as the slowest
+            // standard-mode bit time — enough edges to measure. EN is the only
+            // register a transfer needs; `GPIO_I2CROUTE` is deliberately NOT
+            // written, which is the difference between this and a pad probe.
+            let _ = machine.bus.write_u32(inst.base + 0x04, 1); // EN
+        }
         Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
@@ -1371,6 +1467,19 @@ fn transmit_i2c(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstan
             for _ in 0..50_000 {
                 let _ = machine.step();
             }
+            true
+        }
+        Family::Efr32s2 => {
+            // START, address+W, the payload, STOP — the sequence emlib's
+            // `I2C_TransferInit` drives, byte at a time through TXDATA.
+            let _ = machine.bus.write_u32(inst.base + 0x0C, 1 << 0); // CMD.START
+            let _ = machine
+                .bus
+                .write_u32(inst.base + 0x34, u32::from(I2C_ADDR) << 1);
+            for &b in &PAYLOAD {
+                let _ = machine.bus.write_u32(inst.base + 0x34, u32::from(b));
+            }
+            let _ = machine.bus.write_u32(inst.base + 0x0C, 1 << 1); // CMD.STOP
             true
         }
         Family::Rp2040 => {

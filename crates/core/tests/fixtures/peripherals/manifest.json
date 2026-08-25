@@ -890,6 +890,33 @@
       "inputs": []
     },
     {
+      "device_type": "amoled-rm67162",
+      "label": "RM67162 AMOLED",
+      "summary": "240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C).",
+      "detail": "Raydium RM67162 emissive panel. Implements the DCS command / RAMWR stream against an in-memory framebuffer. Unlike a backlit TFT, brightness lives in the controller (WRDISBV 0x51, reset 0x00 = black), so the artifact reports `lit` -- DISPON AND awake AND non-zero brightness -- alongside the raw pixels. D/C framing comes either from a GPIO or from the SPI controller's own DCX line.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select pin label. With a controller-driven hardware CSN (nRF54L PSEL.CSN) this is documentation only -- the controller asserts chip select itself."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Use this when the firmware toggles D/C itself between transfers, which is how nRF52-era and STM32 boards wire a panel. Mutually exclusive with `hw_dcx`."
+        },
+        {
+          "name": "hw_dcx",
+          "ty": "bool",
+          "doc": "Set when the SPI controller drives D/C itself (nRF54L SPIM PSEL.DCX + DCXCNT). No GPIO is involved. Mutually exclusive with `dc_pin`. Exactly one of the two is required: this model has no infer-framing-from-byte-values fallback, because that inference desynchronises on a real init sequence."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "ili9341-16bit",
       "label": "ILI9341 TFT (16-bit parallel)",
       "summary": "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
@@ -2408,7 +2435,7 @@
         {
           "name": "cpu_hz",
           "ty": "int",
-          "doc": "Simulated CPU Hz for edge timing. Defaults to 160_000_000."
+          "doc": "Simulated CPU Hz for edge timing. Defaults to the system's clock (the manifest's `cpu_hz:`, else the chip descriptor's)."
         }
       ],
       "labs": [],

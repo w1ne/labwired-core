@@ -246,7 +246,7 @@ fn build_node_air(flash: &[u8], idle_ff: bool, private_air: Option<&str>) -> Nod
                 .unwrap();
         }
     }
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    let sp_top = (chip.ram.base + chip.ram.size) as u32;
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(bootloader.entry_point as u32);
 

@@ -100,6 +100,101 @@ jobs:
             make: examples/f103-j1939-monitor/firmware
             script: examples/f103-j1939-monitor/j1939-replay.yaml
             system: examples/f103-j1939-monitor/replay-system.yaml
+          # Committed-ELF cells. No `crate`/`make`: the firmware is a checked-in
+          # fixture, so these need no cross toolchain and finish in seconds
+          # (measured 0.05s / 0.09s / 2.4s / 2.3s on this tree).
+          #
+          # All four were found by scripts/ci/chip_coverage.py, which derives
+          # per-chip coverage from what CI actually runs. Each smoke was already
+          # in the tree and PASSING, and executed by no workflow at all — the
+          # same shape as the h735 lab above. They are the only CLI proof for
+          # three chips: nrf54l15, stm32f411ceu6 and mkw41z4.
+          - id: nrf54l15-dk
+            script: examples/nrf54l15-dk/io-smoke.yaml
+            system: examples/nrf54l15-dk/system.yaml
+          # nrf54lm20a's only CLI proof. Committed ELF, and the only cell here
+          # that judges a DISPLAY: its io-smoke asserts ink in the AMOLED's play
+          # area and requires the never-addressed strip below it to be exactly
+          # black, so a SPIM that completes its transfers into nothing fails.
+          - id: nrf54lm20a-snake
+            script: examples/nrf54lm20a-snake/io-smoke.yaml
+            system: examples/nrf54lm20a-snake/system.yaml
+          - id: nrf54l15-smart-ring
+            script: examples/nrf54l15-smart-ring/io-smoke.yaml
+            system: examples/nrf54l15-smart-ring/system.yaml
+          - id: stm32f411ceu6-blackpill
+            script: examples/stm32f411ceu6-blackpill/io-smoke.yaml
+            system: examples/stm32f411ceu6-blackpill/system.yaml
+          - id: kw41z-cow-activity
+            script: examples/kw41z-cow-activity/calm.yaml
+            system: configs/systems/frdm-kw41z-lcd.yaml
+          # BRD2709A / EFR32MG26: first CLI cell for Series-2 Gecko. The
+          # uart-smoke ELF is also committed at tests/fixtures/mg26-smoke.elf
+          # for the install canary; this cell builds from source so a linker
+          # or USART-layout regression cannot hide behind a stale blob.
+          - id: brd2709a
+            target: thumbv7m-none-eabi
+            crate: firmware-mg26-demo
+            profile: release
+            profile_dir: release
+            script: examples/brd2709a/uart-smoke.yaml
+            system: examples/brd2709a/system.yaml
+          # F405 and F767 had no cell at all: their only smokes borrowed
+          # firmware-f401-demo from a sibling part, which needs a build, so no
+          # workflow ran them. Their own TIER1 fixtures are committed blobs, so
+          # these two cells cost seconds and no toolchain — and they are what
+          # found I2C1 answering before its RCC gate on both parts.
+          - id: feather-f405
+            script: examples/feather-f405/tier1-smoke.yaml
+            system: examples/feather-f405/system.yaml
+          - id: nucleo-f767zi
+            script: examples/nucleo-f767zi/tier1-smoke.yaml
+            system: examples/nucleo-f767zi/system.yaml
+          # The first CLI cell on an ESP32-S3. No S3 chip had one, because
+          # `labwired test` could not boot an S3 image: it recognised the part by
+          # an exact name (so every board variant took the generic builder and
+          # died with a memory violation) and then booted every S3 image on the
+          # factory-partition flash layout (so a bare-metal image's DROM reads
+          # landed on the wrong pages and it jumped to 0x0 at step 48). The
+          # Arduino matrix's esp32s3 cell could not see either defect — its
+          # images DO have a partition table and it never names a board variant.
+          # Committed fixture, no toolchain, 3.2s.
+          - id: esp32s3-zero
+            script: examples/esp32s3-zero/tier1-smoke.yaml
+            system: examples/esp32s3-zero/system.yaml
+          # nRF5340: real upstream Zephyr v3.7 hello_world on the application
+          # core. The ELF already booted in firmware_survival.rs, but IN
+          # PROCESS — no CLI ran it, which is why the chip sat in the coverage
+          # ledger. Non-vacuity checked: pointed at the nrf52840-dk system the
+          # same script drops to 1/3, with both banner assertions failing.
+          - id: nrf5340dk-zephyr
+            script: examples/nrf5340dk/zephyr-smoke.yaml
+            system: examples/nrf5340dk/system.yaml
+          # RP2350 — the last chip that no gate ran, and the cell that emptied
+          # configs/ci/chip-coverage.yaml (the file is deleted; all 26 chips are
+          # covered). The model, the reset-path test and this firmware all
+          # existed; there was no system manifest, so no script could name them
+          # together and no workflow executed the chip.
+          #
+          # `build_dir` is not decoration: the linker script comes from the
+          # crate's OWN .cargo/config.toml (`-C link-arg=-Tlink.x`), and cargo
+          # reads config from the working directory's ancestors, not from the
+          # package it is building. Built from the workspace root the same
+          # command links entry 0x0 (measured, both ways) and the firmware
+          # boots nowhere. The entry-point guard below names that failure
+          # instead of leaving it as a silent empty UART.
+          #
+          # Non-vacuity checked: on the rp2040 descriptor — whose UART0 sits at
+          # 0x4003_4000, not the RP2350's 0x4007_0000 — the same script captures
+          # zero UART bytes and drops to 1/2.
+          - id: rp2350-demo
+            target: thumbv8m.main-none-eabi
+            crate: firmware-rp2350-demo
+            build_dir: crates/firmware-rp2350-demo
+            profile: release
+            profile_dir: release
+            script: examples/rp2350-demo/io-smoke.yaml
+            system: examples/rp2350-demo/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -107,7 +202,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,riscv32i-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -131,12 +226,33 @@ jobs:
 
       - name: Build matrix firmware
         if: matrix.crate != ''
+        # `build_dir` (default: the workspace root) is the directory cargo runs
+        # IN, which is not the same question as which package it builds. A crate
+        # whose linker script comes from its own .cargo/config.toml must be
+        # built from inside itself — see the rp2350-demo cell.
+        working-directory: ${{ matrix.build_dir || '.' }}
         run: |
           if [ "${{ matrix.profile }}" = "release" ]; then
             cargo build -p "${{ matrix.crate }}" --release --target "${{ matrix.target }}"
           else
             cargo build -p "${{ matrix.crate }}" --target "${{ matrix.target }}"
           fi
+
+      # A firmware that linked with entry 0x0 boots nowhere and prints nothing,
+      # so the smoke below fails with an empty UART and no clue why. Say it here.
+      - name: Firmware must not have linked with entry 0x0
+        if: matrix.crate != ''
+        run: |
+          set -euo pipefail
+          elf="target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}"
+          entry=$(python3 -c "import struct,sys;print(struct.unpack_from('<I',open(sys.argv[1],'rb').read(),0x18)[0])" "$elf")
+          if [ "$entry" -eq 0 ]; then
+            echo "::error::$elf linked with entry 0x0 — its linker script was not applied."
+            echo "::error::Cargo reads .cargo/config.toml from the working directory, not the package."
+            echo "::error::Set build_dir on this matrix cell to the crate's own directory."
+            exit 1
+          fi
+          printf 'entry point 0x%08x\n' "$entry"
 
       - name: Run matrix smoke
         run: |

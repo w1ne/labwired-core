@@ -134,6 +134,18 @@ const HARDCODED_BASE_ALLOWLIST: &[(&str, &str, &str)] = &[
     ),
     // ── register field encodings that merely LOOK like bases ────────────────
     (
+        "peripherals/virtual_ble.rs",
+        "ADV_ACCESS_ADDRESS",
+        "NOT A PERIPHERAL BASE. 0x8E89BED6 is the BLE advertising ACCESS \
+         ADDRESS — a fixed 32-bit value the Bluetooth Core Specification \
+         assigns to the primary advertising channels (Vol 6, Part B, 2.1.2). \
+         Every BLE controller in this engine carries it: the nRF52 RADIO puts \
+         it in BASE0/PREFIX0 and the ESP32-C3 RW-BLE core in its control \
+         structure. It names a radio protocol constant, not a location in the \
+         address space; no chip YAML declares it and there is nothing for \
+         ChipMap to resolve.",
+    ),
+    (
         "peripherals/esp32c3/pms.rs",
         "IRAM0_STATUS_ADDR_BASE",
         "NOT A PERIPHERAL BASE. `IRAM0_VIOLATE_STATUS_ADDR_OFFSET` from IDF's \

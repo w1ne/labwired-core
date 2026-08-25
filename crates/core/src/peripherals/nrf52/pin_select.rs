@@ -77,7 +77,6 @@
 //! deliberately declines to install this table on a port whose window is
 //! offset. See `SystemBus::wire_nrf52_pads`.
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// `CONNECT` = Disconnected. Bit 31 of every `PSEL.*` register, and its reset
@@ -95,10 +94,6 @@ const PSEL_PORT_MASK: u32 = 0x1;
 pub(crate) const PINS_PER_PORT: usize = 32;
 /// Ports a `PSEL.PORT` field can name (`[0..1]`).
 pub(crate) const PORTS: usize = 2;
-
-/// No signal claims this pad. `u32::MAX` because it must not collide with a
-/// claim token, and tokens are handed out from 0 upwards by the wiring pass.
-const UNCLAIMED: u32 = u32::MAX;
 
 /// The pad a `PSEL.*` word names, as a flat `port * 32 + pin` index, or `None`
 /// when `CONNECT` reads Disconnected.
@@ -122,66 +117,16 @@ fn psel_pad(psel: u32) -> Option<usize> {
 /// and by every `PSEL`-owning peripheral (which writes it). Reads are lock-free
 /// because a pad read runs on the CPU walk and must not contend with an MMIO
 /// write on another peripheral.
-#[derive(Debug)]
-pub struct NrfPinClaims {
-    /// One slot per `port * 32 + pin`, holding the claim token of the signal
-    /// driving that pad or [`UNCLAIMED`].
-    slots: Vec<AtomicU32>,
-}
+/// The claim table, now shared. ⚠️ NOT a Nordic type any more: the EFR32
+/// Series-2 route registers mux the same way (the peripheral names the pad),
+/// so the mechanism moved to [`crate::peripherals::pad_claims`] and only the
+/// PSEL ENCODING stayed here. The alias keeps every Nordic call site reading
+/// the way it did.
+pub type NrfPinClaims = crate::peripherals::pad_claims::PadClaims;
 
-impl Default for NrfPinClaims {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl NrfPinClaims {
-    pub fn new() -> Self {
-        Self {
-            slots: (0..PORTS * PINS_PER_PORT)
-                .map(|_| AtomicU32::new(UNCLAIMED))
-                .collect(),
-        }
-    }
-
-    /// The claim token currently driving `(port, pin)`, or `None` for a pad no
-    /// peripheral has selected — the `selector_of` closure
-    /// [`PadRoutes::level`](super::super::pad_routing::PadRoutes::level) wants.
-    ///
-    /// `None` for an out-of-range pad rather than a panic, for the same reason
-    /// [`PadLines::level`](super::super::pad_lines::PadLines::level) reads low:
-    /// this runs on the CPU walk, where stale bookkeeping must not take the
-    /// engine down.
-    pub fn selector(&self, port: u8, pin: u8) -> Option<u32> {
-        let idx = usize::from(port) * PINS_PER_PORT + usize::from(pin);
-        let token = self.slots.get(idx)?.load(Ordering::Relaxed);
-        (token != UNCLAIMED).then_some(token)
-    }
-
-    /// Take `pad` for `token`, displacing whatever held it.
-    ///
-    /// Last writer wins, which is what the silicon does not promise: "Only one
-    /// peripheral can be assigned to drive a particular GPIO pin at a time.
-    /// Failing to do so may result in unpredictable behavior" (nRF52840 PS
-    /// v1.11 §6.31.6, p790). Picking the most recent claim is one legal reading
-    /// of unpredictable and the only one that stays deterministic.
-    fn take(&self, pad: usize, token: u32) {
-        if let Some(slot) = self.slots.get(pad) {
-            slot.store(token, Ordering::Relaxed);
-        }
-    }
-
-    /// Give up `pad` — but ONLY if `token` still holds it.
-    ///
-    /// The compare is load-bearing. Two peripherals can name the same pad, and
-    /// the second one's claim must survive the first one's release; a blind
-    /// store would hand the pad back to the GPIO latch while a live peripheral
-    /// was still driving it.
-    fn release(&self, pad: usize, token: u32) {
-        if let Some(slot) = self.slots.get(pad) {
-            let _ = slot.compare_exchange(token, UNCLAIMED, Ordering::Relaxed, Ordering::Relaxed);
-        }
-    }
+/// A Nordic table: two ports of 32 pads (PS v1.11 6.9, p143).
+pub fn nrf_pin_claims() -> NrfPinClaims {
+    NrfPinClaims::new(PORTS, PINS_PER_PORT)
 }
 
 /// One peripheral signal's standing claim on a pad — the handle a `PSEL`-owning
@@ -281,7 +226,7 @@ mod tests {
 
     #[test]
     fn an_unclaimed_pad_answers_none_so_the_port_falls_back_to_its_latch() {
-        let claims = NrfPinClaims::new();
+        let claims = nrf_pin_claims();
         assert_eq!(claims.selector(0, 3), None);
         // Out of range is None, never a panic: this runs on the CPU walk.
         assert_eq!(claims.selector(9, 3), None);
@@ -290,7 +235,7 @@ mod tests {
 
     #[test]
     fn a_claim_follows_psel_and_is_released_when_the_peripheral_is_disabled() {
-        let claims = Arc::new(NrfPinClaims::new());
+        let claims = Arc::new(nrf_pin_claims());
         let mut scl = NrfPinClaim::default();
         scl.install(claims.clone(), SCL);
 
@@ -313,7 +258,7 @@ mod tests {
         // The regression a bind-once table cannot express: pinctrl swapping an
         // instance onto a different pad must not leave the first pad reading
         // the wire forever.
-        let claims = Arc::new(NrfPinClaims::new());
+        let claims = Arc::new(nrf_pin_claims());
         let mut sda = NrfPinClaim::default();
         sda.install(claims.clone(), SDA);
 
@@ -333,7 +278,7 @@ mod tests {
         // "Only one peripheral can be assigned to drive a particular GPIO pin
         // at a time" (PS §6.31.6) — but firmware CAN do it, and when the loser
         // later disconnects, the winner must keep its pad.
-        let claims = Arc::new(NrfPinClaims::new());
+        let claims = Arc::new(nrf_pin_claims());
         let mut scl = NrfPinClaim::default();
         let mut txd = NrfPinClaim::default();
         scl.install(claims.clone(), SCL);
@@ -360,7 +305,7 @@ mod tests {
 
     #[test]
     fn dropping_a_model_frees_the_pad_it_held() {
-        let claims = Arc::new(NrfPinClaims::new());
+        let claims = Arc::new(nrf_pin_claims());
         {
             let mut scl = NrfPinClaim::default();
             scl.install(claims.clone(), SCL);

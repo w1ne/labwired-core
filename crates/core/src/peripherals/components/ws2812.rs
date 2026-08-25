@@ -279,7 +279,8 @@ static WS2812_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: "cpu_hz",
             ty: ConfigType::Int,
-            doc: "Simulated CPU Hz for edge timing. Defaults to 160_000_000.",
+            doc: "Simulated CPU Hz for edge timing. Defaults to the system's \
+                  clock (the manifest's `cpu_hz:`, else the chip descriptor's).",
         },
     ],
     labs: &[],
@@ -293,7 +294,15 @@ impl PeripheralKit for Ws2812Kit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let data = ctx.config_str("data_pin").unwrap_or("GPIO48");
         let num_pixels = ctx.config_i64("num_pixels").unwrap_or(1).max(1) as usize;
-        let cpu_hz = ctx.config_i64("cpu_hz").unwrap_or(160_000_000) as u64;
+        // Same order as the declarative devices: the placed part's own
+        // `cpu_hz` first, then the system's clock (manifest override, else the
+        // chip descriptor), and only then the historical C3 literal — which is
+        // what every board used to get, S3 and ATmega included.
+        let cpu_hz = ctx
+            .config_i64("cpu_hz")
+            .map(|v| v as u64)
+            .or_else(|| Some(ctx.bus.cpu_hz).filter(|hz| *hz > 0))
+            .unwrap_or(160_000_000);
         let pin = ctx.parse_gpio_pin(data).ok_or_else(|| {
             anyhow::anyhow!(
                 "neopixel '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",

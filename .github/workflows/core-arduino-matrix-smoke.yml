@@ -75,26 +75,58 @@ jobs:
       # No distro gcc-arm-none-eabi apt: PlatformIO installs its own toolchains,
       # and parallel apt-get across matrix jobs has hung runners for 20+ minutes.
 
+      # WHY THE KEY IS THE PLATFORM AND NOT THE BOARD.
+      #
+      # `~/.platformio` holds a PLATFORM's toolchain, and sixteen boards in this
+      # matrix pull only FIVE platforms — nine of them are `ststm32`. Keying per
+      # board stored the same ~0.7 GB toolchain nine times over.
+      #
+      # Measured 2026-08-20: fifteen `pio-<board>-` entries held ~8.5 GB of the
+      # repository's 10 GB Actions cache budget. That is not merely wasteful, it
+      # is what EVICTS the one cache every pull request depends on — the 0.96 GB
+      # `v0-rust-core-ci` target dir that `pr-workspace-tests` restores in all
+      # three shards. A nightly fleet lane was starving every PR of its warm
+      # build, which is how "No cache found" and a cold 8-minute build per shard
+      # became normal (see the timing block in core-ci.yml).
+      #
+      # Five keys instead of sixteen: ~8.5 GB -> ~2.3 GB, freeing ~6 GB.
+      #
+      # Matrix jobs sharing one key race to save it. That is fine and is not an
+      # error: the loser logs "Cache already exists", and a board whose extra
+      # sub-packages are missing from the winner's copy simply downloads them.
+      # This is a warm start, never a correctness input.
+      - name: Which PlatformIO platform this board needs
+        id: pio
+        run: |
+          case "${{ matrix.board }}" in
+            stm32*)      platform=ststm32 ;;
+            nrf*)        platform=nordicnrf52 ;;
+            rp2040)      platform=raspberrypi ;;
+            esp32*)      platform=espressif32 ;;
+            atmega328p)  platform=atmelavr ;;
+            *)
+              echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
+              exit 1
+              ;;
+          esac
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "board ${{ matrix.board }} -> platform $platform"
+
       - name: Cache PlatformIO packages
         uses: actions/cache@v4
         with:
           path: |
             ~/.platformio
-          key: pio-${{ matrix.board }}-${{ hashFiles('validation/arduino-matrix/boards.yaml') }}
+          key: pio-${{ steps.pio.outputs.platform }}-${{ hashFiles('validation/arduino-matrix/boards.yaml') }}
           restore-keys: |
-            pio-${{ matrix.board }}-
+            pio-${{ steps.pio.outputs.platform }}-
 
       - name: Install PyYAML + PlatformIO
         run: |
           python -m pip install --quiet 'platformio>=6.1' pyyaml
-          # Warm platforms used by the thin matrix (platforms pull frameworks).
-          case "${{ matrix.board }}" in
-            stm32*)      pio pkg install -g -p ststm32 ;;
-            nrf*)        pio pkg install -g -p nordicnrf52 ;;
-            rp2040)      pio pkg install -g -p raspberrypi ;;
-            esp32*)      pio pkg install -g -p espressif32 ;;
-            atmega328p)  pio pkg install -g -p atmelavr ;;
-          esac
+          # Warm the platform resolved above — one source for the mapping, so
+          # the cache key and the thing being cached can never disagree.
+          pio pkg install -g -p "${{ steps.pio.outputs.platform }}"
 
       - name: Arduino matrix (L0 + L2 + L3 I2C kit)
         env:

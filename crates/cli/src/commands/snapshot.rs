@@ -498,22 +498,18 @@ pub(crate) fn run_snapshot_capture(
 
     dump_trace(&ring);
 
-    // Ask before taking. `Cpu::runtime_snapshot` no longer panics on the arches
-    // that do not implement it (a panic in wasm is a trap, and a trap leaks
-    // wasm-bindgen's borrow guard — see the note on the trait), so an ungated
-    // call here would no longer fail loudly: it would write a well-formed file
-    // whose CPU blob is EMPTY. A resume from that blob restores no registers at
-    // all, and nothing downstream can tell it apart from a real capture. Refuse
-    // instead — a missing snapshot is recoverable, a lying one is not.
-    if !machine.cpu.supports_runtime_snapshot() {
+    // `None` means this CPU models no runtime snapshot. There is no longer a
+    // separate capability query to ask first: the take itself is the answer,
+    // so the check cannot disagree with what a capture would contain. Refuse —
+    // a missing snapshot is recoverable, a file whose CPU blob is empty but
+    // which looks like a real capture is not.
+    let Some(snap) = machine.take_runtime_snapshot() else {
         eprintln!(
             "error: this CPU has no runtime-snapshot implementation, so no resumable \
              snapshot can be captured for it (supported: RISC-V, Xtensa LX7)."
         );
         return ExitCode::from(EXIT_RUNTIME_ERROR);
-    }
-
-    let snap = machine.take_runtime_snapshot();
+    };
     let bytes = snap.to_bytes();
 
     if let Some(parent) = args.output.parent() {

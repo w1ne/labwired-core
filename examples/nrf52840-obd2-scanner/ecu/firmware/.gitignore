@@ -1,0 +1,8 @@
+# Build output. `cargo test -p labwired-core --test e2e_nrf52840_obd2_scanner`
+# produces this directory itself; nothing in it is committed.
+#
+# These rules live HERE and not inside build/, because the Makefile's `clean`
+# does `rm -rf $(BUILD_DIR)`: a .gitignore in there is deleted by the first
+# clean, and the object files it was hiding then land in the next `git add -A`.
+# That is not hypothetical -- it happened, and binaries reached a commit.
+build/

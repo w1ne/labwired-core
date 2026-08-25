@@ -64,6 +64,7 @@ fn rp2040_chip() -> (ChipDescriptor, SystemManifest) {
         schema_version: "1.0".to_string(),
         name: "rp2040-pio-onboarding".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         board_io: vec![],
         debug_uart: None,

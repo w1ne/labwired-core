@@ -2,6 +2,12 @@ schema_version: "1.0"
 name: "STM32WBA52"
 arch: "arm"
 core: "cortex-m33"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32WBA52CG maximum CPU frequency, 100 MHz (datasheet DS14127 rev 10,
+# "Maximum CPU frequency 100 MHz").
+cpu_hz: 100_000_000
+
 flash:
   base: 0x08000000
   size: "1024KB"

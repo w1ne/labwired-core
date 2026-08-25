@@ -410,34 +410,16 @@ impl WasmSimulator {
             .machine
             .as_ref()
             .ok_or_else(|| JsValue::from_str("no machine"))?;
-        // Ask before taking. On a CPU without a runtime_snapshot impl this
-        // used to reach `unimplemented!()`, and a Rust panic in wasm is an
+        // A CPU without a runtime_snapshot impl answers `None`. This used to
+        // reach `unimplemented!()`, and a Rust panic in wasm is an
         // `unreachable` TRAP: no destructors run, so wasm-bindgen's borrow
         // guard leaks and the simulator is borrowed forever. Every later
         // call — `step_batch` above all — then dies with "recursive use of
         // an object", which is what froze every Cortex-M lab a few seconds
         // in. An Err returns normally and leaves the machine healthy.
-        if !machine.cpu.supports_runtime_snapshot() {
-            return Err(JsValue::from_str(
-                "runtime snapshot is not supported for this CPU",
-            ));
-        }
-        Ok(machine.take_runtime_snapshot().to_bytes())
-    }
-
-    /// Re-write the dual-core handshake bytes. Call every ~10k steps from JS
-    /// — firmware boot code revisits these and we need them to stay 1.
-    #[wasm_bindgen]
-    pub fn keep_alive_esp32_dual_core(&mut self) {
-        let machine = match self.machine.as_mut() {
-            Some(m) => m,
-            None => return,
-        };
-        let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
-        let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
+        machine
+            .take_runtime_snapshot()
+            .map(|snap| snap.to_bytes())
+            .ok_or_else(|| JsValue::from_str("runtime snapshot is not supported for this CPU"))
     }
 }

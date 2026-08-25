@@ -73,7 +73,7 @@ impl SystemBus {
     fn attach_pulse_echo(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
         let trig = self.pin_config(ext, desc, "trig", "PA8")?;
         let echo = self.pin_config(ext, desc, "echo", "PA9")?;
-        let cpu_hz = param_u64(desc, ext, "cpu_hz", 80_000_000);
+        let cpu_hz = param_cpu_hz(desc, ext, self.cpu_hz);
         let distance_cm = param_f64(desc, ext, "distance_cm", 50.0) as f32;
 
         let (trig_addr, trig_bit) = Self::resolve_pin_odr(self, &trig).ok_or_else(|| {
@@ -110,7 +110,7 @@ impl SystemBus {
     /// the standard stimulus API.
     fn attach_one_wire(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
         let data = self.pin_config(ext, desc, "data", "PA8")?;
-        let cpu_hz = param_u64(desc, ext, "cpu_hz", 80_000_000);
+        let cpu_hz = param_cpu_hz(desc, ext, self.cpu_hz);
         let temperature_c = param_f64(desc, ext, "temperature_c", 22.0) as f32;
         let humidity_pct = param_f64(desc, ext, "humidity_pct", 50.0) as f32;
 
@@ -197,7 +197,7 @@ impl SystemBus {
     fn attach_quadrature(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
         let clk = self.pin_config(ext, desc, "a", "PA0")?;
         let dt = self.pin_config(ext, desc, "b", "PA1")?;
-        let cpu_hz = param_u64(desc, ext, "cpu_hz", 80_000_000);
+        let cpu_hz = param_cpu_hz(desc, ext, self.cpu_hz);
 
         let (clk_idr_addr, clk_bit) = Self::resolve_pin_idr(self, &clk).ok_or_else(|| {
             anyhow!(
@@ -299,24 +299,42 @@ impl SystemBus {
     }
 }
 
-/// Read a `u64` primitive param: the descriptor's `params.<name>` entry gives
-/// the `config:` key and default; `config[key]` overrides it when present.
-/// Falls back to `fallback` when the descriptor omits the param entirely.
-fn param_u64(desc: &DeviceDescriptor, ext: &ExternalDevice, name: &str, fallback: u64) -> u64 {
-    let (config_key, default) = match desc.behavior.params.get(name) {
-        Some(v) => (
-            v.get("key").and_then(|k| k.as_str()).unwrap_or(name),
-            v.get("default")
-                .and_then(|d| d.as_u64())
-                .unwrap_or(fallback),
-        ),
-        None => (name, fallback),
-    };
-    ext.config
-        .get(config_key)
-        .and_then(|v| v.as_u64())
-        .unwrap_or(default)
+/// Resolve a self-timing device's simulated CPU clock, in Hz.
+///
+/// Order: the placed device's own `config.cpu_hz` (what the diagram emitter
+/// writes) → the system's clock, i.e. the manifest's `cpu_hz:` if it declares
+/// one and otherwise the chip descriptor's → the device descriptor's
+/// `default:`.
+///
+/// The middle step is the whole point. A DHT22 converts its datasheet
+/// microseconds to simulated cycles with this number, so feeding it a clock
+/// the firmware was not built against stretches every bit cell by the ratio
+/// between the two and the firmware decodes noise. Until the chip descriptor
+/// carried the clock, that middle step did not exist: the descriptor's flat
+/// 80 MHz default answered for a 16 MHz ATmega and a 160 MHz C3 alike.
+fn param_cpu_hz(desc: &DeviceDescriptor, ext: &ExternalDevice, system_cpu_hz: u64) -> u64 {
+    let entry = desc.behavior.params.get("cpu_hz");
+    let config_key = entry
+        .and_then(|v| v.get("key"))
+        .and_then(|k| k.as_str())
+        .unwrap_or("cpu_hz");
+    if let Some(explicit) = ext.config.get(config_key).and_then(|v| v.as_u64()) {
+        return explicit;
+    }
+    if system_cpu_hz > 0 {
+        return system_cpu_hz;
+    }
+    entry
+        .and_then(|v| v.get("default"))
+        .and_then(|d| d.as_u64())
+        .unwrap_or(DEFAULT_DEVICE_CPU_HZ)
 }
+
+/// Last-resort clock for a self-timed device: no `config.cpu_hz`, no system
+/// clock, no descriptor default. Kept at the value every declarative device
+/// descriptor already carries so a chip YAML written before
+/// `ChipDescriptor::cpu_hz` behaves exactly as it did.
+const DEFAULT_DEVICE_CPU_HZ: u64 = 80_000_000;
 
 /// Read an `f64` primitive param (temperature, humidity): same `{key, default}`
 /// descriptor shape as [`param_u64`], overridden by `config[key]` when present.

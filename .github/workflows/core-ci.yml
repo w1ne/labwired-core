@@ -15,9 +15,27 @@ on:
 # PR runs still cancel superseded PR heads. push / schedule / workflow_dispatch
 # each get their own group so a manual full-CI dispatch (or nightly) cannot
 # cancel the push-to-main integrity lane mid-flight (and vice versa).
+#
+# `cancel-in-progress` is now PR-ONLY. Superseding your own PR head is what this
+# is for; superseding a push to main is not. Two things are lost every time a
+# main run is cancelled, and both were happening several times an hour:
+#
+#   1. main's verdict. A cancelled run is not a failed run and not a passing one
+#      — the commit simply has no answer, which is how main sat red unnoticed.
+#   2. main's BUILD CACHE, which is worse than it sounds. `Swatinem/rust-cache`
+#      saves in a post step that a cancellation skips, and GitHub scopes caches
+#      by ref: a pull request can read a cache written on its BASE branch, but
+#      never one written on another PR. So with no `core-ci` cache on
+#      refs/heads/main, EVERY pull request compiles the whole workspace from
+#      scratch — measured at 8m00s of the 13m35s in `pr-workspace-tests` shard 1,
+#      paid three times over because each shard builds independently.
+#
+# Verified before changing this: `gh api .../actions/caches` listed 19 caches
+# and every `v0-rust-core-ci-*` entry was on a `refs/pull/N/merge` ref. Not one
+# on main.
 concurrency:
   group: core-ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.event_name) }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ── Static contract (always on PR; seconds) ────────────────────────────────
@@ -39,6 +57,28 @@ jobs:
 
       - name: Verify release runner contract
         run: bash scripts/ci/verify-release-runner-contract.sh
+
+      # scripts/install.sh is a shipped artifact — it is what
+      # https://labwired.com/install.sh serves — so it gets tested like one.
+      - name: Verify installer contract
+        run: bash scripts/ci/test-install-script.sh
+
+      # Docs are checked against the RELEASED CLI, not the workspace build:
+      # what a reader can run is whatever they were able to install. The README
+      # told people to pass `--system` to `labwired run` for months; that flag
+      # has never existed on that subcommand.
+      - name: Install the released CLI
+        run: |
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Every documented command is one the CLI accepts
+        run: python3 scripts/ci/docs-commands-gate.py "$HOME/.local/bin/labwired"
+
+      # The chips gate decides whether "every documented chip runs" is true, so
+      # it gets to prove it can say no. Four cut-down maps, five seconds.
+      - name: The chips gate fails when it should
+        run: bash scripts/ci/test-docs-runnable-chips.sh "$HOME/.local/bin/labwired"
 
   # ── Formatting is APPLIED, not demanded (PR only) ─────────────────────────
   #
@@ -355,9 +395,24 @@ jobs:
     # job that is already at 92% of its timeout is how you get a red lane that
     # means nothing — the same mis-read this comment's first paragraph is about.
     #
-    # 12 is a stay of execution, not a fix. The lasting answer is still the one
-    # named above: move the browser layer (~100s) to its own job. Do that before
-    # bumping this number a third time.
+    # 12 was a stay of execution, and on 2026-08-21 it ran out: two runs on a
+    # WARM cache hit 12m15s and were killed inside the LAST step, `Firmware
+    # survival`, which reads as a firmware failure and is not one. A neighbour
+    # PR measured 11m16s against the same wall, so the job had ~44s of headroom
+    # for ANY change, not just the one that tripped it.
+    #
+    # The answer this note had been asking for was taken instead of a third
+    # bump: the browser layer moved to its own `browser-layer` job. It was 185s
+    # by then (clippy 36s + target add 2s + lib tests 147s), not the ~100s
+    # estimated here, which is most of the overrun. This job should now sit
+    # around 9m45s.
+    #
+    # ⚠️ If it approaches 12 again, do NOT bump. The two remaining costs are
+    # measured and named: `Unit tests (default-members lib)` at 212s and
+    # `Generated artifacts — regenerate and assert no drift` at 152s. Split one
+    # of those out the same way — and if you do, add the new job to main's
+    # required contexts in the SAME change, because `pr-gate` is one of only
+    # two and anything that leaves it stops blocking merges.
     timeout-minutes: 12
     steps:
       # Full history required: generate_validation_status.py uses
@@ -369,6 +424,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # FIRST, and before the toolchain: this is a pure-Python scan of
+      # crates/**/*.rs with no build, measured at 0.17-0.44s locally. It is
+      # here rather than in core-board-ci.yml's `coverage-staleness` (where
+      # #966 first put it) because that workflow's PR trigger is path-filtered
+      # to configs/**, examples/**, hil/** and platformio/**, which excludes
+      # `crates/**` — so a PR adding a bare `#[ignore]` to a Rust test never
+      # started it. It ran once, on the PR that introduced it, because that PR
+      # edited the workflow file.
+      #
+      # This job is already close to its timeout and the comment above says not
+      # to grow it. That warning is about the multi-minute Rust steps; a
+      # sub-second step that needs no toolchain and runs before the toolchain
+      # is installed cannot move the wall clock. Putting it first also means a
+      # PR with an undocumented ignore fails in seconds, not ten minutes.
+      #
+      # `cargo test` reports ignored tests as a bare count, so which tests are
+      # switched off — and why — was recorded nowhere. An `#[ignore]` WITH a
+      # reason is free; a bare one fails here. The fix is to write the reason,
+      # not to raise the ceiling in the script.
+      - name: Ignored-test inventory is fresh and undocumented ignores have not grown
+        run: python3 scripts/generate_ignored_tests.py --check
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
@@ -418,7 +495,27 @@ jobs:
           python3 -m pytest -q \
             scripts/perf/test_board_perf.py \
             scripts/ci/test_board_matrix.py \
+            scripts/ci/test_chip_coverage.py \
+            scripts/ci/test_matrix_external_cache.py \
+            scripts/ci/test_workspace_test_shard.py \
             scripts/test_generate_validation_status.py
+
+      # The perf gate above answers "is this chip measured". This answers "does
+      # any gate RUN FIRMWARE on it through the CLI", which nothing did: the
+      # Arduino matrix and the coverage matrix both name their cells inline, so
+      # a chip could land in configs/chips/ and be executed by no gate at all.
+      # 8 of 26 were in that state when this landed.
+      #
+      # It reads no list of its own — coverage is derived from the workflows and
+      # board manifests, so a cell deleted from a matrix reddens this on the PR
+      # that deletes it. The gaps lived in configs/ci/chip-coverage.yaml, each
+      # with a reason and a ceiling that had to equal the gap count; that file
+      # is GONE now, because all 26 are covered and an empty ledger reads like
+      # debt still owed. Its absence fails closed: with nothing declared, any
+      # uncovered chip is an error, so a new descriptor reddens this on the PR
+      # that adds it. Pure Python, seconds.
+      - name: Chip coverage — every chip executed by a CLI gate, or a written reason
+        run: python3 scripts/ci/chip_coverage.py --report
 
       # Universal staleness gate. Regenerates EVERY committed artifact derived
       # from repo state and asserts the tree is clean. This catches the
@@ -466,37 +563,6 @@ jobs:
       # UART+D13 behavior on every PR so the twin cannot regress silently.
       - name: AVR Nano golden survival
         run: cargo test -p labwired-core --test avr_nano_golden_survival -- --nocapture
-
-      # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
-      # (see `default-members` in the root Cargo.toml), so every step above
-      # resolves to a set that excludes it: `cargo clippy --all-targets` does not
-      # lint it and `cargo test --lib` does not build it. Before this step, NO
-      # pre-merge lane in this repo compiled the code the browser actually runs.
-      #
-      # That is not a theoretical hole, it is where this class of bug lives. The
-      # browser is the only consumer that goes through the wasm bindings, so a
-      # fork that exists ONLY there — an inlined device-type alias table, a
-      # per-model framebuffer accessor that drifted from the engine's registry —
-      # is invisible to every gate that stops at the workspace default set. A
-      # `gxepd2_290_c90c` panel attached, was driven, and rendered dark for
-      # exactly this reason, behind a fully green board.
-      #
-      # Host target on purpose: wasm-bindgen compiles for the host, and the
-      # failures worth catching pre-merge (type errors, a dropped match arm, a
-      # signature that no longer lines up with core) all surface here without
-      # needing the wasm32 toolchain on the runner. A wasm32 link is a heavier,
-      # separate concern and stays in the deploy path.
-      - name: Clippy + build the browser layer (crates/wasm)
-        run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
-
-      # playground_repro drives the secure-boot lab through the same entry
-      # points simulator-bridge.ts uses, so it needs that lab's firmware. It
-      # builds the ELF itself (ensure_firmware_built) and needs the target to
-      # do it. ~10s once, cached with the rest of the toolchain.
-      - name: Add ARM target (secure-boot lab firmware for the browser repro)
-        run: rustup target add thumbv7em-none-eabi
-      - name: Unit tests (browser layer)
-        run: cargo test -p labwired-wasm --lib
 
       # Walk-deletion honesty, on EVERY PR. The structural arm of this test
       # needs no firmware, no `event-scheduler` recompile and no fixtures — it
@@ -632,6 +698,89 @@ jobs:
   # `core-integrity` runs the same test with `jit,event-scheduler`, which the
   # browser never builds — this lane is the faithful one. It does not replace
   # the integrity run; both stay.
+  browser-layer:
+    name: browser-layer
+    # Split out of `pr-gate` on 2026-08-21, which is what the note above that
+    # job's `timeout-minutes` had been asking for. The measurement that forced
+    # it: pr-gate ran 12m15s against a 12-minute wall and died inside its LAST
+    # step, `Firmware survival`, twice in a row on a warm cache. Per-step times
+    # from run 32480450041 — generated-artifacts 152s, default-members lib tests
+    # 212s, browser-layer tests 147s, default-members clippy 81s, browser clippy
+    # 36s. The browser steps are 185s of that, not the "~100s" the old note
+    # estimated; they had nearly doubled since it was written.
+    #
+    # Moving them here takes pr-gate to roughly 9m45s, so this is headroom
+    # rather than a third stay of execution, and the two run in PARALLEL so the
+    # PR's wall-clock does not grow.
+    #
+    # ⚠️ THIS JOB MUST BE A REQUIRED CONTEXT ON main. `pr-gate` and
+    # `release-runner-contract` were the only two, so a job split out of pr-gate
+    # stops blocking merges the moment it moves — the exact silent-weakening
+    # this repo keeps re-learning. Added to branch protection in the same change
+    # that landed this split; if you ever rename this job, update the required
+    # contexts in the SAME commit or the gate goes advisory without a diff to
+    # show for it.
+    #
+    # Same trigger set as pr-gate, and for the same reason: a dispatch is the
+    # only way out of a wedged concurrency group when a required context has to
+    # be reported against a head SHA.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Standalone this job pays for `labwired-core` itself, which pr-gate had
+    # already built by the time these steps ran there — so the 185s measured
+    # inside pr-gate is NOT what this costs alone. 20 is sized for the cold
+    # build, not for the incremental one.
+    timeout-minutes: 20
+    steps:
+      # Shallow checkout: this job runs no git-history-dependent gate.
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy
+
+      # Its OWN cache key. rust-cache folds the installed toolchain components
+      # into the key, so this job (clippy only) could never share pr-gate's
+      # (rustfmt + clippy) — pointing it at `core-pr-gate` would restore
+      # nothing and cost a pointless lookup, the same measurement
+      # pr-scheduler-observable records for its no-cache decision.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-browser-layer
+          workspaces: . -> target
+
+      # THE BROWSER LAYER. `crates/wasm` is a cdylib and is NOT a default-member
+      # (see `default-members` in the root Cargo.toml), so every step above
+      # resolves to a set that excludes it: `cargo clippy --all-targets` does not
+      # lint it and `cargo test --lib` does not build it. Before this step, NO
+      # pre-merge lane in this repo compiled the code the browser actually runs.
+      #
+      # That is not a theoretical hole, it is where this class of bug lives. The
+      # browser is the only consumer that goes through the wasm bindings, so a
+      # fork that exists ONLY there — an inlined device-type alias table, a
+      # per-model framebuffer accessor that drifted from the engine's registry —
+      # is invisible to every gate that stops at the workspace default set. A
+      # `gxepd2_290_c90c` panel attached, was driven, and rendered dark for
+      # exactly this reason, behind a fully green board.
+      #
+      # Host target on purpose: wasm-bindgen compiles for the host, and the
+      # failures worth catching pre-merge (type errors, a dropped match arm, a
+      # signature that no longer lines up with core) all surface here without
+      # needing the wasm32 toolchain on the runner. A wasm32 link is a heavier,
+      # separate concern and stays in the deploy path.
+      - name: Clippy + build the browser layer (crates/wasm)
+        run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
+
+      # playground_repro drives the secure-boot lab through the same entry
+      # points simulator-bridge.ts uses, so it needs that lab's firmware. It
+      # builds the ELF itself (ensure_firmware_built) and needs the target to
+      # do it. ~10s once, cached with the rest of the toolchain.
+      - name: Add ARM target (secure-boot lab firmware for the browser repro)
+        run: rustup target add thumbv7em-none-eabi
+      - name: Unit tests (browser layer)
+        run: cargo test -p labwired-wasm --lib
+
   pr-scheduler-observable:
     name: pr-scheduler-observable
     if: github.event_name == 'pull_request'
@@ -715,6 +864,9 @@ jobs:
           scripts/ci/cargo-test-nonvacuous.sh
           -p labwired-core --features event-scheduler
           --test esp32c3_bt_event_residency_gate
+          --test esp32s3_irq_cache_differential
+          --test esp32s3_smp_yield_latency
+          --test efr32mg26_walk_differential
           --test nrf52_timer_walk_differential
           --test nrf52_easydma_tick512_fidelity
           --test nrf52840_timer_machine_gate
@@ -724,6 +876,254 @@ jobs:
           --test stm32f103_dma_walk_differential
           --test systick_walk_differential
           --test board_batch_width
+
+  # ── Workspace tests on PRs (sharded; advisory for now) ─────────────────────
+  #
+  # THE LANE THAT RAN THE NIGHT AFTER THE MERGE. A plain
+  # `cargo test --workspace` touches 215 default-runnable test targets across
+  # 14 packages. Until this job existed it ran ONLY in `core-full` (nightly /
+  # dispatch / `[full-ci]`), so a PR could break any of those 215 targets and
+  # learn about it from the next nightly — after the squash-merge. Remediation
+  # plan task 2.3.
+  #
+  # ── SHAPE: three shards + one aggregate ──
+  #
+  # `scripts/ci/workspace_test_shard.py` builds the workspace's whole test set
+  # in ONE `cargo test --workspace --no-run` per shard and then executes each
+  # test binary straight out of cargo's artifact list. Why not
+  # `cargo test -p <pkg>` per package: feature unification. crates/wasm
+  # requests labwired-core/event-scheduler, so under `--workspace` EVERY
+  # core/cli/oracle test runs against a scheduler-enabled core and the
+  # `required-features = ["event-scheduler"]` targets run too — the nightly's
+  # semantics. Per-package invocations would silently test a different
+  # program (measured: core#929's environment_runner test passes under
+  # `-p labwired-cli` and fails under `--workspace`). Each shard assigns its
+  # slice of the artifact list by deterministic round-robin (contiguous blocks
+  # would hand one shard all ~125 labwired-core integration binaries); running
+  # binaries individually costs a few seconds of process overhead and makes
+  # every failure attributable to exactly one target, with per-target
+  # durations for future balancing.
+  #
+  # EXCLUDED, BY DESIGN: the cross-build suites in
+  # `scripts/ci/workspace-test-shards.json` — targets that build firmware for
+  # thumbv*/xtensa at test time or panic without a pre-built cross ELF. They
+  # need the five rustup targets `core-full` installs and no PR runner has;
+  # `core-full` keeps running them nightly, so this removes no coverage. The
+  # classification is closed: a default-runnable target in NEITHER the shard
+  # run nor the exclusion list is a hard error, so a new test file cannot
+  # silently miss the lane, and a stale exclusion entry is an error too.
+  #
+  # KNOWN-RED ALLOW-LIST. `workspace-test-shards.json`'s `known_red` holds the
+  # tests red on main TODAY, as exact (package, target, test-name) triples with
+  # one GitHub issue each — no patterns, so an unrelated failure in the same
+  # file can never hide behind an entry. A shard fails only on NEW red; the
+  # aggregate additionally fails when an allow-listed test PASSES, so the list
+  # shrinks in the PR that fixes the test instead of silently re-arming.
+  #
+  # ── ADVISORY, NOT REQUIRED — FOR NOW ──
+  #
+  # `main` requires exactly two contexts (`pr-gate`,
+  # `release-runner-contract`) with `enforce_admins` ON. This lane deliberately
+  # does NOT join them yet: the wall-clock budget on hosted runners is measured
+  # by this very lane's first runs, and a required check whose runtime nobody
+  # has measured is how you get a red lane that means nothing. The aggregate
+  # job's context name (`pr-workspace-tests`) is the one to add to branch
+  # protection once the timing proves out — requiring the matrix shards
+  # individually would couple protection to the shard count.
+  #
+  # ── THE TIMING, MEASURED 2026-08-14 (run 31836179346, PR #984) ──
+  #
+  #   shard 1  13m35s     shard 2  12m25s     shard 3  9m59s
+  #
+  # Already well balanced, so RESHARDING IS THE WRONG LEVER. Splitting shard 1
+  # showed where the time actually goes:
+  #
+  #   build   8m00s   (20:04:57 -> 20:12:56, "273 test binaries built")
+  #   tests   5m36s   (20:12:56 -> 20:18:32, 622 passed)
+  #
+  # The build is ~59% of the slowest shard AND is paid three times, because each
+  # shard runs `cargo test --workspace --no-run` independently. Going to 5 shards
+  # would divide only the 5m36s and multiply the 8m00s — roughly 10m best case,
+  # against ~13m now, for two extra runners' worth of compute.
+  #
+  # The build was cold because there was NO cache to restore: the log said
+  # "... Restoring cache ... No cache found.", and `gh api .../actions/caches`
+  # confirmed every `v0-rust-core-ci-*` entry lived on a `refs/pull/N/merge` ref
+  # with none on main. Three causes, all now addressed above:
+  #   * main's runs were cancelled by the next merge (post-step save skipped)
+  #     → `cancel-in-progress` is PR-only;
+  #   * a red `core-integrity` discarded a good target dir
+  #     → `cache-on-failure: true`;
+  #   * PR-ref caches nothing else can read were evicting main's under the
+  #     10 GB repo budget (11.27 GB in use) → this lane is `save-if: false`.
+  #
+  # PROMOTION CRITERION, so this does not stay "for now" forever: once a merge
+  # to main has populated the `core-ci` cache, a PR shard should restore it and
+  # land near the 5m36s test time rather than 13m35s. Confirm that on a real PR,
+  # then add the `pr-workspace-tests` context to branch protection.
+  #
+  # Cache key matches `core-integrity` (`core-ci` + rustfmt/clippy components)
+  # so the first PR run restores main's warm target dir; see the
+  # `pr-scheduler-observable` comment for what happens when the components
+  # don't fold into the same key.
+  pr-workspace-tests:
+    name: pr-workspace-tests (shard ${{ matrix.shard }})
+    # `workflow_dispatch` too: it is the only way to exercise the lane against
+    # a branch without opening a PR, which is how its own runtime gets
+    # measured before anyone considers making it required.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Sized generously until the first real runs say otherwise — the nightly
+    # `Run Workspace Tests` step takes ~8 min to cover roughly half the
+    # targets on a warm cache, so a shard of ~72 should sit well under this.
+    # Tighten to measured x1.5 once there is data; a timeout that cannot fit
+    # the work it names is a gate that fails for the wrong reason.
+    timeout-minutes: 45
+    strategy:
+      # A red shard must not cancel its siblings: their reports are what tell
+      # the aggregate (and the human) whether the red is new or known.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      # Full history, on purpose — the same reason as `full:`: the Tier-1
+      # baseline ratchet (labwired-cli lib) and bus_proof_matrix
+      # (labwired-core lib) resolve their baseline from
+      # `git merge-base HEAD origin/main`, and on a shallow checkout they
+      # FAIL LOUDLY rather than guess. The first shard run proved it: four
+      # "new red" that were really this line missing.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # actions/checkout fetches the checked-out ref only, so the
+      # origin/main remote-tracking ref the ratchets merge-base against may
+      # not exist yet. Same step as `full:`.
+      - name: Fetch merge-base ref for the baseline ratchets
+        run: git fetch --no-tags --prune origin +refs/heads/main:refs/remotes/origin/main
+
+      # rustfmt + clippy are NOT used by this job — they are installed so
+      # rust-cache's key (which folds in components) matches core-integrity's
+      # and the restore hits main's warm cache.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      # The labwired-wasm LIB unittests include the secure-boot playground
+      # repro, which builds firmware-nrf52840-secure-boot for thumbv7em at
+      # test time (ensure_firmware_built). pr-gate installs the same target
+      # for the same tests. It is a lib unittest, not a [[test]] target, so
+      # it cannot go in cross_build_excluded — the target must simply exist.
+      - name: Add ARM target (wasm secure-boot repro firmware)
+        run: rustup target add thumbv7em-none-eabi
+
+      # The OBD2 end-to-end (labwired-core/e2e_nrf52840_obd2_scanner) runs a
+      # REAL scanner against a REAL ECU over a modelled CAN bus. The scanner is
+      # a cargo crate; the ECU is C, built with arm-none-eabi-gcc. The test
+      # builds both itself, so the only thing it needed from this lane was the
+      # C compiler.
+      #
+      # Without it the test was allow-listed known-red (#960) and therefore
+      # proved NOTHING on every PR — a gate that cannot build its inputs is not
+      # a gate. Same package core-coverage-matrix-smoke.yml already installs.
+      - name: Add the C cross-compiler (OBD2 ECU firmware)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      # READ-ONLY. This lane restores main's `core-ci` target dir; it must not
+      # write one back, for a reason that is easy to miss: GitHub scopes caches
+      # by ref, so a cache written on `refs/pull/N/merge` can never be read by
+      # another pull request — it only ever helps a second push to the SAME PR —
+      # but it does count against the repo's 10 GB cache budget, and eviction is
+      # LRU across the whole repo.
+      #
+      # Measured while writing this: 11.27 GB in use against that 10 GB limit,
+      # with every single `v0-rust-core-ci-*` entry sitting on a `refs/pull/N`
+      # ref and none on main. Three shards per PR, several PRs a day, each
+      # writing a multi-gigabyte entry nothing else can read — that is what was
+      # evicting the one cache that actually matters. Restoring is still free.
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-ci
+          save-if: false
+          workspaces: |
+            . -> target
+
+      # ubuntu-latest's system python3 (3.12+) suffices — the script is
+      # stdlib-only and drives cargo as a subprocess.
+      - name: Workspace tests — shard ${{ matrix.shard }}/3
+        run: >
+          python3 scripts/ci/workspace_test_shard.py run
+          --shard ${{ matrix.shard }}
+          --report shard-${{ matrix.shard }}.json
+
+      # `if: always()`: a shard that found new red exits 1, and its report is
+      # precisely what the aggregate needs to distinguish new red from known
+      # red — withholding it would turn an explainable failure into an
+      # unexplained one.
+      - name: Upload shard report + per-target logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-test-shard-${{ matrix.shard }}
+          path: |
+            shard-${{ matrix.shard }}.json
+            shard-${{ matrix.shard }}-logs/
+          if-no-files-found: error
+          # One day: the report matters for the aggregate run minutes from
+          # now, not for archaeology.
+          retention-days: 1
+
+  pr-workspace-tests-aggregate:
+    # The single stable context this lane reports. This is the name to add to
+    # branch protection IF the lane ever becomes required — never the matrix
+    # shards, whose count is an implementation detail.
+    name: pr-workspace-tests
+    needs: pr-workspace-tests
+    # `always()`: the aggregate's whole job is to render a verdict on partial
+    # information — a missing shard report is a FAILURE here, not a pass, so
+    # it must run even when (especially when) a shard job went red or was
+    # cancelled.
+    if: >
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The checkout carries the allow-list (workspace-test-shards.json) and
+      # the aggregator script — at the PR's own revision, so a PR that shrinks
+      # the list is judged by its own list.
+      - uses: actions/checkout@v4
+
+      - name: Download shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: workspace-test-shard-*
+          path: reports
+
+      - name: Aggregate — new red fails, known red is named, stale entries fail
+        run: python3 scripts/ci/workspace_test_aggregate.py --reports reports
+
+      # A shard job that went red WITHOUT a report to explain it (timeout,
+      # cancelled, infra) leaves the aggregate no evidence to judge — that is
+      # a red lane with no readable reason, so say so explicitly instead of
+      # letting the missing-report error read like a test failure.
+      - name: Shard job status must be explainable
+        # always(): when the aggregate step above goes red the default
+        # skip-on-failure would mute exactly the message that explains the red.
+        if: always() && needs.pr-workspace-tests.result != 'success'
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.pr-workspace-tests.result }}" = "cancelled" ]; then
+            echo "::error::pr-workspace-tests was cancelled (concurrency supersede or timeout). Re-run the workflow; a cancelled shard is not a verdict."
+            exit 1
+          fi
+          # 'failure' with all three reports present is explainable (new red,
+          # hard error); the aggregate step above already said which.
+          echo "Shard jobs failed; see the aggregate step above for the attribution."
 
   # ── Main-branch integrity (push to main) — fuller than PR, still no matrices ─
   integrity:
@@ -748,10 +1148,23 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # `cache-on-failure` matters more here than anywhere else in this file:
+      # this is the job that WRITES the `core-ci` cache every pull request then
+      # reads. rust-cache defaults to discarding the cache when the job fails,
+      # and a red `core-integrity` is a TEST failure — the compilation that
+      # produced the target dir succeeded, and that target dir is exactly what a
+      # PR needs. Throwing it away means main is red AND every PR is slow, with
+      # the second consequence invisible.
+      #
+      # That was the live state: no `v0-rust-core-ci-*` cache existed on
+      # refs/heads/main at all, so `pr-workspace-tests` logged
+      # "... Restoring cache ... No cache found." and cold-built the workspace in
+      # 8m00s — three times per PR, once per shard.
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: core-ci
+          cache-on-failure: true
           workspaces: |
             . -> target
 
@@ -906,6 +1319,7 @@ jobs:
           --test stm32_timer_walk_differential
           --test stm32_dma_walk_differential
           --test kw41z_walk_free_differential
+          --test efr32mg26_walk_differential
           --test nrf52_timer_walk_differential
           --test nrf52_easydma_tick512_fidelity
           --test nrf52840_timer_machine_gate
@@ -975,9 +1389,75 @@ jobs:
       github.event_name == 'schedule' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
+      # Dockerfile.ci does `COPY dist/${TARGETARCH}/labwired` — it ships a
+      # PREBUILT binary rather than compiling one, so that the image and the
+      # release archive of a tag are the same bytes and so arm64 needs no
+      # emulated Rust compile. core-release.yml satisfies that by extracting
+      # the published archives into dist/amd64 and dist/arm64.
+      #
+      # This job never did, and had no way to: it ran `docker build` on a bare
+      # checkout, so every run since the COPY landed failed with
+      #   failed to compute cache key: "/dist/amd64/labwired": not found
+      # As written it could not have passed once. Nothing noticed because the
+      # job is main-only and not a required check, so it is skipped on every PR
+      # and its red never blocked anyone — the runner image has simply been
+      # unsmoked. Build the binary this commit would ship and stage it where
+      # the COPY looks.
+      #
+      # ⚠️ IN `rust:1.95-bullseye`, NOT ON THE RUNNER. core-release.yml builds
+      # both Linux targets in that container precisely so the shipped binaries
+      # keep a GLIBC_2.31 floor. Building on the runner instead produced a
+      # binary linked against the ubuntu-24.04 host glibc, and the image —
+      # `FROM debian:bookworm-slim`, glibc 2.36 — refused to run it:
+      #
+      #   labwired: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not
+      #   found (required by labwired)
+      #
+      # That is the second defect this job was hiding, and it is the one worth
+      # having: a smoke that compiles differently from the release proves
+      # nothing about the image that ships. Using the release's own container
+      # keeps one source of truth for how the shipped binary is linked.
+      - name: Stage dist/amd64/labwired for the COPY
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD":/src -w /src \
+            -e CARGO_TERM_COLOR=never \
+            -e CARGO_TARGET_DIR=/src/target-ci-runner-image \
+            rust:1.95-bullseye \
+            cargo build --release -p labwired-cli --bin labwired
+          mkdir -p dist/amd64
+          cp target-ci-runner-image/release/labwired dist/amd64/labwired
+          chmod +x dist/amd64/labwired
+          # Fail here, loudly, rather than inside a docker layer: a missing or
+          # non-executable binary is a staging bug, not a Dockerfile bug, and
+          # the two read identically in buildkit's output.
+          test -x dist/amd64/labwired
+
+      # Assert the floor rather than assume the container held it — the same
+      # check core-release.yml runs, for the same reason: without it the next
+      # base-image bump silently raises the floor again and the failure
+      # reappears at `RUN labwired --version` inside a buildkit layer.
+      - name: Assert glibc floor
+        run: |
+          set -euo pipefail
+          floor=GLIBC_2.31
+          max="$(readelf -V dist/amd64/labwired | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V -u | tail -1)"
+          echo "dist/amd64/labwired requires $max (floor $floor)"
+          newest="$(printf '%s\n%s\n' "$max" "$floor" | sort -V | tail -1)"
+          if [ "$newest" != "$floor" ]; then
+            echo "::error::the staged binary requires $max, above the $floor floor — it cannot start in debian:bookworm-slim, which is what Dockerfile.ci is FROM."
+            exit 1
+          fi
+
+      # Only linux/amd64 is smoked. The arm64 half of the manifest is built
+      # under emulation at release time from the arm64 archive; reproducing
+      # that here would cost a QEMU Rust build for no extra Dockerfile
+      # coverage, since both architectures run the identical COPY/ENTRYPOINT.
       - name: Smoke CI runner image
         run: |
           set -euo pipefail
@@ -1064,7 +1544,53 @@ jobs:
         # artifact this job never produces would fail it for the wrong reason.
         env:
           LABWIRED_REQUIRE_FIRMWARE: firmware-ci-fixture,firmware-rp2040-pio-onboarding
-        run: cargo test --workspace
+        # KNOWN-RED, FROM THE SAME LIST THE PR SHARDS USE.
+        #
+        # This step was plain `cargo test --workspace`, so it went red on
+        # `cpu_trace_conformance::every_cpu_core_is_covered_by_this_file` — a
+        # failure the project has already acknowledged and tracked as issue 961,
+        # and which `pr-workspace-tests` tolerates by reading `known_red` from
+        # scripts/ci/workspace-test-shards.json.
+        #
+        # One test, acknowledged in one lane and not the other, is why THIS job
+        # has been red on every scheduled run. That matters well beyond its own
+        # colour: `nightly_only_excluded` sends work HERE. Five targets already
+        # sit in that list believing this job covers them, so while this job
+        # cannot go green, that list is a deletion mechanism wearing a
+        # relocation's name.
+        #
+        # The skips are generated FROM the JSON, never typed here, so the two
+        # lanes cannot drift into disagreeing about what is known-red. The
+        # skipped tests are then run for real by the step below — skipped from
+        # the verdict, never from the log.
+        run: |
+          set -uo pipefail
+          # while-read, not `mapfile`: bash 3.2 has no mapfile, and a CI step
+          # that only works on the runner is a step nobody can reproduce.
+          skips=()
+          while IFS= read -r arg; do skips+=("$arg"); done \
+            < <(python3 scripts/ci/known_red.py --skip-args)
+          echo "known-red skips (from workspace-test-shards.json): ${skips[*]:-<none>}"
+          cargo test --workspace --no-fail-fast -- "${skips[@]}"
+
+      # The other half of the bargain: a test excused from the verdict must
+      # still RUN and still be reported, or "known red" becomes "never looked
+      # at" — which is how the list would quietly outlive the bugs in it.
+      # Annotates in BOTH directions: a known-red test that starts passing is
+      # news too, and says to delete its entry.
+      - name: Run the known-red tests anyway, and say where they stand
+        if: always()
+        run: |
+          set -uo pipefail
+          python3 scripts/ci/known_red.py --rows > /tmp/known-red.txt
+          while read -r pkg target test issue; do
+            [ -n "${pkg:-}" ] || continue
+            if cargo test -p "$pkg" --test "$target" -- --exact "$test"; then
+              echo "::warning title=known-red test now PASSES::${target}::${test} (issue ${issue}) passed. Delete its known_red entry in scripts/ci/workspace-test-shards.json so it gates again."
+            else
+              echo "::warning title=known-red test still red::${target}::${test} — tracked as issue ${issue}, not counted against this job."
+            fi
+          done < /tmp/known-red.txt
 
       - name: Feature tests — jit + event-scheduler
         run: cargo test -p labwired-core --features jit,event-scheduler

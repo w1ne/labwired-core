@@ -841,6 +841,41 @@ impl SystemBus {
         }
     }
 
+    /// Wire S3 IO_MUX per-pad controls into S3 GPIO after both models have
+    /// been constructed — the S3 counterpart of
+    /// [`Self::wire_esp32c3_pad_controls`]. The IO_MUX owns the shared
+    /// `IO_MUX_GPIOn_REG` bank; GPIO reads `FUN_WPU` from it to model Arduino
+    /// `INPUT_PULLUP`. Without this the S3's per-pad words were write-only
+    /// storage and a released `INPUT_PULLUP` pin read 0. No-op on any bus
+    /// without both S3 peripherals.
+    pub(crate) fn wire_esp32s3_pad_controls(&mut self) {
+        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
+
+        // Two type-scans rather than index-then-downcast: the concrete type
+        // decides identity either way, and this adds no new immutable-any call
+        // site (see `tests::downcast_ratchet` — remediation row 6.5). Scanning
+        // by type rather than by peripheral id keeps the wiring alive if the
+        // S3 tables ever rename `io_mux`/`gpio`; a silent no-op there would be
+        // invisible exactly the way the missing `wire_esp32s3_i2c_pads` call
+        // was.
+        let Some(controls) = self
+            .peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.as_any_mut()?.downcast_mut::<Esp32s3IoMux>())
+            .map(|io_mux| io_mux.pad_controls())
+        else {
+            return;
+        };
+        if let Some(gpio) = self
+            .peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.as_any_mut()?.downcast_mut::<Esp32s3Gpio>())
+        {
+            gpio.set_pad_controls(controls);
+        }
+    }
+
     /// Wire C3 IO_MUX per-pad controls into C3 GPIO after both models have
     /// been constructed. The IO_MUX owns the shared register bank; GPIO reads
     /// `FUN_WPU` from it to model Arduino `INPUT_PULLUP`. No-op on any bus
@@ -1656,7 +1691,6 @@ impl SystemBus {
     /// [`Self::wire_rp2040_uart_pads`].
     pub(crate) fn wire_nrf52_pads(&mut self) {
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
-        use crate::peripherals::nrf52::pin_select::NrfPinClaims;
         use crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance;
         use crate::peripherals::nrf52::twim::{LINE_SCL, LINE_SDA};
         use crate::peripherals::nrf52::uarte::{Nrf52Uarte, LINE_TXD};
@@ -1701,14 +1735,14 @@ impl SystemBus {
             return;
         }
 
-        let claims = Arc::new(NrfPinClaims::new());
+        let claims = Arc::new(crate::peripherals::nrf52::pin_select::nrf_pin_claims());
         for &(idx, port) in &ports {
             if let Some(gpio) = self.peripherals[idx]
                 .dev
                 .as_any_mut()
                 .and_then(|a| a.downcast_mut::<GpioPort>())
             {
-                gpio.set_nrf_pin_claims(claims.clone(), port);
+                gpio.set_pad_claims(claims.clone(), port);
             }
         }
 
@@ -1830,6 +1864,168 @@ impl SystemBus {
             for (lines, signals) in &wired {
                 for &(token, line, func) in signals {
                     for pin in 0..32u8 {
+                        gpio.add_pad_route_selector(lines, pin, Some(token), line, func);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Route EFR32 Series-2 TIMER compare outputs to the pads
+    /// `GPIO_TIMERROUTE` names.
+    ///
+    /// # Why a wiring pass at all
+    ///
+    /// `analogWrite` on BRD2709A programmed the right duty into real `CC_OC`
+    /// registers and lit nothing: on Series 2 an output reaches a pin only
+    /// through the GPIO block's ROUTE registers, and nothing modelled them. The
+    /// duty was never the problem.
+    ///
+    /// # Shape
+    ///
+    /// The same shape as [`Self::wire_nrf52_pads`], because the silicon has the
+    /// same shape: the PERIPHERAL names the pad, so a claim token minted here
+    /// is installed in the route block and bound into every port's routing
+    /// table, and that identity IS the routing.
+    ///
+    /// ⚠️ The token comes from
+    /// [`gpio_route::cc_token`](crate::peripherals::efr32::gpio_route::cc_token),
+    /// NOT from a counter of its own. The route block mints the same value when
+    /// firmware writes a route; deriving it twice is how the two halves would
+    /// disagree about which signal a pad carries.
+    pub(crate) fn wire_efr32_timer_pads(&mut self) {
+        use crate::peripherals::efr32::gpio_route::{cc_token, Efr32s2TimerRoute, CC_PER_TIMER};
+        use crate::peripherals::efr32::timer::Efr32s2Timer;
+        use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+        use crate::peripherals::pad_claims::PadClaims;
+        use std::sync::Arc;
+
+        /// TIMER instances by base address — `TIMER0_S_BASE` + n * 0x4000
+        /// (efr32mg26b510f3200im48.h). The index is what `GPIO_TIMERROUTE[n]`
+        /// is indexed by, so it has to match the silicon's numbering and not
+        /// the order a chip yaml happens to declare them in.
+        const TIMER_BASE: u64 = 0x4004_8000;
+        const TIMER_STRIDE: u64 = 0x4000;
+        const TIMER_COUNT: u64 = 10;
+
+        /// ⚠️ FOUR ports of SIXTEEN pads (`GPIO_PORT_x_WIDTH` = 0x10 on the
+        /// IM48), which is not the Nordic 2 x 32. The claim index is computed
+        /// from these, so a wrong pair puts claims on real pads that are not
+        /// the ones firmware named.
+        const PORTS: usize = 4;
+        const PINS_PER_PORT: usize = 16;
+
+        // Port index in `CCnROUTE.PORT` order: A=0, B=1, C=2, D=3.
+        //
+        // Found and handed the table in ONE mutable pass rather than an
+        // immutable filter followed by a mutable loop. Not style:
+        // `downcast_ratchet` counts type-erasure call sites and refuses a rise,
+        // and the two-pass shape spends one for nothing.
+        //
+        // ⚠️ That ratchet counts literal SUBSTRINGS across every source file,
+        // so prose naming either method counts too and a comment alone can red
+        // it. It excludes only its own file, which is why this note talks
+        // around the names rather than quoting them.
+        let claims = Arc::new(PadClaims::new(PORTS, PINS_PER_PORT));
+        let mut ports: Vec<usize> = Vec::new();
+        for idx in 0..self.peripherals.len() {
+            let port = match self.peripherals[idx].name.as_str() {
+                "gpioa" => 0u8,
+                "gpiob" => 1,
+                "gpioc" => 2,
+                "gpiod" => 3,
+                _ => continue,
+            };
+            let Some(gpio) = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<GpioPort>())
+            else {
+                continue;
+            };
+            if gpio.register_layout() != GpioRegisterLayout::Efr32s2 {
+                continue;
+            }
+            gpio.set_pad_claims(claims.clone(), port);
+            ports.push(idx);
+        }
+        if ports.is_empty() {
+            return;
+        }
+
+        // The route block publishes claims; without it a route write stores and
+        // moves nothing, which is what this whole pass exists to change.
+        let mut route_installed = false;
+        for entry_idx in 0..self.peripherals.len() {
+            if let Some(route) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Efr32s2TimerRoute>())
+            {
+                route.install_claims(claims.clone());
+                route_installed = true;
+            }
+        }
+        if !route_installed {
+            return;
+        }
+
+        type Bindings = (
+            std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+            Vec<(u32, usize, &'static str)>,
+        );
+        let mut wired: Vec<Bindings> = Vec::new();
+        // Signal names, one per (timer, channel), so a pad table reads
+        // "TIMER1_CC0" rather than a token.
+        const FUNCS: [[&str; CC_PER_TIMER]; 10] = [
+            ["TIMER0_CC0", "TIMER0_CC1", "TIMER0_CC2"],
+            ["TIMER1_CC0", "TIMER1_CC1", "TIMER1_CC2"],
+            ["TIMER2_CC0", "TIMER2_CC1", "TIMER2_CC2"],
+            ["TIMER3_CC0", "TIMER3_CC1", "TIMER3_CC2"],
+            ["TIMER4_CC0", "TIMER4_CC1", "TIMER4_CC2"],
+            ["TIMER5_CC0", "TIMER5_CC1", "TIMER5_CC2"],
+            ["TIMER6_CC0", "TIMER6_CC1", "TIMER6_CC2"],
+            ["TIMER7_CC0", "TIMER7_CC1", "TIMER7_CC2"],
+            ["TIMER8_CC0", "TIMER8_CC1", "TIMER8_CC2"],
+            ["TIMER9_CC0", "TIMER9_CC1", "TIMER9_CC2"],
+        ];
+
+        for entry_idx in 0..self.peripherals.len() {
+            let base = self.peripherals[entry_idx].base;
+            let in_block = (TIMER_BASE..TIMER_BASE + TIMER_STRIDE * TIMER_COUNT).contains(&base);
+            let Some(index) = (in_block && (base - TIMER_BASE) % TIMER_STRIDE == 0)
+                .then(|| ((base - TIMER_BASE) / TIMER_STRIDE) as usize)
+            else {
+                continue;
+            };
+            let Some(timer) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Efr32s2Timer>())
+            else {
+                continue;
+            };
+            let lines = timer.pad_lines_arc();
+            let signals = (0..CC_PER_TIMER)
+                .map(|ch| (cc_token(index, ch), ch, FUNCS[index][ch]))
+                .collect();
+            wired.push((lines, signals));
+        }
+        if wired.is_empty() {
+            return;
+        }
+
+        for &idx in &ports {
+            let Some(gpio) = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<GpioPort>())
+            else {
+                continue;
+            };
+            for (lines, signals) in &wired {
+                for &(token, line, func) in signals {
+                    for pin in 0..PINS_PER_PORT as u8 {
                         gpio.add_pad_route_selector(lines, pin, Some(token), line, func);
                     }
                 }

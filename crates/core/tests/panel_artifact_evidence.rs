@@ -55,6 +55,7 @@ fn rig(device_type: &str, connection: &str, config: &[(&str, serde_yaml::Value)]
         schema_version: "1.0".to_string(),
         name: "panel-rig".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![ExternalDevice {
             id: "panel".to_string(),
             r#type: device_type.to_string(),

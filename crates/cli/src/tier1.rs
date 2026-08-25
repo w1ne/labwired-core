@@ -415,26 +415,6 @@ pub fn load_ratchet_acks(root: &Path) -> Result<Vec<RatchetAck>, String> {
     Ok(doc.acks)
 }
 
-/// Resolve the baseline commit for the ratchet, as a `(description, commit)`
-/// pair. See [`resolve_baseline_matrix`] for the rule.
-fn git(root: &Path, args: &[&str]) -> Result<String, String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .map_err(|e| format!("git {}: {e}", args.join(" ")))?;
-    if !out.status.success() {
-        return Err(format!(
-            "git {} failed ({}): {}",
-            args.join(" "),
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
 /// The ref the baseline is taken against.
 pub fn baseline_ref() -> String {
     std::env::var(BASELINE_REF_ENV).unwrap_or_else(|_| DEFAULT_BASELINE_REF.to_string())
@@ -469,86 +449,23 @@ pub fn resolve_baseline_matrix_against(
     root: &Path,
     base_ref: &str,
 ) -> Result<(String, Tier1Matrix), String> {
-    // A shallow clone cannot be trusted to resolve a merge base or to walk the
-    // file's history, and a wrong baseline is indistinguishable from a green
-    // gate. Fail loudly with the fix instead of guessing.
-    if git(root, &["rev-parse", "--is-shallow-repository"])? == "true" {
-        return Err(format!(
-            "tier1 ratchet: this is a SHALLOW clone, so the baseline cannot be established. \
-             Deepen it first (`git fetch --unshallow origin` or \
-             `actions/checkout` with `fetch-depth: 0`) and make sure `{base_ref}` exists. \
-             Refusing to run: a gate that cannot find its baseline must not pass."
-        ));
-    }
-
-    let head = git(root, &["rev-parse", "HEAD"])?;
-    let merge_base = git(root, &["merge-base", "HEAD", base_ref]).map_err(|e| {
+    // The git dance — shallow-clone refusal, merge-base, walking back on trunk —
+    // lives in `crate::baseline` because the SVD coverage ratchet needs exactly
+    // the same thing. Two copies of "where is my baseline" is how one of them
+    // ends up reading the working tree and grading a commit against itself.
+    let found = crate::baseline::resolve(root, base_ref, MATRIX_PATH, "tier1 ratchet")?;
+    let Some(blob) = found.blob else {
+        // No earlier recorded state: nothing has been promised yet, so there are
+        // no `pass` cells to protect.
+        return Ok((found.label, Tier1Matrix::default()));
+    };
+    let matrix: Tier1Matrix = serde_json::from_str(&blob).map_err(|e| {
         format!(
-            "tier1 ratchet: cannot compute merge-base(HEAD, {base_ref}): {e}. \
-             Fetch the baseline ref (`git fetch --no-tags origin \
-             +refs/heads/main:refs/remotes/origin/main`) or point {BASELINE_REF_ENV} \
-             at a ref that exists. Refusing to run without a baseline."
+            "tier1 ratchet: baseline {MATRIX_PATH} at {} does not parse: {e}",
+            found.label
         )
     })?;
-
-    let (commit, how) = if merge_base != head {
-        (merge_base.clone(), format!("merge-base with {base_ref}"))
-    } else {
-        // On the trunk: the newest commit that touched the matrix, and the one
-        // before it.
-        let log = git(
-            root,
-            &[
-                "log",
-                "--format=%H",
-                "--first-parent",
-                "HEAD",
-                "--",
-                MATRIX_PATH,
-            ],
-        )?;
-        let revs: Vec<&str> = log.lines().collect();
-        match revs.first() {
-            // HEAD itself changed the matrix — measure against what it replaced.
-            Some(&newest) if newest == head => match revs.get(1) {
-                Some(&prev) => (
-                    prev.to_string(),
-                    "previous recorded matrix (HEAD is on the baseline branch)".to_string(),
-                ),
-                // The commit that introduced the file. There is no earlier
-                // recorded state, so there are no `pass` cells to protect.
-                None => {
-                    return Ok((
-                        "no prior matrix revision (file introduced by HEAD)".to_string(),
-                        Tier1Matrix::default(),
-                    ))
-                }
-            },
-            // The matrix is unchanged at HEAD: nothing new to ratchet. The
-            // committed-vs-live ratchet still guards engine drift.
-            Some(&newest) => (
-                newest.to_string(),
-                "newest recorded matrix (unchanged at HEAD)".to_string(),
-            ),
-            None => {
-                return Ok((
-                    "no recorded matrix revision".to_string(),
-                    Tier1Matrix::default(),
-                ))
-            }
-        }
-    };
-
-    let blob = git(root, &["show", &format!("{commit}:{MATRIX_PATH}")]).map_err(|e| {
-        format!("tier1 ratchet: cannot read {MATRIX_PATH} at baseline {commit}: {e}")
-    })?;
-    let matrix: Tier1Matrix = serde_json::from_str(&blob).map_err(|e| {
-        format!("tier1 ratchet: baseline {MATRIX_PATH} at {commit} does not parse: {e}")
-    })?;
-    Ok((
-        format!("{} ({how})", &commit[..commit.len().min(12)]),
-        matrix,
-    ))
+    Ok((found.label, matrix))
 }
 
 /// Run the baseline gate: every `pass` the baseline records must still pass
@@ -1396,11 +1313,11 @@ peripherals:
             vec!["config", "user.email", "t@example.com"],
             vec!["config", "user.name", "t"],
         ] {
-            git(&dir, &args).unwrap();
+            crate::baseline::git(&dir, &args).unwrap();
         }
         std::fs::write(dir.join("f"), "x").unwrap();
-        git(&dir, &["add", "-A"]).unwrap();
-        git(&dir, &["commit", "-qm", "seed", "--no-verify"]).unwrap();
+        crate::baseline::git(&dir, &["add", "-A"]).unwrap();
+        crate::baseline::git(&dir, &["commit", "-qm", "seed", "--no-verify"]).unwrap();
         // What `git clone --depth` leaves behind; `rev-parse
         // --is-shallow-repository` keys on exactly this file.
         std::fs::write(dir.join(".git/shallow"), "").unwrap();

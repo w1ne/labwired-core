@@ -137,3 +137,14 @@ jobs:
             git --no-pager diff -- docs/coverage/tier1-scoreboard.md
             exit 1
           fi
+
+      # The ignored-test inventory check is deliberately NOT here. #966 put it
+      # in this job, where it was worse than useless: this workflow's PR trigger
+      # is filtered to configs/**, examples/**, hil/**, platformio/** and three
+      # named files — `crates/**` is not among them. A pull request that adds a
+      # bare `#[ignore]` to a Rust test therefore does not start this workflow
+      # at all, so the gate could never see the only change it exists to catch.
+      # It ran exactly once, on #966 itself, because #966 edited this file. A
+      # gate that validates its own introduction and nothing afterwards is the
+      # shape this repo keeps getting caught by. It now lives in `pr-gate` in
+      # core-ci.yml, which is a REQUIRED context and runs on every PR.

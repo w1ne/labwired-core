@@ -218,6 +218,23 @@ fn bus_nrf52840() -> SystemBus {
     bus
 }
 
+/// Silicon Labs BRD2709A (EFR32MG26) — the Series-2 family.
+///
+/// ⚠️ Worth listing separately from the other Cortex-M boards because its
+/// walk-forcing set was the largest any shipped board had: TEN `Efr32s2Timer`
+/// instances, FOUR shared-`I2c` instances in the EFR32 variant, the IADC, the
+/// GPIO EXTI block and the `VirtualBle` controller — fifteen entries, of which
+/// only three lived in EFR32-specific model files. A migration that moved the
+/// obvious three would have left the board at `max_safe = 1` and reported
+/// success.
+fn bus_brd2709a() -> SystemBus {
+    let chip = load_chip("configs/chips/efr32mg26.yaml");
+    let manifest = load_manifest("configs/systems/brd2709a.yaml");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build brd2709a bus");
+    let _ = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+    bus
+}
+
 fn bus_esp32s3() -> SystemBus {
     // Production / WASM path — NOT SystemBus::from_config on chip YAML.
     // from_config stubs rmt/gdma/systimer (and other S3 models) with generic
@@ -413,6 +430,49 @@ fn h563_is_walk_free_and_tick_512() {
         assert_eq!(
             inv.max_safe, RECOMMENDED_TICK_INTERVAL,
             "h563: expected max_safe={RECOMMENDED_TICK_INTERVAL} (flash_models_ops must not pin tick interval), got {}",
+            inv.max_safe
+        );
+    }
+
+    #[cfg(not(feature = "event-scheduler"))]
+    {
+        assert_eq!(inv.max_safe, 1, "featureless build must keep max_safe=1");
+    }
+}
+
+/// BRD2709A (EFR32MG26) auto-derives walk deletion under `event-scheduler` and
+/// reaches `RECOMMENDED_TICK_INTERVAL` (512).
+///
+/// The forcer inventory this had to empty: `timer0`..`timer9`
+/// (`Efr32s2Timer` — lazy counter + closed-form wake), `i2c0`..`i2c3`
+/// (`I2c::Efr32s2` — held-level re-assert chain), `iadc0`, `gpio_exti` and
+/// `ble` (`VirtualBle` — advertising deadline plus a scan-cadence chain). No
+/// `walk_deleted` YAML hatch; the executing proof that the migration is
+/// behaviour-preserving is `efr32mg26_walk_differential`.
+#[test]
+fn brd2709a_is_walk_free_and_tick_512() {
+    let bus = bus_brd2709a();
+    let inv = inventory("efr32mg26", &bus);
+    print_inventory(&inv);
+
+    #[cfg(feature = "event-scheduler")]
+    {
+        let forcing: Vec<&str> = inv.forcers.iter().map(|f| f.name.as_str()).collect();
+        assert!(
+            forcing.is_empty(),
+            "brd2709a still has walk-forcers under event-scheduler: {forcing:?}"
+        );
+        assert!(
+            inv.legacy_walk_disabled,
+            "brd2709a: expected legacy_walk_disabled after auto-derive"
+        );
+        assert!(
+            !inv.flash_models_ops && !inv.has_iolink_master,
+            "brd2709a: unexpected non-forcer max_safe blocker"
+        );
+        assert_eq!(
+            inv.max_safe, RECOMMENDED_TICK_INTERVAL,
+            "brd2709a: expected max_safe={RECOMMENDED_TICK_INTERVAL}, got {}",
             inv.max_safe
         );
     }

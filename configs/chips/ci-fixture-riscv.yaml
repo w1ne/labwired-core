@@ -7,6 +7,11 @@
 name: "ci-fixture-riscv"
 arch: "riscv"
 registers_count: 50
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# CI fixture — see ci-fixture-cortex-m3-uart1.yaml.
+cpu_hz: 80_000_000
+
 flash:
   base: 0x80000000
   size: "128KB"

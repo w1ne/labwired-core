@@ -17,9 +17,17 @@ name: "stm32f407vgt6"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 150
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F407VGT6 maximum core clock, 168 MHz.
+cpu_hz: 168_000_000
+
 flash:
   base: 0x08000000
-  size: "1MB"
+  # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
+  # 1_000_000, 48_576 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "1024KB"
 ram:
   base: 0x20000000
   size: "128KB"

@@ -15,7 +15,9 @@
 //!     here we track the headline match% so it can't drop.
 //!   * **Behavior** (chips with a golden firmware): whether a running-firmware
 //!     gate exists (`firmware_survival` / `*_exec_oracle`), which boots real FW
-//!     and asserts its register/IO effects.
+//!     and asserts its register/IO effects. The named gate is **resolved against
+//!     the tree** (`resolve_behavior_gate`) — a chip cannot be promoted on a
+//!     string that names no test.
 //!
 //! The board is written to `docs/coverage/chip-conformance.md`; the ratchet
 //! baseline is `docs/coverage/chip-conformance.json`. A chip's estate must stay
@@ -38,7 +40,14 @@ struct ChipConf {
     yaml: &'static str,
     /// Committed real-silicon reset capture (schema labwired-hw-oracle/*-regs).
     reset_oracle: Option<&'static str>,
-    /// Name of the running-firmware gate that asserts this chip's behavior.
+    /// The running-firmware gate that asserts this chip's behavior, as
+    /// `"<test target>"` or `"<test target>::<test fn>"`.
+    ///
+    /// This is NOT a free-form label. Every value here is **resolved** against
+    /// the tree by [`resolve_behavior_gate`]: the named `crates/*/tests/
+    /// <target>.rs` must exist and, when a function is named, that function must
+    /// exist there carrying a `#[…test…]` attribute. An unresolvable string is a
+    /// hard failure, not a silently-honoured claim.
     behavior_gate: Option<&'static str>,
 }
 
@@ -59,6 +68,17 @@ const CHIPS: &[ChipConf] = &[
         // authoritative for the map but is not the same as measured silicon.
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_nrf54l15_zephyr_survival"),
+    },
+    ChipConf {
+        name: "nrf54lm20a",
+        yaml: "configs/chips/nrf54lm20a.yaml",
+        // No silicon capture: nothing here has been diffed against a real
+        // nRF54LM20A over SWD. Every value is MDK/SVD-derived, which is
+        // authoritative for the map but is not measured silicon.
+        reset_oracle: None,
+        behavior_gate: Some(
+            "nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses",
+        ),
     },
     ChipConf {
         name: "esp32",
@@ -82,17 +102,31 @@ const CHIPS: &[ChipConf] = &[
         name: "stm32f401cdu6",
         yaml: "configs/chips/stm32f401cdu6.yaml",
         reset_oracle: None,
-        behavior_gate: Some("onboarding-stm32f401cdu6"),
+        // Was `Some("onboarding-stm32f401cdu6")`, which resolved to no test
+        // anywhere in the tree. The nearest real thing is the *CI lane*
+        // `onboarding-stm32f401cdu6` in .github/workflows/core-onboarding-smoke.yml
+        // — a matrix job that runs `scripts/onboarding_smoke.sh` on push-to-main
+        // and on a schedule, NOT on pull requests (see validation/bus_proof_matrix.json).
+        // A lane that does not run on PRs cannot be the thing that holds this
+        // chip's level up, and this harness has no way to resolve it, so the
+        // claim is withdrawn: promote again only via a real firmware_survival /
+        // exec-oracle case that `resolve_behavior_gate` can find.
+        behavior_gate: None,
     },
     ChipConf {
         // WeAct F411 Black Pill. Sim-derived from ST's CMSIS header + the modm
-        // F411 SVD; there is no bench part, so no reset_oracle. Behaviour is
-        // asserted by the tier-1 fixture self-tests (clock/gpio/timer/i2c/spi/
-        // adc/wdt/rtc PASS + UART), which is also what its io-smoke runs.
+        // F411 SVD; there is no bench part, so no reset_oracle.
+        //
+        // Was `Some("tier1::stm32f411")`. `crates/validation-report/tests/tier1.rs`
+        // is a real test target, but it contains no `stm32f411` case at all — it
+        // tests the validation-report renderer. The comment here used to claim
+        // "asserted by the tier-1 fixture self-tests (clock/gpio/timer/i2c/spi/
+        // adc/wdt/rtc PASS + UART)"; nothing in the tree asserted that for this
+        // chip. Claim withdrawn until a resolvable running-firmware gate lands.
         name: "stm32f411ceu6",
         yaml: "configs/chips/stm32f411ceu6.yaml",
         reset_oracle: None,
-        behavior_gate: Some("tier1::stm32f411"),
+        behavior_gate: None,
     },
     ChipConf {
         name: "nrf52832",
@@ -177,11 +211,17 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         // First Cortex-M7 chip. Sim-derived (RM0468); no silicon capture, so no
-        // reset_oracle. Behaviour asserted by the tier-1 fixture self-tests.
+        // reset_oracle.
+        //
+        // Was `Some("tier1::stm32h735")` with the comment "behaviour asserted by
+        // the tier-1 fixture self-tests". Same story as stm32f411 above: the
+        // `tier1` test target exists but has no stm32h735 case, so nothing ran.
+        // This chip is separately known to fail a real hosted compile, which the
+        // fictional gate did nothing to surface. Claim withdrawn.
         name: "stm32h735",
         yaml: "configs/chips/stm32h735.yaml",
         reset_oracle: None,
-        behavior_gate: Some("tier1::stm32h735"),
+        behavior_gate: None,
     },
     ChipConf {
         name: "stm32l073",
@@ -215,6 +255,27 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/mkw41z4.yaml",
         reset_oracle: None,
         behavior_gate: Some("firmware_survival::test_kw41z_smoke_survival"),
+    },
+    // Silicon Labs EFR32MG26 (Series-2, Cortex-M33). Register surface from the
+    // simplicity_sdk CMSIS headers (no public SVD exists); L1 smoke only —
+    // Real silicon capture, taken over SWD from a BRD2709A on 2026-08-21 —
+    // the SECOND chip in this table to have one, after esp32c3. CMU, GPIO,
+    // TIMER0/1, USART0, IADC0 and I2C0 are modelled from the vendor CMSIS
+    // headers (Silicon Labs publishes no SVD for this family), and this is the
+    // capture that says the model agrees with the die.
+    //
+    // ⚠️ The capture state is `reset_halt+preamble`, not pure reset_halt, and
+    // that is a property of the silicon rather than a shortcut: a Series-2
+    // peripheral that is not clocked does not read as zero over the debug port,
+    // it FAULTS, and openocd abandons the rest of its command list. A bare
+    // `reset halt` capture returns the CMU window and dies at GPIO. The
+    // preamble writes CLKEN0 and nothing else, so every register below is
+    // still its reset value.
+    ChipConf {
+        name: "efr32mg26",
+        yaml: "configs/chips/efr32mg26.yaml",
+        reset_oracle: Some("scripts/hw-oracle/captures/efr32mg26/20260821T163632Z/reg_oracle.json"),
+        behavior_gate: None,
     },
     // Classic Arduino Nano / ATmega328P — sim-smoke twin (PORT/Timer0/USART0).
     // Behavior: PlatformIO nanoatmega328 golden (serial nano-ok + D13 toggle).
@@ -309,6 +370,34 @@ fn dynamic_excludes(name: &str) -> &'static [(u64, u64, &'static str)] {
                 "INTERRUPT_CORE: dynamic pending/status",
             ),
         ],
+        // ⚠️ ONE entry, and it is not the chip.
+        //
+        // The first pass at this capture excluded ten registers as
+        // "undocumented" or "warm". That was the wrong instinct. A register
+        // the vendor header calls RESERVED still has a value on the die, and a
+        // twin that answers 0 where silicon answers 0xC00000BC is wrong
+        // whether or not anybody wrote the answer down. Nine of the ten are
+        // now MODELLED at their measured values — CMU +0x40 and SYSCLKCTRL,
+        // the five undocumented IADC words at +0x30..0x40, and IADC +0x90 —
+        // and the header-documented gaps the pass had lumped in with them
+        // (IADC CFG/SCALE/FIFOCFG, TIMER/USART/I2C IPVERSION, USART
+        // FRAME/STATUS/IF, TIMER TOP/TOPB) were fixed, not excluded.
+        //
+        // What is left is the one value the die reported that the DIE did not
+        // author.
+        "efr32mg26" => &[(
+            0x4003c044,
+            0x4003c044,
+            "GPIO PORTA_DIN: the probe's own footprint. PA1 reads high with its \
+             port mode DISABLED, while PB0/PB1 — buttons, pulled up, also \
+             DISABLED — read 0 on the same board, so 'disabled reads 0' is the \
+             rule this one pin breaks. GPIO_DBGROUTEPEN enables the debug pins \
+             out of reset and they override the port mode; a J-Link was \
+             clocking SWD throughout the capture. Not asserted as PA1=SWCLK \
+             without the UG594 pinout in hand. Either way DIN is a pad read, \
+             not a reset value: the model reproduces the mechanism, and no \
+             probe is attached to the twin",
+        )],
         _ => &[],
     }
 }
@@ -326,6 +415,221 @@ fn root(rel: &str) -> PathBuf {
         .join(rel)
 }
 
+// ---------------------------------------------------------------------------
+// behavior_gate resolution
+//
+// `behavior_gate` used to be a hand-typed string that nothing ever opened. Its
+// only consumers were `behavior: c.behavior_gate.is_some()` — which feeds
+// `level()` and so the committed ratchet baseline — and a `println!` into the
+// scoreboard. Three of the seventeen values named a test that does not exist
+// (`onboarding-stm32f401cdu6`, `tier1::stm32f411`, `tier1::stm32h735`), so three
+// chips were carrying a behaviour claim, and a frozen ratchet floor, on nothing.
+// A typo, a renamed test, or a deleted test would all have kept passing.
+//
+// The strings are now resolved against the tree, and every failure to resolve is
+// a hard error. Deleting `firmware_survival::test_esp32c3_demo_survival` (or just
+// renaming it) now turns this test red instead of silently keeping esp32c3 at L2.
+// ---------------------------------------------------------------------------
+
+/// Where a resolved gate lives: the test source file, and the test function in
+/// it when the gate named one.
+#[derive(Debug)]
+struct GateTarget {
+    /// Repo-relative path of the test target source.
+    source: String,
+}
+
+/// Resolve a `behavior_gate` string to a real test in this repository.
+///
+/// Accepted forms:
+///   * `"<target>"` — `crates/*/tests/<target>.rs` must exist and declare at
+///     least one test function.
+///   * `"<target>::<fn>"` — that file must additionally declare `fn <fn>` under
+///     a test attribute (`#[test]`, `#[tokio::test]`, `#[thumb_oracle_test]`, …).
+///
+/// Returns `Err` with a human-readable reason when the gate names nothing.
+fn resolve_behavior_gate(gate: &str) -> Result<GateTarget, String> {
+    let (target, func) = match gate.split_once("::") {
+        Some((t, f)) => (t, Some(f)),
+        None => (gate, None),
+    };
+    if target.is_empty() || func == Some("") {
+        return Err(format!(
+            "malformed gate `{gate}`: expected `target` or `target::test_fn`"
+        ));
+    }
+
+    // Locate crates/<pkg>/tests/<target>.rs. Integration-test target names are
+    // the file stem, so this is the same mapping cargo uses.
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    let crates_dir = root("crates");
+    let mut pkgs: Vec<PathBuf> = std::fs::read_dir(&crates_dir)
+        .unwrap_or_else(|e| panic!("read {}: {e}", crates_dir.display()))
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .collect();
+    pkgs.sort();
+    for pkg in pkgs {
+        let p = pkg.join("tests").join(format!("{target}.rs"));
+        if p.is_file() {
+            candidates.push(p);
+        }
+    }
+    let Some(path) = candidates.first() else {
+        return Err(format!(
+            "`{gate}`: no test target `crates/*/tests/{target}.rs` exists in this tree"
+        ));
+    };
+    // Two crates with the same test-target name would make "which test does this
+    // gate mean" a coin flip resolved by directory order. Say so instead.
+    if candidates.len() > 1 {
+        return Err(format!(
+            "`{gate}`: ambiguous — {} crates declare a test target `{target}`: {:?}. \
+             Qualify the gate or rename one of them.",
+            candidates.len(),
+            candidates
+        ));
+    }
+    let rel = path
+        .strip_prefix(root(""))
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string_lossy().to_string());
+    let src = std::fs::read_to_string(path)
+        .map_err(|e| format!("`{gate}`: read {}: {e}", path.display()))?;
+
+    match func {
+        None => {
+            if !src.lines().any(is_test_attr) {
+                return Err(format!(
+                    "`{gate}`: {rel} exists but declares no test function"
+                ));
+            }
+        }
+        Some(f) => {
+            if !declares_test_fn(&src, f) {
+                return Err(format!(
+                    "`{gate}`: {rel} exists but declares no test function `{f}`"
+                ));
+            }
+        }
+    }
+    Ok(GateTarget { source: rel })
+}
+
+/// A line that is a test-ish attribute: `#[test]`, `#[tokio::test]`,
+/// `#[thumb_oracle_test]`, `#[rstest]`, …
+fn is_test_attr(line: &str) -> bool {
+    let t = line.trim();
+    t.starts_with("#[") && t.contains("test")
+}
+
+/// True when `src` declares `fn name(` (or `async fn name(`) with a test
+/// attribute in the attribute/doc-comment block immediately above it.
+fn declares_test_fn(src: &str, name: &str) -> bool {
+    let lines: Vec<&str> = src.lines().collect();
+    let sig = format!("fn {name}(");
+    for (i, line) in lines.iter().enumerate() {
+        let t = line.trim();
+        let is_decl = t.starts_with(&sig)
+            || t.starts_with(&format!("pub {sig}"))
+            || t.starts_with(&format!("async {sig}"))
+            || t.starts_with(&format!("pub async {sig}"));
+        if !is_decl {
+            continue;
+        }
+        // Walk back over the contiguous attribute / comment / blank block.
+        let mut j = i;
+        while j > 0 {
+            j -= 1;
+            let p = lines[j].trim();
+            if is_test_attr(p) {
+                return true;
+            }
+            if p.starts_with("#[") || p.starts_with("//") || p.is_empty() {
+                continue;
+            }
+            break;
+        }
+    }
+    false
+}
+
+/// The gate for one chip, resolved. Panics (hard, on the ratchet's own path)
+/// when the chip claims a gate that names nothing.
+fn behavior_gate_target(c: &ChipConf) -> Option<GateTarget> {
+    let gate = c.behavior_gate?;
+    match resolve_behavior_gate(gate) {
+        Ok(t) => Some(t),
+        Err(why) => panic!(
+            "{}: behavior_gate does not resolve — {why}\n\
+             A behavior_gate is a promotion to L2 in `level()` and a frozen floor \
+             in docs/coverage/chip-conformance.json. It must name a test that \
+             exists: `<target>` or `<target>::<test_fn>` under crates/*/tests/. \
+             Either point it at a real gate or set it to None (which demotes the \
+             chip — re-baseline with UPDATE_CONFORMANCE_BASELINE=1).",
+            c.name
+        ),
+    }
+}
+
+/// Standalone listing of every unresolvable gate, so a reviewer sees all of them
+/// at once instead of the first panic. `measure()` enforces the same rule on the
+/// ratchet's own path, so deleting this test does not reopen the hole.
+#[test]
+fn behavior_gates_name_tests_that_exist() {
+    let mut bad = Vec::new();
+    let mut resolved = Vec::new();
+    for c in CHIPS {
+        let Some(gate) = c.behavior_gate else {
+            continue;
+        };
+        match resolve_behavior_gate(gate) {
+            Ok(t) => resolved.push(format!("  {:<14} {gate} -> {}", c.name, t.source)),
+            Err(why) => bad.push(format!("  {:<14} {why}", c.name)),
+        }
+    }
+    println!(
+        "behavior gates resolved ({}):\n{}",
+        resolved.len(),
+        resolved.join("\n")
+    );
+    assert!(
+        bad.is_empty(),
+        "{} chip(s) claim a behavior gate that names no test in this tree:\n{}\n\
+         A behavior_gate promotes the chip in `level()`; an unresolvable one is a \
+         claim resting on a string. Point it at a real test or set it to None.",
+        bad.len(),
+        bad.join("\n")
+    );
+}
+
+/// A positive control for the resolver: if `resolve_behavior_gate` degenerated
+/// into "always Ok", this test would go red. Pairs with the negative controls in
+/// the test above (which only fires when a bad gate is present in CHIPS).
+#[test]
+fn behavior_gate_resolver_rejects_what_does_not_exist() {
+    // Positive: a gate that really exists resolves.
+    let ok = resolve_behavior_gate("firmware_survival::test_esp32c3_demo_survival")
+        .expect("the esp32c3 survival gate must resolve");
+    assert!(
+        ok.source
+            .ends_with("crates/core/tests/firmware_survival.rs"),
+        "resolved to an unexpected file: {}",
+        ok.source
+    );
+    assert!(resolve_behavior_gate("stm32f1_exec_oracle").is_ok());
+
+    // Negative: no such test target.
+    assert!(resolve_behavior_gate("onboarding-stm32f401cdu6").is_err());
+    assert!(resolve_behavior_gate("no_such_test_target_at_all").is_err());
+    // Negative: the target exists, the function does not — the exact shape of
+    // the `tier1::stm32f411` / `tier1::stm32h735` claims this PR withdrew.
+    assert!(resolve_behavior_gate("tier1::stm32f411").is_err());
+    assert!(resolve_behavior_gate("firmware_survival::no_such_case").is_err());
+    // Negative: a real *non-test* function in a test file is not a gate.
+    assert!(resolve_behavior_gate("firmware_survival::workspace_root").is_err());
+}
+
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
         parts: Vec::new(),
@@ -341,6 +645,8 @@ fn dummy_manifest(path: &str) -> SystemManifest {
         wifi_ap: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
+        // No override: these harnesses take whatever the chip declares.
+        cpu_hz: None,
     }
 }
 
@@ -384,6 +690,34 @@ fn measure(c: &ChipConf) -> Record {
     if let Some(oracle) = c.reset_oracle {
         if let Ok(text) = std::fs::read_to_string(root(oracle)) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                // ⚠️ REPLAY THE CAPTURE'S PREAMBLE INTO THE SIM.
+                //
+                // A capture may have had to write registers before it could
+                // read anything — on EFR32 a peripheral that is not clocked
+                // FAULTS the debug port rather than reading zero, so its oracle
+                // un-gates CLKEN0 first. Diffing that against a sim still in
+                // its cold reset state compares an un-gated die with a gated
+                // model, and every clock-gated peripheral reads 0 in the sim
+                // and non-zero on silicon. That is the gating working, not a
+                // model gap, and counting it as one buries the real gaps in
+                // noise.
+                //
+                // So the sim is put into the SAME state the capture was taken
+                // in. Nothing else about the comparison changes.
+                let mut bus = bus;
+                if let Some(pre) = json.get("preamble").and_then(|p| p.as_array()) {
+                    for step in pre {
+                        let Some(w) = step.get("write32") else {
+                            continue;
+                        };
+                        let addr = w.get("address").and_then(|a| a.as_str()).map(parse_hex);
+                        let val = w.get("value").and_then(|v| v.as_str()).map(parse_hex32);
+                        if let (Some(a), Some(v)) = (addr, val) {
+                            let _ = bus.write_u32(a, v);
+                        }
+                    }
+                }
+                let bus = bus;
                 if let Some(blocks) = json.get("blocks").and_then(|b| b.as_object()) {
                     for block in blocks.values() {
                         if let Some(words) = block.get("words").and_then(|w| w.as_object()) {
@@ -415,7 +749,14 @@ fn measure(c: &ChipConf) -> Record {
                                             );
                                         }
                                     }
-                                    Err(_) => {}
+                                    Err(_) => {
+                                        if report {
+                                            eprintln!(
+                                                "  [{}] BUS-FAULT 0x{a:08x}: silicon=0x{v:08x} (sim read faulted)",
+                                                c.name
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -425,13 +766,19 @@ fn measure(c: &ChipConf) -> Record {
         }
     }
 
+    // Behavior: the chip has a running-firmware gate AND that gate names a test
+    // that actually exists. `behavior_gate_target` panics on an unresolvable
+    // string, so a fictional gate can never reach `level()` — this is on the
+    // ratchet's own path, not a side test.
+    let behavior = behavior_gate_target(c).is_some();
+
     Record {
         estate_ok,
         peripherals,
         reg_total,
         reg_match,
         excluded,
-        behavior: c.behavior_gate.is_some(),
+        behavior,
     }
 }
 

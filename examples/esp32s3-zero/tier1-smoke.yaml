@@ -1,0 +1,35 @@
+# LabWired — ESP32-S3-Zero TIER1 smoke test
+#
+# The first CLI gate on ANY ESP32-S3 descriptor. Until this landed the S3 family
+# was proven only by `labwired run` and by the browser; `labwired test` — the
+# command every gate uses — could not boot an S3 image at all, and the ledger
+# carried esp32s3-zero as an uncovered chip because of it.
+#
+# Two defects had to go first, and this script is what holds them shut:
+#
+#   * the test path recognised the S3 by an exact chip name (`== "esp32s3"`),
+#     so every board variant fell through to the generic builder, which loads
+#     none of an S3 image's segments — a memory violation ~20k steps in;
+#   * it then booted every S3 image on the factory-partition flash layout, which
+#     maps a bare-metal image's DROM reads to the wrong pages. The `.rodata`
+#     jump table in this fixture read back as zero and the firmware jumped to
+#     0x0 at step 48.
+#
+# The firmware is a committed blob, so this cell needs no toolchain and runs in
+# about three seconds.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/esp32s3.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 8000000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 timer PASS"
+  - uart_contains: "TIER1 irq PASS"
+  - uart_contains: "TIER1 dma PASS"
+  - uart_contains: "TIER1 mcpwm PASS"
+  - uart_contains: "TIER1 rmt PASS"
+  - uart_contains: "TIER1 i2c PASS"
+  - uart_contains: "TIER1 done"

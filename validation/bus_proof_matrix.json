@@ -111,6 +111,26 @@
         "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
       }
     },
+    "efr32mg26": {
+      "in_boards": false,
+      "uart": {
+        "state": "shallow",
+        "file": "examples/brd2709a/uart-smoke.yaml",
+        "test": "uart_contains",
+        "gap": "the script PASSES locally via `labwired test --script examples/brd2709a/uart-smoke.yaml` (real firmware prints 'brd2709a: MG26 OK' over the modelled Series-2 USART1 TX path, plus expected_stop_reason) but runs in NO CI lane - no workflow invokes it, so nothing gates a regression.",
+        "lane": "none"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "No SPI controller model mapped on EFR32MG26 (the Series-2 USARTs can do SPI on silicon; not modelled).",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "No I2C model mapped on EFR32MG26 (I2C1 exists on silicon; not modelled).",
+        "lane": "none"
+      }
+    },
     "mkw41z4": {
       "in_boards": false,
       "uart": {
@@ -603,6 +623,29 @@
         "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
         "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
         "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03."
+      }
+    },
+    "nrf54lm20a": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/strict_onboarding.rs",
+        "test": "test_strict_board_onboarding",
+        "signal": "the committed tests/fixtures/nrf54lm20a-snake.elf boots in-sim and UARTE20 EasyDMA reaches the capture sink; the asserted lines carry the chip's OWN geometry and map (rram=2036K ram=511K, p3@0x500D8600), all of which are wrong on the nRF54L15 profile this one would most plausibly be copied from",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/nrf54lm20a-snake/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+      },
+      "spi": {
+        "state": "proven",
+        "file": "crates/core/tests/strict_onboarding.rs",
+        "test": "test_strict_board_onboarding",
+        "signal": "SPIM22 EasyDMA drives an RM67162 AMOLED and the run is judged on the PICTURE, not the transaction: a display_region assertion requires ink in the 240x520 play area and requires the never-addressed 16-row strip below it to be EXACTLY black. Verified to discriminate -- setting DCXCNT to 0 in the firmware, so no byte is ever framed as a command, leaves every UART assertion passing and takes the play area to 0.0% inked.",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/nrf54lm20a-snake/io-smoke.yaml through the CLI and fails the board if any assertion fails)",
+        "note": "the D/C line is driven by the CONTROLLER (PSEL.DCX + DCXCNT), not a GPIO, so this also proves the nRF54L SPIM's hardware data/command path end to end."
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "TWIM21 is declared at 0x500C7000 and uses the same nrf54l_twim model the nRF54L15 smart-ring lane proves, but no nrf54lm20a manifest or firmware wires an I2C device.",
+        "lane": "none"
       }
     }
   }

@@ -428,6 +428,46 @@ def never_measured_note(board: str, mode: str, fixture: str) -> str:
     return f"fixture '{fixture}' ({spec.target}) has never produced a number in this mode"
 
 
+
+def _path_with_xtensa_linker(target: str, path: str) -> str:
+    """PATH with espup's Xtensa GCC prepended, for Xtensa targets only.
+
+    rustc links Xtensa with `xtensa-<chip>-elf-gcc`, which it finds on PATH.
+    espup installs that GCC under the `esp` rustup toolchain, and the workflow
+    that runs this script installs espup but deliberately puts NOTHING on PATH
+    (see core-perf.yml): `~/.rustup/toolchains/esp/bin` ahead of the rustup shim
+    makes every later `cargo` resolve to the esp fork, which carries no std for
+    thumbv6m or riscv32imc, so the FIRST fixture build dies with "can't find
+    crate for `core`" before a single board is measured (#843).
+
+    Both constraints are real, so the PATH edit is scoped to the one subprocess
+    that needs it. Without this the Xtensa fixtures compile and then fail to
+    LINK -- `error: linker `xtensa-esp32-elf-gcc` not found` -- and esp32,
+    esp32s3 and esp32s3-zero land under "NEVER measured anywhere" on a job whose
+    espup step reported success.
+    """
+    if not target.startswith("xtensa-"):
+        return path
+    # espup has shipped the GCC under two roots; accept either rather than
+    # pinning the layout of a tool this script does not control.
+    # espup has shipped the GCC under two roots. Prefer the one under the `esp`
+    # rustup toolchain, because that is the toolchain `cargo +esp` selects; fall
+    # back to the standalone espressif tools dir only if it is absent. Within a
+    # root, take the newest version rather than pinning one.
+    newest = None
+    for root in (
+        Path.home() / ".rustup/toolchains/esp/xtensa-esp-elf",
+        Path.home() / ".espressif/tools/xtensa-esp-elf",
+    ):
+        found = sorted(root.glob("*/xtensa-esp-elf/bin"))
+        if found:
+            newest = str(found[-1])
+            break
+    if newest is None:
+        return path
+    return os.pathsep.join([newest, path]) if path else newest
+
+
 def fixture_origins(name: str) -> tuple[int, int]:
     """The (flash, RAM) origins a fixture links against."""
     for (_arch, flash, ram), (fixture_name, _spec) in FIXTURES.items():
@@ -538,6 +578,7 @@ def build_fixtures(fixtures: set[str]) -> tuple[dict[str, Path], dict[str, str]]
         if spec.env_origins:
             env["LABWIRED_PERF_FLASH_ORIGIN"] = f"{flash:#010x}"
             env["LABWIRED_PERF_RAM_ORIGIN"] = f"{ram:#010x}"
+        env["PATH"] = _path_with_xtensa_linker(spec.target, env.get("PATH", ""))
 
         proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
         if proc.returncode != 0:

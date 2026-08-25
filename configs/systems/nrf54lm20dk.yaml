@@ -1,0 +1,79 @@
+# LabWired - nRF54LM20-DK System Configuration
+#
+# Maps to Zephyr board target `nrf54lm20dk/nrf54lm20a/cpuapp` (application core).
+#
+# Pin assignments are from the Zephyr board devicetree
+# `boards/nordic/nrf54lm20dk/nrf54lm20dk_common.dtsi` — the same sourcing rule
+# as the chip profile.
+#
+# This is the BARE DK: no add-on hardware, the same shape as nrf54l15dk.yaml.
+# The AMOLED lab is a separate manifest that lives with its firmware
+# (examples/nrf54lm20a-snake/system.yaml), because the panel is something a
+# person wires to the expansion header, not something the board carries.
+#
+# UARTE20 is the DK console (P1.16 TX / P1.17 RX), routed to the on-board
+# interface MCU's virtual COM port — `zephyr,console = &uart20`.
+#
+# ⚠️ The LEDs are all on P1 here, but the BUTTONS are split across two ports:
+# three on P1 and the fourth on P0. That is a real property of this DK, and it
+# is why the chip profile has to get each port's `ngpios` right — P0=10, P1=32,
+# P2=11, P3=13. nRF54L15 has different widths and only three ports.
+name: "nrf54lm20dk"
+chip: "../chips/nrf54lm20a.yaml"
+external_devices: []
+board_io:
+  # LEDs — all active-high on P1 (DT: GPIO_ACTIVE_HIGH).
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 22
+    signal: "output"
+    active_high: true
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 25
+    signal: "output"
+    active_high: true
+  - id: "led2"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 27
+    signal: "output"
+    active_high: true
+  - id: "led3"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 28
+    signal: "output"
+    active_high: true
+
+  # Buttons — active-low with pull-ups (DT: GPIO_PULL_UP | GPIO_ACTIVE_LOW).
+  # The pull-up is configured through PIN_CNF and nothing else, which is why
+  # the chip profile uses `profile: nrf54l` rather than the sibling's
+  # back-offset window: a constant shift drops every PIN_CNF write and these
+  # four pins would float.
+  - id: "button0"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 26
+    signal: "input"
+    active_high: false
+  - id: "button1"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 9
+    signal: "input"
+    active_high: false
+  - id: "button2"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 8
+    signal: "input"
+    active_high: false
+  - id: "button3"
+    kind: "button"
+    peripheral: "gpio0"
+    pin: 5
+    signal: "input"
+    active_high: false

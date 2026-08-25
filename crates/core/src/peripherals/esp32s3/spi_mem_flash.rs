@@ -21,6 +21,7 @@
 //!   +0x28 MISO_DLEN read data bitlen-1
 //!   +0x58 W0..W15   data buffer (MOSI out / MISO in)
 
+use crate::peripherals::esp32s3::psram_opi::PsramDevice;
 use crate::{Peripheral, SimResult};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -35,7 +36,21 @@ const ADDR: u64 = 0x04;
 /// every slot0 access by a factor of 256.
 const USER1: u64 = 0x1C;
 const USER2: u64 = 0x20;
+const MOSI_DLEN: u64 = 0x24;
 const MISO_DLEN: u64 = 0x28;
+/// `SPI_MEM_MISC_REG` — chip-select enables. `CS0_DIS` (bit 0) disables the
+/// flash chip select, `CS1_DIS` (bit 1) disables the PSRAM one. Reset value has
+/// CS1 *disabled* (`spi_mem_reg.h`: CS1_DIS default 1'b1, CS0_DIS default 1'b0),
+/// which matters: a zero-initialised MISC would read as "PSRAM selected" and
+/// send every flash command to the wrong chip.
+const MISC: u64 = 0x34;
+/// Bit 0 is `CS0_DIS`. It is described above rather than declared: the model
+/// routes on CS1 alone (flash is the default target), so a `CS0_DIS` constant
+/// would be dead code the compiler warns about.
+const CS1_DIS: u32 = 1 << 1;
+/// `SPI_MEM_USER2_REG` bits[31:28] hold the command-phase length minus one.
+/// OPI commands are 16 bits (field = 15); ordinary SPI NOR commands are 8.
+const USER2_CMD_BITLEN_SHIFT: u32 = 28;
 /// SPI_MEM_RD_STATUS_REG: holds the flash status register value captured by a
 /// dedicated `FLASH_RDSR` / `FLASH_RES` command (bits[15:0]).
 const RD_STATUS: u64 = 0x2C;
@@ -81,6 +96,32 @@ const CMD_SFDP: u8 = 0x5A; // read SFDP
 const CMD_RDUID: u8 = 0x4B; // read unique ID (64-bit)
 const CMD_RDID: u8 = 0x9F; // read JEDEC id
 
+/// The smallest SPI flash part any board this controller serves is fitted with.
+/// Every ESP32 module in the catalog carries at least 4 MB, and the pre-2026-08
+/// model hardcoded exactly this value for all of them.
+const MIN_PART_BYTES: usize = 4 * 1024 * 1024;
+
+/// JEDEC RDID capacity byte — `log2` of the **part** size, which is not the
+/// same thing as the length of the image we were handed to back it.
+///
+/// A backing vector is a merged flash image: bootloader + partition table + app,
+/// and nothing after the last byte the build actually wrote. On the C3 that is
+/// often under 1 MiB while the app's own image header declares a 4 MB part, and
+/// `esp_flash`'s probe compares the two and aborts the boot
+/// ("Detected size(1024k) smaller than the size in the binary image
+/// header(4096k). Probe failed."). So the reported part is the backing rounded
+/// **up** to a power of two — a 6.2 MB image is an 8 MB part, never a 4 MB one —
+/// and floored at [`MIN_PART_BYTES`].
+///
+/// ⚠️ This controller is shared: `boot/esp32c3_rom.rs` registers the same model
+/// for the C3's SPIMEM0/1 because the two chips share the register layout. A
+/// change here is a change to every ESP32 chip in the workspace.
+fn part_capacity_byte(backing_len: usize) -> u32 {
+    let part = backing_len.max(MIN_PART_BYTES).next_power_of_two() as u64;
+    // 4 MiB -> 0x16, 8 MiB -> 0x17, 16 MiB -> 0x18.
+    (63 - part.leading_zeros() as u64) as u32
+}
+
 #[derive(Debug)]
 pub struct SpiMemFlash {
     regs: HashMap<u64, u32>,
@@ -94,17 +135,36 @@ pub struct SpiMemFlash {
     sr2: u8,
     /// Status register 3.
     sr3: u8,
+    /// The octal PSRAM on chip select 1, when the board has one. `None` on a
+    /// module without PSRAM — then a CS1 command finds no device, exactly as it
+    /// would on bare silicon.
+    psram: Option<Arc<Mutex<PsramDevice>>>,
 }
 
 impl SpiMemFlash {
     pub fn new(flash: Arc<Mutex<Vec<u8>>>) -> Self {
+        let mut regs = HashMap::new();
+        // Reset value: PSRAM chip select disabled, flash chip select enabled.
+        regs.insert(MISC, CS1_DIS);
+
         Self {
-            regs: HashMap::new(),
+            regs,
             flash,
             flash_status: 0,
             sr2: 0,
             sr3: 0,
+            psram: None,
         }
+    }
+
+    /// Attach the octal PSRAM that lives on chip select 1.
+    pub fn attach_psram(&mut self, psram: Arc<Mutex<PsramDevice>>) {
+        self.psram = Some(psram);
+    }
+
+    /// True when the firmware has selected CS1 (the PSRAM) rather than CS0.
+    fn psram_selected(&self) -> bool {
+        self.reg(MISC) & CS1_DIS == 0
     }
 
     /// Shared SPI NOR backing (same buffer SPIMEM0/1 and FlashXip use).
@@ -158,9 +218,60 @@ impl SpiMemFlash {
         self.set_reg(CMD, 0);
     }
 
+    /// Hand an OPI transaction to the PSRAM on CS1 and publish its answer in
+    /// the W buffer, the same way the controller returns flash data.
+    fn execute_psram_command(&mut self) {
+        let cmd = (self.reg(USER2) & 0xFFFF) as u16;
+        let addr = self.reg(ADDR);
+        let read_bytes = ((self.reg(MISO_DLEN) as usize) + 1) / 8;
+        // MOSI_DLEN reads as 0 when there is no data phase; (0+1)/8 == 0, so a
+        // command-only transaction correctly writes nothing.
+        let write_bytes = ((self.reg(MOSI_DLEN) as usize) + 1) / 8;
+
+        let mut write_data = Vec::with_capacity(write_bytes);
+        for i in 0..write_bytes {
+            let word = self.reg(W0 + (i as u64 / 4) * 4);
+            write_data.push(((word >> (8 * (i % 4))) & 0xFF) as u8);
+        }
+
+        let out = match &self.psram {
+            Some(psram) => psram
+                .lock()
+                .unwrap()
+                .exec(cmd, addr, &write_data, read_bytes),
+            None => vec![0u8; read_bytes],
+        };
+
+        if std::env::var("LABWIRED_SPI_DEBUG").is_ok() {
+            eprintln!(
+                "spimem1: psram cmd=0x{cmd:04x} addr=0x{addr:08x} wr={write_data:02x?} rd={out:02x?}"
+            );
+        }
+
+        for (w, chunk) in out.chunks(4).enumerate() {
+            let mut word = 0u32;
+            for (j, &b) in chunk.iter().enumerate() {
+                word |= (b as u32) << (8 * j);
+            }
+            self.set_reg(W0 + (w as u64) * 4, word);
+        }
+
+        self.set_reg(CMD, 0);
+    }
+
     /// Execute the user command currently programmed in the registers, placing
     /// any read result in the W buffer, then clear the USR trigger.
     fn execute_user_command(&mut self) {
+        // A 16-bit command phase means OPI, which on this controller only ever
+        // targets the PSRAM on CS1. Truncating it to 8 bits turns the PSRAM's
+        // 0x4040 mode-register read into flash opcode 0x40, which reads flash
+        // bytes and makes esp_psram_init report "PSRAM ID read error: 0x0".
+        let cmd_bitlen = (self.reg(USER2) >> USER2_CMD_BITLEN_SHIFT) + 1;
+        if cmd_bitlen == 16 && self.psram_selected() {
+            self.execute_psram_command();
+            return;
+        }
+
         let cmd = (self.reg(USER2) & 0xFFFF) as u8;
         // ESP32-S3 SPI_MEM_ADDR_REG holds the flash byte address right-justified
         // (the controller sends the low USER1[31:27]+1 bits MSB-first during the
@@ -217,8 +328,14 @@ impl SpiMemFlash {
             CMD_RDSR2 => self.set_reg(W0, self.sr2 as u32),
             CMD_RDSR3 => self.set_reg(W0, self.sr3 as u32),
             CMD_RDID => {
-                // JEDEC id: a generic 4 MB part (mfg 0x20, type 0x40, cap 0x16).
-                self.set_reg(W0, 0x0016_4020);
+                // JEDEC id. The capacity byte is log2(bytes) of the *part*,
+                // derived from the backing rather than fixed: esp_flash compares
+                // it against the size in the image header and refuses to boot on
+                // a mismatch ("Detected size(4096k) smaller than the size in the
+                // binary image header(16384k)"), so a hardcoded 4 MB part fails
+                // every 8/16 MB image regardless of how big the model's flash is.
+                let capacity = part_capacity_byte(self.flash.lock().unwrap().len());
+                self.set_reg(W0, 0x0000_4020 | (capacity << 16));
             }
             // Read 64-bit unique ID. esp_flash rejects all-zero / all-ones as
             // ESP_ERR_INVALID_RESPONSE, so return a fixed non-trivial value.
@@ -315,6 +432,29 @@ mod tests {
 
     fn ctrl_with(flash: Vec<u8>) -> SpiMemFlash {
         SpiMemFlash::new(Arc::new(Mutex::new(flash)))
+    }
+
+    /// The regression that made eight ESP32-C3 targets red: a C3 rom-boot
+    /// backing is the merged image (well under 1 MiB), while the app's image
+    /// header declares the module's 4 MB part. Reporting `log2(backing)` made
+    /// `esp_flash` abort with "Detected size(1024k) smaller than the size in
+    /// the binary image header(4096k). Probe failed." before `app_main` ran.
+    #[test]
+    fn a_short_c3_image_still_reports_the_modules_4mb_part() {
+        assert_eq!(part_capacity_byte(700 * 1024), 0x16);
+        assert_eq!(part_capacity_byte(0), 0x16);
+    }
+
+    /// And the case that motivated deriving it at all: an N16R8 image that does
+    /// not fill its part must not understate the part it is flashed onto.
+    #[test]
+    fn a_bigger_image_rounds_up_to_the_next_part_size() {
+        // The Doom merged image: 8,455,860 bytes. Flooring log2 would call
+        // this an 8 MB part; the S3 backing is padded to 16 MiB upstream, and
+        // an unpadded one must still not round *down* past the image itself.
+        assert_eq!(part_capacity_byte(8_455_860), 0x18);
+        assert_eq!(part_capacity_byte(16 * 1024 * 1024), 0x18);
+        assert_eq!(part_capacity_byte(8 * 1024 * 1024), 0x17);
     }
 
     #[test]

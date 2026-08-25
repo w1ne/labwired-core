@@ -1,0 +1,17 @@
+# LabWired - BRD2709A I²C smoke: a TMP102 read over I2C0.
+#
+# The TMP102's temperature register resets to 0x1900 — 6400, which is 400 raw
+# counts at 0.0625 °C, i.e. 25 °C (configs/devices/tmp102.yaml, from datasheet
+# SBOS397I). That exact word is the test: a controller that dropped the
+# repeated START, streamed the bytes in the wrong order, or answered from the
+# wrong register would not produce it.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-i2c"
+  system: "./i2c-system.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "MG26-I2C"
+  - uart_regex: "temp=1900"
+  - expected_stop_reason: max_steps

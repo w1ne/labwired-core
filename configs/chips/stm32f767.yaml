@@ -15,9 +15,17 @@ name: "stm32f767zi"
 arch: "arm"
 core: "cortex-m7"
 registers_count: 150
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F767ZI maximum core clock, 216 MHz.
+cpu_hz: 216_000_000
+
 flash:
   base: 0x08000000
-  size: "2MB"
+  # 2 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "2MB" would be
+  # 2_000_000, 97_152 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "2048KB"
 ram:
   base: 0x20000000
   size: "512KB"
@@ -144,6 +152,13 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+    # I2C1 is clock-gated by RCC_APB1ENR.I2C1EN (bit 21) on this part, as
+    # it is on the F407 whose descriptor has always declared it. Without
+    # this the peripheral answers before it is enabled, and firmware that
+    # forgets the gate works here and hangs on silicon.
+    clock:
+      reg: "apb1enr"
+      bit: 21
     config:
       debug_schema: "../peripherals/stm32f767/i2c1.yaml"
       profile: "stm32l4"

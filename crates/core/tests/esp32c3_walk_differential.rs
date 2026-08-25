@@ -20,7 +20,7 @@
 //!    not change: the painted framebuffer is byte-identical to interval 1.
 //!
 //! 3. `esp32c3_irq_choke_reaggregates_on_write` — Task C: FROM_CPU IPI and
-//!    INTC config writes re-aggregate `riscv_irq_lines` AT THE WRITE (through
+//!    INTC config writes re-aggregate `irq_fabric.esp32c3.irq_lines` AT THE WRITE (through
 //!    `sync_esp32c3_irq_cache_write`), with no peripheral tick in between —
 //!    the property that lets a future walk-free C3 bus take the trivial
 //!    per-cycle tick path.
@@ -174,7 +174,7 @@ fn build_oled_lab(
                 .expect("load bootloader segment");
         }
     }
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    let sp_top = (chip.ram.base + chip.ram.size) as u32;
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(bootloader.entry_point as u32);
 
@@ -618,7 +618,7 @@ fn esp32c3_irq_choke_reaggregates_on_write() {
         SystemManifest::from_file(root().join("../../configs/systems/esp32c3-devkit.yaml"))
             .expect("load esp32c3-devkit system yaml");
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 bus");
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
 
     // Route source 50 (FROM_CPU_0) → CPU line 5, priority 1, threshold 1,
     // line enabled — all through ordinary MMIO writes.
@@ -628,14 +628,14 @@ fn esp32c3_irq_choke_reaggregates_on_write() {
     bus.write_u32(INTMATRIX + 0x194, 1).unwrap();
     bus.write_u32(INTMATRIX + 0x104, 1 << LINE).unwrap();
     assert_eq!(
-        bus.riscv_irq_lines, 0,
+        bus.irq_fabric.esp32c3.irq_lines, 0,
         "no source asserted yet → no routed lines"
     );
 
     // IPI set: the line must assert at the write, with NO tick in between.
     bus.write_u32(FROM_CPU_0, 1).unwrap();
     assert_eq!(
-        bus.riscv_irq_lines,
+        bus.irq_fabric.esp32c3.irq_lines,
         1 << LINE,
         "FROM_CPU write must re-aggregate the routed line mask immediately"
     );
@@ -644,16 +644,20 @@ fn esp32c3_irq_choke_reaggregates_on_write() {
     // must also take effect at the write.
     bus.write_u32(INTMATRIX + 0x194, 2).unwrap();
     assert_eq!(
-        bus.riscv_irq_lines, 0,
+        bus.irq_fabric.esp32c3.irq_lines, 0,
         "raising CPU_INT_THRESH above the line priority must mask at the write"
     );
     bus.write_u32(INTMATRIX + 0x194, 1).unwrap();
-    assert_eq!(bus.riscv_irq_lines, 1 << LINE, "unmask re-asserts");
+    assert_eq!(
+        bus.irq_fabric.esp32c3.irq_lines,
+        1 << LINE,
+        "unmask re-asserts"
+    );
 
     // IPI clear: the line must de-assert at the write.
     bus.write_u32(FROM_CPU_0, 0).unwrap();
     assert_eq!(
-        bus.riscv_irq_lines, 0,
+        bus.irq_fabric.esp32c3.irq_lines, 0,
         "FROM_CPU clear must de-assert the routed line at the write"
     );
 }

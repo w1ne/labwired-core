@@ -1,0 +1,59 @@
+# LabWired - nRF54LM20A AMOLED Snake lab.
+#
+# Runs the bare-metal Snake firmware on the nRF54LM20A profile with an RM67162
+# AMOLED on SPIM22 and the DK's four buttons on P1/P0.
+schema_version: "1.0"
+inputs:
+  firmware: "../build/nrf54lm20a-snake.elf"
+  system: "../system.yaml"
+limits:
+  max_steps: 8000000
+assertions:
+  # The chip booted and UARTE20 EasyDMA reached the console sink.
+  - uart_contains: "nRF54LM20A AMOLED Snake"
+  # SPIM22 completed the panel's init transfers.
+  - uart_contains: "panel init ok"
+  - uart_contains: "game start"
+  # The snake actually played: it reached food at least once. This is the
+  # assertion that fails if the buttons read stuck-pressed, because a snake
+  # that cannot steer walks into a wall instead of eating.
+  - uart_contains: "food score="
+  - uart_contains: "snake done"
+
+  # ── Panel evidence ───────────────────────────────────────────────────────
+  #
+  # The UART assertions above prove the SPIM completed its transfers. They
+  # would pass with no panel on the far side of the bus at all, because
+  # EVENTS_END fires either way. These two prove the pixels landed, and landed
+  # where the firmware aimed them.
+  #
+  # The play area: some ink, but nowhere near flooded. A snake and one food
+  # cell cover a small part of the board.
+  - display_region:
+      id: "panel"
+      x: 0
+      y: 0
+      w: 240
+      h: 520
+      min_ink: 0.002
+      max_ink: 0.40
+      # The panel must be EMITTING, not merely painted. Ink alone cannot tell
+      # the two apart: frame memory fills whether or not brightness was ever
+      # written, and on an AMOLED brightness IS the display. Without this the
+      # lab passed firmware that shows a black screen -- verified by deleting
+      # the WRDISBV write and watching it go 7/7.
+      lit: true
+
+  # NEGATIVE SPACE, and the more informative of the two. The board is 26 rows
+  # of 20 px = 520, so the bottom 16 rows of the 536-row panel are never drawn.
+  # They must be EXACTLY black. A command stream that desynchronised -- init
+  # bytes decoded as pixels, a window set past where the firmware meant -- puts
+  # ink here, and every UART assertion above still passes while it does.
+  - display_region:
+      id: "panel"
+      x: 0
+      y: 520
+      w: 240
+      h: 16
+      min_ink: 0.0
+      max_ink: 0.0

@@ -138,7 +138,7 @@ fn diag_c3_boot_progress() {
         )),
     );
     bus.config.optimized_bus_access = false;
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
     bus.refresh_peripheral_index();
 
     let uart = Arc::new(Mutex::new(Vec::new()));

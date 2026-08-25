@@ -36,6 +36,11 @@ name: "stm32h563zi"
 arch: "arm"
 core: "cortex-m33"
 registers_count: 220
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32H563ZI maximum core clock, 250 MHz.
+cpu_hz: 250_000_000
+
 flash:
   base: 0x08000000
   # Binary units (MiB) so the buffer is exactly 2 * 0x100000 = 2,097,152 bytes,

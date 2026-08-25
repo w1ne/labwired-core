@@ -51,6 +51,11 @@ pub const SHCSR_BUSFAULTENA: u32 = 1 << 17;
 pub const CFSR_BFSR_PRECISERR: u32 = 1 << 9;
 /// `CFSR.BFSR.BFARVALID` — BFSR bit 7, i.e. CFSR bit 15 (B3.2.15).
 pub const CFSR_BFSR_BFARVALID: u32 = 1 << 15;
+/// `SHCSR.USGFAULTENA`, bit 18 (ARMv7-M ARM B3.2.13).
+pub const SHCSR_USGFAULTENA: u32 = 1 << 18;
+/// `CFSR.UFSR.UNDEFINSTR` — UFSR bit 0, i.e. CFSR bit 16 (B3.2.15). Set when the
+/// processor attempts to execute an undefined instruction.
+pub const CFSR_UFSR_UNDEFINSTR: u32 = 1 << 16;
 /// `HFSR.FORCED`, bit 30 (B3.2.16): set when a configurable-priority fault
 /// escalates to HardFault.
 pub const HFSR_FORCED: u32 = 1 << 30;

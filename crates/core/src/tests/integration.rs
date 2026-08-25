@@ -401,18 +401,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -443,6 +444,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -588,18 +590,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-2".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -637,6 +640,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-2".to_string(),
             chip: "test-chip-2".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -673,18 +677,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-3".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart1".to_string(),
@@ -704,6 +709,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-3".to_string(),
             chip: "test-chip-3".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -735,18 +741,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-gpio-v2".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -766,6 +773,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2".to_string(),
             chip: "test-chip-gpio-v2".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -803,18 +811,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-uart-v2".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart3".to_string(),
@@ -834,6 +843,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-uart-v2".to_string(),
             chip: "test-chip-uart-v2".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -948,15 +958,16 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-two-uarts".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             memory_regions: Vec::new(),
             peripherals: vec![
@@ -981,7 +992,7 @@ pub mod integration_tests {
             ],
             pins: Default::default(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         };
 
         let manifest = SystemManifest {
@@ -990,6 +1001,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-two-uarts".to_string(),
             chip: "test-chip-two-uarts".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1022,18 +1034,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-rcc-v2".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -1053,6 +1066,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-v2".to_string(),
             chip: "test-chip-rcc-v2".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1087,18 +1101,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-rcc-f4".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -1118,6 +1133,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-f4".to_string(),
             chip: "test-chip-rcc-f4".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1152,18 +1168,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "test-chip-gpio-v2-alias".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -1183,6 +1200,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2-alias".to_string(),
             chip: "test-chip-gpio-v2-alias".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -2379,18 +2397,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "esp32c3-timg-test".to_string(),
+            cpu_hz: 0,
             arch: Arch::RiscV,
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "timg0".to_string(),
@@ -2410,6 +2429,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "esp32c3-timg-test".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -2471,18 +2491,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "esp32c3-gpio-test".to_string(),
+            cpu_hz: 0,
             arch: Arch::RiscV,
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpio".to_string(),
@@ -2504,6 +2525,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "esp32c3-gpio-test".to_string(),
             chip: "esp32c3-gpio-test".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
@@ -2536,18 +2558,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "esp32c3-spi-dc-test".to_string(),
+            cpu_hz: 0,
             arch: Arch::RiscV,
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -2580,6 +2603,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "esp32c3-spi-dc-test".to_string(),
             chip: "esp32c3-spi-dc-test".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
@@ -2746,18 +2770,19 @@ pub mod integration_tests {
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "esp32c3-i2c-trace-test".to_string(),
+            cpu_hz: 0,
             arch: Arch::RiscV,
             core: None,
             flash: MemoryRange {
                 base: 0x4200_0000,
-                size: "4MB".to_string(),
+                size: 4000000,
             },
             ram: MemoryRange {
                 base: 0x3FC8_0000,
-                size: "400KB".to_string(),
+                size: 400000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -2795,6 +2820,7 @@ pub mod integration_tests {
             schema_version: "1.0".to_string(),
             name: "esp32c3-i2c-trace-test".to_string(),
             chip: "esp32c3-i2c-trace-test".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: vec![labwired_config::ExternalDevice {
                 id: "oled".to_string(),
@@ -2908,18 +2934,19 @@ pub mod integration_tests {
             let chip = ChipDescriptor {
                 schema_version: "1.0".to_string(),
                 name: "two-family-trace".to_string(),
+                cpu_hz: 0,
                 arch: Arch::RiscV,
                 core: None,
                 flash: MemoryRange {
                     base: 0x4200_0000,
-                    size: "4MB".to_string(),
+                    size: 4000000,
                 },
                 ram: MemoryRange {
                     base: 0x3FC8_0000,
-                    size: "400KB".to_string(),
+                    size: 400000,
                 },
                 reset_vector_offset: 0,
-                atomic_register_aliases: false,
+                atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
                 memory_regions: Vec::new(),
                 peripherals,
                 pins: Default::default(),
@@ -2937,6 +2964,7 @@ pub mod integration_tests {
                 schema_version: "1.0".to_string(),
                 name: "two-family-trace".to_string(),
                 chip: "two-family-trace".to_string(),
+                cpu_hz: None,
                 memory_overrides: HashMap::new(),
                 external_devices: vec![labwired_config::ExternalDevice {
                     id: "oled".to_string(),

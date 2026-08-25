@@ -15,6 +15,11 @@
 name: "mkw41z4"
 arch: "arm"
 core: "cortex-m0+"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Kinetis KW41Z Cortex-M0+ core maximum, 48 MHz.
+cpu_hz: 48_000_000
+
 flash:
   base: 0x00000000
   size: "512KB"

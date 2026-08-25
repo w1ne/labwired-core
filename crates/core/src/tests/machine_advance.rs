@@ -20,6 +20,7 @@ pub(crate) struct CountingCpu {
     sp: u32,
     steps: u32,
     pending: Vec<u64>,
+    first_pending_at_step: Option<u32>,
     halted: bool,
     // Non-architectural test injection; intentionally omitted from snapshots.
     fail_step: bool,
@@ -27,6 +28,8 @@ pub(crate) struct CountingCpu {
     push_level: Option<bool>,
     // Non-architectural execution probes; intentionally omitted from snapshots.
     zero_batch: bool,
+    // Non-architectural WAITI-park injection (dual-core coalesced-idle batching).
+    parked: bool,
     fail_batch_after: Option<u32>,
     idle_budget: Option<u64>,
     idle_skipped: u64,
@@ -48,6 +51,9 @@ impl Cpu for CountingCpu {
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &SimulationConfig,
     ) -> SimResult<()> {
+        if self.first_pending_at_step.is_none() && self.pending.iter().any(|word| *word != 0) {
+            self.first_pending_at_step = Some(self.steps);
+        }
         if self.fail_step {
             return Err(SimulationError::Other(
                 "CountingCpu injected step failure".to_string(),
@@ -89,6 +95,10 @@ impl Cpu for CountingCpu {
             }
         }
         Ok(max_count)
+    }
+
+    fn is_parked_idle(&self) -> bool {
+        self.parked && !self.halted
     }
 
     fn set_pc(&mut self, val: u32) {
@@ -158,7 +168,7 @@ impl Cpu for CountingCpu {
         }
     }
 
-    fn runtime_snapshot(&self) -> (CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(CpuKind, Vec<u8>)> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&self.pc.to_le_bytes());
         bytes.extend_from_slice(&self.sp.to_le_bytes());
@@ -168,7 +178,7 @@ impl Cpu for CountingCpu {
         for word in &self.pending {
             bytes.extend_from_slice(&word.to_le_bytes());
         }
-        (CpuKind::ArmCortexM, bytes)
+        Some((CpuKind::ArmCortexM, bytes))
     }
 
     fn apply_runtime_snapshot(&mut self, kind: CpuKind, bytes: &[u8]) -> SimResult<()> {
@@ -283,6 +293,26 @@ fn counting_dual_core_machine() -> Machine<CountingCpu> {
         .with_secondary_cpu(CountingCpu::default())
 }
 
+#[derive(Debug)]
+struct EveryTickIrq;
+
+impl crate::Peripheral for EveryTickIrq {
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
+    }
+
+    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+        Ok(())
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        crate::PeripheralTickResult {
+            irq: true,
+            ..Default::default()
+        }
+    }
+}
+
 #[test]
 fn step_adapter_advances_both_cores_once() {
     let mut machine = counting_dual_core_machine();
@@ -331,7 +361,9 @@ fn counting_cpu_runtime_snapshot_round_trips() {
         push_level: None,
         ..Default::default()
     };
-    let (kind, bytes) = source.runtime_snapshot();
+    let (kind, bytes) = source
+        .runtime_snapshot()
+        .expect("CountingCpu models a runtime snapshot");
     let mut restored = CountingCpu::default();
 
     restored
@@ -485,6 +517,73 @@ fn unified_run_advances_both_cores_one_quantum_at_a_time() {
     assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 4);
     assert_eq!(machine.step_profile().cpu_instructions, 4);
     assert_eq!(machine.step_profile().cpu_batches, 4);
+}
+
+/// A WAITI-parked secondary keeps a wide primary batch while still servicing
+/// peripherals and re-deriving interrupts at every requested tick boundary.
+#[test]
+fn parked_secondary_batches_without_skipping_per_cycle_ticks() {
+    let mut machine = counting_dual_core_machine();
+    machine.bus.add_peripheral(
+        "every-tick-irq",
+        0x5100_0000,
+        0x100,
+        Some(7),
+        Box::new(EveryTickIrq),
+    );
+    machine.cpu_secondary.as_mut().unwrap().parked = true;
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    assert_eq!(report.primary_steps, 64);
+    assert_eq!(
+        report.cpu_batches, 1,
+        "per-cycle interrupt visibility must not collapse the parked-secondary batch"
+    );
+    assert_eq!(
+        machine.step_profile().peripheral_ticks,
+        64,
+        "one peripheral boundary per retired instruction at interval 1"
+    );
+    assert_eq!(
+        machine.cpu.first_pending_at_step,
+        Some(1),
+        "the IRQ raised after instruction 1 must be visible before instruction 2"
+    );
+}
+
+#[test]
+fn one_step_parked_secondary_batch_commits_once() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().parked = true;
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+
+    let report = machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+
+    assert_eq!(report.elapsed_cycles, 1);
+    assert_eq!(machine.total_cycles, 1);
+    assert_eq!(machine.step_profile().peripheral_ticks, 1);
+}
+
+/// The coalescing win itself is preserved wherever it was ever sound: at a
+/// relaxed tick interval the parked-secondary window is still wide.
+#[test]
+fn parked_secondary_still_coalesces_at_a_relaxed_tick_interval() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().parked = true;
+    machine.config.peripheral_tick_interval = 64;
+    machine.bus.config.peripheral_tick_interval = 64;
+
+    let report = machine.advance(AdvanceRequest::run(Some(64))).unwrap();
+
+    assert_eq!(report.primary_steps, 64);
+    assert_eq!(
+        report.cpu_batches, 1,
+        "at interval 64 the whole 64-instruction window is one batch"
+    );
 }
 
 #[test]
@@ -1133,4 +1232,42 @@ fn unified_single_releases_and_steps_app_cpu() {
     assert!(!cpu1.halted);
     assert_eq!(cpu1.pc, 0x4008_0002);
     assert_eq!(cpu1.steps, 1);
+}
+
+/// The rom-boot reset edge releases the secondary core, and `Machine::advance`
+/// is what acts on it — for EVERY driver, not just the one that remembered.
+///
+/// This lived in the native runner's step loop. On an ESP32-S3 a core left in
+/// reset is not a missing core, it is a dead run: ESP-IDF's `start_other_core`
+/// spins `while (!s_cpu_up[1]) esp_rom_delay_us(100)` before app_main, so the
+/// run stops inside the mask ROM's `ets_delay_us` at 0x40041a76 with nothing on
+/// the console past the boot banner — indistinguishable from a hung sketch.
+///
+/// Deleting the release arm at the top of `advance` must fail this test.
+#[test]
+fn rom_boot_reset_edge_releases_the_secondary_core() {
+    use crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED;
+
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().halted = true;
+
+    // No edge yet: a halted core stays halted, or the release is unconditional
+    // and this test proves nothing.
+    APPCPU_RESET_RELEASED.with(|s| s.set(false));
+    machine.step().expect("step should succeed");
+    assert!(
+        machine.cpu_secondary.as_ref().unwrap().halted,
+        "core 1 came out of reset with no reset edge to release it"
+    );
+
+    APPCPU_RESET_RELEASED.with(|s| s.set(true));
+    machine.step().expect("step should succeed");
+    assert!(
+        !machine.cpu_secondary.as_ref().unwrap().halted,
+        "the SYSTEM_CORE_1_RESETING edge did not release core 1"
+    );
+    assert!(
+        !APPCPU_RESET_RELEASED.with(|s| s.get()),
+        "the edge must be consumed, not left latched for the next boundary"
+    );
 }

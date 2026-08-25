@@ -7,6 +7,10 @@
     "sha256": "2529150975aa3021ddf6fd5f9a250fe810c39ff7183a495d4359245165533bcf",
     "source_rev": "f866a78d7594e4d939b9bd67c8b712b14bafe06a"
   },
+  "esp32s3-arduino-flash.bin": {
+    "sha256": "2664b7ba3bc27303cd5e48f028ea1b176a68c749230b42e0780a94710948e7c5",
+    "source": "hosted LabWired compile of an Arduino ESP32-S3 sketch (ARDUINO_USB_CDC_ON_BOOT=1) that prints SMOKE_OK; stored trimmed to its used extent and padded to 4 MiB by the test"
+  },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
@@ -35,6 +39,10 @@
     "sha256": "d5d62206e129fe69e330a5ff409f373103315d6c48b66bd81c386b3161594359",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
+  "stm32f405.elf": {
+    "sha256": "e45d2cb26ed742572aaafbf72493b1d850b84665103c1e8faa380cddabe775ff",
+    "source_rev": "96ed4c6a01647736bd33ac8a5445b2fd0a2d4b35"
+  },
   "stm32f407.elf": {
     "sha256": "cf141d08ae423820709a93f1e86e2383a752febe94320c026dd13120c32b350a",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
@@ -42,6 +50,10 @@
   "stm32f411.elf": {
     "sha256": "f95fa2a2eaa65b4453831c79f717c51ca2f3598608e768e670be4d3c42b348e6",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+  },
+  "stm32f767.elf": {
+    "sha256": "6510613ecb53e407960dc56a3a3a155016490337597c71de8a6f6a354bdc09e7",
+    "source_rev": "96ed4c6a01647736bd33ac8a5445b2fd0a2d4b35"
   },
   "stm32g474re.elf": {
     "sha256": "1a854cbf4b3ec27f60683bb10595e9806d2b5ad69cd87d515f0a0800ea0bd6d9",

@@ -137,6 +137,12 @@ pub enum UartRegisterLayout {
     Efm32,
     /// Silicon Labs EFR32 USART (Series 1) — STATUS@0x10, reset 0x2040.
     Efr32,
+    /// Silicon Labs EFR32 Series-2 USART (xG21–xG29) — the Series-1 register
+    /// block shifted: STATUS@0x18, RXDATA@0x24, TXDATA@0x38. Flag semantics and
+    /// the STATUS reset value are unchanged (TXBL|TXIDLE = 0x2040). Offsets
+    /// from the vendor CMSIS header (simplicity_sdk `efr32mg26_usart.h`,
+    /// `USART_TypeDef`).
+    Efr32s2,
     /// Silicon Labs LEUART (Low Energy UART) — STATUS@0x08, reset 0x10.
     Leuart,
     /// Renesas SCI (classic SH/RX and RA-series) — SSR@0x04, byte registers.
@@ -197,6 +203,7 @@ impl FromStr for UartRegisterLayout {
             "cadence" | "cdns" | "zynq" => Ok(Self::Cadence),
             "efm32" => Ok(Self::Efm32),
             "efr32" => Ok(Self::Efr32),
+            "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
             "leuart" => Ok(Self::Leuart),
             "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
             "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
@@ -216,7 +223,7 @@ impl FromStr for UartRegisterLayout {
             "picosoc" | "simpleuart" => Ok(Self::PicoUart),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
-                 lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, leuart, sci, \
+                 lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
                  gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
                  coreuart, k6xf, pulp",
                 value
@@ -413,6 +420,27 @@ impl UartRegisterLayout {
                 status: 0x10,
                 tx: 0x34,
                 rx: 0x1C,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x2040,    // TXBL | TXIDLE
+                rx_present_set: 1 << 7, // RXDATAV
+                rx_present_clear: 0,
+            },
+            // Silicon Labs EFR32 Series-2 USART (xG21/xG24/xG26/…): the flag
+            // semantics are Series-1-identical (TXBL(6) ready, RXDATAV(7) set
+            // on data, reset TXBL|TXIDLE = 0x2040) but the register block
+            // shifted — STATUS 0x10→0x18, RXDATA 0x1C→0x24, TXDATA 0x34→0x38
+            // (simplicity_sdk `efr32mg26_usart.h`, `USART_TypeDef`). A firmware
+            // built for Series 1 writes TXDATA at 0x34, which on this map is
+            // TXDATAX — treating them as one layout transmits nothing and hangs
+            // the driver's TXBL poll at the wrong address.
+            UartRegisterLayout::Efr32s2 => UartRegMap {
+                status: 0x18,
+                tx: 0x38,
+                rx: 0x24,
                 cr3: 0xF00,
                 cr1: None,
                 txeie_mask: 0,
@@ -1880,6 +1908,7 @@ mod tests {
             (Cadence, 0x30, 0x2C),
             (Efm32, 0x34, 0x10),
             (Efr32, 0x34, 0x10),
+            (Efr32s2, 0x38, 0x18),
             (Leuart, 0x28, 0x08),
             (Sci, 0x03, 0x04),
             (Gaisler, 0x00, 0x04),
@@ -1917,6 +1946,36 @@ mod tests {
                 "{layout:?}: idle status at {status:#x}"
             );
         }
+    }
+
+    /// Series-2 USART (EFR32MG26 and the whole xG2 family): the register block
+    /// shifted vs Series 1, so the Series-1 TXDATA offset (0x34) must NOT
+    /// transmit, STATUS lives at 0x18 and resets to TXBL|TXIDLE (0x2040) — the
+    /// value a polling driver spins on before its first byte — and RXDATAV /
+    /// RXDATA moved with it (bit 7 / 0x24, same bit as Series 1).
+    #[test]
+    fn test_uart_efr32s2_transmit_and_status() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Efr32s2);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+
+        assert_eq!(uart.read_u32(0x18).unwrap(), 0x2040, "STATUS reset");
+        // Series-1 TXDATA offset: on Series 2 that is TXDATAX, which this
+        // model does not treat as the byte-TX register.
+        uart.write(0x34, b'X').unwrap();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "the Series-1 TX offset must not transmit on a Series-2 map"
+        );
+        // Series-2 TXDATA @ 0x38 transmits.
+        uart.write(0x38, b'K').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
+        // RXDATAV (STATUS bit 7) sets while a byte is pending; RXDATA @ 0x24
+        // pops it and the flag clears.
+        uart.rx_buffer().lock().unwrap().push_back(b'Z');
+        assert_eq!(uart.read_u32(0x18).unwrap() & (1 << 7), 1 << 7);
+        assert_eq!(uart.read(0x24).unwrap(), b'Z');
+        assert_eq!(uart.read_u32(0x18).unwrap() & (1 << 7), 0);
     }
 
     /// Empty-flag families (PL011 FR.RXFE, Cadence SR.RxEMPTY, OpenTitan

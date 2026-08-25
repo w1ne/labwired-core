@@ -873,4 +873,174 @@ mod tests {
             "BFAR must still name the original data address"
         );
     }
+
+    // -------------------------------------------------------------------------
+    // GUARD 5 — an UNDEFINED INSTRUCTION faults instead of being skipped.
+    // -------------------------------------------------------------------------
+    //
+    // The model used to `record_undecoded(..)` and advance the PC past anything
+    // it could not decode. The run continued with every register stale and
+    // ended green. That is the UADD8/`strlen` incident the fidelity module was
+    // written for, and the response at the time was a counter, not a fault.
+    //
+    // Silicon raises UsageFault with `CFSR.UFSR.UNDEFINSTR` (ARMv7-M B1.5.14).
+    // RISC-V and Xtensa in this same engine already fault; ARM was the outlier,
+    // and ARM is most of the fleet.
+
+    /// `UDF #0` — the T1 permanently-undefined encoding (ARMv7-M A7.7.194). The
+    /// architecture guarantees this will never decode to anything, which is why
+    /// it is a better probe than an opcode we merely have not implemented yet:
+    /// implementing that opcode would silently turn this test green-by-absence.
+    const UDF_0: u16 = 0xDE00;
+
+    /// `SHCSR.USGFAULTENA`, bit 18 (B3.2.13).
+    const SHCSR_USGFAULTENA: u32 = 1 << 18;
+    /// `CFSR.UFSR.UNDEFINSTR` — UFSR bit 0, i.e. CFSR bit 16 (B3.2.15).
+    const CFSR_UNDEFINSTR: u32 = 1 << 16;
+    /// Where the fake `UsageFault_Handler` lives.
+    const USAGEFAULT_HANDLER: u32 = 0x4000;
+
+    /// A machine whose instruction at `CODE` is permanently undefined, with all
+    /// three fault handlers installed.
+    fn undefined_instruction_machine(faults_enabled: bool) -> Machine<CortexM> {
+        let mut bus = crate::bus::SystemBus::new();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+
+        bus.write_u32(0x0C, HARDFAULT_HANDLER | 1).unwrap(); // exception 3
+        bus.write_u32(0x18, USAGEFAULT_HANDLER | 1).unwrap(); // exception 6
+        bus.write_u16(HARDFAULT_HANDLER as u64, B_SELF).unwrap();
+        bus.write_u16(USAGEFAULT_HANDLER as u64, B_SELF).unwrap();
+
+        bus.write_u16(CODE as u64, UDF_0).unwrap();
+        bus.write_u16((CODE + 2) as u64, B_SELF).unwrap();
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.cpu.set_faults_enabled(faults_enabled);
+        machine.cpu.set_pc(CODE);
+        machine.cpu.set_sp(STACK_TOP);
+        machine
+    }
+
+    /// USGFAULTENA set: UsageFault (exception 6) is taken, the handler runs, and
+    /// the run continues — firmware that installs a handler gets to keep going.
+    #[test]
+    fn undefined_instruction_takes_usagefault_when_enabled() {
+        let mut machine = undefined_instruction_machine(true);
+        machine.bus.write_u32(SHCSR, SHCSR_USGFAULTENA).unwrap();
+        assert_eq!(
+            machine.bus.read_u32(SHCSR).unwrap() & SHCSR_USGFAULTENA,
+            SHCSR_USGFAULTENA,
+            "USGFAULTENA must read back set, or this cannot tell the enabled \\
+             case from the escalated one"
+        );
+
+        run_alive(&mut machine, 4);
+
+        assert_eq!(
+            machine.cpu.get_pc() & !1,
+            USAGEFAULT_HANDLER,
+            "the UsageFault handler must be running; pc = 0x{:08X}",
+            machine.cpu.get_pc()
+        );
+        assert_eq!(
+            machine.bus.read_u32(CFSR).unwrap(),
+            CFSR_UNDEFINSTR,
+            "CFSR must report UNDEFINSTR and nothing else"
+        );
+        assert_eq!(
+            machine.bus.read_u32(HFSR).unwrap() & HFSR_FORCED,
+            0,
+            "HFSR.FORCED is for escalation only; UsageFault was taken directly"
+        );
+    }
+
+    /// USGFAULTENA clear: the fault escalates to HardFault with `HFSR.FORCED`,
+    /// and `CFSR` still names UNDEFINSTR so the HardFault handler can tell what
+    /// it is standing in for (B1.5.14).
+    #[test]
+    fn undefined_instruction_escalates_to_hardfault_when_usagefault_disabled() {
+        let mut machine = undefined_instruction_machine(true);
+        assert_eq!(
+            machine.bus.read_u32(SHCSR).unwrap() & SHCSR_USGFAULTENA,
+            0,
+            "precondition: USGFAULTENA clear"
+        );
+
+        run_alive(&mut machine, 4);
+
+        assert_eq!(
+            machine.cpu.get_pc() & !1,
+            HARDFAULT_HANDLER,
+            "must escalate to HardFault; pc = 0x{:08X}",
+            machine.cpu.get_pc()
+        );
+        assert_eq!(
+            machine.bus.read_u32(HFSR).unwrap() & HFSR_FORCED,
+            HFSR_FORCED,
+            "HFSR.FORCED marks an escalated configurable fault"
+        );
+        assert_eq!(
+            machine.bus.read_u32(CFSR).unwrap() & CFSR_UNDEFINSTR,
+            CFSR_UNDEFINSTR,
+            "CFSR must still say which fault escalated"
+        );
+    }
+
+    /// The regression itself, stated as an assertion: the PC must NOT walk past
+    /// an instruction the model cannot decode.
+    ///
+    /// With escalation off (the `LABWIRED_CORTEXM_FAULTS=0` opt-out) it stops
+    /// the run with `DecodeError` rather than skipping — matching RISC-V. Either
+    /// outcome is acceptable; silently continuing is not, and that is what this
+    /// pins.
+    #[test]
+    fn an_undecodable_instruction_is_never_skipped() {
+        let mut machine = undefined_instruction_machine(false);
+        let before = machine.cpu.get_pc();
+
+        let step = machine.step();
+
+        assert!(
+            matches!(step, Err(SimulationError::DecodeError(_))),
+            "with faults off, an undefined instruction must abort the run like \\
+             RISC-V does. got {step:?}"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            before,
+            "the PC advanced past an instruction that was never executed — this \\
+             is exactly the defect: every register is now stale and the run will \\
+             end green"
+        );
+    }
+
+    /// The other direction. A change that faulted on everything would pass all
+    /// three tests above, so: ordinary decodable code must pend nothing and
+    /// leave every fault register at zero.
+    #[test]
+    fn decodable_code_raises_no_usagefault() {
+        let mut machine = undefined_instruction_machine(true);
+        machine.bus.write_u32(SHCSR, SHCSR_USGFAULTENA).unwrap();
+        // Replace the UDF with a plain `MOVS r0, #1`, then the self-loop.
+        machine.bus.write_u16(CODE as u64, 0x2001).unwrap();
+
+        run_alive(&mut machine, 8);
+
+        assert_eq!(
+            machine.bus.read_u32(CFSR).unwrap(),
+            0,
+            "valid code must leave CFSR untouched"
+        );
+        assert_eq!(machine.bus.read_u32(HFSR).unwrap(), 0, "and HFSR");
+        assert_ne!(
+            machine.cpu.get_pc() & !1,
+            USAGEFAULT_HANDLER,
+            "valid code must not end up in the UsageFault handler"
+        );
+        assert_ne!(
+            machine.cpu.get_pc() & !1,
+            HARDFAULT_HANDLER,
+            "nor HardFault"
+        );
+    }
 }

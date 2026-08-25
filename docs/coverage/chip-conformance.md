@@ -8,11 +8,12 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
 | nrf54l15 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
+| nrf54lm20a | **L1** | ✓ | 31 | — | — | nrf54lm20a_peripheral_estate::the_estate_answers_at_its_own_addresses |
 | esp32 | **L0** | ✓ | 32 | — | — | — |
 | esp32s3 | **L0** | ✓ | 14 | — | — | — |
 | esp32s3-zero | **L0** | ✓ | 17 | — | — | — |
-| stm32f401cdu6 | **L1** | ✓ | 45 | — | — | onboarding-stm32f401cdu6 |
-| stm32f411ceu6 | **L1** | ✓ | 46 | — | — | tier1::stm32f411 |
+| stm32f401cdu6 | **L0** | ✓ | 45 | — | — | — |
+| stm32f411ceu6 | **L0** | ✓ | 46 | — | — | — |
 | nrf52832 | **L1** | ✓ | 16 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52840 | **L1** | ✓ | 49 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 20 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
@@ -25,10 +26,11 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f407 | **L1** | ✓ | 33 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32g474re | **L0** | ✓ | 22 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
-| stm32h735 | **L1** | ✓ | 40 | — | — | tier1::stm32h735 |
+| stm32h735 | **L0** | ✓ | 40 | — | — | — |
 | stm32l073 | **L2** | ✓ | 42 | 55/55 (100%) | 5 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L0** | ✓ | 22 | — | — | — |
 | stm32wba52 | **L0** | ✓ | 21 | — | — | — |
 | mkw41z4 | **L1** | ✓ | 20 | — | — | firmware_survival::test_kw41z_smoke_survival |
+| efr32mg26 | **L1** | ✓ | 31 | 215/215 (100%) | 1 | — |
 | atmega328p | **L1** | ✓ | 3 | — | — | avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks |

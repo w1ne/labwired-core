@@ -1,0 +1,445 @@
+# Install canary — runs the instructions we publish, on the platforms we claim.
+#
+# This exists because for two weeks in August 2026 the documented one-liner
+# installed nothing on any platform, and the Linux archives could not start on
+# Debian 12 or Ubuntu 22.04 LTS, while every workflow in this repo stayed green.
+# Nothing was wrong with the code under test — the tests simply never ran what a
+# user runs, on a machine like a user's.
+#
+# Two rules keep it honest:
+#   1. Fetch the scripts LIVE from labwired.com. The copy in this repo is not
+#      what users execute; the landing site serves the file, and the two have
+#      drifted before.
+#   2. Assert on output, not exit codes alone. An installer that prints
+#      "Installation complete!" and exits 0 is exactly how the last outage hid.
+name: Install canary
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: install-canary
+  cancel-in-progress: false
+
+env:
+  # Where a failing leg reports itself, so a broken install is data and not a
+  # support message. Best effort: a canary leg never fails because of telemetry.
+  LABWIRED_TELEMETRY_URL: https://api.labwired.com/v1/telemetry/failure
+
+jobs:
+  # ── The CLI, installed the way the README says ───────────────────────────────
+  cli:
+    name: CLI on ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-14,         label: macOS 14 arm64 }
+          - { runner: macos-15-intel,   label: macOS 15 x86_64 }
+          - { runner: ubuntu-latest,    label: Ubuntu 24.04 x86_64 }
+          - { runner: ubuntu-22.04,     label: Ubuntu 22.04 x86_64 }
+          - { runner: ubuntu-24.04-arm, label: Ubuntu 24.04 arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install with the documented one-liner
+        run: |
+          set -euo pipefail
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: The binary starts, and says which version it is
+        run: |
+          set -euo pipefail
+          out="$(labwired --version)"
+          echo "$out"
+          echo "$out" | grep -qE '^labwired-cli [0-9]+\.[0-9]+\.[0-9]+$'
+          labwired-dap --version
+
+      - name: The README quickstart prints what the README says it prints
+        run: |
+          set -euo pipefail
+          labwired test --script examples/nrf54l15-dk/io-smoke.yaml 2>&1 | tee out.txt
+          for line in \
+            'nRF54L15 boot OK' \
+            'core=cortex-m33 rram=1524K ram=256K' \
+            'uarte20@0x500C6000 gpio2@0x50050400' \
+            'regs from MDK/SVD, not nRF52'
+          do
+            grep -qF "$line" out.txt || { echo "::error::quickstart no longer prints: $line"; exit 1; }
+          done
+
+      - name: Heartbeat
+        if: success()
+        continue-on-error: true
+        run: |
+          curl -fsS -m 5 -X POST "$LABWIRED_TELEMETRY_URL" -H 'content-type: application/json' \
+            -d "{\"surface\":\"canary\",\"event\":\"canary_ok\",\"stage\":\"cli\",\"platform\":\"${{ matrix.runner }}\",\"channel\":\"install.sh\"}" || true
+
+  # ── Windows: the archive we ship, run the way the README says to ────────────
+  #
+  # x86_64-pc-windows-msvc has been built and published since v0.22.0 and had
+  # never been EXECUTED anywhere — built, uploaded, downloadable, unproven.
+  # That is the same shape as the Linux archives that shipped needing a glibc
+  # no target distribution had: a green build is not evidence that a binary
+  # runs. The steps below are the README's Windows section, verbatim.
+  cli-windows:
+    name: CLI on Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the way the README says
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = (Invoke-RestMethod 'https://api.github.com/repos/w1ne/labwired-core/releases/latest').tag_name
+          Write-Host "latest release: $tag"
+          $asset = "labwired-$tag-windows-x86_64.tar.gz"
+          Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$tag/$asset" -OutFile labwired.tar.gz
+          New-Item -ItemType Directory -Force -Path "$env:LOCALAPPDATA\LabWired" | Out-Null
+          tar -xzf labwired.tar.gz -C "$env:LOCALAPPDATA\LabWired"
+          "$env:LOCALAPPDATA\LabWired" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: The binary starts, and so does the debug adapter
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = labwired --version
+          Write-Host $out
+          if ($out -notmatch '^labwired-cli \d+\.\d+\.\d+$') { throw "unexpected --version output: $out" }
+          labwired-dap --version
+
+      - name: The README quickstart prints what the README says it prints
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = labwired test --script examples/nrf54l15-dk/io-smoke.yaml 2>&1 | Out-String
+          Write-Host $out
+          foreach ($line in @(
+            'nRF54L15 boot OK',
+            'core=cortex-m33 rram=1524K ram=256K',
+            'uarte20@0x500C6000 gpio2@0x50050400',
+            'regs from MDK/SVD, not nRF52'
+          )) {
+            if (-not $out.Contains($line)) { throw "quickstart no longer prints: $line" }
+          }
+
+      # The change v0.22.1 exists for, on the platform least likely to have
+      # been checked: a fault must be visible in the exit status here too.
+      - name: A run that faults exits non-zero
+        shell: pwsh
+        run: |
+          labwired run --chip configs/chips/nrf52832.yaml --firmware tests/fixtures/tier1/stm32f407.elf --max-steps 200000 | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw "a faulting run exited 0 on Windows" }
+          Write-Host "faulting run exited $LASTEXITCODE"
+          labwired run --chip configs/chips/nrf52832.yaml --firmware tests/fixtures/tier1/nrf52832.elf --max-steps 3000000 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "a clean run exited $LASTEXITCODE on Windows" }
+
+      # Without this, Windows is watched only while the workflow runs. The
+      # daily watchdog alerts on a platform going SILENT, and a platform that
+      # never spoke cannot go silent — so a Windows leg that stopped being
+      # scheduled would look exactly like a Windows leg that is fine.
+      - name: Heartbeat
+        if: success()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $body = '{"surface":"canary","event":"canary_ok","stage":"cli","platform":"windows-latest","channel":"install.sh"}'
+          try {
+            Invoke-RestMethod -Method Post -Uri $env:LABWIRED_TELEMETRY_URL -ContentType 'application/json' -Body $body -TimeoutSec 5 | Out-Null
+          } catch {
+            Write-Host "heartbeat not delivered: $_"
+          }
+
+  # ── The distributions people actually run, not the one CI runs ───────────────
+  cli-old-distros:
+    name: CLI on ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'debian:12-slim', arch: x86_64,  runner: ubuntu-latest }
+          - { image: 'ubuntu:22.04',   arch: x86_64,  runner: ubuntu-latest }
+          - { image: 'almalinux:9',    arch: x86_64,  runner: ubuntu-latest }
+          - { image: 'debian:12-slim', arch: aarch64, runner: ubuntu-24.04-arm }
+          - { image: 'ubuntu:22.04',   arch: aarch64, runner: ubuntu-24.04-arm }
+    steps:
+      # AlmaLinux ships `curl-minimal`, which PROVIDES curl and conflicts with
+      # the full package, so asking for `curl` there fails the job before it
+      # tests anything. Install only what is actually missing.
+      - name: Bare-image prerequisites
+        run: |
+          if command -v curl >/dev/null 2>&1; then
+            echo "curl already present: $(curl --version | head -1)"
+          elif command -v apt-get >/dev/null; then
+            apt-get -qq update && apt-get -qq install -y curl ca-certificates >/dev/null
+          else
+            (dnf install -y -q --allowerasing curl ca-certificates \
+              || yum install -y -q --allowerasing curl ca-certificates) >/dev/null
+          fi
+
+      - name: Install and start
+        run: |
+          set -eu
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          "$HOME/.local/bin/labwired" --version
+
+  # ── Every chip we document, run with the CLI a user can install ─────────────
+  chips:
+    name: Documented chips on ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, label: Ubuntu 24.04 x86_64 }
+          - { runner: macos-14,      label: macOS 14 arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install with the documented one-liner
+        run: |
+          set -euo pipefail
+          curl -fsSL https://labwired.com/install.sh | LABWIRED_NO_MODIFY_PATH=1 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Firmware comes from the pinned demo release, so this is the experience
+      # of someone who installed the CLI and cloned the repo: no Rust, no
+      # cross toolchain, no build. Judged on what the firmware printed.
+      - name: Run every documented chip
+        run: bash scripts/ci/docs-runnable-chips.sh "$HOME/.local/bin/labwired"
+
+      - name: Every documented command is one the CLI accepts
+        run: python3 scripts/ci/docs-commands-gate.py "$HOME/.local/bin/labwired"
+
+      - name: Heartbeat
+        if: success()
+        continue-on-error: true
+        run: |
+          curl -fsS -m 5 -X POST "$LABWIRED_TELEMETRY_URL" -H 'content-type: application/json' \
+            -d "{\"surface\":\"canary\",\"event\":\"canary_ok\",\"stage\":\"run\",\"platform\":\"${{ matrix.runner }}\",\"channel\":\"install.sh\"}" || true
+
+  # ── The agent one-liner, in every shell the docs' `| sh` can land in ─────────
+  mcp-oneliner:
+    name: mcp.sh under ${{ matrix.shell }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [sh, bash, zsh, busybox]
+    steps:
+      - name: Install the shell under test
+        run: sudo apt-get -qq update && sudo apt-get -qq install -y zsh busybox dash >/dev/null
+
+      - name: Pretend every supported editor is installed
+        run: mkdir -p ~/.cursor ~/.config/Code/User ~/.config/opencode
+
+      # `/bin/sh` is dash on Debian and Ubuntu. The published command pipes into
+      # `sh`, so a bash-only test in the script does not fail loudly — it
+      # evaluates false, and the editor is skipped without a word. That is how
+      # Cursor, VS Code and OpenCode silently went unregistered on every
+      # Debian-family machine.
+      - name: Run the published command, then check what it actually registered
+        run: |
+          set -euo pipefail
+          curl -fsSL https://labwired.com/mcp.sh -o mcp.sh
+          case "${{ matrix.shell }}" in
+            busybox) timeout 120 busybox sh mcp.sh ;;
+            *)       timeout 120 ${{ matrix.shell }} mcp.sh ;;
+          esac
+          for f in ~/.cursor/mcp.json ~/.config/Code/User/mcp.json ~/.config/opencode/opencode.json; do
+            test -s "$f" || { echo "::error::${{ matrix.shell }}: $f was never written"; exit 1; }
+            grep -q 'api.labwired.com/mcp' "$f" || { echo "::error::$f has no LabWired entry"; exit 1; }
+          done
+
+      # A one-liner that waits on a browser OAuth flow inside a pipe never
+      # returns, and every agent after it in the script goes unregistered.
+      - name: It returns on its own
+        run: |
+          start=$(date +%s)
+          timeout 120 sh mcp.sh >/dev/null 2>&1 || true
+          echo "took $(( $(date +%s) - start ))s"
+          test $(( $(date +%s) - start )) -lt 90
+
+  # ── Windows: both PowerShells, and the user's other MCP servers survive ──────
+  mcp-windows:
+    name: mcp.ps1 on ${{ matrix.ps }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ps: [powershell, pwsh]
+    steps:
+      # `ConvertFrom-Json -AsHashtable` needs PowerShell 6+. On the Windows
+      # PowerShell 5.1 that ships with Windows, the merge throws, the catch
+      # swallows it, and the file is rewritten with only our entry — taking the
+      # user's other MCP servers with it. So the canary plants one first.
+      - name: Plant an existing MCP server in the Cursor config
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.cursor" | Out-Null
+          '{"mcpServers":{"someone-elses":{"url":"https://example.invalid/mcp"}}}' |
+            Set-Content "$env:USERPROFILE\.cursor\mcp.json" -Encoding utf8
+
+      # `shell:` cannot take an expression, so the two shells are two steps.
+      # Windows PowerShell 5.1 is the one that ships with Windows and the one
+      # the -AsHashtable merge used to destroy configs on.
+      - name: Run the published Windows one-liner (Windows PowerShell 5.1)
+        if: matrix.ps == 'powershell'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          irm https://labwired.com/mcp.ps1 | iex
+
+      - name: Run the published Windows one-liner (PowerShell 7)
+        if: matrix.ps == 'pwsh'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          irm https://labwired.com/mcp.ps1 | iex
+
+      - name: LabWired is registered and the other server is still there
+        shell: pwsh
+        run: |
+          $raw = Get-Content "$env:USERPROFILE\.cursor\mcp.json" -Raw
+          Write-Host $raw
+          if ($raw -notmatch 'api\.labwired\.com/mcp') { throw 'LabWired was not registered' }
+          if ($raw -notmatch 'someone-elses')          { throw 'the pre-existing MCP server was destroyed' }
+
+  # ── The npm and container channels ──────────────────────────────────────────
+  packages:
+    name: npm and container channels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: npx serves a real MCP handshake
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"canary","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' > rpc.jsonl
+          timeout 180 npx -y @labwired/mcp < rpc.jsonl > out.jsonl
+          grep -q '"serverInfo"' out.jsonl
+          # An empty tools list must not read as success.
+          grep -q 'labwired_search' out.jsonl
+
+      - name: A global install puts a working binary on PATH
+        run: |
+          set -euo pipefail
+          npm install -g @labwired/mcp
+          command -v labwired-mcp
+
+      - name: The runner image is pullable on both architectures
+        run: |
+          set -euo pipefail
+          for p in linux/amd64 linux/arm64; do
+            docker manifest inspect ghcr.io/w1ne/labwired:latest \
+              | grep -q "$(echo "$p" | cut -d/ -f2)" \
+              || { echo "::error::no $p manifest — docker pull fails outright on that architecture"; exit 1; }
+          done
+          docker run --rm --platform linux/amd64 ghcr.io/w1ne/labwired:latest --version
+
+  # ── Two claims that are not commands, but are still promises ────────────────
+  promises:
+    name: Release freshness and extension availability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # release-freshness.sh counts commits since the last tag
+
+      # A release that stops happening is invisible to every other check in
+      # this repo, because they all run against the working tree, which is by
+      # definition current. On 2026-08-14 main was 984 commits and 18 days
+      # ahead of the released CLI, and three separate "product defects" turned
+      # out to be that gap.
+      - name: The shipped CLI is not far behind this tree
+        run: bash scripts/ci/release-freshness.sh
+
+      # The endpoint that receives our failure beacons lives in another
+      # repository. A field renamed there, or a value invented here, breaks
+      # reporting in the quietest way available — the endpoint answers 400 to a
+      # caller that ignores the response. Checked on a schedule rather than per
+      # PR, because it is a contract between two repos and a PR here cannot
+      # break or fix the other side.
+      - name: install.sh and the CLI speak the schema the endpoint serves
+        run: bash scripts/ci/telemetry-schema-conformance.sh
+
+      # The extension is a product with a distribution channel, and until it is
+      # on a registry the only way to install it is downloading a .vsix by
+      # hand. That is worth a red light rather than a note in a backlog.
+      - name: The extension is installable from a registry
+        run: |
+          set -uo pipefail
+          fail=0
+          mk=$(curl -s -o /dev/null -w '%{http_code}' -L \
+            'https://marketplace.visualstudio.com/items?itemName=w1ne.labwired-vscode')
+          ovsx=$(curl -s -o /dev/null -w '%{http_code}' -L \
+            'https://open-vsx.org/api/w1ne/labwired-vscode')
+          echo "VS Code Marketplace: $mk"
+          echo "Open VSX:            $ovsx"
+          [ "$mk" = "200" ] || { echo "::error::Not on the VS Code Marketplace. Create the w1ne publisher and add VSCE_PAT to labwired-vscode."; fail=1; }
+          [ "$ovsx" = "200" ] || { echo "::error::Not on Open VSX — VSCodium, Cursor and Windsurf users cannot install it. Create the namespace and add OVSX_PAT."; fail=1; }
+          exit "$fail"
+
+  # ── One issue, kept current, when any of the above goes red ─────────────────
+  report:
+    name: Raise the alarm
+    needs: [cli, cli-old-distros, chips, mcp-oneliner, mcp-windows, packages, promises]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      # ⚠️ `-R` ON EVERY CALL, AND NO `actions/checkout`.
+      #
+      # This job never checked out the repo — it does not need the source to
+      # file an issue — so `gh` had nothing to infer the repository from and
+      # every call died with:
+      #
+      #   failed to run git: fatal: not a git repository
+      #
+      # So the canary could not raise the alarm. Between 2026-08-14 and
+      # 2026-08-20 it failed 28 times out of 31 runs and filed NOTHING; a
+      # search for its own issue title returns empty, so not one of those 28
+      # was ever seen. A canary that cannot alarm is not a canary.
+      #
+      # `-R "$GITHUB_REPOSITORY"` rather than adding a checkout: the fix should
+      # remove the dependency, not satisfy it by cloning a repo this job has no
+      # use for.
+      - name: Open or update the canary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title='install-canary: a published install path is broken'
+          body="A leg of the install canary failed. What a user runs right now does not work.
+
+          Run: $RUN
+
+          Check the failing leg before anything else — this workflow only runs commands we publish."
+          # No `|| true` on the list: it masked the git failure above as "no
+          # existing issue", so every run took the create branch and every
+          # create died too. A lookup that cannot run must stop the step, not
+          # quietly answer "none".
+          existing="$(gh issue list -R "$GITHUB_REPOSITORY" --state open \
+            --search "$title in:title" --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" -R "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body" --label bug
+          fi

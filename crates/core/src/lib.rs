@@ -315,39 +315,54 @@ pub trait Cpu: Send {
     fn snapshot(&self) -> snapshot::CpuSnapshot;
     fn apply_snapshot(&mut self, snapshot: &snapshot::CpuSnapshot);
 
-    /// Whether this CPU can produce a runtime snapshot. FALSE by default:
-    /// only the arches that override `runtime_snapshot` say yes.
+    /// Full mid-flight CPU state for binary runtime snapshots: the arch tag
+    /// plus an opaque blob the matching CPU type knows how to parse, or
+    /// `None` when this core models no runtime snapshot at all.
     ///
-    /// Ask this BEFORE calling `runtime_snapshot`. It exists because the old
-    /// default was `unimplemented!()`, and in wasm a Rust panic lowers to an
-    /// `unreachable` TRAP. A trap runs no destructors, so wasm-bindgen's
-    /// borrow guard leaks and the WasmSimulator stays borrowed forever —
-    /// every later call, `step_batch` included, then fails with "recursive
-    /// use of an object". One snapshot attempt on an unsupported CPU bricked
-    /// the whole engine, which is exactly how every Cortex-M lab died a few
-    /// seconds into a run.
-    fn supports_runtime_snapshot(&self) -> bool {
-        false
+    /// `None` is the ONLY way to say "I cannot" — the return type carries no
+    /// arch tag to fabricate. That is the point. This method used to return
+    /// `(CpuKind::ArmCortexM, Vec::new())` for every core without an
+    /// implementation, so an AVR reported itself as a Cortex-M and a Cortex-M
+    /// reported a well-formed snapshot with an EMPTY body. Nothing downstream
+    /// could tell that apart from a real capture: `snapshot capture` wrote the
+    /// file, the browser handed the bytes to JS, and the resume restored no
+    /// registers while every layer reported success. A simulator sold as a
+    /// hardware oracle may decline to answer; it may not invent one.
+    ///
+    /// The default is deliberately a value and not a panic: in wasm a Rust
+    /// panic lowers to an `unreachable` TRAP, which runs no destructors, so
+    /// wasm-bindgen's borrow guard leaks and the `WasmSimulator` stays
+    /// borrowed forever — every later call, `step_batch` included, then fails
+    /// with "recursive use of an object". One snapshot attempt on an
+    /// unsupported CPU bricked the whole engine, which is how Cortex-M labs
+    /// died seconds into a run. `None` returns normally and leaves the module
+    /// healthy.
+    ///
+    /// A core that overrides this MUST also override
+    /// [`Self::apply_runtime_snapshot`] — a capture nothing can restore is
+    /// the same lie in the other direction. `cpu_runtime_snapshot_honesty`
+    /// fails the build if the two halves ever come apart.
+    fn runtime_snapshot(&self) -> Option<(runtime_snapshot::CpuKind, Vec<u8>)> {
+        None
     }
 
-    /// Full mid-flight CPU state for binary runtime snapshots. Returns the
-    /// arch tag + an opaque blob the matching CPU type knows how to parse.
+    /// Apply a previously-taken runtime snapshot.
     ///
-    /// Overridden by the arches that support it; the default answers empty
-    /// rather than panicking, so a stray call can never trap the module. Gate
-    /// real callers on `supports_runtime_snapshot()`.
-    fn runtime_snapshot(&self) -> (runtime_snapshot::CpuKind, Vec<u8>) {
-        (runtime_snapshot::CpuKind::ArmCortexM, Vec::new())
-    }
-
-    /// Apply a previously-taken runtime snapshot. Default no-op so
-    /// stub/test CPUs don't need to override.
+    /// The default REFUSES. It used to be `Ok(())` with the bytes dropped on
+    /// the floor, which made "restored" and "silently ignored" the same
+    /// observable outcome: `WasmSimulator::apply_runtime_snapshot` returned
+    /// success to JS after leaving the CPU cold and the peripherals warm — a
+    /// machine that never existed on silicon, reported as a good resume. A
+    /// core that models no restore says so, and the caller decides.
     fn apply_runtime_snapshot(
         &mut self,
-        _kind: runtime_snapshot::CpuKind,
+        kind: runtime_snapshot::CpuKind,
         _bytes: &[u8],
     ) -> SimResult<()> {
-        Ok(())
+        Err(SimulationError::NotImplemented(format!(
+            "apply_runtime_snapshot: this CPU models no runtime snapshot, so a \
+             {kind:?} blob cannot be restored onto it"
+        )))
     }
     fn get_register_names(&self) -> Vec<String>;
     fn index_of_register(&self, name: &str) -> Option<u8>;
@@ -471,10 +486,7 @@ impl Cpu for Box<dyn Cpu> {
     fn apply_snapshot(&mut self, s: &snapshot::CpuSnapshot) {
         (**self).apply_snapshot(s)
     }
-    fn supports_runtime_snapshot(&self) -> bool {
-        (**self).supports_runtime_snapshot()
-    }
-    fn runtime_snapshot(&self) -> (runtime_snapshot::CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(runtime_snapshot::CpuKind, Vec<u8>)> {
         (**self).runtime_snapshot()
     }
     fn apply_runtime_snapshot(
@@ -567,13 +579,6 @@ pub trait Peripheral: std::fmt::Debug + Send {
         self.write(offset + 3, ((value >> 24) & 0xFF) as u8)?;
         Ok(())
     }
-    /// Plan 2: word-granular write path. The bus calls this after performing
-    /// the four byte writes, giving peripherals a single coherent 32-bit
-    /// view of the write. Default: no-op. Peripherals with 32-bit word
-    /// triggers (e.g. declarative configs with WriteWord triggers) override.
-    fn write_word_32(&mut self, _offset: u64, _value: u32) -> SimResult<()> {
-        Ok(())
-    }
     /// Side-effect-free value probe used for debug/observer bookkeeping.
     /// Implementations should return `None` when such probing is not supported.
     fn peek(&self, _offset: u64) -> Option<u8> {
@@ -629,10 +634,80 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// True if this peripheral CONSUMES GPIO edges — i.e. its
+    /// [`Self::observe_gpio_change`] does real work.
+    ///
+    /// ⚠️ This is what keeps the per-cycle GPIO edge-detection pass alive on a
+    /// walk-free bus. That pass lives inside the phase-1 body which
+    /// [`SystemBus::per_cycle_tick_is_trivial`] skips wholesale, and its old
+    /// guard was "is there a peripheral NAMED `gpio0`/`gpio1`" — a Nordic
+    /// spelling. A Silicon Labs part names its ports `gpioa`..`gpiod`, so the
+    /// guard answered "nothing to scan" and the fast path would have deleted
+    /// the only path by which an EXTI line ever sees a pad move: a button press
+    /// would set no flag, run no ISR, and nothing anywhere would say so.
+    ///
+    /// Answering the question directly instead of by port name is what makes
+    /// the guard mean what it says. It is deliberately NOT derived from having
+    /// GPIO ports: an STM32 bus has four of them and no edge consumer at all
+    /// (its EXTI is driven by MMIO, not by the pad snapshot), and such a bus
+    /// must keep the fast path.
+    ///
+    /// Default `false`: a model that does not override `observe_gpio_change`
+    /// cannot consume an edge.
+    fn observes_gpio_edges(&self) -> bool {
+        false
+    }
+
+    /// Clock-controller capability: resolve a symbolic clock-enable register
+    /// name from a peripheral's `clock:` declaration (`"apb1enr"`, `"clken2"`,
+    /// …) to its byte offset inside THIS peripheral.
+    ///
+    /// Only a chip's clock controller implements it. The alternative — the bus
+    /// downcasting to one concrete model — meant clock gating existed for
+    /// exactly the family that model belonged to, and a second vendor's clock
+    /// unit could not gate anything no matter what its yaml declared.
+    /// `None` for every other peripheral, and for a name this controller does
+    /// not have (which `resolve_clock_gates` turns into a hard config error
+    /// rather than a silently ungated peripheral).
+    fn clock_gate_reg_offset(&self, _name: &str) -> Option<u64> {
+        None
+    }
+
     /// GPIO capability: read the firmware-visible input level for `pin`.
     /// Non-GPIO peripherals return `None`.
     fn read_gpio_input(&self, _pin: u8) -> Option<bool> {
         None
+    }
+
+    /// GPIO capability: the firmware-visible input levels of the WHOLE port as
+    /// one word, bit `n` being pin `n`. Zero for a non-GPIO peripheral.
+    ///
+    /// The per-tick edge-detection pass in [`SystemBus::tick_peripherals_fully`]
+    /// wants the whole port, not one pin, and it runs on every boundary tick.
+    /// Assembling the word from 32 [`Peripheral::read_gpio_input`] calls costs
+    /// 32 evaluations of the port's input register per port per tick — and on
+    /// these models that register is COMPUTED, not stored: `GpioPort` resolves
+    /// it through `effective_idr`, which folds the output latch, the open-drain
+    /// mask and the pad levels together on every call. Measured under callgrind
+    /// on the perf-spin fixture, that loop was 60% of all instructions the
+    /// simulator retired on efr32mg26 (4 ports) and ~33% on nrf52840 (2 ports).
+    ///
+    /// The default builds the word exactly the way that pass built it before
+    /// this method existed, so a model that does not override it is bit-for-bit
+    /// unchanged: pins are read low to high, and the first `None` ends the port
+    /// (a port narrower than 32 pins leaves the rest of the word clear).
+    /// A port that keeps its inputs in one register overrides this and answers
+    /// in a single read.
+    fn read_gpio_input_word(&self) -> u32 {
+        let mut word = 0u32;
+        for pin in 0..32u8 {
+            match self.read_gpio_input(pin) {
+                Some(true) => word |= 1 << pin,
+                Some(false) => {}
+                None => break,
+            }
+        }
+        word
     }
 
     /// GPIO capability: read the firmware-visible output latch for `pin`.
@@ -1099,6 +1174,55 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
 
+    /// Tell the peripheral the clock its system's core runs at, in Hz — the
+    /// effective `SystemBus::cpu_hz`, i.e. the manifest override if there is
+    /// one and otherwise `ChipDescriptor::cpu_hz`. Called from the same attach
+    /// choke points as [`Peripheral::attach_cycle_clock`].
+    ///
+    /// For a model whose behaviour is specified in WALL time but driven in
+    /// CPU cycles — a BLE controller told to advertise every 100 ms, say —
+    /// this is the conversion factor. Taking it here rather than from a
+    /// per-peripheral `config:` key keeps
+    /// [`labwired_config::ChipDescriptor::cpu_hz`] the single source of the
+    /// core clock: a yaml that restated the frequency next to the peripheral
+    /// would be a second place to change it, and the two would diverge.
+    ///
+    /// Default no-op. A model that never receives it must have a usable
+    /// default, since hand-built buses bypass the choke points.
+    fn attach_cpu_hz(&mut self, _hz: u64) {}
+
+    /// Move this peripheral onto a lab's own BLE air, replacing whatever air it
+    /// was minted with. Called by [`crate::bus::SystemBus::attach_lab_air`] for
+    /// every peripheral in a multi-node world.
+    ///
+    /// A BLE controller built by the ordinary factory joins the process-global
+    /// air, because the factory has no lab identity to hand it. That is right
+    /// for a single lab and wrong for two: without this, two labs in one
+    /// process — two worker threads, or two tests — hear each other's
+    /// advertisements as peer traffic.
+    ///
+    /// An implementation must also re-join the cursor at the new air's current
+    /// sequence. A radio has no history buffer, and an air outlives a
+    /// simulation restart, so a controller that kept a stale cursor would
+    /// replay the previous run's backlog as live packets.
+    ///
+    /// Default no-op: a peripheral with no radio has no air to move.
+    fn attach_ble_air(&mut self, _air: crate::peripherals::ble_air::BleAirBus) {}
+
+    /// Drive the analog level, in millivolts, on one of this peripheral's ADC
+    /// input channels. Returns whether it took it.
+    ///
+    /// The seam a `system.yaml` analog source (a potentiometer, an NTC) uses
+    /// to move what firmware converts. `false` for a peripheral that is not an
+    /// ADC, and for a channel this one does not have.
+    ///
+    /// New ADC models implement this; the five that predate it are still found
+    /// by a downcast chain in `bus::sim_inputs`, which this is the replacement
+    /// for. See the note there.
+    fn set_adc_channel_input(&mut self, _channel: u8, _millivolts: u16) -> bool {
+        false
+    }
+
     /// Hand the peripheral the machine's ONE universal bus trace, plus the name
     /// it should stamp events with. Called from the same registration choke
     /// points as [`Peripheral::attach_cycle_clock`] and
@@ -1249,6 +1373,24 @@ pub trait Bus {
 
     /// Plan 3: clear the pending bit for cpu IRQ `slot` on `core_id`.
     fn clear_cpu_irq_pending(&mut self, _core_id: u8, _slot: u8) {}
+
+    /// Re-derive the routed CPU-interrupt levels after an interrupt dispatch
+    /// cleared the slots it took, once per dispatch.
+    ///
+    /// `clear_cpu_irq_pending` clears a ROUTED bit, not the peripheral source
+    /// behind it. The source is level-sensitive and generally still asserting —
+    /// the firmware ISR de-asserts it later with an INT_CLR write — so the
+    /// routed bit has to come straight back. Until the walk-free ESP32-S3 path
+    /// landed that happened implicitly: the per-cycle aggregation rebuilt the
+    /// whole routed bitmap from the live source levels on the very next tick.
+    /// A bus that no longer aggregates per cycle must re-derive HERE instead,
+    /// or a level the guest can read back (`RSR.INTERRUPT` on Xtensa is
+    /// `pending_cpu_irqs` OR-ed in) reads zero for the whole ISR.
+    ///
+    /// Called once after the dispatch clear loop, not per slot. Default no-op:
+    /// on an NVIC bus the pending bit is owned by the NVIC, and on a bus that
+    /// still aggregates per cycle the next tick does this anyway.
+    fn resettle_cpu_irq_levels(&mut self) {}
 
     /// ESP32-C3 (RISC-V) external-interrupt delivery: the level-sensitive
     /// bitmask of CPU interrupt lines (1..31) currently asserted, after the bus
@@ -1502,6 +1644,16 @@ pub struct Machine<C: Cpu> {
     /// `release_secondary_cpu_if_requested` so a core is never released
     /// without a stack.
     pub secondary_boot_sp: Option<u32>,
+    /// The secondary CPU has no ROM to boot: release it only on an explicit
+    /// entry point (`APPCPU_BOOT_ADDR`), never on the reset-release edge.
+    ///
+    /// A faithful ROM boot constructs core 1 sitting on its reset vector and
+    /// lets `SYSTEM_CORE_1_CONTROL_0.RESETING` 1->0 start it, exactly like
+    /// silicon. The fast-boot frontends do not: they replace the mask ROM with
+    /// a thunk harness, so that same vector holds no startup code and a core
+    /// released there executes the harness and collapses to PC 0. Those
+    /// frontends set this, and hand core 1 over at `call_start_cpu1` instead.
+    pub secondary_awaits_boot_addr: bool,
 
     // Debug state
     pub breakpoints: std::collections::HashSet<u32>,
@@ -2090,6 +2242,7 @@ impl<C: Cpu> Machine<C> {
             bus,
             observers: Vec::new(),
             secondary_boot_sp: None,
+            secondary_awaits_boot_addr: false,
             breakpoints: HashSet::new(),
             last_breakpoint: None,
             total_cycles: 0,
@@ -2168,6 +2321,38 @@ impl<C: Cpu> Machine<C> {
     pub fn with_secondary_cpu(mut self, cpu1: C) -> Self {
         self.cpu_secondary = Some(cpu1);
         self
+    }
+
+    /// The largest `peripheral_tick_interval` THIS MACHINE can run at without
+    /// losing fidelity. Wraps [`crate::bus::SystemBus::max_safe_tick_interval`]
+    /// and adds the one clause the bus cannot see: **a machine with a second
+    /// CPU must stay at 1.**
+    ///
+    /// The bus predicate answers "is every peripheral scheduler-driven", which
+    /// bounds *peripheral* observation error to one interval. On a single-core
+    /// machine that is the whole story. On an SMP machine it is not: the cores
+    /// synchronise through interrupts, and an interrupt-delivery skew of up to
+    /// one interval is not an observation error, it is a *semantic* one. ESP-IDF
+    /// SMP FreeRTOS implements `portYIELD_WITHIN_API()` as
+    /// `esp_crosscore_int_send_yield(xPortGetCoreID())` — ring your own core's
+    /// doorbell inside a critical section and be preempted the instant
+    /// `portEXIT_CRITICAL` re-enables interrupts. Land that late and the calling
+    /// task falls out of `xQueueReceive`'s `for(;;)` still runnable, blocks a
+    /// second time on an event list it is already on, and `vListInsert` links
+    /// the item to itself: the next insert walks the self-loop forever holding
+    /// the queue spinlock while the other core spins in `spinlock_acquire`.
+    /// Measured on the ESP32-S3 dual-core Doom lab — deadlock at interval 512,
+    /// `frame 1` at interval 1, same firmware, same engine, one variable. The
+    /// unicore build of the same firmware runs fine at 512, which is exactly the
+    /// line this clause draws.
+    ///
+    /// Frontends that batch (the browser's `recommended_tick_interval`) must ask
+    /// the MACHINE, not the bus.
+    pub fn max_safe_tick_interval(&self) -> u32 {
+        if self.cpu_secondary.is_some() {
+            return 1;
+        }
+        self.bus.max_safe_tick_interval()
     }
 
     pub fn reset_step_profile(&mut self) {
@@ -2329,13 +2514,21 @@ impl<C: Cpu> Machine<C> {
     /// on a freshly-constructed `Machine` with the same firmware loaded
     /// and the same bus topology.
     ///
+    /// `None` when this machine's CPU models no runtime snapshot
+    /// ([`Cpu::runtime_snapshot`]). A machine-level snapshot whose CPU half
+    /// is missing is not a cheaper snapshot, it is a resume that silently
+    /// starts from a cold core with warm RAM — so there is no such value to
+    /// return. Callers that used to gate on a separate capability query now
+    /// simply handle the `None`, which cannot disagree with what a capture
+    /// would actually contain.
+    ///
     /// Distinct from [`Self::snapshot`] (which produces a JSON value for
     /// the determinism gates) — this one is binary, captures everything
     /// needed for resume (full SR file, shadow stacks, RAM regions, etc.)
     /// and is what the playground uses to ship pre-warmed boot snapshots
     /// alongside firmware ELFs.
-    pub fn take_runtime_snapshot(&self) -> runtime_snapshot::MachineRuntimeSnapshot {
-        let (cpu_kind, cpu_data) = self.cpu.runtime_snapshot();
+    pub fn take_runtime_snapshot(&self) -> Option<runtime_snapshot::MachineRuntimeSnapshot> {
+        let (cpu_kind, cpu_data) = self.cpu.runtime_snapshot()?;
         let peripherals: Vec<(String, Vec<u8>)> = self
             .bus
             .peripherals
@@ -2366,7 +2559,7 @@ impl<C: Cpu> Machine<C> {
             }
             snap.memories = memories;
         }
-        snap
+        Some(snap)
     }
 
     /// Restore from a previously-taken runtime snapshot. Bus topology
@@ -2375,6 +2568,12 @@ impl<C: Cpu> Machine<C> {
     /// peripherals named in the snapshot but missing on the bus return
     /// `MissingPeripheral` so the caller can fail loudly instead of
     /// silently dropping state.
+    ///
+    /// The CPU half is restored FIRST and its error is propagated, so a core
+    /// that models no restore ([`Cpu::apply_runtime_snapshot`]'s default)
+    /// fails the whole call before a single peripheral is touched. That
+    /// ordering is deliberate: a partial restore that reported `Ok(())` gave
+    /// back a machine with warm peripherals and a cold CPU.
     pub fn apply_runtime_snapshot(
         &mut self,
         snap: &runtime_snapshot::MachineRuntimeSnapshot,
@@ -2587,7 +2786,7 @@ impl<C: Cpu> Machine<C> {
                 FlashOp::SwapAndReset => {
                     // Swap the two architectural 1 MiB (0x100000) banks. The
                     // H563 flash buffer is sized to exactly 2 * BANK_SIZE by the
-                    // chip yaml (`size: "2MiB"`), so the same BANK_SIZE used by
+                    // chip yaml (`size: 2MiB`), so the same BANK_SIZE used by
                     // EraseSector above also bounds the swap — keeping erase and
                     // swap on one consistent bank-size notion (real silicon:
                     // bank 2 @ 0x08100000). swap_banks returns false if the
@@ -2792,7 +2991,7 @@ impl<C: Cpu> Machine<C> {
         // LEVEL-sensitive source at the exact firing cycle. Every MCU family
         // follows the same shape behind `deliver_scheduled_irq_levels`:
         //   * ESP32-C3 (RISC-V matrix)  → re-derive `matrix_irq_sources` into
-        //     `riscv_irq_lines`;
+        //     `irq_fabric.esp32c3.irq_lines`;
         //   * ESP32-S3 (Xtensa intmatrix) → re-derive into `pending_cpu_irqs` +
         //     the intmatrix INTR_STATUS mirror.
         // A matrix source ID must NEVER be pended as a Cortex-M NVIC exception

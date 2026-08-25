@@ -7,9 +7,9 @@
 //!   * it operates on a bare [`SystemBus`], so the same call works from the
 //!     RISC-V CLI, the browser, and any future host regardless of CPU type; and
 //!   * it downcasts to every real WiFi MAC the simulator models in ONE place.
-//!     Today that is the ESP32-C3 MAC (the S3 MAC is still thunked); when a
-//!     second real MAC lands, teach THIS function and every host — CLI `test`,
-//!     CLI `run`, the browser ctors — gets it for free, no drift.
+//!     Today that is the ESP32-C3 MAC and the ESP32-S3 MAC (same WDEV IP).
+//!     When a further real MAC lands, teach THIS function and every host —
+//!     CLI `test`, CLI `run`, the browser ctors — gets it for free, no drift.
 //!
 //! Absent a `wifi_ap` in the manifest this is inert, so non-WiFi boots stay
 //! byte-identical to before.
@@ -54,12 +54,14 @@ pub fn attach_configured_wifi_ap(bus: &mut SystemBus, manifest: &SystemManifest)
             mac.attach_to_medium();
             attached = true;
         }
+        // Esp32s3WifiMac is a type alias of Esp32c3WifiMac (same WDEV IP),
+        // so the downcast above already matches the S3 bus entry.
     }
     // `attach_to_medium` flips `needs_bus_tick()` on but is a non-MMIO toggle, so
     // rebuild the tick index once to make the MAC resident (mirrors the CLI solo
     // attach loop). Only when we actually attached a MAC — a diagram may carry a
-    // `wifi_ap` while the board has no real WiFi MAC (e.g. thunked S3), in which
-    // case there is nothing to make resident.
+    // `wifi_ap` while the board has no WiFi MAC, in which case there is
+    // nothing to make resident.
     if attached {
         bus.refresh_peripheral_index();
     }
@@ -140,5 +142,25 @@ mod tests {
 
         let open = manifest(true);
         assert_eq!(open.wifi_ap.as_ref().unwrap().password, "");
+    }
+
+    #[test]
+    fn attach_makes_s3_mac_resident_when_wifi_ap_present() {
+        use crate::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        assert!(
+            bus.find_peripheral_index_by_name("wifi_mac").is_some(),
+            "S3 bus must carry the WDEV MAC at 0x60033000"
+        );
+        assert!(
+            !mac_needs_bus_tick(&mut bus),
+            "fresh S3 MAC should be idle without an AP"
+        );
+        attach_configured_wifi_ap(&mut bus, &manifest(true));
+        assert!(
+            mac_needs_bus_tick(&mut bus),
+            "S3 MAC with wifi_ap must be medium-resident"
+        );
     }
 }

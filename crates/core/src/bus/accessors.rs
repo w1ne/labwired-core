@@ -310,6 +310,11 @@ impl crate::Bus for SystemBus {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
@@ -422,9 +427,11 @@ impl crate::Bus for SystemBus {
                 return Ok(((byte_val >> bit) & 1) as u32);
             }
         }
-        // RP2040 atomic register aliases: every alias of a register reads back
-        // the aligned base register (the op only affects writes).
-        if self.atomic_register_aliases {
+        // Atomic register aliases: every alias of a register reads back the
+        // aligned base register (the op only affects writes). True for both
+        // families — pico-sdk documents it, and the Series-2 RM says a read of
+        // a SET/CLR/TGL alias returns the register's value.
+        if self.atomic_register_aliases.is_enabled() {
             if let Some((base, _)) = self.atomic_alias_redirect(addr) {
                 return self.read_u32(base);
             }
@@ -552,6 +559,11 @@ impl crate::Bus for SystemBus {
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
@@ -595,11 +607,11 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.esp32c3_pms_gate_store(addr) {
             return r;
         }
-        // RP2040 atomic register aliases: a write to a +0x1000/0x2000/0x3000
-        // alias of a peripheral register is a read-modify-write (XOR/SET/CLR)
-        // on the aligned base register. The base access recurses into the
-        // normal path (its alias bits are clear), so there is no further alias.
-        if self.atomic_register_aliases {
+        // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of
+        // a peripheral register is a read-modify-write on the aligned base
+        // register. The base access recurses into the normal path (its alias
+        // bits are clear), so there is no further alias.
+        if self.atomic_register_aliases.is_enabled() {
             if let Some((base, op)) = self.atomic_alias_redirect(addr) {
                 let cur = self.read_u32(base)?;
                 let new = match op {
@@ -609,10 +621,17 @@ impl crate::Bus for SystemBus {
                 };
                 // Flag CLR so write-clear peripherals can accept an absolute
                 // post-clear image (pico-sdk) without treating it as a W1C mask.
-                if matches!(op, crate::bus::AtomicAliasOp::Clr) {
-                    return crate::bus::with_clr_alias_write(|| self.write_u32(base, new));
-                }
-                return self.write_u32(base, new);
+                // Every alias op hands the peripheral a computed FINAL image.
+                // A register that is not plain read-write has to know that, or
+                // it re-interprets the image as a mask — which is how an
+                // EFR32 `IF_CLR` write turned into a no-op.
+                return crate::bus::with_alias_absolute_write(|| {
+                    if matches!(op, crate::bus::AtomicAliasOp::Clr) {
+                        crate::bus::with_clr_alias_write(|| self.write_u32(base, new))
+                    } else {
+                        self.write_u32(base, new)
+                    }
+                });
             }
         }
         // Debug: trace WiFi MAC-window writes (env-gated) to RE the TX path.
@@ -677,6 +696,11 @@ impl crate::Bus for SystemBus {
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
@@ -780,7 +804,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn external_irq_lines(&self) -> u32 {
-        self.riscv_irq_lines
+        self.irq_fabric.esp32c3.irq_lines
     }
 
     #[cfg(feature = "event-scheduler")]
@@ -888,5 +912,24 @@ impl crate::Bus for SystemBus {
 
     fn clear_cpu_irq_pending(&mut self, core_id: u8, slot: u8) {
         self.pending_cpu_irqs[(core_id & 1) as usize] &= !(1u32 << slot);
+    }
+
+    fn resettle_cpu_irq_levels(&mut self) {
+        // Walk-free ESP32-S3 only. Everywhere else the per-cycle aggregation
+        // still rebuilds `pending_cpu_irqs` from the live source levels on the
+        // next tick, so re-deriving here would be duplicated work — and on a
+        // walk-ON bus it would recompute from `walk_sources` that the next
+        // walk has not rebuilt yet, i.e. from stale input.
+        //
+        // Deliberately NOT `refresh_esp32s3_sched_sources()` first: a dispatch
+        // changes the ROUTED bitmap, never the source levels behind it. The
+        // recompute folds the sched-source bitmap the choke/event path already
+        // maintains, so this costs an array walk over the asserting sources and
+        // no peripheral poll at all. (The C3's per-tick aggregation does re-poll
+        // each time; it can, because it only runs on buses that still tick.)
+        #[cfg(feature = "event-scheduler")]
+        if self.legacy_walk_disabled && self.irq_fabric.esp32s3.routing {
+            self.recompute_esp32s3_irq_lines();
+        }
     }
 }

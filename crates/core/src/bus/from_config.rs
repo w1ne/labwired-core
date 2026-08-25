@@ -10,7 +10,7 @@ use crate::memory::LinearMemory;
 use crate::peripherals::gpio::GpioRegisterLayout;
 use crate::Peripheral;
 use anyhow::Context;
-use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
+use labwired_config::{ChipDescriptor, SystemManifest};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
@@ -137,12 +137,12 @@ impl SystemBus {
         // parse with `from_yaml`. Validating at load time only would mean two
         // of our three runtimes silently accept documents the third rejects.
         manifest.validate_parts()?;
-        let flash_size = parse_size(&chip.flash.size)?;
-        let ram_size = parse_size(&chip.ram.size)?;
+        let flash_size = chip.flash.size;
+        let ram_size = chip.ram.size;
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
         for region in &chip.memory_regions {
-            let size = parse_size(&region.size)?;
+            let size = region.size;
             let mut mem = LinearMemory::new(size as usize, region.base);
             // Optionally preload a raw binary image (e.g. a dumped mask ROM)
             // from a path given by an env var. Copyrighted vendor blobs are not
@@ -212,6 +212,10 @@ impl SystemBus {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            // The board's clock beats the chip's rated one: the NUCLEO-L476RG
+            // never configures the PLL, so it really does run its 80 MHz part
+            // at the 4 MHz MSI reset rate and says so in its manifest.
+            cpu_hz: manifest.cpu_hz.unwrap_or(chip.cpu_hz),
             bit_band_enabled: Self::chip_has_bit_band(chip),
             reset_vector_offset: chip.reset_vector_offset,
             atomic_register_aliases: chip.atomic_register_aliases,
@@ -229,6 +233,7 @@ impl SystemBus {
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
             last_gpio_in: None,
+            gpio_port_idx: None,
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
@@ -255,21 +260,12 @@ impl SystemBus {
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
-            esp32c3_irq_routing: false,
-            riscv_irq_lines: 0,
-            esp32c3_system_idx: None,
-            esp32c3_interrupt_core0_idx: None,
-            esp32c3_irq_cache: None,
-            esp32c3_asserted_sources: [0; 2],
-            esp32c3_sched_asserted_sources: [0; 2],
+            irq_fabric: InterruptFabric::default(),
+            esp32s3_irq_audit: None,
             esp32c3_sensitive_idx: None,
             esp32c3_pms: None,
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
-            esp32s3_irq_routing: false,
-            esp32s3_intmatrix_idx: None,
-            esp32s3_asserted_sources: [0; 2],
-            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -597,17 +593,19 @@ impl SystemBus {
                     // For nRF52 ports, an optional `num_pins` config key caps the
                     // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
                     // Writes outside that range are discarded; reads return 0.
-                    if layout == GpioRegisterLayout::Nrf52 {
+                    if layout == GpioRegisterLayout::Nrf52 || layout == GpioRegisterLayout::Nrf54l {
                         let num_pins: u32 = p_cfg
                             .config
                             .get("num_pins")
                             .and_then(|v| v.as_u64())
                             .map(|n| n as u32)
                             .unwrap_or(32);
-                        Box::new(
+                        let port = if layout == GpioRegisterLayout::Nrf54l {
+                            crate::peripherals::gpio::GpioPort::new_nrf54l(num_pins)
+                        } else {
                             crate::peripherals::gpio::GpioPort::new_nrf52(num_pins)
-                                .with_window_offset(window_offset),
-                        )
+                        };
+                        Box::new(port.with_window_offset(window_offset))
                     } else if layout == GpioRegisterLayout::Stm32V2
                         && p_cfg.config.contains_key("reset_moder")
                     {
@@ -910,6 +908,11 @@ impl SystemBus {
         // `INPUT_PULLUP` changes the floating input level. No-op for every
         // other chip.
         bus.wire_esp32c3_pad_controls();
+        // Same for the ESP32-S3. (The S3's IO_MUX is registered by the coded
+        // `configure_xtensa_esp32s3` path rather than the chip yaml, which
+        // wires it there too; this keeps the declarative path honest if the
+        // peripheral is ever declared.)
+        bus.wire_esp32s3_pad_controls();
         // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
         // the C3 GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
@@ -959,6 +962,11 @@ impl SystemBus {
         // publish which pin they claim and the port reads it. No-op for every
         // other chip.
         bus.wire_nrf52_pads();
+        // EFR32 Series 2: same shape as the Nordic pass above and for the same
+        // reason — the pad has no function register, so `GPIO_TIMERROUTE` names
+        // the pin and the port reads that claim. This is what makes
+        // `analogWrite` reach a pad. No-op for every other chip.
+        bus.wire_efr32_timer_pads();
         // Resolve declared per-peripheral RCC clock-gates now that every
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.

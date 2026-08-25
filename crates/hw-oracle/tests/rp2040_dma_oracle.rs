@@ -155,6 +155,7 @@ fn rp2040_bus() -> SystemBus {
         schema_version: "1.0".to_string(),
         name: "rp2040-dma-exec-oracle".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         board_io: vec![],
         debug_uart: None,

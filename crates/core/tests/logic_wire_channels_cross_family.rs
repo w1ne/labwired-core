@@ -58,6 +58,7 @@ fn dummy_manifest(path: &str) -> SystemManifest {
         schema_version: "1.0".to_string(),
         name: "wire-channel-cross-family".to_string(),
         chip: path.to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -304,6 +305,208 @@ fn a_wire_probe_reads_the_esp32c3_i2c_bus_with_no_gpio_matrix_routing() {
         ASYMMETRIC.to_vec(),
         "and then exactly the bytes the controller was given, in order; got \
          {frames:x?}",
+    );
+}
+
+// ── EFR32MG26 (Silicon Labs BRD2709A) ───────────────────────────────────────
+
+/// `CMU_CLKEN0` — the clock gate for every peripheral in group 0.
+const CMU_CLKEN0: u64 = 0x4000_8064;
+/// `_CMU_CLKEN0_I2C0_SHIFT`. ⚠️ I2C2/3 are on CLKEN2, so the bit does not
+/// follow the instance number.
+const CLKEN0_I2C0: u32 = 14;
+/// `_CMU_CLKEN0_USART0_SHIFT`.
+const CLKEN0_USART0: u32 = 9;
+
+/// An INDEPENDENT SPI decoder over SCK/MOSI: sample MOSI on the sampling edge
+/// implied by (CPOL, CPHA), MSB first, eight bits per frame. Imports nothing
+/// from `spi_waveform`.
+fn decode_spi(edges: &[LogicEdge], ch_sck: u32, ch_mosi: u32, cpol: bool, cpha: bool) -> Vec<u8> {
+    // CPHA=0 samples on the leading edge, CPHA=1 on the trailing one. The
+    // leading edge is a rise when the clock idles low.
+    let sample_on_rise = cpha == cpol;
+    let (mut sck, mut mosi) = (cpol, false);
+    let mut bits: Vec<bool> = Vec::new();
+    let mut bytes = Vec::new();
+    for edge in edges {
+        let prev_sck = sck;
+        if edge.ch == ch_sck {
+            sck = edge.value;
+        } else if edge.ch == ch_mosi {
+            mosi = edge.value;
+            continue;
+        } else {
+            continue;
+        }
+        let sampling = if sample_on_rise {
+            !prev_sck && sck
+        } else {
+            prev_sck && !sck
+        };
+        if !sampling {
+            continue;
+        }
+        bits.push(mosi);
+        if bits.len() == 8 {
+            bytes.push(bits.iter().fold(0u8, |acc, &b| (acc << 1) | u8::from(b)));
+            bits.clear();
+        }
+    }
+    bytes
+}
+
+/// A SPI device that answers with a known ramp, so a read carries bytes
+/// nothing else could have produced.
+struct SpiRamp {
+    next: u8,
+}
+impl labwired_core::peripherals::spi::SpiDevice for SpiRamp {
+    fn cs_pin(&self) -> &str {
+        // Single device on the bus; the EFR32 path broadcasts, so the label is
+        // only an identity here.
+        "PC00"
+    }
+    fn transfer(&mut self, _mosi: u8) -> u8 {
+        let byte = self.next;
+        self.next = self.next.wrapping_add(0x11);
+        byte
+    }
+}
+
+/// ACCEPTANCE — a Silicon Labs Series 2. `GPIO_I2CROUTE` is NEVER written, so
+/// no pad on this chip is claimed by I2C0 and a pad probe would be correct to
+/// show a flat line. The wire probe reads the bus regardless.
+///
+/// ⚠️ This controller published NOTHING until 2026-08-22: a byte crossed
+/// inside its `TXDATA` write, no SCL edge existed, and `line_names()` returned
+/// an empty slice — an honest answer to a real gap, and a bus a user could
+/// decode but not measure.
+#[test]
+fn a_wire_probe_reads_the_efr32mg26_i2c_bus_with_no_route_written() {
+    // I2C0_S_BASE — ⚠️ 0x4B00_0000, in the low-energy group, NOT with I2C1..3.
+    const I2C_BASE: u64 = 0x4B00_0000;
+    const REG_EN: u64 = 0x04;
+    const REG_CMD: u64 = 0x0C;
+    const REG_TXDATA: u64 = 0x34;
+    const CMD_START: u32 = 1 << 0;
+    const CMD_STOP: u32 = 1 << 1;
+
+    let mut machine = machine_for("efr32mg26");
+    machine
+        .bus
+        .attach_i2c_slave("i2c0", Box::new(Ramp { next: 0x60 }))
+        .expect("attach an I²C slave to the EFR32 controller");
+
+    let initial = watch_wire(&mut machine, "i2c0", &["SCL", "SDA"]);
+    assert_eq!(
+        initial,
+        vec![Some(true), Some(true)],
+        "an idle open-drain I²C wire rests high on both lines",
+    );
+
+    run(&mut machine, 40_000);
+
+    let bus = &mut machine.bus;
+    // ⚠️ The clock gate, and ONLY the clock gate. On Series 2 an ungated
+    // peripheral does not decode at all, so this is the one write a driver
+    // cannot skip — unlike `GPIO_I2CROUTE`, which is never written here and is
+    // what a pad probe would need.
+    bus.write_u32(CMU_CLKEN0, 1 << CLKEN0_I2C0).unwrap();
+    bus.write_u32(I2C_BASE + REG_EN, 1).unwrap();
+    bus.write_u32(I2C_BASE + REG_CMD, CMD_START).unwrap();
+    bus.write_u32(I2C_BASE + REG_TXDATA, u32::from(ADDR) << 1)
+        .unwrap();
+    for byte in ASYMMETRIC {
+        bus.write_u32(I2C_BASE + REG_TXDATA, u32::from(byte))
+            .unwrap();
+    }
+    bus.write_u32(I2C_BASE + REG_CMD, CMD_STOP).unwrap();
+    run(&mut machine, 20_000);
+
+    let edges = machine.logic_read_edges(0).edges;
+    assert!(
+        !edges.is_empty(),
+        "the EFR32 controller transacted a whole frame and a wire probe on \
+         i2c0.SCL/SDA saw nothing",
+    );
+    let frames = decode_i2c(&edges, 0, 1);
+    assert_eq!(
+        frames.first().map(|f| f.0),
+        Some(ADDR << 1),
+        "the first frame on the wire is the 7-bit address with R/W clear; got \
+         {frames:x?}",
+    );
+    let data: Vec<u8> = frames.iter().skip(1).map(|&(byte, _)| byte).collect();
+    assert_eq!(
+        data,
+        ASYMMETRIC.to_vec(),
+        "and then exactly the bytes the controller was given, in order; got \
+         {frames:x?}",
+    );
+}
+
+/// The same claim for the SPI side. ⚠️ On Series 2 "SPI" IS a USART with
+/// `CTRL.SYNC` — there is no separate SPI peripheral — so this exercises the
+/// same register block the console UART model drives, in its other mode.
+///
+/// `GPIO_USARTROUTE` is never written here either.
+#[test]
+fn a_wire_probe_reads_the_efr32mg26_spi_bus_with_no_route_written() {
+    // USART0_S_BASE, the instance the chip yaml declares as `spi0`.
+    const SPI_BASE: u64 = 0x400A_0000;
+    const REG_EN: u64 = 0x04;
+    const REG_CTRL: u64 = 0x08;
+    const REG_CMD: u64 = 0x14;
+    const REG_TXDATA: u64 = 0x3C;
+    const CTRL_SYNC: u32 = 1 << 0;
+    const CTRL_MSBF: u32 = 1 << 10;
+    const CMD_TXEN: u32 = 1 << 2;
+    const CMD_MASTEREN: u32 = 1 << 4;
+
+    let mut machine = machine_for("efr32mg26");
+    machine
+        .bus
+        .attach_spi_device("spi0", Box::new(SpiRamp { next: 0x60 }))
+        .expect("attach a SPI device to the EFR32 USART");
+
+    let initial = watch_wire(&mut machine, "spi0", &["SCK", "MOSI"]);
+    assert_eq!(
+        initial,
+        vec![Some(false), Some(false)],
+        "SCK idles at CPOL, which is low out of reset",
+    );
+
+    run(&mut machine, 40_000);
+
+    let bus = &mut machine.bus;
+    // The clock gate, as above; `GPIO_USARTROUTE` stays unwritten.
+    bus.write_u32(CMU_CLKEN0, 1 << CLKEN0_USART0).unwrap();
+    bus.write_u32(SPI_BASE + REG_EN, 1).unwrap();
+    // SYNC is what makes this block SPI rather than a UART; MSBF is the
+    // Arduino default bit order and the only one the narrator draws.
+    bus.write_u32(SPI_BASE + REG_CTRL, CTRL_SYNC | CTRL_MSBF)
+        .unwrap();
+    bus.write_u32(SPI_BASE + REG_CMD, CMD_MASTEREN | CMD_TXEN)
+        .unwrap();
+    for byte in ASYMMETRIC {
+        machine
+            .bus
+            .write_u32(SPI_BASE + REG_TXDATA, u32::from(byte))
+            .unwrap();
+        run(&mut machine, 4_000);
+    }
+
+    let edges = machine.logic_read_edges(0).edges;
+    assert!(
+        !edges.is_empty(),
+        "the EFR32 USART clocked three frames and a wire probe on \
+         spi0.SCK/MOSI saw nothing",
+    );
+    assert_eq!(
+        decode_spi(&edges, 0, 1, false, false),
+        ASYMMETRIC.to_vec(),
+        "the wire carries exactly the bytes the controller was given, MSB \
+         first, in order",
     );
 }
 

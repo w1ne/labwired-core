@@ -873,7 +873,7 @@ mod tests {
     /// (raw IDR MMIO is ignored), host release is detected when ENABLE is
     /// cleared (Arduino `pinMode(INPUT_PULLUP)`), and
     /// `tick_peripherals_fully` services the device even with
-    /// `esp32c3_irq_routing` set (the Nordic GPIO block is skipped on C3).
+    /// `irq_fabric.esp32c3.routing` set (the Nordic GPIO block is skipped on C3).
     #[test]
     fn frame_driven_through_esp32c3_gpio() {
         use crate::bus::SystemBus;
@@ -888,7 +888,7 @@ mod tests {
         let mask = 1u32 << bit;
 
         let mut bus = SystemBus::empty();
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
         bus.add_peripheral(
             "gpio",
             GPIO_BASE,
@@ -966,7 +966,7 @@ mod tests {
         let cyc = |us: u64| us * (CPU_HZ / 1_000_000);
 
         let mut bus = SystemBus::empty();
-        bus.esp32c3_irq_routing = true;
+        bus.irq_fabric.esp32c3.routing = true;
         bus.add_peripheral(
             "gpio",
             GPIO_BASE,

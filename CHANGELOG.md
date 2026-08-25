@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The EFR32 TIMER compare is a level match on `CNT == OC`, measured on a
+  BRD2709A die.** A counter *written* onto its compare value and then started
+  latches `IF.CCn` on its first counter step, without ever arriving there —
+  silicon over SWD: TIMER0, `PRESC = 1023`, `TOP = 0xFFFF`, `CC0_OC = 0x8000`,
+  `CNT` pre-loaded to `0x8000`, `IF` reads `0x10` at 250 ms with `CNT` at
+  `0x9268`, which is inside the first pass of a 3.5 s period. The model required
+  arrival and stayed silent for a whole period. The same run pins the other
+  half: `IF` read back `0x00000000` while `CNT == OC` and the counter was
+  stopped, so the match is gated on the counter being clocked, not on the
+  register values alone. It is now modelled as a one-shot pending match armed by
+  the events that make a value resident (`CMD.START`, a `CNT` write, a
+  `CC_OC`/`CC_CFG` write) and consumed by the next counter step — deliberately
+  NOT a standing "also compare the value you start from" rule, which would
+  re-latch every compare on the following tick and hand firmware two interrupts
+  per match. The trajectory rule below is unchanged, and a lumped advance still
+  latches exactly what the same number of single steps latch. Pinned by
+  `crates/core/tests/efr32mg26_timer_compare_level.rs`, which replays the die's
+  register sequence against the real BRD2709A bus.
+- **The EFR32MG26 (BRD2709A) runs walk-free.** Every peripheral on that bus now
+  either rides the event scheduler or provably does nothing on the per-cycle
+  walk, so `SystemBus::derive_walk_deletable()` is true with no hand flag and
+  the board reaches the recommended tick interval instead of executing one
+  instruction per batch. Fifteen models moved: the ten `TIMER` instances (lazy
+  counter advanced in closed form, with interrupt and PWM-pad wakes scheduled at
+  their exact cycles), the four `I2C` instances and the `IADC`, the GPIO
+  external-interrupt block, and the `virtual_ble` controller. Behaviour is
+  pinned against the pre-migration per-cycle walk by
+  `crates/core/tests/efr32mg26_walk_differential.rs`, which runs the committed
+  BRD2709A firmware both ways and compares the full architectural state, the
+  NVIC pending latch, the migrated peripherals' registers and the board LED pad
+  levels after **every retired instruction**.
+- **A compare on the EFR32 TIMER no longer fires when `OC == CNT`.** The wrapped
+  branch of the counter advance latched every channel whose `OC` was at or above
+  the current count, so an advance that wrapped flagged a compare the counter was
+  *leaving* rather than arriving at. It is now the value the counter actually
+  takes, which is also what makes a lumped advance latch exactly what the same
+  number of single steps latch — the property the scheduler path depends on.
+- **`Peripheral::observes_gpio_edges()`** — the bus's per-cycle GPIO
+  edge-detection pass is kept alive by asking the peripherals whether any of them
+  consumes edges, instead of by looking for a peripheral named `gpio0`/`gpio1`.
+  That name is a Nordic spelling; a part that letters its ports answered "nothing
+  to scan", so on a walk-free bus the fast path would have deleted the only route
+  by which a pad movement reaches an external-interrupt line.
+- **`labwired run` exits 3 on a RISC-V simulation fault too.** v0.22.1 below
+  announces that "`labwired run` exits 3 when the run ends on a simulation
+  fault"; the change only landed on ARM. Both RISC-V loops kept
+  `tracing::debug!("… halt: {e}")` followed by `EXIT_PASS`, and `debug!` prints
+  nothing at the default log level — so a `MemoryViolation` or a `DecodeError`
+  on the ESP32-C3, the most-used board, produced **zero bytes of stderr and exit
+  0**. Both loops now name the fault and its PC on stderr and return
+  `EXIT_RUNTIME_ERROR`, the same as ARM and Xtensa. `--allow-sim-error` restores
+  exit 0 for callers that own the verdict and read it from the output.
+
+## [0.22.1] - 2026-08-14
+
+A one-change release, because the change is one the last release made
+impossible to trust: with v0.22.0 in hand, a harness could not use the exit
+status of `labwired run` to tell a completed run from a firmware that faulted.
+
+### Changed
+- **`labwired run` exits 3 when the run ends on a simulation fault.** It used to
+  print `simulation error: Memory access violation at 0x…` and exit **0**, so
+  `labwired run … && echo ok` printed `ok` for firmware that died on its second
+  instruction, and any harness judging by exit status read a fault as a pass.
+  Xtensa already exited non-zero on the same class of failure; ARM is now
+  consistent with it, in both the default and `--batched` loops. `--allow-sim-error`
+  restores the old behaviour for callers that own the verdict and read it from
+  the output — the TIER1 matrix takes the protocol lines on stdout as the result
+  and ignores the exit code either way.
+
+## [0.22.0] - 2026-08-14
+
+The install release. Everything below was found by running the instructions we
+publish, on the platforms we claim, rather than by reading them.
+
+### Fixed
+- **The documented one-liner installs a CLI again.** `curl … install.sh | sh`
+  resolved "latest" to `firmware-demos-v3` — an asset-only demo release with no
+  CLI archive — 404'd, and silently escalated to downloading a Rust toolchain
+  and building from source. Dead from 2026-08-01 to 2026-08-14 on every
+  platform.
+- **The Linux archives start on the distributions people run.** They were built
+  on `ubuntu-latest` and required `GLIBC_2.39`, so they could not start on
+  Ubuntu 22.04 LTS, Debian 12 (every Raspberry Pi OS), RHEL 9 or Amazon Linux
+  2023. They are now built against a 2.31 floor, asserted with `readelf`, and
+  started in `debian:12`, `ubuntu:22.04` and `almalinux:9` before the release
+  job may publish.
+- **An install that produced an unusable binary reported success.** The
+  installer now runs what it installed and names the reason when it cannot
+  start.
+- Four documented commands could not run as written, including
+  `labwired run --system …` — that flag has never existed on that subcommand.
+
+### Added
+- **Windows.** `x86_64-pc-windows-msvc` archives ship from this release.
+  Nothing had blocked it; no leg of the release had ever asked for it.
+- **The runner image is published for arm64 as well**, and now carries the
+  released binary instead of a separate rebuild of the same commit. `docker
+  pull` failed outright on Apple Silicon before this.
+- Install failures are reported (enumerated fields only, `LABWIRED_TELEMETRY=0`
+  or `DO_NOT_TRACK` to opt out), and an install canary runs the published
+  instructions every six hours across nine platform legs.
+
+### Changed
+- Shipped binaries are stripped: the Linux archives went from 65 MB to 12 MB.
+
 ### Added
 - **`labwired run --batched`** drives ARM through
   `Machine::advance(AdvanceRequest::run(..))` — the call the browser makes from

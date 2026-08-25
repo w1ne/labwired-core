@@ -1,0 +1,27 @@
+# LabWired — Feather STM32F405 TIER1 smoke test
+#
+# Runs the committed part-specific TIER1 fixture and asserts the whole
+# transcript. The firmware path is a blob in this repo, not a build output, so
+# this needs no cross toolchain and a workflow can run it on any runner.
+#
+# Why part-specific matters here: this board's other smoke borrows
+# firmware-f401-demo from a sibling part, and a sibling's image cannot see what
+# this chip declares differently. Writing stm32f405's own fixture is what
+# surfaced I2C1 answering before RCC_APB1ENR.I2C1EN was set — firmware that
+# forgets the gate worked in the simulator and would hang on silicon.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/stm32f405.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 6000000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 timer PASS"
+  - uart_contains: "TIER1 i2c PASS"
+  - uart_contains: "TIER1 spi PASS"
+  - uart_contains: "TIER1 adc PASS"
+  - uart_contains: "TIER1 wdt PASS"
+  - uart_contains: "TIER1 rtc PASS"
+  - uart_contains: "TIER1 done"

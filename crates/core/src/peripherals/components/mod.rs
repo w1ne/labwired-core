@@ -69,6 +69,7 @@ pub mod pcf8574;
 pub mod pn532;
 pub mod potentiometer;
 pub mod rc522;
+pub mod rm67162;
 pub mod rotary_encoder;
 pub mod scd41;
 pub mod sensirion;

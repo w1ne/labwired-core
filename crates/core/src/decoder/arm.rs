@@ -653,6 +653,27 @@ pub enum Instruction {
         rm: u8,
         ra: u8,
     },
+    /// SMLABB/BT/TB/TT and SMULBB/BT/TB/TT — ARMv7-M A7.7.166/A7.7.171.
+    ///
+    /// A 16x16 signed multiply picking a HALF of each operand register, with an
+    /// optional 32-bit accumulate. Part of the DSP extension, which the
+    /// Cortex-M33 in EFR32MG26 has and which GCC reaches for on ordinary code:
+    /// it compiles `base + 48 * index` in Arduino's `digitalWrite` to SMLABB
+    /// because it can prove both operands fit in 16 bits.
+    ///
+    /// `accumulate` is false for the SMUL forms (Ra == 0b1111), where there is
+    /// no addend and Ra is not a register at all.
+    SmlaXy {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        ra: u8,
+        /// Take Rn's TOP half rather than its bottom.
+        n_top: bool,
+        /// Take Rm's TOP half rather than its bottom.
+        m_top: bool,
+        accumulate: bool,
+    },
 
     // -------- VFPv4 single-precision (FPU) --------
     //
@@ -1134,6 +1155,19 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
                 imm8: (opcode & 0xFF) as u8,
             };
         }
+        // cond 0xE (1101 1110 ...) is UDF — PERMANENTLY UNDEFINED (A7.7.194).
+        // The B T1 encoding (A7.7.12) excludes both 1110 and 1111 from `cond`;
+        // only 1111 was excluded here, so `UDF #imm8` decoded as a branch with
+        // cond = "always" and offset = imm8 << 1. `UDF #0` therefore became a
+        // 4-byte forward step that looked exactly like ordinary execution.
+        //
+        // This is the instruction compilers emit to trap on purpose:
+        // `__builtin_trap()`, an unreachable arm, a Rust panic in some
+        // configurations. Firmware saying "stop, this must never happen" was
+        // being simulated as "jump forward and keep going".
+        if cond == 0xE {
+            return Instruction::Unknown(opcode);
+        }
         let mut offset = (opcode & 0xFF) as i32;
         // Sign extend 8-bit to 32-bit
         if (offset & 0x80) != 0 {
@@ -1443,6 +1477,39 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             0x1 => return Instruction::Mls { rd, rn, rm, ra },
             _ => {}
         }
+    }
+
+    // SMLABB/BT/TB/TT, SMULBB/BT/TB/TT — ARMv7-M A7.7.166 / A7.7.171.
+    //
+    //   1111 1011 0001 nnnn | aaaa dddd 00 N M mmmm
+    //
+    // ⚠️ NOT an exotic DSP intrinsic nobody's code reaches. This is what GCC
+    // emits at -Os for `base + K * index` when it can prove both halves fit in
+    // 16 bits, and Arduino's `digitalWrite` is exactly that shape — the GPIO
+    // port base is `0x4003C000 + 0x30 * (pin >> 4)`. Undecoded, it was a silent
+    // no-op (see `record_undecoded`), so `digitalWrite` computed a garbage port
+    // address and BLINK DID NOT BLINK on EFR32MG26 while every other cell of
+    // that board's Arduino column passed.
+    //
+    // h2[7:6] must be 00: 01/10/11 in that field are SMLAD/SMLAWx/SMLSD, which
+    // are different instructions and are still undecoded rather than
+    // approximated by this one.
+    if (h1 & 0xFFF0) == 0xFB10 && (h2 & 0x00C0) == 0 {
+        let ra = ((h2 >> 12) & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rn = (h1 & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return Instruction::SmlaXy {
+            rd,
+            rn,
+            rm,
+            ra,
+            n_top: (h2 & 0x0020) != 0,
+            m_top: (h2 & 0x0010) != 0,
+            // Ra == 0b1111 is the SMUL form: no addend, and Ra is an encoding
+            // marker rather than a register to read.
+            accumulate: ra != 0xF,
+        };
     }
 
     // -------------------------------------------------------------

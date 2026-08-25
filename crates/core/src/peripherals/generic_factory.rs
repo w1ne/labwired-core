@@ -122,6 +122,13 @@ pub const MODEL_TYPES: &[&str] = &[
     // generic STM32 UART layout — it is a distinct silicon register map.
     "nrf54l_uarte",
     "nrf54l_twim",
+    // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
+    // coerces `nrf54l_spim` onto the shared `spi` arm, which then sees
+    // `contains("nrf")` and picks the nRF52 SPIM offset map. That failure is
+    // silent: ENABLE (0x500) and CONFIG (0x554) are at the same addresses on
+    // both generations, so the instance enables and configures cleanly and then
+    // never sees a start task, because 0x000 means nothing to the nRF52 map.
+    "nrf54l_spim",
     // ESP32-classic behavioral models (esp32 factory). Absent while every C3
     // sibling was listed: only the Xtensa builder ever built these, and it
     // registers the bank in Rust without consulting this table, so the gap was
@@ -176,6 +183,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_uart",
     "esp32s3_usb_otg",
     "esp32s3_usb_serial_jtag",
+    "esp32s3_wifi_mac",
     // nRF52 behavioral models the factory builds but this table never named.
     // Alias spellings are deliberately NOT here -- `canonical_peripheral_type`
     // maps those to their canonical output, and listing an alias INPUT would
@@ -238,6 +246,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // Further nRF54L factory arms.
     "nrf54l_clock",
     "nrf54l_grtc",
+    "efr32s2_cmu",
+    "efr32s2_gpio_head",
+    "efr32s2_smu",
+    "efr32s2_timerroute",
+    "efr32s2_gpio_exti",
+    "efr32s2_iadc",
+    "efr32s2_timer",
+    "virtual_ble",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -263,6 +279,73 @@ pub fn try_build(
                 )),
                 None => Box::new(crate::peripherals::systick::Systick::new()),
             }
+        }
+        // Silicon Labs Series-2 GPIO external interrupts — the `attachInterrupt`
+        // block, in the GPIO head at `GPIO_S_BASE + 0x400`. A separate window
+        // from the four port structs, which keep their own model.
+        "efr32s2_gpio_exti" => {
+            Box::new(crate::peripherals::efr32::gpio_exti::Efr32s2GpioExti::new())
+        }
+        // Silicon Labs Series-2 incremental ADC — the `analogRead` path.
+        // Its own model, NOT an `AdcRegisterLayout` variant: `adc.rs` is one
+        // struct per STM32 family by design and shares no register with this.
+        "efr32s2_iadc" => Box::new(crate::peripherals::efr32::iadc::Efr32s2Iadc::new()),
+        // Silicon Labs Series-2 TIMER. ⚠️ `counter_bits` is REQUIRED and per
+        // instance: TIMER0/1/8/9 are 32-bit and TIMER2..7 are 16-bit on this
+        // part (`TIMER_CNTWIDTH` in the device header). There is no safe
+        // default — guessing 32 gives a `micros()` that never wraps on a
+        // 16-bit instance, guessing 16 truncates a 32-bit one.
+        "efr32s2_timer" => {
+            let bits = p_cfg
+                .config
+                .get("counter_bits")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "peripheral '{}' (efr32s2_timer) must declare `config: {{ counter_bits: 16|32 }}`                          — the width is per instance on this family (TIMER_CNTWIDTH), not a family constant",
+                        p_cfg.id
+                    )
+                })? as u32;
+            let mut timer = crate::peripherals::efr32::timer::Efr32s2Timer::new(bits);
+            // ⚠️ The timebase is the PERIPHERAL clock, not `cpu_hz`. On this
+            // family they differ by 4.1x out of reset; see the model's header.
+            if let Some(hz) = p_cfg.config.get("peripheral_hz").and_then(|v| v.as_u64()) {
+                timer.set_peripheral_hz(hz);
+            }
+            Box::new(timer)
+        }
+        // LabWired virtual BLE controller. NOT a model of any silicon — see
+        // `peripherals/virtual_ble.rs` for why a part whose vendor documents no
+        // radio register anywhere gets a declared simulator device instead of
+        // an invented register map that would read as silicon in an inspector.
+        "virtual_ble" => Box::new(crate::peripherals::virtual_ble::VirtualBle::new_default()),
+        // Silicon Labs Series-2 CMU — its own model, NOT an `RccRegisterLayout`
+        // variant. `rcc.rs` is one struct per STM32 family by design, and this
+        // silicon shares no register with any of them.
+        "efr32s2_cmu" => Box::new(crate::peripherals::efr32::cmu::Efr32s2Cmu::new()),
+        // The GPIO block HEAD — `GPIO_TypeDef`'s first twelve words, which sit
+        // BELOW the four port structs at +0x30. Only one of them is a
+        // register: `GPIO_IPVERSION` at +0x00, which reads 7.
+        //
+        // ⚠️ This window was not mapped at all, so `GPIO->IPVERSION` — the
+        // first thing a Series-2 driver touches to identify the block — bus
+        // faulted on the twin and returns 7 on silicon. It was invisible
+        // because the conformance ratchet dropped faulting reads on the floor
+        // (`Err(_) => {}`) instead of reporting them; twelve addresses were
+        // being counted as misses with no line saying why.
+        // The Security Management Unit — the first peripheral a vendor-built
+        // image touches, three instructions into `SystemInit`.
+        "efr32s2_smu" => Box::new(crate::peripherals::efr32::smu::Efr32s2Smu::new()),
+        // The GPIO block's TIMER pin-mux. A real model, not a stub: it is the
+        // difference between a PWM duty that is correct in a register and a
+        // waveform that reaches a pad.
+        "efr32s2_timerroute" => {
+            Box::new(crate::peripherals::efr32::gpio_route::Efr32s2TimerRoute::new())
+        }
+        "efr32s2_gpio_head" => {
+            let mut s = crate::peripherals::stub::StubPeripheral::new(0x00);
+            s.values.insert(0x00, 0x0000_0007);
+            Box::new(s)
         }
         "rcc" => {
             let layout: RccRegisterLayout = SystemBus::parse_profile_or_default(p_cfg, "RCC")?;

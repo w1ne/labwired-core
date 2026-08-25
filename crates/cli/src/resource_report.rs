@@ -34,11 +34,12 @@ pub(crate) struct ChipMemoryMap {
 }
 
 impl ChipMemoryMap {
-    /// Build from a chip descriptor; size strings use [`labwired_config::parse_size`].
+    /// Build from a chip descriptor. Sizes arrive already in bytes — the parse
+    /// moved to deserialisation, so there is no longer a failure to swallow.
     pub(crate) fn from_chip(chip: &labwired_config::ChipDescriptor) -> Self {
-        let flash_total = labwired_config::parse_size(&chip.flash.size).ok();
-        let ram_total = labwired_config::parse_size(&chip.ram.size).ok();
-        let ram_size = ram_total.unwrap_or(0);
+        let flash_total = Some(chip.flash.size);
+        let ram_total = Some(chip.ram.size);
+        let ram_size = chip.ram.size;
         Self {
             ram: RamRegion {
                 base: chip.ram.base,

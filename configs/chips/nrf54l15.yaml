@@ -40,6 +40,13 @@ core: "cortex-m33"
 
 # RRAM, not flash. 1524 KB — an odd size, and it is correct: see
 # nrf54l15.dtsi, `cpuapp_rram: reg = <0x0 DT_SIZE_K(1524)>`.
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Matches peripherals/nrf54l/grtc.rs CPU_HZ_DEFAULT. The part boots at
+# 64 MHz and Zephyr raises PLL.FREQ to 128 MHz before peripherals start
+# (datasheet v1.0 §5.5.3), which is the state every lab here runs in.
+cpu_hz: 128_000_000
+
 flash:
   base: 0x00000000
   size: "1524KB"

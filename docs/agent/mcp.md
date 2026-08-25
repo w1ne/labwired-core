@@ -64,7 +64,7 @@ Example JSON shape:
 2. **`labwired` CLI on `PATH`** for local runs:
 
 ```bash
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.22.1 sh
 labwired --help
 ```
 

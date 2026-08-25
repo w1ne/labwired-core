@@ -9,12 +9,16 @@
 // `labwired_cli::...` paths the binary used valid inside the library.
 extern crate self as labwired_cli;
 
+pub mod baseline;
 pub mod bus_vcd;
 pub mod coverage;
+pub mod crash_report;
 pub mod faults;
 pub mod manifest;
 pub mod pc_coverage_report;
 pub mod regex;
+/// What a finished run reports (row 6.11: verdict / report / drive).
+mod report;
 pub mod test_support;
 pub mod tier1;
 pub mod verdict;
@@ -43,8 +47,8 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
 use artifacts::{
-    AssertionEvidence, AssertionResult, NamedU64, Snapshot, StimulusOutcome, StopReasonDetails,
-    TestConfig, TestResult,
+    AssertionEvidence, AssertionResult, Snapshot, StimulusOutcome, StopReasonDetails, TestConfig,
+    TestResult,
 };
 use labwired_config::{
     load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
@@ -349,9 +353,42 @@ pub struct RunArgs {
     #[arg(long)]
     pub firmware: PathBuf,
 
+    /// Optional system manifest (YAML) whose `external_devices:` are attached
+    /// to the chip before the run — a display, a sensor, anything the board
+    /// carries. Without it the chip runs bare and firmware talking to a panel
+    /// has nothing on the far side of the bus.
+    ///
+    /// ESP32-S3 only for now (the path `--rom-boot` uses); other families
+    /// build their bus through `SystemBus::from_config` and already take a
+    /// manifest via the top-level `--system`.
+    #[arg(long)]
+    pub system: Option<PathBuf>,
+
+    /// Optional path for an end-of-run dump of every attached parallel panel:
+    /// a binary PPM at this path plus a luma ASCII map on stderr. Proves what
+    /// the display actually painted, not just that a transaction completed.
+    #[arg(long)]
+    pub display_out: Option<PathBuf>,
+
+    /// End the run as soon as this text appears on the firmware's console.
+    /// Makes end-of-run artifacts frame-exact: "stop right after the firmware
+    /// printed X" is reproducible where a hand-tuned `--max-steps` is not.
+    /// ESP32-S3 only (needs the USB-Serial-JTAG console).
+    #[arg(long)]
+    pub stop_on: Option<String>,
+
     /// Maximum number of simulator steps before exit (default: unlimited).
     #[arg(long)]
     pub max_steps: Option<u64>,
+
+    /// Exit 0 even when the run ends on a simulation fault.
+    ///
+    /// A fault normally exits 3, the same as every other runtime error. Use
+    /// this when the caller owns the verdict and reads it from the output —
+    /// the TIER1 matrix, for instance, treats the protocol lines on stdout as
+    /// the result and a late fault as noise.
+    #[arg(long)]
+    pub allow_sim_error: bool,
 
     /// Optional path to write a JSON-line GPIO transition trace.
     /// Each line is `{"sim_cycle":N, "pin":P, "from":B, "to":B}`.
@@ -766,6 +803,10 @@ pub fn check_plugin_versions(
 /// The `labwired` binary with extra chip plugins linked in.
 /// Pass `&[]` for the stock open-catalog CLI.
 pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> ExitCode {
+    // A panic used to print a backtrace on the user's terminal and reach
+    // nobody else. Chains to the default hook, so what they see is unchanged.
+    crash_report::install();
+
     if let Err(msg) = check_plugin_versions(plugins) {
         eprintln!("{msg}");
         return ExitCode::FAILURE;
@@ -1391,120 +1432,6 @@ fn run_simulation_loop<C: labwired_core::Cpu>(
     }
 }
 
-fn report_metrics<C: labwired_core::Cpu>(
-    cli: &Cli,
-    cpu: &C,
-    metrics: &labwired_core::metrics::PerformanceMetrics,
-) {
-    if cli.json {
-        let report = serde_json::json!({
-            "status": "finished",
-            "final_pc": cpu.get_pc(),
-            "total_instructions": metrics.get_instructions(),
-            "total_cycles": metrics.get_cycles(),
-            "average_ips": metrics.get_ips(),
-        });
-        println!("{}", serde_json::to_string(&report).unwrap());
-    } else {
-        info!("Simulation loop finished.");
-        info!("Final PC: {:#x}", cpu.get_pc());
-        info!("Total Instructions: {}", metrics.get_instructions());
-        info!("Total Cycles: {}", metrics.get_cycles());
-        info!("Average IPS: {:.2}", metrics.get_ips());
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn build_stop_reason_details(
-    stop_reason: &StopReason,
-    limits: &TestLimits,
-    steps_executed: u64,
-    cycles: u64,
-    uart_bytes: u64,
-    stuck_steps: u64,
-    duration: std::time::Duration,
-    vcd_bytes: u64,
-) -> StopReasonDetails {
-    let (triggered_limit, observed) = match stop_reason {
-        StopReason::MaxSteps => (
-            Some(NamedU64 {
-                name: "max_steps".to_string(),
-                value: limits.max_steps,
-            }),
-            Some(NamedU64 {
-                name: "steps_executed".to_string(),
-                value: steps_executed,
-            }),
-        ),
-        StopReason::MaxCycles => (
-            limits.max_cycles.map(|v| NamedU64 {
-                name: "max_cycles".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "cycles".to_string(),
-                value: cycles,
-            }),
-        ),
-        StopReason::MaxUartBytes => (
-            limits.max_uart_bytes.map(|v| NamedU64 {
-                name: "max_uart_bytes".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "uart_bytes".to_string(),
-                value: uart_bytes,
-            }),
-        ),
-        StopReason::NoProgress => (
-            limits.no_progress_steps.map(|v| NamedU64 {
-                name: "no_progress_steps".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "stuck_steps".to_string(),
-                value: stuck_steps,
-            }),
-        ),
-        StopReason::WallTime => (
-            limits.wall_time_ms.map(|v| NamedU64 {
-                name: "wall_time_ms".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "elapsed_wall_time_ms".to_string(),
-                value: duration.as_millis().min(u128::from(u64::MAX)) as u64,
-            }),
-        ),
-        StopReason::MaxVcdBytes => (
-            limits.max_vcd_bytes.map(|v| NamedU64 {
-                name: "max_vcd_bytes".to_string(),
-                value: v,
-            }),
-            Some(NamedU64 {
-                name: "vcd_bytes".to_string(),
-                value: vcd_bytes,
-            }),
-        ),
-        StopReason::AssertionsPassed => (None, None),
-        // No limit triggered this one — the firmware chose to end the run. The
-        // exit code is reported separately as `firmware_exit_code`, not as a
-        // limit/observation pair.
-        StopReason::FirmwareExit => (None, None),
-        StopReason::MemoryViolation
-        | StopReason::DecodeError
-        | StopReason::Halt
-        | StopReason::Exception
-        | StopReason::ConfigError => (None, None),
-    };
-
-    StopReasonDetails {
-        triggered_stop_condition: stop_reason.clone(),
-        triggered_limit,
-        observed,
-    }
-}
-
 #[allow(clippy::if_same_then_else)]
 #[allow(clippy::too_many_arguments)]
 fn handle_load_error<C: labwired_core::Cpu>(
@@ -1520,7 +1447,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
 ) -> ExitCode {
     let err_msg = format!("Simulation error during load/reset: {}", e);
     error!("{}", err_msg);
-    let stop_reason_details = build_stop_reason_details(
+    let stop_reason_details = crate::report::build_stop_reason_details(
         &StopReason::Halt,
         resolved_limits,
         0,
@@ -1565,12 +1492,17 @@ fn handle_load_error<C: labwired_core::Cpu>(
     verdict.exit_code()
 }
 
-fn assertion_currently_passes(
-    assertion: &TestAssertion,
-    uart_text: &str,
-    machine: &labwired_core::Machine<impl labwired_core::Cpu>,
-) -> bool {
-    match assertion {
+/// The assertions decided by captured UART text alone, and nothing else.
+///
+/// Returns `None` for any assertion that needs the machine — that is the
+/// caller's signal to keep matching, not a failure.
+///
+/// Shared deliberately: the single-machine runner and the multi-MCU world
+/// runner must agree on what `uart_contains` means, and the world runner has
+/// no `Machine<impl Cpu>` to hand to [`assertion_currently_passes`]. Two
+/// copies of `uart_text.contains(..)` is exactly how one of them drifts.
+pub(crate) fn uart_assertion_passes(assertion: &TestAssertion, uart_text: &str) -> Option<bool> {
+    Some(match assertion {
         TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
         TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, uart_text),
         TestAssertion::UartOrdered(a) => {
@@ -1583,6 +1515,23 @@ fn assertion_currently_passes(
                 true
             })
         }
+        _ => return None,
+    })
+}
+
+fn assertion_currently_passes(
+    assertion: &TestAssertion,
+    uart_text: &str,
+    machine: &labwired_core::Machine<impl labwired_core::Cpu>,
+) -> bool {
+    if let Some(passed) = uart_assertion_passes(assertion, uart_text) {
+        return passed;
+    }
+    match assertion {
+        // Handled above by `uart_assertion_passes`.
+        TestAssertion::UartContains(_)
+        | TestAssertion::UartRegex(_)
+        | TestAssertion::UartOrdered(_) => unreachable!("decided by uart_assertion_passes"),
         TestAssertion::MotorSpeedReached(a) => machine.bus.motor_snapshots().iter().any(|motor| {
             let speed = motor.speed_rpm.abs();
             motor.id == a.motor_speed_reached.id
@@ -1735,6 +1684,40 @@ pub(crate) fn evaluate_display_region(
                 d.id
             )
         })?;
+
+    // `lit` is checked BEFORE the pixels, because it answers a different
+    // question and a failure here explains a passing ink measurement rather
+    // than contradicting it: the frame really was painted, onto a panel that
+    // cannot show it.
+    if let Some(want_lit) = d.lit {
+        let got = artifact
+            .meta
+            .get("lit")
+            .and_then(|v| v.as_bool())
+            .ok_or_else(|| {
+                format!(
+                    "display_region '{}': `lit` was asserted but this panel publishes no \
+                     `meta.lit` -- it has no emissive state to report, so the assertion \
+                     cannot be measured (do not ask it of a backlit panel)",
+                    d.id
+                )
+            })?;
+        if got != want_lit {
+            let brightness = artifact
+                .meta
+                .get("brightness")
+                .and_then(|v| v.as_u64())
+                .map(|b| format!(", brightness={b}"))
+                .unwrap_or_default();
+            return Err(format!(
+                "display_region '{}': lit is {got}, expected {want_lit}{brightness}. An \
+                 emissive panel shows nothing at brightness 0 however much was painted \
+                 into frame memory -- check that the firmware writes WRDISBV and leaves \
+                 sleep",
+                d.id
+            ));
+        }
+    }
 
     let bytes = artifact.bytes.as_deref().ok_or_else(|| {
         format!(
@@ -2550,20 +2533,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             let pc = machine.cpu.get_pc();
             let reached = cap.target_pc == Some(pc) || (0x4200_0000..0x4400_0000).contains(&pc);
             if reached {
-                // Same reason as `snapshot capture`: the trait default is now a
-                // non-panicking EMPTY blob, so an ungated call would write a
-                // resume file that restores no CPU state and still looks valid.
-                // Say so and write nothing. NOT a `continue` — the rest of this
-                // loop body is what actually advances the machine, so skipping
-                // it would hang the run instead of just declining the capture.
-                if !machine.cpu.supports_runtime_snapshot() {
-                    error!(
-                        "capture-app-entry: this CPU has no runtime-snapshot implementation \
-                         (supported: RISC-V, Xtensa LX7) — no snapshot written to {:?}",
-                        cap.path
-                    );
-                } else {
-                    let mut snap = machine.take_runtime_snapshot();
+                // Same reason as `snapshot capture`: a CPU that models no
+                // runtime snapshot answers `None`, and writing a resume file
+                // without a CPU half would produce something that still looks
+                // valid. Say so and write nothing. NOT a `continue` — the rest
+                // of this loop body is what actually advances the machine, so
+                // skipping it would hang the run instead of just declining the
+                // capture.
+                if let Some(mut snap) = machine.take_runtime_snapshot() {
                     snap.set_self_key(cap.chip, cap.fw_sha);
                     if let Some(parent) = cap.path.parent() {
                         let _ = std::fs::create_dir_all(parent);
@@ -2576,6 +2553,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         ),
                         Err(e) => error!("capture-app-entry: failed to write {:?}: {e}", cap.path),
                     }
+                } else {
+                    error!(
+                        "capture-app-entry: this CPU has no runtime-snapshot implementation \
+                         (supported: RISC-V, Xtensa LX7) — no snapshot written to {:?}",
+                        cap.path
+                    );
                 }
                 // Capture once; keep running so the cold invocation still
                 // produces the normal serial/cycle evidence.
@@ -2930,9 +2913,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     for (assertion_index, assertion) in assertions.iter().enumerate() {
         let (passed, evidence) = match assertion {
-            TestAssertion::UartContains(a) => (uart_text.contains(&a.uart_contains), None),
-            TestAssertion::UartRegex(a) => (simple_regex_is_match(&a.uart_regex, &uart_text), None),
-            TestAssertion::UartOrdered(_)
+            TestAssertion::UartContains(_)
+            | TestAssertion::UartRegex(_)
+            | TestAssertion::UartOrdered(_)
             | TestAssertion::MotorState(_)
             | TestAssertion::MqttFabric(_) => (
                 assertion_currently_passes(assertion, &uart_text, machine),
@@ -3171,7 +3154,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     let duration = start.elapsed();
     let uart_bytes = uart_tx.lock().map(|g| g.len() as u64).unwrap_or(0);
-    let stop_reason_details = build_stop_reason_details(
+    let stop_reason_details = crate::report::build_stop_reason_details(
         &stop_reason,
         resolved_limits,
         steps_executed,
@@ -3672,7 +3655,7 @@ pub(crate) fn write_config_error_outputs(
     });
 
     let stop_reason = StopReason::ConfigError;
-    let stop_reason_details = build_stop_reason_details(
+    let stop_reason_details = crate::report::build_stop_reason_details(
         &stop_reason,
         &resolved_limits,
         0,
@@ -4323,6 +4306,7 @@ mod tests {
                     h: None,
                     min_ink: 1.0,
                     max_ink: None,
+                    lit: None,
                 },
             },
         )];

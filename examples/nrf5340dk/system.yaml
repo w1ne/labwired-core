@@ -1,0 +1,8 @@
+# LabWired — nRF5340-DK, application core.
+#
+# Same board profile as configs/systems/nrf5340dk.yaml, kept beside the smoke
+# script so the script's `system:` is relative to itself, the way every other
+# committed-ELF cell in the coverage matrix is written.
+name: "nrf5340dk"
+chip: "../../configs/chips/nrf5340.yaml"
+peripherals: []

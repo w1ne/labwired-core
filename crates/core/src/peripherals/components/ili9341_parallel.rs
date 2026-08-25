@@ -310,16 +310,35 @@ impl Ili9341Parallel {
         (WIDTH, HEIGHT)
     }
 
+    /// Addressable (logical) size under the current MADCTL. `MADCTL_MV` swaps
+    /// the axes, so a landscape-configured panel is 320×240 even though the
+    /// physical frame memory stays 240×320.
+    pub fn logical_dimensions(&self) -> (usize, usize) {
+        let s = self.state.lock().unwrap();
+        (
+            s.addressable_width() as usize,
+            s.addressable_height() as usize,
+        )
+    }
+
     /// Framebuffer with MADCTL applied for host row-major rendering (same idea
     /// as the SPI [`super::ili9341::Ili9341::oriented_framebuffer`]).
+    ///
+    /// The result is [`Self::logical_dimensions`] wide × high — i.e. it is
+    /// indexed by the CASET/PASET coordinates the firmware wrote, which is the
+    /// orientation a viewer expects. Row stride is the LOGICAL width: iterating
+    /// the physical 240×320 extents here (as this used to) walks off the end of
+    /// each row under `MADCTL_MV` and shears the image.
     pub fn oriented_framebuffer(&self) -> Vec<u8> {
         let s = self.state.lock().unwrap();
-        let mut out = vec![0u8; FB_BYTES];
-        for col in 0..WIDTH as u16 {
-            for row in 0..HEIGHT as u16 {
-                let (x, y) = s.to_physical(col, row);
+        let lw = s.addressable_width() as usize;
+        let lh = s.addressable_height() as usize;
+        let mut out = vec![0u8; lw * lh * 2];
+        for row in 0..lh {
+            for col in 0..lw {
+                let (x, y) = s.to_physical(col as u16, row as u16);
                 let src = (y * WIDTH + x) * 2;
-                let dst = (row as usize * WIDTH + col as usize) * 2;
+                let dst = (row * lw + col) * 2;
                 if src + 1 < s.framebuffer.len() {
                     out[dst] = s.framebuffer[src];
                     out[dst + 1] = s.framebuffer[src + 1];
@@ -327,6 +346,31 @@ impl Ili9341Parallel {
             }
         }
         out
+    }
+
+    /// Drive one 8080 bus cycle from a *peripheral* instead of from GPIO edges.
+    ///
+    /// The ESP32-S3 `LCD_CAM` i80 master owns DB[15:0], WR and D/C once the
+    /// firmware routes them through the GPIO matrix (`esp_lcd_new_i80_bus`), so
+    /// the pads never toggle as CPU-visible GPIO and [`Self::on_gpio_edge`]
+    /// never fires. This is the same latch [`State::on_wr_strobe`] performs —
+    /// sample D/C and DB[15:0] on the WR falling edge — with the bus word and
+    /// the D/C level supplied by the controller.
+    ///
+    /// CS is deliberately not consulted: on the i80 path CS is a peripheral
+    /// output asserted by the LCD_CAM state machine for the duration of the
+    /// transaction, not a pad the firmware drives, so there is no CS edge to
+    /// latch. A transaction reaching here *is* the chip-select assertion.
+    ///
+    /// `dc_high` is the D/C (RS) level for this cycle: `false` = command phase,
+    /// `true` = data phase.
+    pub fn i80_write_word(&self, dc_high: bool, word: u16) {
+        let mut s = self.state.lock().unwrap();
+        // Latch the pad state a real strobe would leave behind, so a firmware
+        // that mixes the two paths sees a consistent bus.
+        s.rs = dc_high;
+        s.db = word;
+        s.on_wr_strobe();
     }
 
     /// Feed one GPIO transition. Unit tests and the ESP32/S3 observers call this.
@@ -478,6 +522,17 @@ impl PeripheralKit for Ili9341ParallelKit {
         let panel = std::sync::Arc::new(Ili9341Parallel::new(ctx.device_id(), pins));
         // Universal GPIO bit-bang attach: same choke point as motors/servos.
         ctx.install_gpio_observer(panel.clone());
+        // ESP32-S3 i80 attach: when the chip has an LCD_CAM block, bind the
+        // same panel to it so firmware driving the bus through `esp_lcd`'s i80
+        // master (LCD_CMD_VAL + GDMA outlink, no GPIO edges at all) paints too.
+        // Both paths feed one panel model — whichever the firmware uses.
+        if let Some(idx) = ctx.bus.find_peripheral_index_by_name("lcd_cam") {
+            if let Some(lcd) = ctx.bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                a.downcast_mut::<crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam>()
+            }) {
+                lcd.attach_panel(panel.clone());
+            }
+        }
         ctx.bus.ili9341_parallel.push(panel);
         Ok(())
     }
@@ -493,7 +548,9 @@ impl crate::inspect::DeviceEvidence for Ili9341Parallel {
     ) -> Vec<crate::inspect::Artifact> {
         let fb = self.oriented_framebuffer();
         let painted = fb.iter().filter(|&&b| b != 0x00).count();
-        let (w, h) = self.dimensions();
+        // Logical extents: `oriented_framebuffer` is in CASET/PASET space, so
+        // a landscape MADCTL reports 320×240 and the bytes match the stride.
+        let (w, h) = self.logical_dimensions();
         let mut counts: std::collections::HashMap<u16, usize> = std::collections::HashMap::new();
         for px in fb.chunks_exact(2) {
             let v = u16::from_be_bytes([px[0], px[1]]);

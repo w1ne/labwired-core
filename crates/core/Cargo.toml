@@ -156,6 +156,16 @@ required-features = ["event-scheduler"]
 name = "census_probe"
 required-features = ["silent-census"]
 
+# #![cfg(feature = "silent-census")]
+[[test]]
+name = "undecoded_register_ratchet"
+required-features = ["silent-census"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32s3_irq_cache_differential"
+required-features = ["event-scheduler"]
+
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
 name = "e2e_blinky"
@@ -164,6 +174,11 @@ required-features = ["esp32s3-fixtures"]
 # #![cfg(feature = "esp32s3-fixtures")]
 [[test]]
 name = "e2e_esp32s3_faithful_boot"
+required-features = ["esp32s3-fixtures"]
+
+# #![cfg(feature = "esp32s3-fixtures")]
+[[test]]
+name = "e2e_esp32s3_flash_boot_no_elf"
 required-features = ["esp32s3-fixtures"]
 
 # #![cfg(feature = "esp32s3-fixtures")]
@@ -228,6 +243,16 @@ required-features = ["event-scheduler"]
 
 # #![cfg(feature = "event-scheduler")]
 [[test]]
+name = "esp32s3_doom_frame_oracle"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "esp32s3_smp_yield_latency"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
 name = "esp32s3_walk_differential"
 required-features = ["event-scheduler"]
 
@@ -239,6 +264,11 @@ required-features = ["iolink-native"]
 # #![cfg(feature = "event-scheduler")]
 [[test]]
 name = "kw41z_walk_free_differential"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
+name = "efr32mg26_walk_differential"
 required-features = ["event-scheduler"]
 
 # #![cfg(feature = "event-scheduler")]

@@ -2,6 +2,12 @@ name: "atmega328p"
 arch: "avr"
 core: "avr8"
 registers_count: 32
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# 16 MHz crystal on the Arduino Nano/Uno boards this part is modelled for
+# (the ATmega328P itself is rated to 20 MHz at 5 V; no in-tree board uses it).
+cpu_hz: 16_000_000
+
 flash:
   base: 0x00000000
   size: "32KB"

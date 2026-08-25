@@ -37,6 +37,24 @@ where
     }
 }
 
+/// [`deserialize_u64_lax`] for an optional field: absent ⇒ `None`, present ⇒
+/// the same int-or-underscored-string parse. YAML 1.2 does not accept `_` in a
+/// number, so `cpu_hz: 160_000_000` arrives as a *string* — the corpus is
+/// written that way throughout and this is what makes it a clock.
+fn deserialize_opt_u64_lax<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let raw = Option::<serde_yaml::Value>::deserialize(deserializer)?;
+    match raw {
+        None | Some(serde_yaml::Value::Null) => Ok(None),
+        Some(v) => deserialize_u64_lax(v).map(Some).map_err(|e| {
+            serde::de::Error::custom(format!("cpu_hz is not a whole number of hertz: {e}"))
+        }),
+    }
+}
+
 /// Default schema version for YAML configs
 fn default_schema_version() -> String {
     "1.0".to_string()
@@ -57,11 +75,75 @@ pub enum Arch {
     Unknown,
 }
 
+/// Deserialize a memory size, in bytes, from the human form the chip YAMLs use.
+///
+/// The wire format is unchanged — `128KB`, `1.5 MiB`, `0x20000` and a bare
+/// `131072` all still load. What changed is that the parse happens HERE, once,
+/// at the boundary, instead of at each of the 39 places that used to call
+/// `parse_size(&chip.ram.size)` on a `String` field.
+///
+/// That mattered: 18 of those call sites ended `.unwrap_or(0)`. A size that
+/// failed to parse did not fail the run — it silently became **zero bytes of
+/// RAM**, and the eleven ESP32-C3 suites computing `sp_top = ram.base + size`
+/// got a stack pointer at the very bottom of RAM. Wrong, and green. Making the
+/// field a `u64` deletes the fallible read, so that state cannot be
+/// constructed: a bad size is now a load error naming the field.
+fn deserialize_size<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IntOrString {
+        Int(u64),
+        String(String),
+    }
+
+    match IntOrString::deserialize(deserializer)? {
+        IntOrString::Int(v) => Ok(v),
+        IntOrString::String(s) => parse_size(&s).map_err(serde::de::Error::custom),
+    }
+}
+
+/// Serialize a size back as a bare byte count.
+///
+/// Deliberately NOT re-rendered in a unit, because the units here do not mean
+/// what they look like. Measured against the real parser:
+///
+/// ```text
+///   1KB  -> 1024          1KiB -> 1024
+///   1MB  -> 1_000_000     1MiB -> 1_048_576
+/// ```
+///
+/// `KB` is BINARY and `MB` is DECIMAL — inconsistent with each other, inside
+/// one parser. So re-rendering `1048576` as `1MB` would read back as
+/// `1_000_000` and quietly shrink a chip's flash by 4.9% on every round trip.
+/// A bare byte count says exactly one thing and `parse_size` reads it back
+/// unchanged.
+///
+/// (That asymmetry was also a live fidelity bug: nine committed chips spelled
+/// flash in `MB`, so e.g. esp32s3 modelled 16_000_000 bytes where the part has
+/// 16 MiB = 16_777_216. All nine have since been rewritten in `KB`, and
+/// `labwired_core::tests::chip_memory_sizes` fails the build if a new chip
+/// reintroduces the spelling.)
+fn serialize_size<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u64(*value)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MemoryRange {
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
-    pub size: String, // e.g. "128KB"
+    /// Size in BYTES. Parsed from the YAML's human form at load time.
+    #[serde(
+        deserialize_with = "deserialize_size",
+        serialize_with = "serialize_size"
+    )]
+    pub size: u64,
 }
 
 /// An additional named RAM/ROM-backed memory window beyond the primary
@@ -73,7 +155,12 @@ pub struct NamedMemoryRange {
     pub name: String,
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
-    pub size: String,
+    /// Size in BYTES — same boundary parse as [`MemoryRange::size`].
+    #[serde(
+        deserialize_with = "deserialize_size",
+        serialize_with = "serialize_size"
+    )]
+    pub size: u64,
     /// Optional env var naming a path to a raw binary loaded into this region at
     /// `base` (e.g. a chip's mask ROM dump). Used for copyrighted vendor blobs
     /// that can't be committed — the region stays zero-filled if unset/missing.
@@ -169,6 +256,100 @@ pub struct PinLoc {
     pub bit: u8,
 }
 
+/// Which family's atomic register aliases a chip implements.
+///
+/// Both families alias every peripheral register three more times at a 0x1000
+/// stride inside the peripheral's window, and both let firmware do a bit-level
+/// read-modify-write with one store. They do NOT agree on which alias means
+/// what, and the two orders overlap enough that using the wrong one is silent:
+/// an RP2040 SET (`+0x2000`) is an EFR32 CLR, so a driver "enabling" a clock
+/// would disable it and every later access to that block would read zero.
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AtomicAliasFlavour {
+    /// No aliases. An alias address is ordinary (usually unmapped) MMIO.
+    #[default]
+    None,
+    /// RP2040 / RP2350: `+0x1000` XOR, `+0x2000` SET, `+0x3000` CLR
+    /// (`hw_xor_bits` / `hw_set_bits` / `hw_clear_bits`, pico-sdk
+    /// `hardware/address_mapped.h`). The HAL drives nearly all register setup
+    /// through them, so without this an unmodified image faults on the first
+    /// `hw_set_bits`.
+    Rp2040,
+    /// Silicon Labs EFR32/EFM32 Series 2: `+0x1000` SET, `+0x2000` CLR,
+    /// `+0x3000` TGL (EFR32xG26 Reference Manual rev 1.0, "Peripheral Bit Set
+    /// and Clear"; `emlib` writes `PERIPH->REG_SET = mask`). Series-2 emlib and
+    /// the Gecko SDK use the aliases for essentially every enable bit — CMU
+    /// clock gating, GPIO ROUTEEN, USART/EUSART enables — so a Series-2 image
+    /// cannot configure a single peripheral without them.
+    Efr32s2,
+}
+
+impl AtomicAliasFlavour {
+    /// The op an alias index (`(addr >> 12) & 0x3`) means for this family, or
+    /// `None` for index 0 (the register itself) and for a chip with no aliases.
+    #[inline]
+    pub fn op_for_index(self, index: u64) -> Option<AtomicAliasOp> {
+        match (self, index) {
+            (Self::None, _) | (_, 0) => None,
+            (Self::Rp2040, 1) => Some(AtomicAliasOp::Xor),
+            (Self::Rp2040, 2) => Some(AtomicAliasOp::Set),
+            (Self::Rp2040, _) => Some(AtomicAliasOp::Clr),
+            (Self::Efr32s2, 1) => Some(AtomicAliasOp::Set),
+            (Self::Efr32s2, 2) => Some(AtomicAliasOp::Clr),
+            (Self::Efr32s2, _) => Some(AtomicAliasOp::Xor),
+        }
+    }
+
+    /// Whether this chip decodes atomic aliases at all.
+    #[inline]
+    pub fn is_enabled(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+/// The read-modify-write an atomic alias performs. `Xor` doubles as Series-2
+/// TGL: toggling IS an XOR of the written mask, and keeping one op spares the
+/// bus a second identical arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicAliasOp {
+    /// Write XORs the bits (RP2040 `+0x1000`, EFR32 Series-2 TGL `+0x3000`).
+    Xor,
+    /// Write sets (ORs) the bits.
+    Set,
+    /// Write clears (AND-NOTs) the bits.
+    Clr,
+}
+
+/// `false` / `true` / `"none"` / `"rp2040"` / `"efr32s2"`. The bool spelling is
+/// what every RP2040 descriptor in the tree already carries; `true` keeps
+/// meaning RP2040 rather than becoming ambiguous the day a second family
+/// arrived.
+fn deserialize_atomic_alias_flavour<'de, D>(d: D) -> Result<AtomicAliasFlavour, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrName {
+        Bool(bool),
+        Name(String),
+    }
+    match BoolOrName::deserialize(d)? {
+        BoolOrName::Bool(false) => Ok(AtomicAliasFlavour::None),
+        BoolOrName::Bool(true) => Ok(AtomicAliasFlavour::Rp2040),
+        BoolOrName::Name(name) => match name.trim().to_ascii_lowercase().as_str() {
+            "none" | "false" => Ok(AtomicAliasFlavour::None),
+            "rp2040" | "rp2350" | "true" => Ok(AtomicAliasFlavour::Rp2040),
+            "efr32s2" | "efm32s2" | "efr32_series2" | "efr32xg2" => Ok(AtomicAliasFlavour::Efr32s2),
+            other => Err(D::Error::custom(format!(
+                "unknown atomic_register_aliases '{other}'; expected false, true, rp2040 or efr32s2"
+            ))),
+        },
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -182,6 +363,26 @@ pub struct ChipDescriptor {
     /// that predate this field.
     #[serde(default)]
     pub core: Option<String>,
+    /// The clock this chip's core runs at in the simulator, in Hz — the single
+    /// source of truth for every "how many cycles is a microsecond" question.
+    ///
+    /// Self-timing devices (DHT22, the rotary encoder, WS2812) convert their
+    /// datasheet µs/ns windows to simulated cycles with this number, so it has
+    /// to agree with the clock the firmware was built against or the firmware
+    /// decodes noise. It used to be four inline literals and two board-name
+    /// string comparisons spread over two languages; it is now declared once,
+    /// here, per chip.
+    ///
+    /// This is the chip's *default* rate. A board that runs the part slower —
+    /// the NUCLEO-L476RG never leaves the 4 MHz MSI reset clock — overrides it
+    /// with [`SystemManifest::cpu_hz`].
+    ///
+    /// `0` means "undeclared". Every in-tree chip declares it and
+    /// `every_chip_descriptor_declares_a_cpu_hz` fails the build if a new one does
+    /// not, but the field stays defaulted so an out-of-tree chip YAML written before
+    /// this existed still loads.
+    #[serde(default, deserialize_with = "deserialize_u64_lax")]
+    pub cpu_hz: u64,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
     /// Offset in bytes from the flash base to the application vector table
@@ -194,15 +395,15 @@ pub struct ChipDescriptor {
     /// the real reset vector when the flash-base vectors are not valid.
     #[serde(default, deserialize_with = "deserialize_u64_lax")]
     pub reset_vector_offset: u64,
-    /// RP2040-style atomic register aliases. When true, every 0x1000-strided
-    /// alias of a peripheral register in the APB window decodes as an atomic
-    /// op on the base register: `+0x0000` normal, `+0x1000` XOR, `+0x2000`
-    /// SET (bitwise OR), `+0x3000` CLR (bitwise AND-NOT). The RP2040 HAL drives
-    /// nearly all of its register setup through these aliases (`hw_set_bits`,
-    /// `hw_clear_bits`), so without them an unmodified image faults on the
-    /// first `hw_set_bits`. Default `false` (other Cortex-M parts).
-    #[serde(default)]
-    pub atomic_register_aliases: bool,
+    /// Atomic register aliases: the 0x1000-strided aliases of every peripheral
+    /// register that a family's HAL uses for read-modify-write without a
+    /// critical section. Two families do this with the SAME stride and
+    /// DIFFERENT ops, so the key names which — see [`AtomicAliasFlavour`].
+    /// Accepts `false`/`true` (historical spelling: `true` == `rp2040`) or the
+    /// flavour name. Default: none, i.e. an alias address is unmapped MMIO and
+    /// faults, which is correct for STM32/nRF/etc.
+    #[serde(default, deserialize_with = "deserialize_atomic_alias_flavour")]
+    pub atomic_register_aliases: AtomicAliasFlavour,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -731,6 +932,17 @@ pub struct SystemManifest {
     pub schema_version: String,
     pub name: String,
     pub chip: String, // Reference to chip name or file path
+    /// Override for [`ChipDescriptor::cpu_hz`] — the clock THIS board runs the
+    /// part at, in Hz. Absent ⇒ the chip's declared default.
+    ///
+    /// The key has been in the corpus for a long time; until now nothing in the
+    /// engine read it. Ten system YAMLs declared a `cpu_hz:` that serde threw
+    /// away, and `nucleo-l476rg.yaml` documented the discard in a comment —
+    /// the firmware there never configures the PLL, so the core really runs at
+    /// the 4 MHz MSI reset rate and every self-timed device on that board was
+    /// nevertheless being told 80 MHz. Reading the key is the fix.
+    #[serde(default, deserialize_with = "deserialize_opt_u64_lax")]
+    pub cpu_hz: Option<u64>,
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
@@ -1139,6 +1351,22 @@ fn optional_nonempty_interconnect_string<'a>(
 }
 
 impl ChipDescriptor {
+    /// Is this an ESP32-S3 (Xtensa LX7) part?
+    ///
+    /// The S3 needs its own memory map — DROM 0x3C00_xxxx, DRAM 0x3FC8_xxxx,
+    /// IROM 0x4200_xxxx, IRAM 0x4037_xxxx — and the classic ESP32 (LX6) setup
+    /// loads none of an S3 image's segments. Every caller that has to choose
+    /// between those two setups asks this question, and the answer lives here
+    /// because it was previously answered twice, differently:
+    /// `crates/wasm` matched `name.starts_with("esp32s3")` and the CLI's `test`
+    /// command matched `name == "esp32s3"` exactly. So `esp32s3-zero` — a
+    /// shipped board variant — booted in the browser and died with a memory
+    /// violation under `labwired test`, and no S3 board variant could be
+    /// covered by a CLI gate at all.
+    pub fn is_esp32s3(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)?;
@@ -1208,75 +1436,16 @@ pub fn is_builtin_chip_spec(spec: &str) -> bool {
         && !spec.ends_with(".json")
 }
 
-/// The chips bundled with the CLI, in the spelling a `chip:` field accepts.
-pub const BUILTIN_CHIP_NAMES: &[&str] = &[
-    "atmega328p",
-    "esp32",
-    "esp32c3",
-    "esp32s3",
-    "esp32s3-zero",
-    "mkw41z4",
-    "nrf52832",
-    "nrf52840",
-    "nrf5340",
-    "nrf54l15",
-    "rp2040",
-    "rp2350",
-    "stm32f103",
-    "stm32f401",
-    "stm32f401cdu6",
-    "stm32f405",
-    "stm32f407",
-    "stm32f767",
-    "stm32f411ceu6",
-    "stm32g474re",
-    "stm32h563",
-    "stm32h735",
-    "stm32l073",
-    "stm32l476",
-    "stm32wb55",
-    "stm32wba52",
-];
+// BUILTIN_CHIP_NAMES + embedded_chip_yaml(), generated from configs/chips/ by
+// build.rs. They used to be two hand-written lists that had to agree with each
+// other and with the directory; the directory is now the registry, so there is
+// nothing left to keep in step. See build.rs for why ci-fixture-* is excluded.
+include!(concat!(env!("OUT_DIR"), "/builtin_chips.rs"));
 
 /// Chips that moved to the private `labwired-ip` repo. Kept so users get a
 /// pointed error instead of "unknown chip". Empty until the first chip
 /// migrates; `resolve`/`resolve_with` check it before the unknown-chip error.
 pub const MOVED_CHIP_NAMES: &[&str] = &[];
-
-/// The embedded `configs/chips/*.yaml` descriptors, keyed by built-in name.
-/// `include_str!` bundles them so a released binary carries them and wasm
-/// builds (no `std::fs`) resolve them too.
-pub fn embedded_chip_yaml(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "atmega328p" => include_str!("../../../configs/chips/atmega328p.yaml"),
-        "esp32" => include_str!("../../../configs/chips/esp32.yaml"),
-        "esp32c3" => include_str!("../../../configs/chips/esp32c3.yaml"),
-        "esp32s3" => include_str!("../../../configs/chips/esp32s3.yaml"),
-        "esp32s3-zero" => include_str!("../../../configs/chips/esp32s3-zero.yaml"),
-        "mkw41z4" => include_str!("../../../configs/chips/mkw41z4.yaml"),
-        "nrf52832" => include_str!("../../../configs/chips/nrf52832.yaml"),
-        "nrf52840" => include_str!("../../../configs/chips/nrf52840.yaml"),
-        "nrf5340" => include_str!("../../../configs/chips/nrf5340.yaml"),
-        "nrf54l15" => include_str!("../../../configs/chips/nrf54l15.yaml"),
-        "rp2040" => include_str!("../../../configs/chips/rp2040.yaml"),
-        "rp2350" => include_str!("../../../configs/chips/rp2350.yaml"),
-        "stm32f103" => include_str!("../../../configs/chips/stm32f103.yaml"),
-        "stm32f401" => include_str!("../../../configs/chips/stm32f401.yaml"),
-        "stm32f401cdu6" => include_str!("../../../configs/chips/stm32f401cdu6.yaml"),
-        "stm32f405" => include_str!("../../../configs/chips/stm32f405.yaml"),
-        "stm32f767" => include_str!("../../../configs/chips/stm32f767.yaml"),
-        "stm32f407" => include_str!("../../../configs/chips/stm32f407.yaml"),
-        "stm32f411ceu6" => include_str!("../../../configs/chips/stm32f411ceu6.yaml"),
-        "stm32g474re" => include_str!("../../../configs/chips/stm32g474re.yaml"),
-        "stm32h563" => include_str!("../../../configs/chips/stm32h563.yaml"),
-        "stm32h735" => include_str!("../../../configs/chips/stm32h735.yaml"),
-        "stm32l073" => include_str!("../../../configs/chips/stm32l073.yaml"),
-        "stm32l476" => include_str!("../../../configs/chips/stm32l476.yaml"),
-        "stm32wb55" => include_str!("../../../configs/chips/stm32wb55.yaml"),
-        "stm32wba52" => include_str!("../../../configs/chips/stm32wba52.yaml"),
-        _ => return None,
-    })
-}
 
 impl SystemManifest {
     /// Parse a System Manifest from a YAML string. Unlike [`Self::from_file`]
@@ -2880,34 +3049,39 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             .get("FLASH")
             .map(|r| MemoryRange {
                 base: r.base,
-                size: format!("{}B", r.size),
+                // r.size is already a byte count; it used to be formatted to
+                // "<n>B" purely so this field could hold a String, then parsed
+                // straight back at every read. That round-trip is gone.
+                size: r.size,
             })
-            .unwrap_or(MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            });
+            .unwrap_or(MemoryRange { base: 0, size: 0 });
 
         let ram = ir
             .memory_regions
             .get("RAM")
             .map(|r| MemoryRange {
                 base: r.base,
-                size: format!("{}B", r.size),
+                // r.size is already a byte count; it used to be formatted to
+                // "<n>B" purely so this field could hold a String, then parsed
+                // straight back at every read. That round-trip is gone.
+                size: r.size,
             })
-            .unwrap_or(MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            });
+            .unwrap_or(MemoryRange { base: 0, size: 0 });
 
         Self {
             schema_version: default_schema_version(),
             name: ir.name,
             arch,
             core,
+            // An SVD/IR document describes a register map, not a clock tree —
+            // it has no core frequency to carry over. `0` is the honest answer
+            // ("undeclared"); attach sites keep their historical default for it
+            // rather than inventing a number here.
+            cpu_hz: 0,
             flash,
             ram,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals
@@ -3012,6 +3186,7 @@ impl ResolvedSystem {
                 schema_version: default_schema_version(),
                 name: chip.to_string(),
                 chip: chip.to_string(),
+                cpu_hz: None,
                 ..SystemManifest::default()
             },
             base_dir: PathBuf::from("."),
@@ -3399,6 +3574,24 @@ pub struct DisplayRegionDetails {
     /// which is only allowed when `min_ink` is itself above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_ink: Option<f64>,
+    /// Require the panel to be EMITTING, not merely painted.
+    ///
+    /// Ink measures frame memory, and frame memory fills whether or not the
+    /// panel can show it. On an emissive display those are different
+    /// questions: an AMOLED has no backlight and its brightness lives in the
+    /// controller (DCS `WRDISBV`, reset 0x00), so firmware ported from a
+    /// backlit TFT driver paints a perfect frame and displays black.
+    ///
+    /// This is not hypothetical and it is why the field exists: deleting the
+    /// one `WRDISBV` write from the nRF54LM20A snake firmware left its lab
+    /// passing 7/7, because every assertion measured pixels that had genuinely
+    /// been written to a panel nobody could see.
+    ///
+    /// Only meaningful for a panel that publishes `meta.lit`; asking it of one
+    /// that does not is an error rather than a pass, on the same principle as
+    /// every other way of not-measuring here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lit: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -4340,9 +4533,22 @@ impl EnvTestScript {
         // it checks, or it visibly checks nothing.
 
         for (index, assertion) in self.assertions.iter().enumerate() {
+            // UART assertions carry no node id, so there is no node rule to
+            // enforce here. The world runner evaluates them against every
+            // node's captured stream.
+            if matches!(
+                assertion,
+                TestAssertion::UartContains(_)
+                    | TestAssertion::UartRegex(_)
+                    | TestAssertion::UartOrdered(_)
+            ) {
+                continue;
+            }
             let TestAssertion::MemoryValue(memory) = assertion else {
                 anyhow::bail!(
-                    "Environment test scripts support only memory_value assertions (assertions[{index}])"
+                    "Environment test scripts support only uart_contains / uart_regex / \
+                     uart_ordered and node-qualified memory_value assertions (assertions[{index}]); \
+                     the world runner cannot observe the others"
                 );
             };
             let has_node =
@@ -5881,18 +6087,6 @@ assertions:
     fn env_script_requires_memory_assertions_with_nodes() {
         for (name, yaml, diagnostic) in [
             (
-                "no-assertions",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-  - uart_contains: "PASS"
-"#,
-                "memory_value",
-            ),
-            (
                 "missing-node",
                 r#"
 schema_version: "1.0"
@@ -5915,20 +6109,64 @@ assertions:
                 "node",
             ),
             (
+                // Still unsupported, and still refused: the world runner has no
+                // per-node stop reason to compare against. The refusal must
+                // survive UART assertions becoming legal, or admitting those
+                // would have quietly admitted everything.
                 "unsupported-assertion",
                 r#"
 schema_version: "1.0"
 inputs: { env: "twonode-env.yaml" }
 limits: { max_steps: 10 }
 assertions:
-  - uart_contains: "PASS"
+  - expected_stop_reason: max_steps
 "#,
-                "memory_value",
+                "cannot observe",
             ),
         ] {
             let script_path = write_temp_file(name, yaml);
             let err = load_test_script(&script_path).unwrap_err().to_string();
             assert!(err.contains(diagnostic), "unexpected error: {err}");
+        }
+    }
+
+    /// UART assertions carry no node id, so the node rules above do not apply
+    /// to them; they are satisfied by any node printing the text. They load
+    /// alone and alongside a node-qualified `memory_value`.
+    #[test]
+    fn env_script_accepts_uart_assertions() {
+        for (name, yaml) in [
+            (
+                "uart-only",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - uart_contains: "PASS"
+  - uart_regex: "PA+SS"
+  - uart_ordered: ["boot", "PASS"]
+"#,
+            ),
+            (
+                "uart-and-memory",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+  - uart_contains: "PASS"
+"#,
+            ),
+        ] {
+            let script_path = write_temp_file(name, yaml);
+            let script = load_test_script(&script_path)
+                .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            assert!(
+                matches!(script, LoadedTestScript::Env(_)),
+                "{name} must load as an environment script"
+            );
         }
     }
 
@@ -6091,6 +6329,77 @@ registers:
 }
 
 #[cfg(test)]
+mod memory_size_tests {
+    use super::*;
+
+    fn chip(flash: &str, ram: &str) -> Result<ChipDescriptor, serde_yaml::Error> {
+        serde_yaml::from_str(&format!(
+            "name: t\narch: arm\nflash: {{ base: 0, size: \"{flash}\" }}\n\
+             ram: {{ base: 0x20000000, size: \"{ram}\" }}\nperipherals: []\n"
+        ))
+    }
+
+    /// The wire format is unchanged: every spelling the chip yamls use still loads.
+    #[test]
+    fn the_human_forms_still_load() {
+        assert_eq!(chip("64KB", "16KiB").unwrap().flash.size, 64 * 1024);
+        assert_eq!(chip("64KB", "16KiB").unwrap().ram.size, 16 * 1024);
+        assert_eq!(chip("1MiB", "131072").unwrap().flash.size, 1024 * 1024);
+        assert_eq!(chip("1MiB", "131072").unwrap().ram.size, 131_072);
+    }
+
+    /// KB is BINARY and MB is DECIMAL, in the same parser. Pinned here because
+    /// it is the opposite of what the spelling suggests and nothing else states
+    /// it.
+    ///
+    /// No committed chip relies on the `MB` arm any more. Nine of them used to,
+    /// and every one modelled less flash than its part has; esp32s3 was
+    /// rewritten to `"16384KB"` first, and the remaining eight (esp32c3,
+    /// rp2040, rp2350, stm32f103/f405/f407/f767/l476, plus the C3's DROM
+    /// window) followed. The multipliers still cannot move — they are the wire
+    /// format every out-of-tree descriptor and every hosted manifest was
+    /// written against — so the spelling is policed instead, over the shipped
+    /// corpus, by `labwired_core::tests::chip_memory_sizes`.
+    #[test]
+    fn kb_is_1024_and_mb_is_1000000() {
+        assert_eq!(chip("1KB", "1KB").unwrap().flash.size, 1024);
+        assert_eq!(chip("1MB", "1KB").unwrap().flash.size, 1_000_000);
+        assert_eq!(chip("1MiB", "1KB").unwrap().flash.size, 1_048_576);
+    }
+
+    /// The point of moving the parse to the boundary: a size that does not
+    /// parse is now a load error. It used to be stored verbatim and then hit
+    /// `parse_size(..).unwrap_or(0)` at the point of use — so a typo'd unit
+    /// gave the machine ZERO bytes of RAM and ran anyway.
+    #[test]
+    fn an_unparseable_size_fails_the_load_instead_of_becoming_zero() {
+        let err = chip("64K", "16KB").expect_err("a bare `K` is not a unit human_size accepts");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("flash"),
+            "the error must name the field: {msg}"
+        );
+        assert!(
+            msg.contains("Invalid size format"),
+            "the error must say what was wrong: {msg}"
+        );
+    }
+
+    /// Sizes round-trip through serde without changing value. They serialise as
+    /// a bare byte count precisely so this holds — re-rendering `1048576` as
+    /// `1MB` would read back as 1_000_000.
+    #[test]
+    fn a_size_round_trips_without_shrinking() {
+        let c = chip("1MiB", "192KB").unwrap();
+        let back: ChipDescriptor =
+            serde_yaml::from_str(&serde_yaml::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back.flash.size, c.flash.size);
+        assert_eq!(back.ram.size, c.ram.size);
+        assert_eq!(back.flash.size, 1_048_576);
+    }
+}
+
+#[cfg(test)]
 mod pin_map_tests {
     use super::*;
 
@@ -6099,8 +6408,8 @@ mod pin_map_tests {
         let yaml = r#"
 name: "test-chip"
 arch: "arm"
-flash: { base: 0, size: "64K" }
-ram: { base: 0x20000000, size: "16K" }
+flash: { base: 0, size: "64KB" }
+ram: { base: 0x20000000, size: "16KB" }
 peripherals: []
 pins:
   PC0: { gpio: gpioc, bit: 0, functions: [{ type: gpio, peripheral: gpioc }] }
@@ -6120,8 +6429,8 @@ pins:
         let yaml = r#"
 name: "no-pins"
 arch: "arm"
-flash: { base: 0, size: "64K" }
-ram: { base: 0x20000000, size: "16K" }
+flash: { base: 0, size: "64KB" }
+ram: { base: 0x20000000, size: "16KB" }
 peripherals: []
 "#;
         let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse");

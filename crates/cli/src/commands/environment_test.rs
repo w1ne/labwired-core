@@ -9,7 +9,8 @@ use crate::artifacts::{
     AssertionResult, EnvironmentConfig, EnvironmentNodeProvenance, EnvironmentNodeSnapshot,
     EnvironmentTestResult, Snapshot,
 };
-use crate::{build_stop_reason_details, TestArgs, EXIT_CONFIG_ERROR};
+use crate::report::build_stop_reason_details;
+use crate::{TestArgs, EXIT_CONFIG_ERROR};
 use labwired_config::{EnvTestScript, EnvironmentManifest, StopReason, TestAssertion, TestLimits};
 use labwired_core::world::{MachineTrait, World};
 use sha2::{Digest, Sha256};
@@ -407,9 +408,22 @@ fn validate_environment_assertions(
     manifest: &EnvironmentManifest,
 ) -> Option<String> {
     for (index, assertion) in assertions.iter().enumerate() {
+        // UART assertions carry no node id, so there is nothing to resolve
+        // against the manifest. They are evaluated against every node's
+        // captured stream in `evaluate_assertions`.
+        if matches!(
+            assertion,
+            TestAssertion::UartContains(_)
+                | TestAssertion::UartRegex(_)
+                | TestAssertion::UartOrdered(_)
+        ) {
+            continue;
+        }
         let TestAssertion::MemoryValue(memory) = assertion else {
             return Some(format!(
-                "environment assertion {index} is not a node-qualified memory_value assertion"
+                "environment assertion {index} is not a uart_contains/uart_regex/uart_ordered \
+                 or node-qualified memory_value assertion; the world runner cannot observe the \
+                 others (no per-node simctl verdict, motor bus, or post-run footprint)"
             ));
         };
         let node = memory.memory_value.node.as_deref().unwrap_or_default();
@@ -489,7 +503,7 @@ fn run_world(
             break;
         }
         if limits.stop_when_assertions_pass {
-            let all_assertions_passed = evaluate_assertions(&script.assertions, world)
+            let all_assertions_passed = evaluate_assertions(&script.assertions, world, uart_sinks)
                 .iter()
                 .all(|assertion| assertion.passed);
             if all_assertions_passed {
@@ -513,7 +527,7 @@ fn run_world(
     let duration = start.elapsed();
     let cycles = max_cycles(world);
     let uart_bytes = total_uart_bytes(uart_sinks);
-    let assertions = evaluate_assertions(&script.assertions, world);
+    let assertions = evaluate_assertions(&script.assertions, world, uart_sinks);
     let all_assertions_passed = assertions.iter().all(|assertion| assertion.passed);
     let safety_stop_requires_failure = matches!(
         stop_reason,
@@ -605,7 +619,21 @@ fn stop_reason_for_simulation_error(error: &labwired_core::SimulationError) -> S
     }
 }
 
-fn evaluate_assertions(assertions: &[TestAssertion], world: &World) -> Vec<AssertionResult> {
+fn evaluate_assertions(
+    assertions: &[TestAssertion],
+    world: &World,
+    uart_sinks: &BTreeMap<String, Arc<Mutex<Vec<u8>>>>,
+) -> Vec<AssertionResult> {
+    // Decoded once per evaluation, not once per assertion: this runs every
+    // world round when `stop_when_assertions_pass` is set.
+    let node_uart_text: Vec<String> = uart_sinks
+        .values()
+        .map(|sink| {
+            sink.lock()
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .unwrap_or_default()
+        })
+        .collect();
     assertions
         .iter()
         .map(|assertion| {
@@ -618,7 +646,13 @@ fn evaluate_assertions(assertions: &[TestAssertion], world: &World) -> Vec<Asser
                         .map(|machine| memory_assertion_passes(machine.as_ref(), memory))
                         .unwrap_or(false)
                 }
-                _ => false,
+                // A UART assertion names no node, so it is satisfied by ANY
+                // node printing it. Evaluated per node rather than against the
+                // concatenation, so `uart_ordered` cannot be satisfied by
+                // tokens spread across two different machines.
+                other => node_uart_text
+                    .iter()
+                    .any(|text| crate::uart_assertion_passes(other, text) == Some(true)),
             };
             AssertionResult {
                 assertion: assertion.clone(),

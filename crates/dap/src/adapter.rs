@@ -1064,9 +1064,31 @@ fn gpio_offsets_for_peripheral(
             idr_offset: 0x10,
             odr_offset: 0x00,
         }),
+        // Silicon Labs Series-2 EFR32 port struct: DOUT (output) at 0x10, DIN
+        // (input) at 0x14 (efr32mg26_gpio_port.h, GPIO_PORT_TypeDef).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Efr32s2 => Some(GpioOffsets {
+            idr_offset: 0x14,
+            odr_offset: 0x10,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,
+        // nRF54L family (nRF54L05/10/15, nRF54LM20A/B): OUT at 0x000, IN at
+        // 0x00C, from the Nordic MDK SVD (GLOBAL_P2).
+        //
+        // Mapped rather than skipped like nRF52 above, because on this family
+        // the arithmetic is well defined: the chip yaml declares each port at
+        // the VENDOR's own base with the block starting at OUT, so
+        // `base + offset` lands on the register. The nRF52 profiles back-offset
+        // their base instead, which is why `base + 0x504` is not a safe thing
+        // for this function to assume there.
+        //
+        // These are the same two numbers `GpioPort::odr_offset()` and
+        // `idr_offset()` return for this layout; keep the three in step.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf54l => Some(GpioOffsets {
+            idr_offset: 0x00C,
+            odr_offset: 0x000,
+        }),
     }
 }
 
@@ -1157,18 +1179,19 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
+            cpu_hz: 0,
             arch: labwired_config::Arch::Arm,
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32000,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -1188,6 +1211,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1220,18 +1244,19 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
+            cpu_hz: 0,
             arch: labwired_config::Arch::Arm,
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32000,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "gpiob".to_string(),
@@ -1251,6 +1276,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
@@ -1297,18 +1323,19 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
+            cpu_hz: 0,
             arch: labwired_config::Arch::Arm,
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32000,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "gpiob".to_string(),
@@ -1328,6 +1355,7 @@ mod tests {
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),

@@ -1,0 +1,10 @@
+# LabWired - BRD2709A (xG26-EK2709A) UART smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 512
+assertions:
+  - uart_contains: "MG26 OK"
+  - expected_stop_reason: max_steps

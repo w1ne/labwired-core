@@ -84,6 +84,7 @@ fn f407_bus() -> SystemBus {
         schema_version: "1.0".to_string(),
         name: "f407-dma".to_string(),
         chip: path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         board_io: vec![],
         debug_uart: None,

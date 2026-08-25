@@ -9,10 +9,20 @@ board_io:
     pin: 5
     signal: "output"
     active_high: true
+  # B1 is ACTIVE LOW. UM1724 wires the user button from PC13 to GND with a pull
+  # up, so a press reads 0 — which is why every other Nucleo-64 manifest here
+  # (nucleo-l073rz.yaml, nucleo-l476rg.yaml) declares `active_high: false` for
+  # the same button on the same pin. This one said `true`, so firmware polling
+  # B1 through the twin saw the press inverted: idle read as pressed and a real
+  # press read as released.
+  #
+  # Found by the superproject's mcu-profile-source-drift gate, which compares a
+  # board's declared user IO against the core manifest it cites — the NUCLEO-64
+  # McuProfile says active-low and this file disagreed with its two siblings.
   - id: "button_b1"
     kind: "button"
     peripheral: "gpioc"
     pin: 13
     signal: "input"
-    active_high: true
+    active_high: false
 

@@ -1269,20 +1269,18 @@ impl WasmSimulator {
     /// Bytes outside any mapped region read back as `0` here (the honest
     /// mapped/unmapped markers live on the core [`labwired_core::Machine::peek`]
     /// / the `inspect` payload; this raw byte view is the fast path).
+    ///
+    /// Errors when there is no machine at all, rather than handing back an empty
+    /// buffer: a zero-length read is data-shaped, so a caller that checks
+    /// `.length` could not tell "nothing is mapped here" from "this simulator
+    /// never started". The per-byte lossy zero-fill above is unchanged.
     #[wasm_bindgen]
-    pub fn peek(&self, addr: u32, len: u32) -> Box<[u8]> {
-        // A panic here would throw a JS exception straight out of this wasm
-        // frame; JS exceptions do NOT run Rust destructors, so the
-        // wasm-bindgen borrow guard would never drop and EVERY later call
-        // would fail with "recursive use of an object". Never panic in an
-        // accessor — answer neutrally instead.
-        let Some(machine) = self.machine.as_ref() else {
-            return Vec::new().into_boxed_slice();
-        };
-        machine
+    pub fn peek(&self, addr: u32, len: u32) -> Result<Box<[u8]>, JsValue> {
+        let machine = self.machine_or_err()?;
+        Ok(machine
             .peek(addr as u64, len as usize)
             .to_lossy_bytes()
-            .into_boxed_slice()
+            .into_boxed_slice())
     }
 
     /// Read the IO-Link master peer's live state: `{ link_state, pd_valid,

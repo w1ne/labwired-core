@@ -200,18 +200,19 @@ mod from_declaration {
         ChipDescriptor {
             schema_version: "1.0".to_string(),
             name: "simctl-test-chip".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0,
-                size: "128KB".to_string(),
+                size: 125 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20000,
             },
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "simctl".to_string(),
@@ -233,6 +234,7 @@ mod from_declaration {
             schema_version: "1.0".to_string(),
             name: "simctl-test-system".to_string(),
             chip: "simctl-test-chip".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),

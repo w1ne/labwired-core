@@ -189,6 +189,21 @@ impl BleAirBus {
     }
 }
 
+/// Hand every controller on a BLE air a distinct identity, so no controller
+/// ever decodes its own transmission.
+///
+/// ONE counter for the whole process, deliberately. Identities are compared
+/// across controllers that share an air, and an air is shared by whatever ends
+/// up in one lab — an ESP32-C3 RW-BLE core and a [`crate::peripherals::
+/// virtual_ble::VirtualBle`] can be two nodes of the same world. Two
+/// per-model counters would both start at 1, so the first controller of each
+/// kind would collide and each would silently swallow the other's frames as
+/// "its own transmission". That failure looks exactly like a dead radio.
+pub fn next_node_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Process-global air, so two `Esp32c3Bt` models built by the ordinary factory
 /// (which has no lab identity to thread through) share one medium — the same
 /// transitional arrangement `nrf52::radio` uses for `Nrf52Radio::new()`.

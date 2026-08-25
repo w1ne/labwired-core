@@ -1,0 +1,519 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Silicon Labs EFR32MG26B510F3200IM48-B — Series-2 "Mighty Gecko" wireless SoC
+# (Cortex-M33 / ARMv8-M, 78 MHz, 3200 KiB flash, 512 KiB SRAM), as fitted to
+# the BRD2709A xG26-EK2709A Explorer Kit.
+#
+# Source references (P0 grounding):
+# - Memory map, peripheral bases and IRQ numbers: Silicon Labs CMSIS device
+#   header, simplicity_sdk tag sisdk-2025.6,
+#   platform/Device/SiliconLabs/EFR32MG26/Include/efr32mg26b510f3200im48.h
+#   (https://raw.githubusercontent.com/SiliconLabs/simplicity_sdk/sisdk-2025.6/platform/Device/SiliconLabs/EFR32MG26/Include/efr32mg26b510f3200im48.h)
+#   and efr32mg26_usart.h / efr32mg26_gpio.h / efr32mg26_gpio_port.h from the
+#   same tag. Silicon Labs ships NO public SVD for this family — these headers
+#   are the authoritative register source.
+# - Board pinout (VCOM/LED/buttons): UG594, BRD2709A User's Guide
+#   (https://www.silabs.com/documents/public/user-guides/ug594-brd2709a-user-guide.pdf).
+# - Product page: https://www.silabs.com/wireless/zigbee/efr32mg26-series-2-socs
+# - Silicon identification: probe-rs SWD against the physical board (Energy
+#   Micro DP part 0x1013, CPUID PARTNO = Cortex-M33).
+#
+# Address-map note — the thing to get right on this part:
+#   Flash is based at 0x0800_0000, NOT 0x0 (unlike Series-1 EFR32 and nRF).
+#   The bootloader vector table lives at 0x0800_0000; browser-flashed apps
+#   link at +32 KiB (reset_vector_offset 0x8000).
+#   Peripherals are mapped at their SECURE alias (0x4xxx_xxxx), which is the
+#   default firmware view on this part; the NS alias at 0x5xxx_xxxx is not
+#   mapped.
+#
+# Known divergences from silicon (honest list, L1 smoke target):
+#   - (FIXED) `analogWrite`'s waveform reaches a PAD. `GPIO_TIMERROUTE` is a
+#     real model, so a TIMER compare output is connected to the pin its route
+#     names — the last of the three gaps this board's onboarding note listed.
+#   - (FIXED) CMU and TIMER0 were `type: stub`. Both are real models now, and
+#     the clock gates gate. See `peripherals/efr32/{cmu,timer}.rs`.
+#   - Every register in the seven windows this part's silicon capture covers
+#     now reads what BRD2709A reads: 215/215, one exclusion, and that one is
+#     the attached debug probe's own footprint, not the chip. See
+#     `scripts/hw-oracle/captures/efr32mg26/` and `docs/coverage/`.
+#   - GPIO is modelled with the dedicated Series-2 port layout (CTRL/MODEL/
+#     MODEH/DOUT/DIN per port): DOUT drives pins, DIN reads pin state, the
+#     4-bit mode nibble gates input vs output (open-drain WIREDOR pins only
+#     pull LOW). NOT modelled: the ROUTE pin-mux registers are a stub window
+#     (`gpio_route` below — a deliberate sim no-op, load-bearing on silicon),
+#     the EXTI/EM4WU interrupt path, drive-strength/slew fields (stored, no
+#     behaviour), and the WIREDAND open-source analog niceties (treated as
+#     push-pull).
+#   - (FIXED) The Series-2 SET/CLR/TGL register aliases are now decoded, see
+#     `atomic_register_aliases` below.
+#   - (FIXED) USART0 (as `spi0`), USART1 (VCOM console) and USART2 are mapped,
+#     as are TIMER0..9 and I2C0..3. The four EUSARTs are still not declared.
+#   - MSC (flash controller), WDOG0/1, EMU, PRS, LDMA, radio (RAIL/RADIOAES),
+#     USERDATA (0x0FE0_0000) and DEVINFO (0x0FE0_8000) pages are not mapped;
+#     reads there fault the bus, deliberately loudly.
+#   - (MAPPED) SMU is declared — `SystemInit` writes it three instructions in,
+#     so an unmapped block faulted a vendor image before `main`. Registers
+#     only: no protection is enforced and the alias move is not modelled.
+#   - No `debug_schema` entries: Silicon Labs publishes no SVD for MG26 and the
+#     schema descriptors are SVD-ingested, so there is nothing honest to point
+#     at yet.
+schema_version: "1.0"
+name: "EFR32MG26"
+arch: "arm"
+core: "cortex-m33"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. EFR32MG26 maximum CPU
+# frequency, 78 MHz (datasheet; the part's PLL-less HFRCO top speed).
+cpu_hz: 78_000_000
+
+flash:
+  # FLASH_BASE 0x08000000 / FLASH_SIZE 0x00320000 (3200 KiB) — CMSIS header.
+  base: 0x08000000
+  size: "3200KB"
+# UART bootloader owns the first 32 KiB. Hosted Arduino / XMODEM images put
+# their vector table here; a full-flash demo ELF still boots from flash_base.
+reset_vector_offset: 0x8000
+# Series-2 peripheral bit set/clear: every peripheral register is aliased three
+# more times inside its 16 KiB block — +0x1000 SET, +0x2000 CLR, +0x3000 TGL
+# (EFR32xG26 Reference Manual rev 1.0, "Peripheral Bit Set and Clear"). emlib
+# and the Gecko SDK write essentially every enable bit through them
+# (`CMU->CLKEN0_SET`, `GPIO->USARTROUTE[1].ROUTEEN_SET`, `USART1->CMD_SET`), so
+# without this an unmodified Silicon Labs image faults on the first one. Every
+# module in the RM's peripheral map is 16 KiB-aligned, so folding an alias with
+# `addr & !0x3000` lands on the same block it came from, never a neighbour.
+#
+# ⚠️ NOT the RP2040 order. There `+0x1000` is XOR and `+0x2000` is SET; here
+# `+0x1000` is SET and `+0x2000` is CLR. Naming the family is what keeps a
+# "clock enable" from decoding as a clock disable.
+atomic_register_aliases: "efr32s2"
+ram:
+  # SRAM_BASE 0x20000000 / SRAM_SIZE 0x00080000 (512 KiB) — CMSIS header.
+  base: 0x20000000
+  size: "512KB"
+
+peripherals:
+  # ── VCOM console: USART1 ─────────────────────────────────────────────────
+  # BRD2709A routes the on-board J-Link OB virtual COM port to USART1
+  # (TX=PB02, RX=PB03, 115200 8N1 — UG594). The engine's UART model drives its
+  # TX sink directly, so the GPIO ROUTE programming that would carry the signal
+  # to PB02 on silicon is not needed (and the ROUTE registers are not modelled).
+  #
+  # This is a SERIES-2 USART: same flag semantics as Series 1 but a shifted
+  # register block — STATUS @0x18 (reset 0x2040 = TXBL|TXIDLE), TXDATA @0x38,
+  # RXDATA @0x24, EN @0x04, CLKDIV @0x1C (efr32mg26_usart.h, USART_TypeDef).
+  # The type routes to the dedicated `efr32s2` layout; the plain `efr32`
+  # (Series-1) layout would put STATUS/TXDATA 8/4 bytes lower and transmit
+  # nothing.
+  #
+  # IRQ: the NVIC exposes split RX/TX lines — USART1_RX_IRQn = 16,
+  # USART1_TX_IRQn = 17 (CMSIS header IRQn enum). The entry carries the TX
+  # line; the smoke path is polled and the model's TXEIE/TCIE masks are 0 for
+  # this layout, so no UART interrupt is ever pended either way.
+  # USART2, the third instance. CLKEN2 bit 8; `irq` names the TX vector, the
+  # same choice usart1 makes.
+  - id: "usart2"
+    type: "efr32s2_usart"
+    clock: { reg: "clken2", bit: 8 }
+    base_address: 0x400A8000
+    size: "4KB"
+    irq: 19
+
+  - id: "usart1"
+    type: "efr32s2_usart"
+    # CMU_CLKEN2.USART1, bit 7 (`_CMU_CLKEN2_USART1_SHIFT`). USART1 is on
+    # CLKEN2, not CLKEN0 — the Series-2 CLKEN registers are not one flat space
+    # and USART0 (CLKEN0 bit 9) is a different word entirely.
+    clock: { reg: "clken2", bit: 7 }
+    base_address: 0x400A4000
+    size: "4KB"
+    irq: 17
+
+  # ── Clock management unit ────────────────────────────────────────────────
+  # CMU_S_BASE (CMU_IRQn = 63). A real register model — see
+  # `peripherals/efr32/cmu.rs` for the offsets (walked from `CMU_TypeDef` in
+  # efr32mg26_cmu.h) and the honest list of what it does not model. CLKEN0/1/2
+  # hold live state, which is what makes the `clock:` gates below mean
+  # something: a peripheral that firmware never clocked now reads back zero, as
+  # it does on silicon, instead of answering anyway.
+  #
+  # This peripheral's id is `cmu`, not `rcc` — the bus resolves the clock
+  # controller from a short list of vendor names (`CLOCK_CONTROLLER_IDS`).
+  - id: "cmu"
+    type: "efr32s2_cmu"
+    base_address: 0x40008000
+    size: "4KB"
+
+  # ── GPIO ports A–D ───────────────────────────────────────────────────────
+  # GPIO_S_BASE = 0x4003C000; the four port structs (GPIO_PORT_TypeDef, 0x30
+  # bytes each: CTRL/MODEL/MODEH/DOUT/DIN at +0x00/+0x04/+0x0C/+0x10/+0x14)
+  # start at block +0x30 — so PA @ 0x4003C030, PB @ 0x4003C060, PC @
+  # 0x4003C090, PD @ 0x4003C0C0 (efr32mg26_gpio.h GPIO_TypeDef P[4],
+  # efr32mg26_gpio_port.h). GPIO_PORT_x_WIDTH = 0x10 for all four ports.
+  # IRQs: GPIO_ODD_IRQn = 39, GPIO_EVEN_IRQn = 40.
+  #
+  # The type is the SERIES-2 port layout (`efr32s2` in GpioRegisterLayout):
+  # DOUT drives model pins, DIN reads them, and the board_io LED/button
+  # bindings are live. The bare `efr32_gpioport` name stays with the Series-0/1
+  # Renode-imported onboarding stubs (efr32mg12/13, sltb004a, …) whose silicon
+  # map this is NOT — do not "unify" them onto this type.
+  # The block head, below the port structs: GPIO_IPVERSION at +0x00 (reads 7 —
+  # measured on BRD2709A over SWD, and `_GPIO_IPVERSION_RESETVALUE` agrees),
+  # then eleven reserved words. Without this window a `GPIO->IPVERSION` read —
+  # the first thing a Series-2 driver does to identify the block — bus faults
+  # on the twin while silicon answers.
+  - id: "gpio_head"
+    type: "efr32s2_gpio_head"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C000
+    size: "48B"
+
+  - id: "gpioa"
+    type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C030
+    size: "48B"
+  - id: "gpiob"
+    type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C060
+    size: "48B"
+  - id: "gpioc"
+    type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C090
+    size: "48B"
+  - id: "gpiod"
+    type: "efr32s2_gpioport"
+    # CMU_CLKEN0.GPIO, bit 26 (`_CMU_CLKEN0_GPIO_SHIFT`). All four ports share
+    # the one GPIO clock; there is no per-port gate on this silicon.
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C0C0
+    size: "48B"
+
+  # ── GPIO pin-mux (ROUTE) ─────────────────────────────────────────────────
+  # The peripheral route registers live in the GPIO block head, far above the
+  # port structs: GPIO_USARTROUTE[0..2] at block +0x820/+0x840/+0x860 (0x20
+  # each — ROUTEEN, CS/CTS/RTS, RXROUTE, CLKROUTE, TXROUTE; offsets computed
+  # from efr32mg26_gpio.h GPIO_TypeDef). Explicit stub: firmware ROUTE writes
+  # decode and read back zero instead of faulting the bus. On the simulator
+  # this is a deliberate no-op — the UART model drives its TX sink directly
+  # and the board_io pins take their levels from the port DOUTs. On silicon
+  # the same writes are load-bearing (VCOM TX reach PB02 only through
+  # USART1ROUTE). See the bench note in docs/boards/brd2709a.md.
+  #
+  # ⚠️ TIMERROUTE is NOT in this window, and that is the whole reason
+  # `analogWrite`'s waveform reaches no pad in the twin. Derived from
+  # GPIO_TypeDef the same way the USARTROUTE offsets above were, and
+  # cross-checked against them — the derivation puts USARTROUTE at exactly the
+  # +0x820 this entry already uses, which is what makes the rest believable:
+  #
+  #   GPIO_TIMERROUTE[10]  block +0x6E0, stride 0x20  (TIMER0 at 0x4003C6E0,
+  #                                                    TIMER1 at 0x4003C700)
+  #     ROUTEEN   +0x00   CC0ROUTE +0x04   CC1ROUTE +0x08   CC2ROUTE +0x0C
+  #     CDTI0ROUTE +0x10  CDTI1ROUTE +0x14  CDTI2ROUTE +0x18
+  #
+  # (FIXED) That block is modelled now — `gpio_timerroute` above. `analogWrite`
+  # drives a pad, proven end to end in crates/core/tests/efr32mg26_pwm_pad.rs
+  # against this very yaml. What remains a stub here is USARTROUTE, whose
+  # writes still decode and read back zero.
+  # The TIMER route block: REAL, not a stub. This is what makes a timer's
+  # compare output reach a pin — `analogWrite` programmed the correct duty into
+  # real CC registers and lit nothing until this existed.
+  - id: "gpio_timerroute"
+    type: "efr32s2_timerroute"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C6E0
+    size: "320B"
+
+  - id: "gpio_route"
+    type: "stub"
+    # Same GPIO clock as the port structs — the ROUTE registers live in the
+    # same block.
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C820
+    size: "96B"
+
+  # ── TIMER0 / TIMER1 ──────────────────────────────────────────────────────
+  # TIMER0_S_BASE = 0x40048000 (TIMER0_IRQn = 4), TIMER1 at +0x4000
+  # (TIMER1_IRQn = 5). Series-2 TIMER shares no register layout with the
+  # engine's STM32 TIM model, so it has its own — see
+  # `peripherals/efr32/timer.rs`.
+  #
+  # ⚠️ `counter_bits` is per INSTANCE and is not the obvious four. From
+  # `TIMER_CNTWIDTH` in efr32mg26b510f3200im48.h:
+  #   TIMER0 32, TIMER1 32, TIMER2 16, TIMER3 16, TIMER4 16,
+  #   TIMER5 16, TIMER6 16, TIMER7 16, TIMER8 32, TIMER9 32
+  # The 32-bit ones are 0, 1, 8 and 9. The datasheet summary says "4x 32-bit"
+  # without saying which, and the reference manual defers to the datasheet, so
+  # a guess of 0..3 would give TIMER2 a `micros()` that never wraps. The model
+  # REQUIRES the key rather than defaulting.
+  #
+  # Clocks: CMU_CLKEN0.TIMER0 bit 4, .TIMER1 bit 5.
+  #
+  # ⚠️ `peripheral_hz` is NOT `cpu_hz`, and the difference is 4.1x. A TIMER
+  # counts on the EM01 group A peripheral clock, which out of reset selects the
+  # HFRCODPLL path at its startup band — 19 MHz (`HFRCODPLL_STARTUP_FREQ`,
+  # system_efr32mg26.c). That is the number firmware computes PRESC from (it is
+  # what this family's Arduino `boards.txt` publishes as F_CPU, and what the
+  # demo firmware's USART divisor is computed against). `cpu_hz` above is the
+  # part's 78 MHz MAXIMUM core frequency. Counting at that would give a
+  # `micros()` reading four times too many microseconds in the twin against the
+  # same firmware on the bench. Closing this properly means modelling the clock
+  # tree so CLKSEL and the HFRCO band decide it.
+  #
+  # TIMER2..9 ARE declared now, below. They were not, on the reasoning that an
+  # undeclared window faults loudly where a stub would answer zero — which is
+  # right for a peripheral with no model, and wrong for one whose model is
+  # already here. `GPIO_TIMERROUTE` routes all ten; leaving eight of them
+  # unmapped meant a sketch that reached for a second PWM timer hit a bus fault
+  # instead of the model sitting next to the two that worked.
+  #
+  # ⚠️ The clock bits do NOT follow the instance number. TIMER0..4 are CLKEN0
+  # bits 4..8; TIMER5..9 are CLKEN2 bits 0..4. Same trap as I2C0 vs I2C2/3.
+  - id: "timer0"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
+    base_address: 0x40048000
+    size: "4KB"
+    irq: 4
+  - id: "timer1"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 5 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
+    base_address: 0x4004C000
+    size: "4KB"
+  - id: "timer2"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 6 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40050000
+    size: "4KB"
+  - id: "timer3"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 7 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40054000
+    size: "4KB"
+  - id: "timer4"
+    type: "efr32s2_timer"
+    clock: { reg: "clken0", bit: 8 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40058000
+    size: "4KB"
+  - id: "timer5"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 0 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x4005C000
+    size: "4KB"
+  - id: "timer6"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 1 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40060000
+    size: "4KB"
+  - id: "timer7"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 2 }
+    config: { counter_bits: 16, peripheral_hz: 19_000_000 }
+    base_address: 0x40064000
+    size: "4KB"
+  - id: "timer8"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 3 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
+    base_address: 0x40068000
+    size: "4KB"
+  - id: "timer9"
+    type: "efr32s2_timer"
+    clock: { reg: "clken2", bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19_000_000 }
+    base_address: 0x4006C000
+    size: "4KB"
+    irq: 5
+
+  # ── USART0 as SPI ────────────────────────────────────────────────────────
+  # ⚠️ Series 2 has NO separate SPI peripheral. SPI is a USART with
+  # `CTRL.SYNC` set and `CMD.MASTEREN` issued — the SAME register block the
+  # VCOM console uses, and an instance is one or the other, never both. So
+  # USART0 is declared as `spi` here and USART1 stays the console; declaring
+  # one instance twice would give it two models fighting over one window.
+  #
+  # USART0_S_BASE = 0x400A0000, CMU_CLKEN0.USART0 bit 9. The NVIC splits this
+  # USART into two vectors, USART0_RX_IRQn = 14 and USART0_TX_IRQn = 15; the
+  # entry carries TX, which is the one a polled SPI driver would arm.
+  - id: "spi0"
+    type: "spi"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken0", bit: 9 }
+    base_address: 0x400A0000
+    size: "4KB"
+    irq: 15
+
+  # ── I2C0 / I2C1 ──────────────────────────────────────────────────────────
+  # ⚠️ The two instances are NOT neighbours. The RM's peripheral map puts I2C0
+  # in the low-energy group at 0x4B000000 (with WDOG0/1 and EUSART0) and
+  # I2C1..3 in the main block at 0x400B0000 + n*0x4000. A model that assumed a
+  # regular stride would put I2C0 on top of something else entirely.
+  # I2C0_IRQn = 41, I2C1_IRQn = 42 (CMSIS `IRQn_Type`).
+  #
+  # Clocks: CMU_CLKEN0.I2C0 bit 14, .I2C1 bit 15 (I2C2/3 are on CLKEN2 bits
+  # 9/10 — another place the numbering does not follow the instance).
+  #
+  # The register layout is the Silicon Labs one — CMD/STATE/STATUS/TXDATA/
+  # RXDATA with an IF flag per event, driven by emlib's `I2C_Transfer`. It
+  # shares nothing with the STM32 map, so the profile is load-bearing: without
+  # it the shared model would default to STM32F1 and put TXDATA where CTRL is.
+  #
+  # I2C2/I2C3 are deliberately NOT declared — nothing uses them, and an
+  # undeclared window faults loudly where a stub would answer zero.
+  - id: "i2c0"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken0", bit: 14 }
+    base_address: 0x4B000000
+    size: "4KB"
+    irq: 41
+  - id: "i2c1"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken0", bit: 15 }
+    base_address: 0x400B0000
+    size: "4KB"
+    irq: 42
+  # ⚠️ I2C2/3 are on CLKEN2 (bits 9, 10) while I2C0/1 are on CLKEN0 (14, 15).
+  # The clock bit does not follow the instance number on this family, and I2C0
+  # is not even in the same address group — see its entry above.
+  - id: "i2c2"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken2", bit: 9 }
+    base_address: 0x400B4000
+    size: "4KB"
+    irq: 43
+  - id: "i2c3"
+    type: "i2c"
+    config: { profile: "efr32s2" }
+    clock: { reg: "clken2", bit: 10 }
+    base_address: 0x400B8000
+    size: "4KB"
+    irq: 44
+
+  # ── SMU (Security Management Unit) ───────────────────────────────────────
+  # SMU_S_BASE = 0x44008000, CMU_CLKEN1.SMU bit 16, SMU_SECURE_IRQn = 66.
+  #
+  # ⚠️ This is the FIRST peripheral any vendor-built image touches. Three
+  # instructions into `SystemInit` (system_efr32mg26.c, sisdk-2025.6):
+  #     CMU->CLKEN1_SET   = CMU_CLKEN1_SMU;
+  #     SMU->PPUSATD0_CLR = _SMU_PPUSATD0_MASK;   ...and PPUSATD1/2, IF, IEN
+  # Unmapped, that is a bus fault before `main`, so a Simplicity-SDK image
+  # could not begin. It is mapped for that reason and not because the twin
+  # models security.
+  #
+  # ⚠️ NO PROTECTION IS ENFORCED. The registers store and read back; nothing is
+  # refused and PPUFS never latches. Consequently the peripheral ALIAS MOVE is
+  # not modelled either — on silicon, marking peripherals non-secure moves them
+  # to 0x5000_0000 and this descriptor maps the secure alias only. Same
+  # registers either way, so firmware runs; the address in a trace is the thing
+  # to be careful about. See peripherals/efr32/smu.rs.
+  - id: "smu"
+    type: "efr32s2_smu"
+    clock: { reg: "clken1", bit: 16 }
+    base_address: 0x44008000
+    size: "4KB"
+    irq: 66
+
+  # ── GPIO external interrupts ─────────────────────────────────────────────
+  # The EXTI registers live in the GPIO block HEAD, not in the port structs:
+  # GPIO_S_BASE + 0x400 = EXTIPSELL, then EXTIPSELH/EXTIPINSELL/EXTIPINSELH/
+  # EXTIRISE/EXTIFALL (+0x04..+0x14), IF/IEN (+0x20/+0x24) and the EM4 wake
+  # pair (+0x2C/+0x30) — offsets walked from `GPIO_TypeDef` in efr32mg26_gpio.h
+  # with the port group resolved from efr32mg26_gpio_port.h (stride 0x30).
+  #
+  # ⚠️ Line n cannot watch an arbitrary pin: RM §24.3.10.1 fixes
+  # `p = 4 * int(n/4)` and EXTIPINSEL only chooses within that group of four.
+  # See `peripherals/efr32/gpio_exti.rs`.
+  #
+  # IRQs: GPIO_EVEN_IRQn = 40 for even lines, GPIO_ODD_IRQn = 39 for odd — the
+  # model raises whichever the flagged line belongs to, so the entry's `irq`
+  # is the even vector and the odd one arrives as an explicit IRQ.
+  - id: "gpio_exti"
+    type: "efr32s2_gpio_exti"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C400
+    size: "64B"
+    irq: 40
+
+  # ── IADC0: the incremental ADC ───────────────────────────────────────────
+  # IADC0_S_BASE = 0x49004000, IADC_IRQn = 65 (CMSIS `efr32mg26b510f3200im48.h`
+  # — note the enum spells it IADC_IRQn, not IADC0_IRQn, though the base is
+  # IADC0_S_BASE; the part has IADC_COUNT = 1).
+  #
+  # ⚠️ The IADC is NOT in the 0x4000_0000 block with the digital peripherals.
+  # The RM's peripheral map puts the analog group at 0x4900_0000 (LETIMER0,
+  # IADC0, ACMP0/1, VDAC0/1, PCNT0). It is still inside the peripheral window
+  # the Series-2 alias decode covers, and 0x49004000 is 16 KiB-aligned, so its
+  # SET/CLR/TGL aliases fold correctly like every other block's.
+  #
+  # Clock: CMU_CLKEN0.IADC0, bit 10 (`_CMU_CLKEN0_IADC0_SHIFT`).
+  - id: "iadc0"
+    type: "efr32s2_iadc"
+    clock: { reg: "clken0", bit: 10 }
+    base_address: 0x49004000
+    size: "4KB"
+    irq: 65
+
+  # ── BLE (LabWired virtual controller) ────────────────────────────────────
+  # ⚠️ THIS BLOCK IS NOT SILICON. There is no EFR32 radio peripheral at this
+  # address, or at any address, in anything Silicon Labs publishes:
+  #   - EFR32xG26 RM rev 1.0 chapter 5 "Radio Transceiver" is four pages of
+  #     prose with NO register documentation, while every other peripheral in
+  #     that manual gets a full register map.
+  #   - The CMSIS device headers ship 73 peripheral headers for this part and
+  #     none of them is rac/frc/modem/protimer/bufc/synth/agc.
+  #   - There is no SVD for the family.
+  # The radio is reachable only through the closed RAIL binary. So rather than
+  # invent EFR32-shaped register names — which would look like silicon in an
+  # inspector and be fiction — this is a DECLARED LabWired device, the same
+  # kind of thing as `simctl`. Its ID register reads ASCII "LWBL" so a dump
+  # says whose block it is.
+  #
+  # Consequence, stated where someone will read it: a sketch that drives this
+  # controller runs in the twin and NOT on the physical board. Silicon needs
+  # the vendor stack, which is a separate compile lane.
+  #
+  # Base 0x4F000000 is outside the RM's peripheral map entirely (which ends at
+  # MVP, 0x4D003FFF), so it can never collide with a block Silicon Labs adds.
+  # IRQ 93 is one past EXT_IRQ_COUNT (93 lines, 0..92 — CMSIS `IRQn_Type`), so
+  # it cannot shadow a real peripheral's vector either.
+  - id: "ble"
+    type: "virtual_ble"
+    base_address: 0x4F000000
+    size: "4KB"
+    irq: 93
+
+  # ── SysTick ──────────────────────────────────────────────────────────────
+  # Architectural ARMv8-M SysTick in the SCS block (not a Silabs peripheral),
+  # declared so firmware gets a periodic core interrupt. Same treatment as the
+  # other Cortex-M33 chips (nrf54l15.yaml).
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base (stm32wba52.yaml pattern).
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"

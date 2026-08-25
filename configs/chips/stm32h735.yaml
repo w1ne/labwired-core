@@ -66,6 +66,11 @@ name: "stm32h735vg"
 arch: "arm"
 core: "cortex-m7"
 registers_count: 140
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32H735VG maximum core clock, 550 MHz.
+cpu_hz: 550_000_000
+
 flash:
   base: 0x08000000
   # STM32H735VG = 1 MiB single-bank flash (0x100000 bytes) at 0x08000000.

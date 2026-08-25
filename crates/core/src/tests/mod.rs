@@ -4,12 +4,20 @@ pub mod builtin_chip_self_contained;
 pub mod bus_proof_matrix;
 #[cfg(test)]
 pub mod bus_trace_one_home;
+
+/// A chip may not declare a memory size no silicon has (decimal-MB trap).
+#[cfg(test)]
+pub mod chip_memory_sizes;
 #[cfg(test)]
 pub mod cortex_m_fault_escalation;
 #[cfg(test)]
 pub mod cortex_m_memory_contract;
 #[cfg(test)]
 pub mod device_identity_one_home;
+
+/// Row 6.5: the runtime-downcast count may not grow.
+#[cfg(test)]
+pub mod downcast_ratchet;
 #[cfg(test)]
 pub mod esp32;
 #[cfg(test)]
@@ -82,5 +90,7 @@ pub mod uart_stream_interval_differential;
 pub mod walk_starvation_contract;
 #[cfg(test)]
 pub mod xtensa_memory_contract;
+#[cfg(test)]
+pub mod xtensa_waiti_resume;
 #[cfg(test)]
 pub mod yaml_owned_base_contract;

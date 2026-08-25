@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -31,6 +32,7 @@ if str(_VALIDATION) not in sys.path:
     sys.path.insert(0, str(_VALIDATION))
 
 from matrix_lib import (  # noqa: E402
+    cacheable_cell,
     compile_fingerprint,
     elf_cache_hit,
     find_labwired,
@@ -83,6 +85,69 @@ def write_pio_project(work: Path, board: dict, sketch_src: Path) -> Path:
         shutil.rmtree(src_dir)
     shutil.copytree(sketch_src, src_dir)
     return work
+
+
+#: Environment variable naming the external compile driver.
+#:
+#: Not every Arduino core LabWired supports is a PlatformIO platform. The
+#: Silicon Labs xG26 core is hand-written and lives in the labwired monorepo
+#: (`services/labwired-builder/silabs-arduino`), so the compile flags — which
+#: are load-bearing and were derived on real silicon — have exactly one home,
+#: and it is not this repository. Rather than copy them here and let the two
+#: drift, a board can declare `external_compile:` and the lane that owns the
+#: core supplies the driver through this variable.
+#:
+#: Contract: the driver is invoked as
+#:     $LW_EXTERNAL_COMPILE --target <id> --src <sketch src dir> --out <dir>
+#: and must leave `<dir>/firmware.elf` behind. Anything else is a failure.
+EXTERNAL_COMPILE_ENV = "LW_EXTERNAL_COMPILE"
+
+
+def external_compile(
+    board: dict, sketch_src: Path, out_dir: Path, log_path: Path, timeout: int
+) -> tuple[bool, str, Path | None]:
+    """Compile through the driver named by [`EXTERNAL_COMPILE_ENV`].
+
+    ⚠️ A missing driver is `toolchain_missing`, NOT a skip. `run_matrix.py`
+    reports it as a row and the gate counts it, so a lane that quietly stopped
+    compiling a board cannot read as green — see the fully-skipped-file trap in
+    docs/engineering/test_harness.md.
+    """
+    driver = os.environ.get(EXTERNAL_COMPILE_ENV)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    if not driver:
+        log_path.write_text(
+            f"{EXTERNAL_COMPILE_ENV} is unset; this board compiles through an "
+            f"external driver ({board['external_compile']['target']}) that this "
+            "lane does not provide.\n",
+            encoding="utf-8",
+        )
+        return False, "toolchain_missing", None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        *driver.split(),
+        "--target",
+        str(board["external_compile"]["target"]),
+        "--src",
+        str(sketch_src.resolve()),
+        "--out",
+        str(out_dir.resolve()),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        log_path.write_text((e.stdout or "") + "\nTIMEOUT\n" + (e.stderr or ""), encoding="utf-8")
+        return False, "compile_timeout", None
+    except FileNotFoundError:
+        log_path.write_text(f"{EXTERNAL_COMPILE_ENV} driver not executable: {driver}\n", "utf-8")
+        return False, "toolchain_missing", None
+    log_path.write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
+    if proc.returncode != 0:
+        return False, "compile_fail", None
+    elf = out_dir / "firmware.elf"
+    if not elf.is_file():
+        return False, "elf_missing", None
+    return True, "ok", elf
 
 
 def compile_sketch(work: Path, log_path: Path, timeout: int) -> tuple[bool, str, Path | None]:
@@ -231,17 +296,45 @@ def main() -> int:
             print(f"==> {bid} × {sid}", flush=True)
 
             sketch_src = MATRIX_DIR / sketch["dir"] / "src"
-            pio = board["pio"]
+            ext = board.get("external_compile")
+            # An external-compile board has no PlatformIO triple to fingerprint;
+            # its driver target identifies the toolchain instead.
+            pio = board.get("pio") or {}
             digest = compile_fingerprint(
                 board_id=bid,
                 sketch_id=sid,
                 sketch_src=sketch_src,
-                pio_platform=pio["platform"],
-                pio_board=pio["board"],
-                pio_framework=pio["framework"],
+                pio_platform=pio.get("platform") or "external",
+                pio_board=pio.get("board") or (ext or {}).get("target", "external"),
+                pio_framework=pio.get("framework") or "arduino",
                 extra={"max_steps": board.get("max_steps"), "led_watch": board.get("led_watch")},
             )
 
+            # ⚠️ AN EXTERNAL-COMPILE CELL IS NOT CACHEABLE.
+            #
+            # compile_fingerprint() above hashes the sketch sources and the
+            # PlatformIO platform/board/framework strings. For a PlatformIO cell
+            # those strings pin the toolchain, so the digest describes every
+            # input to the ELF. For an external-compile cell they describe
+            # nothing: its compiler is a driver in ANOTHER repository (for
+            # brd2709a, services/labwired-builder/silabs-arduino in the
+            # monorepo), and not one byte of it reaches the digest.
+            #
+            # So editing that Arduino core changes the ELF a user gets and
+            # leaves the digest identical — the cell hits its cache and the
+            # column reports `pass` against an ELF built from the previous
+            # core. `--out` is /tmp on a self-hosted runner, so the stale ELF
+            # survives between jobs. Measured 2026-08-24 on the brd2709a lane:
+            # the cells last really compiled on 2026-08-22 and the five runs
+            # after it were 8/8 "cache hit", 0 compiles — two of them triggered
+            # BY a change to that Arduino core.
+            #
+            # Fingerprinting the driver would mean core reaching into a repo it
+            # does not own and guessing which of its files matter. Not caching
+            # is the honest answer: these cells are cheap (~1.3 s each, and
+            # there is exactly one such board), and a cache that cannot see its
+            # own compiler must not claim a hit.
+            cacheable = cacheable_cell(ext)
             cached_elf = cell_out / "firmware.elf"
             used_cache = False
             if args.sim_only:
@@ -257,13 +350,30 @@ def main() -> int:
                     )
                     continue
                 print("    compile: skipped (--sim-only)", flush=True)
-            elif not args.force_compile and elf_cache_hit(cell_out, digest):
+            elif not args.force_compile and cacheable and elf_cache_hit(cell_out, digest):
                 used_cache = True
                 print(f"    compile: cache hit ({cached_elf.name})", flush=True)
+            elif not args.force_compile and not cacheable and elf_cache_hit(cell_out, digest):
+                # Say it out loud rather than silently spending 11s: this cell
+                # HAS a matching digest and we are recompiling anyway, because
+                # the digest cannot see this board's compiler.
+                print(
+                    "    compile: digest matches but not cacheable "
+                    "(external driver is not fingerprinted)",
+                    flush=True,
+                )
             else:
                 work = work_root / f"{bid}__{sid}"
-                write_pio_project(work, board, sketch_src)
-                if "wba" in bid.lower() or "wba" in str(board.get("chip", "")).lower():
+                if ext:
+                    ok, stage, elf = external_compile(
+                        board, sketch_src, work, cell_out / "compile.log", args.compile_timeout
+                    )
+                else:
+                    write_pio_project(work, board, sketch_src)
+                    ok, stage, elf = (False, "", None)
+                if not ext and (
+                    "wba" in bid.lower() or "wba" in str(board.get("chip", "")).lower()
+                ):
                     patch = MATRIX_DIR / "scripts" / "patch_stm32duino_wba_series.py"
                     if patch.is_file():
                         # On a fresh runner the framework package doesn't exist
@@ -283,9 +393,10 @@ def main() -> int:
                             capture_output=True,
                             text=True,
                         )
-                ok, stage, elf = compile_sketch(
-                    work, cell_out / "compile.log", args.compile_timeout
-                )
+                if not ext:
+                    ok, stage, elf = compile_sketch(
+                        work, cell_out / "compile.log", args.compile_timeout
+                    )
                 if not ok or elf is None:
                     print(f"    compile: {stage}", flush=True)
                     rows.append({"board": bid, "sketch": sid, "status": stage, "detail": stage})
