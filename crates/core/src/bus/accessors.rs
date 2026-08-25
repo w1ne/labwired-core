@@ -558,6 +558,27 @@ impl crate::Bus for SystemBus {
                 self.sync_esp32c3_pms_write(idx, addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
+                // Peripheral stores reach observers - see write_u32.
+                for i in 0..2u64 {
+                    let byte = ((value >> (8 * i)) & 0xFF) as u8;
+                    for observer in &self.observers {
+                        observer.on_memory_write(addr + i, 0, byte);
+                    }
+                }
+                // Observers see peripheral stores too: per byte, LE, the
+                // same shape the RAM fallback below produces via write_u8.
+                // Without this the --vcd bus trace records only RAM-path
+                // writes and every 32-bit MMIO store (GPIO BSRR, USART
+                // TDR - the traffic a firmware trace exists for) is
+                // invisible. `old` is 0 on purpose: reading a peripheral
+                // register to report its previous value can have side
+                // effects (RDR, status-clear-on-read).
+                for i in 0..4u64 {
+                    let byte = ((value >> (8 * i)) & 0xFF) as u8;
+                    for observer in &self.observers {
+                        observer.on_memory_write(addr + i, 0, byte);
+                    }
+                }
             }
             return r;
         }
@@ -662,6 +683,20 @@ impl crate::Bus for SystemBus {
                 self.sync_esp32c3_pms_write(idx, addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
+                // Observers see peripheral stores too: per byte, LE, the
+                // same shape the RAM fallback below produces via write_u8.
+                // Without this the --vcd bus trace records only RAM-path
+                // writes and every 32-bit MMIO store (GPIO BSRR, USART
+                // TDR - the traffic a firmware trace exists for) is
+                // invisible. `old` is 0 on purpose: reading a peripheral
+                // register to report its previous value can have side
+                // effects (RDR, status-clear-on-read).
+                for i in 0..4u64 {
+                    let byte = ((value >> (8 * i)) & 0xFF) as u8;
+                    for observer in &self.observers {
+                        observer.on_memory_write(addr + i, 0, byte);
+                    }
+                }
             }
             return r;
         }

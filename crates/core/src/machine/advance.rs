@@ -52,6 +52,14 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
+        // Observers registered on the MACHINE also see BUS-level events:
+        // the bus keeps its own observer list (peripheral MMIO stores
+        // notify through it - see bus/accessors.rs), and nothing mirrored
+        // machine.observers into it, so a --vcd trace recorded pc and
+        // nothing else. Arc clones, idempotent per call.
+        if self.bus.observers.len() != self.observers.len() {
+            self.bus.observers = self.observers.clone();
+        }
         let start_cycles = self.total_cycles;
         let mut state = AdvanceState::default();
 
