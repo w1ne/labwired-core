@@ -42,6 +42,7 @@ mod resident_device;
 mod routing;
 pub mod sim_inputs;
 mod tick;
+pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
 pub use resident_device::BusResidentDevice;
