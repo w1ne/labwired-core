@@ -917,6 +917,48 @@
       "inputs": []
     },
     {
+      "device_type": "st7789-170x320",
+      "label": "ST7789 IPS TFT",
+      "summary": "1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI.",
+      "detail": "Sitronix ST7789V controller against an in-memory 240x320 RGB565 frame memory, the extent the datasheet gives in section 8.12 (X 0..239, Y 0..319). The 1.9in glass shows a 170-column strip of that memory; firmware selects it with CASET, so no panel offset is assumed here -- that number is in neither Sitronix's document nor the module vendor's drawing. Set `col_offset`/`cols` to crop the artifact to a particular glass. Reports `lit` (DISPON AND awake) beside the raw pixels, because a panel that never got SLPOUT is dark whatever is in memory.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select pin label."
+        },
+        {
+          "name": "dc_pin",
+          "ty": "str",
+          "doc": "Data/command GPIO pin. Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes a parameter byte 0x2C as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
+        },
+        {
+          "name": "col_offset",
+          "ty": "int",
+          "doc": "First frame-memory column the glass shows. NOT a datasheet value -- the ST7789V document describes a 240-column frame memory and says nothing about which strip a given panel exposes. Leave unset to get the whole 240x320 frame memory, which is what the controller holds."
+        },
+        {
+          "name": "row_offset",
+          "ty": "int",
+          "doc": "First frame-memory row the glass shows. Same provenance caveat as `col_offset`."
+        },
+        {
+          "name": "cols",
+          "ty": "int",
+          "doc": "Visible column count, e.g. 170 for the 1.9in module. Requires `col_offset`."
+        },
+        {
+          "name": "rows",
+          "ty": "int",
+          "doc": "Visible row count, e.g. 320 for the 1.9in module. Requires `row_offset`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "ili9341-16bit",
       "label": "ILI9341 TFT (16-bit parallel)",
       "summary": "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
