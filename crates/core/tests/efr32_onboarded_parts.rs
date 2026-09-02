@@ -130,3 +130,31 @@ fn the_canonical_potentiometer_matches_the_alias_on_efr32() {
         "the alias and its target must attach alike on this die",
     );
 }
+
+/// The shipped BRD2709A lab manifest must actually build. A committed
+/// system.yaml that no longer loads is worse than none: it looks like a
+/// working starting point right up until someone runs it.
+#[test]
+fn the_shipped_brd2709a_st7789_lab_builds() {
+    use labwired_config::SystemManifest;
+    let path = repo("examples/brd2709a/st7789-system.yaml");
+    let manifest = SystemManifest::from_file(&path).expect("load the shipped lab manifest");
+    let chip_path = repo("configs/chips/efr32mg26.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load efr32mg26 descriptor");
+    let bus = SystemBus::from_config(&chip, &manifest);
+    assert!(bus.is_ok(), "the shipped lab must build: {:?}", bus.err());
+}
+
+/// The pins in that manifest have to be REAL pins on this die, resolvable to a
+/// GPIO output. PC00 and PC04 come off UG594 Table 3.1 (breakout pads 17 and
+/// 16); if the chip descriptor ever stopped resolving them the panel would
+/// attach with a dead D/C line and paint nothing, silently.
+#[test]
+fn the_lab_pins_resolve_on_this_die() {
+    let ok = efr32_with(
+        "st7789-170x320",
+        "spi0",
+        &[("cs_pin", "PC04".into()), ("dc_pin", "PC00".into())],
+    );
+    assert!(ok.is_ok(), "PC04/PC00 must resolve: {:?}", ok.err());
+}
