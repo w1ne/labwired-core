@@ -152,6 +152,11 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // H-bridge family.
     ("tb6612", "l298n"),
     ("l293d", "l298n"),
+    // A fader is a pot. Same three-terminal carbon track and the same wiper
+    // voltage the ADC reads; only the mechanism the human touches differs, and
+    // the catalog keeps them apart for the BODY (an 88mm fader is not a 9.53mm
+    // trimmer), not for the electrical model.
+    ("slide-potentiometer", "potentiometer"),
     // Unipolar stepper.
     ("stepper-28byj48", "uln2003"),
     // CAN diagnostic one-shot injector alias.
