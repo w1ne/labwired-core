@@ -322,6 +322,54 @@ pub trait UartStreamDevice: Send {
     }
 }
 
+// ── I2S ─────────────────────────────────────────────────────────────────────
+/// A device on a serial-audio (I2S) bus.
+///
+/// I2S is not SPI with different framing, and modelling it as bytes on a wire
+/// loses the one thing that decides whether a recording works: WHICH CHANNEL a
+/// slot belongs to. So the unit here is a 32-bit slot plus the state of the
+/// word clock, not a byte.
+///
+/// Per the EFR32xG26 reference manual section 20.3.3.8 (p.629): "A word
+/// transmitted while the word clock is low is for the left channel, and a word
+/// transmitted while the word clock is high is for the right." Every I2S part
+/// picks a side, and a part addressed on the other side is silent rather than
+/// broken -- which is why `right` is an argument and not something the device
+/// infers.
+pub trait I2sDevice: Send {
+    /// The device's next 32-bit slot for this channel, MSB-aligned.
+    ///
+    /// A device that does not drive the requested channel returns 0: on real
+    /// hardware its output is high-Z and the bus pulldown wins, so silence is
+    /// the honest answer rather than the other channel's sample.
+    fn next_slot(&mut self, right: bool) -> u32;
+
+    /// Human-facing id, for evidence and stimulus routing.
+    fn component_id(&self) -> Option<&str> {
+        None
+    }
+
+    fn artifacts(
+        &self,
+        _id: &str,
+        _opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::Artifact> {
+        Vec::new()
+    }
+
+    /// Both halves are required for a downcast to work from outside. A
+    /// one-sided impl compiles, passes every unit test, and wires nothing.
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        None
+    }
+}
+
 // ── GPIO edge observation ───────────────────────────────────────────────────
 /// Notified synchronously inside the bus write path on every GPIO pin
 /// transition. Observers must not panic — a panic propagates out of
