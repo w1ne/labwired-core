@@ -1,0 +1,51 @@
+# LabWired - BRD2709A "agent deck" smoke test
+#
+# Every part of the HEStore order driven at once: ST7789 panel on USART0 in
+# SPI mode, INMP441 microphone on USART2 in I2S mode, slide fader on IADC0,
+# and the encoder / pushbutton / toggle contacts on GPIO.
+#
+# This is the board's first L2 (behaviour) evidence. L1 already showed the
+# register file matches silicon 219/219; what it could not show is that a
+# driver written against those registers actually makes a panel light up and
+# a microphone hand back samples.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-deck"
+  system: "./agent-deck-system.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "MG26-DECK"
+  - uart_contains: "tft: slpout colmod dispon"
+  - uart_contains: "tft: filled 54400 px"
+  # ⚠️ THE PANEL MUST ACTUALLY BE LIT, not merely written. `lit` is DISPON AND
+  # awake, so a firmware that filled frame memory but skipped SLPOUT — a real
+  # and common bring-up bug — fails here while the ink assertion alone would
+  # pass. Ink and lit are asserted together deliberately.
+  - display_region:
+      id: "tft"
+      x: 0
+      y: 0
+      w: 170
+      h: 320
+      min_ink: 1.0
+      max_ink: 1.0
+      lit: true
+  # ⚠️ THE HALVES SEPARATELY, NOT THE TOTAL. The INMP441 has L/R tied low, so
+  # it drives the LEFT half of each stereo frame and tristates the right. A
+  # bare "4 of 8 slots" total passes for a mic on EITHER channel — it did, when
+  # this lab was first written — so the two halves are counted apart. Silence
+  # on the right is the mic obeying its datasheet, not the bus half-failing.
+  - uart_contains: "mic: left=4 right=0"
+  # ⚠️ THE VALUE, NOT THE LABEL. "fader: code=" alone passes on a zero, and a
+  # zero is exactly what a fader wired to the wrong channel prints — this lab
+  # shipped that way for one run. The pot boots centred, so its wiper sits at
+  # 1650 mV of the 3300 mV reference and a 12-bit conversion is 2048. A model
+  # that ignored PINPOS, converted against the wrong reference, or handed back
+  # a constant would not produce that number.
+  - uart_contains: "fader: code=2048"
+  # Every contact idles released. The button module DRIVES its SIG line so it
+  # idles LOW; the rest close to ground through a pull-up and idle HIGH.
+  - uart_contains: "in: CLK=1 DT=1 SW=1 BTN=0 TOGGLE=1"
+  - uart_contains: "MG26-DECK DONE"
+  - expected_stop_reason: max_steps

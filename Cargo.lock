@@ -1221,6 +1221,13 @@ name = "firmware-mg26-bootloader"
 version = "0.22.2"
 
 [[package]]
+name = "firmware-mg26-deck"
+version = "0.22.2"
+dependencies = [
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-mg26-demo"
 version = "0.22.2"
 dependencies = [

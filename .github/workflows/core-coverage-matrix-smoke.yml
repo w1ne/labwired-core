@@ -146,6 +146,20 @@ jobs:
             profile_dir: release
             script: examples/brd2709a/uart-smoke.yaml
             system: examples/brd2709a/system.yaml
+          # The BRD2709A "agent deck": every externally-wired part the board
+          # carries, driven at once. This is the chip's only L2 (BEHAVIOUR)
+          # cell — the register file already matches silicon 219/219, which
+          # says nothing about whether a driver written against those
+          # registers makes a panel light up. Judges a display (100% ink AND
+          # `lit`, so a firmware that filled frame memory but skipped SLPOUT
+          # fails), an I2S microphone, an IADC conversion and five contacts.
+          - id: brd2709a-deck
+            target: thumbv7m-none-eabi
+            crate: firmware-mg26-deck
+            profile: release
+            profile_dir: release
+            script: examples/brd2709a/deck-smoke.yaml
+            system: examples/brd2709a/agent-deck-system.yaml
           # F405 and F767 had no cell at all: their only smokes borrowed
           # firmware-f401-demo from a sibling part, which needs a build, so no
           # workflow ran them. Their own TIER1 fixtures are committed blobs, so

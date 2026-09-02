@@ -2,6 +2,20 @@
 
 No required external simulated components for the minimal deterministic smoke test.
 
+## The agent deck
+
+`agent-deck-system.yaml` wires every part below onto the bare breakout pads at
+once, and `deck-smoke.yaml` / `firmware-mg26-deck` drive them together. That
+pair is this chip's **L2 (behaviour)** evidence: the silicon reset oracle
+already matches 219/219 registers, which is an L1 claim about the register
+FILE and says nothing about whether a driver written against those registers
+makes a panel light up.
+
+The same assertions run in process as `efr32_deck_behavior::
+the_deck_firmware_drives_every_part`, because the CLI lab runs in the
+coverage-matrix workflow and that is not a required PR check — a gate that
+only runs elsewhere is not holding anything.
+
 ## Parts that DO attach on this board
 
 Gated by `crates/core/tests/efr32_onboarded_parts.rs`, which builds each one

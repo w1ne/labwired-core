@@ -78,11 +78,18 @@ external_devices:
       channel: "left"
 
   # 60 mm slide fader on the IADC, through the MIKROE_AN pad (PD02).
+  #
+  # ⚠️ CHANNEL 50, NOT 0. The IADC addresses a pad by (port << 4) | pin, so
+  # PD02 is (3 << 4) | 2 = 50. That index is LabWired's — the IADC has no
+  # "channel number" on silicon, it has a PORTPOS/PINPOS mux — and it is how a
+  # system.yaml names the pad it drives. Channel 0 attaches perfectly happily
+  # and then reads back zero forever, because the firmware's conversion on
+  # PD02 never meets the source sitting on channel 0.
   - id: "fader"
     type: "slide-potentiometer"
     connection: "iadc0"
     config:
-      channel: 0
+      channel: 50
 
 board_io:
   # ── Panel control lines the SPI model does not carry ────────────────────

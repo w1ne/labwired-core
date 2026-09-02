@@ -253,7 +253,7 @@ fn the_deck_assigns_every_pin_once() {
         format!("gpio{port}:{n}")
     }
 
-    let manifest = SystemManifest::from_file(&repo("examples/brd2709a/agent-deck-system.yaml"))
+    let manifest = SystemManifest::from_file(repo("examples/brd2709a/agent-deck-system.yaml"))
         .expect("load the deck manifest");
 
     let mut claimed: Vec<(String, String)> = Vec::new();

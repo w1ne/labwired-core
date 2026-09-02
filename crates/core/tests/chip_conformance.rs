@@ -277,7 +277,14 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: Some(
             "scripts/hw-oracle/captures/efr32mg26/20260902T194136Z-i2sctrl/reg_oracle.json",
         ),
-        behavior_gate: None,
+        // The BRD2709A agent deck, running. The reset oracle above is an L1
+        // claim -- the register FILE matches the die, 219/219 -- which says
+        // nothing about whether a driver written against those registers makes
+        // a panel light up. This runs the deck firmware in process and asserts
+        // the glass is lit and fully inked, that the I2S mic drives its LEFT
+        // half and tristates the right, that an IADC conversion lands on 2048,
+        // and that five contacts read at their own idle polarities.
+        behavior_gate: Some("efr32_deck_behavior::the_deck_firmware_drives_every_part"),
     },
     // Classic Arduino Nano / ATmega328P — sim-smoke twin (PORT/Timer0/USART0).
     // Behavior: PlatformIO nanoatmega328 golden (serial nano-ok + D13 toggle).
