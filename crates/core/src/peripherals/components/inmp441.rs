@@ -245,3 +245,59 @@ mod tests {
         assert!(distinct > 8, "expected a varying tone, saw {distinct} distinct slots");
     }
 }
+
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Inmp441Kit;
+pub static INMP441_KIT: Inmp441Kit = Inmp441Kit;
+
+static INMP441_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "inmp441",
+    label: "INMP441 I2S Mic",
+    summary: "Omnidirectional MEMS microphone, 24-bit I2S digital output.",
+    detail: "TDK InvenSense INMP441 on a serial-audio bus. Answers in 32-bit channel slots, \
+             24-bit two's complement MSB-aligned, and drives ONLY the half of the frame its \
+             L/R pin selects -- the other half reads zero, because SD tri-states there and the \
+             board's 100k pulldown wins. That is the part's commonest bring-up failure and the \
+             model reproduces it rather than hiding it. On EFR32 the transport is a USART in \
+             I2S mode (I2SCTRL.EN); the sample stream is a deterministic synthetic tone, not \
+             real audio, and its artifact says so.",
+    transport: Transport::Spi,
+    category: Category::Spi,
+    config_keys: &[
+        ConfigKey {
+            name: "channel",
+            ty: ConfigType::Str,
+            doc: "Which half of the stereo frame this mic drives: \"left\" (L/R tied low, \
+                  the default) or \"right\" (L/R tied high). Datasheet pin 4. A mic asked \
+                  for the other channel is SILENT, not absent.",
+        },
+    ],
+    labs: &[],
+};
+
+impl PeripheralKit for Inmp441Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &INMP441_METADATA
+    }
+
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let channel = match ctx.config_str("channel").unwrap_or("left") {
+            "left" | "LEFT" | "Left" => MicChannel::Left,
+            "right" | "RIGHT" | "Right" => MicChannel::Right,
+            other => anyhow::bail!(
+                "inmp441 '{}': channel '{}' is not a side of an I2S frame. Use \"left\" \
+                 (L/R tied low) or \"right\" (L/R tied high) -- the mic drives exactly one.",
+                ctx.device_id(),
+                other,
+            ),
+        };
+        let id = ctx.device_id().to_string();
+        ctx.attach_i2s_device(Box::new(Inmp441::new(id, channel)))
+    }
+}

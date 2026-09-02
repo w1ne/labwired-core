@@ -135,6 +135,34 @@ impl<'a> AttachCtx<'a> {
             .map_err(|_| wrong_transport_err(self.ext, "SPI"))
     }
 
+    /// Attach a serial-audio device to the USART/I2S block the `connection:`
+    /// field names.
+    ///
+    /// Separate from `attach_spi_device` because the unit differs: an I2S
+    /// device answers in 32-bit channel slots, not bytes. On EFR32 the same
+    /// physical block does both, which is exactly why the two doors must stay
+    /// distinct -- a mic attached through the SPI door would be asked for
+    /// bytes and would have no way to say which channel they came from.
+    pub fn attach_i2s_device(
+        &mut self,
+        device: Box<dyn crate::peripherals::device::I2sDevice>,
+    ) -> Result<()> {
+        let ext = self.ext;
+        let idx = self
+            .bus
+            .find_peripheral_index_by_name(&ext.connection)
+            .ok_or_else(|| missing_connection_err(ext))?;
+        let any = self.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| downcast_err(ext))?;
+        let spi = any
+            .downcast_mut::<crate::peripherals::spi::Spi>()
+            .ok_or_else(|| wrong_transport_err(ext, "I2S"))?;
+        spi.i2s_device = Some(device);
+        Ok(())
+    }
+
     /// Acquire the ADC peripheral declared in the system.yaml `connection:`
     /// field. Used by analog peripherals (e.g. NTC thermistor) that "seed"
     /// a channel rather than attach a stream/device.

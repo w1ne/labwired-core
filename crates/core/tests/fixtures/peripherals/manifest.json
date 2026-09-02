@@ -959,6 +959,23 @@
       "inputs": []
     },
     {
+      "device_type": "inmp441",
+      "label": "INMP441 I2S Mic",
+      "summary": "Omnidirectional MEMS microphone, 24-bit I2S digital output.",
+      "detail": "TDK InvenSense INMP441 on a serial-audio bus. Answers in 32-bit channel slots, 24-bit two's complement MSB-aligned, and drives ONLY the half of the frame its L/R pin selects -- the other half reads zero, because SD tri-states there and the board's 100k pulldown wins. That is the part's commonest bring-up failure and the model reproduces it rather than hiding it. On EFR32 the transport is a USART in I2S mode (I2SCTRL.EN); the sample stream is a deterministic synthetic tone, not real audio, and its artifact says so.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "str",
+          "doc": "Which half of the stereo frame this mic drives: \"left\" (L/R tied low, the default) or \"right\" (L/R tied high). Datasheet pin 4. A mic asked for the other channel is SILENT, not absent."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "ili9341-16bit",
       "label": "ILI9341 TFT (16-bit parallel)",
       "summary": "240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang.",
