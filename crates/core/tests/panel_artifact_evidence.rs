@@ -366,6 +366,100 @@ fn ili9341_evidence_is_unchanged() {
     assert_eq!(art.meta["top_colour_pixels"], PIXELS);
 }
 
+/// The ST7789 on the 1.9in IPS module, through its OWN kit `attach` -- the
+/// path the 15 unit tests beside the model never touch, because they construct
+/// `St7789` directly. Everything below goes through SystemBus::from_config, so
+/// a kit that registers but fails to resolve its D/C pin fails here.
+///
+/// `lit` is the claim worth pinning: the model reports DISPON **and** awake,
+/// so this drives SLPOUT before DISPON. A panel given DISPON alone is dark on
+/// the bench however full frame memory is, and reporting it as lit would be the
+/// evidence layer flattering the firmware.
+#[test]
+fn st7789_that_painted_reports_its_ink_and_says_it_is_lit() {
+    const PIXELS: usize = 100;
+    const HI: u8 = 0x07;
+    const LO: u8 = 0xE0; // RGB565 green: both bytes non-zero.
+    // SLPOUT, DISPON, then open the pixel stream.
+    let mut frames = vec![(false, 0x11u8), (false, 0x29), (false, 0x2C)];
+    for _ in 0..PIXELS {
+        frames.push((true, HI));
+        frames.push((true, LO));
+    }
+    let mut bus = rig(
+        "st7789-170x320",
+        "spi1",
+        &[("cs_pin", "PA4".into()), ("dc_pin", "PC7".into())],
+    );
+    spi_write(&mut bus, "spi1", &frames);
+
+    let device = inspect_panel(bus);
+    let art = evidence(&device);
+    assert_eq!(art.meta["format"], "rgb565_be");
+    // Undeclared window: the artifact is the controller's WHOLE frame memory,
+    // 240x320 per datasheet section 8.12 p.124. No panel offset is assumed.
+    assert_eq!(art.meta["w"], 240);
+    assert_eq!(art.meta["h"], 320);
+    assert_eq!(art.meta["total_bytes"], 240 * 320 * 2);
+    assert_eq!(art.meta["display_on"], true);
+    assert_eq!(art.meta["awake"], true);
+    assert_eq!(art.meta["lit"], true);
+    assert_eq!(art.meta["painted_bytes"], PIXELS * 2);
+    assert_eq!(art.meta["top_colour"], "0x07E0");
+    assert_eq!(art.meta["top_colour_pixels"], PIXELS);
+}
+
+/// DISPON without SLPOUT is not a lit panel. Same bytes as above minus 0x11:
+/// the pixels still land, and `lit` must still be false.
+#[test]
+fn st7789_painted_but_asleep_is_not_lit() {
+    let frames = vec![
+        (false, 0x29u8),
+        (false, 0x2C),
+        (true, 0x07),
+        (true, 0xE0),
+    ];
+    let mut bus = rig(
+        "st7789-170x320",
+        "spi1",
+        &[("cs_pin", "PA4".into()), ("dc_pin", "PC7".into())],
+    );
+    spi_write(&mut bus, "spi1", &frames);
+
+    let device = inspect_panel(bus);
+    let art = evidence(&device);
+    assert_eq!(art.meta["display_on"], true);
+    assert_eq!(art.meta["awake"], false);
+    assert_eq!(art.meta["lit"], false, "DISPON alone must not read as lit");
+    assert_eq!(art.meta["painted_bytes"], 2, "the pixel still landed");
+}
+
+/// A declared visible window crops the ARTIFACT without moving frame memory.
+/// The offset is an integration value the datasheet does not give, so it is
+/// supplied here rather than assumed anywhere in the model.
+#[test]
+fn st7789_visible_window_crops_the_artifact_to_the_glass() {
+    let mut bus = rig(
+        "st7789-170x320",
+        "spi1",
+        &[
+            ("cs_pin", "PA4".into()),
+            ("dc_pin", "PC7".into()),
+            ("col_offset", 35.into()),
+            ("row_offset", 0.into()),
+            ("cols", 170.into()),
+            ("rows", 320.into()),
+        ],
+    );
+    spi_write(&mut bus, "spi1", &[(false, 0x11), (false, 0x29)]);
+
+    let device = inspect_panel(bus);
+    let art = evidence(&device);
+    assert_eq!(art.meta["w"], 170);
+    assert_eq!(art.meta["h"], 320);
+    assert_eq!(art.meta["total_bytes"], 170 * 320 * 2);
+}
+
 /// The Nokia 5110's controller: bank-addressed 1-bpp, D/C framed.
 #[test]
 fn pcd8544_that_painted_reports_its_ink() {
