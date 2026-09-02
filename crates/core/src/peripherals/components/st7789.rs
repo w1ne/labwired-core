@@ -588,15 +588,18 @@ impl PeripheralKit for St7789Kit {
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("").to_string();
-        let dc = ctx.config_str("dc_pin").map(|s| s.to_string()).ok_or_else(|| {
-            anyhow::anyhow!(
-                "st7789-170x320 '{}': no `dc_pin`. This panel frames commands from the D/C \
+        let dc = ctx
+            .config_str("dc_pin")
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "st7789-170x320 '{}': no `dc_pin`. This panel frames commands from the D/C \
                  line and has no infer-from-byte-values fallback: that inference decodes a \
                  parameter byte 0x2C as RAMWR and writes the remaining init bytes into the \
                  framebuffer as pixels, leaving a blank screen and a blameless firmware.",
-                ctx.device_id(),
-            )
-        })?;
+                    ctx.device_id(),
+                )
+            })?;
 
         // Resolving the pin to its GPIO output register is the half that makes
         // D/C real: the bus samples that register before each transfer.
@@ -799,7 +802,11 @@ mod tests {
         cmd(&mut d, CMD_DISPON, &[]);
         assert!(d.lit());
         cmd(&mut d, CMD_SWRESET, &[]);
-        assert_eq!(px_at(&d, 10, 20), 0xF800, "memory survives a software reset");
+        assert_eq!(
+            px_at(&d, 10, 20),
+            0xF800,
+            "memory survives a software reset"
+        );
         assert!(!d.display_on());
         assert!(!d.lit());
     }
@@ -855,7 +862,10 @@ mod tests {
         cmd(&mut d, CMD_CASET, &[0x00, 0x2C, 0x00, 0x2C]);
         cmd(&mut d, CMD_SLPOUT, &[]);
         cmd(&mut d, CMD_DISPON, &[]);
-        assert!(d.lit(), "init survived: SLPOUT and DISPON were not eaten as pixels");
+        assert!(
+            d.lit(),
+            "init survived: SLPOUT and DISPON were not eaten as pixels"
+        );
         assert_eq!(
             d.framebuffer.iter().filter(|&&b| b != 0).count(),
             0,
@@ -868,12 +878,14 @@ mod tests {
     /// rather than assume them.
     #[test]
     fn a_visible_window_crops_the_artifact_only() {
-        let mut d = St7789::new("PA4").with_dc_pin("PB0").with_visible_window(VisibleWindow {
-            col_offset: 35,
-            row_offset: 0,
-            cols: 170,
-            rows: 320,
-        });
+        let mut d = St7789::new("PA4")
+            .with_dc_pin("PB0")
+            .with_visible_window(VisibleWindow {
+                col_offset: 35,
+                row_offset: 0,
+                cols: 170,
+                rows: 320,
+            });
         assert_eq!(d.logical_dimensions(), (170, 320));
         window(&mut d, 35, 35, 0, 0);
         pixels(&mut d, &[0x07E0]);

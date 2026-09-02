@@ -380,7 +380,7 @@ fn st7789_that_painted_reports_its_ink_and_says_it_is_lit() {
     const PIXELS: usize = 100;
     const HI: u8 = 0x07;
     const LO: u8 = 0xE0; // RGB565 green: both bytes non-zero.
-    // SLPOUT, DISPON, then open the pixel stream.
+                         // SLPOUT, DISPON, then open the pixel stream.
     let mut frames = vec![(false, 0x11u8), (false, 0x29), (false, 0x2C)];
     for _ in 0..PIXELS {
         frames.push((true, HI));
@@ -413,12 +413,7 @@ fn st7789_that_painted_reports_its_ink_and_says_it_is_lit() {
 /// the pixels still land, and `lit` must still be false.
 #[test]
 fn st7789_painted_but_asleep_is_not_lit() {
-    let frames = vec![
-        (false, 0x29u8),
-        (false, 0x2C),
-        (true, 0x07),
-        (true, 0xE0),
-    ];
+    let frames = vec![(false, 0x29u8), (false, 0x2C), (true, 0x07), (true, 0xE0)];
     let mut bus = rig(
         "st7789-170x320",
         "spi1",

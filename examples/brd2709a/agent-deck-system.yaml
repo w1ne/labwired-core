@@ -1,0 +1,147 @@
+# BRD2709A "agent deck" — every part onboarded from the HEStore order, on one
+# board, wired to the bare breakout pads.
+#
+# ⚠️ TWO SYNCHRONOUS BLOCKS, AND THAT IS NOT AN ARBITRARY CHOICE. On EFR32 a
+# USART is one block with three personalities and I2SCTRL.EN switches the WHOLE
+# block, so a display in SPI mode and a microphone in I2S mode CANNOT share
+# one. The xG26 has three I2S-capable USARTs; USART1 is the VCOM console, which
+# leaves USART0 for the panel and USART2 for the mic. That is the same split a
+# person would wire on the bench.
+#
+# ⚠️ THE PADS ARE SHARED, NOT SPARE. UG594 Table 3.1 p.10: "pins may be shared
+# between the breakout pads and other functions". PD03 (pad 6) is the only GPIO
+# with no shared feature; everything else below is also a mikroBUS or Qwiic
+# signal. This deck therefore requires the mikroBUS socket to be EMPTY and
+# cannot coexist with a Click board.
+#
+# ⚠️ 3.3 V ONLY. xG26 GPIO is not 5 V tolerant (datasheet VDIGPIN abs max =
+# VIOVDD + 0.3 V). Power every module from VMCU (pad 8). Pad 7 is the board's
+# 5 V USB rail and must not reach an MCU pin.
+#
+# PIN BUDGET — UG594 Table 3.1 p.10 and Figure 3.5 p.9. The 28 pads carry
+# FIFTEEN MCU GPIO plus four dedicated analog inputs; the rest are GND, 5V,
+# VMCU, 3V3, VREFN/VREFP and the two BOARD_ID lines. All fifteen are spent
+# here, and the pin map below is DATA (`board_io` + device config), not this
+# comment, so `the_deck_assigns_every_pin_once` can actually collide it.
+#
+#   PC03 pad 14  tft SCK       PC02 pad 10  tft MOSI     PC04 pad 16  tft CS
+#   PC00 pad 17  tft DC        PC06 pad 18  tft RES      PD03 pad  6  tft BLK
+#   PA04 pad 13  mic SCK       PA05 pad 15  mic WS       PA07 pad 19  mic SD
+#   PD02 pad 20  fader wiper (MIKROE_AN -> IADC0)
+#   PC05 pad 11  enc CLK       PC07 pad  9  enc DT       PD04 pad 28  enc SW
+#   PC01 pad 12  button SIG    PD05 pad 26  toggle
+#
+# PD04/PD05 are the PTI (Packet Trace Interface) pads, and using them as GPIO
+# is what makes the encoder's push switch fit.
+#
+# ⚠️ THIS DOES NOT COST YOU THE RADIO. PTI is a debug TAP that streams a copy
+# of transmitted and received packets to the J-Link (UG594 §1, p.3). BLE runs
+# on the 2.4 GHz radio and the on-chip link layer; it does not read or write
+# these two pins. So a BLE deck still works with them spent — what you give up
+# is watching packets go by in Network Analyzer, and you can still see the
+# stack's own logs over the VCOM console on USART1.
+#
+# If you DO want packet tracing on a given build, PD04/PD05 are the two pins to
+# take back: drop `enc_sw` and `toggle` and the deck loses two contacts, not a
+# device. Programming and debug are unaffected either way — they run over SWD
+# through the on-board J-Link on PA01/PA02/PA03, which nothing here touches.
+#
+# PC01 is the mikroBUS MISO pad and is free because the ST7789 is write-only:
+# it has no MISO line at all.
+#
+# Not on the pads and therefore not usable: PA01/PA02/PA03 (SWD, held by the
+# J-Link for the whole debug session), PB02/PB03 (VCOM console), PB00/PB01
+# (BTN0/BTN1), PC08/PC09 (LED0/LED1). The last four are ON the board, and the
+# deck deliberately leaves them alone so a lab can still use them.
+name: "brd2709a-agent-deck"
+chip: "../../configs/chips/efr32mg26.yaml"
+
+external_devices:
+  # 1.9" 170x320 IPS panel on USART0 in SPI mode.
+  - id: "tft"
+    type: "st7789-170x320"
+    connection: "spi0"
+    config:
+      cs_pin: "PC04"
+      dc_pin: "PC00"
+      col_offset: 35
+      row_offset: 0
+      cols: 170
+      rows: 320
+
+  # INMP441 on USART2 in I2S mode. L/R tied low = LEFT channel; the mic is
+  # silent on the right half of the frame, by design and per its datasheet.
+  - id: "mic"
+    type: "inmp441"
+    connection: "spi2"
+    config:
+      channel: "left"
+
+  # 60 mm slide fader on the IADC, through the MIKROE_AN pad (PD02).
+  - id: "fader"
+    type: "slide-potentiometer"
+    connection: "iadc0"
+    config:
+      channel: 0
+
+board_io:
+  # ── Panel control lines the SPI model does not carry ────────────────────
+  # RES and BLK are plain GPIO the firmware drives, not SPI traffic, so they
+  # belong here rather than in the device config. Declaring them makes the
+  # deck's pin claim on PC06/PD03 real to the twin AND visible to the
+  # pin-uniqueness gate — as a comment it was neither, which is how PD03 came
+  # to be claimed twice by an earlier draft of this file.
+  - id: "tft_res"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 6
+    signal: "output"
+    active_high: false        # ST7789 RESX is active-LOW (datasheet §6.2.1)
+  - id: "tft_blk"
+    kind: "led"
+    peripheral: "gpiod"
+    pin: 3
+    signal: "output"
+    active_high: true         # module backlight FET drives on a HIGH
+
+  # ── Rotary encoder ──────────────────────────────────────────────────────
+  # Quadrature. Active-LOW: the module carries 10k pull-UPS on CLK and DT with
+  # the common to GND (traced off the vendor schematic).
+  - id: "enc_clk"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 5
+    signal: "input"
+    active_high: false
+  - id: "enc_dt"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 7
+    signal: "input"
+    active_high: false
+  # The shaft's push switch: an ordinary contact to GND, needing the MCU's
+  # internal pull-up. It is a separate contact from the quadrature pair, so it
+  # is a plain button here rather than anything the encoder model decodes.
+  - id: "enc_sw"
+    kind: "button"
+    peripheral: "gpiod"
+    pin: 4
+    signal: "input"
+    active_high: false
+
+  # TACTS-12MOD-SET pushbutton module: it DRIVES SIG high on press, the
+  # opposite of the INPUT_PULLUP idiom, because the module is powered.
+  - id: "btn"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 1
+    signal: "input"
+    active_high: true
+
+  # KNX1 SPDT toggle, ON-ON. COM to GND, so the thrown position reads LOW.
+  - id: "toggle"
+    kind: "button"
+    peripheral: "gpiod"
+    pin: 5
+    signal: "input"
+    active_high: false

@@ -12,19 +12,30 @@ rather than at someone's desk.
 | Part | Connection | Notes |
 |------|-----------|-------|
 | `st7789-170x320` | `spi0` | USART0 in SPI mode. See `st7789-system.yaml`. |
-| `inmp441` | `spi0` | The SAME block in I2S mode — EFR32 has no separate I2S peripheral. |
+| `inmp441` | `spi2` | USART2 in I2S mode. NOT the same block as the panel: `I2SCTRL.EN` switches a whole USART, so SPI and I2S cannot share one. |
 | `slide-potentiometer` | `iadc0` | Reaches the shared potentiometer kit through TYPE_ALIASES. |
-| `toggle-switch`, `button-module`, `rotary-encoder` | `board_io` | GPIO. |
+| `toggle-switch`, `button-module`, `rotary-encoder` | `board_io` | GPIO. The encoder needs three pins: A, B and the shaft switch. |
 
-⚠️ **The breakout pads are not spare pins.** UG594 Table 3.1 (p.10): "pins may
-be shared between the breakout pads and other functions". Of the 28 pads,
+⚠️ **The pads are shared, not spare.** UG594 Table 3.1 (p.10): "pins may be
+shared between the breakout pads and other functions". Of the 28 pads,
 **PD03 (pad 6) is the only GPIO with no shared feature** — everything else is
-also a mikroBUS or Qwiic signal, or a debug/PTI line. Wiring anything to the
-pads means keeping the mikroBUS socket empty.
+also a mikroBUS or Qwiic signal, a power rail, a VREF, a BOARD_ID line or a PTI
+line. Wiring anything to the pads means keeping the mikroBUS socket empty.
 
-Pins that are NOT available: PA01/PA02/PA03 (SWD — the on-board J-Link uses
-them throughout a debug session), PB02/PB03 (VCOM console), PB00/PB01
-(BTN0/BTN1), PC08/PC09 (LED0/LED1), PD04/PD05 (PTI).
+**The 28 pads carry fifteen MCU GPIO** (PC00–PC07, PD02–PD05, PA04, PA05, PA07)
+plus four dedicated analog inputs (AIN0–AIN3). The rest are GND ×2, 5V, VMCU,
+3V3, VREFN, VREFP and the two BOARD_ID lines. `agent-deck-system.yaml` spends
+all fifteen.
+
+PD04/PD05 are the PTI pads. PTI is a debug **tap** that copies radio packets to
+the J-Link — **BLE does not need it**, so spending those two as GPIO costs you
+packet tracing in Network Analyzer, not the radio. Take them back if you want
+tracing on a build; the deck then loses two contacts, not a device.
+
+Pins that are NOT on the pads and so not usable: PA01/PA02/PA03 (SWD — the
+on-board J-Link holds them for the whole debug session), PB02/PB03 (VCOM
+console), PB00/PB01 (BTN0/BTN1), PC08/PC09 (LED0/LED1). The last four are on
+the board and the deck deliberately leaves them free.
 
 ⚠️ **3.3 V only.** The xG26's GPIO is not 5 V tolerant — its datasheet gives
 `VDIGPIN` abs max as `VIOVDD + 0.3 V`. Pad 7 is the board's 5 V USB rail and

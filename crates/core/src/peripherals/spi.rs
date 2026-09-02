@@ -2168,13 +2168,13 @@ impl Spi {
                     // of each word can be read out". Dropping this would let a
                     // driver configured for 16-bit audio read 32 bits of it and
                     // still look correct.
-                    let format = (i2sctrl & EFR_USART_I2SCTRL_FORMAT_MASK)
-                        >> EFR_USART_I2SCTRL_FORMAT_SHIFT;
+                    let format =
+                        (i2sctrl & EFR_USART_I2SCTRL_FORMAT_MASK) >> EFR_USART_I2SCTRL_FORMAT_SHIFT;
                     let data_bits: u32 = match format {
-                        0 => 32,          // W32D32
-                        1 | 2 => 24,      // W32D24M / W32D24
-                        3 | 5 => 16,      // W32D16 / W16D16
-                        _ => 8,           // W32D8 / W16D8 / W8D8
+                        0 => 32,     // W32D32
+                        1 | 2 => 24, // W32D24M / W32D24
+                        3 | 5 => 16, // W32D16 / W16D16
+                        _ => 8,      // W32D8 / W16D8 / W8D8
                     };
                     let slot = if data_bits >= 32 {
                         raw
@@ -4792,10 +4792,12 @@ mod efr32s2_spi_tests {
     #[test]
     fn without_i2sctrl_en_a_write_is_still_a_byte_transfer() {
         let mut spi = ready();
-        spi.i2s_device = Some(Box::new(crate::peripherals::components::inmp441::Inmp441::new(
-            "mic",
-            crate::peripherals::components::inmp441::MicChannel::Left,
-        )));
+        spi.i2s_device = Some(Box::new(
+            crate::peripherals::components::inmp441::Inmp441::new(
+                "mic",
+                crate::peripherals::components::inmp441::MicChannel::Left,
+            ),
+        ));
         spi.write_u32(EFR_USART_TXDATA, 0x00).unwrap();
         // No SPI device attached and no loopback: a byte transfer reads 0, and
         // crucially NOT a 32-bit audio slot.
@@ -4842,9 +4844,17 @@ mod efr32s2_spi_tests {
         use crate::peripherals::components::inmp441::MicChannel;
         let mut spi = i2s_ready(MicChannel::Right);
         spi.write_u32(EFR_USART_TXDATA, 0).unwrap();
-        assert_eq!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0, "left slot: silent");
+        assert_eq!(
+            spi.read_u32(EFR_USART_RXDATA).unwrap(),
+            0,
+            "left slot: silent"
+        );
         spi.write_u32(EFR_USART_TXDATA, 0).unwrap();
-        assert_ne!(spi.read_u32(EFR_USART_RXDATA).unwrap(), 0, "right slot: audio");
+        assert_ne!(
+            spi.read_u32(EFR_USART_RXDATA).unwrap(),
+            0,
+            "right slot: audio"
+        );
     }
 
     /// FORMAT decides how many MSBs come back. W32D16 must truncate a 24-bit

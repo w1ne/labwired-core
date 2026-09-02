@@ -274,7 +274,9 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "efr32mg26",
         yaml: "configs/chips/efr32mg26.yaml",
-        reset_oracle: Some("scripts/hw-oracle/captures/efr32mg26/20260902T194136Z-i2sctrl/reg_oracle.json"),
+        reset_oracle: Some(
+            "scripts/hw-oracle/captures/efr32mg26/20260902T194136Z-i2sctrl/reg_oracle.json",
+        ),
         behavior_gate: None,
     },
     // Classic Arduino Nano / ATmega328P — sim-smoke twin (PORT/Timer0/USART0).

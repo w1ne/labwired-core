@@ -230,7 +230,9 @@ mod tests {
     fn the_sample_stream_is_reproducible() {
         let take = || {
             let mut m = Inmp441::new("mic", MicChannel::Left);
-            (0..TONE_PERIOD_FRAMES * 2).map(|_| m.next_slot(false)).collect::<Vec<_>>()
+            (0..TONE_PERIOD_FRAMES * 2)
+                .map(|_| m.next_slot(false))
+                .collect::<Vec<_>>()
         };
         assert_eq!(take(), take());
     }
@@ -240,9 +242,14 @@ mod tests {
     #[test]
     fn the_tone_actually_varies() {
         let mut m = Inmp441::new("mic", MicChannel::Left);
-        let s: Vec<u32> = (0..TONE_PERIOD_FRAMES).map(|_| m.next_slot(false)).collect();
+        let s: Vec<u32> = (0..TONE_PERIOD_FRAMES)
+            .map(|_| m.next_slot(false))
+            .collect();
         let distinct = s.iter().collect::<std::collections::HashSet<_>>().len();
-        assert!(distinct > 8, "expected a varying tone, saw {distinct} distinct slots");
+        assert!(
+            distinct > 8,
+            "expected a varying tone, saw {distinct} distinct slots"
+        );
     }
 }
 
@@ -269,15 +276,13 @@ static INMP441_METADATA: KitMetadata = KitMetadata {
              real audio, and its artifact says so.",
     transport: Transport::Spi,
     category: Category::Spi,
-    config_keys: &[
-        ConfigKey {
-            name: "channel",
-            ty: ConfigType::Str,
-            doc: "Which half of the stereo frame this mic drives: \"left\" (L/R tied low, \
+    config_keys: &[ConfigKey {
+        name: "channel",
+        ty: ConfigType::Str,
+        doc: "Which half of the stereo frame this mic drives: \"left\" (L/R tied low, \
                   the default) or \"right\" (L/R tied high). Datasheet pin 4. A mic asked \
                   for the other channel is SILENT, not absent.",
-        },
-    ],
+    }],
     labs: &[],
 };
 

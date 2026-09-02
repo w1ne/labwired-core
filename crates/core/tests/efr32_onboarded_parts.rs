@@ -86,7 +86,10 @@ fn the_st7789_still_refuses_an_unresolvable_dc_pin_on_efr32() {
         "spi0",
         &[("cs_pin", "PC00".into()), ("dc_pin", "PZ99".into())],
     );
-    assert!(bus.is_err(), "a nonexistent D/C pin must be refused, not guessed");
+    assert!(
+        bus.is_err(),
+        "a nonexistent D/C pin must be refused, not guessed"
+    );
 }
 
 /// The INMP441 on the same block in I2S mode. On EFR32 there is no dedicated
@@ -157,4 +160,175 @@ fn the_lab_pins_resolve_on_this_die() {
         &[("cs_pin", "PC04".into()), ("dc_pin", "PC00".into())],
     );
     assert!(ok.is_ok(), "PC04/PC00 must resolve: {:?}", ok.err());
+}
+
+/// THE DECK: every onboarded part on one board, built from the shipped
+/// manifest. This is the claim "all of them work with the board" as a gate.
+///
+/// It is also the only thing that would catch the block conflict: a display in
+/// SPI mode and a mic in I2S mode cannot share one USART, because I2SCTRL.EN
+/// switches the whole block. Put both on `spi0` and the second attach silently
+/// wins -- there is no error, just a panel or a microphone that never answers.
+#[test]
+fn the_agent_deck_builds_with_every_part_on_it() {
+    use labwired_config::SystemManifest;
+    let path = repo("examples/brd2709a/agent-deck-system.yaml");
+    let manifest = SystemManifest::from_file(&path).expect("load the deck manifest");
+
+    // Every onboarded part is actually present -- a deck that quietly lost one
+    // would still build.
+    let types: Vec<&str> = manifest
+        .external_devices
+        .iter()
+        .map(|d| d.r#type.as_str())
+        .collect();
+    for want in ["st7789-170x320", "inmp441", "slide-potentiometer"] {
+        assert!(
+            types.contains(&want),
+            "the deck must carry {want}, has {types:?}"
+        );
+    }
+    // Panel RES + BLK, encoder A/B/SW, button module, toggle. Named one by one
+    // so a dropped contact fails here rather than silently shrinking the deck.
+    let io: Vec<&str> = manifest.board_io.iter().map(|b| b.id.as_str()).collect();
+    for want in [
+        "tft_res", "tft_blk", "enc_clk", "enc_dt", "enc_sw", "btn", "toggle",
+    ] {
+        assert!(io.contains(&want), "the deck must wire {want}, has {io:?}");
+    }
+    assert_eq!(
+        manifest.board_io.len(),
+        7,
+        "exactly those seven contacts, saw {io:?}"
+    );
+
+    // The pushbutton module DRIVES its SIG line, so it is the one active-HIGH
+    // contact. Every other contact closes to ground. Getting this backwards
+    // reads as a button stuck down, which looks like firmware, not wiring.
+    for b in &manifest.board_io {
+        let want_high = b.id == "btn" || b.id == "tft_blk";
+        assert_eq!(b.active_high, want_high, "{} has the wrong polarity", b.id);
+    }
+
+    // The panel and the microphone must be on DIFFERENT blocks.
+    let tft = manifest
+        .external_devices
+        .iter()
+        .find(|d| d.id == "tft")
+        .unwrap();
+    let mic = manifest
+        .external_devices
+        .iter()
+        .find(|d| d.id == "mic")
+        .unwrap();
+    assert_ne!(
+        tft.connection, mic.connection,
+        "SPI and I2S cannot share one USART: I2SCTRL.EN switches the whole block",
+    );
+
+    let chip_path = repo("configs/chips/efr32mg26.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load efr32mg26 descriptor");
+    let bus = SystemBus::from_config(&chip, &manifest);
+    assert!(bus.is_ok(), "the deck must build: {:?}", bus.err());
+}
+
+/// No two parts on the deck may claim the same MCU pin. A duplicate would
+/// build fine and produce a board nobody can wire.
+#[test]
+fn the_deck_assigns_every_pin_once() {
+    use labwired_config::SystemManifest;
+
+    // ⚠️ BOTH NAMESPACES, NORMALISED TO ONE. The first version of this gate
+    // pushed "PC04" from a device config and "gpiod:3" from board_io into the
+    // same list and asked for duplicates. Those two spellings can never be
+    // equal, so the deck shipped with PD03 claimed TWICE — as the panel
+    // backlight and as the toggle — and this test passed. A pin name is
+    // canonicalised here so a collision between the two sources is reachable.
+    fn canon(pin_name: &str) -> String {
+        let t = pin_name.trim().trim_start_matches('P');
+        let mut c = t.chars();
+        let port = c.next().unwrap_or('?').to_ascii_lowercase();
+        let idx: String = c.filter(|ch| ch.is_ascii_digit()).collect();
+        let n: u32 = idx.trim_start_matches('0').parse().unwrap_or(0);
+        format!("gpio{port}:{n}")
+    }
+
+    let manifest = SystemManifest::from_file(&repo("examples/brd2709a/agent-deck-system.yaml"))
+        .expect("load the deck manifest");
+
+    let mut claimed: Vec<(String, String)> = Vec::new();
+    for d in &manifest.external_devices {
+        for key in ["cs_pin", "dc_pin"] {
+            if let Some(v) = d.config.get(key).and_then(|v| v.as_str()) {
+                claimed.push((canon(v), format!("{}.{key}", d.id)));
+            }
+        }
+    }
+    for b in &manifest.board_io {
+        claimed.push((format!("{}:{}", b.peripheral, b.pin), b.id.clone()));
+    }
+
+    let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for (pin, owner) in &claimed {
+        if let Some(prev) = seen.insert(pin.clone(), owner.clone()) {
+            panic!("pin {pin} is claimed twice on the deck: by {prev} and by {owner}");
+        }
+    }
+
+    // The normaliser must actually reach the device-config namespace, or this
+    // gate silently degrades to "board_io has no duplicates" again.
+    assert_eq!(
+        canon("PD03"),
+        "gpiod:3",
+        "canon() must meet board_io's spelling"
+    );
+    assert!(
+        seen.contains_key("gpioc:4") && seen.contains_key("gpioc:0"),
+        "the panel's CS/DC must land in the same namespace as board_io, saw {:?}",
+        seen.keys().collect::<Vec<_>>()
+    );
+
+    // ⚠️ ONLY NINE OF THE FIFTEEN PINS ARE MANIFEST DATA. The other six are
+    // BUS pins, implied by `connection: spi0` / `spi2` / `iadc0` and the
+    // chip's route — they appear nowhere in this file, so a gate cannot read
+    // them off the manifest. They are named here instead, and the two sets are
+    // checked to be disjoint and to cover the pad list exactly. That catches
+    // the error that can really happen: a `cs_pin`/`dc_pin`/board_io entry
+    // quietly landing on a pin the bus already drives.
+    assert_eq!(
+        claimed.len(),
+        9,
+        "nine deck pins are declarable; saw {} -> {:?}",
+        claimed.len(),
+        claimed
+    );
+
+    // tft SCK/MOSI on USART0, mic SCK/WS/SD on USART2, fader wiper on IADC0.
+    const BUS_PINS: [&str; 6] = [
+        "gpioc:3", "gpioc:2", "gpioa:4", "gpioa:5", "gpioa:7", "gpiod:2",
+    ];
+    for b in BUS_PINS {
+        assert!(
+            !seen.contains_key(b),
+            "{b} is driven by a bus, but {} also claims it",
+            seen[b]
+        );
+    }
+
+    // UG594 Table 3.1 p.10 + Figure 3.5 p.9: the 28 pads carry FIFTEEN MCU
+    // GPIO (plus four dedicated analog inputs, and GND/5V/VMCU/3V3/VREF/
+    // BOARD_ID). The deck spends all fifteen, so a dropped pin is caught.
+    const PADS: [&str; 15] = [
+        "gpioc:7", "gpioc:5", "gpioa:4", "gpioa:5", "gpioc:0", "gpioa:7", "gpiod:3", "gpioc:2",
+        "gpioc:1", "gpioc:3", "gpioc:4", "gpioc:6", "gpiod:2", "gpiod:5", "gpiod:4",
+    ];
+    let mut spent: Vec<&str> = seen.keys().map(|k| k.as_str()).collect();
+    spent.extend(BUS_PINS);
+    spent.sort_unstable();
+    let mut pads = PADS.to_vec();
+    pads.sort_unstable();
+    assert_eq!(
+        spent, pads,
+        "the deck must spend each of the 15 breakout GPIO exactly once"
+    );
 }
