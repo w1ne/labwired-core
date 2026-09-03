@@ -141,9 +141,7 @@ impl Rp2040Watchdog {
         }
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// True while the generator + dog can still change observable state.
     fn countdown_active(&self) -> bool {

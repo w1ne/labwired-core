@@ -317,6 +317,14 @@ impl std::fmt::Debug for Esp32I2c {
 }
 
 impl Peripheral for Esp32I2cAhbFifo {
+    /// A write-only alias onto `Esp32I2c`'s TX FIFO: a `write` pushes a byte,
+    /// a `read` returns 0. The engine that drains that FIFO lives on
+    /// [`Esp32I2c`], not here. No `tick`/`tick_elapsed` override, so the walk
+    /// gets the trait default (`PeripheralTickResult::default()`) — no IRQ,
+    /// DMA request, mmio-write or fired event, for every reachable state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }

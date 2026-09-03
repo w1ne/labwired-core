@@ -103,22 +103,20 @@ impl Pio {
         }
     }
 
-    /// Scheduler mode: the `event-scheduler` feature is on AND the bus handed
-    /// this instance its shared [`CycleClock`] at attach time.
-    ///
-    /// The clock is the only evidence a peripheral has that it went through
-    /// `SystemBus::add_peripheral`/`push_peripheral` — and therefore that it
-    /// sits on a bus whose `Machine` drains the event scheduler. PIO's
-    /// scheduler path is a self-perpetuating delay-1 `EVT_SM_STEP` chain
-    /// (`take_scheduled_events` + `on_event`): with no drain there is nothing
-    /// to step the state machines and every SM freezes at PC 0 forever.
-    /// Hand-built buses (tests, embedders that push `PeripheralEntry` directly
-    /// and settle with `tick_peripherals*`) therefore stay on the legacy walk
-    /// with exact historical semantics — the contract documented on
-    /// [`Peripheral::attach_cycle_clock`]. Mirrors `timer`/`dma`/`i2c`/`exti`.
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    // Scheduler mode: the `event-scheduler` feature is on AND the bus handed
+    // this instance its shared [`CycleClock`] at attach time.
+    //
+    // The clock is the only evidence a peripheral has that it went through
+    // `SystemBus::add_peripheral`/`push_peripheral` — and therefore that it
+    // sits on a bus whose `Machine` drains the event scheduler. PIO's
+    // scheduler path is a self-perpetuating delay-1 `EVT_SM_STEP` chain
+    // (`take_scheduled_events` + `on_event`): with no drain there is nothing
+    // to step the state machines and every SM freezes at PC 0 forever.
+    // Hand-built buses (tests, embedders that push `PeripheralEntry` directly
+    // and settle with `tick_peripherals*`) therefore stay on the legacy walk
+    // with exact historical semantics — the contract documented on
+    // [`Peripheral::attach_cycle_clock`]. Mirrors `timer`/`dma`/`i2c`/`exti`.
+    crate::cycle_clock::scheduler_mode!();
 
     /// True while any state machine is enabled (needs per-cycle SM steps).
     fn any_sm_enabled(&self) -> bool {
