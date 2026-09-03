@@ -24,8 +24,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::cortex_m::CortexM;
-use labwired_core::peripherals::components::st7789::St7789;
-use labwired_core::peripherals::spi::Spi;
+use labwired_core::inspect::InspectOpts;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::Machine;
 use std::path::{Path, PathBuf};
@@ -105,24 +104,6 @@ fn run_deck(elf: &Path) -> Run {
     Run { console, machine }
 }
 
-/// The panel model, reached through the USART0 block it hangs off.
-fn panel(m: &Machine<CortexM>) -> &St7789 {
-    let idx = m
-        .bus
-        .find_peripheral_index_by_name("spi0")
-        .expect("the deck puts the panel on spi0 (USART0)");
-    m.bus.peripherals[idx]
-        .dev
-        .as_any()
-        .unwrap()
-        .downcast_ref::<Spi>()
-        .expect("spi0 is a USART in SPI mode")
-        .attached_devices
-        .iter()
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<St7789>()))
-        .expect("an ST7789 is attached to spi0")
-}
-
 #[test]
 fn the_deck_firmware_drives_every_part() {
     let run = run_deck(&build_firmware());
@@ -170,23 +151,48 @@ fn the_deck_firmware_drives_every_part() {
     );
 
     // ── And the glass itself, not the firmware's opinion of it ───────────
-    let p = panel(&run.machine);
-    assert!(
-        p.lit(),
+    //
+    // ⚠️ THROUGH `display_artifact`, NOT A DOWNCAST. This first reached for
+    // `St7789` by concrete type, which the downcast ratchet correctly refused:
+    // that is debt, and it is also the WEAKER check. `display_artifact` is the
+    // same door the CLI's `display_region` assertion and the browser both use,
+    // so asserting here proves the evidence a user would actually see — a panel
+    // that painted but whose artifact never reached that door would satisfy a
+    // downcast and still show a person nothing.
+    let art = run
+        .machine
+        .bus
+        .display_artifact(
+            "tft",
+            &InspectOpts {
+                include_bytes: true,
+                peripheral: None,
+            },
+        )
+        .expect("the panel must publish a display artifact under its own id");
+
+    assert_eq!(
+        art.meta.get("lit").and_then(|v| v.as_bool()),
+        Some(true),
         "the panel must be AWAKE and DISPON, not merely painted: a firmware \
          that fills frame memory but skips SLPOUT drives a dark panel"
     );
     assert_eq!(
-        p.logical_dimensions(),
-        (170, 320),
+        (
+            art.meta.get("w").and_then(|v| v.as_u64()),
+            art.meta.get("h").and_then(|v| v.as_u64()),
+        ),
+        (Some(170), Some(320)),
         "the artifact must be cropped to this module's glass, not the 240x320 \
-         frame memory the ST7789V datasheet describes"
+         frame memory the ST7789V datasheet describes; meta was {:?}",
+        art.meta
     );
-    // Ink is a non-black pixel. Counting it here rather than trusting the
-    // firmware's own "filled 54400 px" line: that line proves the loop ran,
-    // not that anything reached the panel.
-    let fb = p.oriented_framebuffer();
-    let inked = fb
+
+    // Ink is a non-black pixel, counted off the artifact's own bytes rather
+    // than trusting the firmware's "filled 54400 px" line: that line proves the
+    // loop ran, not that anything reached the panel.
+    let bytes = art.bytes.as_ref().expect("include_bytes was requested");
+    let inked = bytes
         .chunks_exact(2)
         .filter(|px| px[0] != 0 || px[1] != 0)
         .count();
@@ -194,5 +200,18 @@ fn the_deck_firmware_drives_every_part() {
         inked,
         170 * 320,
         "every pixel of the 170x320 glass must carry ink; got {inked}"
+    );
+
+    // And the whole glass is ONE colour, the RGB565 blue the firmware wrote.
+    // Ink alone would pass on a panel painted with garbage; this says the
+    // bytes that arrived are the bytes that were sent.
+    assert_eq!(
+        (
+            art.meta.get("top_colour").and_then(|v| v.as_str()),
+            art.meta.get("top_colour_pixels").and_then(|v| v.as_u64()),
+        ),
+        (Some("0x001F"), Some(170 * 320)),
+        "the glass must be uniformly the 0x001F the firmware wrote; meta was {:?}",
+        art.meta
     );
 }

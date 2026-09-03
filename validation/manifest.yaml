@@ -1096,8 +1096,18 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    drift_ack: 2026-08-24
-    drift_ack_digest: e6a7c0479a962ada8585851c8735e065090b676ad211e8bb78fa776dc60e2490
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    drift_ack_digest: 44a49270f4958a0d93026136bf4c100f255add3aa73e4b7ccf4b7186c57937c6
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2272,8 +2282,18 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    drift_ack: 2026-08-24
-    drift_ack_digest: 70afb05b26f0a9ee97b6c6c9680c5e8e3c85dd2eca3b5e30633befa831a6c9c9
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    drift_ack_digest: 8e1cd6603424322304ace1f754e3b4dcc1f5aa23e74d7013824debef9d48b199
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2640,8 +2660,18 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    drift_ack: 2026-08-24
-    drift_ack_digest: b18bb27d064db6a933712f6e290a9154f2dcede8d1981bc342be9ddb829b7858
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    drift_ack_digest: 83e6bb7af729591da1d04657607de01bc0bc5900e061106600a13620ba8caa50
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3068,8 +3098,18 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    drift_ack: 2026-08-24
-    drift_ack_digest: 8cf71b344af92780991f0b079991fca197b531fd7dc60c15e5c3ac726871a7b0
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    drift_ack_digest: c8e34d6c922fa5cc7beb957b989f96dc3d0d4ab983d6287dc60d331f03e856c2
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3456,8 +3496,18 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    drift_ack: 2026-08-24
-    drift_ack_digest: 9b9e0c07d849292195854123981cd6099f1346198e9baea13d58d1a762018bb7
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    drift_ack_digest: b51e729a22db08812ee4934e366a7644a007b50e0b68cee5a84c36a5c07e7cb0
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
