@@ -32,7 +32,7 @@
     {
       "id": "usart0",
       "base": "0x400A0000",
-      "count": 20
+      "count": 24
     },
     {
       "id": "iadc0",

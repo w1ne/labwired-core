@@ -114,8 +114,24 @@ peripherals:
   # this layout, so no UART interrupt is ever pended either way.
   # USART2, the third instance. CLKEN2 bit 8; `irq` names the TX vector, the
   # same choice usart1 makes.
-  - id: "usart2"
-    type: "efr32s2_usart"
+  #
+  # ⚠️ DECLARED AS `spi`, NOT `efr32s2_usart`, AND THAT IS A TRADE-OFF.
+  # A USART is one block with three personalities — async UART, synchronous
+  # SPI, and I2S — and this twin picks ONE per declaration: `bus/profiles.rs`
+  # classifies any type containing "usart" as a UART, which builds the async
+  # model and nothing else. So a block declared `efr32s2_usart` can never host
+  # an SPI or I2S device, because `attach_spi_device` / `attach_i2s_device`
+  # downcast to `Spi`.
+  #
+  # This instance is declared synchronous because the xG26 has exactly three
+  # I2S-capable USARTs, USART1 is the VCOM console, and I2SCTRL.EN switches the
+  # WHOLE block — so a display on USART0 and a microphone on USART0 cannot
+  # coexist. A deck that wants both needs a second synchronous block, and this
+  # is it. The cost is that USART2 is no longer available as an async UART in
+  # the twin; nothing in the tree used it that way.
+  - id: "spi2"
+    type: "spi"
+    config: { profile: "efr32s2" }
     clock: { reg: "clken2", bit: 8 }
     base_address: 0x400A8000
     size: "4KB"

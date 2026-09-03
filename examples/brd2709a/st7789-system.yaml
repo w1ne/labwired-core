@@ -1,0 +1,40 @@
+# BRD2709A + 1.9" 170x320 ST7789 IPS panel, wired to the BREAKOUT PADS.
+#
+# ⚠️ THE BREAKOUT PADS ARE NOT SPARE PINS. UG594 Table 3.1 (p.10): "pins may be
+# shared between the breakout pads and other functions on the EFR32xG26
+# Explorer Kit". Every pin below except PD03 is also a mikroBUS signal, so this
+# wiring REQUIRES THE MIKROBUS SOCKET TO BE EMPTY. PD03 (pad 6) is the only
+# GPIO on the whole header with no shared feature.
+#
+# Pad map, all from UG594 Table 3.1:
+#   pad 14  PC03  MIKROE_SCK   -> SCL
+#   pad 10  PC02  MIKROE_MOSI  -> SDA
+#   pad 16  PC04  MIKROE_CS    -> CS
+#   pad 17  PC00  MIKROE_INT   -> DC
+#   pad 18  PC06  MIKROE_RST   -> RES
+#   pad  6  PD03  (unshared)   -> BLK
+#   pad  8  VMCU               -> VCC
+#   pad  5  GND                -> GND
+#
+# ⚠️ POWER FROM VMCU (pad 8), NOT THE 5V PAD (pad 7). The panel itself takes
+# 3-5 V, so 5 V would run it — but xG26 GPIO is NOT 5 V tolerant (datasheet
+# VDIGPIN abs max = VIOVDD + 0.3 V) and mixing a 5 V-powered module with 3.3 V
+# logic is how a display survives bring-up and the MCU does not.
+#
+# The panel is a 240x320 frame memory showing a 170-column strip; the offset is
+# an integration value the Sitronix document does not give, so it is declared
+# here rather than assumed by the model.
+name: "brd2709a-st7789"
+chip: "../../configs/chips/efr32mg26.yaml"
+external_devices:
+  - id: "tft"
+    type: "st7789-170x320"
+    connection: "spi0"
+    config:
+      cs_pin: "PC04"
+      dc_pin: "PC00"
+      col_offset: 35
+      row_offset: 0
+      cols: 170
+      rows: 320
+board_io: []
