@@ -45,9 +45,16 @@
 #     4-bit mode nibble gates input vs output (open-drain WIREDOR pins only
 #     pull LOW). NOT modelled: the ROUTE pin-mux registers are a stub window
 #     (`gpio_route` below — a deliberate sim no-op, load-bearing on silicon),
-#     the EXTI/EM4WU interrupt path, drive-strength/slew fields (stored, no
-#     behaviour), and the WIREDAND open-source analog niceties (treated as
-#     push-pull).
+#     EM4WU wake, drive-strength/slew fields (stored, no behaviour), and the
+#     WIREDAND open-source analog niceties (treated as push-pull).
+#   - (FIXED) The EXTI interrupt path IS modelled — this list said it was not,
+#     for long enough that "can I do an interrupt-driven button on this board?"
+#     had a wrong answer written down. `peripherals/efr32/gpio_exti.rs` is a
+#     real model: EXTIPSEL/EXTIPINSEL group selection, rising and falling arms
+#     independently, write-1-to-clear flags that latch without IEN, and even
+#     and odd lines raising GPIO_EVEN_IRQn 40 / GPIO_ODD_IRQn 39 separately.
+#     Ten unit tests cover it, including that a line armed for neither edge
+#     never fires and that a pad's first transition is an edge, not a baseline.
 #   - (FIXED) The Series-2 SET/CLR/TGL register aliases are now decoded, see
 #     `atomic_register_aliases` below.
 #   - (FIXED) USART0 (as `spi0`), USART1 (VCOM console) and USART2 are mapped,
@@ -114,8 +121,24 @@ peripherals:
   # this layout, so no UART interrupt is ever pended either way.
   # USART2, the third instance. CLKEN2 bit 8; `irq` names the TX vector, the
   # same choice usart1 makes.
-  - id: "usart2"
-    type: "efr32s2_usart"
+  #
+  # ⚠️ DECLARED AS `spi`, NOT `efr32s2_usart`, AND THAT IS A TRADE-OFF.
+  # A USART is one block with three personalities — async UART, synchronous
+  # SPI, and I2S — and this twin picks ONE per declaration: `bus/profiles.rs`
+  # classifies any type containing "usart" as a UART, which builds the async
+  # model and nothing else. So a block declared `efr32s2_usart` can never host
+  # an SPI or I2S device, because `attach_spi_device` / `attach_i2s_device`
+  # downcast to `Spi`.
+  #
+  # This instance is declared synchronous because the xG26 has exactly three
+  # I2S-capable USARTs, USART1 is the VCOM console, and I2SCTRL.EN switches the
+  # WHOLE block — so a display on USART0 and a microphone on USART0 cannot
+  # coexist. A deck that wants both needs a second synchronous block, and this
+  # is it. The cost is that USART2 is no longer available as an async UART in
+  # the twin; nothing in the tree used it that way.
+  - id: "spi2"
+    type: "spi"
+    config: { profile: "efr32s2" }
     clock: { reg: "clken2", bit: 8 }
     base_address: 0x400A8000
     size: "4KB"

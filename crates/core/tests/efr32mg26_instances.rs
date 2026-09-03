@@ -45,13 +45,24 @@ const EXPECTED: &[(&str, u64, &str, u8)] = &[
     ("timer7", 0x4006_4000, "clken2", 2),
     ("timer8", 0x4006_8000, "clken2", 3),
     ("timer9", 0x4006_C000, "clken2", 4),
-    // ⚠️ USART0 is declared as `spi0`, not `usart0`. Series 2 has NO separate
-    // SPI peripheral — SPI is a USART with `CTRL.SYNC` — so an instance is one
-    // or the other and never both, and this chip gives USART0 to SPI while
-    // USART1 is the VCOM console.
+    // ⚠️ USART0 AND USART2 ARE DECLARED AS `spi0` AND `spi2`, not `usart0` and
+    // `usart2`. Series 2 has NO separate SPI or I2S peripheral — both are a
+    // USART wearing a different hat (`CTRL.SYNC` for SPI, `I2SCTRL.EN` for
+    // I2S) — so an instance is one personality or another and never both.
+    //
+    // This chip gives USART0 to the mikroBUS SPI and USART2 to I2S, leaving
+    // USART1 as the VCOM console. USART2 became `spi2` for the agent deck:
+    // `bus/profiles.rs` classifies any type containing "usart" as a UART, so
+    // while it was `efr32s2_usart` it was built as the async model, and
+    // `attach_i2s_device` downcasts to `Spi` — no microphone could attach to
+    // it. The cost is that USART2 is no longer available as an async UART in
+    // the twin; nothing in the tree used it that way.
+    //
+    // The BASE and CLOCK BIT below are unchanged and still the silicon's: what
+    // moved is which model the descriptor builds at that address.
     ("spi0", 0x400A_0000, "clken0", 9),
     ("usart1", 0x400A_4000, "clken2", 7),
-    ("usart2", 0x400A_8000, "clken2", 8),
+    ("spi2", 0x400A_8000, "clken2", 8),
     ("i2c0", 0x4B00_0000, "clken0", 14),
     ("i2c1", 0x400B_0000, "clken0", 15),
     ("i2c2", 0x400B_4000, "clken2", 9),
