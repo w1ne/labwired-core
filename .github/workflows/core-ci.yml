@@ -552,7 +552,8 @@ jobs:
             scripts/ci/test_linker_script_single_source.py \
             scripts/ci/test_host_clippy_scope.py \
             scripts/ci/test_workspace_test_shard.py \
-            scripts/test_generate_validation_status.py
+            scripts/test_generate_validation_status.py \
+            scripts/test_labwired_audit.py
 
       # The perf gate above answers "is this chip measured". This answers "does
       # any gate RUN FIRMWARE on it through the CLI", which nothing did: the

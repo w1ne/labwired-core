@@ -1,6 +1,6 @@
 # Golden Reference: Hardware vs. Simulation Parity
 
-LabWired's defining property is *deterministic parity with real hardware*. To back that up, the project runs a two-phase pipeline that captures execution from a real board and diffs it against the simulator running the same firmware ELF. This document describes the pipeline, the published evidence, and how to reproduce it.
+LabWired validates selected simulator behavior against real hardware. One evidence channel is a two-phase pipeline that captures execution from a real board and compares its program-counter sequence with a simulator run intended to use the same firmware ELF. This document describes that PC-trace pipeline, the published evidence, and how to reproduce it.
 
 ## The published proof
 
@@ -41,7 +41,10 @@ Required tooling on the host: `openocd`, `gdb-multiarch`, `pygdbmi`. The script'
 2. Invokes [`scripts/labwired-audit.py`](../scripts/labwired-audit.py), which:
    - Aligns the two traces by first-common-PC (the real board executes a few cycles of bootloader stub before reaching the firmware entry, which the simulator does not model).
    - Walks both traces step-by-step, comparing PCs.
-   - Emits `determinism_report.json` with per-step match/mismatch and an aggregate `status`.
+   - Uses an explicitly declared prefix scope because the fixed hardware capture can be shorter than the simulator run.
+   - Emits `determinism_report.json` with per-step match/mismatch, the comparison scope, and an aggregate `status`.
+
+The audit does not itself hash the firmware ELF or compare registers or UART. Retain those as separate evidence when they are required; a PC-sequence PASS covers only the declared trace scope.
 
 Reproducing the published H563 run:
 
@@ -59,7 +62,7 @@ The audit report lands in `out/golden-reference/`. Compare it against the commit
 
 A static "we simulate Cortex-M33" claim is a wishlist. A captured hardware trace, a simulator trace, a diff, and a committed report is evidence.
 
-The pipeline answers the first question every embedded engineer asks before trusting a simulator: *does it actually match what the chip does?* Architectural state divergence between sim and hardware is the bug class that ruins firmware development workflows — peripherals that "work in the sim" but lock up the chip, race conditions that only appear on metal, and so on. The golden-reference workflow turns "trust me" into a CI artifact.
+The pipeline answers one early question an embedded engineer asks before trusting a simulator: *does execution follow the same PC path over this captured scope?* Architectural state divergence between sim and hardware is the bug class that ruins firmware development workflows — peripherals that "work in the sim" but lock up the chip, race conditions that only appear on metal, and so on. PC parity does not exclude every such divergence, but the retained traces turn this particular claim into an inspectable artifact.
 
 ## Extending to a new board
 

@@ -34,6 +34,7 @@ echo "==> Running Audit..."
     --target "$TARGET" \
     --firmware "$(basename "$FIRMWARE")" \
     --output "$REPORT" \
-    --align-window 50
+    --align-window 50 \
+    --allow-prefix
 
 echo "==> Done. Report saved to $REPORT"
