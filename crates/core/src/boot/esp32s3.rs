@@ -280,6 +280,14 @@ mod tests {
     }
 
     impl Peripheral for RamPeripheral {
+        /// Same answer as the production window this stands in for
+        /// (`crate::system::xtensa::RamPeripheral`): a flat byte array with no
+        /// `tick`/`tick_elapsed` override, so the walk gets the trait default
+        /// and it emits nothing. Declared here too so a bus assembled from
+        /// this double derives walk-deletion the same way the real one does.
+        fn needs_legacy_walk(&self) -> bool {
+            false
+        }
         fn read(&self, offset: u64) -> SimResult<u8> {
             Ok(*self.data.borrow().get(offset as usize).unwrap_or(&0))
         }

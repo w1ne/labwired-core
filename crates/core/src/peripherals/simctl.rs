@@ -140,6 +140,20 @@ impl Default for SimCtl {
 }
 
 impl Peripheral for SimCtl {
+    /// Every register moves on an MMIO access and nowhere else: `EXIT` latches
+    /// on `write_u32`, `SOUT`/`SERR` append on write, and `SCLK` is served
+    /// lazily out of the bus-published [`CycleClock`] from a `&self` read —
+    /// the "purely lazy model that advances its state on MMIO access rather
+    /// than in tick" case in the [`Peripheral::needs_legacy_walk`] contract.
+    /// The exit code is drained by the advance loop (`Machine::advance` →
+    /// [`Self::drain_exit_code`]), which is not the walk. There is no
+    /// `tick`/`tick_elapsed` override, so the walk gets the trait default
+    /// (`PeripheralTickResult::default()`) — no IRQ, DMA request, mmio-write
+    /// or fired event, for every reachable state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     /// `SCLK` is the only readable register; everything else reads `0`.
     fn read(&self, offset: u64) -> SimResult<u8> {
         match offset {

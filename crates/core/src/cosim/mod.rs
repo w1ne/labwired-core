@@ -94,6 +94,15 @@ impl Peripheral for CosimPeripheral {
         PeripheralTickResult::default()
     }
 
+    // `needs_legacy_walk` is deliberately NOT overridden to `false` here, even
+    // though today's `tick` is literally `PeripheralTickResult::default()`.
+    // This type is scaffolding: nothing in the workspace constructs it, so a
+    // `false` banks nothing on any bus — and the TODO above says the intended
+    // body syncs simulation time with an external process, i.e. real walk work.
+    // A `false` left standing would silently starve the peripheral of ticks the
+    // moment someone fills that in. Per the `Peripheral::needs_legacy_walk`
+    // contract, the honest direction under that doubt is to leave it `true`.
+
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }
