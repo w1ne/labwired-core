@@ -608,14 +608,7 @@ impl Efr32s2Timer {
 
     // ── Drive-mode plumbing (walk vs event scheduler) ──────────────────────
 
-    /// True when the event scheduler owns this timer's time base: the
-    /// `event-scheduler` feature AND a [`CycleClock`] attached by the bus
-    /// registration choke. Everything time-related branches on this ONE
-    /// predicate, so the two drive modes can never mix.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock, pinning the model to the
     /// legacy walk (`uses_scheduler() == false`). This is how the

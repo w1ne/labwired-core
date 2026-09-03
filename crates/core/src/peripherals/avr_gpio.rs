@@ -40,6 +40,14 @@ impl AvrGpioPort {
 }
 
 impl Peripheral for AvrGpioPort {
+    /// PIN/DDR/PORT are three bytes moved only by `read`/`write`. There is no
+    /// `tick`/`tick_elapsed` override, so the walk calls the trait default,
+    /// which returns `PeripheralTickResult::default()` — no IRQ, no DMA
+    /// request, no mmio-write, no fired event, for every reachable state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

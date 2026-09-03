@@ -208,9 +208,7 @@ impl Rp2040Adc {
         }
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     fn free_running(&self) -> bool {
         self.cs & CS_EN != 0 && self.cs & CS_START_MANY != 0

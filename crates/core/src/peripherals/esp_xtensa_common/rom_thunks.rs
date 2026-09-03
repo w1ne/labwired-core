@@ -217,6 +217,17 @@ impl std::fmt::Debug for RomThunkBank {
 }
 
 impl Peripheral for RomThunkBank {
+    /// A read-only byte bank. Thunk dispatch happens in the CPU's `BREAK 1,14`
+    /// exec arm on an instruction fetch, never on a clock, and `write` is
+    /// dropped. No `tick`/`tick_elapsed` override, so the walk gets the trait
+    /// default (`PeripheralTickResult::default()`) — no IRQ, DMA request,
+    /// mmio-write or fired event, for every reachable state. Matches
+    /// [`crate::system::xtensa::RamPeripheral`], the other flat window on the
+    /// same buses.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         self.backing
             .get(offset as usize)
@@ -2356,6 +2367,12 @@ mod tests {
             }
         }
         impl Peripheral for OneShotRam {
+            /// Flat bytes, no `tick`/`tick_elapsed` override — same answer as
+            /// the production windows it stands in for, so the bus this test
+            /// builds derives walk-deletion the way a real one would.
+            fn needs_legacy_walk(&self) -> bool {
+                false
+            }
             fn read(&self, off: u64) -> SimResult<u8> {
                 Ok(*self.0.borrow().get(off as usize).unwrap_or(&0))
             }

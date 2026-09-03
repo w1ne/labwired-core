@@ -30,6 +30,12 @@
 //! them; the wire gates already run under three feature sets to see both paths,
 //! and the `e-reader` walk regression was `legacy_walk_disabled` flipping.
 //!
+//! The first fall is Phase 1 of the migration: 30 peripherals carried a
+//! byte-identical private `fn scheduler_mode(&self) -> bool { cfg!(feature =
+//! "event-scheduler") && self.clock.is_some() }`, and those 30 `cfg!` sites are
+//! now the one inside [`crate::cycle_clock::scheduler_mode`] — 208 → 179, with
+//! no behaviour change and no attribute touched.
+//!
 //! This gate does NOT decide the feature's fate, and deliberately so — that
 //! decision needs a walk-differential measurement nobody has. It is the move
 //! that is right under both outcomes: if the migration finishes the count falls
@@ -44,7 +50,7 @@
 //!   the feature — the item exists in one world and not the other.
 //! * `cfg!(...)` whose predicate names the feature — both arms compile, but
 //!   only one is ever live, and the dead one is never type-checked *against
-//!   reality*. 68 of the 208 sites are this form. Counting attributes alone
+//!   reality*. 39 of the 179 sites are this form. Counting attributes alone
 //!   would let the whole surface keep growing through `cfg!` without ever
 //!   moving the number, which is a gate that governs nothing.
 //!
@@ -81,10 +87,11 @@
 //!
 //! # The counter ignores prose
 //!
-//! Naive `grep` over this tree counts 217 model sites where the truth is 208:
-//! nine of the matches are doc comments *about* the feature (`scheduler_lane_
-//! coverage.rs` quotes `#![cfg(feature = "event-scheduler")]` five times to
-//! explain the vacuous-target hazard) and assertion strings. Miscounts of
+//! The same scan with [`strip_comments_and_strings`] disabled — the "naive
+//! grep" figure — counts 190 model sites where the truth is 179: eleven of the
+//! matches are doc comments *about* the feature (`scheduler_lane_coverage.rs`
+//! quotes `#![cfg(feature = "event-scheduler")]` five times to explain the
+//! vacuous-target hazard) and assertion strings. Miscounts of
 //! exactly that kind have reached this repo's ledger before, so
 //! [`count_in_source`] blanks comments and string literals *before* it looks
 //! for anything, and [`prose_about_the_feature_is_not_a_site`] pins that
@@ -101,14 +108,21 @@ const FEATURE: &str = "event-scheduler";
 
 /// `crates/core/src/**` — the engine's own conditional-compilation surface.
 ///
-/// Measured at 208 on `c8172b917` (2026-09-03): 140 `cfg`/`cfg_attr`
-/// attributes (9 of them negated) plus 68 `cfg!` expressions, across 77 files.
+/// Was 208 on `c8172b917` (2026-09-03) and still 208 at this branch's base:
+/// 140 `cfg`/`cfg_attr` attributes (9 of them negated) plus 68 `cfg!`
+/// expressions, across 77 files.
+///
+/// Now 179: the same 140 attributes (9 still negated) plus 39 `cfg!`, across 64
+/// files. Phase 1 of the migration folded 30 byte-identical private
+/// `scheduler_mode()` bodies into [`crate::cycle_clock::scheduler_mode`], so
+/// 30 `cfg!` sites became the one inside that macro — a net −29 with no
+/// behaviour change and no attribute touched.
 ///
 /// LOWER this when peripherals migrate and gated blocks are deleted. RAISING it
 /// requires the commit to say which of the two futures the new site serves: a
 /// step in the migration that ends the feature, or another permanent fork the
 /// migration will have to unpick later.
-const MAX_MODEL_SITES: usize = 208;
+const MAX_MODEL_SITES: usize = 179;
 
 /// The rest of `crates/**` — test harnesses and downstream crates.
 ///

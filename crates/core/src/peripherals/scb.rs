@@ -297,14 +297,7 @@ impl Scb {
         }
     }
 
-    /// True when the event scheduler owns the ICSR pend-drain (feature on AND
-    /// the bus attached its cycle clock at registration). The single predicate
-    /// both `uses_scheduler()` and the legacy-tick guard branch on, so the two
-    /// drive modes can never mix.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock, pinning the model to
     /// the legacy walk path (`uses_scheduler() == false`). Lets the

@@ -398,13 +398,7 @@ impl VirtualBle {
 
     // ── Drive-mode plumbing (walk vs event scheduler) ──────────────────────
 
-    /// True when the event scheduler owns this controller's periodic service:
-    /// the `event-scheduler` feature AND a [`crate::CycleClock`] attached by
-    /// the bus registration choke.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the clock, pinning the controller to the
     /// legacy walk so a differential can build its reference lane from the same
