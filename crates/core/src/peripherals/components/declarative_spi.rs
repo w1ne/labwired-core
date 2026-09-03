@@ -49,47 +49,67 @@ pub struct GenericSpiDevice {
     component_id: Option<String>,
 }
 
+/// Validate the static descriptor contract for the `spi_device` primitive.
+///
+/// This stays separate from construction so manifest preflight can reject
+/// malformed unused packs without allocating runtime input tables.
+pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
+    if descriptor.behavior.primitive != "spi_device" {
+        bail!(
+            "declarative spi kit requires behavior.primitive: spi_device, got '{}'",
+            descriptor.behavior.primitive
+        );
+    }
+    let spec = descriptor
+        .behavior
+        .spi
+        .as_ref()
+        .context("declarative spi device is missing behavior.spi")?;
+    if spec.registers.is_empty() {
+        bail!("behavior.spi declares no registers");
+    }
+    if spec.framing.command_bytes > 1 {
+        bail!(
+            "behavior.spi command_bytes {} unsupported (0 or 1)",
+            spec.framing.command_bytes
+        );
+    }
+    // `zero_when` power-gates work here too (the read math is shared with
+    // the I²C engine), so a dangling reference must not silently no-op into
+    // "gate never fires". No shipping SPI descriptor uses one yet; this is
+    // the guard that keeps the first one from being wrong in silence.
+    for reg in &spec.registers {
+        if let Some(z) = &reg.zero_when {
+            if !spec.registers.iter().any(|r| r.name == z.register) {
+                bail!(
+                    "register '{}' zero_when register '{}' is not a declared register",
+                    reg.name,
+                    z.register
+                );
+            }
+            if z.mask == 0 {
+                bail!(
+                    "register '{}' zero_when mask is 0 — the gate could never fire",
+                    reg.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 impl GenericSpiDevice {
     pub fn from_descriptor(
         descriptor: &DeviceDescriptor,
         cs_pin: String,
         channels: &'static [InputChannel],
     ) -> Result<Self> {
+        validate_descriptor(descriptor)?;
         let spec = descriptor
             .behavior
             .spi
             .as_ref()
             .context("declarative spi device is missing behavior.spi")?;
-        if spec.registers.is_empty() {
-            bail!("behavior.spi declares no registers");
-        }
-        if spec.framing.command_bytes > 1 {
-            bail!(
-                "behavior.spi command_bytes {} unsupported (0 or 1)",
-                spec.framing.command_bytes
-            );
-        }
-        // `zero_when` power-gates work here too (the read math is shared with
-        // the I²C engine), so a dangling reference must not silently no-op into
-        // "gate never fires". No shipping SPI descriptor uses one yet; this is
-        // the guard that keeps the first one from being wrong in silence.
-        for reg in &spec.registers {
-            if let Some(z) = &reg.zero_when {
-                if !spec.registers.iter().any(|r| r.name == z.register) {
-                    bail!(
-                        "register '{}' zero_when register '{}' is not a declared register",
-                        reg.name,
-                        z.register
-                    );
-                }
-                if z.mask == 0 {
-                    bail!(
-                        "register '{}' zero_when mask is 0 — the gate could never fire",
-                        reg.name
-                    );
-                }
-            }
-        }
         let mut slots = HashMap::new();
         if let Some(meta) = &descriptor.metadata {
             for input in &meta.inputs {
@@ -341,17 +361,7 @@ pub struct DeclarativeSpiKit {
 impl DeclarativeSpiKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
-        if descriptor.behavior.primitive != "spi_device" {
-            bail!(
-                "declarative spi kit requires behavior.primitive: spi_device, got '{}'",
-                descriptor.behavior.primitive
-            );
-        }
-        descriptor
-            .behavior
-            .spi
-            .as_ref()
-            .context("declarative spi kit is missing behavior.spi")?;
+        validate_descriptor(&descriptor)?;
         let channels = super::declarative_i2c::leak_channels(&descriptor);
         let metadata = leak_metadata(&descriptor, channels);
         Ok(Self {

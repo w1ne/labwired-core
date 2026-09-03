@@ -450,13 +450,13 @@ impl crate::bus::BusResidentDevice for Dht22 {
     /// Drive the data pin's input register to the wired-AND pad level its armed
     /// schedule implies at `now`, touching the bus only on a transition. This is
     /// the body of the former `SystemBus::drive_dht22_line`, moved onto the
-    /// device; the register IO stays on the bus via
-    /// [`drive_idr_bit`](crate::bus::SystemBus). Same choke point as the
+    /// device; the register IO stays on the far side of the
+    /// [`DevicePins`](crate::bus::DevicePins) port. Same choke point as the
     /// HC-SR04 ECHO drive, so logic-analyzer probe capture on the data pad stays
     /// consistent. The level is the wired-AND of both drivers on this open-drain
     /// line (see [`Dht22::pad_high_at`]), so while the MCU holds the line low the
     /// pad reads low and the firmware reads back its own start pulse.
-    fn service(&mut self, bus: &mut crate::bus::SystemBus, now: u64) {
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, now: u64) {
         let pad_high = self.pad_high_at(now);
         if pad_high == self.last_pad_high() {
             return;
@@ -465,8 +465,8 @@ impl crate::bus::BusResidentDevice for Dht22 {
         // writable data register, digitalRead samples external_levels. Also
         // poke drive_idr_bit so STM32-style GpioPort tests that read the IDR
         // word directly still see the level (raw IDR MMIO is a no-op on C3).
-        let _ = bus.drive_input_bit(self.data_idr_addr, self.data_bit, pad_high);
-        bus.drive_idr_bit(self.data_idr_addr, self.data_bit, pad_high);
+        let _ = pins.drive_input_bit(self.data_idr_addr, self.data_bit, pad_high);
+        pins.drive_idr_bit(self.data_idr_addr, self.data_bit, pad_high);
         self.set_last_pad_high(pad_high);
     }
 

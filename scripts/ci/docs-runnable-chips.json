@@ -165,6 +165,12 @@
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
       "note": "AVR runs through a system manifest, not `labwired run`. Blinky drives a pin and prints nothing, so the assertion is that it executes its whole step budget without faulting."
+    },
+    "atsamd21g18a": {
+      "how": "committed",
+      "firmware": "tests/fixtures/samd21-smoke.elf",
+      "expect": "samd21 sercom0 up",
+      "note": "Bare-metal SERCOM0 bring-up for the Arduino Zero / Feather M0 class. Same ELF `cargo build -p firmware-samd21-demo --release` produces from crates/firmware-samd21-demo (build from that directory, not the workspace root: its -Tlink.x comes from its own .cargo/config.toml, and a root build links entry 0x0 and boots nowhere while succeeding). Committed so a clone plus the CLI is the whole prerequisite. The expected line is the SECOND the firmware prints, so a model that sets INTFLAG.DRE once and forgets emits only the first and fails here."
     }
   }
 }

@@ -1096,18 +1096,8 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
-    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
-    # `I2sDevice` slot path). Every added line is inside
-    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
-    # that touches shared shape is that function's local tuple widening from
-    # three fields to four, and that function only runs for EFR32 register
-    # writes. `git diff` changes no line an STM32 path executes.
-    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
-    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
-    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
-    drift_ack_digest: 44a49270f4958a0d93026136bf4c100f255add3aa73e4b7ccf4b7186c57937c6
+    drift_ack: 2026-08-24
+    drift_ack_digest: 14e41ed3f053ef7ec1975a8645cb5cd259f64171ac45f3414df9c7d16c4655f3
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1131,6 +1121,71 @@ boards:
       - configs/chips/stm32h563.yaml
 
   # ── Silicon-verified once, but shared models drifted since (acknowledged) ─────
+    # 2026-08-31: adc.rs — CR.ADCAL is now the self-clearing COMMAND bit silicon
+    # makes it, on both the L4 and H7 layouts, and stm32h563 returns to the
+    # `stm32l4` ADC profile it was moved off on 2026-08-12. The move was wrong:
+    # this repo's own vendor-derived schemas put the H563 ADC1 register map at
+    # EXACTLY the L476's offsets (one extra ADC_OR) with CFGR.RES two bits at
+    # [4:3], where the H735's differs in eight registers and encodes RES in
+    # three bits at [4:2]. The model now matches the schema it is measured
+    # against; nothing here claims new silicon evidence, so this is an ack.
+    # Ran: labwired-core --lib peripherals::adc (13), h563_conformance (6),
+    # stm32h563_walk_differential (5, event-scheduler), tier1_matrix +
+    # tier1_matrix_ratchet (h563 adc pass -> the row is whole again).
+    drift_ack: 2026-08-31
+    # 2026-09-01: `gpio.rs` gained a `SamPort` variant (Microchip SAM D21/D51
+    # PORT) so the ATSAMD21G18A could be onboarded, and `generic_factory.rs` +
+    # `bus/construct.rs` gained the SERCOM console arms beside it.
+    #
+    # Additive BEHIND A DISCRIMINANT THE STM32 CONSTRUCTION PATH NEVER SETS,
+    # exactly like the 2026-08-24 nRF54L ack above: `GpioRegisterLayout::SamPort`
+    # is reachable only from a chip yaml declaring `profile: sam`, and no STM32
+    # chip yaml in this tree does. The new match arms are added arms — every
+    # pre-existing arm is byte-identical, and `git diff` changes no line an STM32
+    # path executes. The new SERCOM downcast arms sit AFTER the generic `Uart`
+    # arm in both console walks, which returns first for every board here.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed), including
+    # this board's own conformance/oracle sim arms and gpio's own suites.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-01
+    # 2026-09-02: the UART RX-stream pacing path gained a per-peer byte budget so a
+    # link faster than ~9600 baud can be modelled at all.
+    #
+    # `peripherals/device.rs` — ONE new trait method on `UartStreamDevice`,
+    # `max_bytes_per_tick()`, defaulting to 1. Nothing in this tree overrides it
+    # except the new scanning-lidar kit, so every existing peer (GPS, HC-05,
+    # SIM800L, BG770A, IO-Link) answers 1.
+    #
+    # `peripherals/uart.rs` — the tick loop's stream poll became a bounded inner
+    # loop: `elapsed_us` is credited on the FIRST poll of a tick and the rest carry
+    # 0. At the default budget of 1 the loop body runs exactly once with
+    # `credit = elapsed`, which is the previous single call line for line.
+    #
+    # WHAT IT CANNOT REACH: no register in this board's anchored sweep. The change
+    # touches only how many bytes an ATTACHED SIMULATED PEER may push into the RX
+    # FIFO within one tick, and only for a peer that opts in. The USART register
+    # file (SR/DR/BRR/CR1) is untouched, as are GPIO, RCC, TIM, ADC, SPI, I2C and
+    # DBGMCU. No MMIO read or write value can differ. None of this board's captures
+    # involved an attached stream peer at all, so the budget is not even consulted
+    # on the paths those captures exercised.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed) and the full
+    # integration set (132 suites, 0 failures), plus peripheral_kit_gate, sim_input
+    # and the new ydlidar_silicon_parity. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-02
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
   - id: esp32c3
     doc: docs/boards/esp32c3.md
     chip: configs/chips/esp32c3.yaml
@@ -2282,18 +2337,8 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
-    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
-    # `I2sDevice` slot path). Every added line is inside
-    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
-    # that touches shared shape is that function's local tuple widening from
-    # three fields to four, and that function only runs for EFR32 register
-    # writes. `git diff` changes no line an STM32 path executes.
-    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
-    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
-    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
-    drift_ack_digest: 8e1cd6603424322304ace1f754e3b4dcc1f5aa23e74d7013824debef9d48b199
+    drift_ack: 2026-08-24
+    drift_ack_digest: f58305cb7264da3b87d544459e20d80d71e73f232e74add344b21bb4a026fab0
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2312,6 +2357,71 @@ boards:
       - crates/core/src/peripherals/pwr.rs
       - configs/chips/stm32l476.yaml
 
+    # 2026-08-31: adc.rs — CR.ADCAL is now the self-clearing COMMAND bit silicon
+    # makes it, on both the L4 and H7 layouts, and stm32h563 returns to the
+    # `stm32l4` ADC profile it was moved off on 2026-08-12. The move was wrong:
+    # this repo's own vendor-derived schemas put the H563 ADC1 register map at
+    # EXACTLY the L476's offsets (one extra ADC_OR) with CFGR.RES two bits at
+    # [4:3], where the H735's differs in eight registers and encodes RES in
+    # three bits at [4:2]. The model now matches the schema it is measured
+    # against; nothing here claims new silicon evidence, so this is an ack.
+    # Ran: labwired-core --lib peripherals::adc (13), h563_conformance (6),
+    # stm32h563_walk_differential (5, event-scheduler), tier1_matrix +
+    # tier1_matrix_ratchet (h563 adc pass -> the row is whole again).
+    drift_ack: 2026-08-31
+    # 2026-09-01: `gpio.rs` gained a `SamPort` variant (Microchip SAM D21/D51
+    # PORT) so the ATSAMD21G18A could be onboarded, and `generic_factory.rs` +
+    # `bus/construct.rs` gained the SERCOM console arms beside it.
+    #
+    # Additive BEHIND A DISCRIMINANT THE STM32 CONSTRUCTION PATH NEVER SETS,
+    # exactly like the 2026-08-24 nRF54L ack above: `GpioRegisterLayout::SamPort`
+    # is reachable only from a chip yaml declaring `profile: sam`, and no STM32
+    # chip yaml in this tree does. The new match arms are added arms — every
+    # pre-existing arm is byte-identical, and `git diff` changes no line an STM32
+    # path executes. The new SERCOM downcast arms sit AFTER the generic `Uart`
+    # arm in both console walks, which returns first for every board here.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed), including
+    # this board's own conformance/oracle sim arms and gpio's own suites.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-01
+    # 2026-09-02: the UART RX-stream pacing path gained a per-peer byte budget so a
+    # link faster than ~9600 baud can be modelled at all.
+    #
+    # `peripherals/device.rs` — ONE new trait method on `UartStreamDevice`,
+    # `max_bytes_per_tick()`, defaulting to 1. Nothing in this tree overrides it
+    # except the new scanning-lidar kit, so every existing peer (GPS, HC-05,
+    # SIM800L, BG770A, IO-Link) answers 1.
+    #
+    # `peripherals/uart.rs` — the tick loop's stream poll became a bounded inner
+    # loop: `elapsed_us` is credited on the FIRST poll of a tick and the rest carry
+    # 0. At the default budget of 1 the loop body runs exactly once with
+    # `credit = elapsed`, which is the previous single call line for line.
+    #
+    # WHAT IT CANNOT REACH: no register in this board's anchored sweep. The change
+    # touches only how many bytes an ATTACHED SIMULATED PEER may push into the RX
+    # FIFO within one tick, and only for a peer that opts in. The USART register
+    # file (SR/DR/BRR/CR1) is untouched, as are GPIO, RCC, TIM, ADC, SPI, I2C and
+    # DBGMCU. No MMIO read or write value can differ. None of this board's captures
+    # involved an attached stream peer at all, so the budget is not even consulted
+    # on the paths those captures exercised.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed) and the full
+    # integration set (132 suites, 0 failures), plus peripheral_kit_gate, sim_input
+    # and the new ydlidar_silicon_parity. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-02
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
   - id: nucleo-l073rz
     doc: docs/boards/nucleo-l073rz.md
     chip: configs/chips/stm32l073.yaml
@@ -2660,18 +2770,24 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
-    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
-    # `I2sDevice` slot path). Every added line is inside
-    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
-    # that touches shared shape is that function's local tuple widening from
-    # three fields to four, and that function only runs for EFR32 register
-    # writes. `git diff` changes no line an STM32 path executes.
-    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
-    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
-    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
-    drift_ack_digest: 83e6bb7af729591da1d04657607de01bc0bc5900e061106600a13620ba8caa50
+    drift_ack: 2026-08-24
+    # 2026-09-01: `gpio.rs` gained a `SamPort` variant (Microchip SAM D21/D51
+    # PORT) so the ATSAMD21G18A could be onboarded, and `generic_factory.rs` +
+    # `bus/construct.rs` gained the SERCOM console arms beside it.
+    #
+    # Additive BEHIND A DISCRIMINANT THE STM32 CONSTRUCTION PATH NEVER SETS,
+    # exactly like the 2026-08-24 nRF54L ack above: `GpioRegisterLayout::SamPort`
+    # is reachable only from a chip yaml declaring `profile: sam`, and no STM32
+    # chip yaml in this tree does. The new match arms are added arms — every
+    # pre-existing arm is byte-identical, and `git diff` changes no line an STM32
+    # path executes. The new SERCOM downcast arms sit AFTER the generic `Uart`
+    # arm in both console walks, which returns first for every board here.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed), including
+    # this board's own conformance/oracle sim arms and gpio's own suites.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-01
+    drift_ack_digest: 937a7dec2fcdfeb32e9d7233e0a47003adebe32d0965b719e1787a4322ed6f0b
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2686,6 +2802,43 @@ boards:
       - crates/core/src/peripherals/crc.rs
       - configs/chips/stm32l073.yaml
 
+    # 2026-09-02: the UART RX-stream pacing path gained a per-peer byte budget so a
+    # link faster than ~9600 baud can be modelled at all.
+    #
+    # `peripherals/device.rs` — ONE new trait method on `UartStreamDevice`,
+    # `max_bytes_per_tick()`, defaulting to 1. Nothing in this tree overrides it
+    # except the new scanning-lidar kit, so every existing peer (GPS, HC-05,
+    # SIM800L, BG770A, IO-Link) answers 1.
+    #
+    # `peripherals/uart.rs` — the tick loop's stream poll became a bounded inner
+    # loop: `elapsed_us` is credited on the FIRST poll of a tick and the rest carry
+    # 0. At the default budget of 1 the loop body runs exactly once with
+    # `credit = elapsed`, which is the previous single call line for line.
+    #
+    # WHAT IT CANNOT REACH: no register in this board's anchored sweep. The change
+    # touches only how many bytes an ATTACHED SIMULATED PEER may push into the RX
+    # FIFO within one tick, and only for a peer that opts in. The USART register
+    # file (SR/DR/BRR/CR1) is untouched, as are GPIO, RCC, TIM, ADC, SPI, I2C and
+    # DBGMCU. No MMIO read or write value can differ. None of this board's captures
+    # involved an attached stream peer at all, so the budget is not even consulted
+    # on the paths those captures exercised.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed) and the full
+    # integration set (132 suites, 0 failures), plus peripheral_kit_gate, sim_input
+    # and the new ydlidar_silicon_parity. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-02
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
   - id: stm32f103
     doc: docs/boards/stm32f103.md
     chip: configs/chips/stm32f103.yaml
@@ -3098,18 +3251,8 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
-    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
-    # `I2sDevice` slot path). Every added line is inside
-    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
-    # that touches shared shape is that function's local tuple widening from
-    # three fields to four, and that function only runs for EFR32 register
-    # writes. `git diff` changes no line an STM32 path executes.
-    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
-    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
-    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
-    drift_ack_digest: c8e34d6c922fa5cc7beb957b989f96dc3d0d4ab983d6287dc60d331f03e856c2
+    drift_ack: 2026-08-24
+    drift_ack_digest: 92ee7e133d35f9cc5557c3fd880a8aa8f03ced07d34dd01180861be201a446e4
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3130,6 +3273,71 @@ boards:
       - crates/core/src/peripherals/wwdg.rs
       - configs/chips/stm32f103.yaml
 
+    # 2026-08-31: adc.rs — CR.ADCAL is now the self-clearing COMMAND bit silicon
+    # makes it, on both the L4 and H7 layouts, and stm32h563 returns to the
+    # `stm32l4` ADC profile it was moved off on 2026-08-12. The move was wrong:
+    # this repo's own vendor-derived schemas put the H563 ADC1 register map at
+    # EXACTLY the L476's offsets (one extra ADC_OR) with CFGR.RES two bits at
+    # [4:3], where the H735's differs in eight registers and encodes RES in
+    # three bits at [4:2]. The model now matches the schema it is measured
+    # against; nothing here claims new silicon evidence, so this is an ack.
+    # Ran: labwired-core --lib peripherals::adc (13), h563_conformance (6),
+    # stm32h563_walk_differential (5, event-scheduler), tier1_matrix +
+    # tier1_matrix_ratchet (h563 adc pass -> the row is whole again).
+    drift_ack: 2026-08-31
+    # 2026-09-01: `gpio.rs` gained a `SamPort` variant (Microchip SAM D21/D51
+    # PORT) so the ATSAMD21G18A could be onboarded, and `generic_factory.rs` +
+    # `bus/construct.rs` gained the SERCOM console arms beside it.
+    #
+    # Additive BEHIND A DISCRIMINANT THE STM32 CONSTRUCTION PATH NEVER SETS,
+    # exactly like the 2026-08-24 nRF54L ack above: `GpioRegisterLayout::SamPort`
+    # is reachable only from a chip yaml declaring `profile: sam`, and no STM32
+    # chip yaml in this tree does. The new match arms are added arms — every
+    # pre-existing arm is byte-identical, and `git diff` changes no line an STM32
+    # path executes. The new SERCOM downcast arms sit AFTER the generic `Uart`
+    # arm in both console walks, which returns first for every board here.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed), including
+    # this board's own conformance/oracle sim arms and gpio's own suites.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-01
+    # 2026-09-02: the UART RX-stream pacing path gained a per-peer byte budget so a
+    # link faster than ~9600 baud can be modelled at all.
+    #
+    # `peripherals/device.rs` — ONE new trait method on `UartStreamDevice`,
+    # `max_bytes_per_tick()`, defaulting to 1. Nothing in this tree overrides it
+    # except the new scanning-lidar kit, so every existing peer (GPS, HC-05,
+    # SIM800L, BG770A, IO-Link) answers 1.
+    #
+    # `peripherals/uart.rs` — the tick loop's stream poll became a bounded inner
+    # loop: `elapsed_us` is credited on the FIRST poll of a tick and the rest carry
+    # 0. At the default budget of 1 the loop body runs exactly once with
+    # `credit = elapsed`, which is the previous single call line for line.
+    #
+    # WHAT IT CANNOT REACH: no register in this board's anchored sweep. The change
+    # touches only how many bytes an ATTACHED SIMULATED PEER may push into the RX
+    # FIFO within one tick, and only for a peer that opts in. The USART register
+    # file (SR/DR/BRR/CR1) is untouched, as are GPIO, RCC, TIM, ADC, SPI, I2C and
+    # DBGMCU. No MMIO read or write value can differ. None of this board's captures
+    # involved an attached stream peer at all, so the budget is not even consulted
+    # on the paths those captures exercised.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed) and the full
+    # integration set (132 suites, 0 failures), plus peripheral_kit_gate, sim_input
+    # and the new ydlidar_silicon_parity. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-02
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
   - id: stm32f407
     doc: docs/boards/stm32f407.md
     chip: configs/chips/stm32f407.yaml
@@ -3496,18 +3704,24 @@ boards:
     # stm32_spi_waveform (5), stm32h5_spi_visibility (8) and gpio's
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
-    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
-    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
-    # `I2sDevice` slot path). Every added line is inside
-    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
-    # that touches shared shape is that function's local tuple widening from
-    # three fields to four, and that function only runs for EFR32 register
-    # writes. `git diff` changes no line an STM32 path executes.
-    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
-    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
-    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
-    drift_ack_digest: b51e729a22db08812ee4934e366a7644a007b50e0b68cee5a84c36a5c07e7cb0
+    drift_ack: 2026-08-24
+    # 2026-09-01: `gpio.rs` gained a `SamPort` variant (Microchip SAM D21/D51
+    # PORT) so the ATSAMD21G18A could be onboarded, and `generic_factory.rs` +
+    # `bus/construct.rs` gained the SERCOM console arms beside it.
+    #
+    # Additive BEHIND A DISCRIMINANT THE STM32 CONSTRUCTION PATH NEVER SETS,
+    # exactly like the 2026-08-24 nRF54L ack above: `GpioRegisterLayout::SamPort`
+    # is reachable only from a chip yaml declaring `profile: sam`, and no STM32
+    # chip yaml in this tree does. The new match arms are added arms — every
+    # pre-existing arm is byte-identical, and `git diff` changes no line an STM32
+    # path executes. The new SERCOM downcast arms sit AFTER the generic `Uart`
+    # arm in both console walks, which returns first for every board here.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed), including
+    # this board's own conformance/oracle sim arms and gpio's own suites.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-01
+    drift_ack_digest: 7cfc6e57d3821b7500bc19dbef075db35e9df4b31531939c1cdd2dd7de22e504
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3525,6 +3739,43 @@ boards:
       - configs/chips/stm32f407.yaml
 
   # ── No silicon capture: honest structural / manual-smoke tiers ───────────────
+    # 2026-09-02: the UART RX-stream pacing path gained a per-peer byte budget so a
+    # link faster than ~9600 baud can be modelled at all.
+    #
+    # `peripherals/device.rs` — ONE new trait method on `UartStreamDevice`,
+    # `max_bytes_per_tick()`, defaulting to 1. Nothing in this tree overrides it
+    # except the new scanning-lidar kit, so every existing peer (GPS, HC-05,
+    # SIM800L, BG770A, IO-Link) answers 1.
+    #
+    # `peripherals/uart.rs` — the tick loop's stream poll became a bounded inner
+    # loop: `elapsed_us` is credited on the FIRST poll of a tick and the rest carry
+    # 0. At the default budget of 1 the loop body runs exactly once with
+    # `credit = elapsed`, which is the previous single call line for line.
+    #
+    # WHAT IT CANNOT REACH: no register in this board's anchored sweep. The change
+    # touches only how many bytes an ATTACHED SIMULATED PEER may push into the RX
+    # FIFO within one tick, and only for a peer that opts in. The USART register
+    # file (SR/DR/BRR/CR1) is untouched, as are GPIO, RCC, TIM, ADC, SPI, I2C and
+    # DBGMCU. No MMIO read or write value can differ. None of this board's captures
+    # involved an attached stream peer at all, so the budget is not even consulted
+    # on the paths those captures exercised.
+    #
+    # Ran: cargo test -p labwired-core --lib (3300 passed, 0 failed) and the full
+    # integration set (132 suites, 0 failures), plus peripheral_kit_gate, sim_input
+    # and the new ydlidar_silicon_parity. This is an ACK, NOT A CAPTURE — a live
+    # re-capture is still owed.
+    drift_ack: 2026-09-02
+    # 2026-09-03: `crates/core/src/peripherals/spi.rs` gained I2S mode on the
+    # EFR32 Series-2 USART (I2SCTRL at 0x54, FORMAT width masking, an
+    # `I2sDevice` slot path). Every added line is inside
+    # `write_efr32s2_usart_reg` or the `SpiRegs::Efr32s2Usart` arm; the ONE edit
+    # that touches shared shape is that function's local tuple widening from
+    # three fields to four, and that function only runs for EFR32 register
+    # writes. `git diff` changes no line an STM32 path executes.
+    # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
+    # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
   - id: esp32s3
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml
@@ -4458,6 +4709,29 @@ boards:
       - configs/chips/mkw41z4.yaml
       - crates/core/src/peripherals/i2c.rs
       - configs/peripherals/mkw41z4
+
+  - id: atsamd21g18a
+    doc: docs/boards/atsamd21g18a.md
+    chip: configs/chips/atsamd21g18a.yaml
+    tier: sim-validated
+    note: "Microchip ATSAMD21G18A (Cortex-M0+, 256K flash at 0x0 / 32K SRAM) — the first SAM part in the engine, Arduino Zero / Feather M0 class. PORT and SERCOM are BEHAVIOURAL models, not stubs: PORT implements the DIR/OUT SET-CLR-TGL aliases as one register each, WRCONFIG's bulk PINCFG/PMUX write (the path ASF and the Arduino SAMD core actually take), and IN reading back what an output pin drives; SERCOM implements USART mode with DRE derived from CTRLA.ENABLE. A bare-metal firmware performs the real bring-up in datasheet order (NVMCTRL wait states, the SYSCTRL.PCLKSR ready poll, three GCLK SYNCBUSY spins, PM.APBCMASK, WRCONFIG, CTRLB before CTRLA.ENABLE) and its console reaches the capture sink — examples/samd21-smoke/io-smoke.yaml, 7 checks, executed by BOTH the strict-onboarding gate and the coverage matrix. Three of those checks are memory_value reads of the PORT registers the firmware configured, so the banner is not the gate. Every base and IRQ is checked against Microchip's Apache-2.0 ATSAMD21G18A.svd by svd_conformance with ZERO justified deviations. NOT PROVEN: no SAM D21 silicon diff (no bench part); nothing is clock-gated (PM is a register bank, so firmware that forgets APBCMASK works here and fails on hardware); SYNCBUSY always reads 0 and transmission has no latency — modelling truths, not silicon ones; SERCOM SPI/I2C modes, EIC, USB, TCC/TC, ADC and DMAC are unmodelled and their windows deliberately unmapped."
+    offline_tests:
+      - "strict_onboarding::test_strict_board_onboarding (executes examples/samd21-smoke/io-smoke.yaml)"
+      - "atsamd21_peripheral_estate::{the_estate_answers_at_its_own_addresses,the_sercom_instances_are_not_each_other,the_port_groups_are_not_each_other}"
+      - "svd_conformance::chip_configs_match_their_svd"
+    models:
+      - crates/core/src/cpu/cortex_m.rs
+      - crates/core/src/decoder/arm.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/sam/sercom_usart.rs
+      - configs/chips/atsamd21g18a.yaml
+      # Every `path:` the chip yaml wires must be listed, or the drift gate
+      # reads this board as fresh forever — the esp32c3 hole in the header.
+      - configs/peripherals/atsamd21g18a/pm.yaml
+      - configs/peripherals/atsamd21g18a/sysctrl.yaml
+      - configs/peripherals/atsamd21g18a/gclk.yaml
+      - configs/peripherals/atsamd21g18a/wdt.yaml
+      - configs/peripherals/atsamd21g18a/nvmctrl.yaml
 
   - id: nrf54l15
     doc: docs/boards/nrf54l15.md

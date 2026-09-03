@@ -562,7 +562,7 @@ def print_digests(manifest: dict) -> int:
     return 0
 
 
-def write_ack_digests(manifest: dict) -> int:
+def write_ack_digests(manifest: dict, stamp_all: bool = False) -> int:
     """Stamp `drift_ack_digest` next to every existing `drift_ack`.
 
     Deliberately only touches boards that ALREADY carry a human-written
@@ -574,10 +574,29 @@ def write_ack_digests(manifest: dict) -> int:
     Edits the YAML as text rather than round-tripping through the loader: the
     manifest is a hand-maintained document whose comments carry the reasoning
     for every ack, and PyYAML would drop all of them.
+
+    ⚠️ ONLY DRIFTED BOARDS ARE STAMPED, and that restriction is the point.
+
+    `evaluate()` consults a `drift_ack_digest` for exactly one purpose: deciding
+    whether an ack still covers a DRIFTED board. For a board that is not
+    drifted, the field is dead weight — no gate reads it, and re-stamping it
+    rewrites a line nothing consults.
+
+    That was not a theoretical cost. Stamping every acked board whose digest had
+    gone stale swept four unrelated boards into every model-sized change
+    (mkw41z4, rp2040, stm32f411ceu6, stm32h735 — the SAME four, four separate
+    times on 2026-08-31), and each time they had to be reverted by hand so that
+    every moved digest could be attributed to a file the change actually
+    touched. A tool that reliably produces work its user must undo is a defect,
+    not a convenience.
+
+    `--write-ack-digests-all` restores the old sweep for when a stale field
+    genuinely wants tidying — deliberately, and on its own.
     """
     text = MANIFEST.read_text()
     lines = text.split("\n")
     stamped = 0
+    skipped_not_drifted: list[str] = []
 
     for board in manifest.get("boards", []):
         if not board.get("drift_ack"):
@@ -586,6 +605,11 @@ def write_ack_digests(manifest: dict) -> int:
         if not digest:
             continue
         if board.get("drift_ack_digest") == digest:
+            continue
+        # `evaluate()` is the same function `--drift` and the rendered doc use,
+        # so this can never disagree with the gate about which boards are in play.
+        if not stamp_all and not evaluate(board)["drifted"]:
+            skipped_not_drifted.append(board["id"])
             continue
 
         # Find this board's `drift_ack:` line: scan from its `- id:` header to
@@ -621,6 +645,14 @@ def write_ack_digests(manifest: dict) -> int:
 
     MANIFEST.write_text("\n".join(lines))
     print(f"stamped {stamped} drift_ack_digest value(s)")
+    # Name what was left alone and why. The old sweep's cost stayed invisible
+    # until someone diffed the manifest and found boards they never touched.
+    if skipped_not_drifted:
+        print(
+            f"left {len(skipped_not_drifted)} stale digest(s) alone — not drifted, so "
+            f"nothing reads them: {', '.join(sorted(skipped_not_drifted))}"
+        )
+        print("  (use --write-ack-digests-all to tidy those deliberately)")
     return 0
 
 
@@ -632,6 +664,15 @@ def main() -> int:
         "--digests",
         action="store_true",
         help="print each board's current model digest against what it recorded",
+    )
+    ap.add_argument(
+        "--write-ack-digests-all",
+        action="store_true",
+        help=(
+            "stamp EVERY acked board whose digest moved, including boards that are "
+            "not drifted. The plain flag stamps only drifted boards, whose digest is "
+            "the only one any gate reads."
+        ),
     )
     ap.add_argument(
         "--write-ack-digests",
@@ -650,8 +691,8 @@ def main() -> int:
     if args.digests:
         return print_digests(manifest)
 
-    if args.write_ack_digests:
-        return write_ack_digests(manifest)
+    if args.write_ack_digests or args.write_ack_digests_all:
+        return write_ack_digests(manifest, stamp_all=args.write_ack_digests_all)
 
     rendered = render(manifest)
 

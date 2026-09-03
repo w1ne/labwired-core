@@ -34,6 +34,7 @@ fn root(rel: &str) -> std::path::PathBuf {
 /// covered; `every_svd_backed_chip_is_checked` below keeps that list honest so a
 /// newly-vendored SVD cannot sit unused.
 const PAIRS: &[(&str, &str)] = &[
+    ("atsamd21g18a", "tests/fixtures/real_world/atsamd21g18a.svd"),
     ("esp32", "tests/fixtures/real_world/esp32.svd"),
     ("esp32c3", "tests/fixtures/real_world/esp32c3.svd"),
     ("esp32s3", "tests/fixtures/svd/esp32s3.svd"),

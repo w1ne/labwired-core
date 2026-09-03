@@ -76,7 +76,18 @@ jobs:
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-          RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
+          # No RUSTFLAGS here. firmware-rp2040-pio-onboarding passes its own
+          # `-Tlink.x` from build.rs, so a plain `cargo build -p <crate>` links
+          # on its own.
+          #
+          # ⚠️ Exactly one place may pass `-Tlink.x`. This line used to add it
+          # too; once the crate's build.rs started passing its own
+          # (labwired-core#1064) the script was included twice, along with the
+          # memory.x it consumes, and the link died with "region 'FLASH'
+          # already defined". A warm target/ hides it — cargo does not relink a
+          # cached artifact — so this stayed green on the self-hosted runners
+          # and only fell over the first time the job ran on a clean one.
+          cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
 
       - name: Run coverage
         run: |

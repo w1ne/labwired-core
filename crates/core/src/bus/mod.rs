@@ -34,6 +34,7 @@ pub mod known_stubs;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
+mod observed_device;
 pub(crate) mod part_pack;
 mod pms;
 mod policy;
@@ -44,7 +45,8 @@ pub mod sim_inputs;
 mod tick;
 
 pub use can_devices::*;
-pub use resident_device::BusResidentDevice;
+pub use observed_device::ObservedDevice;
+pub use resident_device::{BusResidentDevice, DevicePins};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub use interrupt_fabric::{
@@ -458,33 +460,19 @@ pub struct SystemBus {
     ///
     /// [`service_gpio_devices`]: Self::service_gpio_devices
     pub gpio_devices: Vec<Box<dyn BusResidentDevice>>,
-    /// WS2812 / NeoPixel strips. Each is installed as a GPIO observer on its data
-    /// pin (ESP32-S3 only today — the RMT drives the pad), so decode is fully
-    /// edge-driven with no per-tick pass. Held here as `Arc` clones purely so the
-    /// UI/oracle can read the decoded pixels back. Empty by default → zero cost.
-    pub ws2812: Vec<std::sync::Arc<crate::peripherals::components::ws2812::Ws2812>>,
-    /// Hobby PWM servos (SG90 / MG996R-class). Driven by GPIO edges and/or LEDC
-    /// duty observers; held as `Arc` clones so the UI can poll shaft angle via
-    /// `get_actuator_states`. Empty by default → zero cost.
-    pub servos: Vec<std::sync::Arc<crate::peripherals::components::servo::Servo>>,
-    /// STEP/DIR steppers (A4988/DRV8825/TMC2209). GPIO-observer driven.
-    pub step_dir_motors:
-        Vec<std::sync::Arc<crate::peripherals::components::step_dir_motor::StepDirMotor>>,
-    /// H-bridge channels (L298N/TB6612). GPIO-observer driven.
-    pub h_bridge_motors:
-        Vec<std::sync::Arc<crate::peripherals::components::h_bridge_motor::HBridgeMotor>>,
+    /// Off-chip models the bus holds ONLY so something can read them back — the
+    /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
+    /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO
+    /// (or LEDC duty) observer holding its own `Arc` clone; the bus never ticks,
+    /// routes or reads one. Six typed `Vec<Arc<Concrete>>` fields used to sit
+    /// here, one per part, and the bus therefore had to be edited to add a part
+    /// that it does nothing with. See [`ObservedDevice`]. Empty by default →
+    /// zero cost.
+    pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>,
     /// Deterministic typed motor plants, resolved from the system manifest.
     motors: Vec<motors::MotorRuntime>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
-    /// ILI9341 16-bit 8080 parallel panels (GPIO bit-bang). Observer-driven on
-    /// ESP32 / ESP32-S3; held as `Arc` clones so inspect can read the RGB565
-    /// framebuffer. Empty by default → zero cost. Distinct from SPI `ili9341`.
-    pub ili9341_parallel:
-        Vec<std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>>,
-    /// 4-phase unipolar steppers (28BYJ-48 + ULN2003). GPIO-observer driven.
-    pub unipolar_steppers:
-        Vec<std::sync::Arc<crate::peripherals::components::unipolar_stepper::UnipolarStepper>>,
     /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
     /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
     /// line transitions to the display's protocol state machine. Purely

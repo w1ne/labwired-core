@@ -107,6 +107,7 @@ nav:
     - XIAO nRF52840 Sense: boards/seeed-xiao-nrf52840-sense.md
     - RP2040: boards/rp2040.md
     - RP2350: boards/rp2350.md
+    - RP2350-Zero: boards/rp2350-zero.md
     - STM32F103: boards/stm32f103.md
     - STM32F401: boards/stm32f401.md
     - STM32F405: boards/stm32f405.md
@@ -121,6 +122,7 @@ nav:
     - nRF52832: boards/nrf52832.md
     - nRF5340: boards/nrf5340.md
     - nRF54L15: boards/nrf54l15.md
+    - ATSAMD21G18A: boards/atsamd21g18a.md
 
   - Parts:
     - Overview: parts/index.md

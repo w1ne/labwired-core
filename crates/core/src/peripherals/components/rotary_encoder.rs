@@ -232,17 +232,17 @@ impl crate::bus::BusResidentDevice for RotaryEncoder {
     /// Advance the shaft to `now` and drive whichever of its CLK/DT input-register
     /// bits changed. This is the body of the former
     /// `SystemBus::drive_rotary_encoder`, moved onto the device; the register IO
-    /// stays on the bus via [`drive_idr_bit`](crate::bus::SystemBus). Two
-    /// independent pins, each a transition-only IDR write.
-    fn service(&mut self, bus: &mut crate::bus::SystemBus, now: u64) {
+    /// stays on the far side of the [`DevicePins`](crate::bus::DevicePins) port.
+    /// Two independent pins, each a transition-only IDR write.
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, now: u64) {
         // Inherent `RotaryEncoder::service` (chosen over the trait method here —
         // inherent methods win resolution) does the phase advance + change flags.
         let ((clk_high, dt_high), (clk_changed, dt_changed)) = self.service(now);
         if clk_changed {
-            bus.drive_idr_bit(self.clk_idr_addr, self.clk_bit, clk_high);
+            pins.drive_idr_bit(self.clk_idr_addr, self.clk_bit, clk_high);
         }
         if dt_changed {
-            bus.drive_idr_bit(self.dt_idr_addr, self.dt_bit, dt_high);
+            pins.drive_idr_bit(self.dt_idr_addr, self.dt_bit, dt_high);
         }
     }
 

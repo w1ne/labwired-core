@@ -70,6 +70,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_nrf54l15_zephyr_survival"),
     },
     ChipConf {
+        name: "atsamd21g18a",
+        yaml: "configs/chips/atsamd21g18a.yaml",
+        // No silicon capture: nothing here has been diffed against a real SAM
+        // D21 over SWD. Every value is ATSAMD21G18A.svd-derived (Microchip,
+        // Apache-2.0), which is authoritative for the map but is not measured
+        // silicon.
+        reset_oracle: None,
+        behavior_gate: Some("atsamd21_peripheral_estate::the_estate_answers_at_its_own_addresses"),
+    },
+    ChipConf {
         name: "nrf54lm20a",
         yaml: "configs/chips/nrf54lm20a.yaml",
         // No silicon capture: nothing here has been diffed against a real

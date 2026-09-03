@@ -30,9 +30,12 @@
 //!
 //! The fixture is built by the core-ci "Build test firmware fixture" step:
 //! ```text
-//! RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2040-pio-onboarding \
-//!     --release --target thumbv6m-none-eabi
+//! cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
 //! ```
+//! No RUSTFLAGS: the crate passes its own `-Tlink.x` from build.rs, and
+//! passing it a second time fails the link with "region 'FLASH' already
+//! defined".
+//!
 //! When it is absent (a plain `cargo test` without that pre-build) the test
 //! skips with a notice rather than failing spuriously.
 
@@ -83,7 +86,7 @@ fn rp2040_pio_onboarding_reaches_pio_ok() {
         labwired_core::test_support::skip_or_fail_missing_firmware(
             "firmware-rp2040-pio-onboarding",
             &format!("RP2040 PIO onboarding fixture ({})", firmware.display()),
-            "RUSTFLAGS=\"-C link-arg=-Tlink.x\" cargo build -p firmware-rp2040-pio-onboarding \
+            "cargo build -p firmware-rp2040-pio-onboarding \
              --release --target thumbv6m-none-eabi",
         );
         return;

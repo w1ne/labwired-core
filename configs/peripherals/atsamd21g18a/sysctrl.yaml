@@ -1,0 +1,865 @@
+peripheral: SYSCTRL
+version: 0.1.0
+registers:
+- id: INTENCLR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XOSCRDY
+    bit_range:
+    - 0
+    - 0
+    description: XOSC Ready Interrupt Enable
+  - name: XOSC32KRDY
+    bit_range:
+    - 1
+    - 1
+    description: XOSC32K Ready Interrupt Enable
+  - name: OSC32KRDY
+    bit_range:
+    - 2
+    - 2
+    description: OSC32K Ready Interrupt Enable
+  - name: OSC8MRDY
+    bit_range:
+    - 3
+    - 3
+    description: OSC8M Ready Interrupt Enable
+  - name: DFLLRDY
+    bit_range:
+    - 4
+    - 4
+    description: DFLL Ready Interrupt Enable
+  - name: DFLLOOB
+    bit_range:
+    - 5
+    - 5
+    description: DFLL Out Of Bounds Interrupt Enable
+  - name: DFLLLCKF
+    bit_range:
+    - 6
+    - 6
+    description: DFLL Lock Fine Interrupt Enable
+  - name: DFLLLCKC
+    bit_range:
+    - 7
+    - 7
+    description: DFLL Lock Coarse Interrupt Enable
+  - name: DFLLRCS
+    bit_range:
+    - 8
+    - 8
+    description: DFLL Reference Clock Stopped Interrupt Enable
+  - name: BOD33RDY
+    bit_range:
+    - 9
+    - 9
+    description: BOD33 Ready Interrupt Enable
+  - name: BOD33DET
+    bit_range:
+    - 10
+    - 10
+    description: BOD33 Detection Interrupt Enable
+  - name: B33SRDY
+    bit_range:
+    - 11
+    - 11
+    description: BOD33 Synchronization Ready Interrupt Enable
+  - name: DPLLLCKR
+    bit_range:
+    - 15
+    - 15
+    description: DPLL Lock Rise Interrupt Enable
+  - name: DPLLLCKF
+    bit_range:
+    - 16
+    - 16
+    description: DPLL Lock Fall Interrupt Enable
+  - name: DPLLLTO
+    bit_range:
+    - 17
+    - 17
+    description: DPLL Lock Timeout Interrupt Enable
+  side_effects: null
+- id: INTENSET
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XOSCRDY
+    bit_range:
+    - 0
+    - 0
+    description: XOSC Ready Interrupt Enable
+  - name: XOSC32KRDY
+    bit_range:
+    - 1
+    - 1
+    description: XOSC32K Ready Interrupt Enable
+  - name: OSC32KRDY
+    bit_range:
+    - 2
+    - 2
+    description: OSC32K Ready Interrupt Enable
+  - name: OSC8MRDY
+    bit_range:
+    - 3
+    - 3
+    description: OSC8M Ready Interrupt Enable
+  - name: DFLLRDY
+    bit_range:
+    - 4
+    - 4
+    description: DFLL Ready Interrupt Enable
+  - name: DFLLOOB
+    bit_range:
+    - 5
+    - 5
+    description: DFLL Out Of Bounds Interrupt Enable
+  - name: DFLLLCKF
+    bit_range:
+    - 6
+    - 6
+    description: DFLL Lock Fine Interrupt Enable
+  - name: DFLLLCKC
+    bit_range:
+    - 7
+    - 7
+    description: DFLL Lock Coarse Interrupt Enable
+  - name: DFLLRCS
+    bit_range:
+    - 8
+    - 8
+    description: DFLL Reference Clock Stopped Interrupt Enable
+  - name: BOD33RDY
+    bit_range:
+    - 9
+    - 9
+    description: BOD33 Ready Interrupt Enable
+  - name: BOD33DET
+    bit_range:
+    - 10
+    - 10
+    description: BOD33 Detection Interrupt Enable
+  - name: B33SRDY
+    bit_range:
+    - 11
+    - 11
+    description: BOD33 Synchronization Ready Interrupt Enable
+  - name: DPLLLCKR
+    bit_range:
+    - 15
+    - 15
+    description: DPLL Lock Rise Interrupt Enable
+  - name: DPLLLCKF
+    bit_range:
+    - 16
+    - 16
+    description: DPLL Lock Fall Interrupt Enable
+  - name: DPLLLTO
+    bit_range:
+    - 17
+    - 17
+    description: DPLL Lock Timeout Interrupt Enable
+  side_effects: null
+- id: INTFLAG
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: XOSCRDY
+    bit_range:
+    - 0
+    - 0
+    description: XOSC Ready
+  - name: XOSC32KRDY
+    bit_range:
+    - 1
+    - 1
+    description: XOSC32K Ready
+  - name: OSC32KRDY
+    bit_range:
+    - 2
+    - 2
+    description: OSC32K Ready
+  - name: OSC8MRDY
+    bit_range:
+    - 3
+    - 3
+    description: OSC8M Ready
+  - name: DFLLRDY
+    bit_range:
+    - 4
+    - 4
+    description: DFLL Ready
+  - name: DFLLOOB
+    bit_range:
+    - 5
+    - 5
+    description: DFLL Out Of Bounds
+  - name: DFLLLCKF
+    bit_range:
+    - 6
+    - 6
+    description: DFLL Lock Fine
+  - name: DFLLLCKC
+    bit_range:
+    - 7
+    - 7
+    description: DFLL Lock Coarse
+  - name: DFLLRCS
+    bit_range:
+    - 8
+    - 8
+    description: DFLL Reference Clock Stopped
+  - name: BOD33RDY
+    bit_range:
+    - 9
+    - 9
+    description: BOD33 Ready
+  - name: BOD33DET
+    bit_range:
+    - 10
+    - 10
+    description: BOD33 Detection
+  - name: B33SRDY
+    bit_range:
+    - 11
+    - 11
+    description: BOD33 Synchronization Ready
+  - name: DPLLLCKR
+    bit_range:
+    - 15
+    - 15
+    description: DPLL Lock Rise
+  - name: DPLLLCKF
+    bit_range:
+    - 16
+    - 16
+    description: DPLL Lock Fall
+  - name: DPLLLTO
+    bit_range:
+    - 17
+    - 17
+    description: DPLL Lock Timeout
+  side_effects: null
+# ⚠️ HAND-EDITED after `svd-ingestor`: PCLKSR.reset_value.
+#
+# The SVD gives PCLKSR a reset value of 0 — correct for the instant power-on,
+# and a boot-blocker for every SAM D21 firmware there is. Each of these bits
+# is a clock-ready flag the startup code SPINS on:
+#
+#     while (!SYSCTRL->PCLKSR.bit.DFLLRDY) { }      // Arduino SAMD core
+#     while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_DFLLLCKC)) { }
+#
+# Nothing in this model ever sets them, so a reset value of 0 is not a
+# conservative default — it is a hang before `main()`, with no error and no
+# output. The oscillators in this twin are ready the moment they are asked
+# for, so the honest reset value is "every ready flag set".
+#
+# Set (0x1_8ADF): XOSCRDY[0], XOSC32KRDY[1], OSC32KRDY[2], OSC8MRDY[3],
+# DFLLRDY[4], DFLLLCKF[6], DFLLLCKC[7], BOD33RDY[9], B33SRDY[11],
+# DPLLLCKR[15], DPLLLCKF[16].
+#
+# Deliberately NOT set — these are FAULTS, not readiness, and asserting them
+# would report a failure that never happened: DFLLOOB[5] (DFLL out of bounds),
+# DFLLRCS[8] (DFLL reference clock stopped), BOD33DET[10] (brown-out
+# detected), DPLLLTO[17] (DPLL lock timeout).
+#
+# Regenerating this file from the SVD DROPS this value. Re-apply it.
+- id: PCLKSR
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 101087
+  fields:
+  - name: XOSCRDY
+    bit_range:
+    - 0
+    - 0
+    description: XOSC Ready
+  - name: XOSC32KRDY
+    bit_range:
+    - 1
+    - 1
+    description: XOSC32K Ready
+  - name: OSC32KRDY
+    bit_range:
+    - 2
+    - 2
+    description: OSC32K Ready
+  - name: OSC8MRDY
+    bit_range:
+    - 3
+    - 3
+    description: OSC8M Ready
+  - name: DFLLRDY
+    bit_range:
+    - 4
+    - 4
+    description: DFLL Ready
+  - name: DFLLOOB
+    bit_range:
+    - 5
+    - 5
+    description: DFLL Out Of Bounds
+  - name: DFLLLCKF
+    bit_range:
+    - 6
+    - 6
+    description: DFLL Lock Fine
+  - name: DFLLLCKC
+    bit_range:
+    - 7
+    - 7
+    description: DFLL Lock Coarse
+  - name: DFLLRCS
+    bit_range:
+    - 8
+    - 8
+    description: DFLL Reference Clock Stopped
+  - name: BOD33RDY
+    bit_range:
+    - 9
+    - 9
+    description: BOD33 Ready
+  - name: BOD33DET
+    bit_range:
+    - 10
+    - 10
+    description: BOD33 Detection
+  - name: B33SRDY
+    bit_range:
+    - 11
+    - 11
+    description: BOD33 Synchronization Ready
+  - name: DPLLLCKR
+    bit_range:
+    - 15
+    - 15
+    description: DPLL Lock Rise
+  - name: DPLLLCKF
+    bit_range:
+    - 16
+    - 16
+    description: DPLL Lock Fall
+  - name: DPLLLTO
+    bit_range:
+    - 17
+    - 17
+    description: DPLL Lock Timeout
+  side_effects: null
+- id: XOSC
+  address_offset: 16
+  size: 16
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: Oscillator Enable
+  - name: XTALEN
+    bit_range:
+    - 2
+    - 2
+    description: Crystal Oscillator Enable
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: ONDEMAND
+    bit_range:
+    - 7
+    - 7
+    description: On Demand Control
+  - name: GAIN
+    bit_range:
+    - 10
+    - 8
+    description: Oscillator Gain
+  - name: AMPGC
+    bit_range:
+    - 11
+    - 11
+    description: Automatic Amplitude Gain Control
+  - name: STARTUP
+    bit_range:
+    - 15
+    - 12
+    description: Start-Up Time
+  side_effects: null
+- id: XOSC32K
+  address_offset: 20
+  size: 16
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: Oscillator Enable
+  - name: XTALEN
+    bit_range:
+    - 2
+    - 2
+    description: Crystal Oscillator Enable
+  - name: EN32K
+    bit_range:
+    - 3
+    - 3
+    description: 32kHz Output Enable
+  - name: EN1K
+    bit_range:
+    - 4
+    - 4
+    description: 1kHz Output Enable
+  - name: AAMPEN
+    bit_range:
+    - 5
+    - 5
+    description: Automatic Amplitude Control Enable
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: ONDEMAND
+    bit_range:
+    - 7
+    - 7
+    description: On Demand Control
+  - name: STARTUP
+    bit_range:
+    - 10
+    - 8
+    description: Oscillator Start-Up Time
+  - name: WRTLOCK
+    bit_range:
+    - 12
+    - 12
+    description: Write Lock
+  side_effects: null
+- id: OSC32K
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 4128896
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: Oscillator Enable
+  - name: EN32K
+    bit_range:
+    - 2
+    - 2
+    description: 32kHz Output Enable
+  - name: EN1K
+    bit_range:
+    - 3
+    - 3
+    description: 1kHz Output Enable
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: ONDEMAND
+    bit_range:
+    - 7
+    - 7
+    description: On Demand Control
+  - name: STARTUP
+    bit_range:
+    - 10
+    - 8
+    description: Oscillator Start-Up Time
+  - name: WRTLOCK
+    bit_range:
+    - 12
+    - 12
+    description: Write Lock
+  - name: CALIB
+    bit_range:
+    - 22
+    - 16
+    description: Oscillator Calibration
+  side_effects: null
+- id: OSCULP32K
+  address_offset: 28
+  size: 8
+  access: READ_WRITE
+  reset_value: 31
+  fields:
+  - name: CALIB
+    bit_range:
+    - 4
+    - 0
+    description: Oscillator Calibration
+  - name: WRTLOCK
+    bit_range:
+    - 7
+    - 7
+    description: Write Lock
+  side_effects: null
+- id: OSC8M
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 2265383810
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: Oscillator Enable
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: ONDEMAND
+    bit_range:
+    - 7
+    - 7
+    description: On Demand Control
+  - name: PRESC
+    bit_range:
+    - 9
+    - 8
+    description: Oscillator Prescaler
+  - name: CALIB
+    bit_range:
+    - 27
+    - 16
+    description: Oscillator Calibration
+  - name: FRANGE
+    bit_range:
+    - 31
+    - 30
+    description: Oscillator Frequency Range
+  side_effects: null
+- id: DFLLCTRL
+  address_offset: 36
+  size: 16
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: DFLL Enable
+  - name: MODE
+    bit_range:
+    - 2
+    - 2
+    description: Operating Mode Selection
+  - name: STABLE
+    bit_range:
+    - 3
+    - 3
+    description: Stable DFLL Frequency
+  - name: LLAW
+    bit_range:
+    - 4
+    - 4
+    description: Lose Lock After Wake
+  - name: USBCRM
+    bit_range:
+    - 5
+    - 5
+    description: USB Clock Recovery Mode
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: ONDEMAND
+    bit_range:
+    - 7
+    - 7
+    description: On Demand Control
+  - name: CCDIS
+    bit_range:
+    - 8
+    - 8
+    description: Chill Cycle Disable
+  - name: QLDIS
+    bit_range:
+    - 9
+    - 9
+    description: Quick Lock Disable
+  - name: BPLCKC
+    bit_range:
+    - 10
+    - 10
+    description: Bypass Coarse Lock
+  - name: WAITLOCK
+    bit_range:
+    - 11
+    - 11
+    description: Wait Lock
+  side_effects: null
+- id: DFLLVAL
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FINE
+    bit_range:
+    - 9
+    - 0
+    description: Fine Value
+  - name: COARSE
+    bit_range:
+    - 15
+    - 10
+    description: Coarse Value
+  - name: DIFF
+    bit_range:
+    - 31
+    - 16
+    description: Multiplication Ratio Difference
+  side_effects: null
+- id: DFLLMUL
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MUL
+    bit_range:
+    - 15
+    - 0
+    description: DFLL Multiply Factor
+  - name: FSTEP
+    bit_range:
+    - 25
+    - 16
+    description: Fine Maximum Step
+  - name: CSTEP
+    bit_range:
+    - 31
+    - 26
+    description: Coarse Maximum Step
+  side_effects: null
+- id: DFLLSYNC
+  address_offset: 48
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READREQ
+    bit_range:
+    - 7
+    - 7
+    description: Read Request
+  side_effects: null
+- id: BOD33
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: Enable
+  - name: HYST
+    bit_range:
+    - 2
+    - 2
+    description: Hysteresis
+  - name: ACTION
+    bit_range:
+    - 4
+    - 3
+    description: BOD33 Action
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: MODE
+    bit_range:
+    - 8
+    - 8
+    description: Operation Mode
+  - name: CEN
+    bit_range:
+    - 9
+    - 9
+    description: Clock Enable
+  - name: PSEL
+    bit_range:
+    - 15
+    - 12
+    description: Prescaler Select
+  - name: LEVEL
+    bit_range:
+    - 21
+    - 16
+    description: BOD33 Threshold Level
+  side_effects: null
+- id: VREG
+  address_offset: 60
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: FORCELDO
+    bit_range:
+    - 13
+    - 13
+    description: Force LDO Voltage Regulator
+  side_effects: null
+- id: VREF
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TSEN
+    bit_range:
+    - 1
+    - 1
+    description: Temperature Sensor Enable
+  - name: BGOUTEN
+    bit_range:
+    - 2
+    - 2
+    description: Bandgap Output Enable
+  - name: CALIB
+    bit_range:
+    - 26
+    - 16
+    description: Bandgap Voltage Generator Calibration
+  side_effects: null
+- id: DPLLCTRLA
+  address_offset: 68
+  size: 8
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: DPLL Enable
+  - name: RUNSTDBY
+    bit_range:
+    - 6
+    - 6
+    description: Run in Standby
+  - name: ONDEMAND
+    bit_range:
+    - 7
+    - 7
+    description: On Demand Clock Activation
+  side_effects: null
+- id: DPLLRATIO
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LDR
+    bit_range:
+    - 11
+    - 0
+    description: Loop Divider Ratio
+  - name: LDRFRAC
+    bit_range:
+    - 19
+    - 16
+    description: Loop Divider Ratio Fractional Part
+  side_effects: null
+- id: DPLLCTRLB
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FILTER
+    bit_range:
+    - 1
+    - 0
+    description: Proportional Integral Filter Selection
+  - name: LPEN
+    bit_range:
+    - 2
+    - 2
+    description: Low-Power Enable
+  - name: WUF
+    bit_range:
+    - 3
+    - 3
+    description: Wake Up Fast
+  - name: REFCLK
+    bit_range:
+    - 5
+    - 4
+    description: Reference Clock Selection
+  - name: LTIME
+    bit_range:
+    - 10
+    - 8
+    description: Lock Time
+  - name: LBYPASS
+    bit_range:
+    - 12
+    - 12
+    description: Lock Bypass
+  - name: DIV
+    bit_range:
+    - 26
+    - 16
+    description: Clock Divider
+  side_effects: null
+- id: DPLLSTATUS
+  address_offset: 80
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: LOCK
+    bit_range:
+    - 0
+    - 0
+    description: DPLL Lock Status
+  - name: CLKRDY
+    bit_range:
+    - 1
+    - 1
+    description: Output Clock Ready
+  - name: ENABLE
+    bit_range:
+    - 2
+    - 2
+    description: DPLL Enable
+  - name: DIV
+    bit_range:
+    - 3
+    - 3
+    description: Divider Enable
+  side_effects: null
+interrupts:
+  SYSCTRL: 1
+timing: null

@@ -70,6 +70,16 @@ pub enum GpioRegisterLayout {
     /// DOUT @0x10 (output), DIN @0x14 (input). Offsets from the vendor CMSIS
     /// header (simplicity_sdk `efr32mg26_gpio_port.h`).
     Efr32s2,
+    /// Microchip **SAM** (SAM D21 / D51 / E5x) PORT group — DIR @0x00 with
+    /// CLR/SET/TGL aliases, OUT @0x10 with the same three aliases, IN @0x20,
+    /// CTRL @0x24, WRCONFIG @0x28, PMUX[16] @0x30, PINCFG[32] @0x40. Offsets
+    /// from `ATSAMD21G18A.svd` (Microchip, Apache-2.0), cluster GROUP.
+    ///
+    /// One LabWired port = one PORT GROUP. The groups sit at a 0x80 stride
+    /// inside a single 0x200 PORT window, so a SAM chip YAML declares each
+    /// group as its own peripheral at `PORT_base + 0x80 * n` — the same
+    /// per-port-window shape the EFR32 Series-2 ports use.
+    SamPort,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -84,8 +94,9 @@ impl FromStr for GpioRegisterLayout {
             "nrf54l" | "nrf54lm20a" | "nrf54l15" => Ok(Self::Nrf54l),
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
             "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
+            "sam" | "sam_port" | "samd" | "samd21" | "samd51" | "microchip" => Ok(Self::SamPort),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, nrf54l, kinetis, efr32s2",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, nrf54l, kinetis, efr32s2, sam_port",
                 value
             )),
         }
@@ -539,6 +550,191 @@ impl Efr32s2Gpio {
     }
 }
 
+// ── Microchip SAM (SAM D21 / D51 / E5x) PORT ─────────────────────────────────
+// One GROUP of the PORT block. PORT packs its groups at a 0x80 stride
+// (GROUP[0] = PA, GROUP[1] = PB, …); each group is modelled here as its own
+// window at the true group base, exactly as the EFR32 Series-2 ports are.
+//
+// Register map — `ATSAMD21G18A.svd` (Microchip Technology Inc., Apache-2.0),
+// cluster GROUP, confirmed field-by-field against that file:
+//   DIR 0x00, DIRCLR 0x04, DIRSET 0x08, DIRTGL 0x0C,
+//   OUT 0x10, OUTCLR 0x14, OUTSET 0x18, OUTTGL 0x1C,
+//   IN 0x20 (read-only), CTRL 0x24, WRCONFIG 0x28 (write-only),
+//   PMUX[16] 0x30..0x3F (8-bit), PINCFG[32] 0x40..0x5F (8-bit).
+//
+// ⚠️ The SET/CLR/TGL registers are NOT separate state: silicon reads all four
+// DIR aliases back as DIR and all four OUT aliases back as OUT. A model that
+// stored them separately would read back the last write mask instead of the
+// port state, and `digitalRead()` on a pin set through OUTSET would answer
+// from a register no silicon has.
+//
+// WRCONFIG is modelled because it is the path ASF, the Arduino SAMD core and
+// CircuitPython actually use to configure a pad: one store writes PINCFG (and
+// optionally PMUX) for up to 16 pins selected by PINMASK, with HWSEL choosing
+// the low or the high half of the port. Dropping it would leave every pad at
+// its reset config while the firmware believed it had muxed SERCOM onto them —
+// silent, and the same shape as the RP2040 IO_BANK0 gap.
+//
+// NOT modelled, deliberately: CTRL.SAMPLING (continuous input sampling — this
+// model samples on read), PINCFG.DRVSTR and PULLEN's pull direction (stored,
+// read back, no electrical effect), and the PORT_IOBUS alias window at
+// 0x6000_0000 (a second, single-cycle view of the same registers; it is a
+// separate bus window and belongs in the chip YAML if a firmware needs it).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct SamGpio {
+    dir: u32, // 0x00 — 1 = output
+    out: u32, // 0x10 — output latch
+    /// 0x20 IN, the latched EXTERNAL level. Blended with the driven pins by
+    /// [`SamGpio::effective_in`]; never written by firmware (IN is read-only).
+    in_latch: u32,
+    ctrl: u32, // 0x24
+    /// PMUX[16]: two 4-bit peripheral selections per byte — PMUXE (bits 3:0)
+    /// for the even pin, PMUXO (bits 7:4) for the odd one.
+    pmux: [u8; 16],
+    /// PINCFG[32]: PMUXEN bit 0, INEN bit 1, PULLEN bit 2, DRVSTR bit 6.
+    pincfg: [u8; 32],
+}
+
+impl SamGpio {
+    /// Mask of pins whose pad is handed to a peripheral (PINCFG.PMUXEN).
+    fn pmuxen_mask(&self) -> u32 {
+        let mut mask = 0u32;
+        for (pin, cfg) in self.pincfg.iter().enumerate() {
+            if cfg & 0x1 != 0 {
+                mask |= 1u32 << pin;
+            }
+        }
+        mask
+    }
+
+    /// Mask of pins this port drives as a GPIO output: DIR set AND the pad not
+    /// muxed away to a peripheral. A PMUXEN pad is driven by whoever owns the
+    /// function, so DIR alone does not make the port the driver.
+    fn output_mask(&self) -> u32 {
+        self.dir & !self.pmuxen_mask()
+    }
+
+    /// IN as silicon presents it: the *pin* level, not a bare latch. A pin the
+    /// port drives reads back what OUT is driving — `digitalRead()` on an
+    /// OUTPUT pin is a common Arduino idiom and must not read 0 forever. Every
+    /// other pin reads the latched external level. Same contract as
+    /// `V2Gpio::effective_idr` and `Efr32s2Gpio::effective_din`.
+    fn effective_in(&self) -> u32 {
+        let driven = self.output_mask();
+        (self.out & driven) | (self.in_latch & !driven)
+    }
+
+    /// Pack four consecutive 8-bit registers into the word at `base + n*4`.
+    fn packed(bytes: &[u8], index: usize) -> u32 {
+        let mut word = 0u32;
+        for i in 0..4 {
+            if let Some(b) = bytes.get(index + i) {
+                word |= (*b as u32) << (i * 8);
+            }
+        }
+        word
+    }
+
+    fn unpack(bytes: &mut [u8], index: usize, value: u32) {
+        for i in 0..4 {
+            if let Some(b) = bytes.get_mut(index + i) {
+                *b = ((value >> (i * 8)) & 0xFF) as u8;
+            }
+        }
+    }
+
+    /// WRCONFIG: bulk PINCFG/PMUX write. PINMASK[15:0] selects pins within the
+    /// half of the port chosen by HWSEL[31] (0 = pins 0..15, 1 = 16..31);
+    /// WRPINCFG[30] and WRPMUX[28] each gate whether that half of the payload
+    /// is applied. The PINCFG payload arrives as separate bits — PMUXEN[16],
+    /// INEN[17], PULLEN[18], DRVSTR[22] — and is reassembled into the PINCFG
+    /// byte layout here.
+    fn write_wrconfig(&mut self, value: u32) {
+        let pinmask = value & 0xFFFF;
+        let base = if (value >> 31) & 1 == 1 { 16usize } else { 0 };
+        let write_pincfg = (value >> 30) & 1 == 1;
+        let write_pmux = (value >> 28) & 1 == 1;
+
+        let cfg = (((value >> 16) & 1) as u8)
+            | ((((value >> 17) & 1) as u8) << 1)
+            | ((((value >> 18) & 1) as u8) << 2)
+            | ((((value >> 22) & 1) as u8) << 6);
+        let pmux = ((value >> 24) & 0xF) as u8;
+
+        for i in 0..16usize {
+            if pinmask & (1u32 << i) == 0 {
+                continue;
+            }
+            let pin = base + i;
+            if write_pincfg {
+                self.pincfg[pin] = cfg;
+            }
+            if write_pmux {
+                let byte = pin / 2;
+                self.pmux[byte] = if pin % 2 == 0 {
+                    (self.pmux[byte] & 0xF0) | pmux
+                } else {
+                    (self.pmux[byte] & 0x0F) | (pmux << 4)
+                };
+            }
+        }
+    }
+
+    /// The 4-bit PMUX selection for `pin`, or `None` when the pad is not muxed
+    /// to a peripheral. Null over a guess: a pad with PMUXEN clear is a GPIO,
+    /// whatever stale value PMUX happens to hold.
+    fn pmux_of(&self, pin: u8) -> Option<u8> {
+        let pin = pin as usize;
+        if pin >= 32 || self.pincfg[pin] & 0x1 == 0 {
+            return None;
+        }
+        let byte = self.pmux[pin / 2];
+        Some(if pin % 2 == 0 { byte & 0xF } else { byte >> 4 })
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            // All four DIR aliases read back DIR, all four OUT aliases read
+            // back OUT — silicon has one register behind each set.
+            0x00 | 0x04 | 0x08 | 0x0C => self.dir,
+            0x10 | 0x14 | 0x18 | 0x1C => self.out,
+            0x20 => self.effective_in(),
+            0x24 => self.ctrl,
+            // WRCONFIG is write-only; silicon returns 0.
+            0x28 => 0,
+            0x30..=0x3F => Self::packed(&self.pmux, (offset - 0x30) as usize),
+            0x40..=0x5F => Self::packed(&self.pincfg, (offset - 0x40) as usize),
+            _ => {
+                crate::census_reg!("gpio:SamGpio", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.dir = value,
+            0x04 => self.dir &= !value, // DIRCLR
+            0x08 => self.dir |= value,  // DIRSET
+            0x0C => self.dir ^= value,  // DIRTGL
+            0x10 => self.out = value,
+            0x14 => self.out &= !value, // OUTCLR
+            0x18 => self.out |= value,  // OUTSET
+            0x1C => self.out ^= value,  // OUTTGL
+            // IN is read-only for firmware, exactly as on silicon. External
+            // input arrives through GpioFamily::set_external_input.
+            0x20 => {}
+            0x24 => self.ctrl = value,
+            0x28 => self.write_wrconfig(value),
+            0x30..=0x3F => Self::unpack(&mut self.pmux, (offset - 0x30) as usize, value),
+            0x40..=0x5F => Self::unpack(&mut self.pincfg, (offset - 0x40) as usize, value),
+            _ => {
+                crate::census_reg!("gpio:SamGpio", offset, "write");
+            }
+        }
+    }
+}
+
 /// The per-family register set of a [`GpioPort`]. Register sets are fully
 /// isolated — a register from one family cannot exist on another.
 #[derive(Debug, serde::Serialize)]
@@ -548,6 +744,7 @@ pub enum GpioFamily {
     Nrf52(Nrf52Gpio),
     Kinetis(KinetisGpio),
     Efr32s2(Efr32s2Gpio),
+    SamPort(SamGpio),
 }
 
 impl GpioFamily {
@@ -558,6 +755,7 @@ impl GpioFamily {
             Self::Nrf52(g) => g.read_reg(offset),
             Self::Kinetis(g) => g.read_reg(offset),
             Self::Efr32s2(g) => g.read_reg(offset),
+            Self::SamPort(g) => g.read_reg(offset),
         }
     }
 
@@ -568,6 +766,7 @@ impl GpioFamily {
             Self::Nrf52(g) => g.write_reg(offset, value),
             Self::Kinetis(g) => g.write_reg(offset, value),
             Self::Efr32s2(g) => g.write_reg(offset, value),
+            Self::SamPort(g) => g.write_reg(offset, value),
         }
     }
 
@@ -601,6 +800,8 @@ impl GpioFamily {
             Self::Kinetis(g) => apply(&mut g.pdir),
             // Series-2 EFR32 names it DIN.
             Self::Efr32s2(g) => apply(&mut g.din),
+            // SAM PORT names it IN, and it is read-only to firmware.
+            Self::SamPort(g) => apply(&mut g.in_latch),
         }
         true
     }
@@ -656,6 +857,17 @@ impl GpioFamily {
             // latched inputs — it IS the pad view (no AF tracking on this
             // family: the ROUTE mux is not modelled).
             Self::Efr32s2(g) => Some(bit(g.read_reg(0x14))),
+            // SAM PORT: a pad with PINCFG.PMUXEN is handed to a peripheral,
+            // whose wire state this model cannot know — None, not a guess from
+            // a DIR bit the port no longer owns. Every other pad reads IN,
+            // which already mixes OUT-through-DIR with the latched input.
+            Self::SamPort(g) => {
+                if g.pmux_of(pin).is_some() {
+                    None
+                } else {
+                    Some(bit(g.read_reg(0x20)))
+                }
+            }
         }
     }
 }
@@ -770,6 +982,7 @@ impl GpioPort {
             }
             GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
             GpioRegisterLayout::Efr32s2 => GpioFamily::Efr32s2(Efr32s2Gpio::default()),
+            GpioRegisterLayout::SamPort => GpioFamily::SamPort(SamGpio::default()),
         })
     }
 
@@ -847,6 +1060,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => 0x504,
             GpioFamily::Kinetis(_) => 0x00,
             GpioFamily::Efr32s2(_) => 0x10, // DOUT
+            GpioFamily::SamPort(_) => 0x10, // OUT
         };
         family.saturating_sub(self.window_offset)
     }
@@ -862,6 +1076,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => 0x510,
             GpioFamily::Kinetis(_) => 0x10,
             GpioFamily::Efr32s2(_) => 0x14, // DIN
+            GpioFamily::SamPort(_) => 0x20, // IN
         };
         family.saturating_sub(self.window_offset)
     }
@@ -904,6 +1119,7 @@ impl GpioPort {
             GpioFamily::Nrf52(_) => GpioRegisterLayout::Nrf52,
             GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
             GpioFamily::Efr32s2(_) => GpioRegisterLayout::Efr32s2,
+            GpioFamily::SamPort(_) => GpioRegisterLayout::SamPort,
         }
     }
 
@@ -1251,6 +1467,18 @@ impl crate::Peripheral for GpioPort {
                 0x1..=0x3 => GpioMode::Input,
                 _ => GpioMode::Output,
             },
+            // SAM PORT: PINCFG.PMUXEN is the AF verdict and it is a REGISTER,
+            // not an inference — the pad is muxed or it is not. DIR then
+            // separates output from input for the pads the port still owns.
+            GpioFamily::SamPort(g) => {
+                if g.pmux_of(pin).is_some() {
+                    GpioMode::Af
+                } else if (g.read_reg(0x00) & (1u32 << pin)) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
         };
         // func: a pad whose AF routing resolves to a wired peripheral signal
         // names it ("SPI1_SCK", "I2C1_SDA"); otherwise STM32 V2 exposes the raw
@@ -1268,6 +1496,15 @@ impl crate::Peripheral for GpioPort {
                     (0x24, ((pin - 8) * 4) as u32)
                 };
                 Some(format!("AF{}", (g.read_reg(afr_off) >> sh) & 0xF))
+            } else if let GpioFamily::SamPort(g) = &self.family {
+                // The SAM datasheet labels peripheral functions by LETTER
+                // (PMUX 0 = A, 1 = B, … 7 = H), and the pin-function tables in
+                // every SAM datasheet are indexed by that letter. Reporting
+                // "PMUX_C" is the silicon's own name for the selection; which
+                // SERCOM instance that letter lands on is a per-pin table this
+                // model does not hold, so it is not invented here.
+                g.pmux_of(pin)
+                    .map(|sel| format!("PMUX_{}", (b'A' + sel) as char))
             } else {
                 None
             }
@@ -1324,6 +1561,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Nrf52(g) => serde_json::to_value(g),
             GpioFamily::Kinetis(g) => serde_json::to_value(g),
             GpioFamily::Efr32s2(g) => serde_json::to_value(g),
+            GpioFamily::SamPort(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -1736,5 +1974,198 @@ mod efr32s2_tests {
         g.write(0x11, 0x04).unwrap(); // DOUT byte 1: pin 10 high
         assert_eq!(g.gpio_routing(10).unwrap().mode, GpioMode::Output);
         assert_eq!(g.read_gpio_pad(10), Some(true));
+    }
+}
+
+#[cfg(test)]
+mod sam_port_tests {
+    use super::{GpioMode, GpioPort, GpioRegisterLayout};
+    use crate::Peripheral;
+
+    fn port() -> GpioPort {
+        GpioPort::new_with_layout(GpioRegisterLayout::SamPort)
+    }
+
+    /// WRCONFIG payload: `pins` within the half chosen by `hwsel`, PINCFG bits
+    /// as named, and (when `pmux` is `Some`) that peripheral selection.
+    fn wrconfig(pinmask: u16, hwsel: bool, pmuxen: bool, inen: bool, pmux: Option<u8>) -> u32 {
+        let mut w = u32::from(pinmask);
+        if pmuxen {
+            w |= 1 << 16;
+        }
+        if inen {
+            w |= 1 << 17;
+        }
+        if let Some(sel) = pmux {
+            w |= (u32::from(sel) & 0xF) << 24;
+            w |= 1 << 28; // WRPMUX
+        }
+        w |= 1 << 30; // WRPINCFG
+        if hwsel {
+            w |= 1 << 31;
+        }
+        w
+    }
+
+    /// SAM D21 PORT resets to all-zero: every pin an input, nothing muxed.
+    #[test]
+    fn sam_port_reset_values() {
+        let g = port();
+        for off in [0x00u64, 0x10, 0x20, 0x24, 0x30, 0x40] {
+            assert_eq!(g.read_u32(off).unwrap(), 0, "offset {off:#x} reset");
+        }
+    }
+
+    /// ⚠️ The regression this family is most exposed to: DIRSET/DIRCLR/DIRTGL
+    /// are aliases, not registers. Silicon reads all four back as DIR. A model
+    /// that stored them separately reads back the last write MASK, so a driver
+    /// that sets a pin through DIRSET and then read-modify-writes DIR loses
+    /// every other pin on the port.
+    #[test]
+    fn dir_aliases_all_read_back_as_dir() {
+        let mut g = port();
+        g.write_u32(0x08, 1 << 17).unwrap(); // DIRSET pin 17
+        for alias in [0x00u64, 0x04, 0x08, 0x0C] {
+            assert_eq!(
+                g.read_u32(alias).unwrap(),
+                1 << 17,
+                "alias {alias:#x} must read DIR"
+            );
+        }
+        g.write_u32(0x04, 1 << 17).unwrap(); // DIRCLR
+        assert_eq!(g.read_u32(0x00).unwrap(), 0);
+        g.write_u32(0x0C, 1 << 3).unwrap(); // DIRTGL
+        assert_eq!(g.read_u32(0x00).unwrap(), 1 << 3);
+    }
+
+    /// Same contract on the OUT side, and OUTTGL is how the Arduino SAMD core
+    /// blinks.
+    #[test]
+    fn out_aliases_all_read_back_as_out() {
+        let mut g = port();
+        g.write_u32(0x18, 1 << 5).unwrap(); // OUTSET
+        for alias in [0x10u64, 0x14, 0x18, 0x1C] {
+            assert_eq!(g.read_u32(alias).unwrap(), 1 << 5, "alias {alias:#x}");
+        }
+        g.write_u32(0x1C, 1 << 5).unwrap(); // OUTTGL
+        assert_eq!(g.read_u32(0x10).unwrap(), 0);
+    }
+
+    /// `digitalRead()` on an OUTPUT pin must see what the port drives, not a
+    /// separate input latch stuck at 0. PA17 is the Arduino Zero LED.
+    #[test]
+    fn in_reads_back_what_an_output_pin_drives() {
+        let mut g = port();
+        g.write_u32(0x08, 1 << 17).unwrap(); // DIRSET PA17
+        g.write_u32(0x18, 1 << 17).unwrap(); // OUTSET PA17
+        assert_eq!(g.read_u32(0x20).unwrap() & (1 << 17), 1 << 17, "IN");
+        assert_eq!(g.read_gpio_pad(17), Some(true));
+        assert_eq!(g.gpio_routing(17).unwrap().mode, GpioMode::Output);
+    }
+
+    /// An external driver (button, sensor) moves only the pins the port is not
+    /// driving — otherwise a shorted output would read the world instead of
+    /// itself.
+    #[test]
+    fn external_input_reaches_only_undriven_pins() {
+        let mut g = port();
+        g.write_u32(0x08, 1 << 2).unwrap(); // pin 2 is an output
+        assert!(g.set_gpio_input(2, true));
+        assert!(g.set_gpio_input(3, true));
+        assert_eq!(g.read_u32(0x20).unwrap() & (1 << 2), 0, "output wins on 2");
+        assert_eq!(g.read_u32(0x20).unwrap() & (1 << 3), 1 << 3, "input on 3");
+    }
+
+    /// WRCONFIG is the only path ASF and the Arduino SAMD core take to a
+    /// PINCFG byte. PINMASK selects within the half HWSEL picks.
+    #[test]
+    fn wrconfig_writes_pincfg_for_the_masked_pins_only() {
+        let mut g = port();
+        // Pins 4 and 6, low half, INEN set.
+        g.write_u32(
+            0x28,
+            wrconfig((1 << 4) | (1 << 6), false, false, true, None),
+        )
+        .unwrap();
+        let pincfg = |g: &GpioPort, pin: u64| {
+            (g.read_u32(0x40 + (pin & !3)).unwrap() >> ((pin % 4) * 8)) & 0xFF
+        };
+        assert_eq!(pincfg(&g, 4), 0x02, "PINCFG4.INEN");
+        assert_eq!(pincfg(&g, 6), 0x02, "PINCFG6.INEN");
+        assert_eq!(pincfg(&g, 5), 0x00, "PINCFG5 untouched");
+    }
+
+    /// HWSEL shifts the same 16-bit PINMASK onto pins 16..31. Getting this
+    /// wrong configures the wrong pad and says nothing about it.
+    #[test]
+    fn wrconfig_hwsel_selects_the_high_half() {
+        let mut g = port();
+        g.write_u32(0x28, wrconfig(1 << 1, true, false, true, None))
+            .unwrap();
+        let pincfg17 = (g.read_u32(0x40 + 16).unwrap() >> 8) & 0xFF;
+        assert_eq!(pincfg17, 0x02, "PINCFG17 via HWSEL");
+        assert_eq!(g.read_u32(0x40).unwrap(), 0, "low half untouched");
+    }
+
+    /// PMUX packs two pins per byte — even pin in PMUXE (bits 3:0), odd in
+    /// PMUXO (bits 7:4). Writing the wrong nibble mutes the neighbouring pad.
+    #[test]
+    fn wrconfig_pmux_lands_in_the_even_or_odd_nibble() {
+        let mut g = port();
+        // Pin 10 (even) → PMUX[5].PMUXE = C (2). Pin 11 (odd) → PMUX[5].PMUXO.
+        g.write_u32(0x28, wrconfig(1 << 10, false, true, true, Some(2)))
+            .unwrap();
+        let pmux5 = (g.read_u32(0x34).unwrap() >> 8) & 0xFF;
+        assert_eq!(pmux5, 0x02, "even pin writes the low nibble");
+
+        g.write_u32(0x28, wrconfig(1 << 11, false, true, true, Some(3)))
+            .unwrap();
+        let pmux5 = (g.read_u32(0x34).unwrap() >> 8) & 0xFF;
+        assert_eq!(pmux5, 0x32, "odd pin writes the high nibble, even survives");
+    }
+
+    /// A pad handed to a peripheral is not the port's to report a level for,
+    /// and the routing names the datasheet's own function letter.
+    #[test]
+    fn a_muxed_pad_reports_af_and_no_level() {
+        let mut g = port();
+        g.write_u32(0x08, 1 << 10).unwrap(); // DIR set — irrelevant once muxed
+        g.write_u32(0x28, wrconfig(1 << 10, false, true, true, Some(2)))
+            .unwrap();
+        let routing = g.gpio_routing(10).unwrap();
+        assert_eq!(routing.mode, GpioMode::Af);
+        assert_eq!(routing.func.as_deref(), Some("PMUX_C"));
+        assert_eq!(g.read_gpio_pad(10), None, "the peripheral owns the wire");
+    }
+
+    /// Clearing PMUXEN hands the pad back to the port — the selection left in
+    /// PMUX must not keep claiming it.
+    #[test]
+    fn clearing_pmuxen_hands_the_pad_back_to_the_port() {
+        let mut g = port();
+        g.write_u32(0x28, wrconfig(1 << 10, false, true, true, Some(2)))
+            .unwrap();
+        assert_eq!(g.gpio_routing(10).unwrap().mode, GpioMode::Af);
+        g.write_u32(0x28, wrconfig(1 << 10, false, false, true, None))
+            .unwrap();
+        assert_eq!(g.gpio_routing(10).unwrap().mode, GpioMode::Input);
+        assert_eq!(g.gpio_routing(10).unwrap().func, None);
+    }
+
+    /// WRCONFIG is write-only on silicon; it must not read back as state.
+    #[test]
+    fn wrconfig_is_write_only() {
+        let mut g = port();
+        g.write_u32(0x28, wrconfig(0xFFFF, false, true, true, Some(2)))
+            .unwrap();
+        assert_eq!(g.read_u32(0x28).unwrap(), 0);
+    }
+
+    /// IN is read-only for firmware, exactly as on silicon.
+    #[test]
+    fn firmware_cannot_store_to_in() {
+        let mut g = port();
+        g.write_u32(0x20, 0xFFFF_FFFF).unwrap();
+        assert_eq!(g.read_u32(0x20).unwrap(), 0);
     }
 }

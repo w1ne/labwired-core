@@ -309,8 +309,30 @@ impl PeripheralKit for Ws2812Kit {
         );
         // Classic ESP32 + S3 GPIO observers (same choke as motors / parallel TFT).
         ctx.install_gpio_observer(strip.clone());
-        ctx.bus.ws2812.push(strip);
+        ctx.bus.observe_device(strip);
         Ok(())
+    }
+}
+
+/// A strip is held by the bus purely so the UI/oracle can read the decoded
+/// pixels back, and it IS a display, so it reports its own framebuffer as
+/// evidence. When no `component:` id was stamped it answers to its part name —
+/// the same fallback the old per-type walk arm used.
+impl crate::bus::ObservedDevice for Ws2812 {
+    fn manifest_id(&self) -> &str {
+        self.component_id().unwrap_or("ws2812")
+    }
+
+    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
+        self
     }
 }
 

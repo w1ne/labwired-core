@@ -1,0 +1,16 @@
+name: "ydlidar-scan-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "lidar"
+    type: "ydlidar-scanner"
+    connection: "uart1"
+    # A 4 m x 3 m room with the scanner off-centre, so the four walls sit at
+    # four different ranges and a wrong bearing is visible rather than
+    # symmetric. Straight ahead (0 deg, +Y) is the near wall at 1.0 m.
+    config:
+      room_width_mm: 4000.0
+      room_depth_mm: 3000.0
+      scanner_x_mm: 500.0
+      scanner_y_mm: 500.0
+      spin_hz: 10.0
+board_io: []

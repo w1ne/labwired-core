@@ -819,7 +819,10 @@ impl WasmSimulator {
         };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
-        for servo in &machine.bus.servos {
+        for servo in machine
+            .bus
+            .observed_of::<labwired_core::peripherals::components::servo::Servo>()
+        {
             let id = servo.id();
             if id.is_empty() {
                 continue;

@@ -49,6 +49,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
 | atmega328p | — | — | — |
+| atsamd21g18a | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
 | esp32 | ✓ | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |

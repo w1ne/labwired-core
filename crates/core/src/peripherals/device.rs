@@ -307,6 +307,25 @@ pub trait UartStreamDevice: Send {
     fn carries_protocol_octets(&self) -> bool {
         false
     }
+
+    /// How many bytes this peer may emit within one 1 ms bus tick.
+    ///
+    /// The tick loop credits `elapsed_us` on the FIRST [`poll`] of a tick and
+    /// passes `0` to the rest, so the extra calls only drain what the device
+    /// has already earned — they never hand it more simulated time.
+    ///
+    /// Default `1` is the historical pacing and keeps every text-stream peer
+    /// (GPS, HC-05, SIM800L, BG770A, IO-Link) byte-exact: one byte per
+    /// millisecond is about 9600 baud, which is what they assume. A peer whose
+    /// real link is faster MUST raise this, or the tick loop — not the wire —
+    /// becomes the bottleneck: a 230400-baud scanner puts ~23 bytes on the
+    /// wire per millisecond, so a budget of 1 delivers 4% of its stream and no
+    /// frame ever completes.
+    ///
+    /// [`poll`]: UartStreamDevice::poll
+    fn max_bytes_per_tick(&self) -> usize {
+        1
+    }
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }

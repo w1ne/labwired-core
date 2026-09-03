@@ -398,8 +398,24 @@ impl PeripheralKit for ServoKit {
                 }
             }
         }
-        ctx.bus.servos.push(servo);
+        ctx.bus.observe_device(servo);
         Ok(())
+    }
+}
+
+/// A servo is held by the bus only so the canvas can poll its shaft angle. It
+/// has no display surface, so it reports no evidence.
+impl crate::bus::ObservedDevice for Servo {
+    fn manifest_id(&self) -> &str {
+        self.id()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
+        self
     }
 }
 

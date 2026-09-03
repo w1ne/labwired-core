@@ -8,6 +8,7 @@
 
 use crate::artifacts::{write_interactive_snapshot, InteractiveSnapshotInputs};
 use crate::*;
+use labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel;
 
 /// Export every attached parallel-panel framebuffer, if `--display-out <path>`
 /// was given: a binary PPM per panel (`<path>` for the first, `<path>.<id>`
@@ -24,11 +25,12 @@ pub(crate) fn export_display_if_requested(
     let Some(path) = display_out else {
         return;
     };
-    if bus.ili9341_parallel.is_empty() {
+    let panels: Vec<&Ili9341Parallel> = bus.observed_of::<Ili9341Parallel>().collect();
+    if panels.is_empty() {
         eprintln!("labwired-cli run: --display-out given but no parallel panel is attached");
         return;
     }
-    for (n, panel) in bus.ili9341_parallel.iter().enumerate() {
+    for (n, panel) in panels.iter().enumerate() {
         let (w, h) = panel.logical_dimensions();
         let fb = panel.oriented_framebuffer();
         let ink = fb.iter().filter(|&&b| b != 0).count();

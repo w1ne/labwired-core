@@ -341,9 +341,31 @@ peripherals:
     irq: 37
     config:
       debug_schema: "../peripherals/stm32h563/adc1.yaml"
-      # H5 ADC is the H7-class IP (DEEPPWD/ADVREGEN/ADCAL/ADSTART), not L4.
-      # L4 profile made Arduino analogRead hang forever on DEEPPWD.
-      profile: "stm32h7"
+      # ⚠️ This said "H5 ADC is the H7-class IP … not L4" and was wrong. Checked
+      # against the two vendor-derived schemas in this repo: the H563 ADC1
+      # register map is IDENTICAL to the L476's — every register at the same
+      # offset, one extra `ADC_OR` — while the H735's differs in eight
+      # registers (PCSEL, LTR/HTR pairs, CALFACT2) and moves CALFACT/DIFSEL.
+      # Decisively: H563 CFGR.RES is TWO bits at [4:3] like the L4, not the
+      # H7's three at [4:2], and H563 ISR has no LDORDY.
+      #
+      # DEEPPWD/ADVREGEN/ADCAL/ADSTART are not H7 markers — the L4 carries all
+      # four at the same bit positions, and its power-up test is itself pinned
+      # to H563 silicon (2026-06-11).
+      #
+      # The Arduino analogRead hang that prompted the switch was real, but the
+      # cause was ADCAL, not DEEPPWD: the block latched that self-clearing
+      # command bit forever, so the HAL's `while (CR & ADC_CR_ADCAL)` never
+      # exited. `stm32h5` is the L4 map with calibration that COMPLETES —
+      # H5 firmware configures the ADC kernel clock, so the bit clears.
+      #
+      # ⚠️ Not `stm32l4`: NUCLEO-L476RG silicon (firmware_survival's
+      # nucleo_l476rg_adc case) shows ADCAL STAYING SET when the firmware
+      # enables only AHB2ENR.ADCEN and leaves CCIPR alone — no clock, no
+      # calibration. That capture is why the profiles are separate rather than
+      # one always-clearing L4. When the RCC model exposes the kernel clock to
+      # the ADC, both should ask it and this split can go away.
+      profile: "stm32h5"
     # ADC1/2 are clocked from RCC_AHB2ENR.ADCEN (bit 10) — the H5 ADC sits on
     # AHB2, not an APB bus. Unclocked out of reset (RM0481 §11.8.34): CR reads 0
     # (not its 0x20000000 DEEPPWD reset) until the clock is enabled.

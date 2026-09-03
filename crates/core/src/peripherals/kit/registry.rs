@@ -22,6 +22,7 @@ use crate::peripherals::components;
 pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bg770a::BG770A_KIT,
     &components::neo6m::NEO6M_KIT,
+    &components::ydlidar::YDLIDAR_KIT,
     &components::adxl345::ADXL345_KIT,
     &components::ina219::INA219_KIT,
     &components::ads1115::ADS1115_KIT,

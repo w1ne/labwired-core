@@ -123,6 +123,108 @@
       ]
     },
     {
+      "device_type": "ydlidar-scanner",
+      "label": "360° Scanning Lidar",
+      "summary": "Spinning lidar streaming YDLIDAR scan frames over UART RX at 230400 baud.",
+      "detail": "Emits 0xAA55 frames — 25 samples of quarter-millimetre range plus 6-bit intensity, with a one-sample zero packet marking each revolution. Ranges come from raycasting a declared rectangular room plus a drivable target arc, and the generator inverts the atan angle correction so decoded bearings match the room as authored. Wire format is gated byte-for-byte against a capture from physical silicon.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [
+        {
+          "name": "room_width_mm",
+          "ty": "float",
+          "doc": "Interior room width along X in millimetres (default 4000)."
+        },
+        {
+          "name": "room_depth_mm",
+          "ty": "float",
+          "doc": "Interior room depth along Y in millimetres (default 3000)."
+        },
+        {
+          "name": "scanner_x_mm",
+          "ty": "float",
+          "doc": "Scanner offset from the room centre along X (default 0)."
+        },
+        {
+          "name": "scanner_y_mm",
+          "ty": "float",
+          "doc": "Scanner offset from the room centre along Y (default 0)."
+        },
+        {
+          "name": "spin_hz",
+          "ty": "float",
+          "doc": "Revolutions per second (default 10.0; the measured unit reported 10.0)."
+        },
+        {
+          "name": "sample_rate_hz",
+          "ty": "float",
+          "doc": "Ranging samples per second (default 4000; measured 4031)."
+        },
+        {
+          "name": "intensity",
+          "ty": "float",
+          "doc": "Reported 6-bit return intensity 0-63 (default 31, the measured median)."
+        },
+        {
+          "name": "baud",
+          "ty": "float",
+          "doc": "Link rate used to pace bytes onto the wire (default 230400)."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "ydlidar-scan-lab",
+          "chip": "stm32f103",
+          "example_dir": "ydlidar-scan-lab",
+          "demo_elf": "demo-ydlidar-scan-lab.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "target_bearing",
+          "label": "Target bearing",
+          "unit": "°",
+          "min": 0.0,
+          "max": 360.0
+        },
+        {
+          "key": "target_range",
+          "label": "Target range",
+          "unit": "mm",
+          "min": 0.0,
+          "max": 12000.0
+        },
+        {
+          "key": "target_width",
+          "label": "Target width",
+          "unit": "°",
+          "min": 0.0,
+          "max": 180.0
+        },
+        {
+          "key": "spin_hz",
+          "label": "Spin rate",
+          "unit": "Hz",
+          "min": 1.0,
+          "max": 20.0
+        },
+        {
+          "key": "room_width",
+          "label": "Room width",
+          "unit": "mm",
+          "min": 200.0,
+          "max": 20000.0
+        },
+        {
+          "key": "room_depth",
+          "label": "Room depth",
+          "unit": "mm",
+          "min": 200.0,
+          "max": 20000.0
+        }
+      ]
+    },
+    {
       "device_type": "adxl345",
       "label": "ADXL345 Tilt",
       "summary": "3-axis ±2/4/8/16 g digital accelerometer over I2C.",

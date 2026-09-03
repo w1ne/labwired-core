@@ -84,6 +84,20 @@ pub enum AdcRegisterLayout {
     /// [`H7AdcRegs`] for what diverges and why the alias that used to point
     /// `"h7"` at [`Self::Stm32L4`] was wrong.
     Stm32H7,
+    /// STM32H5 (RM0481). Register-for-register the L4 map — every offset
+    /// identical, `CFGR.RES` two bits at [4:3], no `LDORDY` — plus one extra
+    /// `ADC_OR`. It is NOT the H7 block, whose map differs in eight registers
+    /// and encodes `RES` in three bits at [4:2].
+    ///
+    /// It differs from the L4 in exactly one modelled respect: the H5 firmware
+    /// this simulates configures the ADC kernel clock, so a calibration
+    /// request COMPLETES and `ADCAL` self-clears. The plain L4 profile keeps
+    /// the latched behaviour, which is what NUCLEO-L476RG silicon shows when
+    /// only `AHB2ENR.ADCEN` is set and `CCIPR` is left alone — calibration
+    /// cannot run without a clock, so the bit never clears. Two different
+    /// firmware situations, not two different silicon behaviours; when the
+    /// kernel clock is modelled these collapse back into one layout.
+    Stm32H5,
 }
 
 impl FromStr for AdcRegisterLayout {
@@ -100,8 +114,9 @@ impl FromStr for AdcRegisterLayout {
             // values from the wrong registers.
             "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32g0" | "g0" => Ok(Self::Stm32L4),
             "stm32h7" | "h7" => Ok(Self::Stm32H7),
+            "stm32h5" | "h5" => Ok(Self::Stm32H5),
             _ => Err(format!(
-                "unsupported ADC register layout '{}'; supported: stm32f1, stm32l4, stm32h7",
+                "unsupported ADC register layout '{}'; supported: stm32f1, stm32l4, stm32h5, stm32h7",
                 value
             )),
         }
@@ -221,6 +236,19 @@ pub struct Adc {
     /// Scheduler mode: `true` while the conversion-countdown event is live.
     #[serde(skip)]
     chain_live: bool,
+    /// Does a calibration request complete, so `CR.ADCAL` self-clears?
+    ///
+    /// `ADCAL` is a self-clearing COMMAND bit, but only once calibration can
+    /// actually run — which needs an ADC kernel clock. NUCLEO-L476RG silicon,
+    /// captured in `firmware_survival`'s `nucleo_l476rg_adc` case, shows the
+    /// bit STAYING SET when the firmware enables only `AHB2ENR.ADCEN` and
+    /// never touches `CCIPR`. The H5 firmware modelled here does configure the
+    /// clock, so its calibration finishes.
+    ///
+    /// This is a stand-in for the kernel clock the RCC model does not yet
+    /// expose to the ADC. When it does, this flag should die and both layouts
+    /// should ask the clock instead.
+    calibration_completes: bool,
 }
 
 impl Adc {
@@ -234,11 +262,13 @@ impl Adc {
         // F1 reset is all-zeros.
         let regs = match layout {
             AdcRegisterLayout::Stm32F1 => AdcRegs::Stm32F1(F1AdcRegs::default()),
-            AdcRegisterLayout::Stm32L4 => AdcRegs::Stm32L4(L4AdcRegs {
-                cr: 0x2000_0000,
-                cfgr: 0x8000_0000,
-                ..Default::default()
-            }),
+            AdcRegisterLayout::Stm32L4 | AdcRegisterLayout::Stm32H5 => {
+                AdcRegs::Stm32L4(L4AdcRegs {
+                    cr: 0x2000_0000,
+                    cfgr: 0x8000_0000,
+                    ..Default::default()
+                })
+            }
             // Same DEEPPWD/JQDIS story as the L4, plus the three analog-watchdog
             // high thresholds, which reset to the 26-bit all-ones 0x03FF_FFFF
             // rather than 0.
@@ -252,6 +282,12 @@ impl Adc {
             }),
         };
         Self {
+            // H5 and H7 firmware configure the ADC kernel clock; the plain L4
+            // case captured on NUCLEO-L476RG does not. See the field docs.
+            calibration_completes: matches!(
+                layout,
+                AdcRegisterLayout::Stm32H5 | AdcRegisterLayout::Stm32H7
+            ),
             regs,
             sr: 0,
             dr: 0,
@@ -571,23 +607,48 @@ impl Adc {
         }
     }
 
-    fn write_reg_l4(r: &mut L4AdcRegs, reg: u64, value: u32) {
+    fn write_reg_l4(r: &mut L4AdcRegs, reg: u64, value: u32, calibration_completes: bool) {
         match reg {
             // ISR is rc_w1 — a write clears matched flags; firmware can't SET it.
             0x00 => r.isr &= !value,
             0x04 => r.ier = value,
             0x08 => {
-                r.cr = value; // latch verbatim (ADCAL self-clear not modelled)
-                              // ADEN with the voltage regulator up (ADVREGEN set, DEEPPWD
-                              // clear) raises ISR.ADRDY. Silicon-verified on STM32H563
-                              // ADC1 (2026-06-11): DEEPPWD=0 -> ADVREGEN=1 -> ADEN=1 reads
-                              // back CR=0x10000001 with ISR=0x00000001.
-                let aden = value & 0x1 != 0;
-                let advregen = value & (1 << 28) != 0;
-                let deeppwd = value & (1 << 29) != 0;
+                // ADCAL (bit 31) is a self-clearing COMMAND — but only once
+                // calibration can actually RUN, which needs an ADC kernel
+                // clock. Both halves are silicon:
+                //
+                //   * NUCLEO-L476RG, captured in firmware_survival's
+                //     `nucleo_l476rg_adc` case: with only AHB2ENR.ADCEN
+                //     enabled and CCIPR untouched, CR reads back 0x9000_0000 —
+                //     ADCAL STILL SET. No clock, no calibration, no clear.
+                //   * A firmware that does configure the kernel clock sees it
+                //     complete and the bit clear, which is what the H5 Arduino
+                //     path needs; a HAL running the documented
+                //     `while (ADC->CR & ADC_CR_ADCAL);` otherwise spins forever.
+                //
+                // ⚠️ Do not "simplify" this to always-clear. That breaks the
+                // L476 capture, and always-latch is what made the H5 HAL hang —
+                // the hang that moved stm32h563 onto the `stm32h7` profile,
+                // whose 3-bit CFGR.RES[4:2] then read the fixture's 2-bit
+                // RES[4:3] write as 16-bit and turned `TIER1 adc` red.
+                let calibrating = value & (1 << 31) != 0;
+                r.cr = if calibration_completes {
+                    value & !(1 << 31)
+                } else {
+                    value
+                };
+                // ADEN with the voltage regulator up (ADVREGEN set, DEEPPWD
+                // clear) raises ISR.ADRDY. Silicon-verified on STM32H563
+                // ADC1 (2026-06-11): DEEPPWD=0 -> ADVREGEN=1 -> ADEN=1 reads
+                // back CR=0x10000001 with ISR=0x00000001.
+                let aden = r.cr & 0x1 != 0;
+                let advregen = r.cr & (1 << 28) != 0;
+                let deeppwd = r.cr & (1 << 29) != 0;
                 if aden && advregen && !deeppwd {
                     r.isr |= 0x1;
                 }
+                // Nothing else to record: this block has no CALFACT model yet.
+                let _ = calibrating;
             }
             0x0C => r.cfgr = value,
             0x10 => r.cfgr2 = value,
@@ -678,10 +739,11 @@ impl Peripheral for Adc {
             AdcRegs::Stm32L4(_) => {
                 let reg = offset & !3;
                 let dr = self.dr;
+                let calibration_completes = self.calibration_completes;
                 let mut full = 0;
                 if let AdcRegs::Stm32L4(r) = &mut self.regs {
                     full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
-                    Self::write_reg_l4(r, reg, full);
+                    Self::write_reg_l4(r, reg, full, calibration_completes);
                 }
                 // A write touching CR may have set ADSTART — try to convert.
                 if reg == 0x08 {
@@ -929,6 +991,112 @@ mod tests {
         let mut cold = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
         cold.write_u32(0x08, (1 << 29) | 1).unwrap();
         assert_eq!(cold.read_u32(0x00).unwrap() & 0x1, 0);
+    }
+
+    /// ADCAL is a self-clearing command bit, and a HAL is entitled to spin on
+    /// it. `while (ADC->CR & ADC_CR_ADCAL);` is the sequence ST's own driver
+    /// runs, so a model that latches bit 31 hangs the firmware rather than
+    /// failing it — the worst shape of defect, because it looks like a stall
+    /// in the CPU rather than a wrong value in a peripheral.
+    ///
+    /// Regression: this bit staying set is what moved stm32h563 onto the
+    /// `stm32h7` ADC profile, whose 3-bit `CFGR.RES[4:2]` then read the L4's
+    /// 2-bit `RES[4:3]` write as 16-bit and turned `TIER1 adc` red.
+    ///
+    /// The mirror of this is [`test_adc_l4_adcal_latches_without_a_kernel_clock`]:
+    /// the plain L4 case must NOT clear it. Both are silicon; they differ in
+    /// what the firmware clocked, not in what the hardware does.
+    #[test]
+    fn test_adc_h5_adcal_self_clears() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H5);
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap(); // ADVREGEN | ADCAL
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & (1 << 31),
+            0,
+            "ADCAL must read back clear — a HAL polling it would spin forever"
+        );
+        assert_eq!(
+            adc.read_u32(0x08).unwrap(),
+            1 << 28,
+            "clearing ADCAL must not disturb the rest of CR"
+        );
+
+        // And calibration must not be a back door to readiness: ADRDY still
+        // requires ADEN.
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & 0x1,
+            0,
+            "no ADRDY without ADEN"
+        );
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 0x1);
+    }
+
+    /// The L476 keeps ADCAL SET, and that is not a bug to be tidied away.
+    ///
+    /// Captured on NUCLEO-L476RG (see `firmware_survival`'s `nucleo_l476rg_adc`
+    /// case, which reads `CR=90000000` after a calibration request): the smoke
+    /// firmware enables only `AHB2ENR.ADCEN` and never configures `CCIPR`, so
+    /// the converter has no kernel clock, calibration cannot run, and the
+    /// command bit never clears.
+    ///
+    /// This test exists because the first fix for the H5 hang made ADCAL
+    /// always self-clear and silently contradicted this capture. The survival
+    /// fixture caught it; nothing in this file did.
+    #[test]
+    fn test_adc_l4_adcal_latches_without_a_kernel_clock() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap(); // ADCAL
+        assert_eq!(
+            adc.read_u32(0x08).unwrap(),
+            0x9000_0000,
+            "NUCLEO-L476RG silicon: ADCAL stays set with no ADC kernel clock"
+        );
+    }
+
+    /// The H7 clears ADCAL too, and nothing asserted it. Found by accident:
+    /// a mis-aimed negative control deleted the H7's `& !(1 << 31)` and the
+    /// whole ADC suite stayed green. Same defect as the L4 had, one layout
+    /// over, and the same hang on any HAL that polls the bit.
+    #[test]
+    fn test_adc_h7_adcal_self_clears() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap(); // ADCAL
+        assert_eq!(
+            adc.read_u32(0x08).unwrap() & (1 << 31),
+            0,
+            "ADCAL must read back clear on the H7 as well"
+        );
+        assert_eq!(adc.read_u32(0x08).unwrap(), 1 << 28);
+    }
+
+    /// The H563 is an L4-class ADC: `CFGR.RES` is two bits at [4:3], so the
+    /// same firmware write means 12-bit here and 16-bit on the H7. This is the
+    /// exact divergence that produced `stm32h563/adc: pass -> blocked`, and it
+    /// is asserted on both layouts so neither can drift onto the other again.
+    #[test]
+    fn test_res_field_placement_differs_between_l4_and_h7() {
+        // RES = 0 written at the L4's [4:3] is 12-bit on the L4 …
+        let mut l4 = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        l4.write_u32(0x08, 0).unwrap();
+        l4.write_u32(0x08, 1 << 28).unwrap();
+        l4.write_u32(0x08, (1 << 28) | 1).unwrap();
+        l4.write_u32(0x0C, 0).unwrap();
+        l4.write_u32(0x00, 1 << 2).unwrap();
+        l4.write_u32(0x08, (1 << 28) | 1 | (1 << 2)).unwrap();
+        assert_eq!(l4.read_u32(0x40).unwrap() & 0xFFFF, 3723, "L4 12-bit code");
+
+        // … and 16-bit on the H7, from the identical CFGR write.
+        assert_eq!(h7_resolution_bits(0), 16);
+        assert_eq!(l4_adc_code(12), 3723);
+        assert_eq!(h7_adc_code(16), 3723 << 4);
     }
 
     /// L4 ADSTART converts the fixed internal source: DR holds a derived code,

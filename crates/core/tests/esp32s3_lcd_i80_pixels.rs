@@ -155,7 +155,7 @@ board_io: []
     )
     .expect("parse manifest");
     attach_esp32_external_devices(&mut bus, &manifest).expect("attach parallel panel");
-    assert_eq!(bus.ili9341_parallel.len(), 1, "panel attached");
+    assert_eq!(bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>().count(), 1, "panel attached");
     // The kit must bind the panel to LCD_CAM as well as to the GPIO observer;
     // without that binding the i80 path has nothing to paint and every
     // assertion below would fail for the wrong reason.
@@ -326,7 +326,10 @@ fn i80_transaction_streams_pixels_into_the_panel_framebuffer() {
     }
     send_dma_transaction(&mut bus, 0x2C, &payload); // RAMWR
 
-    let panel = &bus.ili9341_parallel[0];
+    let panel = bus
+        .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached");
     let (lw, lh) = panel.logical_dimensions();
     assert_eq!((lw, lh), (320, 240), "MADCTL 0x28 gives landscape 320x240");
     let fb = panel.oriented_framebuffer();
@@ -403,7 +406,11 @@ fn trans_done_is_withheld_until_the_outlink_chain_drains() {
         !trans_done(&mut bus),
         "TRANS_DONE latched while the chain was still draining"
     );
-    let partial = bus.ili9341_parallel[0].ink_bytes();
+    let partial = bus
+        .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached")
+        .ink_bytes();
     assert!(partial > 0, "no pixels moved on the first tick");
 
     let ticks = 1 + tick_until(&mut bus, 4096, trans_done);
@@ -417,7 +424,10 @@ fn trans_done_is_withheld_until_the_outlink_chain_drains() {
         "GDMA must latch OUT_EOF when the chain drains"
     );
     assert!(
-        bus.ili9341_parallel[0].ink_bytes() > partial,
+        bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached")
+        .ink_bytes() > partial,
         "the rest of the chain never reached the panel"
     );
 }
@@ -454,7 +464,10 @@ fn outlink_walk_stops_at_suc_eof_not_at_the_end_of_the_pool() {
 
     // Exactly one pixel: 2 non-zero bytes. The stale node would have added 256.
     assert_eq!(
-        bus.ili9341_parallel[0].ink_bytes(),
+        bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached")
+        .ink_bytes(),
         2,
         "walk ran past the suc_eof descriptor into the stale pool tail"
     );
@@ -465,7 +478,9 @@ fn outlink_walk_stops_at_suc_eof_not_at_the_end_of_the_pool() {
 #[test]
 fn gpio_bitbang_path_still_paints_without_lcd_cam() {
     let bus = build_bus();
-    let panel = bus.ili9341_parallel[0].clone();
+    let panel = bus.observed_arcs_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached");
     let pins = *panel.pins();
 
     let strobe = |dc: bool, word: u16| {

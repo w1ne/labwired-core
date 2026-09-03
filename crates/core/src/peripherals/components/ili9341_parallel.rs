@@ -527,7 +527,7 @@ impl PeripheralKit for Ili9341ParallelKit {
                 lcd.attach_panel(panel.clone());
             }
         }
-        ctx.bus.ili9341_parallel.push(panel);
+        ctx.bus.observe_device(panel);
         Ok(())
     }
 }
@@ -570,6 +570,27 @@ impl crate::inspect::DeviceEvidence for Ili9341Parallel {
             }),
             bytes: crate::inspect::artifact_bytes(&fb, opts),
         }]
+    }
+}
+
+/// A bus-resident DISPLAY: readback only as far as the bus is concerned, but
+/// it reports its RGB565 framebuffer as evidence, the same shape the SPI kit's
+/// panels emit.
+impl crate::bus::ObservedDevice for Ili9341Parallel {
+    fn manifest_id(&self) -> &str {
+        self.id()
+    }
+
+    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
+        self
     }
 }
 

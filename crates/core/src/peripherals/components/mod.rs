@@ -105,6 +105,7 @@ pub mod veml7700;
 mod veml7700_parity;
 pub mod vl53l1x;
 pub mod ws2812;
+pub mod ydlidar;
 
 pub use adxl345::Adxl345;
 pub use aht20::Aht20;

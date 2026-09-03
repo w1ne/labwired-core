@@ -49,6 +49,10 @@ pub fn attach_esp32_external_devices(
     bus: &mut SystemBus,
     manifest: &labwired_config::SystemManifest,
 ) -> anyhow::Result<()> {
+    // Xtensa machines build their peripheral bank directly instead of through
+    // `SystemBus::from_config`, so this is the runtime contract boundary for
+    // browser/WASM manifests as well as native callers.
+    crate::bus::part_pack::validate_manifest(manifest)?;
     // Classic ESP32 builds its peripheral bank in Rust and never runs
     // `SystemBus::from_config`'s peripheral loop, so it must record the
     // manifest's external-device declarations itself. Without this the devices

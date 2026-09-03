@@ -476,6 +476,18 @@ jobs:
       - name: Every `#[ignore]` says why
         run: python3 scripts/ci/ignore_reasons.py --check
 
+      # A doubled `-Tlink.x` duplicates memory.x's MEMORY block and the link
+      # dies with "region 'FLASH' already defined". It is invisible on a warm
+      # `target/` — cargo does not relink a cached artifact — so the build step
+      # further down carried the flag for a week after the crate's build.rs
+      # started passing its own, stayed green on the self-hosted runners, and
+      # failed the first time it ran on a clean one. The rule is derived, not
+      # listed: a crate whose build.rs emits the flag owns it, and no caller may
+      # repeat it. Pure Python, no toolchain, so it sits before the Rust
+      # install with the two checks above.
+      - name: One source for `-Tlink.x`
+        run: python3 scripts/ci/linker_script_single_source.py --check
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
@@ -537,6 +549,8 @@ jobs:
             scripts/ci/test_matrix_verdict.py \
             scripts/ci/test_cheat_ratchet.py \
             scripts/ci/test_ignore_reasons.py \
+            scripts/ci/test_linker_script_single_source.py \
+            scripts/ci/test_host_clippy_scope.py \
             scripts/ci/test_workspace_test_shard.py \
             scripts/test_generate_validation_status.py
 
@@ -591,8 +605,22 @@ jobs:
       # `pull_request` CI builds the merge commit, not the branch tip, so
       # linting the default-members here catches that class of semantic
       # conflict against the tree the merge will actually produce — before it
-      # lands rather than after. Keep this scope in step with the `Run Clippy`
-      # step in core-integrity; if they drift apart the hole reopens.
+      # lands rather than after.
+      #
+      # ⚠️ THIS IS FIVE PACKAGES OF EIGHTY-FOUR, AND THAT IS NOW DELIBERATE
+      # RATHER THAN ACCIDENTAL. `cargo clippy --all-targets` resolves to
+      # `default-members`; it never linted the workspace. The remaining host
+      # crates are covered by the `Clippy (host crates outside default-members)`
+      # step in `browser-layer`, whose scope `host_clippy_scope.py` derives as
+      # the COMPLEMENT of this command. So: keep this step bare. Narrowing it to
+      # a `-p` list would leave default-members linted by nothing, and
+      # `--check` fails the moment no bare `cargo clippy` remains in this file.
+      #
+      # This is also what the old note here — "keep this scope in step with the
+      # `Run Clippy` step in core-integrity; if they drift apart the hole
+      # reopens" — was asking a human to do by hand. The two steps are still
+      # identical, but drift between them can no longer open a hole silently:
+      # the union of the three clippy scopes is asserted against the tree.
       - name: Clippy (default-members)
         run: cargo clippy --all-targets -- -D warnings
 
@@ -809,8 +837,79 @@ jobs:
       # signature that no longer lines up with core) all surface here without
       # needing the wasm32 toolchain on the runner. A wasm32 link is a heavier,
       # separate concern and stays in the deploy path.
+      #
+      # ⚠️ KEEP THE `-p labwired-wasm` HERE. `host_clippy_scope.py` subtracts
+      # this package from the scope of the step below on the strength of this
+      # step existing, and its `--check` reads this file to prove it still
+      # does. Delete or rename the flag and that check goes red rather than
+      # letting the browser layer go quietly unlinted again.
       - name: Clippy + build the browser layer (crates/wasm)
         run: cargo clippy -p labwired-wasm --all-targets -- -D warnings
+
+      # THE REST OF THE HOST WORKSPACE — the step above's argument, generalized.
+      #
+      # It was never only crates/wasm. `cargo clippy --all-targets` in `pr-gate`
+      # and in `core-integrity` is not a workspace command: it resolves to
+      # `default-members`, FIVE packages of eighty-four. crates/wasm was lifted
+      # out of that hole one crate at a time by the step above; twelve more host
+      # crates were still in it when this landed. What reached them, measured:
+      #
+      #   * cargo applies `RUSTC_WORKSPACE_WRAPPER=clippy-driver` to every
+      #     workspace member it builds, dependencies included, so SIX of the
+      #     twelve already had their lib linted incidentally as path-deps of a
+      #     default-member (codegen, config, gdbstub, hw-trace, ir,
+      #     svd-ingestor);
+      #   * SIX were reached by no clippy lane at all — egress-relay, hw-oracle
+      #     (the silicon ground-truth comparator), hw-oracle-macros, hw-runner,
+      #     validation-report, python;
+      #   * and for all twelve, everything that is NOT the lib — tests/,
+      #     benches/, [[bin]] targets, `#[cfg(test)]` modules — was linted by
+      #     nothing, because a dependency is only ever built as a lib. That is
+      #     the exact class the note on pr-gate's clippy step already records:
+      #     `channel: Option<String>` on `BoardIoBinding` stranded four literals
+      #     in the DAP adapter's tests and "was invisible to anything short of
+      #     `--all-targets`".
+      #
+      # None of that is a testing gap. `pr-workspace-tests` shards
+      # `cargo test --workspace --no-run`, which compiles and runs every member.
+      # It is clippy, and only clippy, that stopped short.
+      #
+      # DERIVED, NOT LISTED. A longer `-p` list in this file would be the same
+      # defect one level up — the hole reopens the next time somebody adds a
+      # crate, exactly as it did after crates/wasm was handled by name.
+      # `host_clippy_scope.py` classifies every workspace member from the tree
+      # (a per-crate `.cargo/config.toml` pinning a bare-metal triple, or a
+      # `#![no_std]` crate root, means firmware) and emits the host crates the
+      # other two clippy scopes do not cover. Its `--check` asserts those other
+      # two still exist — a bare `cargo clippy` somewhere for default-members,
+      # and the `-p labwired-wasm` step above — so the three scopes PARTITION
+      # the host set instead of leaving a gap between them, and it fails when
+      # this scope comes out empty, because a `cargo clippy` with no packages
+      # left to name silently falls back to linting default-members again.
+      #
+      # HERE AND NOT IN `pr-gate`, AND THAT IS MEASURED, NOT A MOVE TO SAFETY.
+      # This job is a REQUIRED context on main and runs on every PR, so the gate
+      # stays pre-merge. Run 33458359629: `pr-gate` 7m03s against a 12-minute
+      # wall whose own note says do not bump it a third time, `browser-layer`
+      # 2m14s against 20. Locally the step costs 25s on top of the wasm clippy
+      # above (26s), and folding the same crates into pr-gate's `--all-targets`
+      # default-members build measured 50s instead — the test targets of core
+      # and cli are most of that, and this scope does not rebuild them.
+      #
+      # PYO3_USE_ABI3_FORWARD_COMPATIBILITY: `crates/python` builds pyo3 0.20,
+      # whose build script refuses any interpreter newer than 3.12. CI's ubuntu
+      # image ships 3.12 so this is a no-op here, but it keeps the same command
+      # working on a developer machine with a newer python3 — the identical
+      # escape `scripts/ci/rust-suite-baseline.py` sets for the same crate, and
+      # documented in docs/testing/RUST_SUITE_BASELINE.md.
+      - name: Clippy (host crates outside default-members)
+        run: |
+          python3 scripts/ci/host_clippy_scope.py --check
+          scope="$(python3 scripts/ci/host_clippy_scope.py --cargo-args | tr '\n' ' ')"
+          echo "derived scope: $scope"
+          # shellcheck disable=SC2086  # deliberate word split: one --package= per field
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 \
+            cargo clippy $scope --all-targets -- -D warnings
 
       # playground_repro drives the secure-boot lab through the same entry
       # points simulator-bridge.ts uses, so it needs that lab's firmware. It
@@ -1230,8 +1329,26 @@ jobs:
       - name: Check Formatting
         run: cargo fmt --all -- --check
 
+      # Bare on purpose — see the long note on `Clippy (default-members)` in
+      # `pr-gate`. This resolves to `default-members`, and the step below covers
+      # the host crates it leaves out.
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
+
+      # The main-side twin of `browser-layer`'s host-scope step. `browser-layer`
+      # runs on pull_request/dispatch only, so without this the twelve crates
+      # outside `default-members` would be linted on PRs and not on main — and
+      # this job is where the note on `Clippy (default-members)` says the hole
+      # used to live, main noticing a break only after the merge. Scope derived
+      # by the same script; nothing here to keep in step by hand.
+      - name: Clippy (host crates outside default-members)
+        run: |
+          python3 scripts/ci/host_clippy_scope.py --check
+          scope="$(python3 scripts/ci/host_clippy_scope.py --cargo-args | tr '\n' ' ')"
+          echo "derived scope: $scope"
+          # shellcheck disable=SC2086  # deliberate word split: one --package= per field
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 \
+            cargo clippy $scope --all-targets -- -D warnings
 
       # Before the --lib run, not just before the fixture suites below. The
       # playground secure-boot repro in crates/wasm builds
@@ -1567,12 +1684,56 @@ jobs:
           rustup target add thumbv7em-none-eabihf
           rustup target add thumbv8m.main-none-eabi
 
+      # `pr-workspace-tests` installs this and this job did not, so the same
+      # OBD2 end-to-end passed on every PR and failed here — the ECU half is C,
+      # built with arm-none-eabi-gcc, and the test builds it itself. It asserts
+      # rather than skips (a gate that cannot build its inputs is not a gate),
+      # so the absent compiler is a hard failure, and it was invisible for as
+      # long as the firmware build above failed first and skipped this step.
+      - name: Add the C cross-compiler (OBD2 ECU firmware)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      # ubuntu-latest ships ~14 GB free, and this job builds the workspace test
+      # binaries twice — once on default features, once on `jit,event-scheduler`
+      # — with debug info. `Feature tests` died on:
+      #
+      #     rustc-LLVM ERROR: IO failure on output stream: No space left on device
+      #     collect2: fatal error: ld terminated with signal 7 [Bus error]
+      #
+      # The bus error is the same exhaustion wearing a different hat, which is
+      # why this looked like an LLVM crash and says "PLEASE submit a bug report".
+      #
+      # The images carry ~25 GB of preinstalled SDKs this job never touches.
+      # Measured, not assumed: the df either side is printed, so if a future
+      # image stops shipping them the log says so instead of the step quietly
+      # freeing nothing.
+      - name: Reclaim runner disk
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          docker image prune -af >/dev/null 2>&1 || true
+          df -h / | tail -1
+
       - name: Build test firmware fixture
         run: |
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-          RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
+          # No RUSTFLAGS here. firmware-rp2040-pio-onboarding passes its own
+          # `-Tlink.x` from build.rs, so a plain `cargo build -p <crate>` links
+          # on its own.
+          #
+          # ⚠️ Exactly one place may pass `-Tlink.x`. This line used to add it
+          # too; once the crate's build.rs started passing its own
+          # (labwired-core#1064) the script was included twice, along with the
+          # memory.x it consumes, and the link died with "region 'FLASH'
+          # already defined". A warm target/ hides it — cargo does not relink a
+          # cached artifact — so this stayed green on the self-hosted runners
+          # and only fell over the first time the job ran on a clean one.
+          cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
           cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
 
       - name: Run Workspace Tests

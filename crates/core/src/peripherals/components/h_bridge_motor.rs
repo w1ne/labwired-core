@@ -166,7 +166,7 @@ impl PeripheralKit for HBridgeMotorKit {
                 .with_declared_id(ctx.device_id().to_string()),
         );
         ctx.install_gpio_observer(motor.clone());
-        ctx.bus.h_bridge_motors.push(motor);
+        ctx.bus.observe_device(motor);
 
         let has_b = ctx.ext.config.contains_key("in3_pin")
             || ctx.ext.config.contains_key("IN3")
@@ -190,10 +190,34 @@ impl PeripheralKit for HBridgeMotorKit {
                         .with_declared_id(ctx.device_id().to_string()),
                 );
                 ctx.install_gpio_observer(motor_b.clone());
-                ctx.bus.h_bridge_motors.push(motor_b);
+                ctx.bus.observe_device(motor_b);
             }
         }
         Ok(())
+    }
+}
+
+/// An H-bridge board carries two independent motor channels, so ONE
+/// declaration builds TWO models (`<id>-a`, `<id>-b`). Each reports its own
+/// channel identity as [`model_id`](crate::bus::ObservedDevice::model_id) and
+/// both join back to the declaration they came from — neither is anonymous,
+/// and neither claims to be the whole board. A single-channel board declares
+/// no channel id and is the whole of what was declared.
+impl crate::bus::ObservedDevice for HBridgeMotor {
+    fn manifest_id(&self) -> &str {
+        HBridgeMotor::declared_id(self).unwrap_or_else(|| self.id())
+    }
+
+    fn model_id(&self) -> Option<&str> {
+        HBridgeMotor::declared_id(self).map(|_| self.id())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
+        self
     }
 }
 

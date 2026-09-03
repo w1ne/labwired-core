@@ -948,9 +948,10 @@ impl Uart {
     /// so they are evaluated once; only the RX-stream pacing is replayed `n`
     /// times. Replaying it — rather than handing a stream one poll carrying
     /// `n * TICK_US` — is what keeps this refactor byte-exact: the
-    /// [`UartStreamDevice::poll`] contract emits at most ONE byte per call, so
-    /// `n` polls is the only way to produce the `n` bytes the per-cycle path
-    /// would have produced, in the same order.
+    /// [`UartStreamDevice::poll`] contract emits at most ONE byte per call
+    /// (times the peer's [`UartStreamDevice::max_bytes_per_tick`] budget, 1 by
+    /// default), so `n` polls is the only way to produce the `n` bytes the
+    /// per-cycle path would have produced, in the same order.
     fn advance_ticks(&mut self, n: u32) -> (bool, Vec<u32>) {
         // Publish any burst the wire has now had time to carry. Cheap and
         // inert when nothing is buffered, which is every tick on a UART that
@@ -986,9 +987,19 @@ impl Uart {
                     *elapsed_us = 0; // consumed this tick
 
                     for stream in attached_streams.iter_mut() {
-                        if let Some(byte) = stream.poll(elapsed) {
+                        // Time is credited once per tick; the remaining calls
+                        // pass 0, so a fast peer drains what it earned without
+                        // being handed the tick again. The default budget of 1
+                        // is exactly the old single-poll behaviour.
+                        let budget = stream.max_bytes_per_tick().max(1);
+                        let mut credit = elapsed;
+                        for _ in 0..budget {
+                            let Some(byte) = stream.poll(credit) else {
+                                break;
+                            };
                             rx_guard.push_back(byte);
                             rx_trace.push(byte);
+                            credit = 0;
                         }
                     }
                 }

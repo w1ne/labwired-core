@@ -32,7 +32,13 @@
 /// `include_str!` rather than a runtime directory walk: the count is then a
 /// compile-time fact about the source that shipped, and the test cannot pass
 /// vacuously because it was run from the wrong working directory.
+///
+/// The list is hand-maintained, which is its one weakness: every check below
+/// reads only from here, so a crate file missing from it is invisible to all
+/// three ceilings at once. `sources_covers_every_file_in_the_crate` closes
+/// that by comparing this list against the directory itself.
 const SOURCES: &[(&str, &str)] = &[
+    ("fidelity_surface.rs", include_str!("fidelity_surface.rs")),
     ("inputs.rs", include_str!("inputs.rs")),
     ("inspect.rs", include_str!("inspect.rs")),
     ("install.rs", include_str!("install.rs")),
@@ -42,6 +48,34 @@ const SOURCES: &[(&str, &str)] = &[
     ("traces.rs", include_str!("traces.rs")),
     ("world.rs", include_str!("world.rs")),
 ];
+
+/// Files in `crates/wasm/src` deliberately left OUT of `SOURCES`, each with the
+/// reason. A silent omission is the defect this list exists to prevent; an
+/// omission with a stated reason is fine.
+///
+/// It is not a blanket pass. `sources_covers_every_file_in_the_crate` re-reads
+/// each named file and fails if it has grown a `pub fn`, so an exception only
+/// holds for as long as the file really has no boundary surface. The reason has
+/// to stay true, not merely stay written down.
+const SOURCE_COVERAGE_EXCEPTIONS: &[(&str, &str)] = &[(
+    "error_boundary_ratchet.rs",
+    "this file. Scanning it would poison its own counts: `null_return_sites` \
+     matches the literal text `return JsValue::NULL` and \
+     `unwrap_or(JsValue::NULL)`, which occur here four times — twice as the \
+     matcher's own string literals and twice in the prose above that explains \
+     them — so including it would report four `null` answers that answer \
+     nothing and push NULL_RETURN_CEILING from 55 to 59. It has no \
+     `#[wasm_bindgen]` attribute and no `pub fn`: it is a test module, not part \
+     of the boundary it measures.",
+)];
+
+// `fidelity_surface.rs` is in SOURCES rather than here on purpose. Like this
+// file it is test-only today and contributes zero to every count, so listing it
+// is free — but unlike this file it is scannable, nothing about it poisons the
+// counts, and it sits next to the browser surface it tests. An exception would
+// have to be justified by a property the file does not have. The rule that
+// keeps the list honest is: exclude a file only when scanning it is WRONG, not
+// when scanning it is merely uneventful.
 
 /// Every `pub fn` in the crate, as `(file, fn name, full signature)`.
 ///
@@ -269,6 +303,126 @@ mod tests {
             unique.len(),
             "BARE_JSVALUE_ACCESSORS lists the same (file, fn) twice"
         );
+    }
+
+    /// `SOURCES` is hand-maintained, and every check above reads only from it.
+    /// So a `.rs` file that is in the crate but not in that list is invisible to
+    /// all three ceilings at once: its `pub fn`s are not counted as
+    /// failure-blind, its bare-`JsValue` accessors are not required to be
+    /// declared, and its `null` answers do not exist. Nothing fails — the gate
+    /// simply is not looking. `fidelity_surface.rs` sat in exactly that
+    /// position, and every file added to the crate from now on lands there by
+    /// default, which is the wrong default for a gate.
+    ///
+    /// `SOURCES` keeps `include_str!` for the reason its own doc comment gives;
+    /// this is a separate, native-only completeness check ON that list, not a
+    /// replacement for it. It resolves `src/` from `CARGO_MANIFEST_DIR` rather
+    /// than from the working directory, so it cannot pass vacuously by reading
+    /// an empty path — the same hazard that made the list compile-time.
+    ///
+    /// It fails in BOTH directions: a file on disk that is in neither list, and
+    /// a `SOURCES` or exception entry naming a file that no longer exists.
+    #[test]
+    fn sources_covers_every_file_in_the_crate() {
+        let src_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+
+        // Recursive: a module moved into `src/panels/` is still crate source,
+        // and a flat scan would hand it the same free pass this test removes.
+        fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<String>) {
+            for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read {dir:?}: {e}")) {
+                let path = entry.expect("dir entry").path();
+                if path.is_dir() {
+                    walk(&path, root, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(
+                        path.strip_prefix(root)
+                            .expect("under src/")
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    );
+                }
+            }
+        }
+        let mut on_disk = Vec::new();
+        walk(&src_dir, &src_dir, &mut on_disk);
+        on_disk.sort();
+
+        // Vacuity guard, same shape as `the_scanner_actually_sees_the_boundary`:
+        // a directory read that came back short would pass every check below for
+        // free, which is the failure mode this whole file exists to prevent.
+        assert!(
+            on_disk.iter().any(|f| f == "lib.rs") && on_disk.len() >= SOURCES.len(),
+            "the directory read found {on_disk:?} under {src_dir:?}, which is not the \
+             wasm crate — this check is vacuous"
+        );
+
+        let on_disk_set: BTreeSet<&str> = on_disk.iter().map(String::as_str).collect();
+        let listed: BTreeSet<&str> = SOURCES.iter().map(|(f, _)| *f).collect();
+        let excepted: BTreeSet<&str> = SOURCE_COVERAGE_EXCEPTIONS.iter().map(|(f, _)| *f).collect();
+
+        let both: Vec<_> = listed.intersection(&excepted).collect();
+        assert!(
+            both.is_empty(),
+            "{both:?} appears in BOTH SOURCES and SOURCE_COVERAGE_EXCEPTIONS. A file is \
+             either scanned or excused; one that claims both leaves a reader unable to \
+             tell which, and the exception silently wins if the entry is ever removed."
+        );
+
+        // Direction 1: a crate file that no ceiling can see.
+        let uncovered: Vec<&str> = on_disk_set
+            .iter()
+            .filter(|f| !listed.contains(*f) && !excepted.contains(*f))
+            .copied()
+            .collect();
+        assert!(
+            uncovered.is_empty(),
+            "crates/wasm/src file(s) not covered by SOURCES: {uncovered:?}.\n\
+             Every ceiling in this file reads only from SOURCES, so a `pub fn` in an \
+             unlisted file is counted by nothing: it is not failure-blind, it is not a \
+             bare-`JsValue` accessor that must be declared, and its `null` returns do \
+             not exist. All three tests keep passing while the boundary grows.\n\
+             Do one of two things:\n\
+             \x20 * add `(\"<file>\", include_str!(\"<file>\"))` to SOURCES. This is the \
+             default, and it is free for a file with no `pub fn`.\n\
+             \x20 * or add it to SOURCE_COVERAGE_EXCEPTIONS with the reason scanning it \
+             would be WRONG rather than merely uneventful. An excepted file must have \
+             no `pub fn` at all, which this test re-checks below."
+        );
+
+        // Direction 2: an entry naming a file that is gone. A stale `SOURCES`
+        // entry cannot survive `include_str!`, but a stale EXCEPTION can sit
+        // here for years excusing nothing, and reads as a live exemption.
+        let stale: Vec<&str> = listed
+            .union(&excepted)
+            .filter(|f| !on_disk_set.contains(*f))
+            .copied()
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "SOURCES / SOURCE_COVERAGE_EXCEPTIONS names {stale:?}, which is not in \
+             {src_dir:?}. Strike the entry: a list that names files that do not exist \
+             cannot be read as a statement about the ones that do."
+        );
+
+        // An exception holds only while its reason does. Each excused file must
+        // still carry no boundary surface at all — otherwise the entry, written
+        // when the file was inert, would go on excusing a real accessor.
+        for (file, reason) in SOURCE_COVERAGE_EXCEPTIONS {
+            let src = std::fs::read_to_string(src_dir.join(file))
+                .unwrap_or_else(|e| panic!("read excepted file {file}: {e}"));
+            let pubs: Vec<&str> = src
+                .lines()
+                .map(str::trim)
+                .filter(|l| l.starts_with("pub fn "))
+                .collect();
+            assert!(
+                pubs.is_empty(),
+                "{file} is excused from SOURCES on the grounds that it has no boundary \
+                 surface, but it now declares {pubs:?}. The exception no longer holds. \
+                 Either move the file into SOURCES so its functions are counted, or \
+                 justify the new surface — the standing reason is:\n  {reason}"
+            );
+        }
     }
 
     /// Guards the scanner itself: if `include_str!` or the signature join ever

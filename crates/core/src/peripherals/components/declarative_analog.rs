@@ -62,12 +62,23 @@ impl DeclarativeAnalogDevice {
             .context("analog_source kit is missing behavior.analog")?;
         validate_spec(spec)?;
         let below_clamp_mv = spec.curve[0].1;
+        let input_value = descriptor
+            .metadata
+            .as_ref()
+            .and_then(|metadata| {
+                metadata
+                    .inputs
+                    .iter()
+                    .find(|candidate| candidate.key == input.key)
+            })
+            .and_then(|input| input.default)
+            .unwrap_or(0.0);
         Ok(Self {
             channel,
             curve: spec.curve.clone(),
             below_clamp_mv,
             above: spec.above_last,
-            input_value: 0.0,
+            input_value,
             input,
             v_ref_mv: 3300.0,
             component_id: None,
@@ -191,26 +202,9 @@ pub struct DeclarativeAnalogKit {
 impl DeclarativeAnalogKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
-        if descriptor.behavior.primitive != "analog_source" {
-            bail!(
-                "declarative analog kit requires behavior.primitive: analog_source, got '{}'",
-                descriptor.behavior.primitive
-            );
-        }
-        let spec = descriptor
-            .behavior
-            .analog
-            .as_ref()
-            .context("analog_source kit is missing behavior.analog")?;
-        validate_spec(spec)?;
+        validate_descriptor(&descriptor)?;
 
         let channels = leak_channels(&descriptor);
-        if channels.len() != 1 {
-            bail!(
-                "analog_source drives exactly one input channel, got {}",
-                channels.len()
-            );
-        }
         let metadata = leak_metadata(&descriptor, channels);
         Ok(Self {
             descriptor,
@@ -218,6 +212,33 @@ impl DeclarativeAnalogKit {
             metadata,
         })
     }
+}
+
+/// Validate the static descriptor contract for the `analog_source` primitive
+/// without constructing a long-lived kit. Part-pack preflight calls this for
+/// every carried pack, including leaves that no current canvas references.
+pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
+    if descriptor.behavior.primitive != "analog_source" {
+        bail!(
+            "declarative analog kit requires behavior.primitive: analog_source, got '{}'",
+            descriptor.behavior.primitive
+        );
+    }
+    let spec = descriptor
+        .behavior
+        .analog
+        .as_ref()
+        .context("analog_source kit is missing behavior.analog")?;
+    validate_spec(spec)?;
+    let input_count = descriptor
+        .metadata
+        .as_ref()
+        .map(|metadata| metadata.inputs.len())
+        .unwrap_or(0);
+    if input_count != 1 {
+        bail!("analog_source drives exactly one input channel, got {input_count}");
+    }
+    Ok(())
 }
 
 /// Leak the descriptor's `metadata.inputs` into a static channel table — the

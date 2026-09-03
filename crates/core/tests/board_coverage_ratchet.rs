@@ -403,6 +403,15 @@ fn every_shipped_descriptor_is_ratcheted() {
     // Chip descriptors that exist in configs/chips but are NOT in the canonical
     // shipped catalog (bundled-configs.ts). They are intentionally not ratcheted.
     const NOT_SHIPPED: &[&str] = &[
+        // First Microchip part in the engine. Has a chip descriptor, an
+        // io-smoke executed by the coverage matrix and the strict-onboarding
+        // gate, and a peripheral-estate test — but it is NOT a
+        // bundled-configs.ts catalog board, has no silicon oracle (no SAM D21
+        // bench part has ever been diffed over SWD), and carries no
+        // executing-fidelity differential of its own. Same bar as rp2350 and
+        // stm32f411ceu6 below. Promote when the catalog registration lands and
+        // a real board is benched.
+        "atsamd21g18a",
         "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
         "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)

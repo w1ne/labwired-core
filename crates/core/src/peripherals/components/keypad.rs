@@ -185,17 +185,14 @@ impl crate::bus::BusResidentDevice for Keypad {
     /// Read the four ROW output (ODR) bits, recompute the four COLUMN levels for
     /// the pressed key, and drive each changed COLUMN input (IDR) bit. This is
     /// the body of the former `SystemBus::drive_keypad`, moved onto the device;
-    /// the register IO stays on the bus via
-    /// [`drive_idr_bit`](crate::bus::SystemBus). An unreadable row defaults HIGH
-    /// (an undriven row selects nothing). The keypad is combinational, so `now`
-    /// is unused.
-    fn service(&mut self, bus: &mut crate::bus::SystemBus, _now: u64) {
-        use crate::Bus; // `read_u32` is a Bus-trait method
+    /// the register IO stays on the far side of the
+    /// [`DevicePins`](crate::bus::DevicePins) port. An unreadable row defaults
+    /// HIGH (an undriven row selects nothing). The keypad is combinational, so
+    /// `now` is unused.
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, _now: u64) {
         let row_outputs: [bool; ROWS] = std::array::from_fn(|r| {
             let (addr, bit) = self.row_odr[r];
-            bus.read_u32(addr)
-                .map(|v| (v >> bit) & 1 != 0)
-                .unwrap_or(true)
+            pins.output_bit(addr, bit).unwrap_or(true)
         });
         // Inherent `Keypad::service` (chosen over the trait method — inherent
         // methods win resolution) recomputes the columns + change flags.
@@ -203,7 +200,7 @@ impl crate::bus::BusResidentDevice for Keypad {
         for (c, &(high, changed)) in cols.iter().enumerate().take(COLS) {
             if changed {
                 let (addr, bit) = self.col_idr[c];
-                bus.drive_idr_bit(addr, bit, high);
+                pins.drive_idr_bit(addr, bit, high);
             }
         }
     }

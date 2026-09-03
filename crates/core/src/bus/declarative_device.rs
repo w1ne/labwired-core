@@ -40,6 +40,47 @@ pub(crate) fn lookup(device_type: &str) -> Result<Option<DeviceDescriptor>> {
     DeviceDescriptor::embedded(device_type)
 }
 
+/// Validate the static portion of a GPIO / pin-timing descriptor.
+///
+/// Pin labels themselves belong to a placed `external_devices` entry and need
+/// a concrete MCU to resolve, but every primitive's role-to-config-key mapping
+/// is part of the pack. Checking it here lets manifest preflight reject an
+/// incomplete private GPIO leaf even when no current canvas references it.
+pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
+    let required_roles: &[&str] = match desc.behavior.primitive.as_str() {
+        "quadrature" => &["a", "b"],
+        "matrix" => &["rows", "cols"],
+        "one_wire" => &["data"],
+        "pulse_echo" => &["trig", "echo"],
+        other => {
+            return Err(anyhow!(
+                "declarative device '{}' names unknown primitive '{}'",
+                desc.r#type,
+                other
+            ));
+        }
+    };
+    for role in required_roles {
+        let Some(config_key) = desc.behavior.pins.get(*role) else {
+            return Err(anyhow!(
+                "declarative device '{}' primitive '{}' is missing required pin role '{}'",
+                desc.r#type,
+                desc.behavior.primitive,
+                role
+            ));
+        };
+        if config_key.trim().is_empty() {
+            return Err(anyhow!(
+                "declarative device '{}' primitive '{}' has a blank config key for pin role '{}'",
+                desc.r#type,
+                desc.behavior.primitive,
+                role
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl SystemBus {
     /// Attach a declarative GPIO device described by `desc` for the placed
     /// `ext`. Dispatches on the descriptor's primitive; each primitive arm
@@ -50,6 +91,7 @@ impl SystemBus {
         ext: &ExternalDevice,
         desc: &DeviceDescriptor,
     ) -> Result<()> {
+        validate_descriptor(desc)?;
         match desc.behavior.primitive.as_str() {
             "quadrature" => self.attach_quadrature(ext, desc),
             "matrix" => self.attach_matrix(ext, desc),

@@ -647,6 +647,26 @@
         "gap": "TWIM21 is declared at 0x500C7000 and uses the same nrf54l_twim model the nRF54L15 smart-ring lane proves, but no nrf54lm20a manifest or firmware wires an I2C device.",
         "lane": "none"
       }
+    },
+    "atsamd21g18a": {
+      "in_boards": false,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/strict_onboarding.rs",
+        "test": "test_strict_board_onboarding",
+        "signal": "firmware-samd21-demo brings SERCOM0 up the way a driver does \u2014 NVMCTRL wait states, the SYSCTRL.PCLKSR ready-flag poll, three GCLK SYNCBUSY spins, PM.APBCMASK, a WRCONFIG pad mux, then CTRLB before CTRLA.ENABLE \u2014 and its bytes reach the capture sink through the DRE poll. Two separate lines are asserted, so a model that sets DRE once and forgets fails: it emits one byte and then spins in putc forever.",
+        "lane": "core-ci: cargo test -p labwired-core --test strict_onboarding (the gate EXECUTES examples/samd21-smoke/io-smoke.yaml through the CLI and fails the board if any assertion fails)"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "SERCOM is one block that becomes a UART, an SPI controller or an I2C controller depending on CTRLA.MODE. Only USART mode is modelled; a SERCOM put into SPI mode goes inert rather than answering an SPI driver out of a USART register map.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Same block, same gap as SPI: SERCOM I2CM/I2CS modes are not modelled.",
+        "lane": "none"
+      }
     }
   }
 }

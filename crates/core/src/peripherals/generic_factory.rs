@@ -122,6 +122,12 @@ pub const MODEL_TYPES: &[&str] = &[
     // generic STM32 UART layout — it is a distinct silicon register map.
     "nrf54l_uarte",
     "nrf54l_twim",
+    // Microchip SERCOM in USART mode. ⚠️ Load-bearing for the same reason
+    // `nrf54l_uarte` is: the fuzzy `contains("uart")` heuristic would coerce
+    // `sam_sercom_usart` onto the generic STM32 UART layout, whose DR/SR
+    // offsets mean nothing to a SERCOM. That is the silent shape — a console
+    // that enables cleanly and never emits a byte.
+    "sam_sercom_usart",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
     // coerces `nrf54l_spim` onto the shared `spi` arm, which then sees
     // `contains("nrf")` and picks the nRF52 SPIM offset map. That failure is
@@ -441,6 +447,9 @@ pub fn try_build(
             }
         }
         "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
+        "sam_sercom_usart" => {
+            Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
+        }
         "spi" | "stm32spi" => {
             let layout: crate::peripherals::spi::SpiRegisterLayout = if p_cfg.r#type.contains("nrf")
             {
@@ -705,6 +714,27 @@ pub fn try_build(
 mod registry_agreement {
     use super::MODEL_TYPES;
 
+    /// The families that existed when the scan below became directory-derived.
+    /// It is a FLOOR, never the scan set: the test checks every family it finds
+    /// on disk, and uses this only to prove the directory read actually saw the
+    /// tree. A read that came back empty — wrong path, renamed directory — would
+    /// otherwise satisfy every assertion for free, which is the exact failure
+    /// mode this whole test exists to prevent. Names only ever get added here.
+    const FAMILIES_AT_LEAST: &[&str] = &["esp32", "esp32c3", "esp32s3", "nrf52", "nrf54l"];
+
+    /// Families discovered under `src/peripherals/*/factory.rs` that are
+    /// deliberately NOT scanned, each with the reason. Empty today, and the
+    /// default for a new family is to be scanned.
+    ///
+    /// It is not a blanket pass. The test re-derives the verdict for each
+    /// excused family and fails if the family would now pass the scan cleanly:
+    /// the only defensible reason to except one is that it genuinely builds
+    /// types the reachability rule cannot express, so an exception that no
+    /// longer excuses anything is stale and must be struck. A stale entry
+    /// naming a family with no `factory.rs` on disk fails too — an exemption
+    /// that reads as live while excusing nothing is worse than no entry.
+    const FAMILY_SCAN_EXCEPTIONS: &[(&str, &str)] = &[];
+
     /// Every type a family factory can build must be REACHABLE — either already
     /// canonical (in [`MODEL_TYPES`]) or mapped by the alias table in
     /// `bus::profiles::canonical_peripheral_type`. Anything else falls into the
@@ -728,6 +758,14 @@ mod registry_agreement {
     /// Note what is deliberately NOT asserted: that a factory type is in
     /// `MODEL_TYPES` specifically. Alias INPUTS must stay out of it — listing
     /// one short-circuits the very mapping that makes it canonical.
+    ///
+    /// The families are derived the same way, for the same reason. They used to
+    /// be a hardcoded literal, which matched `src/peripherals/*/factory.rs`
+    /// exactly and so hid nothing — but a sixth family added tomorrow would get
+    /// no coverage and nothing would fail, putting the family list back in the
+    /// position the type list was rescued from. `src/` is resolved from
+    /// `CARGO_MANIFEST_DIR`, not from the working directory, so the walk cannot
+    /// pass vacuously by reading an empty path.
     #[test]
     fn every_family_factory_type_is_reachable() {
         let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -740,12 +778,54 @@ mod registry_agreement {
         };
         let alias_names: Vec<&str> = aliases.split('"').skip(1).step_by(2).collect();
 
-        let mut unreachable: Vec<String> = Vec::new();
-        for family in ["esp32", "esp32c3", "esp32s3", "nrf52", "nrf54l"] {
-            let src = std::fs::read_to_string(
-                src_root.join("peripherals").join(family).join("factory.rs"),
-            )
-            .unwrap_or_else(|e| panic!("read {family}/factory.rs: {e}"));
+        let peripherals = src_root.join("peripherals");
+        let mut families: Vec<String> = Vec::new();
+        for entry in
+            std::fs::read_dir(&peripherals).unwrap_or_else(|e| panic!("read {peripherals:?}: {e}"))
+        {
+            let path = entry.expect("dir entry").path();
+            if path.join("factory.rs").is_file() {
+                families.push(
+                    path.file_name()
+                        .expect("family directory name")
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+        families.sort();
+
+        // Vacuity guard. Everything below is a loop over `families`; if the walk
+        // found nothing, or lost a family that is still on disk, every assertion
+        // would hold trivially and the gate would report green while looking at
+        // nothing.
+        let missing: Vec<&&str> = FAMILIES_AT_LEAST
+            .iter()
+            .filter(|k| !families.iter().any(|f| f == *k))
+            .collect();
+        assert!(
+            missing.is_empty() && families.len() >= FAMILIES_AT_LEAST.len(),
+            "the directory walk of {peripherals:?} found {families:?}, which is missing \
+             {missing:?} of the families known to have a factory.rs — this check is \
+             vacuous, it is scanning fewer sources than exist. Fix the walk; do not \
+             shrink FAMILIES_AT_LEAST."
+        );
+
+        // `head` is everything left of a `=>`, i.e. the match patterns: the type
+        // names a family factory can be asked to build. `lit.starts_with(family)`
+        // keeps config keys and other incidental literals out. That filter reads
+        // the family from the DIRECTORY name now, so it is only correct while a
+        // family's directory name prefixes the types it builds — true for all
+        // five today (and harmlessly a superset for the nested esp32/esp32c3/
+        // esp32s3 names, where the broader family also sees the narrower's
+        // literals). A family that named its types differently would silently
+        // filter to nothing, so the caller asserts each family matched at least
+        // one literal rather than trusting it.
+        let scan = |family: &str| -> (usize, Vec<String>) {
+            let src = std::fs::read_to_string(peripherals.join(family).join("factory.rs"))
+                .unwrap_or_else(|e| panic!("read {family}/factory.rs: {e}"));
+            let mut considered = 0usize;
+            let mut bad = Vec::new();
             for line in src.lines() {
                 let Some((head, _)) = line.split_once("=>") else {
                     continue;
@@ -754,11 +834,30 @@ mod registry_agreement {
                     if !lit.starts_with(family) {
                         continue; // config keys and other string literals
                     }
+                    considered += 1;
                     if !MODEL_TYPES.contains(&lit) && !alias_names.contains(&lit) {
-                        unreachable.push(format!("{family}/factory.rs: {lit}"));
+                        bad.push(format!("{family}/factory.rs: {lit}"));
                     }
                 }
             }
+            (considered, bad)
+        };
+
+        let mut unreachable: Vec<String> = Vec::new();
+        for family in &families {
+            if FAMILY_SCAN_EXCEPTIONS.iter().any(|(f, _)| f == family) {
+                continue;
+            }
+            let (considered, bad) = scan(family);
+            assert!(
+                considered > 0,
+                "{family}/factory.rs has no match arm building a type that starts with \
+                 \"{family}\", so this family is scanned for nothing and passes for free. \
+                 Either its types do not carry the directory name as a prefix (then the \
+                 prefix filter is wrong for it), or it is not a family factory at all \
+                 (then it needs a FAMILY_SCAN_EXCEPTIONS entry saying so)."
+            );
+            unreachable.extend(bad);
         }
         unreachable.sort();
         unreachable.dedup();
@@ -771,5 +870,24 @@ mod registry_agreement {
              Add each to MODEL_TYPES (or to the alias table if its canonical \
              name differs)."
         );
+
+        // An exception holds only while its reason does.
+        for (family, reason) in FAMILY_SCAN_EXCEPTIONS {
+            assert!(
+                families.iter().any(|f| f == family),
+                "FAMILY_SCAN_EXCEPTIONS excuses {family:?}, which has no factory.rs under \
+                 {peripherals:?}. Strike the entry: a list naming families that do not \
+                 exist cannot be read as a statement about the ones that do. Reason on \
+                 record:\n  {reason}"
+            );
+            let (_, bad) = scan(family);
+            assert!(
+                !bad.is_empty(),
+                "{family} is excused from the scan on the grounds that it builds types \
+                 the reachability rule cannot express, but every type it builds is now \
+                 reachable — the exception excuses nothing and only hides the family from \
+                 future regressions. Strike the entry. Reason on record:\n  {reason}"
+            );
+        }
     }
 }

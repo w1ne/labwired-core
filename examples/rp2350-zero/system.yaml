@@ -1,0 +1,14 @@
+# LabWired - Waveshare RP2350-Zero example
+#
+# Same wiring as configs/systems/rp2350-zero.yaml. LED/WS2812 stand-in on
+# GP16 via SIO — not Pico 2 GP25. Twin UART is UART0, not the USB-C CDC.
+name: "rp2350-zero-example"
+chip: "../../configs/chips/rp2350.yaml"
+external_devices: []
+board_io:
+  - id: "led_gp16"
+    kind: "led"
+    peripheral: "sio"
+    pin: 16
+    signal: "output"
+    active_high: true

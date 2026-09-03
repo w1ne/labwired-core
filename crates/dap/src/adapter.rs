@@ -1085,6 +1085,19 @@ fn gpio_offsets_for_peripheral(
         //
         // These are the same two numbers `GpioPort::odr_offset()` and
         // `idr_offset()` return for this layout; keep the three in step.
+        // Microchip SAM (SAM D21 / D51 / E5x) PORT GROUP: OUT at 0x10, IN at
+        // 0x20 (ATSAMD21G18A.svd, cluster GROUP). Mapped rather than skipped
+        // for the same reason the nRF54L arm is: the chip yaml declares each
+        // GROUP at its own true base (PA 0x41004400, PB 0x41004480), with the
+        // register map starting at DIR, so `base + offset` lands on the
+        // register with no back-offset to guess at.
+        //
+        // These are the same two numbers `GpioPort::odr_offset()` and
+        // `idr_offset()` return for this layout; keep the three in step.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::SamPort => Some(GpioOffsets {
+            idr_offset: 0x20,
+            odr_offset: 0x10,
+        }),
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf54l => Some(GpioOffsets {
             idr_offset: 0x00C,
             odr_offset: 0x000,

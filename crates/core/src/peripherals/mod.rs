@@ -65,6 +65,7 @@ pub mod rtc;
 pub mod rtc_f1;
 pub mod rtc_v3;
 pub mod sai;
+pub mod sam;
 pub mod scb;
 pub mod sdmmc;
 pub mod simctl;

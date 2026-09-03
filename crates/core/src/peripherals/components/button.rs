@@ -199,11 +199,11 @@ impl crate::bus::BusResidentDevice for Button {
     /// MMIO store to the input register: IDR is read-only on silicon, so a
     /// store is correctly ignored by the STM32F1 model and the button would
     /// never move its pin.
-    fn service(&mut self, bus: &mut crate::bus::SystemBus, _now: u64) {
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, _now: u64) {
         let (high, changed) = Button::service(self);
         if changed {
             let (addr, bit) = self.gpio;
-            bus.drive_input_bit(addr, bit, high);
+            pins.drive_input_bit(addr, bit, high);
         }
     }
 

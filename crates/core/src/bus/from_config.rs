@@ -136,7 +136,7 @@ impl SystemBus {
         // `from_file` is the CLI's path, and the browser and hosted runners
         // parse with `from_yaml`. Validating at load time only would mean two
         // of our three runtimes silently accept documents the third rejects.
-        manifest.validate_parts()?;
+        super::part_pack::validate_manifest(manifest)?;
         let flash_size = chip.flash.size;
         let ram_size = chip.ram.size;
 
@@ -245,14 +245,9 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
-            ws2812: Vec::new(),
-            servos: Vec::new(),
-            step_dir_motors: Vec::new(),
-            h_bridge_motors: Vec::new(),
+            observed: Vec::new(),
             motors: Vec::new(),
             motor_cycle_anchor: 0,
-            ili9341_parallel: Vec::new(),
-            unipolar_steppers: Vec::new(),
             tm1637: Vec::new(),
             hx711: Vec::new(),
             seven_segment: Vec::new(),

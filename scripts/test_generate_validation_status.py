@@ -379,3 +379,56 @@ def test_the_committed_manifest_is_not_already_expired():
         "drift acks have come due: " + ", ".join(stale) + ". Re-capture and bump "
         "silicon.last_capture, or renew the ack — do not widen ACK_TTL_DAYS to clear this."
     )
+
+def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
+    """The stamper must not sweep boards whose digest nothing reads.
+
+    A `drift_ack_digest` is consulted by `evaluate()` for exactly one purpose:
+    deciding whether an ack still covers a DRIFTED board. Stamping a board that
+    is not drifted rewrites a line no gate consults, and on 2026-08-31 that put
+    the SAME four unrelated boards into four separate pull requests, each time
+    to be reverted by hand.
+    """
+    boards = [
+        {"id": "drifted-one", "drift_ack": "2026-08-31", "drift_ack_digest": "stale",
+         "models": ["m.rs"], "silicon": {"last_capture": "2020-01-01"}},
+        {"id": "fresh-one", "drift_ack": "2026-08-31", "drift_ack_digest": "stale",
+         "models": ["m.rs"], "silicon": {"last_capture": "2099-01-01"}},
+    ]
+    seen = {"drifted": False, "fresh": False}
+
+    def fake_evaluate(board, today=None):
+        return {"drifted": board["id"] == "drifted-one"}
+
+    def fake_digest(models):
+        return "newdigest"
+
+    monkeypatch.setattr(gvs, "evaluate", fake_evaluate)
+    monkeypatch.setattr(gvs, "model_digest", fake_digest)
+
+    manifest_text = (
+        "boards:\n"
+        "  - id: drifted-one\n"
+        "    drift_ack: 2026-08-31\n"
+        "    drift_ack_digest: stale\n"
+        "  - id: fresh-one\n"
+        "    drift_ack: 2026-08-31\n"
+        "    drift_ack_digest: stale\n"
+    )
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_text)
+    monkeypatch.setattr(gvs, "MANIFEST", manifest_file)
+
+    gvs.write_ack_digests({"boards": boards})
+    after = manifest_file.read_text()
+
+    drifted_line = [ln for ln in after.splitlines() if "drift_ack_digest" in ln][0]
+    fresh_line = [ln for ln in after.splitlines() if "drift_ack_digest" in ln][1]
+    assert "newdigest" in drifted_line, "a drifted board must be stamped"
+    assert "stale" in fresh_line, "an undrifted board must be left alone"
+
+    # And the escape hatch still does the old thing, deliberately.
+    manifest_file.write_text(manifest_text)
+    gvs.write_ack_digests({"boards": boards}, stamp_all=True)
+    lines = [ln for ln in manifest_file.read_text().splitlines() if "drift_ack_digest" in ln]
+    assert all("newdigest" in ln for ln in lines), "--all must stamp both"

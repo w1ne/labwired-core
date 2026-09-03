@@ -1,0 +1,120 @@
+peripheral: GCLK
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SWRST
+    bit_range:
+    - 0
+    - 0
+    description: Software Reset
+  side_effects: null
+- id: STATUS
+  address_offset: 1
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SYNCBUSY
+    bit_range:
+    - 7
+    - 7
+    description: Synchronization Busy Status
+  side_effects: null
+- id: CLKCTRL
+  address_offset: 2
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ID
+    bit_range:
+    - 5
+    - 0
+    description: Generic Clock Selection ID
+  - name: GEN
+    bit_range:
+    - 11
+    - 8
+    description: Generic Clock Generator
+  - name: CLKEN
+    bit_range:
+    - 14
+    - 14
+    description: Clock Enable
+  - name: WRTLOCK
+    bit_range:
+    - 15
+    - 15
+    description: Write Lock
+  side_effects: null
+- id: GENCTRL
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ID
+    bit_range:
+    - 3
+    - 0
+    description: Generic Clock Generator Selection
+  - name: SRC
+    bit_range:
+    - 12
+    - 8
+    description: Source Select
+  - name: GENEN
+    bit_range:
+    - 16
+    - 16
+    description: Generic Clock Generator Enable
+  - name: IDC
+    bit_range:
+    - 17
+    - 17
+    description: Improve Duty Cycle
+  - name: OOV
+    bit_range:
+    - 18
+    - 18
+    description: Output Off Value
+  - name: OE
+    bit_range:
+    - 19
+    - 19
+    description: Output Enable
+  - name: DIVSEL
+    bit_range:
+    - 20
+    - 20
+    description: Divide Selection
+  - name: RUNSTDBY
+    bit_range:
+    - 21
+    - 21
+    description: Run in Standby
+  side_effects: null
+- id: GENDIV
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ID
+    bit_range:
+    - 3
+    - 0
+    description: Generic Clock Generator Selection
+  - name: DIV
+    bit_range:
+    - 23
+    - 8
+    description: Division Factor
+  side_effects: null
+interrupts: null
+timing: null

@@ -347,7 +347,7 @@ fn build_doom_machine(
         .expect("attach the Doom lab's ILI9341 parallel panel from the manifest");
     bus.refresh_peripheral_index();
     assert_eq!(
-        bus.ili9341_parallel.len(),
+        bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>().count(),
         1,
         "the manifest's 16-bit parallel ILI9341 must be on the bus; without it the \
          GPIO->panel pixel path is not exercised at all"
@@ -562,7 +562,11 @@ impl DoomRun {
     /// much of an async DMA push has landed at the instant the firmware logs
     /// its line legitimately moves when the engine's timing moves.
     fn assert_panel_live(&self, observed: u32) -> (usize, usize, u64) {
-        let panel = &self.machine.bus.ili9341_parallel[0];
+        let panel = self.machine
+            .bus
+            .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+            .next()
+            .expect("parallel panel attached");
         let panel_fb = panel.oriented_framebuffer();
         let panel_ink = panel_fb.iter().filter(|&&byte| byte != 0).count();
         let digest = fnv1a_64(&panel_fb);

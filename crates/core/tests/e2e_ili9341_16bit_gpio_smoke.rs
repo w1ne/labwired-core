@@ -186,13 +186,22 @@ fn ili9341_16bit_lab_system_yaml_attaches_and_paints_over_real_gpio() {
 
     let mut bus = SystemBus::from_config(&chip, &manifest)
         .expect("from_config must attach ili9341-16bit on classic ESP32");
-    assert_eq!(bus.ili9341_parallel.len(), 1, "exactly one parallel panel");
-    assert_eq!(bus.ili9341_parallel[0].id(), "tft");
-    assert_eq!(bus.ili9341_parallel[0].ink_bytes(), 0);
+    assert_eq!(bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>().count(), 1, "exactly one parallel panel");
+    assert_eq!(bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached")
+        .id(), "tft");
+    assert_eq!(bus.observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached")
+        .ink_bytes(), 0);
 
     paint_red_band(&mut bus);
 
-    let panel = &bus.ili9341_parallel[0];
+    let panel = bus
+        .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached");
     // RGB565 red 0xF800: only the high byte is non-zero, so ink_bytes (non-zero
     // count) is one per pixel for a solid-red band.
     let ink = panel.ink_bytes();
@@ -241,7 +250,11 @@ fn lab_pin_map_matches_attached_panel() {
     let yaml = std::fs::read_to_string(&system_path).unwrap();
     let manifest: SystemManifest = serde_yaml::from_str(&yaml).unwrap();
     let bus = SystemBus::from_config(&chip, &manifest).unwrap();
-    let pins = bus.ili9341_parallel[0].pins();
+    let pins = bus
+        .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+        .next()
+        .expect("parallel panel attached")
+        .pins();
     assert_eq!(pins.cs, CS);
     assert_eq!(pins.rs, RS);
     assert_eq!(pins.wr, WR);

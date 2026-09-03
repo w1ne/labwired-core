@@ -754,16 +754,17 @@ board_io: []
     .expect("parse servo manifest");
 
     let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with servo");
-    assert_eq!(bus.servos.len(), 1, "one servo twin attached");
-    assert_eq!(bus.servos[0].id(), "srv1");
-    assert_eq!(bus.servos[0].pin(), 5);
+    let servos: Vec<&crate::peripherals::components::servo::Servo> = bus.observed_of().collect();
+    assert_eq!(servos.len(), 1, "one servo twin attached");
+    assert_eq!(servos[0].id(), "srv1");
+    assert_eq!(servos[0].pin(), 5);
     // Until commanded, parks at min_angle (0° for sg90).
-    assert_eq!(bus.servos[0].angle_degrees(), 0.0);
-    bus.servos[0].apply_duty_fraction(0.075);
+    assert_eq!(servos[0].angle_degrees(), 0.0);
+    servos[0].apply_duty_fraction(0.075);
     assert!(
-        (bus.servos[0].angle_degrees() - 94.7).abs() < 1.0,
+        (servos[0].angle_degrees() - 94.7).abs() < 1.0,
         "sg90 mid duty → ~94.7°, got {}",
-        bus.servos[0].angle_degrees()
+        servos[0].angle_degrees()
     );
 }
 
@@ -815,12 +816,14 @@ board_io: []
 
         let bus = SystemBus::from_config(&chip, &manifest)
             .unwrap_or_else(|e| panic!("build bus with {type_str}: {e:#}"));
+        let panels: Vec<&crate::peripherals::components::ili9341_parallel::Ili9341Parallel> =
+            bus.observed_of().collect();
         assert_eq!(
-            bus.ili9341_parallel.len(),
+            panels.len(),
             1,
             "one parallel panel attached for type '{type_str}'"
         );
-        let panel = &bus.ili9341_parallel[0];
+        let panel = panels[0];
         assert_eq!(panel.id(), "tft");
         let pins = panel.pins();
         assert_eq!(pins.cs, 15);
@@ -3134,14 +3137,9 @@ fn test_flash_boot_alias_read_and_write() {
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3238,14 +3236,9 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3493,14 +3486,9 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3746,14 +3734,9 @@ fn test_peripheral_range_index_lookup() {
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3854,14 +3837,9 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),

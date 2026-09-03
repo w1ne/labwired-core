@@ -1,0 +1,117 @@
+peripheral: WDT
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ENABLE
+    bit_range:
+    - 1
+    - 1
+    description: Enable
+  - name: WEN
+    bit_range:
+    - 2
+    - 2
+    description: Watchdog Timer Window Mode Enable
+  - name: ALWAYSON
+    bit_range:
+    - 7
+    - 7
+    description: Always-On
+  side_effects: null
+- id: CONFIG
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 187
+  fields:
+  - name: PER
+    bit_range:
+    - 3
+    - 0
+    description: Time-Out Period
+  - name: WINDOW
+    bit_range:
+    - 7
+    - 4
+    description: Window Mode Time-Out Period
+  side_effects: null
+- id: EWCTRL
+  address_offset: 2
+  size: 8
+  access: READ_WRITE
+  reset_value: 11
+  fields:
+  - name: EWOFFSET
+    bit_range:
+    - 3
+    - 0
+    description: Early Warning Interrupt Time Offset
+  side_effects: null
+- id: INTENCLR
+  address_offset: 4
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EW
+    bit_range:
+    - 0
+    - 0
+    description: Early Warning Interrupt Enable
+  side_effects: null
+- id: INTENSET
+  address_offset: 5
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EW
+    bit_range:
+    - 0
+    - 0
+    description: Early Warning Interrupt Enable
+  side_effects: null
+- id: INTFLAG
+  address_offset: 6
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EW
+    bit_range:
+    - 0
+    - 0
+    description: Early Warning
+  side_effects: null
+- id: STATUS
+  address_offset: 7
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SYNCBUSY
+    bit_range:
+    - 7
+    - 7
+    description: Synchronization Busy
+  side_effects: null
+- id: CLEAR
+  address_offset: 8
+  size: 8
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: CLEAR
+    bit_range:
+    - 7
+    - 0
+    description: Watchdog Clear
+  side_effects: null
+interrupts:
+  WDT: 2
+timing: null

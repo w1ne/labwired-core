@@ -48,8 +48,28 @@ use std::path::{Path, PathBuf};
 /// downcast was not merely debt, it was a correctness ceiling: it answered
 /// `None` for any clock controller that is not an STM32 RCC, so an EFR32's CMU
 /// could declare `clock:` gates that silently never resolved.
-const MAX_AS_ANY: usize = 193;
-const MAX_DOWNCAST_REF: usize = 207;
+/// 193 → 194 / 207 → 208: `SystemBus::observed_of` — ONE generic accessor over
+/// the readback-only device registry, which replaced six typed
+/// `Vec<Arc<Concrete>>` fields (ws2812 / servos / step_dir_motors /
+/// h_bridge_motors / ili9341_parallel / unipolar_steppers) and their six arms
+/// in the attached-device walk. This is a deliberate trade and it goes the way
+/// the row wants: the debt row 6.5 is about is `as_any()` spread over ~60
+/// concrete types, one site per type. What this adds is a single
+/// type-parameterised site that serves all six today and every readback-only
+/// part added after, so the number stops tracking the number of off-chip parts
+/// at all. The alternative was a seventh public field on `SystemBus` the next
+/// time somebody adds a stepper.
+/// 208 → 210: the SAM SERCOM console joins the by-type and by-name RX-source
+/// walks in `bus::construct`. Both walks are a chain of `downcast_ref` arms,
+/// one per UART-shaped model (generic `Uart`, `EspUart`, `Nrf52Uarte`,
+/// `Nrf54lUarte`), and a new console model that is not in the chain silently
+/// gets NO injected serial input — a board that cannot be typed at, with no
+/// error to say so. This is the debt row 6.5 names, added knowingly: the fix
+/// that would actually retire it is a `UartConsole` capability trait covering
+/// `set_sink` and `rx_buffer`, which retires all four existing arms too and is
+/// its own change, not a rider on a chip onboarding.
+const MAX_AS_ANY: usize = 194;
+const MAX_DOWNCAST_REF: usize = 210;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

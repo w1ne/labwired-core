@@ -165,8 +165,24 @@ impl PeripheralKit for UnipolarStepperKit {
             [p1, p2, p3, p4],
         ));
         ctx.install_gpio_observer(motor.clone());
-        ctx.bus.unipolar_steppers.push(motor);
+        ctx.bus.observe_device(motor);
         Ok(())
+    }
+}
+
+/// Readback only: a 28BYJ-48 is stepped by its four GPIO observers, never by
+/// the bus. No display surface, so no evidence.
+impl crate::bus::ObservedDevice for UnipolarStepper {
+    fn manifest_id(&self) -> &str {
+        self.id()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
+        self
     }
 }
 
