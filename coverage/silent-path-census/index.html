@@ -1,0 +1,5046 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/coverage/silent-path-census/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Silent-path census - LabWired docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#silent-path-census" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LabWired docs" class="md-header__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Silent-path census
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LabWired docs" class="md-nav__button md-logo" aria-label="LabWired docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fidelity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fidelity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Agent
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First agent run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing (engine agents)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/playground/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playground first run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run firmware (CLI)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I2C sensor example (TMP102)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/onboard-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/onboard-part/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboard a part (I2C/SPI/actuators)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/multi-node/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-node worlds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../platformio_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PlatformIO Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cosimulation_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Co-simulation Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integration-templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI Integration Templates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target support levels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/seeed-xiao-nrf52840-sense/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XIAO nRF52840 Sense
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2350/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2350-zero/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2350-Zero
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f405/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F405
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f411/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F411
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f767/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F767
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l073rz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L073RZ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf5340/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF5340
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf54l15/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF54L15
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/atsamd21g18a/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ATSAMD21G18A
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Parts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mcp9808/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP9808
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mma8451q/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MMA8451Q
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/mpu6050/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MPU-6050
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/bmp280/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BMP280
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/ssd1306/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSD1306 OLED
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/lcd1602/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCD1602
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/apa102/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    APA102
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/servo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Servo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Button
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/buzzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buzzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parts/seven-segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seven-segment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../arduino-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arduino Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zephyr-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Zephyr Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../engineering/test_harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../limits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#correction-counter-b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correction (counter b)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-counted-and-how-it-is-gated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was counted, and how it is gated
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What was counted, and how it is gated">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-b2-decides-that-something-is-a-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How (b2) decides that something is a stub
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-c-exists-and-what-the-audits-arm-count-really-contains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why c' exists, and what the audit's arm count really contains
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-the-raw-counts-with-a-4x-byte-multiplier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read the raw counts with a 4x byte multiplier
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-the-briefs-denominator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On the brief's denominator
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aggregate-counter-a-dropped-cortex-m-memory-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregate: counter (a) - dropped Cortex-M memory errors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aggregate-counter-b2-live-stub-peripherals-the-actionable-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregate: counter (b2) - live stub peripherals (the actionable number)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Aggregate: counter (b2) - live stub peripherals (the actionable number)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aggregate-counter-b1-factory-fallthrough-construction-statistic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregate: counter (b1) - factory fallthrough (construction statistic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reconciling-b1-and-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconciling (b1) and (b2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delta-against-the-first-published-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delta against the first published table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-post-factory-mutation-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other post-factory mutation passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-and-c-are-unchanged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (a) and (c) are unchanged
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aggregate-counter-c-undecoded-register-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregate: counter (c) - undecoded register access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-lab-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-lab table
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-lab table">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clean-labs-a-b2-and-c-all-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clean labs (a, b2 and c all zero)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skipped-could-not-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skipped - could not run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ran-but-produced-no-census-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ran, but produced no census file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavioural-neutrality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavioural neutrality
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-not-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was NOT measured
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#belongs-to-another-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Belongs to another task
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="silent-path-census">Silent-path census</h1>
+<p>Measured on branch <code>chore/silent-path-census</code>, whose merge base is
+<code>d503501d323fe25fb9dc2dd87481806e37beeb67</code> (<code>origin/main</code>); host
+<code>aarch64-apple-darwin</code>, <code>rustc 1.97.1</code>.</p>
+<p>Every number here is from a <strong>full re-measurement</strong> after counter (b) was corrected
+(see below). Counters (a), (c) and (b1) reproduced the first run exactly, entry for
+entry, which is what establishes that the (b2) figures are a correction rather than
+run-to-run drift.</p>
+<p>This document is a <strong>measurement</strong>. Nothing is fixed, escalated, or gated here. It
+exists to scope three follow-up repairs that could not be sized without data.</p>
+<blockquote>
+<h2 id="correction-counter-b">Correction (counter b)</h2>
+<p>The first version of this document reported <code>nvic</code> on 22 labs and <code>scb</code> on 3 as
+live stubs, and called them the only entries that were "not intentional". <strong>That
+was wrong.</strong> Both are replaced by real models before a single instruction
+executes, and the conclusion was published without being checked.</p>
+<p>The cause was measuring at the wrong moment: counter (b) fired inside
+<code>bus/from_config.rs</code>, which is <strong>construction time but not the end of
+construction</strong>. <code>system::cortex_m::configure_cortex_m</code> runs afterwards on every
+ARM path — <code>cli/commands/test.rs</code>, <code>wasm/lib.rs</code>, <code>run.rs</code>, <code>machine.rs</code>,
+<code>debug_probe.rs</code>, <code>dap/adapter.rs</code>, <code>python/lib.rs</code>, <code>system/node.rs</code> — finds the
+entry matching <code>name == "nvic" || base == 0xE000_E100</code> and swaps in a real
+<code>Nvic</code>, does the same for <code>Scb</code> at <code>0xE000_ED00</code> and <code>Dwt</code> at <code>0xE000_1000</code>, and
+rewrites their names while doing it. A factory-time counter cannot see any of
+that. It was counting what the factory emitted, not what the machine ran.</p>
+<p>Counter (b) is now two clearly separated numbers: <strong>(b1)</strong> how often the factory
+fallthrough was taken, and <strong>(b2)</strong> what is <em>still</em> a <code>StubPeripheral</code> on a fully
+assembled machine. <strong>(b2) is the actionable one</strong>; (b1) is retained because "how
+often did the <code>_other =&gt;</code> arm fire" is a legitimate, separate statistic about the
+factory. They are not interchangeable and must never be read off one another.</p>
+<p>A guard that proves the real <code>Nvic</code>/<code>Scb</code> are installed is
+<a href="https://github.com/w1ne/labwired-core/pull/877">#877</a>. The corrected mechanism
+also has a gate in this branch:
+<code>crates/core/tests/census_probe.rs::nvic_and_scb_trip_the_factory_counter_but_are_not_live_stubs</code>,
+which runs the real <code>from_config</code> on a committed chip file, asserts NVIC/SCB <em>are</em>
+stubs straight out of the factory, then asserts they are <em>not</em> after
+<code>configure_cortex_m</code>.</p>
+<p><strong>Generalising the lesson:</strong> a counter placed inside a construction step measures
+that step, not construction. Before trusting one, find every pass that mutates
+the same data afterwards. The audit of those passes is in
+<em><a href="#other-post-factory-mutation-passes">Other post-factory mutation passes</a></em>.</p>
+<p>Counters (a) and (c) instrument runtime <em>access</em>, not construction, so they should
+be unaffected. That was <strong>checked, not assumed</strong> — see
+<em><a href="#a-and-c-are-unchanged">(a) and (c) are unchanged</a></em>.</p>
+</blockquote>
+<h2 id="what-was-counted-and-how-it-is-gated">What was counted, and how it is gated</h2>
+<p>All counters live behind the <code>silent-census</code> Cargo feature
+(<code>crates/core/src/census.rs</code>). It is <strong>off by default</strong>, is not implied by any other
+feature, and even when compiled in it writes nothing unless <code>LABWIRED_CENSUS_OUT</code>
+names an output path at runtime. Both the compile-time feature and the env var are
+required, so it cannot be turned on by accident.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cargo build -p labwired-cli --features silent-census
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>LABWIRED_CENSUS_OUT=census.json ./target/debug/labwired test --script &lt;lab&gt;.yaml ...
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Path</th>
+<th>Instrumented at</th>
+<th>Sites</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a</td>
+<td>Dropped Cortex-M memory errors</td>
+<td><code>cpu/cortex_m.rs</code> - every <code>let _ = bus.write_*</code> and every discarded <code>bus.read_*</code>, wrapped in <code>census_bus!</code></td>
+<td>64 (25 write, 39 read)</td>
+</tr>
+<tr>
+<td>b1</td>
+<td>Stub-peripheral <strong>factory fallthrough</strong> (construction statistic)</td>
+<td><code>bus/from_config.rs</code> - the <code>_other =&gt;</code> arm ending the factory chain</td>
+<td>1</td>
+</tr>
+<tr>
+<td>b2</td>
+<td><strong>Live</strong> stub peripherals, <strong>post-construction</strong> (the actionable number)</td>
+<td><code>Machine::new</code> - a sweep of <code>bus.peripherals</code> after the finished bus is handed over</td>
+<td>1</td>
+</tr>
+<tr>
+<td>c</td>
+<td>Undecoded register access</td>
+<td><code>peripherals/**</code> - catch-all <code>_ =&gt; {}</code> / <code>_ =&gt; 0</code> decode arms, via <code>census_reg!</code></td>
+<td>312</td>
+</tr>
+<tr>
+<td>c'</td>
+<td>Undecoded register access, declarative models</td>
+<td><code>peripherals/declarative.rs</code> - the <code>reg_index_at</code> miss fallthrough</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-b2-decides-that-something-is-a-stub">How (b2) decides that something is a stub</h3>
+<p>Not by name. <code>PeripheralEntry::name</code> is rewritten by the very replacement passes
+that make (b1) misleading, so a name records what the manifest asked for, never
+what the machine ended up holding.</p>
+<p>The sweep uses the type system: <code>Peripheral::as_any()</code> followed by
+<code>dyn Any::is::&lt;StubPeripheral&gt;()</code>. That is a <code>TypeId</code> comparison against the
+concrete type — it cannot false-positive on some other model, and it cannot
+false-negative on a real stub. Name and base address are still <em>reported</em>,
+because they are how a human finds the entry again; they are output, not the
+predicate.</p>
+<p>The one production-type change this needs is a <code>Peripheral::as_any</code> override on
+<code>StubPeripheral</code>, and it is itself <code>#[cfg(feature = "silent-census")]</code>: with the
+feature off the type is byte-for-byte what it was. With the feature on it returns
+<code>Some(self)</code> where it previously returned <code>None</code>, and every existing consumer of
+<code>Peripheral::as_any</code> in the tree immediately <code>downcast_ref</code>s to a concrete model
+type that a stub is not — so <code>Some(stub)</code> and <code>None</code> are indistinguishable to all
+of them.</p>
+<p><code>Machine::new</code> is the sweep point because it is the single choke that every
+runner (CLI lab runner, multi-node environment runner, wasm, DAP, python,
+<code>system::node</code>) passes through holding a <em>finished</em> bus. It already walks
+<code>bus.peripherals</code> for exactly this kind of <code>TypeId</code> lookup. The census publishes
+<code>machines_swept</code> alongside the table so multi-node runs and any double
+construction are visible rather than silently inflating the count.</p>
+<h3 id="why-c-exists-and-what-the-audits-arm-count-really-contains">Why c' exists, and what the audit's arm count really contains</h3>
+<p>The audit sized (c) as "~204 <code>_ =&gt; {}</code> and ~173 <code>_ =&gt; 0</code> arms". A grep at this SHA
+finds 201 and 176 (377 total). Classifying each by the <em>subject of its enclosing
+<code>match</code></em> shows they are not all register decodes:</p>
+<table>
+<thead>
+<tr>
+<th>Arm population</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total <code>_ =&gt; {}</code> / <code>_ =&gt; 0,</code> arms</td>
+<td>377</td>
+</tr>
+<tr>
+<td>... in <code>#[cfg(test)]</code> / <code>mod tests</code> code</td>
+<td>19</td>
+</tr>
+<tr>
+<td>... matching on a register offset (<code>offset</code>, <code>reg</code>, <code>reg_off</code>, <code>word_off</code>, ...) - <strong>instrumented</strong></td>
+<td><strong>312</strong></td>
+</tr>
+<tr>
+<td>... matching on something else entirely (<code>cmd</code>, <code>dest</code>, <code>src</code>, <code>self.state</code>, <code>self.pointer</code>, <code>upper.as_str()</code>, ...) - <strong>not instrumented, not a register decode</strong></td>
+<td>46</td>
+</tr>
+</tbody>
+</table>
+<p>Instrumenting the last group would have produced numbers that look like register
+gaps but are not. They are excluded deliberately.</p>
+<p>Separately, the <code>_ =&gt;</code> grep <strong>structurally cannot see</strong> the declarative/SVD-driven
+models (<code>GenericPeripheral</code>), whose decode is
+<code>if let Some(idx) = self.reg_index_at(offset) { ... }</code> with a bare <code>Ok(0)</code> / <code>Ok(())</code>
+fallthrough - the same silent path in a different shape. 138 of the 1,186 peripheral
+instances across the runnable corpus are declarative, so omitting them would have made
+a near-zero (c) result misleading. They are counted and reported separately as
+<code>shape: declarative_miss</code>.</p>
+<h3 id="read-the-raw-counts-with-a-4x-byte-multiplier">Read the raw counts with a 4x byte multiplier</h3>
+<p><code>Peripheral::read</code>/<code>write</code> are <strong>byte</strong>-granular; <code>read_u32</code>/<code>write_u32</code> decompose into
+four byte accesses. Several models (RCC among them) additionally do a read-modify-write
+per byte. So <strong>one</strong> 32-bit write to an undecoded register costs 4 <code>write</code> hits <em>and</em> 4
+<code>read</code> hits. This is pinned by a test
+(<code>crates/core/tests/census_probe.rs::raw_counts_carry_a_four_times_byte_multiplier</code>).
+Divide raw (c) counts by 4 to get register-level accesses.</p>
+<h2 id="coverage">Coverage</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Test scripts discovered under <code>examples/</code> (any YAML with an <code>assertions:</code> block)</td>
+<td><strong>97</strong></td>
+</tr>
+<tr>
+<td>Ran</td>
+<td><strong>68</strong></td>
+</tr>
+<tr>
+<td>Skipped - firmware artifact absent</td>
+<td><strong>27</strong></td>
+</tr>
+<tr>
+<td>Ran but produced no census file</td>
+<td><strong>2</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Of the 68 runs: <strong>25 clean</strong> (counters a, b2 and c all zero), <strong>43 hot</strong>.
+The 68 runs built <strong>70 machines</strong> — <code>ci-multiarch/two-riscv-test</code> and
+<code>ci/two-node-inputs-env</code> are two-node environments and are swept twice, once per
+node. Every other lab reports <code>machines_swept: 1</code>.</p>
+<p>Assertion outcome 58 pass / 10 fail; the failures are pre-existing at this
+SHA and are not caused by the census - see <em>Behavioural neutrality</em>, which proves
+byte-identical output on failing labs as well as passing ones.</p>
+<blockquote>
+<p>Under the old, factory-time (b) the split was 19 clean / 49 hot. Six labs
+(<code>feather-f405</code> x2, <code>nucleo-f401re</code> x2, <code>nucleo-f767zi</code> x2) were counted as hot
+<strong>solely</strong> because their manifest declares <code>type: "nvic"</code>. They have no live
+stub, no dropped memory error and no undecoded register access, and are now
+where they belong: clean.</p>
+</blockquote>
+<h3 id="on-the-briefs-denominator">On the brief's denominator</h3>
+<p>The brief describes the corpus as "89 projects and 82 committed <code>.elf</code> files" in
+<code>examples/</code>. The 89 directories are right; the 82 ELFs are <strong>repo-wide</strong>. Only <strong>8</strong>
+committed ELFs are under <code>examples/</code> - 67 are under <code>tests/fixtures/</code>. The runnable
+unit is a <em>test script</em>, not a project: the 89 directories yield 97 scripts, and most
+firmware comes from cross-compiling workspace members (33 of 38 ARM build units built
+cleanly here; the 5 failures are 3 nested workspaces that do not build on this
+toolchain and 2 crate names that are <code>[[bin]]</code> targets inside other packages, both of
+which were then built via their real package).</p>
+<h2 id="aggregate-counter-a-dropped-cortex-m-memory-errors">Aggregate: counter (a) - dropped Cortex-M memory errors</h2>
+<p><strong>2 hits, 2 distinct (pc, addr, kind), in 1 of 68 runs.</strong></p>
+<table>
+<thead>
+<tr>
+<th>count</th>
+<th>pc</th>
+<th>addr</th>
+<th>kind</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>0x00000000</code></td>
+<td><code>0x00000001</code></td>
+<td>read</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>0x00000000</code></td>
+<td><code>0x00000004</code></td>
+<td>read</td>
+</tr>
+</tbody>
+</table>
+<p>Both hits are in <code>examples/ci/dummy-memory-violation.yaml</code> - a fixture whose <em>purpose</em>
+is to provoke a memory violation. <strong>No shipped lab drops a single Cortex-M memory error.</strong></p>
+<p>Cross-checked against the independent, always-on <code>fidelity::unmapped_mmio</code> log, which
+records the same bus rejections one layer lower (per byte, at the point the error is
+<em>created</em> rather than dropped):</p>
+<table>
+<thead>
+<tr>
+<th>lab</th>
+<th>fidelity <code>unmapped_mmio</code> (bytes rejected)</th>
+<th>census (a) (errors dropped)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ci/dummy-memory-violation</code></td>
+<td>7</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>nucleo-l073rz/io-smoke</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>pico2/io-smoke</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>pico2/uart-smoke</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>total</strong></td>
+<td><strong>10</strong></td>
+<td><strong>2</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The gap is the point: 8 of the 10 rejections were <strong>propagated</strong>, not dropped - they
+hit the instruction-fetch path (<code>bus.read_u16(fetch_pc)?</code>, one of the 9 places
+<code>cortex_m.rs</code> does use <code>?</code>), which already faults correctly. Counter (a) is measuring
+the drop sites specifically, and they are cold.</p>
+<h2 id="aggregate-counter-b2-live-stub-peripherals-the-actionable-number">Aggregate: counter (b2) - live stub peripherals (the actionable number)</h2>
+<p><strong>147 live stubs, 34 distinct (name, base), in 41 of 68 runs, across 70 machines.</strong></p>
+<p>This is what is still a <code>StubPeripheral</code> when the machine actually runs. Every one
+of the 147 was traced back to the manifest entry that produced it, and <strong>every one
+is a stub the manifest or the factory deliberately asked for</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>count</th>
+<th>asked for by</th>
+<th>reading</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>120</td>
+<td>manifest <code>type: "stub"</code></td>
+<td><strong>Declared.</strong> The manifest literally says <code>type: stub</code>; the factory is doing what it was asked.</td>
+</tr>
+<tr>
+<td>18</td>
+<td>manifest <code>type: "nrf54l_*_stub"</code> (7 strings)</td>
+<td><strong>Declared by naming convention.</strong> <code>dppic</code> x4, <code>wdt</code> x4, <code>ficr</code>/<code>regulators</code>/<code>rramc</code>/<code>tampc</code>/<code>uicr</code> x2 each. Intentional, but they still reach the factory's <code>_other =&gt;</code> arm by <em>failing to match</em>, so the factory cannot tell them from a typo.</td>
+</tr>
+<tr>
+<td>7</td>
+<td>manifest <code>type: "icache"</code></td>
+<td><strong>Declared, and explicitly handled.</strong> <code>peripherals/generic_factory.rs</code> maps <code>"icache" \| "dcache"</code> to a read-as-zero stub on purpose: Zephyr's SoC init writes <code>ICACHE_CR.EN</code> and never polls a completion flag, and the simulator has flat memory, so there is no cache behaviour to model.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>manifest <code>type: "syscfg"</code></td>
+<td><strong>Declared, and explicitly handled.</strong> Same file: a read-0 stub with <code>CCCSR</code> @ 0x20 seeded to <code>0x0000_0100</code> so the H7 HAL's I/O-compensation-cell READY poll exits.</td>
+</tr>
+<tr>
+<td><strong>0</strong></td>
+<td>anything else</td>
+<td><strong>Nothing unaccounted for.</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>(b2) is benign on the current corpus.</strong> There is no live stub that anybody asked
+for by accident: no unmatched manifest <code>type:</code> survives to run time, and in
+particular <code>nvic</code> and <code>scb</code> — the two entries the first version of this document
+flagged — do not appear here at all, because they are not stubs by the time the
+machine exists.</p>
+<h3 id="aggregate-counter-b1-factory-fallthrough-construction-statistic">Aggregate: counter (b1) - factory fallthrough (construction statistic)</h3>
+<p><strong>163 instantiations, 10 distinct <code>type:</code> strings, in 47 of 68 runs.</strong></p>
+<p>How often <code>bus/from_config.rs</code>'s <code>_other =&gt;</code> arm was taken. Useful for scoping a
+change <em>to the factory</em>, and for nothing else — it is not a statement about the
+running machine.</p>
+<table>
+<thead>
+<tr>
+<th>count</th>
+<th><code>type:</code> string</th>
+<th>still a stub at run time?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>120</td>
+<td><code>stub</code></td>
+<td>yes - all 120</td>
+</tr>
+<tr>
+<td>22</td>
+<td><code>nvic</code></td>
+<td><strong>no - all 22 replaced</strong> by a real <code>Nvic</code> in <code>configure_cortex_m</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>nrf54l_dppic_stub</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>nrf54l_wdt_stub</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>scb</code></td>
+<td><strong>no - all 3 replaced</strong> by a real <code>Scb</code> in <code>configure_cortex_m</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>nrf54l_ficr_stub</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>nrf54l_regulators_stub</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>nrf54l_rramc_stub</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>nrf54l_tampc_stub</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>nrf54l_uicr_stub</code></td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="reconciling-b1-and-b2">Reconciling (b1) and (b2)</h3>
+<p>The two numbers differ by 16, and the difference is exactly accounted for:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>(b1) factory fallthrough                                    163
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>   - nvic  (22)  replaced by a real Nvic before run time    -22
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>   - scb   ( 3)  replaced by a real Scb  before run time     -3
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>   + icache( 7)  an explicit generic_factory arm, so it
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>                 never reaches `_other =&gt;` and is invisible
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>                 to (b1) - but it IS a live stub             + 7
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>   + syscfg( 2)  same                                        + 2
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>                                                            ----
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>(b2) live stubs                                             147
+</span></code></pre></div>
+<p>That the difference runs in <strong>both</strong> directions is the point. (b1) over-reports by
+counting entries that were replaced afterwards, and <em>also</em> under-reports by missing
+stubs the factory installs from a named arm rather than by falling off the end.
+Neither number is a proxy for the other.</p>
+<h3 id="delta-against-the-first-published-table">Delta against the first published table</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>first version</th>
+<th>corrected</th>
+<th>change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>headline count</td>
+<td>163 "live stubs"</td>
+<td>147 live stubs (b2); 163 factory fallthroughs (b1)</td>
+<td>the 163 was never a live-stub count</td>
+</tr>
+<tr>
+<td>entries called "not intentional"</td>
+<td><code>nvic</code> x22, <code>scb</code> x3</td>
+<td><strong>none</strong></td>
+<td>both are real models at run time</td>
+</tr>
+<tr>
+<td>labs with a live stub</td>
+<td>47</td>
+<td>41</td>
+<td>6 labs were hot only because of <code>nvic</code></td>
+</tr>
+<tr>
+<td>clean labs</td>
+<td>19</td>
+<td>25</td>
+<td>same 6 labs</td>
+</tr>
+<tr>
+<td>stub sources not previously visible</td>
+<td>-</td>
+<td><code>icache</code> x7, <code>syscfg</code> x2</td>
+<td>explicit factory arms, missed by a fallthrough-only counter</td>
+</tr>
+<tr>
+<td>(a) dropped memory errors</td>
+<td>2</td>
+<td>2</td>
+<td>unchanged</td>
+</tr>
+<tr>
+<td>(c) undecoded register access</td>
+<td>11 raw / 5 distinct</td>
+<td>11 raw / 5 distinct</td>
+<td>unchanged</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scoping consequence.</strong> The follow-up repair is unchanged in shape but smaller in
+substance, and it is a <em>factory hygiene</em> change rather than a fidelity gap:</p>
+<ul>
+<li>Nothing on the current corpus runs with an accidentally stubbed peripheral, so
+  there is no chip-model repair to schedule from (b2). No datasheet look is owed.</li>
+<li>Turning <code>_other =&gt;</code> into a hard error still breaks 47 of 68 labs, because 138 of
+  the 163 fallthroughs are intentional stubbing that is <em>inferred from falling off
+  the end of the match</em> rather than declared. The fix remains a migration: make the
+  factory explicitly match <code>type: stub</code> and the <code>*_stub</code> convention, then
+  hard-error the remainder — which, after that migration, is the empty set on this
+  corpus.</li>
+<li><code>nvic</code> and <code>scb</code> want a tidy-up for a different reason than the first version
+  claimed: they are not a fidelity problem, they are <em>dead manifest entries</em>. The
+  factory builds a stub that <code>configure_cortex_m</code> immediately throws away. Removing
+  them from the chip yamls, or giving the factory a real arm for them, would make
+  the fallthrough histogram mean what a reader assumes it means.</li>
+</ul>
+<h3 id="other-post-factory-mutation-passes">Other post-factory mutation passes</h3>
+<p><code>configure_cortex_m</code> is not the only thing that touches peripherals after the
+factory runs. Every pass found in the tree, and whether it can produce the same
+false positive:</p>
+<table>
+<thead>
+<tr>
+<th>pass</th>
+<th>what it does</th>
+<th>affected?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>system/cortex_m.rs::configure_cortex_m</code></td>
+<td><strong>replaces</strong> the entries at <code>0xE000_ED00</code> (SCB), <code>0xE000_E100</code> (NVIC), <code>0xE000_1000</code> (DWT) with real models, rewriting <code>name</code>, <code>base</code>, <code>size</code> and <code>irq</code></td>
+<td><strong>yes - this is the one that caused the wrong number.</strong> Runs before <code>Machine::new</code>, so (b2) sees the result.</td>
+</tr>
+<tr>
+<td><code>cli/commands/esp32_boot_state.rs::install_esp32c3_fast_boot</code></td>
+<td><code>replace_or_add_peripheral</code> for <code>systimer</code>, <code>rmt</code>, <code>usb_serial_jtag</code>, plus 6 <code>add_peripheral</code> installs</td>
+<td><strong>yes, same mechanism</strong> - a chip-yaml entry can be replaced by a behavioural twin. Runs at <code>test.rs:1352</code>, before the machine is built at <code>test.rs:1467</code>, so (b2) already covers it.</td>
+</tr>
+<tr>
+<td><code>system/xtensa/{mod,esp32,esp32s3}.rs</code></td>
+<td>~40 <code>add_peripheral</code> calls building the ESP32/S3 bus</td>
+<td>no - additive, and these buses are assembled before <code>Machine::new</code>.</td>
+</tr>
+<tr>
+<td><code>boot/esp32c3_rom::inject_rom_regions</code></td>
+<td>injects ROM windows, then <code>build_rom_boot_machine</code></td>
+<td>no - additive, and it constructs the machine itself, so the sweep still runs.</td>
+</tr>
+<tr>
+<td><code>system/riscv.rs::configure_riscv</code></td>
+<td>14 lines; mandates no peripherals at all</td>
+<td>no. There is no RISC-V equivalent of the Cortex-M replacement pass.</td>
+</tr>
+<tr>
+<td><code>bus/tick.rs</code> (3 sites) and <code>peripherals/esp32s3/gdma.rs</code> (2 sites)</td>
+<td>temporarily swap <code>entry.dev</code> out for a placeholder while lending a model to a bus-aware tick, then swap it back</td>
+<td>no - transient, mid-run, and restored. Not construction.</td>
+</tr>
+<tr>
+<td><code>bus/construct.rs::replace_or_add_peripheral</code></td>
+<td>the generic replacement primitive the passes above use</td>
+<td>covered by whoever calls it, all of which run before <code>Machine::new</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The sweep point is therefore after every construction-time pass in the tree today.
+It is not immune by <em>design</em>: a pass that replaced a peripheral after <code>Machine::new</code>
+would be missed. <code>machines_swept</code> and this table are what a future reader should
+re-check before trusting the number again.</p>
+<h3 id="a-and-c-are-unchanged">(a) and (c) are unchanged</h3>
+<p>Counters (a) and (c) instrument runtime <em>access</em>, so they should be unaffected by a
+construction-time error. That was verified rather than assumed: the corpus was
+re-run in full and both counters reproduced <strong>exactly</strong>, entry for entry —</p>
+<ul>
+<li>(a): 2 hits, the same 2 distinct <code>(pc, addr, kind)</code> triples, in the same single
+  lab, and the same <code>fidelity::unmapped_mmio</code> cross-check (7 + 1 + 1 + 1 = 10 bytes
+  rejected against 2 errors dropped).</li>
+<li>(c): 11 raw hits, the same 5 distinct <code>(peripheral, offset, kind)</code> triples, in the
+  same 5 labs, with <code>declarative_miss</code> still at zero.</li>
+<li>(b1) also reproduced exactly (163 / 10 distinct / 47 labs), which is what
+  establishes that this re-run and the original measured the same corpus under the
+  same conditions — so the (b2) delta is the correction and not run-to-run drift.</li>
+</ul>
+<h2 id="aggregate-counter-c-undecoded-register-access">Aggregate: counter (c) - undecoded register access</h2>
+<p><strong>11 raw hits, 5 distinct (peripheral, offset, kind), in 5 of 68 runs.</strong></p>
+<p>Applying the multiplier per entry rather than in bulk: the two 4-hit entries are one
+32-bit write each; the three 1-hit entries are single <strong>byte</strong> writes. So the corpus
+performs <strong>5 register-level undecoded accesses in total</strong>, all writes.</p>
+<p>Fewer than 20 distinct pairs exist, so this is the complete list, not a top-20:</p>
+<table>
+<thead>
+<tr>
+<th>count</th>
+<th>peripheral</th>
+<th>offset</th>
+<th>kind</th>
+<th>shape</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4</td>
+<td><code>fdcan:Fdcan</code></td>
+<td><code>0x0010</code></td>
+<td>write</td>
+<td><code>match_arm</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>iwdg:Iwdg</code></td>
+<td><code>0x0008</code></td>
+<td>write</td>
+<td><code>match_arm</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>nrf54l.twim:Nrf54lTwim</code></td>
+<td><code>0x0508</code></td>
+<td>write</td>
+<td><code>match_arm</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>nrf54l.twim:Nrf54lTwim</code></td>
+<td><code>0x050c</code></td>
+<td>write</td>
+<td><code>match_arm</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>nrf52.twim:Nrf52Twim</code></td>
+<td><code>0x0510</code></td>
+<td>write</td>
+<td><code>match_arm</code></td>
+</tr>
+</tbody>
+</table>
+<p>Shape split: <code>match_arm</code> 11 hits, <code>declarative_miss</code> 0 hits.</p>
+<p><strong>The declarative path recorded zero hits across the entire corpus.</strong> That is a
+measured zero from live instrumentation, not an untested assumption - the counter is
+proven capable of firing by <code>census_probe.rs</code>.</p>
+<p><strong>Scoping consequence.</strong> Three findings are <code>twim</code> <code>0x508</code>/<code>0x50c</code>/<code>0x510</code> (nRF52 and
+nRF54L), each a single byte write; one is <code>fdcan</code> <code>0x010</code> and one is <code>iwdg</code> <code>0x008</code>,
+each a single 32-bit write. The WB55 precedent in <code>rcc.rs</code> is real, but
+nothing in the current shipped corpus reproduces it: <strong>no RCC/clock-enable offset is
+undecoded on any lab that runs.</strong> Escalating undecoded writes to a fault would break 5
+labs, each for one register.</p>
+<h2 id="per-lab-table">Per-lab table</h2>
+<p><code>a</code> = dropped Cortex-M memory errors, <code>b1</code> = factory stub fallthroughs (construction
+statistic), <code>b2</code> = <strong>live stubs on the assembled machine</strong> (the actionable column),
+<code>c</code> = undecoded register hits (raw, pre-divide). Sorted hot first.</p>
+<p>Where <code>b1</code> and <code>b2</code> differ the difference is always <code>nvic</code>/<code>scb</code> (counted by <code>b1</code>,
+replaced before run time) or <code>icache</code>/<code>syscfg</code> (a live stub <code>b1</code> cannot see).</p>
+<table>
+<thead>
+<tr>
+<th>script</th>
+<th>status</th>
+<th>steps</th>
+<th>a</th>
+<th>b1</th>
+<th>b2</th>
+<th>c</th>
+<th>detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>examples/stm32f411ceu6-blackpill/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>5,000,000</td>
+<td>0</td>
+<td>13</td>
+<td>13</td>
+<td>4</td>
+<td>live stub: <code>crc</code>@0x40023000, <code>dbg</code>@0xe0042000, <code>dma1</code>@0x40026000, <code>dma2</code>@0x40026400, <code>i2s2ext</code>@0x40003400, <code>i2s3ext</code>@0x40004000, <code>otg_fs_device</code>@0x50000800, <code>otg_fs_global</code>@0x50000000, <code>otg_fs_host</code>@0x50000400, <code>otg_fs_pwrclk</code>@0x50000e00, <code>sdio</code>@0x40012c00, <code>syscfg</code>@0x40013800, <code>wwdg</code>@0x40002c00; reg: <code>iwdg:Iwdg</code>@0x0008 writex4</td>
+</tr>
+<tr>
+<td><code>examples/stm32f401cdu6-blackpill/i2c-smoke.yaml</code></td>
+<td>fail</td>
+<td>4,096</td>
+<td>0</td>
+<td>15</td>
+<td>15</td>
+<td>0</td>
+<td>live stub: <code>crc</code>@0x40023000, <code>dbg</code>@0xe0042000, <code>dma1</code>@0x40026000, <code>dma2</code>@0x40026400, <code>i2s2ext</code>@0x40003400, <code>i2s3ext</code>@0x40004000, <code>iwdg</code>@0x40003000, <code>otg_fs_device</code>@0x50000800, <code>otg_fs_global</code>@0x50000000, <code>otg_fs_host</code>@0x50000400, <code>otg_fs_pwrclk</code>@0x50000e00, <code>rtc</code>@0x40002800, <code>sdio</code>@0x40012c00, <code>syscfg</code>@0x40013800, <code>wwdg</code>@0x40002c00</td>
+</tr>
+<tr>
+<td><code>examples/stm32f401cdu6-blackpill/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>0</td>
+<td>15</td>
+<td>15</td>
+<td>0</td>
+<td>live stub: <code>crc</code>@0x40023000, <code>dbg</code>@0xe0042000, <code>dma1</code>@0x40026000, <code>dma2</code>@0x40026400, <code>i2s2ext</code>@0x40003400, <code>i2s3ext</code>@0x40004000, <code>iwdg</code>@0x40003000, <code>otg_fs_device</code>@0x50000800, <code>otg_fs_global</code>@0x50000000, <code>otg_fs_host</code>@0x50000400, <code>otg_fs_pwrclk</code>@0x50000e00, <code>rtc</code>@0x40002800, <code>sdio</code>@0x40012c00, <code>syscfg</code>@0x40013800, <code>wwdg</code>@0x40002c00</td>
+</tr>
+<tr>
+<td><code>examples/stm32f401cdu6-blackpill/trace-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>0</td>
+<td>15</td>
+<td>15</td>
+<td>0</td>
+<td>live stub: <code>crc</code>@0x40023000, <code>dbg</code>@0xe0042000, <code>dma1</code>@0x40026000, <code>dma2</code>@0x40026400, <code>i2s2ext</code>@0x40003400, <code>i2s3ext</code>@0x40004000, <code>iwdg</code>@0x40003000, <code>otg_fs_device</code>@0x50000800, <code>otg_fs_global</code>@0x50000000, <code>otg_fs_host</code>@0x50000400, <code>otg_fs_pwrclk</code>@0x50000e00, <code>rtc</code>@0x40002800, <code>sdio</code>@0x40012c00, <code>syscfg</code>@0x40013800, <code>wwdg</code>@0x40002c00</td>
+</tr>
+<tr>
+<td><code>examples/stm32f401cdu6/uart-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>0</td>
+<td>15</td>
+<td>15</td>
+<td>0</td>
+<td>live stub: <code>crc</code>@0x40023000, <code>dbg</code>@0xe0042000, <code>dma1</code>@0x40026000, <code>dma2</code>@0x40026400, <code>i2s2ext</code>@0x40003400, <code>i2s3ext</code>@0x40004000, <code>iwdg</code>@0x40003000, <code>otg_fs_device</code>@0x50000800, <code>otg_fs_global</code>@0x50000000, <code>otg_fs_host</code>@0x50000400, <code>otg_fs_pwrclk</code>@0x50000e00, <code>rtc</code>@0x40002800, <code>sdio</code>@0x40012c00, <code>syscfg</code>@0x40013800, <code>wwdg</code>@0x40002c00</td>
+</tr>
+<tr>
+<td><code>examples/nrf54l15-smart-ring/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>500,000</td>
+<td>0</td>
+<td>9</td>
+<td>9</td>
+<td>2</td>
+<td>live stub: <code>dppic20</code>@0x500c2000, <code>dppic30</code>@0x50102000, <code>ficr</code>@0x00ffc000, <code>regulators</code>@0x50120000, <code>rramc</code>@0x5004b000, <code>tampc</code>@0x500dc000, <code>uicr</code>@0x00ffd000, <code>wdt30</code>@0x50108000, <code>wdt31</code>@0x50109000; reg: <code>nrf54l.twim:Nrf54lTwim</code>@0x0508 writex1, <code>nrf54l.twim:Nrf54lTwim</code>@0x050c writex1</td>
+</tr>
+<tr>
+<td><code>examples/nrf54l15-dk/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>9</td>
+<td>9</td>
+<td>0</td>
+<td>live stub: <code>dppic20</code>@0x500c2000, <code>dppic30</code>@0x50102000, <code>ficr</code>@0x00ffc000, <code>regulators</code>@0x50120000, <code>rramc</code>@0x5004b000, <code>tampc</code>@0x500dc000, <code>uicr</code>@0x00ffd000, <code>wdt30</code>@0x50108000, <code>wdt31</code>@0x50109000</td>
+</tr>
+<tr>
+<td><code>examples/h563-uds-ecu/uds-session-smoke.yaml</code></td>
+<td>pass</td>
+<td>2,000,000</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>2</td>
+<td>live stub: <code>icache</code>@0x40030400; reg: <code>fdcan:Fdcan</code>@0x0010 writex2</td>
+</tr>
+<tr>
+<td><code>examples/h563-uds-ecu/uds-smoke.yaml</code></td>
+<td>pass</td>
+<td>2,000,000</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>2</td>
+<td>live stub: <code>icache</code>@0x40030400; reg: <code>fdcan:Fdcan</code>@0x0010 writex2</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-l073rz/io-smoke.yaml</code></td>
+<td>fail</td>
+<td>0</td>
+<td>0</td>
+<td>5</td>
+<td>3</td>
+<td>0</td>
+<td>live stub: <code>lcd</code>@0x40002400, <code>syscfg</code>@0x40010000, <code>usb_fs</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ads1115-adc-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>500,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ads1115-adc-lab/stimuli-smoke.yaml</code></td>
+<td>pass</td>
+<td>2,000,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/adxl345-sensor-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/bme280-weather-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-memory-violation.yaml</code></td>
+<td>pass</td>
+<td>0</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>arm: pc=0x00000000 addr=0x00000001 readx1, pc=0x00000000 addr=0x00000004 readx1</td>
+</tr>
+<tr>
+<td><code>examples/demo-blinky/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>10,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ds3231-rtc-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>500,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ds3231-rtc-lab/stimuli-smoke.yaml</code></td>
+<td>pass</td>
+<td>2,000,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/f103-fidelity-bench/gpiobug-smoke.yaml</code></td>
+<td>fail</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/f103-i2c-silicon/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>50,000,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ili9341-tft-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>20,000,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ina219-power-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>500,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ina219-power-lab/stimuli-smoke.yaml</code></td>
+<td>pass</td>
+<td>2,000,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/max31855-thermocouple-lab/io-smoke.yaml</code></td>
+<td>fail</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/mpu6050-sensor-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/neo6m-gps-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ntc-thermistor-lab/io-smoke.yaml</code></td>
+<td>fail</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/pico2/io-smoke.yaml</code></td>
+<td>fail</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>powman</code>@0x40100000, <code>tbman</code>@0x40160000</td>
+</tr>
+<tr>
+<td><code>examples/pico2/uart-smoke.yaml</code></td>
+<td>fail</td>
+<td>0</td>
+<td>0</td>
+<td>3</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>powman</code>@0x40100000, <code>tbman</code>@0x40160000</td>
+</tr>
+<tr>
+<td><code>examples/ssd1306-hello-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/vl53l1x-tof-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>200,000</td>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>live stub: <code>bkp</code>@0x40006c00, <code>usb_dev</code>@0x40005c00</td>
+</tr>
+<tr>
+<td><code>examples/ci/l476-bldc-stall.yaml</code></td>
+<td>pass</td>
+<td>1,265,348</td>
+<td>0</td>
+<td>3</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>syscfg</code>@0x40010000</td>
+</tr>
+<tr>
+<td><code>examples/h735-telematics-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>840,000</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>syscfg</code>@0x58000400</td>
+</tr>
+<tr>
+<td><code>examples/hil-displacement-showcase/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>icache</code>@0x40030400</td>
+</tr>
+<tr>
+<td><code>examples/hil-displacement-showcase/showcase-test.yaml</code></td>
+<td>pass</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>icache</code>@0x40030400</td>
+</tr>
+<tr>
+<td><code>examples/nokia5110-invaders-lab/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>5,000,000</td>
+<td>0</td>
+<td>3</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>syscfg</code>@0x40010000</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-h563zi/fullchip-smoke.yaml</code></td>
+<td>pass</td>
+<td>2,000</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>icache</code>@0x40030400</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-h563zi/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>5,000,000</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>icache</code>@0x40030400</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-h563zi/uart-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>icache</code>@0x40030400</td>
+</tr>
+<tr>
+<td><code>examples/rp2040-pio/asm-smoke.yaml</code></td>
+<td>pass</td>
+<td>10</td>
+<td>0</td>
+<td>2</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>tbman</code>@0x4006c000</td>
+</tr>
+<tr>
+<td><code>examples/rp2040-pio/io-smoke.yaml</code></td>
+<td>fail</td>
+<td>10,000</td>
+<td>0</td>
+<td>2</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>tbman</code>@0x4006c000</td>
+</tr>
+<tr>
+<td><code>examples/seeed-xiao-nrf52840-sense/uart-gpio-spi-smoke.yaml</code></td>
+<td>pass</td>
+<td>20,000</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>reg: <code>nrf52.twim:Nrf52Twim</code>@0x0510 writex1</td>
+</tr>
+<tr>
+<td><code>examples/stm32h735-smoke/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>5,000,000</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>live stub: <code>syscfg</code>@0x58000400</td>
+</tr>
+</tbody>
+</table>
+<h3 id="clean-labs-a-b2-and-c-all-zero">Clean labs (a, b2 and c all zero)</h3>
+<p><code>b1</code> is shown so the six labs that were previously listed as hot purely because
+their chip yaml declares <code>type: "nvic"</code> are visible as exactly that.</p>
+<table>
+<thead>
+<tr>
+<th>script</th>
+<th>status</th>
+<th>steps</th>
+<th>b1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>examples/ci-multiarch/two-riscv-test.yaml</code></td>
+<td>pass</td>
+<td>2,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-fail-uart.yaml</code></td>
+<td>fail</td>
+<td>10</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-max-cycles.yaml</code></td>
+<td>pass</td>
+<td>10</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-max-steps.yaml</code></td>
+<td>pass</td>
+<td>10</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-max-uart-bytes.yaml</code></td>
+<td>pass</td>
+<td>10,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-no-progress.yaml</code></td>
+<td>pass</td>
+<td>125</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/dummy-wall-time.yaml</code></td>
+<td>pass</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/two-node-inputs-env.yaml</code></td>
+<td>pass</td>
+<td>10</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/uart-inject-echo.yaml</code></td>
+<td>pass</td>
+<td>20,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/ci/uart-ok.yaml</code></td>
+<td>pass</td>
+<td>1,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-blinky/test-blink.yaml</code></td>
+<td>pass</td>
+<td>800,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-leo-airquality/test-fresh.yaml</code></td>
+<td>pass</td>
+<td>24,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-leo-airquality/test-stuffy.yaml</code></td>
+<td>pass</td>
+<td>28,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-leo-airquality/test.yaml</code></td>
+<td>pass</td>
+<td>28,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/feather-f405/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>examples/feather-f405/uart-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>examples/kw41z-cow-activity/calm.yaml</code></td>
+<td>pass</td>
+<td>6,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/kw41z-cow-activity/stimulus-shake.yaml</code></td>
+<td>pass</td>
+<td>6,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/nrf52840-proximity-lab/proximity-smoke.yaml</code></td>
+<td>fail</td>
+<td>6,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/nrf52840-secure-boot-lab/secure-boot-smoke.yaml</code></td>
+<td>pass</td>
+<td>30,000,000</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-f401re/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-f401re/uart-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-f767zi/io-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-f767zi/uart-smoke.yaml</code></td>
+<td>pass</td>
+<td>64</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>examples/simctl-selftest/simctl-selftest.yaml</code></td>
+<td>pass</td>
+<td>7,210</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="skipped-could-not-run">Skipped - could not run</h3>
+<p>Every script that did not run gets a row. None is omitted.</p>
+<table>
+<thead>
+<tr>
+<th>script</th>
+<th>missing artifact</th>
+<th>why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>examples/canmod-gps-sim/canmod-smoke.yaml</code></td>
+<td><code>./firmware/build/canmod_gps_sim.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/ci/riscv-uart-ok.yaml</code></td>
+<td><code>../../target/riscv32i-unknown-none-elf/release/riscv-ci-fixture</code></td>
+<td>riscv32 rustup target not installed on this host</td>
+</tr>
+<tr>
+<td><code>examples/esp32-bay-occupancy/tests/test-debounce.yaml</code></td>
+<td><code>../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf</code></td>
+<td>PlatformIO/Arduino output; needs <code>pio run</code>, not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32-bay-occupancy/tests/test-fault-and-display.yaml</code></td>
+<td><code>../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf</code></td>
+<td>PlatformIO/Arduino output; needs <code>pio run</code>, not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32-bay-occupancy/tests/test-nonblocking.yaml</code></td>
+<td><code>../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf</code></td>
+<td>PlatformIO/Arduino output; needs <code>pio run</code>, not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32-bay-occupancy/tests/test-occupancy-combinations.yaml</code></td>
+<td><code>../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf</code></td>
+<td>PlatformIO/Arduino output; needs <code>pio run</code>, not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32-bay-occupancy/tests/test-thresholds-hysteresis.yaml</code></td>
+<td><code>../firmware/.pio/build/adafruit_feather_esp32_v2/firmware.elf</code></td>
+<td>PlatformIO/Arduino output; needs <code>pio run</code>, not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-mlx90640-thermal/test-fault.yaml</code></td>
+<td><code>./firmware/thermal_fingerprint.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-mlx90640-thermal/test-iolink-fault.yaml</code></td>
+<td><code>./firmware/thermal_fingerprint.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-mlx90640-thermal/test-iolink.yaml</code></td>
+<td><code>./firmware/thermal_fingerprint.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/esp32c3-mlx90640-thermal/test.yaml</code></td>
+<td><code>./firmware/thermal_fingerprint.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-fidelity-bench/clockbug-nogate-smoke.yaml</code></td>
+<td><code>./firmware/build/clockbug.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-fidelity-bench/clockbug-smoke.yaml</code></td>
+<td><code>./firmware/build/clockbug.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-fidelity-bench/control-smoke.yaml</code></td>
+<td><code>./firmware/build/control.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-fidelity-bench/rambug-smoke.yaml</code></td>
+<td><code>./firmware/build/rambug.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-j1939-monitor/j1939-replay.yaml</code></td>
+<td><code>./firmware/build/j1939_monitor.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-uds-ecu/firmware/diff/diff-smoke.yaml</code></td>
+<td><code>/tmp/lw-deploy/core/examples/f103-uds-ecu/firmware/diff/build/f103_uds_diff.elf</code></td>
+<td>absolute path into an external HIL deploy tree</td>
+</tr>
+<tr>
+<td><code>examples/f103-uds-ecu/uds-reset-smoke.yaml</code></td>
+<td><code>./firmware/build/f103_uds_ecu.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-uds-ecu/uds-session-smoke.yaml</code></td>
+<td><code>./firmware/build/f103_uds_ecu.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/f103-uds-ecu/uds-smoke.yaml</code></td>
+<td><code>./firmware/build/f103_uds_ecu.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/h563-uds-bootloader/ota-smoke.yaml</code></td>
+<td><code>../../../udslib/examples/h563_uds_bootloader/bootloader/build/h563_uds_bootloader_sim.elf</code></td>
+<td>sibling <code>udslib</code> checkout not present in this repo</td>
+</tr>
+<tr>
+<td><code>examples/iolink-dido/test.yaml</code></td>
+<td><code>./firmware/iolink_dido.elf</code></td>
+<td>C/Makefile firmware (arm-none-eabi-gcc / riscv32-esp-elf-gcc); ELF not committed</td>
+</tr>
+<tr>
+<td><code>examples/marketplace-arduino-c3/stimuli-smoke.yaml</code></td>
+<td><code>../../platformio/marketplace-arduino-c3/.pio/build/marketplace/firmware.elf</code></td>
+<td>PlatformIO/Arduino output; needs <code>pio run</code>, not committed</td>
+</tr>
+<tr>
+<td><code>examples/mb1355c/uart-smoke.yaml</code></td>
+<td><code>./board_firmware/target/thumbv7em-none-eabi/release/firmware-mb1355c-demo</code></td>
+<td>nested cargo workspace; host build fails (<code>unwinding panics are not supported without std</code>)</td>
+</tr>
+<tr>
+<td><code>examples/nucleo-h563zi/golden-reference/dummy_test.yaml</code></td>
+<td><code>target/thumbv7em-none-eabihf/release/firmware-h563-demo</code></td>
+<td>firmware artifact absent</td>
+</tr>
+<tr>
+<td><code>examples/nucleo_g474re/uart-smoke.yaml</code></td>
+<td><code>./board_firmware/target/thumbv7em-none-eabi/release/firmware-nucleo_g474re-demo</code></td>
+<td>nested cargo workspace; host build fails (<code>unwinding panics are not supported without std</code>)</td>
+</tr>
+<tr>
+<td><code>examples/nucleo_wba52cg/uart-smoke.yaml</code></td>
+<td><code>./board_firmware/target/thumbv8m.main-none-eabi/release/firmware-nucleo_wba52cg-demo</code></td>
+<td>nested cargo workspace; host build fails (<code>unwinding panics are not supported without std</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ran-but-produced-no-census-file">Ran, but produced no census file</h3>
+<table>
+<thead>
+<tr>
+<th>script</th>
+<th>why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>examples/ci/benchmark.yaml</code></td>
+<td>exited before the census dump point (pre-existing config error)</td>
+</tr>
+<tr>
+<td><code>examples/stm32f103-integrated-test/stm32f103_integrated_test.yaml</code></td>
+<td>exited before the census dump point (pre-existing config error)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="behavioural-neutrality">Behavioural neutrality</h2>
+<p>The instrumentation must not change what the simulator does, or the census is
+worthless. Two independent arguments:</p>
+<p><strong>1. By construction.</strong> With the feature off, every recording site expands back to the
+code it wraps:</p>
+<table>
+<thead>
+<tr>
+<th>site</th>
+<th>feature off expands to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>census_bus!(self, kind, expr)</code></td>
+<td><code>expr</code> - the bare expression</td>
+</tr>
+<tr>
+<td><code>census_reg!(name, off, kind)</code></td>
+<td><code>()</code> - so <code>_ =&gt; { census_reg!(..); }</code> is <code>_ =&gt; {}</code> and <code>_ =&gt; { census_reg!(..); 0 }</code> is <code>_ =&gt; 0</code></td>
+</tr>
+<tr>
+<td><code>census::record_stub</code> / <code>record_live_stubs</code> / <code>record_undecoded_reg_named</code> / <code>dump_if_requested</code></td>
+<td>empty <code>#[inline(always)]</code> fns</td>
+</tr>
+<tr>
+<td><code>StubPeripheral::as_any</code></td>
+<td>does not exist - the whole override is <code>#[cfg(feature = "silent-census")]</code>, so the type is unchanged</td>
+</tr>
+</tbody>
+</table>
+<p>The macro arguments are not even evaluated when the feature is off, so a site cannot
+introduce a side effect, a panic, or a borrow. <code>record_live_stubs</code> takes the bus by
+shared reference and the off-build never touches it, so the single call site in
+<code>Machine::new</code> needs no <code>cfg</code> attribute and cannot perturb construction. With the
+feature on, every arm still performs its original action and <em>then</em> records; no
+control flow changed anywhere.</p>
+<p>The one thing that <em>is</em> observable with the feature on is <code>StubPeripheral::as_any()</code>
+returning <code>Some(self)</code> instead of <code>None</code>. Every consumer of <code>Peripheral::as_any</code> in
+the tree — <code>Machine::new</code>'s four index scans, <code>Machine</code>'s accessors, <code>world.rs</code>'s
+UART lookup, <code>inspect.rs</code>'s mux lookup, <code>cpu/riscv.rs</code>'s XIP lookup — immediately
+<code>downcast_ref</code>s to a concrete model type, and a stub is none of them. <code>Some(stub)</code>
+and <code>None</code> produce the same <code>None</code> from every one of those chains.</p>
+<p><strong>2. Empirically.</strong> The <strong>entire runnable corpus - all 70 labs - was run twice</strong>, once
+with a feature-off binary and once with a feature-on binary that was <em>actively
+recording</em>, and <code>result.json</code> (status, steps, cycles, assertions, full CPU register
+state, UART bytes, peripheral inspection, fidelity gaps) compared byte-for-byte:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>labs run under both binaries</td>
+<td><strong>70</strong></td>
+</tr>
+<tr>
+<td><code>result.json</code> byte-identical</td>
+<td><strong>70 / 70</strong></td>
+</tr>
+<tr>
+<td>exit-code mismatches</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td>ON runs that actively recorded (wrote a census file)</td>
+<td>68</td>
+</tr>
+<tr>
+<td>ON runs where at least one counter fired</td>
+<td>43</td>
+</tr>
+</tbody>
+</table>
+<p>The proof is non-vacuous: all four counters fired somewhere in the set that was
+compared — (a) on <code>dummy-memory-violation</code>, (b1) on 47 labs, (b2) on 41 labs,
+(c) on 5 — and both pass and fail outcomes are represented (58 pass, 10 fail, 2
+config errors), yet not one output byte moved. This is a strict superset of the
+8-lab spot check the first version of this document relied on.</p>
+<p>Both gates were also checked independently:</p>
+<table>
+<thead>
+<tr>
+<th>binary</th>
+<th><code>LABWIRED_CENSUS_OUT</code></th>
+<th>census file written?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>feature-off</td>
+<td>set</td>
+<td><strong>no</strong></td>
+</tr>
+<tr>
+<td>feature-on</td>
+<td>unset</td>
+<td><strong>no</strong></td>
+</tr>
+<tr>
+<td>feature-on</td>
+<td>set</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-was-not-measured">What was NOT measured</h2>
+<ul>
+<li><strong>46 catch-all arms that match on something other than a register offset</strong> - <code>cmd</code>,
+  <code>dest</code>, <code>self.state</code>, <code>upper.as_str()</code> and similar. Not register decodes; counting
+  them would fabricate gaps.</li>
+<li><strong>19 catch-all arms inside <code>#[cfg(test)]</code> / <code>mod tests</code>.</strong></li>
+<li><strong>27 scripts whose firmware could not be produced on this host</strong> - PlatformIO/Arduino
+  builds, C/Makefile firmware needing <code>arm-none-eabi-gcc</code> or <code>riscv32-esp-elf-gcc</code>, one
+  riscv32 target not installed, three nested cargo workspaces that fail to build on
+  this toolchain, and two paths pointing outside the repo. Every one is a row above.</li>
+<li><strong>Xtensa and ESP32 ROM-boot paths.</strong> No <code>examples/esp32s3-*</code> directory has a test
+  script at all, and the C3 Arduino lab needs <code>LABWIRED_ESP32C3_*</code> flash/ROM images.</li>
+<li><strong>The RISC-V CPU's own error handling.</strong> <code>cpu/riscv.rs</code> propagates ~32 bus results
+  with <code>?</code> and discards none, so it has no (a)-equivalent to count. Unverified beyond
+  reading the code.</li>
+<li><strong><code>Machine::run</code> batched orchestration.</strong> Every run here used the CLI's default
+  per-instruction path. The browser's batched path was not measured.</li>
+<li><strong>Any peripheral replacement that happens <em>after</em> <code>Machine::new</code>.</strong> (b2) sweeps at
+  machine construction, which is after every construction-time pass in the tree today
+  (audited above), but it is not immune by design. A future pass that swapped a
+  peripheral out later would be invisible to it, exactly as <code>configure_cortex_m</code> was
+  invisible to (b1). Re-check that table before trusting the number again.</li>
+<li><strong>Whether an undecoded offset is actually <em>wrong</em>.</strong> The census says the model did
+  not decode an offset the firmware touched. Deciding whether that matters needs the
+  datasheet, one register at a time. That is the follow-up work this table scopes.</li>
+</ul>
+<h2 id="belongs-to-another-task">Belongs to another task</h2>
+<ul>
+<li>Fixing any of the three paths. Explicitly out of scope here.</li>
+<li>Removing the dead <code>type: "nvic"</code> / <code>type: "scb"</code> entries from the chip yamls (or
+  giving the factory a real arm for them). They cost a <code>StubPeripheral</code> allocation
+  that <code>configure_cortex_m</code> immediately discards, and they are the reason the
+  fallthrough histogram does not mean what a reader assumes. Not a fidelity bug.</li>
+<li><code>examples/ci/benchmark.yaml</code> declares <code>max_steps: 1000000000</code>, above the CLI's
+  <code>MAX_ALLOWED_STEPS</code> of 50000000, so it cannot run as committed.</li>
+<li><code>examples/stm32f103-integrated-test</code> points at a system manifest missing a <code>chip:</code>
+  field and fails to load.</li>
+<li><code>examples/f103-uds-ecu/firmware/diff/diff-smoke.yaml</code> hardcodes absolute
+  <code>/tmp/lw-deploy/...</code> paths and can never run from a clean checkout.</li>
+<li>10 of the 68 runnable labs fail their own assertions at this SHA. Pre-existing,
+  unrelated to this work, and not investigated.</li>
+<li><code>scripts/example_smokes.sh</code> globs <code>examples/*/*smoke*.yaml examples/*/test*.yaml</code>,
+  which misses ~7 scripts one level deeper plus every <code>examples/ci/*.yaml</code>. Widening
+  it is a separate change.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

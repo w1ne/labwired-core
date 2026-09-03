@@ -1,0 +1,196 @@
+[
+  {
+    "buses": [],
+    "name": "atmega328p"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g18a"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "efr32mg26"
+  },
+  {
+    "buses": [
+      "I2C",
+      "UART"
+    ],
+    "name": "esp32"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "esp32c3"
+  },
+  {
+    "buses": [],
+    "name": "esp32s3"
+  },
+  {
+    "buses": [],
+    "name": "esp32s3-zero"
+  },
+  {
+    "buses": [],
+    "name": "mkw41z4"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "nrf52832"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "nrf52840"
+  },
+  {
+    "buses": [],
+    "name": "nrf5340"
+  },
+  {
+    "buses": [],
+    "name": "nrf54l15"
+  },
+  {
+    "buses": [],
+    "name": "nrf54lm20a"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "rp2040"
+  },
+  {
+    "buses": [],
+    "name": "rp2350"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f103"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f401cdu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f405"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f407"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f767"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32g474re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32h563"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32h735"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l073"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l476"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32wb55"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32wba52"
+  }
+]
