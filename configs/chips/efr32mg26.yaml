@@ -45,9 +45,16 @@
 #     4-bit mode nibble gates input vs output (open-drain WIREDOR pins only
 #     pull LOW). NOT modelled: the ROUTE pin-mux registers are a stub window
 #     (`gpio_route` below — a deliberate sim no-op, load-bearing on silicon),
-#     the EXTI/EM4WU interrupt path, drive-strength/slew fields (stored, no
-#     behaviour), and the WIREDAND open-source analog niceties (treated as
-#     push-pull).
+#     EM4WU wake, drive-strength/slew fields (stored, no behaviour), and the
+#     WIREDAND open-source analog niceties (treated as push-pull).
+#   - (FIXED) The EXTI interrupt path IS modelled — this list said it was not,
+#     for long enough that "can I do an interrupt-driven button on this board?"
+#     had a wrong answer written down. `peripherals/efr32/gpio_exti.rs` is a
+#     real model: EXTIPSEL/EXTIPINSEL group selection, rising and falling arms
+#     independently, write-1-to-clear flags that latch without IEN, and even
+#     and odd lines raising GPIO_EVEN_IRQn 40 / GPIO_ODD_IRQn 39 separately.
+#     Ten unit tests cover it, including that a line armed for neither edge
+#     never fires and that a pad's first transition is an edge, not a baseline.
 #   - (FIXED) The Series-2 SET/CLR/TGL register aliases are now decoded, see
 #     `atomic_register_aliases` below.
 #   - (FIXED) USART0 (as `spi0`), USART1 (VCOM console) and USART2 are mapped,
