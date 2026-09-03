@@ -36,30 +36,64 @@ fn root(rel: &str) -> PathBuf {
         .join(rel)
 }
 
-/// Cross-build the deck firmware. Same shape as `capture_nokia5110_frames`:
-/// the ELF is built rather than committed so a linker or register-layout
-/// regression cannot hide behind a stale blob.
-fn build_firmware() -> PathBuf {
-    let elf = root("target/thumbv7m-none-eabi/release/firmware-mg26-deck");
-    let status = std::process::Command::new(env!("CARGO"))
-        .args([
-            "build",
-            "-p",
-            "firmware-mg26-deck",
-            "--target",
-            "thumbv7m-none-eabi",
-            "--release",
-        ])
-        // Clear coverage instrumentation flags so the no_std cross-build does
-        // not fail with E0463 under llvm-cov.
-        .env_remove("CARGO_ENCODED_RUSTFLAGS")
-        .env_remove("RUSTFLAGS")
-        .current_dir(root(""))
-        .status()
-        .expect("cargo build firmware-mg26-deck");
-    assert!(status.success(), "firmware-mg26-deck build failed");
-    assert!(elf.exists(), "ELF not found at {elf:?}");
-    elf
+/// The deck ELF this gate runs.
+///
+/// ⚠️ A COMMITTED FIXTURE FIRST, A CROSS-BUILD SECOND. This originally always
+/// shelled out to `cargo build --target thumbv7m-none-eabi`, which passes on a
+/// developer machine and FAILS on a PR runner with no cross toolchain — so the
+/// chip's `behavior_gate` was red on every PR while being green locally. The
+/// tree's answer for that is `scripts/ci/workspace-test-shards.json`'s
+/// `cross_build_excluded` list, but moving this there would send it to the
+/// nightly lane only, and a behaviour gate that never runs on a PR is the very
+/// thing writing this test in process was meant to avoid.
+///
+/// So: build from source when the target is installed (a developer, and
+/// core-full, which installs the ARM targets — that lane is what catches a
+/// STALE fixture), and fall back to the committed ELF otherwise, so every PR
+/// shard still executes the assertions. This is not a graceful skip: the same
+/// firmware runs and the same things are asserted either way.
+///
+/// Regenerate with:
+///   cargo build --release --target thumbv7m-none-eabi -p firmware-mg26-deck
+///   cp target/thumbv7m-none-eabi/release/firmware-mg26-deck \
+///      crates/core/tests/fixtures/mg26-deck.elf
+fn deck_elf() -> PathBuf {
+    let fixture = root("crates/core/tests/fixtures/mg26-deck.elf");
+    let built = root("target/thumbv7m-none-eabi/release/firmware-mg26-deck");
+
+    let has_target = std::process::Command::new("rustc")
+        .args(["--print", "target-list"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("thumbv7m-none-eabi"))
+        .unwrap_or(false)
+        && std::process::Command::new(env!("CARGO"))
+            .args([
+                "build",
+                "-p",
+                "firmware-mg26-deck",
+                "--target",
+                "thumbv7m-none-eabi",
+                "--release",
+            ])
+            // Clear coverage instrumentation flags so the no_std cross-build
+            // does not fail with E0463 under llvm-cov.
+            .env_remove("CARGO_ENCODED_RUSTFLAGS")
+            .env_remove("RUSTFLAGS")
+            .current_dir(root(""))
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+
+    if has_target && built.exists() {
+        return built;
+    }
+    assert!(
+        fixture.exists(),
+        "no cross toolchain AND no committed fixture at {fixture:?} — this gate \
+         would assert nothing"
+    );
+    fixture
 }
 
 struct Run {
@@ -106,7 +140,7 @@ fn run_deck(elf: &Path) -> Run {
 
 #[test]
 fn the_deck_firmware_drives_every_part() {
-    let run = run_deck(&build_firmware());
+    let run = run_deck(&deck_elf());
     let out = &run.console;
 
     // The run reached the end. Without this every assertion below could pass
