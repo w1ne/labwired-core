@@ -1138,7 +1138,7 @@ fn drive_spi(
             // (RM section 24.6 p.879), and the pins are arbitrary here: the
             // measure is "does a named line move", not which pad it moved.
             {
-                let n = ((inst.base - 0x400A_0000) / 0x4000) as u64;
+                let n = (inst.base - 0x400A_0000) / 0x4000;
                 let stanza = 0x4003_C820 + n * 0x20;
                 let _ = machine.bus.write_u32(0x4000_8064, 1 << 26); // GPIO clock
                 let _ = machine.bus.write_u32(stanza + 0x14, 2 | (3 << 16)); // CLK -> PC03
