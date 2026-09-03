@@ -1098,7 +1098,6 @@ boards:
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
     drift_ack_digest: 8f72961bbee2ce4757aa81ff75e5b8d9defd7bc1008a5c4ee7fe62fb12d1f5d3
-    drift_ack_digest: 8f41225b7d8fd1abee3f0ee06996609920ab0405a2e13ebad37168df315b9ace
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2356,7 +2355,6 @@ boards:
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
     drift_ack_digest: 7b8fbc7c29e1cababe121595b84e081ef299f9e39ab862cb60c53673c9e86711
-    drift_ack_digest: 656ed1161da936a92ba2cd863e217fb910f3aab9f03200e789d9a1551e46ff90
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2822,7 +2820,6 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
     drift_ack_digest: 11dc377cdd5d4902f4430e681fa4bb7e65552fbbdf30fe34a5a15884ec7d2e54
-    drift_ack_digest: db43cef9e4d2c317bf0bd87021eda7b7ab47e8ea96df7fd47233374de2226848
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3304,7 +3301,6 @@ boards:
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
     drift_ack_digest: 875db4da0c95c571d8e6d9f90b09be31a2b6e4fa013cd8c6af86272e0ac2486b
-    drift_ack_digest: 8d3dc617ffc53ece9a08af26c8408855e199bc2458aa413073d848464e5e4bae
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3790,7 +3786,6 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
     drift_ack_digest: 41035d681d189eefe6a7bcebf7650c1032023f36dc0131c655fe5ff179eebb07
-    drift_ack_digest: 4568049eaad4e5f570080cfc11c3fc7f0c37fe609e8d8b24110e448c9f5547f6
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
