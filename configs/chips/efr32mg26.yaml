@@ -59,9 +59,15 @@
 #     `atomic_register_aliases` below.
 #   - (FIXED) USART0 (as `spi0`), USART1 (VCOM console) and USART2 are mapped,
 #     as are TIMER0..9 and I2C0..3. The four EUSARTs are still not declared.
-#   - MSC (flash controller), WDOG0/1, EMU, PRS, LDMA, radio (RAIL/RADIOAES),
-#     USERDATA (0x0FE0_0000) and DEVINFO (0x0FE0_8000) pages are not mapped;
-#     reads there fault the bus, deliberately loudly.
+#   - (MAPPED) MSC is declared, so firmware can WRITE ITS OWN FLASH and a
+#     project can persist something across a reset. Reset values are the
+#     measured silicon ones, which differ from the manual's — see the block.
+#   - WDOG0/1, EMU, PRS, LDMA, radio (RAIL/RADIOAES) and the USERDATA
+#     (0x0FE0_0000) / DEVINFO (0x0FE0_8000) pages are not mapped; reads there
+#     fault the bus, deliberately loudly. PRS, LDMA and EUSART1 reset states
+#     HAVE been captured off the die (PRS IPVERSION 6, LDMA +0x08 0x1E000000
+#     / +0x0C 0x1F100000, EUSART1 IPVERSION 2) and are recorded here so
+#     whoever maps them next starts from silicon rather than from the manual.
 #   - (MAPPED) SMU is declared — `SystemInit` writes it three instructions in,
 #     so an unmapped block faulted a vendor image before `main`. Registers
 #     only: no protection is enforced and the alias move is not modelled.
@@ -96,6 +102,24 @@ reset_vector_offset: 0x8000
 # `+0x1000` is SET and `+0x2000` is CLR. Naming the family is what keeps a
 # "clock enable" from decoding as a clock disable.
 atomic_register_aliases: "efr32s2"
+# The flash INFORMATION block's user-data page — RM section 6.3 Table 6.1 p.60:
+# "Information N/A 0x0FE00000 ... User Data (UD) 1 kB". This is where a project
+# puts anything it wants to survive a reset, and it is the page MSC writes.
+#
+# ⚠️ `erased: true` because a blank flash page reads ONES. A connected BRD2709A
+# reads `ffffffff ffffffff ffffffff ffffffff` at 0x0FE00000 (SWD, 2026-09-03).
+# Installed as zeros — the default for a plain RAM hole — firmware asking "is
+# my settings page blank?" would get the wrong answer in the twin and the right
+# one on the bench.
+#
+# The DEVINFO page at 0x0FE08000 is deliberately NOT mapped here: it is a
+# read-only factory page whose contents are per-die (calibration, EUI-48/64),
+# and inventing values for it would be fiction. Reads there still fault loudly.
+memory_regions:
+  - name: "userdata"
+    base: 0x0FE00000
+    size: "1KB"
+    erased: true
 ram:
   # SRAM_BASE 0x20000000 / SRAM_SIZE 0x00080000 (512 KiB) — CMSIS header.
   base: 0x20000000
@@ -495,6 +519,34 @@ peripherals:
     base_address: 0x49004000
     size: "4KB"
     irq: 65
+
+  # ── MSC (Memory System Controller) ───────────────────────────────────────
+  # THE BLOCK THAT LETS FIRMWARE WRITE ITS OWN FLASH. Without it nothing on
+  # this part persists across a reset: a sketch that wants to remember a
+  # calibration, a pairing or a high score had nowhere to put it, and the store
+  # faulted the bus.
+  #
+  # Base 0x40030000: RM section 4.2.4.1 Peripheral Map p.48
+  # (0x40030000 - 0x40033FFF MSC). Register map: RM section 6.7 p.134.
+  # CMU_CLKEN1 bit 16 (RM section 8.5.11 p.187, "16 MSC RW Enable Bus Clock").
+  #
+  # ⚠️ MSC DOES NOT ANSWER THE BUS UNCLOCKED. On a cold `reset halt` a read of
+  # 0x40030000 over SWD fails outright on real silicon, as do PRS, LDMA,
+  # ICACHE0, SYSCFG and EUSART1 — only CMU replies. That is Series-2 clock
+  # gating, not a debug or TrustZone problem, and it is why the capture below
+  # needed a CMU_CLKEN preamble.
+  #
+  # ⚠️ ITS RESET VALUES ARE THE DIE'S, NOT THE MANUAL'S. RM p.143 gives
+  # MSC_STATUS reset as WREADY|WDATAREADY = 0x0800_0008. A connected BRD2709A
+  # reads 0x0B00_0008 — PWRON0 and PWRON1 are set too, because both flash banks
+  # finish powering up before any firmware can look. Modelling the paper reset
+  # would hang a driver that waits for its bank to come up. Measured over SWD
+  # 2026-09-03 (J-Link OB, VTarget 3.301 V).
+  - id: "msc"
+    type: "efr32s2_msc"
+    clock: { reg: "clken1", bit: 16 }
+    base_address: 0x40030000
+    size: "4KB"
 
   # ── BLE (LabWired virtual controller) ────────────────────────────────────
   # ⚠️ THIS BLOCK IS NOT SILICON. There is no EFR32 radio peripheral at this
