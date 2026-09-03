@@ -53,6 +53,23 @@ const USART_CMD_TXEN: u32 = 1 << 2;
 const USART_STATUS_TXBL: u32 = 1 << 6;
 const USART1_CLKDIV_115200: u32 = 2384;
 const MODE_PUSHPULL: u32 = 0x4;
+/// Series-2 mode 6 is WIREDANDPULLUP — open-drain with a pull-up, which is
+/// what an I2C line is. RM section 24.3.12.1 p.862 says it outright: "an I2C
+/// SDA should be configured as open-drain".
+const MODE_WIREDANDPULLUP: u32 = 0x6;
+
+// ── GPIO_I2C0 route, RM section 24.6 p.875 ───────────────────────────────
+// ⚠️ WITHOUT THESE THE BUS HAS NO WIRES. I2C reaches SCL/SDA only through
+// these registers; this firmware used to skip them and "worked" only because
+// the window was not even mapped and the twin's model answered anyway.
+// Pins are the kit's own: PC05 = QWIIC/MIKROE_I2C_SCL, PC07 = ..._SDA
+// (UG594 Table 3.1 p.10, pads 11 and 9). PORT is PA=0, PB=1, PC=2.
+const GPIOC_MODEL: *mut u32 = 0x4003_C094 as *mut u32;
+const I2C0_ROUTEEN: *mut u32 = 0x4003_C528 as *mut u32;
+const I2C0_SCLROUTE: *mut u32 = 0x4003_C52C as *mut u32;
+const I2C0_SDAROUTE: *mut u32 = 0x4003_C530 as *mut u32;
+const I2C_ROUTEEN_SCLPEN: u32 = 1 << 0;
+const I2C_ROUTEEN_SDAPEN: u32 = 1 << 1;
 
 // ── I2C0 ─────────────────────────────────────────────────────────────────
 const I2C0_BASE: usize = 0x4B00_0000;
@@ -139,6 +156,16 @@ fn main() -> ! {
     write_u32(USART1_CMD, USART_CMD_TXEN);
 
     puts("MG26-I2C\n");
+
+    // Both wires open-drain with a pull-up, then routed and enabled. One wire
+    // alone is not a bus, and the twin refuses the transfer if only one is up.
+    write_u32(
+        GPIOC_MODEL,
+        (MODE_WIREDANDPULLUP << 20) | (MODE_WIREDANDPULLUP << 28),
+    );
+    write_u32(I2C0_SCLROUTE, 2 | (5 << 16));
+    write_u32(I2C0_SDAROUTE, 2 | (7 << 16));
+    write_u32(I2C0_ROUTEEN, I2C_ROUTEEN_SCLPEN | I2C_ROUTEEN_SDAPEN);
 
     write_u32(I2C_EN, I2C_EN_EN);
     // Any non-zero divisor: the model does not pace the bus, and on silicon

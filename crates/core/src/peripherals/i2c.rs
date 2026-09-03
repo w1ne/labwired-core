@@ -1693,6 +1693,9 @@ impl KinetisI2c {
 ///   single-byte path, and `AUTOACK`/`AUTOSE`/`AUTOSN` are stored and ignored.
 #[derive(serde::Serialize)]
 pub struct Efr32s2I2c {
+    /// See [`Self::resolve`] — the route gate this controller obeys.
+    #[serde(skip)]
+    route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
     en: u32,
     ctrl: u32,
     clkdiv: u32,
@@ -1748,6 +1751,7 @@ pub struct Efr32s2I2c {
 impl Default for Efr32s2I2c {
     fn default() -> Self {
         Self {
+            route_gate: None,
             en: 0,
             ctrl: 0,
             clkdiv: 0,
@@ -1934,10 +1938,30 @@ impl Efr32s2I2c {
         let _fit = wave.emit_ending_at(&lines, now);
     }
 
+    /// Resolve `addr` to an attached device index, through `claims_address`.
+    ///
+    /// ⚠️ NO WIRES, NO DEVICE. On Series 2 an I2C reaches SCL and SDA only
+    /// through `GPIO_I2Cn_ROUTEEN`; unrouted, a real bus is silent and every
+    /// address NACKs. Resolving regardless is how firmware that never routed
+    /// its pins passed in the twin and stalled on the bench — and on this chip
+    /// it could not even have routed them, because that register window was
+    /// not mapped at all.
     fn resolve(&self, addr: u8) -> Option<usize> {
+        if !self
+            .route_gate
+            .as_ref()
+            .is_none_or(|g| g.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return None;
+        }
         self.attached_devices
             .iter()
             .position(|d| d.borrow().claims_address(addr))
+    }
+
+    /// Install the `GPIO_I2Cn_ROUTEEN` gate for this instance.
+    pub fn set_route_gate(&mut self, gate: crate::peripherals::efr32::usart_route::RouteGate) {
+        self.route_gate = Some(gate);
     }
 
     /// A `TXDATA` write: the address byte after a START, or a data byte.
@@ -2206,6 +2230,19 @@ impl Default for I2c {
 }
 
 impl I2c {
+    /// Install the EFR32 `GPIO_I2Cn_ROUTEEN` gate, when this is that family.
+    ///
+    /// A no-op on every other layout, which is what keeps the enforcement
+    /// scoped to the chip whose silicon actually behaves this way.
+    pub(crate) fn set_route_gate(
+        &mut self,
+        gate: crate::peripherals::efr32::usart_route::RouteGate,
+    ) {
+        if let Self::Efr32s2(i2c) = self {
+            i2c.set_route_gate(gate);
+        }
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

@@ -23,5 +23,7 @@ pub mod cmu;
 pub mod gpio_exti;
 pub mod gpio_route;
 pub mod iadc;
+pub mod msc;
 pub mod smu;
 pub mod timer;
+pub mod usart_route;

@@ -671,6 +671,16 @@ impl UartRegisterLayout {
 #[derive(serde::Serialize)]
 pub struct Uart {
     layout: UartRegisterLayout,
+    /// EFR32 only: "my TX currently reaches a pad", published by
+    /// `GPIO_USARTROUTE`.
+    ///
+    /// ⚠️ A USART'S TX REACHES NO PIN UNTIL ITS ROUTE NAMES ONE. Firmware that
+    /// skips it prints nothing on a real board, and this model used to hand
+    /// the byte to the console sink regardless — a serial assertion that
+    /// passed in the twin and produced silence on the bench. `None` means no
+    /// route block is wired (every other family), and the gate is open.
+    #[serde(skip)]
+    route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
@@ -848,6 +858,7 @@ impl Uart {
     pub fn new_with_layout_cr3(layout: UartRegisterLayout, cr3_mask: u32) -> Self {
         Self {
             layout,
+            route_gate: None,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: true,
@@ -1351,7 +1362,27 @@ impl Uart {
         (Vec::new(), now)
     }
 
+    /// Can this UART's TX reach a pin at all?
+    fn reaches_a_pad(&self) -> bool {
+        self.route_gate
+            .as_ref()
+            .is_none_or(|g| g.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// Install the `GPIO_USARTROUTE` gate for this instance.
+    pub(crate) fn set_route_gate(
+        &mut self,
+        gate: crate::peripherals::efr32::usart_route::RouteGate,
+    ) {
+        self.route_gate = Some(gate);
+    }
+
     fn push_tx(&mut self, value: u8) {
+        // The byte leaves the shift register either way — what an unrouted TX
+        // cannot do is reach a wire, so nothing downstream sees it.
+        if !self.reaches_a_pad() {
+            return;
+        }
         self.record_trace("tx", value);
         self.wire_push(value);
 

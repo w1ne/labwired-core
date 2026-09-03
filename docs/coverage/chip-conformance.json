@@ -193,7 +193,7 @@
     "excluded": 1,
     "level": 2,
     "name": "efr32mg26",
-    "reg_match": 219
+    "reg_match": 243
   },
   {
     "behavior": true,

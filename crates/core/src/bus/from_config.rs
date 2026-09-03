@@ -143,7 +143,13 @@ impl SystemBus {
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
         for region in &chip.memory_regions {
             let size = region.size;
-            let mut mem = LinearMemory::new(size as usize, region.base);
+            // `erased` fills with 0xFF: a flash window's blank state is ones,
+            // not zeros. See NamedMemoryRange::erased.
+            let mut mem = if region.erased {
+                LinearMemory::new_erased(size as usize, region.base)
+            } else {
+                LinearMemory::new(size as usize, region.base)
+            };
             // Optionally preload a raw binary image (e.g. a dumped mask ROM)
             // from a path given by an env var. Copyrighted vendor blobs are not
             // committed, so a missing image just leaves the region zero-filled.

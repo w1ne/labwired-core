@@ -166,6 +166,17 @@ pub struct NamedMemoryRange {
     /// that can't be committed — the region stays zero-filled if unset/missing.
     #[serde(default)]
     pub image_env: Option<String>,
+    /// Fill the region with 0xFF instead of 0x00.
+    ///
+    /// ⚠️ A FLASH REGION IS NOT A RAM HOLE. Regions install as zeros, which is
+    /// right for a RAM window and WRONG for flash: an erased flash byte is
+    /// 0xFF, and a blank user-data page on a real EFR32MG26 reads
+    /// `ffffffff ffffffff …` (measured over SWD on BRD2709A, 2026-09-03).
+    /// Without this, firmware that reads its settings page before writing one
+    /// sees zeros in the twin and ones on the bench — and "is this page blank?"
+    /// is the first question any persistence routine asks.
+    #[serde(default)]
+    pub erased: bool,
 }
 
 /// One RCC bit a peripheral's clock depends on.

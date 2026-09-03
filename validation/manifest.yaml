@@ -1097,7 +1097,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: 0ec560f22289e67f24b5771b8479cce4ace1fa89e1bc1897c2040499b3fcbb39
+    drift_ack_digest: 8f72961bbee2ce4757aa81ff75e5b8d9defd7bc1008a5c4ee7fe62fb12d1f5d3
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1185,6 +1185,22 @@ boards:
     # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
     # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    # 2026-09-03 (second, route enforcement): `peripherals/spi.rs`,
+    # `peripherals/uart.rs` and `peripherals/i2c.rs` each gained a ROUTE GATE so
+    # an EFR32 peripheral whose GPIO_*ROUTE names no pad drives nothing — which
+    # is what the die does, and what the twin used to hide.
+    #
+    # WHAT IT CANNOT REACH ON THIS BOARD: the gate is `Option<..>` and is
+    # installed ONLY from `wire_efr32_timer_pads`, i.e. only for peripherals on
+    # an EFR32 bus. Everywhere else it stays `None`, and every check is
+    # `is_none_or(..)`, so a non-EFR32 controller takes exactly the branch it
+    # took before. `git diff` adds no line an STM32 path executes; the STM32
+    # arms of all three models are untouched.
+    # Ran: cargo test -p labwired-core --lib (3366 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
+    # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-03
   - id: esp32c3
     doc: docs/boards/esp32c3.md
@@ -2338,7 +2354,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: 9b1b6a45880881f392926e96a4c873c010b7b4d7cf7b21df2929ec2f9d7c3e3e
+    drift_ack_digest: 7b8fbc7c29e1cababe121595b84e081ef299f9e39ab862cb60c53673c9e86711
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2421,6 +2437,22 @@ boards:
     # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
     # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    # 2026-09-03 (second, route enforcement): `peripherals/spi.rs`,
+    # `peripherals/uart.rs` and `peripherals/i2c.rs` each gained a ROUTE GATE so
+    # an EFR32 peripheral whose GPIO_*ROUTE names no pad drives nothing — which
+    # is what the die does, and what the twin used to hide.
+    #
+    # WHAT IT CANNOT REACH ON THIS BOARD: the gate is `Option<..>` and is
+    # installed ONLY from `wire_efr32_timer_pads`, i.e. only for peripherals on
+    # an EFR32 bus. Everywhere else it stays `None`, and every check is
+    # `is_none_or(..)`, so a non-EFR32 controller takes exactly the branch it
+    # took before. `git diff` adds no line an STM32 path executes; the STM32
+    # arms of all three models are untouched.
+    # Ran: cargo test -p labwired-core --lib (3366 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
+    # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-03
   - id: nucleo-l073rz
     doc: docs/boards/nucleo-l073rz.md
@@ -2787,7 +2819,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 8375dad5c1e0cd5ddc87dd5ffd607f450b651167927a0d8524d23257b12437af
+    drift_ack_digest: 11dc377cdd5d4902f4430e681fa4bb7e65552fbbdf30fe34a5a15884ec7d2e54
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2838,6 +2870,22 @@ boards:
     # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
     # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    # 2026-09-03 (second, route enforcement): `peripherals/spi.rs`,
+    # `peripherals/uart.rs` and `peripherals/i2c.rs` each gained a ROUTE GATE so
+    # an EFR32 peripheral whose GPIO_*ROUTE names no pad drives nothing — which
+    # is what the die does, and what the twin used to hide.
+    #
+    # WHAT IT CANNOT REACH ON THIS BOARD: the gate is `Option<..>` and is
+    # installed ONLY from `wire_efr32_timer_pads`, i.e. only for peripherals on
+    # an EFR32 bus. Everywhere else it stays `None`, and every check is
+    # `is_none_or(..)`, so a non-EFR32 controller takes exactly the branch it
+    # took before. `git diff` adds no line an STM32 path executes; the STM32
+    # arms of all three models are untouched.
+    # Ran: cargo test -p labwired-core --lib (3366 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
+    # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-03
   - id: stm32f103
     doc: docs/boards/stm32f103.md
@@ -3252,7 +3300,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: c906fea80a09489f648b6e20b3bbf7d66aa23c2423ba7889c60c1d32d85e1d64
+    drift_ack_digest: 875db4da0c95c571d8e6d9f90b09be31a2b6e4fa013cd8c6af86272e0ac2486b
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3337,6 +3385,22 @@ boards:
     # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
     # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    # 2026-09-03 (second, route enforcement): `peripherals/spi.rs`,
+    # `peripherals/uart.rs` and `peripherals/i2c.rs` each gained a ROUTE GATE so
+    # an EFR32 peripheral whose GPIO_*ROUTE names no pad drives nothing — which
+    # is what the die does, and what the twin used to hide.
+    #
+    # WHAT IT CANNOT REACH ON THIS BOARD: the gate is `Option<..>` and is
+    # installed ONLY from `wire_efr32_timer_pads`, i.e. only for peripherals on
+    # an EFR32 bus. Everywhere else it stays `None`, and every check is
+    # `is_none_or(..)`, so a non-EFR32 controller takes exactly the branch it
+    # took before. `git diff` adds no line an STM32 path executes; the STM32
+    # arms of all three models are untouched.
+    # Ran: cargo test -p labwired-core --lib (3366 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
+    # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-03
   - id: stm32f407
     doc: docs/boards/stm32f407.md
@@ -3721,7 +3785,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 559f6eb5fdbd05a67d7bf8348f046aec0bc74d32f1f16ef4e60f03181a6026c5
+    drift_ack_digest: 41035d681d189eefe6a7bcebf7650c1032023f36dc0131c655fe5ff179eebb07
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3775,6 +3839,22 @@ boards:
     # Ran: cargo test -p labwired-core --lib (3313 passed, 0 failed), plus
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing and esp32s3_gpspi_oracle,
     # all green. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-03
+    # 2026-09-03 (second, route enforcement): `peripherals/spi.rs`,
+    # `peripherals/uart.rs` and `peripherals/i2c.rs` each gained a ROUTE GATE so
+    # an EFR32 peripheral whose GPIO_*ROUTE names no pad drives nothing — which
+    # is what the die does, and what the twin used to hide.
+    #
+    # WHAT IT CANNOT REACH ON THIS BOARD: the gate is `Option<..>` and is
+    # installed ONLY from `wire_efr32_timer_pads`, i.e. only for peripherals on
+    # an EFR32 bus. Everywhere else it stays `None`, and every check is
+    # `is_none_or(..)`, so a non-EFR32 controller takes exactly the branch it
+    # took before. `git diff` adds no line an STM32 path executes; the STM32
+    # arms of all three models are untouched.
+    # Ran: cargo test -p labwired-core --lib (3366 passed, 0 failed), plus
+    # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
+    # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
+    # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-03
   - id: esp32s3
     doc: docs/boards/esp32s3.md

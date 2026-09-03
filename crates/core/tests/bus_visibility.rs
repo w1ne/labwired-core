@@ -1130,6 +1130,21 @@ fn drive_spi(
             // ⚠️ `CTRL.SYNC` is what makes this USART a SPI at all, and MSBF is
             // the only bit order the narrator draws. CMD then enables master +
             // TX. `GPIO_USARTROUTE` is deliberately NOT written.
+            // ⚠️ AND THE ROUTE, OR THIS BLOCK REACHES NO PAD. On Series 2 a
+            // USART's clock and data are wired to pins only through
+            // GPIO_USARTROUTE; unrouted, the model drives nothing and this
+            // harness sees zero edges — which is what a real board produces.
+            // The instance's stanza is +0x20 apart from USART0's at 0x4003C820
+            // (RM section 24.6 p.879), and the pins are arbitrary here: the
+            // measure is "does a named line move", not which pad it moved.
+            {
+                let n = (inst.base - 0x400A_0000) / 0x4000;
+                let stanza = 0x4003_C820 + n * 0x20;
+                let _ = machine.bus.write_u32(0x4000_8064, 1 << 26); // GPIO clock
+                let _ = machine.bus.write_u32(stanza + 0x14, 2 | (3 << 16)); // CLK -> PC03
+                let _ = machine.bus.write_u32(stanza + 0x18, 2 | (2 << 16)); // TX  -> PC02
+                let _ = machine.bus.write_u32(stanza, (1 << 4) | (1 << 3)); // TXPEN|CLKPEN
+            }
             let _ = machine.bus.write_u32(inst.base + 0x04, 1); // EN
             let _ = machine.bus.write_u32(inst.base + 0x08, 1 | (1 << 10)); // CTRL SYNC|MSBF
             let _ = machine.bus.write_u32(inst.base + 0x14, (1 << 4) | (1 << 2));

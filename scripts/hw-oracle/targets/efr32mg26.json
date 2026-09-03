@@ -43,15 +43,27 @@
       "id": "i2c0",
       "base": "0x4B000000",
       "count": 20
+    },
+    {
+      "id": "msc",
+      "base": "0x40030000",
+      "count": 24
     }
   ],
-  "state_note": "reset halt, then CLKEN0 |= 0x04004630 \u2014 GPIO/TIMER0/TIMER1/USART0/I2C0/IADC0. Every other register in this oracle is still its RESET value: the preamble only un-gates the clock, it configures nothing.",
+  "state_note": "reset halt, then CLKEN0 |= 0x04004630 (GPIO/TIMER0/TIMER1/USART0/I2C0/IADC0) and CLKEN1 |= 0x00010000 (MSC). Every other register in this oracle is still its RESET value: the preamble only un-gates the clock, it configures nothing. \u26a0 MSC_STATUS reads 0x0B000008 here, not the manual's 0x08000008: PWRON0 and PWRON1 are set because both flash banks finish powering up before anything can look. The die's value is the one firmware sees, and the one the twin models.",
   "preamble": [
     {
       "comment": "un-gate the peripherals this oracle reads; unclocked they bus-fault the debug port",
       "write32": {
         "address": "0x40008064",
         "value": "0x04004630"
+      }
+    },
+    {
+      "comment": "CLKEN1 bit 16 = MSC (RM section 8.5.11 p.187). MSC bus-faults the debug port unclocked, exactly like the CLKEN0 blocks above.",
+      "write32": {
+        "address": "0x40008068",
+        "value": "0x00010000"
       }
     }
   ]

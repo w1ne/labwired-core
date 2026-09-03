@@ -45,6 +45,17 @@ const USART_CMD_TXEN: u32 = 1 << 2;
 const USART_STATUS_TXBL: u32 = 1 << 6;
 const USART1_CLKDIV_115200: u32 = 2384;
 const MODE_PUSHPULL: u32 = 0x4;
+const MODE_INPUT: u32 = 0x1;
+
+// ── GPIO_USARTROUTE[0], RM section 24.6 p.879 ────────────────────────────
+const GPIOC_MODEL: *mut u32 = 0x4003_C094 as *mut u32;
+const USART0_ROUTEEN: *mut u32 = 0x4003_C820 as *mut u32;
+const USART0_RXROUTE: *mut u32 = 0x4003_C830 as *mut u32;
+const USART0_CLKROUTE: *mut u32 = 0x4003_C834 as *mut u32;
+const USART0_TXROUTE: *mut u32 = 0x4003_C838 as *mut u32;
+const ROUTEEN_RXPEN: u32 = 1 << 2;
+const ROUTEEN_CLKPEN: u32 = 1 << 3;
+const ROUTEEN_TXPEN: u32 = 1 << 4;
 
 // ── USART0 in synchronous (SPI) mode ─────────────────────────────────────
 const SPI0_BASE: usize = 0x400A_0000;
@@ -121,6 +132,27 @@ fn main() -> ! {
     write_u32(USART1_CMD, USART_CMD_TXEN);
 
     puts("MG26-SPI\n");
+
+    // ⚠️ ROUTE THE PINS, OR THIS CLOCKS NOTHING. On Series 2 a USART's signals
+    // reach NO pad until GPIO_USARTROUTE says which one. This firmware used to
+    // skip that and "worked" only because the twin's route block was a stub —
+    // on a real BRD2709A it drove a dead bus.
+    //
+    // Pins are the kit's mikroBUS mapping, UG594 Table 3.1 p.10: PC03 SCK,
+    // PC02 MOSI, PC01 MISO. Registers are RM section 24.6 p.879 and the route
+    // word's PORT[1:0] / PIN[19:16] (p.1091-93); PORT is PA=0, PB=1, PC=2
+    // (RM section 24.3.12.1 p.862).
+    write_u32(
+        GPIOC_MODEL,
+        (MODE_INPUT << 4) | (MODE_PUSHPULL << 8) | (MODE_PUSHPULL << 12),
+    );
+    write_u32(USART0_RXROUTE, 2 | (1 << 16)); // MISO <- PC01
+    write_u32(USART0_CLKROUTE, 2 | (3 << 16)); // SCLK -> PC03
+    write_u32(USART0_TXROUTE, 2 | (2 << 16)); // MOSI -> PC02
+    write_u32(
+        USART0_ROUTEEN,
+        ROUTEEN_TXPEN | ROUTEEN_CLKPEN | ROUTEEN_RXPEN,
+    );
 
     // Synchronous master: SYNC in CTRL, then MASTEREN/TXEN/RXEN in CMD.
     write_u32(SPI_EN, SPI_EN_EN);

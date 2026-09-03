@@ -285,7 +285,7 @@ const CHIPS: &[ChipConf] = &[
         name: "efr32mg26",
         yaml: "configs/chips/efr32mg26.yaml",
         reset_oracle: Some(
-            "scripts/hw-oracle/captures/efr32mg26/20260902T194136Z-i2sctrl/reg_oracle.json",
+            "scripts/hw-oracle/captures/efr32mg26/20260903T155944Z-msc/reg_oracle.json",
         ),
         // The BRD2709A agent deck, running. The reset oracle above is an L1
         // claim -- the register FILE matches the die, 219/219 -- which says
