@@ -281,6 +281,21 @@ peripherals:
     base_address: 0x4003C6E0
     size: "320B"
 
+  # ── GPIO_I2C[0..3] route ─────────────────────────────────────────────────
+  # ⚠️ THIS WINDOW WAS NOT MAPPED AT ALL — a quieter version of the USART stub
+  # below. `firmware-mg26-i2c` could not have routed its pins if it wanted to,
+  # because a write here FAULTED the bus; and the I2C model reached its device
+  # regardless, so the lab passed. On silicon an unrouted I2C drives neither
+  # SCL nor SDA.
+  #
+  # RM section 24.6 p.875: I2C0 at +0x528, then +0x10 per instance, stanza
+  # ROUTEEN/SCLROUTE/SDAROUTE. ROUTEEN is SCLPEN bit 0, SDAPEN bit 1 (p.1009).
+  - id: "gpio_i2croute"
+    type: "efr32s2_i2croute"
+    clock: { reg: "clken0", bit: 26 }
+    base_address: 0x4003C528
+    size: "64B"
+
   # ── GPIO_USARTROUTE[0..2] ────────────────────────────────────────────────
   # ⚠️ THIS WAS A STUB, AND THE STUB MADE THE TWIN LIE. A USART's clock and
   # data reach NO pad until these registers are written; with the window

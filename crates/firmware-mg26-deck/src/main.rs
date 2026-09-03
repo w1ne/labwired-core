@@ -83,6 +83,22 @@ const USART1_CLKDIV: *mut u32 = (USART1_BASE + 0x1C) as *mut u32;
 const USART1_TXDATA: *mut u32 = (USART1_BASE + 0x38) as *mut u32;
 const USART1_CLKDIV_115200: u32 = 2384;
 
+// ── GPIO_USARTROUTE, RM section 24.6 p.879 ───────────────────────────────
+// ⚠️ WITHOUT THESE THE DECK DRIVES NOTHING ON A REAL BOARD. A USART's signals
+// reach no pad until its route names one. PORT is PA=0, PB=1, PC=2, PD=3
+// (RM section 24.3.12.1 p.862); the route word is PORT[1:0] | PIN[19:16].
+const USART0_ROUTEEN: *mut u32 = 0x4003_C820 as *mut u32;
+const USART0_CLKROUTE: *mut u32 = 0x4003_C834 as *mut u32;
+const USART0_TXROUTE: *mut u32 = 0x4003_C838 as *mut u32;
+const USART2_ROUTEEN: *mut u32 = 0x4003_C860 as *mut u32;
+const USART2_CSROUTE: *mut u32 = 0x4003_C864 as *mut u32;
+const USART2_RXROUTE: *mut u32 = 0x4003_C870 as *mut u32;
+const USART2_CLKROUTE: *mut u32 = 0x4003_C874 as *mut u32;
+const ROUTEEN_CSPEN: u32 = 1 << 0;
+const ROUTEEN_RXPEN: u32 = 1 << 2;
+const ROUTEEN_CLKPEN: u32 = 1 << 3;
+const ROUTEEN_TXPEN: u32 = 1 << 4;
+
 // ── USART0 as SPI, USART2 as I2S ─────────────────────────────────────────
 const SPI0_BASE: usize = 0x400A_0000;
 const I2S2_BASE: usize = 0x400A_8000;
@@ -312,6 +328,13 @@ fn main() -> ! {
     wr(GPIOC_DOUT, rd(GPIOC_DOUT) | PC06_RES);
     wr(GPIOD_DOUT, rd(GPIOD_DOUT) | PD03_BLK);
 
+    // ⚠️ THE PANEL'S PINS. USART0 drives SCK on PC03 and MOSI on PC02 (UG594
+    // Table 3.1). RX is deliberately NOT routed: this panel is write-only, and
+    // the mikroBUS MISO pad PC01 is the deck's pushbutton.
+    wr(USART0_CLKROUTE, 2 | (3 << 16));
+    wr(USART0_TXROUTE, 2 | (2 << 16));
+    wr(USART0_ROUTEEN, ROUTEEN_CLKPEN | ROUTEEN_TXPEN);
+
     // USART0 as a synchronous master: SYNC in CTRL, MASTEREN/TXEN/RXEN in CMD.
     wr(reg(SPI0_BASE, USART_EN), 1);
     wr(reg(SPI0_BASE, USART_CTRL), USART_CTRL_SYNC);
@@ -350,6 +373,17 @@ fn main() -> ! {
     // generate the bus clock even when it is not transmitting data", so a mic
     // is read by writing TXDATA and then reading RXDATA — a read alone would
     // never clock the bus and would return the same stale word forever.
+    // ⚠️ AND THE MICROPHONE'S. On this block the I2S word clock IS the CS
+    // signal, so WS routes through CSROUTE — PA05 — while the bit clock is
+    // CLK on PA04 and the mic's data arrives on RX at PA07.
+    wr(USART2_CLKROUTE, 4 << 16);
+    wr(USART2_CSROUTE, 5 << 16);
+    wr(USART2_RXROUTE, 7 << 16);
+    wr(
+        USART2_ROUTEEN,
+        ROUTEEN_CLKPEN | ROUTEEN_CSPEN | ROUTEEN_RXPEN,
+    );
+
     wr(reg(I2S2_BASE, USART_EN), 1);
     wr(reg(I2S2_BASE, USART_CTRL), USART_CTRL_SYNC);
     wr(reg(I2S2_BASE, USART_CLKDIV), 0);

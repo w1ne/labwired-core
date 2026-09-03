@@ -1282,6 +1282,17 @@ pub struct Spi {
     /// channel slot, not a byte -- see `I2sDevice`.
     #[serde(skip)]
     pub i2s_device: Option<Box<dyn crate::peripherals::device::I2sDevice>>,
+    /// EFR32 only: "my CLK or TX currently reaches a pad", published by
+    /// `GPIO_USARTROUTE`.
+    ///
+    /// ⚠️ WITHOUT THIS THE TWIN LIES. On Series 2 a USART's signals reach NO
+    /// pin until the route registers are written, so firmware that skips them
+    /// drives nothing on a real board — and this model used to clock its
+    /// attached device anyway. `None` means no route block is wired (every
+    /// other chip family), and the gate is then open, which keeps those
+    /// families exactly as they were.
+    #[serde(skip)]
+    route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
     /// Last sampled active-low GPIO CS level for each attached device.
     #[serde(skip)]
     selected_devices: Vec<bool>,
@@ -2141,6 +2152,23 @@ impl Spi {
                 if !(enabled && sync && tx_enabled) {
                     return;
                 }
+                // ⚠️ AND THE SIGNALS MUST ACTUALLY REACH A PIN. On Series 2 a
+                // USART is wired to pads only through `GPIO_USARTROUTE`;
+                // firmware that never writes it clocks NOTHING on a real
+                // board. This model used to drive its attached device anyway,
+                // which is how a silabs-arduino core that programmed no route
+                // passed every simulated SPI test against a dead bus.
+                //
+                // TXC is still raised: the block really does shift the byte
+                // out of its own shift register. What does not happen is the
+                // byte reaching a device — exactly the silicon behaviour.
+                if !self.efr32_reaches_a_pad() {
+                    if let SpiRegs::Efr32s2Usart(r) = &mut self.regs {
+                        r.iflag |= EFR_USART_IF_TXC | EFR_USART_IF_TXBL;
+                        r.txc = true;
+                    }
+                    return;
+                }
                 // I2S mode: a TXDATA write clocks one 32-bit CHANNEL SLOT, not
                 // a byte. On this block receiving requires clocking -- RM
                 // section 20.3.3.7: "the main device must generate the bus
@@ -2528,6 +2556,24 @@ impl Spi {
 
     /// Get-or-create the shared line-level cell (bus wiring hands the same
     /// `Arc` to the STM32 GPIO ports carrying this SPI's AF pads).
+    /// Install the `GPIO_USARTROUTE` gate for this instance.
+    pub(crate) fn set_route_gate(
+        &mut self,
+        gate: crate::peripherals::efr32::usart_route::RouteGate,
+    ) {
+        self.route_gate = Some(gate);
+    }
+
+    /// Can this block's traffic reach a pin at all?
+    ///
+    /// True when no route block is wired (every non-EFR32 family), so nothing
+    /// else changes behaviour.
+    fn efr32_reaches_a_pad(&self) -> bool {
+        self.route_gate
+            .as_ref()
+            .is_none_or(|g| g.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
     pub(crate) fn line_levels_arc(&mut self) -> Arc<SpiLineLevels> {
         if self.lines.is_none() {
             // SCK idles at the programmed polarity, and every layout spells

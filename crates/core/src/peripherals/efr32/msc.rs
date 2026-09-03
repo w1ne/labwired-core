@@ -358,6 +358,19 @@ impl Peripheral for Efr32s2Msc {
         }
     }
 
+    /// ⚠️ THIS BLOCK MUST NOT FORCE THE LEGACY WALK. Its work happens in
+    /// `tick_with_bus`, which the bus pumps on its own; leaving the default
+    /// here kept BRD2709A on the per-instruction walk under `event-scheduler`
+    /// and cost the whole board its walk-deletion, for a peripheral that is
+    /// idle except during a flash write.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

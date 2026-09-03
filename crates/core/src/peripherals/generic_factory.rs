@@ -300,6 +300,9 @@ pub fn try_build(
         "efr32s2_usartroute" => {
             Box::new(crate::peripherals::efr32::usart_route::Efr32s2UsartRoute::new())
         }
+        "efr32s2_i2croute" => {
+            Box::new(crate::peripherals::efr32::usart_route::Efr32s2I2cRoute::new())
+        }
         // Silicon Labs Series-2 TIMER. ⚠️ `counter_bits` is REQUIRED and per
         // instance: TIMER0/1/8/9 are 32-bit and TIMER2..7 are 16-bit on this
         // part (`TIMER_CNTWIDTH` in the device header). There is no safe

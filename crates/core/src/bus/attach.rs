@@ -1897,7 +1897,8 @@ impl SystemBus {
         use crate::peripherals::efr32::gpio_route::{cc_token, Efr32s2TimerRoute, CC_PER_TIMER};
         use crate::peripherals::efr32::timer::Efr32s2Timer;
         use crate::peripherals::efr32::usart_route::{
-            usart_token, Efr32s2UsartRoute, SIGNALS_PER_USART, USARTROUTE_COUNT,
+            usart_token, Efr32s2I2cRoute, Efr32s2UsartRoute, I2CROUTE_COUNT, SIGNALS_PER_USART,
+            USARTROUTE_COUNT,
         };
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
         use crate::peripherals::pad_claims::PadClaims;
@@ -2038,6 +2039,8 @@ impl SystemBus {
         // USART0_S_BASE 0x400A0000, +0x4000 per instance. The index is what
         // GPIO_USARTROUTE[n] is indexed by, so it has to match the silicon's
         // numbering rather than the order peripherals happen to appear.
+        let mut usart_gates: Vec<(usize, crate::peripherals::efr32::usart_route::RouteGate)> =
+            Vec::new();
         const USART_BASE: u64 = 0x400A_0000;
         const USART_STRIDE: u64 = 0x4000;
         /// Line order is `SpiLineLevels`: SCK, MOSI, MISO.
@@ -2055,6 +2058,22 @@ impl SystemBus {
             else {
                 continue;
             };
+            // ⚠️ A USART IS ONE BLOCK WITH THREE PERSONALITIES, so the same
+            // route gates whichever model was built at that base: SPI/I2S here,
+            // the async UART just below. Gating only one of them would leave
+            // the other free to print into a sink from a pin that does not
+            // exist.
+            if let Some(uart) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::uart::Uart>())
+            {
+                let gate: crate::peripherals::efr32::usart_route::RouteGate =
+                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                uart.set_route_gate(gate.clone());
+                usart_gates.push((index, gate));
+                continue;
+            }
             let Some(spi) = self.peripherals[entry_idx]
                 .dev
                 .as_any_mut()
@@ -2063,10 +2082,76 @@ impl SystemBus {
                 continue;
             };
             let lines = spi.line_levels_arc().pad_lines().clone();
+            // The gate the route block flips and this USART reads before it
+            // drives anything. Both halves must hold the SAME Arc or the
+            // enforcement is a flag nobody sets.
+            let gate: crate::peripherals::efr32::usart_route::RouteGate =
+                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            spi.set_route_gate(gate.clone());
+            usart_gates.push((index, gate));
             let signals = (0..SIGNALS_PER_USART)
                 .map(|sig| (usart_token(index, sig), sig, USART_FUNCS[index][sig]))
                 .collect();
             wired.push((lines, signals));
+        }
+        // ── I2C ──────────────────────────────────────────────────────────
+        // Same rule, same block, second window: I2C0_S_BASE 0x4B000000 for
+        // instance 0 and 0x400B0000 + n*0x4000 for the rest, per the chip
+        // descriptor. The route block is GPIO_I2Cn_ROUTEEN.
+        let mut i2c_gates: Vec<(usize, crate::peripherals::efr32::usart_route::RouteGate)> =
+            Vec::new();
+        for entry_idx in 0..self.peripherals.len() {
+            let base = self.peripherals[entry_idx].base;
+            let index = match base {
+                0x4B00_0000 => 0usize,
+                b if (0x400B_0000..0x400B_C000).contains(&b) && (b - 0x400B_0000) % 0x4000 == 0 => {
+                    1 + ((b - 0x400B_0000) / 0x4000) as usize
+                }
+                _ => continue,
+            };
+            if index >= I2CROUTE_COUNT {
+                continue;
+            }
+            let Some(i2c) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::i2c::I2c>())
+            else {
+                continue;
+            };
+            let gate: crate::peripherals::efr32::usart_route::RouteGate =
+                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            i2c.set_route_gate(gate.clone());
+            i2c_gates.push((index, gate));
+        }
+        if !i2c_gates.is_empty() {
+            for entry_idx in 0..self.peripherals.len() {
+                if let Some(route) = self.peripherals[entry_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<Efr32s2I2cRoute>())
+                {
+                    for (index, gate) in &i2c_gates {
+                        route.install_claims(claims.clone());
+                        route.install_gate(*index, gate.clone());
+                    }
+                }
+            }
+        }
+
+        // Hand every gate to the route block now that they all exist.
+        if !usart_gates.is_empty() {
+            for entry_idx in 0..self.peripherals.len() {
+                if let Some(route) = self.peripherals[entry_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<Efr32s2UsartRoute>())
+                {
+                    for (index, gate) in &usart_gates {
+                        route.install_gate(*index, gate.clone());
+                    }
+                }
+            }
         }
 
         if wired.is_empty() {
