@@ -112,6 +112,20 @@ impl SystemBus {
             return "fmc".to_string();
         }
 
+        // ⚠️ A ROUTE BLOCK IS NOT THE PERIPHERAL IT ROUTES. `efr32s2_usartroute`
+        // is the GPIO pin-mux for the USARTs, and the substring rule below
+        // would build it as a UART — which is exactly what happened: the type
+        // was accepted, a UART model was constructed at the route window, and
+        // every route write vanished into it while reads returned zero. The
+        // same substring rule already cost this chip its `usart2` once (it had
+        // to be renamed `spi2` to be built as a synchronous block at all).
+        //
+        // Checked BEFORE the substring, because the substring cannot be
+        // narrowed without breaking every real `*usart*` type that depends on
+        // it.
+        if t.ends_with("route") || t.ends_with("_route") {
+            return t.to_string();
+        }
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
             return "uart".to_string();
         }

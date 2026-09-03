@@ -26,3 +26,4 @@ pub mod iadc;
 pub mod msc;
 pub mod smu;
 pub mod timer;
+pub mod usart_route;

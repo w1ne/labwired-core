@@ -297,6 +297,9 @@ pub fn try_build(
         // struct per STM32 family by design and shares no register with this.
         "efr32s2_iadc" => Box::new(crate::peripherals::efr32::iadc::Efr32s2Iadc::new()),
         "efr32s2_msc" => Box::new(crate::peripherals::efr32::msc::Efr32s2Msc::new()),
+        "efr32s2_usartroute" => {
+            Box::new(crate::peripherals::efr32::usart_route::Efr32s2UsartRoute::new())
+        }
         // Silicon Labs Series-2 TIMER. ⚠️ `counter_bits` is REQUIRED and per
         // instance: TIMER0/1/8/9 are 32-bit and TIMER2..7 are 16-bit on this
         // part (`TIMER_CNTWIDTH` in the device header). There is no safe

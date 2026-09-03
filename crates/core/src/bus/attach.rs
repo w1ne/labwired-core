@@ -1896,8 +1896,12 @@ impl SystemBus {
     pub(crate) fn wire_efr32_timer_pads(&mut self) {
         use crate::peripherals::efr32::gpio_route::{cc_token, Efr32s2TimerRoute, CC_PER_TIMER};
         use crate::peripherals::efr32::timer::Efr32s2Timer;
+        use crate::peripherals::efr32::usart_route::{
+            usart_token, Efr32s2UsartRoute, SIGNALS_PER_USART, USARTROUTE_COUNT,
+        };
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
         use crate::peripherals::pad_claims::PadClaims;
+        use crate::peripherals::spi::Spi;
         use std::sync::Arc;
 
         /// TIMER instances by base address — `TIMER0_S_BASE` + n * 0x4000
@@ -1965,6 +1969,18 @@ impl SystemBus {
                 route.install_claims(claims.clone());
                 route_installed = true;
             }
+            // ⚠️ THE SAME TABLE, DELIBERATELY. USART routes and TIMER routes
+            // claim pads on one bus, and a GPIO port holds exactly one claims
+            // table — a second one here would make every USART claim invisible
+            // to the ports that were given the timer's.
+            if let Some(route) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Efr32s2UsartRoute>())
+            {
+                route.install_claims(claims.clone());
+                route_installed = true;
+            }
         }
         if !route_installed {
             return;
@@ -2011,6 +2027,48 @@ impl SystemBus {
                 .collect();
             wired.push((lines, signals));
         }
+        // ── USART clock and data ─────────────────────────────────────────
+        // The same identity trick as the timer above, for the block that made
+        // the twin lie: a USART's CLK/TX/RX reach a pad only through
+        // GPIO_USARTROUTE, so the SPI model's pad lines are bound under the
+        // token the route block mints. An unrouted USART claims nothing, so no
+        // route matches, so the pad keeps its GPIO level — which is exactly
+        // what a real board does and exactly what the twin used to hide.
+        //
+        // USART0_S_BASE 0x400A0000, +0x4000 per instance. The index is what
+        // GPIO_USARTROUTE[n] is indexed by, so it has to match the silicon's
+        // numbering rather than the order peripherals happen to appear.
+        const USART_BASE: u64 = 0x400A_0000;
+        const USART_STRIDE: u64 = 0x4000;
+        /// Line order is `SpiLineLevels`: SCK, MOSI, MISO.
+        const USART_FUNCS: [[&str; SIGNALS_PER_USART]; USARTROUTE_COUNT] = [
+            ["USART0_CLK", "USART0_TX", "USART0_RX"],
+            ["USART1_CLK", "USART1_TX", "USART1_RX"],
+            ["USART2_CLK", "USART2_TX", "USART2_RX"],
+        ];
+        for entry_idx in 0..self.peripherals.len() {
+            let base = self.peripherals[entry_idx].base;
+            let in_block =
+                (USART_BASE..USART_BASE + USART_STRIDE * USARTROUTE_COUNT as u64).contains(&base);
+            let Some(index) = (in_block && (base - USART_BASE) % USART_STRIDE == 0)
+                .then(|| ((base - USART_BASE) / USART_STRIDE) as usize)
+            else {
+                continue;
+            };
+            let Some(spi) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Spi>())
+            else {
+                continue;
+            };
+            let lines = spi.line_levels_arc().pad_lines().clone();
+            let signals = (0..SIGNALS_PER_USART)
+                .map(|sig| (usart_token(index, sig), sig, USART_FUNCS[index][sig]))
+                .collect();
+            wired.push((lines, signals));
+        }
+
         if wired.is_empty() {
             return;
         }

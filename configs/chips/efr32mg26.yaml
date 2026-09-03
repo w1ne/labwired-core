@@ -281,8 +281,24 @@ peripherals:
     base_address: 0x4003C6E0
     size: "320B"
 
-  - id: "gpio_route"
-    type: "stub"
+  # ── GPIO_USARTROUTE[0..2] ────────────────────────────────────────────────
+  # ⚠️ THIS WAS A STUB, AND THE STUB MADE THE TWIN LIE. A USART's clock and
+  # data reach NO pad until these registers are written; with the window
+  # reading as zero, the SPI model reached its attached device whatever the
+  # pins said. The silabs-arduino core never programmed a route at all, so
+  # `SPI.transfer()` drove a device in simulation and clocked nothing on a real
+  # BRD2709A — and three of that core's four pin constants were wrong without
+  # anything noticing. A twin that cannot fail where the board fails is not
+  # evidence.
+  #
+  # This is the same defect `gpio_timerroute` above was written to fix, on the
+  # same block: one instance modelled, the other left stubbed.
+  #
+  # RM section 24.6 p.879: USART0 at +0x820, USART1 +0x840, USART2 +0x860,
+  # stanza ROUTEEN/CS/CTS/RTS/RX/CLK/TX. See `peripherals/efr32/usart_route.rs`
+  # for the silicon measurement it is gated against.
+  - id: "gpio_usartroute"
+    type: "efr32s2_usartroute"
     # Same GPIO clock as the port structs — the ROUTE registers live in the
     # same block.
     clock: { reg: "clken0", bit: 26 }
