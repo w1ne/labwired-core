@@ -1794,13 +1794,7 @@ impl Esp32c3Bt {
         now.saturating_sub(self.clock_base.unwrap_or(now))
     }
 
-    /// True once the bus has handed over a cycle clock and the event-scheduler
-    /// build is active — the same predicate `ledc`/`i2c0` use. Without a clock
-    /// (feature off, hand-built bus, `force_legacy_walk`) the model stays on
-    /// the legacy per-cycle walk so those callers keep the old semantics.
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob mirroring `Esp32c3Ledc::force_legacy_walk`: drop
     /// the cycle clock so the model runs the legacy walk instead.

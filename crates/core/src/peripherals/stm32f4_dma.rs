@@ -246,10 +246,7 @@ impl StreamDma {
         self
     }
 
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock, pinning the model to the
     /// legacy walk path. Mirrors `Dma1::force_legacy_walk`.

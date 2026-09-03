@@ -202,14 +202,7 @@ impl Esp32c3WifiMac {
         }
     }
 
-    /// True when the event scheduler owns this block's interrupt-level drive
-    /// (feature on AND bus clock attached). One predicate so the walk and
-    /// scheduler drive modes can never mix, mirroring the C3 SARADC/I²C/LEDC
-    /// migrations.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock, pinning the model to the
     /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the

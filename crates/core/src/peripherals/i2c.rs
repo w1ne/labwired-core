@@ -359,12 +359,7 @@ impl F1I2c {
         self.cr1 & 0x0400 != 0
     }
 
-    /// True when the event scheduler owns this controller's transaction engine
-    /// (feature on AND bus clock attached).
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Cycles on which the legacy `tick()` does observable work: any in-flight
     /// countdown (`state != Idle`), the master transfer window (SR2.BUSY), a
@@ -957,11 +952,7 @@ impl L4I2c {
         let addr = ((self.cr2 >> 1) & 0x7F) as u8;
         (addr << 1) | u8::from(self.is_reading)
     }
-    /// True when the event scheduler owns this controller's engine.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Clearing CR1.PE puts the transaction engine and every status bit back to
     /// their reset values, exactly as silicon does (RM0367 §26.7.1 / RM0351
@@ -1499,12 +1490,7 @@ impl Default for KinetisI2c {
 }
 
 impl KinetisI2c {
-    /// True when the event scheduler owns this controller's level IRQ (feature
-    /// on AND bus clock attached).
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// The level the legacy `tick()` re-asserts every cycle: IICIF latched AND
     /// IICIE enabled.
@@ -2172,19 +2158,17 @@ impl Efr32s2I2c {
         self.iflag.get() & self.ien != 0
     }
 
-    /// True when the event scheduler owns this controller's IRQ level (the
-    /// `event-scheduler` feature AND a bus clock attached at registration).
-    ///
-    /// ⚠️ This model has NO cycle-paced transaction engine — a byte completes
-    /// inside the register write — so there is nothing to *pace*. What it does
-    /// owe the walk is the level re-assertion in `tick()`, and that is exactly
-    /// what the event chain re-emits. Leaving it on the walk for want of an
-    /// engine is what kept every EFR32 bus off the walk-free path: four I²C
-    /// instances that do nothing per cycle still pinned the whole chip to one
-    /// instruction per batch.
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    // True when the event scheduler owns this controller's IRQ level (the
+    // `event-scheduler` feature AND a bus clock attached at registration).
+    //
+    // ⚠️ This model has NO cycle-paced transaction engine — a byte completes
+    // inside the register write — so there is nothing to *pace*. What it does
+    // owe the walk is the level re-assertion in `tick()`, and that is exactly
+    // what the event chain re-emits. Leaving it on the walk for want of an
+    // engine is what kept every EFR32 bus off the walk-free path: four I²C
+    // instances that do nothing per cycle still pinned the whole chip to one
+    // instruction per batch.
+    crate::cycle_clock::scheduler_mode!();
 }
 
 /// I2C peripheral — one variant per chip family. Register sets fully isolated.

@@ -235,14 +235,7 @@ impl Efr32s2GpioExti {
         }
     }
 
-    /// True when the event scheduler owns this model's IRQ re-emission (the
-    /// `event-scheduler` feature AND a bus clock attached at registration).
-    /// Every drive-mode branch reads this ONE predicate so the two paths can
-    /// never mix.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the clock, pinning the model to the
     /// legacy walk. This is how the walk-vs-scheduler differential builds its
