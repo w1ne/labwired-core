@@ -27,6 +27,34 @@ use std::sync::Arc;
 ///   pass `irq` through unchanged. Single-peripheral test machines
 ///   call `tick_peripherals()` and read the result directly; they treat
 ///   the irq value as whatever convention the test author chose.
+/// Keep a LEVEL source's NVIC pending bit in step with its line, both
+/// directions. Asserted: pend and MARK (level_pended), so the bit's origin is
+/// distinguishable from a software ISPR write. Deasserted: un-pend ONLY a
+/// marked bit — firmware that cleared the status flag inside the handler is
+/// not re-entered for the same event (the measured 1.95-entries-per-update
+/// double-fire), while a software pend of a low line still fires once, as on
+/// silicon. Active state is deliberately NOT consulted: the deassert that
+/// matters happens precisely while the handler is active.
+pub(crate) fn reconcile_nvic_level(
+    nvic: &Option<Arc<crate::peripherals::nvic::NvicState>>,
+    irq: u32,
+    level: bool,
+) {
+    if let Some(nvic) = nvic {
+        let idx = (irq / 32) as usize;
+        let bit = 1u32 << (irq % 32);
+        if idx < 8 {
+            if level {
+                nvic.ispr[idx].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
+                nvic.level_pended[idx].fetch_or(bit, std::sync::atomic::Ordering::SeqCst);
+            } else if nvic.level_pended[idx].load(std::sync::atomic::Ordering::SeqCst) & bit != 0 {
+                nvic.ispr[idx].fetch_and(!bit, std::sync::atomic::Ordering::SeqCst);
+                nvic.level_pended[idx].fetch_and(!bit, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+    }
+}
+
 fn pend_nvic(
     nvic: &Option<Arc<crate::peripherals::nvic::NvicState>>,
     interrupts: &mut Vec<u32>,
@@ -449,9 +477,25 @@ impl SystemBus {
                 }
             }
 
-            if res.irq {
-                if let Some(irq) = irq {
-                    pend_nvic(&self.nvic, &mut interrupts, irq);
+            // A LEVEL source is reconciled in both directions from its own
+            // line; `res.irq` is redundant for it (the walk re-raises while
+            // held). Everything else keeps pulse semantics unchanged.
+            match (
+                self.peripherals[peripheral_index].dev.irq_line_level(),
+                irq,
+            ) {
+                (Some(level), Some(irq)) => {
+                    reconcile_nvic_level(&self.nvic, irq, level);
+                    if res.irq && self.nvic.is_none() {
+                        interrupts.push(irq);
+                    }
+                }
+                _ => {
+                    if res.irq {
+                        if let Some(irq) = irq {
+                            pend_nvic(&self.nvic, &mut interrupts, irq);
+                        }
+                    }
                 }
             }
 

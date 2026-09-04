@@ -15,6 +15,15 @@ pub struct NvicState {
     pub ispr: [AtomicU32; 8],
     pub iabr: [AtomicU32; 8],
     pub ipr: [AtomicU32; 240], // Priority registers (simplified)
+    /// Which ISPR bits were set by a LEVEL source (a peripheral whose
+    /// `irq_line_level()` is `Some(..)`), so the bus can drop them again
+    /// when that line deasserts. On silicon a level-sensitive interrupt's
+    /// pending state follows the line: firmware that clears the status flag
+    /// inside the handler must not be re-entered for the same event. Bits
+    /// set by a software ISPR write are NOT marked here and are never
+    /// auto-cleared — a software pend of a low line is taken once, as on
+    /// hardware.
+    pub level_pended: [AtomicU32; 8],
 }
 
 impl NvicState {
@@ -39,6 +48,7 @@ impl Default for NvicState {
             ispr: Default::default(),
             iabr: Default::default(),
             ipr: [0; 240].map(|_| AtomicU32::new(0)),
+            level_pended: Default::default(),
         }
     }
 }

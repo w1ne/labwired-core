@@ -1174,6 +1174,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
 
+    /// The CURRENT state of this peripheral's interrupt line, for level
+    /// reconciliation. `Some(level)` marks the model as a LEVEL source —
+    /// its line is a live conjunction (status & enable), not a pulse —
+    /// and the bus then keeps the NVIC pending bit in step with the line
+    /// in BOTH directions: asserted → pended, deasserted → un-pended
+    /// (unless the bit came from a software ISPR write). The default
+    /// `None` keeps pulse semantics: a pend, once set, is only consumed
+    /// by exception entry.
+    ///
+    /// Silicon behaviour, ARMv6-M/ARMv7-M: for a level-sensitive
+    /// interrupt whose line deasserts while the exception is pending or
+    /// active-and-repended, the pending state clears — firmware that
+    /// clears the source's status flag inside the handler is not
+    /// re-entered for the same event. The timer double-entry (two
+    /// handler entries per update event, measured 1.95/event against a
+    /// cycle-exact grid) was exactly this method's absence.
+    fn irq_line_level(&self) -> Option<bool> {
+        None
+    }
+
     /// Tell the peripheral the clock its system's core runs at, in Hz — the
     /// effective `SystemBus::cpu_hz`, i.e. the manifest override if there is
     /// one and otherwise `ChipDescriptor::cpu_hz`. Called from the same attach
@@ -3006,6 +3026,17 @@ impl<C: Cpu> Machine<C> {
         if result.raise_own_irq {
             if let Some(irq) = self.bus.peripherals[peripheral_idx].irq {
                 self.bus.pend_irq_for_event(irq, &mut fallthrough);
+                // A LEVEL source's event-path pend is marked, so the MMIO
+                // write choke can drop it again when the handler clears the
+                // status flag — scheduler-driven timers never pass through
+                // the walk's reconcile.
+                if self.bus.peripherals[peripheral_idx]
+                    .dev
+                    .irq_line_level()
+                    .is_some()
+                {
+                    crate::bus::reconcile_nvic_level(&self.bus.nvic, irq, true);
+                }
             }
         }
         // Scheduler-driven interrupt delivery — ONE per-fabric choke. A

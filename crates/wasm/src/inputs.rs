@@ -324,6 +324,68 @@ impl WasmSimulator {
         Ok(())
     }
 
+    /// Inject a held analog level into one channel of a named ADC, in
+    /// millivolts against the 3.3 V reference. Unlike [`Self::set_adc_value`],
+    /// which pokes the data register once and is overwritten by the very next
+    /// conversion (for an un-injected channel the engine converts an
+    /// incrementing counter), this holds: every later conversion of `channel`
+    /// returns the equivalent 12-bit count until [`Self::clear_adc_channel`].
+    /// This is the entry point an external circuit solver needs — it knows the
+    /// voltage at a pad and which ADC channel that pad carries, and must not
+    /// race the conversion engine for the data register.
+    #[wasm_bindgen]
+    pub fn set_adc_channel_millivolts(
+        &mut self,
+        peripheral_name: &str,
+        channel: u8,
+        millivolts: u16,
+    ) -> Result<(), JsValue> {
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(peripheral_name)
+            .ok_or_else(|| JsValue::from_str(&format!("ADC '{}' not found", peripheral_name)))?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| JsValue::from_str("Peripheral doesn't support downcasting"))?;
+        let adc = any
+            .downcast_mut::<Adc>()
+            .ok_or_else(|| JsValue::from_str("Peripheral is not an ADC"))?;
+        adc.set_channel_input(channel, millivolts);
+        Ok(())
+    }
+
+    /// Remove a held level set by [`Self::set_adc_channel_millivolts`],
+    /// returning the channel to the engine's modeled internal source.
+    #[wasm_bindgen]
+    pub fn clear_adc_channel(
+        &mut self,
+        peripheral_name: &str,
+        channel: u8,
+    ) -> Result<(), JsValue> {
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(peripheral_name)
+            .ok_or_else(|| JsValue::from_str(&format!("ADC '{}' not found", peripheral_name)))?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| JsValue::from_str("Peripheral doesn't support downcasting"))?;
+        let adc = any
+            .downcast_mut::<Adc>()
+            .ok_or_else(|| JsValue::from_str("Peripheral is not an ADC"))?;
+        adc.clear_channel_input(channel);
+        Ok(())
+    }
+
     /// Set the simulated temperature on an NTC thermistor.
     ///
     /// `device_id` is the `external_devices` id (stamped on the kit at attach).
