@@ -173,9 +173,5 @@ fn a_keypad_column_falls_on_a_read_only_input_word() {
          having been driven at all, which a low-only assertion cannot tell apart \
          from a correct press"
     );
-    assert_eq!(
-        din_bit(&bus, 9),
-        0,
-        "the pressed key's column must fall"
-    );
+    assert_eq!(din_bit(&bus, 9), 0, "the pressed key's column must fall");
 }
