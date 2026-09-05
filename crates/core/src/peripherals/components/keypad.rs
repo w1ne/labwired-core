@@ -200,6 +200,11 @@ impl crate::bus::BusResidentDevice for Keypad {
         for (c, &(high, changed)) in cols.iter().enumerate().take(COLS) {
             if changed {
                 let (addr, bit) = self.col_idr[c];
+                // Both seams — see the note in `rotary_encoder.rs`. A bare
+                // `drive_idr_bit` is an MMIO store, so this matrix was inert on
+                // every part whose input word is read-only (EFR32 DIN, SAM IN,
+                // ESP32-C3): a key could be held down and no column ever fell.
+                let _ = pins.drive_input_bit(addr, bit, high);
                 pins.drive_idr_bit(addr, bit, high);
             }
         }

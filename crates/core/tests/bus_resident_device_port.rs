@@ -147,12 +147,36 @@ fn a_keypad_scans_with_no_bus_in_sight() {
         pins.idr_writes
     );
 
-    // A keypad drives its columns through the input register, never through
-    // the external-level seam — the other half of the port stayed untouched.
-    assert!(
-        pins.input_writes.is_empty(),
-        "a keypad has no business on the external-level seam: {:?}",
-        pins.input_writes
+    // ⚠️ THIS USED TO ASSERT THE OPPOSITE, and the opposite was the bug.
+    //
+    // It read: "a keypad has no business on the external-level seam", requiring
+    // `input_writes` to stay EMPTY. That held only because every part in view at
+    // the time let a store to the input register land. On silicon whose input
+    // word is READ-ONLY the store is correctly ignored and the column never
+    // moves — EFR32 Series 2 (DIN @0x14), SAM PORT (IN @0x20), ESP32-C3. The
+    // matrix was inert on all three, silently: attach succeeded, the stimulus
+    // reported applied, no pin moved.
+    //
+    // So a keypad has exactly the same business on that seam as the DHT22,
+    // which has always driven both. `gpio_devices_drive_read_only_inputs.rs`
+    // gates the behaviour on a real EFR32 port; this asserts the port CONTRACT:
+    // both halves are used, and each column change appears on each seam once.
+    // `idr_writes` is cleared as the scan progresses, so the seam is checked
+    // against the full drive history the scan above performed: four columns
+    // settled high, then column 1 low for the press, then back high.
+    assert_eq!(
+        pins.input_writes,
+        vec![
+            (COL_ADDR, 0, true),
+            (COL_ADDR, 1, true),
+            (COL_ADDR, 2, true),
+            (COL_ADDR, 3, true),
+            (COL_ADDR, 1, false),
+            (COL_ADDR, 1, true),
+        ],
+        "every column change must reach BOTH seams — the MMIO store for ports \
+         that accept it, the external-level seam for ports whose input word is \
+         read-only — and a settled keypad must still add nothing"
     );
 }
 
