@@ -567,6 +567,25 @@ const NRF52_CONFIG_CPOL: u32 = 1 << 2;
 /// truncated. See [`Spi::nrf52_wire_flush`].
 const NRF52_WIRE_BYTE_CAP: usize = 2_048;
 
+/// Held MOSI bytes past which the EFR32 Series-2 USART's wire narration is
+/// dropped rather than held any longer. See [`Spi::efr32_wire_flush`].
+///
+/// ⚠️ THE ONLY THING BOUNDING THIS BUFFER. Every other wire buffer in this file
+/// already has a ceiling — [`NRF52_WIRE_BYTE_CAP`] above and
+/// [`H5_WIRE_BURST_CAP`] — and the EFR32 path had none. A run is held whenever
+/// `emit_between` cannot fit it in the `cursor..now` window; with no
+/// logic-capture tap installed `PadLines::tap_clock()` is `None`, `now` reads 0
+/// forever, and the window is therefore never open. Without this cap the buffer
+/// grew by one entry per transmitted byte and every push re-narrated all of it,
+/// so shifting n bytes cost O(n^2): a 108 800-byte ST7789 screen fill on
+/// BRD2709A dropped the engine from 4 000 000 to 1 400 cycles/s and the
+/// playground's first frame never returned.
+///
+/// Sized like [`H5_WIRE_BURST_CAP`], and for the same reason: a run longer than
+/// this has more edges than any analyzer window shows, so holding it buys
+/// nothing a reader can see.
+const EFR32_WIRE_BYTE_CAP: usize = 256;
+
 /// INTEN bit positions (PS §6.30 INTEN register).
 /// STOPPED=1, ENDRX=4, END=6, ENDTX=8.
 const INTEN_STOPPED: u32 = 1 << 1;
@@ -1594,7 +1613,12 @@ impl Spi {
             return;
         };
         let pads = lines.pad_lines();
-        let now = pads.tap_clock().unwrap_or(0);
+        // ⚠️ `None` means NO capture tap is installed, i.e. there is no
+        // timeline for a waveform to land on — not "cycle zero". Holding a run
+        // back for a timeline that will never open is what made this buffer
+        // grow forever; see `EFR32_WIRE_BYTE_CAP`.
+        let tap_clock = pads.tap_clock();
+        let now = tap_clock.unwrap_or(0);
         let mut wave = SpiNarrator::with_lines(
             SpiSignal::Sck as usize,
             SpiSignal::Mosi as usize,
@@ -1613,11 +1637,27 @@ impl Spi {
             wave.frame(u16::from(byte), framing);
         }
         match wave.emit_between(pads, self.efr32_wave_cursor, now) {
-            NarrationFit::LevelsOnly { .. } => {
-                // No room on the timeline yet: hold the bytes and try again
-                // once the machine has stepped. Drawing now would compress the
-                // run onto a single cycle.
-            }
+            // No room on the timeline yet: hold the bytes and try again once
+            // the machine has stepped. Drawing now would compress the run onto
+            // a single cycle.
+            //
+            // ⚠️ HOLD ONLY WHILE HOLDING CAN STILL PAY OFF. Two guards, and
+            // neither is optional:
+            //
+            //   * `tap_clock.is_some()` — with no capture tap there is no
+            //     timeline, `now` is 0 for the whole run, and the window
+            //     `cursor..now` is empty FOREVER. Every byte would be held and
+            //     every retry would re-narrate all of them.
+            //   * the cap — a run past `EFR32_WIRE_BYTE_CAP` has more edges
+            //     than any analyzer window shows, so holding it buys a reader
+            //     nothing while costing O(held) on every push and on every
+            //     one-cycle `on_event` retry.
+            //
+            // Falling through publishes the LEVELS the run ended on (that is
+            // what `LevelsOnly` already applied) and drops the waveform — the
+            // same trade `nrf52_wire_flush` makes at `NRF52_WIRE_BYTE_CAP`.
+            NarrationFit::LevelsOnly { .. }
+                if tap_clock.is_some() && self.efr32_wire_bytes.len() < EFR32_WIRE_BYTE_CAP => {}
             _ => {
                 self.efr32_wave_cursor = now;
                 self.efr32_wire_bytes.clear();
@@ -4967,6 +5007,53 @@ mod efr32s2_spi_tests {
             spi.read_u32(EFR_USART_RXDATA).unwrap(),
             0,
             "after re-enable the first word is LEFT again",
+        );
+    }
+
+    /// ⚠️ A DISPLAY-SIZED SPI BURST MUST NOT COST O(n^2).
+    ///
+    /// `efr32_wire_bytes` is the wire-narration hold buffer, and it was the
+    /// only one in this file with no ceiling: the nRF52 path refuses a burst
+    /// over `NRF52_WIRE_BYTE_CAP` and the H5 path force-publishes at
+    /// `H5_WIRE_BURST_CAP`. A run is HELD whenever `emit_between` cannot fit it
+    /// in the `cursor..now` window, and with no logic-capture tap installed —
+    /// the default for every lab whose analyzer is closed —
+    /// `PadLines::tap_clock()` is `None`, so `efr32_wire_flush` reads `now` as
+    /// 0 and the window is empty FOREVER. Every byte was therefore held, and
+    /// every push (and every one-cycle `on_event` retry) re-narrated the whole
+    /// held run: shifting n bytes cost O(n^2).
+    ///
+    /// Measured in the browser on BRD2709A driving a wired ST7789: a
+    /// full-screen fill (170x320 px = 108 800 SPI bytes) took the engine from
+    /// 4 000 000 cycles/s to 1 400, `spi0` was 93% of engine time at one call
+    /// per cycle, and the playground's first 4 000 000-cycle frame never
+    /// returned — the lab showed "Running" with no cycle counter and an empty
+    /// serial monitor forever.
+    ///
+    /// This gates the HOLD BUFFER, not a wall time: a timing assertion would
+    /// pass on a fast machine with the quadratic still in place.
+    #[test]
+    fn a_display_sized_burst_does_not_hold_an_unbounded_narration_buffer() {
+        let mut spi = ready();
+        // MSBF is what makes `efr32_framing()` answer, i.e. what puts this
+        // controller on the narration path at all. `Spi::new_with_layout`
+        // already created the line cell eagerly for this layout, so there is
+        // no routing step to perform — which is exactly why the `lines.is_none()`
+        // early-out in `efr32_wire_push` never fires on this family.
+        spi.write_u32(EFR_USART_CTRL, EFR_USART_CTRL_SYNC | EFR_USART_CTRL_MSBF)
+            .unwrap();
+        assert!(spi.lines.is_some(), "the EFR32 line cell is eager");
+        assert!(spi.efr32_framing().is_some(), "on the narration path");
+
+        // One row of a 170-wide RGB565 fill: 340 bytes, already past the cap.
+        for i in 0..2_000u32 {
+            spi.write_u32(EFR_USART_TXDATA, i & 0xFF).unwrap();
+        }
+        assert!(
+            spi.efr32_wire_bytes.len() <= EFR32_WIRE_BYTE_CAP,
+            "held {} bytes with no ceiling: every later push re-narrates all of \
+             them, which is the quadratic that froze the ST7789 lab",
+            spi.efr32_wire_bytes.len(),
         );
     }
 
