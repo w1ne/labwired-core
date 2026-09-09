@@ -82,7 +82,8 @@ enum ProtoState {
     },
 }
 
-/// The visible strip of frame memory for a particular glass.
+/// The visible strip in physical frame-memory coordinates for a particular glass.
+/// Its origin and extent stay fixed when firmware changes MADCTL orientation.
 ///
 /// NOT a datasheet value — see the module note. Supplied per-module or left
 /// unset, in which case the artifact reports the whole 240x320 frame memory,
@@ -285,8 +286,10 @@ impl St7789 {
         (x as usize, y as usize)
     }
 
-    /// Frame memory in the firmware's own coordinates, cropped to the visible
-    /// strip when one was declared.
+    /// The configured glass in fixed physical coordinates, or the whole frame
+    /// memory in firmware coordinates when no glass was declared. MADCTL has
+    /// already mapped pixel writes into physical memory; applying it again to
+    /// a glass window would move the crop and clip landscape writes.
     pub fn oriented_framebuffer(&self) -> Vec<u8> {
         let (w, h) = self.logical_dimensions();
         let mut out = vec![0u8; w * h * 2];
@@ -296,7 +299,11 @@ impl St7789 {
         };
         for row in 0..h {
             for col in 0..w {
-                let (x, y) = self.to_physical((col + cx) as u16, (row + cy) as u16);
+                let (x, y) = if self.visible.is_some() {
+                    (col + cx, row + cy)
+                } else {
+                    self.to_physical(col as u16, row as u16)
+                };
                 if x >= WIDTH || y >= HEIGHT {
                     continue;
                 }
@@ -309,8 +316,8 @@ impl St7789 {
         out
     }
 
-    /// Extent of the artifact: the visible strip if declared, else the whole
-    /// frame memory in the current orientation.
+    /// Extent of the artifact: the fixed physical glass size if declared, else
+    /// the whole frame memory in the current firmware orientation.
     pub fn logical_dimensions(&self) -> (usize, usize) {
         if let Some(v) = self.visible {
             return (v.cols as usize, v.rows as usize);
@@ -1106,5 +1113,96 @@ mod tests {
             dev().with_powered(true).powered(),
             "an explicit true is powered too — only `false` is a darkening value",
         );
+    }
+
+    #[test]
+    fn configured_glass_keeps_physical_corners_for_every_madctl_orientation() {
+        for orientation in 0..8 {
+            let madctl = orientation << 5;
+            let mut d = dev().with_visible_window(VisibleWindow {
+                col_offset: 35,
+                row_offset: 0,
+                cols: 170,
+                rows: 320,
+            });
+            cmd(&mut d, CMD_MADCTL, &[madctl]);
+            // Expected physical corners, independent of firmware orientation.
+            for (x, y, color) in [
+                (35, 0, 0xF800),
+                (204, 0, 0x07E0),
+                (35, 319, 0x001F),
+                (204, 319, 0xFFFF),
+            ] {
+                let col = if madctl & MADCTL_MX != 0 { 239 - x } else { x };
+                let row = if madctl & MADCTL_MY != 0 { 319 - y } else { y };
+                let (col, row) = if madctl & MADCTL_MV != 0 {
+                    (row, col)
+                } else {
+                    (col, row)
+                };
+                window(&mut d, col, col, row, row);
+                pixels(&mut d, &[color]);
+                assert_eq!(px_at(&d, x as usize, y as usize), color);
+            }
+            assert_eq!(d.logical_dimensions(), (170, 320));
+            let fb = d.oriented_framebuffer();
+            assert_eq!(fb.len(), 170 * 320 * 2);
+            for (x, y, color) in [
+                (0, 0, 0xF800),
+                (169, 0, 0x07E0),
+                (0, 319, 0x001F),
+                (169, 319, 0xFFFF),
+            ] {
+                let i = (y * 170 + x) * 2;
+                assert_eq!(
+                    u16::from_be_bytes([fb[i], fb[i + 1]]),
+                    color,
+                    "physical corner ({x}, {y}), MADCTL={madctl:#04x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn landscape_writes_fill_all_320_rows_of_configured_physical_glass() {
+        let mut d = dev().with_visible_window(VisibleWindow {
+            col_offset: 35,
+            row_offset: 0,
+            cols: 170,
+            rows: 320,
+        });
+        cmd(&mut d, CMD_MADCTL, &[MADCTL_MV]);
+        window(&mut d, 0, 319, 35, 204);
+        pixels(&mut d, &vec![0xFFFF; 320 * 170]);
+        let fb = d.oriented_framebuffer();
+        assert!(
+            fb.iter().all(|&b| b == 0xFF),
+            "visible glass must have no black rows"
+        );
+        let artifacts = d.artifacts("tft", &crate::inspect::InspectOpts::default());
+        assert_eq!(artifacts[0].meta["w"], 170);
+        assert_eq!(artifacts[0].meta["h"], 320);
+        assert_eq!(artifacts[0].meta["total_bytes"], 170 * 320 * 2);
+        assert_eq!(artifacts[0].meta["painted_bytes"], 170 * 320 * 2);
+    }
+
+    #[test]
+    fn unconfigured_controller_keeps_firmware_coordinates_for_every_orientation() {
+        for orientation in 0..8 {
+            let mut d = dev();
+            let madctl = orientation << 5;
+            cmd(&mut d, CMD_MADCTL, &[madctl]);
+            window(&mut d, 10, 10, 20, 20);
+            pixels(&mut d, &[0xF800]);
+            let expected = if madctl & MADCTL_MV != 0 {
+                (320, 240)
+            } else {
+                (240, 320)
+            };
+            assert_eq!(d.logical_dimensions(), expected);
+            let fb = d.oriented_framebuffer();
+            let i = (20 * expected.0 + 10) * 2;
+            assert_eq!(u16::from_be_bytes([fb[i], fb[i + 1]]), 0xF800);
+        }
     }
 }

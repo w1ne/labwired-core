@@ -76,6 +76,20 @@ connectors:
     endpoint: "host_console"  # Pipes UART output to simulator stdout
 ```
 
+### ST7789 physical glass window
+
+For `st7789-170x320` external devices, the optional config keys `col_offset`,
+`row_offset`, `cols`, and `rows` describe the glass in physical 240×320
+frame-memory coordinates. Supply all four together. For a module exposing
+columns 35–204 and all 320 rows, use `col_offset: 35`, `row_offset: 0`,
+`cols: 170`, and `rows: 320`; the offsets are module integration values.
+
+The configured framebuffer and artifact dimensions remain 170×320 regardless
+of MADCTL rotation or mirroring. MADCTL controls how firmware writes map into
+physical memory, while the glass stays fixed. Without a configured window,
+the framebuffer uses firmware coordinates and reports 240×320 or 320×240
+according to MADCTL's row/column exchange bit.
+
 ### `debug_uart` — which console the board's USB socket is wired to
 
 ```yaml
