@@ -99,6 +99,36 @@ pub struct VisibleWindow {
 #[derive(Debug, serde::Serialize)]
 pub struct St7789 {
     cs_pin: String,
+    /// Whether the module's supply pins are actually connected in the design.
+    ///
+    /// THE BUG THIS EXISTS FOR. A diagram could wire this panel's SIGNAL pins
+    /// only -- SCL/SDA/CS/DC/RES, no VCC and no GND -- and the twin would clock
+    /// in the whole init sequence and report `painted_bytes: 2048, lit: true,
+    /// display_on: true, awake: true`. On a bench that panel is dark: an
+    /// unpowered ST7789V does not latch SPI, does not run its charge pump, and
+    /// does not drive the glass. The twin was reporting a working display for a
+    /// circuit that cannot work, which is the one thing a digital twin must
+    /// never do.
+    ///
+    /// ⚠️ DEFAULTS TO `true`, DELIBERATELY. The emitter side
+    /// (`packages/board-config/src/compile/emitters.ts`) writes `powered:
+    /// false` and NOTHING else -- an absent key means "assume powered". That
+    /// asymmetry is load-bearing, not laziness: measured over the 551-diagram
+    /// ERC corpus, 110 powered external devices across 66 lab manifests have
+    /// ZERO supply pins on any net, including every curated
+    /// `core/examples/brd2709a/*.yaml`. Curated labs state signals and leave
+    /// the rails implicit, essentially universally. Reading an absent key as
+    /// "unpowered" would black out every shipped lab on the spot. So only an
+    /// EXPLICIT `powered: false` -- which only the diagram compiler emits, and
+    /// only when it can see the supply pins are on no net -- darkens a panel.
+    ///
+    /// It stays dark-and-honest rather than raising a fault: that is what the
+    /// hardware does, an `attach` error would refuse to build a circuit the
+    /// user can still legitimately want to run, and the reason is already on
+    /// the design-time side as the `PWR_SUPPLY_UNCONNECTED` ERC warning. The
+    /// artifact carries `"powered"` in its meta so the dark frame is
+    /// self-explaining instead of looking like a firmware bug.
+    powered: bool,
     display_on: bool,
     /// SLPOUT seen. §9.1.12/§9.1.13: the panel is asleep out of reset, and a
     /// sleeping panel shows nothing however full frame memory is.
@@ -140,6 +170,8 @@ impl St7789 {
     pub fn new(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             display_on: false,
             awake: false,
             inverted: false,
@@ -173,15 +205,39 @@ impl St7789 {
         self
     }
 
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
+    }
+
     pub fn display_on(&self) -> bool {
-        self.display_on
+        // An unpowered controller cannot hold DISPON, so this is not a second
+        // opinion layered over the state — it is the state. `transfer` already
+        // refuses the bus when unpowered, so `self.display_on` can never be
+        // true here; the `&&` is the guard that survives someone later adding
+        // another way to set it.
+        self.powered && self.display_on
     }
 
     /// What a camera would see: DISPON **and** awake. §9.1.19 p.196 makes
     /// DISPON meaningful only out of sleep, so reporting DISPON alone would
-    /// call a sleeping panel lit.
+    /// call a sleeping panel lit. A panel with no supply is darker still.
     pub fn lit(&self) -> bool {
-        self.display_on && self.awake
+        self.powered && self.display_on && self.awake
+    }
+
+    /// SLPOUT seen **and** the module has a supply. An unpowered ST7789V is not
+    /// asleep, it is off; either way nothing reaches the glass.
+    pub fn awake(&self) -> bool {
+        self.powered && self.awake
     }
 
     pub fn inverted(&self) -> bool {
@@ -456,7 +512,11 @@ impl SpiDevice for St7789 {
                 // `lit` is the one a photo can be checked against: a panel that
                 // got DISPON but never SLPOUT is dark on the bench.
                 "lit": self.lit(),
-                "awake": self.awake,
+                "awake": self.awake(),
+                // Reported so a dark frame explains itself. Without this, a
+                // panel darkened for having no supply is indistinguishable
+                // from one whose firmware forgot SLPOUT.
+                "powered": self.powered,
                 "inverted": self.inverted,
                 "painted_bytes": painted,
                 "total_bytes": fb.len(),
@@ -494,6 +554,16 @@ impl SpiDevice for St7789 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED PANEL BEHAVE LIKE ONE. Every
+        // state change this model has — DISPON, SLPOUT, CASET/RASET, and every
+        // pixel byte — arrives through `transfer`. Refusing the bus here is
+        // what an unpowered ST7789V does (no supply, no input latches, no
+        // charge pump), and it means the reported `display_on` / `awake` /
+        // `lit` / `painted_bytes` all stay at their power-on-dark values by
+        // construction rather than by masking them at report time.
+        if !self.powered {
+            return 0;
+        }
         if self.dc_level {
             self.dc_data(mosi);
         } else {
@@ -550,6 +620,18 @@ static ST7789_METADATA: KitMetadata = KitMetadata {
                   infer-framing-from-byte-values fallback, because that inference \
                   decodes a parameter byte 0x2C as RAMWR and writes the rest of the \
                   init sequence into the framebuffer as pixels.",
+        },
+        ConfigKey {
+            name: "powered",
+            ty: ConfigType::Bool,
+            doc: "Whether the module's supply pins (VCC, GND) are connected. \
+                  Omit for a powered panel -- ABSENT MEANS POWERED, because the \
+                  curated labs state signals and leave the rails implicit. Only \
+                  an explicit `false`, which the diagram compiler emits when it \
+                  can see the supply pins are on no net, darkens the panel: it \
+                  then ignores the SPI bus entirely and reports `lit: false`, \
+                  `display_on: false`, `awake: false`, `painted_bytes: 0`, \
+                  which is what the part does on a bench.",
         },
         ConfigKey {
             name: "col_offset",
@@ -614,6 +696,14 @@ impl PeripheralKit for St7789Kit {
         })?;
 
         let mut dev = St7789::new(cs_pin).with_dc_pin(dc);
+
+        // Supply state. `Some(false)` is the only value that changes anything:
+        // `None` (no key at all — every hand-written lab manifest) and
+        // `Some(true)` both leave the panel powered. See the `powered` field
+        // for why the default has to be that way round.
+        if ctx.config_bool("powered") == Some(false) {
+            dev = dev.with_powered(false);
+        }
 
         // A crop is all-or-nothing: a half-declared window would silently
         // report a strip at the wrong offset, which looks like a working
@@ -904,5 +994,117 @@ mod tests {
         let d = dev();
         assert_eq!(d.logical_dimensions(), (240, 320));
         assert_eq!(d.oriented_framebuffer().len(), 240 * 320 * 2);
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG. A brd2709a + `st7789-170x320` diagram wiring only
+    // SCL/SDA/CS/DC/RES — no VCC, no GND — ran and came back with
+    // `painted_bytes: 2048, lit: true, display_on: true, awake: true`. On a
+    // bench that panel is dark. These four tests are the pair that makes that
+    // impossible: the same byte sequence, driven into a powered panel and into
+    // an unpowered one, with the unpowered one asserted dark on every field the
+    // report named — and the powered one asserted to still paint, so a model
+    // that simply never paints cannot pass.
+
+    /// A firmware init that unambiguously lights the panel and paints
+    /// 32x32 = 1024 pixels of 0xFFFF, i.e. exactly the 2048 `painted_bytes`
+    /// the bug report measured.
+    fn drive_a_full_frame(d: &mut St7789) {
+        cmd(d, CMD_SLPOUT, &[]);
+        cmd(d, CMD_DISPON, &[]);
+        window(d, 0, 31, 0, 31);
+        pixels(d, &[0xFFFF; 32 * 32]);
+    }
+
+    fn meta(d: &St7789) -> serde_json::Value {
+        let arts = SpiDevice::artifacts(d, "tft", &crate::inspect::InspectOpts::default());
+        arts.into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without this, "unpowered is dark" would also pass
+    /// on a model that never paints at all.
+    #[test]
+    fn a_powered_panel_driven_this_way_lights_and_paints() {
+        let mut d = dev();
+        drive_a_full_frame(&mut d);
+
+        assert!(d.powered(), "no supply config at all must mean powered");
+        assert!(d.display_on(), "DISPON reached a powered panel");
+        assert!(d.awake(), "SLPOUT reached a powered panel");
+        assert!(d.lit());
+
+        let m = meta(&d);
+        assert_eq!(m["painted_bytes"], 2048, "1024 pixels of 0xFFFF");
+        assert_eq!(m["lit"], true);
+        assert_eq!(m["display_on"], true);
+        assert_eq!(m["awake"], true);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_panel_reports_dark_on_every_field_the_bug_reported() {
+        let mut d = dev().with_powered(false);
+        drive_a_full_frame(&mut d);
+
+        assert!(
+            !d.display_on(),
+            "an unpowered controller cannot hold DISPON"
+        );
+        assert!(
+            !d.awake(),
+            "an unpowered controller is off, not merely asleep"
+        );
+        assert!(
+            !d.lit(),
+            "an unpowered panel is dark whatever was clocked at it"
+        );
+
+        let m = meta(&d);
+        assert_eq!(m["painted_bytes"], 0, "no supply, no paint");
+        assert_eq!(m["lit"], false);
+        assert_eq!(m["display_on"], false);
+        assert_eq!(m["awake"], false);
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is dark");
+    }
+
+    /// Paint must not ACCUMULATE either: the bus is refused, so frame memory is
+    /// untouched rather than merely under-reported.
+    #[test]
+    fn an_unpowered_panel_never_accumulates_paint() {
+        let mut d = dev().with_powered(false);
+        for _ in 0..5 {
+            drive_a_full_frame(&mut d);
+        }
+        assert_eq!(
+            d.framebuffer.iter().filter(|&&b| b != 0).count(),
+            0,
+            "frame memory must be untouched, not just reported as zero",
+        );
+        // Nor may the addressing state move: CASET/RASET are commands too.
+        assert_eq!((d.col_start, d.col_end), (0, 239));
+        assert_eq!((d.row_start, d.row_end), (0, 319));
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest —
+    /// including every `core/examples/brd2709a/*.yaml` — declares no supply at
+    /// all, and 110 powered devices across the 551-diagram ERC corpus have zero
+    /// supply pins on a net. If a missing key ever came to mean "unpowered",
+    /// all of them would go black. Only an explicit `false` darkens a panel.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(St7789::new("PA4").powered(), "the default must be powered");
+        assert!(
+            St7789::default().powered(),
+            "and so must the Default impl the factories use",
+        );
+        assert!(
+            dev().with_powered(true).powered(),
+            "an explicit true is powered too — only `false` is a darkening value",
+        );
     }
 }

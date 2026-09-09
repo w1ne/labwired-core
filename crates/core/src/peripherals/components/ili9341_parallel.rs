@@ -272,6 +272,16 @@ pub struct Ili9341Parallel {
     pins: ParallelPins,
     state: Mutex<State>,
     id: String,
+    /// Whether the module's supply pins are actually connected in the design.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens the panel; an absent key means powered. See
+    /// [`crate::peripherals::components::supply`] for why that asymmetry is
+    /// load-bearing, and `st7789.rs` for the reference implementation.
+    ///
+    /// Outside the `Mutex` on purpose: it is wiring, fixed at attach, not
+    /// panel state that a strobe can change.
+    powered: bool,
 }
 
 impl Ili9341Parallel {
@@ -280,7 +290,22 @@ impl Ili9341Parallel {
             pins,
             state: Mutex::new(State::new()),
             id: id.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
         }
+    }
+
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
     }
 
     pub fn id(&self) -> &str {
@@ -302,8 +327,11 @@ impl Ili9341Parallel {
         self.state.lock().unwrap().framebuffer.clone()
     }
 
+    /// DISPON **and** a supply. Both write paths already refuse the bus when
+    /// unpowered, so the inner flag can never be true here; the `&&` is the
+    /// guard that survives someone later adding a third way to set it.
     pub fn display_on(&self) -> bool {
-        self.state.lock().unwrap().display_on
+        self.powered && self.state.lock().unwrap().display_on
     }
 
     pub fn dimensions(&self) -> (usize, usize) {
@@ -365,6 +393,13 @@ impl Ili9341Parallel {
     /// `dc_high` is the D/C (RS) level for this cycle: `false` = command phase,
     /// `true` = data phase.
     pub fn i80_write_word(&self, dc_high: bool, word: u16) {
+        // ONE OF THE TWO GATES that make an unpowered panel behave like one —
+        // this model has two write paths (LCD_CAM i80 here, GPIO edges in
+        // `on_gpio_edge`) and both must refuse, or an S3 firmware would paint
+        // a panel with no supply. See the `powered` field.
+        if !self.powered {
+            return;
+        }
         let mut s = self.state.lock().unwrap();
         // Latch the pad state a real strobe would leave behind, so a firmware
         // that mixes the two paths sees a consistent bus.
@@ -375,6 +410,12 @@ impl Ili9341Parallel {
 
     /// Feed one GPIO transition. Unit tests and the ESP32/S3 observers call this.
     pub fn on_gpio_edge(&self, pin: u8, to: bool, _sim_cycle: u64) {
+        // The other gate — see `i80_write_word`. An unpowered ILI9341 has no
+        // input latches, so every pad transition (including RST, which would
+        // otherwise clear frame memory) is ignored.
+        if !self.powered {
+            return;
+        }
         let mut s = self.state.lock().unwrap();
         let p = &self.pins;
 
@@ -479,6 +520,7 @@ static ILI9341_PARALLEL_METADATA: KitMetadata = KitMetadata {
             ty: ConfigType::Str,
             doc: "Data bus bit 0 (LSB). Also db1_pin..db15_pin. Defaults GPIO10..GPIO25.",
         },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
     ],
     // Example system lives at examples/ili9341-16bit-lab; keep labs empty until
     // a non-empty demo_elf ships (UI kitsWithLabs requires demo_elf length > 0).
@@ -513,7 +555,11 @@ impl PeripheralKit for Ili9341ParallelKit {
             rst,
             db,
         };
-        let panel = std::sync::Arc::new(Ili9341Parallel::new(ctx.device_id(), pins));
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
+        let panel = std::sync::Arc::new(Ili9341Parallel::new(ctx.device_id(), pins).with_powered(
+            crate::peripherals::components::supply::powered_from_config(ctx),
+        ));
         // Universal GPIO bit-bang attach: same choke point as motors/servos.
         ctx.install_gpio_observer(panel.clone());
         // ESP32-S3 i80 attach: when the chip has an LCD_CAM block, bind the
@@ -562,6 +608,10 @@ impl crate::inspect::DeviceEvidence for Ili9341Parallel {
                 "format": crate::inspect::artifact_format::RGB565_BE,
                 "generation": crate::inspect::artifact_generation(&fb),
                 "display_on": self.display_on(),
+                // Reported so a dark frame explains itself. Without this, a
+                // panel darkened for having no supply is indistinguishable
+                // from one whose firmware never strobed WR.
+                "powered": self.powered,
                 "painted_bytes": painted,
                 "total_bytes": fb.len(),
                 "top_colour": top.map(|(v, _)| format!("0x{v:04X}")),
@@ -746,5 +796,129 @@ mod tests {
         // Origin untouched.
         assert_eq!(fb[0], 0);
         assert_eq!(fb[1], 0);
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
+    // only a panel's signal pins — no VCC, no GND — ran and came back painted
+    // and lit. This panel has TWO write paths, GPIO edges and the S3 LCD_CAM
+    // i80 master, and both are covered below; a gate on one alone would leave
+    // an ESP32-S3 firmware painting a panel with no supply.
+
+    /// Light the panel and paint one 0xFFFF pixel at (2,3) — 2 non-zero bytes.
+    /// (`painted_bytes` counts NON-ZERO BYTES, so a colour with a zero byte
+    /// would score half; white keeps the arithmetic honest.)
+    fn drive_a_frame_over_gpio(p: &Ili9341Parallel) {
+        select(p);
+        write_cmd(p, 0x29); // DISPON
+        write_cmd(p, 0x2A);
+        for b in [0x00, 0x02, 0x00, 0x02] {
+            write_data8(p, b);
+        }
+        write_cmd(p, 0x2B);
+        for b in [0x00, 0x03, 0x00, 0x03] {
+            write_data8(p, b);
+        }
+        write_cmd(p, 0x2C);
+        write_data16(p, 0xFFFF);
+    }
+
+    fn supply_meta(p: &Ili9341Parallel) -> serde_json::Value {
+        use crate::inspect::DeviceEvidence;
+        p.artifacts("tft", &crate::inspect::InspectOpts::default())
+            .into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without it, "unpowered is dark" would also pass on
+    /// a model that never paints at all.
+    #[test]
+    fn a_powered_panel_driven_this_way_lights_and_paints() {
+        let p = panel();
+        drive_a_frame_over_gpio(&p);
+
+        assert!(p.powered(), "no supply config at all must mean powered");
+        assert!(p.display_on(), "DISPON reached a powered panel");
+        let m = supply_meta(&p);
+        assert_eq!(m["painted_bytes"], 2, "one pixel of 0xFFFF");
+        assert_eq!(m["display_on"], true);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX, on the GPIO bit-bang path.
+    #[test]
+    fn an_unpowered_panel_reports_dark_on_every_field_the_bug_reported() {
+        let p = panel().with_powered(false);
+        drive_a_frame_over_gpio(&p);
+
+        assert!(
+            !p.display_on(),
+            "an unpowered controller cannot hold DISPON"
+        );
+        let m = supply_meta(&p);
+        assert_eq!(m["painted_bytes"], 0, "no supply, no paint");
+        assert_eq!(m["display_on"], false);
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is dark");
+    }
+
+    /// ⚠️ THE SECOND WRITE PATH. `esp_lcd`'s i80 master reaches the panel
+    /// through LCD_CAM with no GPIO edges at all, so gating `on_gpio_edge`
+    /// alone would leave every ESP32-S3 firmware painting an unpowered panel.
+    /// The positive half of the pair is asserted first so a broken i80 path
+    /// cannot fake the fix.
+    #[test]
+    fn the_i80_write_path_is_gated_too() {
+        let powered = panel();
+        powered.i80_write_word(false, 0x29); // DISPON
+        powered.i80_write_word(false, 0x2C); // RAMWR
+        powered.i80_write_word(true, 0xFFFF);
+        assert!(
+            powered.display_on(),
+            "positive control: i80 lights the panel"
+        );
+        assert_eq!(powered.ink_bytes(), 2, "positive control: i80 paints");
+
+        let dark = panel().with_powered(false);
+        dark.i80_write_word(false, 0x29);
+        dark.i80_write_word(false, 0x2C);
+        dark.i80_write_word(true, 0xFFFF);
+        assert!(!dark.display_on());
+        assert_eq!(dark.ink_bytes(), 0, "the i80 path must refuse the bus too");
+    }
+
+    /// Paint must not ACCUMULATE, and RST — which CLEARS frame memory — must
+    /// not be honoured either: an unpowered panel latches nothing at all.
+    #[test]
+    fn an_unpowered_panel_never_accumulates_paint() {
+        let p = panel().with_powered(false);
+        for _ in 0..5 {
+            // ⚠️ RST FIRST, PAINT SECOND. A hardware reset CLEARS frame memory,
+            // so a loop that ends on RST would report zero ink even with the
+            // gate removed — a vacuous test. Ending on the paint means the
+            // assertion can only hold because nothing latched.
+            p.on_gpio_edge(p.pins().rst, true, 0);
+            p.on_gpio_edge(p.pins().rst, false, 0);
+            drive_a_frame_over_gpio(&p);
+        }
+        assert_eq!(
+            p.ink_bytes(),
+            0,
+            "frame memory must be untouched, not just reported as zero",
+        );
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest
+    /// declares no supply at all; if a missing key meant "unpowered" they
+    /// would all go black.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(panel().powered(), "the default must be powered");
+        assert!(
+            panel().with_powered(true).powered(),
+            "an explicit true is powered too — only `false` darkens",
+        );
     }
 }

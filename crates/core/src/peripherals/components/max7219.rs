@@ -53,6 +53,16 @@ const REG_DISPLAY_TEST: u8 = 0x0F;
 pub struct Max7219 {
     /// `CS`/`LOAD` line, wired to the GPIO used as SPI chip-select.
     cs_pin: String,
+    /// Whether the module's supply pins (VCC, GND) are connected in the design.
+    ///
+    /// ⚠️ NOT the MAX7219's own `shutdown` register below. Shutdown is a mode
+    /// the firmware selects over a bus that works; this is whether the module
+    /// has a rail at all. A diagram wiring only DIN/CLK/CS used to run the
+    /// whole init and report lit LEDs; on a bench the matrix is dark.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens it — see [`crate::peripherals::components::supply`].
+    powered: bool,
     /// Two-byte shift accumulator for the 16-bit write currently clocking in.
     shift: [u8; 2],
     /// Number of bytes clocked into `shift` since the last latch.
@@ -75,6 +85,8 @@ impl Max7219 {
     pub fn new(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             shift: [0; 2],
             shift_len: 0,
             framebuffer: [0; ROWS],
@@ -95,6 +107,11 @@ impl Max7219 {
     /// the mode is cleared. Reporting the raw RAM in those states would render a
     /// picture the real panel is not showing.
     pub fn framebuffer(&self) -> [u8; ROWS] {
+        // No supply, no LEDs — ahead of display test, which on silicon
+        // overrides shutdown but cannot override the absence of a rail.
+        if !self.powered {
+            return [0x00; ROWS];
+        }
         if self.display_test {
             // Display test overrides shutdown (datasheet: "display-test mode
             // overrides shutdown mode").
@@ -126,9 +143,24 @@ impl Max7219 {
         self.scan_limit
     }
 
-    /// True while the driver is in shutdown mode.
+    /// True while the driver is in shutdown mode. A module with no supply is
+    /// reported as shut down as well: `transfer` refuses the bus, so the part
+    /// stays at its power-on-shutdown default by construction.
     pub fn is_shutdown(&self) -> bool {
         self.shutdown
+    }
+
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
     }
 
     /// True while display test is active.
@@ -191,6 +223,10 @@ impl SpiDevice for Max7219 {
                 "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
                 "lit_pixels": fb.iter().map(|b| b.count_ones() as usize).sum::<usize>(),
                 "shutdown": self.is_shutdown(),
+                // Reported so a dark matrix explains itself: without it, "no
+                // supply" is indistinguishable from "firmware never left
+                // shutdown".
+                "powered": self.powered,
                 "intensity": self.intensity(),
                 "scan_limit": self.scan_limit(),
             }),
@@ -215,6 +251,15 @@ impl SpiDevice for Max7219 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED MODULE BEHAVE LIKE ONE. Every
+        // state change this model has — digit RAM, intensity, scan limit,
+        // shutdown, display test — arrives through `transfer` as a 16-bit
+        // register write. Refusing the bus here leaves the part at its
+        // power-on defaults (shut down, RAM clear) by construction rather than
+        // masking the readback at report time.
+        if !self.powered {
+            return 0;
+        }
         self.push_byte(mosi);
         // DOUT is the delayed DIN used for cascading; a single (uncascaded)
         // module presents nothing meaningful on MISO.
@@ -252,11 +297,14 @@ static MAX7219_METADATA: KitMetadata = KitMetadata {
              part drives the panel.",
     transport: Transport::Spi,
     category: Category::Spi,
-    config_keys: &[ConfigKey {
-        name: "cs_pin",
-        ty: ConfigType::Str,
-        doc: "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4.",
-    }],
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4.",
+        },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
+    ],
     // No lab yet: no demo firmware/ELF is built or published for this module.
     // Declaring a LabRef would promise a one-click demo that 404s.
     labs: &[],
@@ -268,7 +316,11 @@ impl PeripheralKit for Max7219Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        ctx.attach_spi_device(Box::new(Max7219::new(cs_pin)))?;
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
+        ctx.attach_spi_device(Box::new(Max7219::new(cs_pin).with_powered(
+            crate::peripherals::components::supply::powered_from_config(ctx),
+        )))?;
         Ok(())
     }
 }
@@ -411,5 +463,114 @@ mod tests {
         write_reg(&mut dev, 0x0E, 0xFF); // undocumented
         assert_eq!(dev.framebuffer()[0], 0x11);
         assert!(!dev.is_display_test());
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
+    // only a module's signal pins — no VCC, no GND — ran and reported lit
+    // LEDs. On a bench the matrix is dark.
+    //
+    // ⚠️ Note the name collision: the helper `power_on` above clears the
+    // MAX7219's SHUTDOWN REGISTER, which is a firmware action over a working
+    // bus. `powered` is whether the module has a rail at all.
+
+    /// Leave shutdown, set intensity, and light all 8 LEDs of row 0.
+    fn drive_a_lit_row(dev: &mut Max7219) {
+        power_on(dev);
+        write_reg(dev, REG_INTENSITY, 0x0F);
+        write_reg(dev, REG_SCAN_LIMIT, 0x07);
+        write_reg(dev, 0x01, 0xFF);
+    }
+
+    fn supply_meta(dev: &Max7219) -> serde_json::Value {
+        SpiDevice::artifacts(dev, "matrix", &crate::inspect::InspectOpts::default())
+            .into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without it, "unpowered is dark" would also pass on
+    /// a model that never lights anything.
+    #[test]
+    fn a_powered_module_driven_this_way_lights_its_leds() {
+        let mut dev = Max7219::new("PA4");
+        drive_a_lit_row(&mut dev);
+
+        assert!(dev.powered(), "no supply config at all must mean powered");
+        assert!(!dev.is_shutdown(), "the shutdown register was cleared");
+        let m = supply_meta(&dev);
+        assert_eq!(m["lit_pixels"], 8, "row 0 fully lit");
+        assert_eq!(m["intensity"], 0x0F);
+        assert_eq!(m["shutdown"], false);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_module_reports_dark_on_every_field_the_bug_reported() {
+        let mut dev = Max7219::new("PA4").with_powered(false);
+        drive_a_lit_row(&mut dev);
+
+        assert!(
+            dev.is_shutdown(),
+            "an unpowered driver cannot honour the shutdown-clear write",
+        );
+        let m = supply_meta(&dev);
+        assert_eq!(m["lit_pixels"], 0, "no supply, no light");
+        assert_eq!(m["ink_bytes"], 0);
+        assert_eq!(m["intensity"], 0, "the intensity write never latched");
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is dark");
+    }
+
+    /// ⚠️ DISPLAY TEST overrides shutdown on silicon — but it cannot override
+    /// the absence of a rail. A gate placed only on `shutdown` would let a
+    /// display-test write flood an unpowered panel with 64 lit LEDs.
+    #[test]
+    fn display_test_cannot_light_an_unpowered_module() {
+        let mut powered = Max7219::new("PA4");
+        write_reg(&mut powered, REG_DISPLAY_TEST, 0x01);
+        assert_eq!(
+            powered
+                .framebuffer()
+                .iter()
+                .map(|b| b.count_ones())
+                .sum::<u32>(),
+            64,
+            "positive control: display test floods a powered panel",
+        );
+
+        let mut dark = Max7219::new("PA4").with_powered(false);
+        write_reg(&mut dark, REG_DISPLAY_TEST, 0x01);
+        assert_eq!(dark.framebuffer(), [0x00; ROWS]);
+        assert!(!dark.is_display_test(), "the write never latched at all");
+    }
+
+    /// Digit RAM must not ACCUMULATE either: the bus is refused, so the
+    /// underlying RAM is untouched rather than merely blanked at readback.
+    #[test]
+    fn an_unpowered_module_never_accumulates_paint() {
+        let mut dev = Max7219::new("PA4").with_powered(false);
+        for _ in 0..5 {
+            drive_a_lit_row(&mut dev);
+        }
+        assert_eq!(
+            dev.digit_ram(),
+            [0x00; ROWS],
+            "digit RAM must be untouched, not just blanked on readback",
+        );
+        assert_eq!(dev.scan_limit(), 0, "nor may the scan limit latch");
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest
+    /// declares no supply at all.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(Max7219::new("PA4").powered(), "the default must be powered");
+        assert!(
+            Max7219::new("PA4").with_powered(true).powered(),
+            "an explicit true is powered too — only `false` darkens",
+        );
     }
 }

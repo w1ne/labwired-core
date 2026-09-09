@@ -63,6 +63,18 @@ enum ProtoState {
 pub struct Uc8151dTricolor290 {
     cs_pin: String,
 
+    /// Whether the module's supply pins (VCC, GND) are connected in the design.
+    ///
+    /// ⚠️ NOT `power_on` below. `power_on` is the UC8151D's own PON (0x04)
+    /// booster sequence, driven over a bus that works; this is whether the
+    /// module has a rail at all. A diagram wiring only CLK/DIN/CS/DC/RST/BUSY
+    /// used to run the whole GxEPD2 init and report inked planes and a bumped
+    /// `refresh_generation`; on a bench the glass never changes.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens it — see [`crate::peripherals::components::supply`].
+    powered: bool,
+
     hibernating: bool,
     power_on: bool,
     /// Set by DRF (0x12). UI uses [`Self::refresh_generation`] to
@@ -111,6 +123,8 @@ impl Uc8151dTricolor290 {
     pub fn new(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             hibernating: false,
             power_on: false,
             refresh_pending: false,
@@ -151,8 +165,24 @@ impl Uc8151dTricolor290 {
         self.refresh_generation
     }
 
+    /// PON **and** a supply. `transfer` already refuses the bus when
+    /// unpowered, so the inner flag can never be true here; the `&&` is the
+    /// guard that survives someone later adding another way to set it.
     pub fn power_on(&self) -> bool {
-        self.power_on
+        self.powered && self.power_on
+    }
+
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
     }
 
     /// Process one command byte (DC=low on real hardware). Resets plane
@@ -331,6 +361,9 @@ impl SpiDevice for Uc8151dTricolor290 {
                 "red_ink_bytes": ink(red),
                 "refresh_generation": self.refresh_generation(),
                 "power_on": self.power_on(),
+                // Reported so a blank panel explains itself: without it, "no
+                // supply" is indistinguishable from "firmware never refreshed".
+                "powered": self.powered,
             }),
             bytes: crate::inspect::artifact_bytes(&both, opts),
         }]
@@ -397,6 +430,21 @@ impl SpiDevice for Uc8151dTricolor290 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED PANEL BEHAVE LIKE ONE. `transfer`
+        // is the only route the bus has into this model, and every state change
+        // — PON, both plane streams, DRF and the refresh counter — is behind
+        // it. Refusing here leaves the planes erased and the counter at zero by
+        // construction rather than masking them at report time.
+        //
+        // BUSY stays driven to its idle level at attach (see `attach`): on a
+        // bench an unpowered panel leaves BUSY floating and GxEPD2 spins to its
+        // 30 s escape timeout, which at simulated speed reads as a hung
+        // firmware rather than a wiring fault. A blank panel that still returns
+        // is the honest half we can show; the wiring fault itself is reported
+        // at design time by the PWR_SUPPLY_UNCONNECTED ERC warning.
+        if !self.powered {
+            return 0;
+        }
         // Silicon-accurate framing: when a D/C line is wired the bus has
         // latched the real GPIO level (low = command, high = data) before
         // this transfer, so we route correctly with no thunk. Without a D/C
@@ -494,6 +542,7 @@ static UC8151D_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
             doc: "BUSY status GPIO the host polls (e.g. \"GPIO5\"). Held HIGH (idle) — \
                   UC8151D is busy-LOW, the inverse of ssd1680_tricolor_290.",
         },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
     ],
     // No core/examples/* lab with system.yaml yet (stats-display is playground-hosted).
     labs: &[],
@@ -505,7 +554,11 @@ impl PeripheralKit for Uc8151dTricolor290Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("GPIO5").to_string();
-        let mut panel = Uc8151dTricolor290::new(cs_pin);
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
+        let mut panel = Uc8151dTricolor290::new(cs_pin).with_powered(
+            crate::peripherals::components::supply::powered_from_config(ctx),
+        );
         if let Some(dc_pin) = ctx.config_str("dc_pin") {
             let (odr_addr, bit) = ctx.resolve_pin_odr(dc_pin).ok_or_else(|| {
                 anyhow::anyhow!(
@@ -599,5 +652,123 @@ mod tests {
         p.command_byte(0xFE); // unrecognized
         p.command_byte(0x04); // PON should still work after
         assert!(p.power_on());
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
+    // only a panel's signal pins — no VCC, no GND — ran and reported inked
+    // planes and a bumped refresh generation. On a bench the glass never
+    // changes.
+    //
+    // ⚠️ These drive through `transfer` with a D/C source wired, i.e. the path
+    // the BUS uses. The older tests in this module poke `command_byte` /
+    // `data_byte` directly, which is below the gate on purpose: the gate is at
+    // the model's bus door, so a test that walks in through the window would
+    // not be testing the fix.
+
+    fn wired(powered: bool) -> Uc8151dTricolor290 {
+        let mut p = Uc8151dTricolor290::new("GPIO5")
+            .with_dc_pin("GPIO2")
+            .with_powered(powered);
+        SpiDevice::set_dc_source(&mut p, 0x4000_0014, 2);
+        p
+    }
+
+    fn bus_cmd(p: &mut Uc8151dTricolor290, cmd: u8, params: &[u8]) {
+        SpiDevice::set_dc_level(p, false);
+        p.transfer(cmd);
+        if !params.is_empty() {
+            SpiDevice::set_dc_level(p, true);
+            for &b in params {
+                p.transfer(b);
+            }
+        }
+    }
+
+    /// The ereader init, then a full black DTM1 plane, then DRF.
+    fn drive_a_refresh(p: &mut Uc8151dTricolor290) {
+        bus_cmd(p, 0x00, &[0x8F]); // PSR
+        bus_cmd(p, 0x61, &[0x80, 0x01, 0x28]); // TRES
+        bus_cmd(p, 0x50, &[0x77]); // CDI
+        bus_cmd(p, 0x04, &[]); // PON
+        SpiDevice::set_dc_level(p, false);
+        p.transfer(0x10); // DTM1
+        SpiDevice::set_dc_level(p, true);
+        for _ in 0..PLANE_BYTES {
+            p.transfer(0x00); // all black ink
+        }
+        bus_cmd(p, 0x12, &[]); // DRF
+    }
+
+    fn supply_meta(p: &Uc8151dTricolor290) -> serde_json::Value {
+        SpiDevice::artifacts(p, "epd", &crate::inspect::InspectOpts::default())
+            .into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without it, "unpowered stays blank" would also
+    /// pass on a model that never inks anything.
+    #[test]
+    fn a_powered_panel_driven_this_way_inks_and_refreshes() {
+        let mut p = wired(true);
+        drive_a_refresh(&mut p);
+
+        assert!(p.powered(), "an explicit true is powered");
+        assert!(p.power_on(), "PON reached a powered panel");
+        let m = supply_meta(&p);
+        assert_eq!(m["black_ink_bytes"], PLANE_BYTES);
+        assert_eq!(m["refresh_generation"], 1);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_panel_reports_blank_on_every_field_the_bug_reported() {
+        let mut p = wired(false);
+        drive_a_refresh(&mut p);
+
+        assert!(!p.power_on(), "an unpowered controller cannot honour PON");
+        let m = supply_meta(&p);
+        assert_eq!(m["black_ink_bytes"], 0, "no supply, no ink");
+        assert_eq!(m["red_ink_bytes"], 0);
+        assert_eq!(
+            m["refresh_generation"], 0,
+            "nothing ever reached the glass, so nothing ever refreshed",
+        );
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is blank");
+    }
+
+    /// Ink must not ACCUMULATE, and the plane cursors must not move either.
+    #[test]
+    fn an_unpowered_panel_never_accumulates_ink() {
+        let mut p = wired(false);
+        for _ in 0..5 {
+            drive_a_refresh(&mut p);
+        }
+        assert!(
+            p.black_plane().iter().all(|&b| b == 0xFF),
+            "the black plane must be untouched, not just reported as blank",
+        );
+        assert!(p.red_plane().iter().all(|&b| b == 0xFF));
+        assert_eq!(p.refresh_generation, 0);
+        assert_eq!((p.cur_black_byte, p.cur_red_byte), (0, 0));
+        assert!(!p.refresh_pending);
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest
+    /// declares no supply at all.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(
+            Uc8151dTricolor290::new("GPIO5").powered(),
+            "the default must be powered",
+        );
+        assert!(
+            Uc8151dTricolor290::default().powered(),
+            "and so must the Default impl the factories use",
+        );
     }
 }

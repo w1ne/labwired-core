@@ -96,6 +96,14 @@ pub enum DcSourceKind {
 #[derive(Debug, serde::Serialize)]
 pub struct Rm67162 {
     cs_pin: String,
+    /// Whether the module's supply pins are actually connected in the design.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens the panel; an absent key means powered, because every
+    /// curated lab states signals and leaves the rails implicit. See
+    /// [`crate::peripherals::components::supply`] for the measurement behind
+    /// that asymmetry, and `st7789.rs` for the reference implementation.
+    powered: bool,
     /// DISPON/DISPOFF state. NOT the same as "visible" — see `is_lit`.
     display_on: bool,
     /// Sleep state (SLPIN/SLPOUT). Resets to asleep, as the panel does.
@@ -150,6 +158,8 @@ impl Rm67162 {
     fn bare(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             display_on: false,
             // The panel powers up ASLEEP; SLPOUT is not optional on silicon.
             asleep: true,
@@ -178,11 +188,27 @@ impl Rm67162 {
     /// a panel that is on, awake and at zero brightness is black on real
     /// hardware, and calling that "on" is how a model flatters broken firmware.
     pub fn is_lit(&self) -> bool {
-        self.display_on && !self.asleep && self.brightness > 0
+        self.powered && self.display_on && !self.asleep && self.brightness > 0
     }
 
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
+    }
+
+    /// DISPON **and** a supply. `transfer` already refuses the bus when
+    /// unpowered, so the inner flag can never be true here; the `&&` is the
+    /// guard that survives someone later adding another way to set it.
     pub fn display_on(&self) -> bool {
-        self.display_on
+        self.powered && self.display_on
     }
     pub fn brightness(&self) -> u8 {
         self.brightness
@@ -411,8 +437,12 @@ impl SpiDevice for Rm67162 {
                 // `display_on` is DISPON alone, kept for parity with the other
                 // panels. `lit` is the honest answer for an emissive display:
                 // DISPON, awake, AND non-zero brightness.
-                "display_on": self.display_on,
+                "display_on": self.display_on(),
                 "lit": self.is_lit(),
+                // Reported so a dark frame explains itself. Without this, a
+                // panel darkened for having no supply is indistinguishable
+                // from one whose firmware left brightness at 0.
+                "powered": self.powered,
                 "asleep": self.asleep,
                 "brightness": self.brightness,
                 "colmod": format!("0x{:02X}", self.colmod),
@@ -458,6 +488,15 @@ impl SpiDevice for Rm67162 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED PANEL BEHAVE LIKE ONE. Every
+        // state change this model has — SLPOUT, DISPON, WRDISBV brightness,
+        // CASET/RASET and every pixel byte — arrives through `transfer`.
+        // Refusing the bus here is what an unpowered RM67162 does, and it
+        // leaves `lit` / `brightness` / `painted_bytes` at their power-on-dark
+        // values by construction rather than masking them at report time.
+        if !self.powered {
+            return 0;
+        }
         // Framing is always the wire's. There is no value-inference path: see
         // the module header for what that costs on a real init sequence.
         if self.dc_level {
@@ -522,6 +561,7 @@ static RM67162_METADATA: KitMetadata = KitMetadata {
                   has no infer-framing-from-byte-values fallback, because that \
                   inference desynchronises on a real init sequence.",
         },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
     ],
     labs: &[],
 };
@@ -535,6 +575,11 @@ impl PeripheralKit for Rm67162Kit {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("").to_string();
         let dc_pin = ctx.config_str("dc_pin").map(|s| s.to_string());
         let hw_dcx = ctx.config_bool("hw_dcx").unwrap_or(false);
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`. Read once and
+        // applied on BOTH wiring arms below — a panel is not more powered for
+        // having its D/C on a GPIO than on the controller's DCX line.
+        let powered = crate::peripherals::components::supply::powered_from_config(ctx);
 
         match (dc_pin, hw_dcx) {
             (Some(_), true) => anyhow::bail!(
@@ -552,7 +597,9 @@ impl PeripheralKit for Rm67162Kit {
                 ctx.device_id(),
             ),
             (None, true) => {
-                ctx.attach_spi_device(Box::new(Rm67162::with_controller_dc(cs_pin)))?;
+                ctx.attach_spi_device(Box::new(
+                    Rm67162::with_controller_dc(cs_pin).with_powered(powered),
+                ))?;
             }
             (Some(dc), false) => {
                 // Resolving the pin to its GPIO output register is the half that
@@ -568,7 +615,7 @@ impl PeripheralKit for Rm67162Kit {
                         dc,
                     )
                 })?;
-                let mut dev = Rm67162::with_gpio_dc(cs_pin, dc);
+                let mut dev = Rm67162::with_gpio_dc(cs_pin, dc).with_powered(powered);
                 SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
                 ctx.attach_spi_device(Box::new(dev))?;
             }
@@ -770,5 +817,100 @@ mod tests {
         assert_eq!(meta["w"], serde_json::json!(240));
         assert_eq!(meta["h"], serde_json::json!(536));
         assert_eq!(meta["dc_source"], serde_json::json!("controller_dcx"));
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
+    // only a panel's signal pins — no VCC, no GND — ran and came back painted
+    // and lit. On a bench that panel is dark.
+
+    /// A full init that lights the panel and paints 16 pixels of 0xFFFF, i.e.
+    /// 32 non-zero bytes. (`painted_bytes` counts NON-ZERO BYTES, so a colour
+    /// with a zero byte would score half.)
+    fn drive_a_lit_frame(d: &mut Rm67162) {
+        cmd(d, CMD_SLPOUT, &[]);
+        cmd(d, CMD_COLMOD, &[COLMOD_RGB565]);
+        cmd(d, CMD_WRDISBV, &[0xFF]);
+        cmd(d, CMD_DISPON, &[]);
+        cmd(d, CMD_CASET, &[0, 0, 0, 15]);
+        cmd(d, CMD_RASET, &[0, 0, 0, 0]);
+        pixels(d, &[0xFFFF; 16]);
+    }
+
+    fn supply_meta(d: &Rm67162) -> serde_json::Value {
+        SpiDevice::artifacts(d, "amoled", &crate::inspect::InspectOpts::default())
+            .into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without it, "unpowered is dark" would also pass on
+    /// a model that never lights or paints at all.
+    #[test]
+    fn a_powered_panel_driven_this_way_lights_and_paints() {
+        let mut d = panel();
+        drive_a_lit_frame(&mut d);
+
+        assert!(d.powered(), "no supply config at all must mean powered");
+        assert!(d.is_lit());
+        let m = supply_meta(&d);
+        assert_eq!(m["painted_bytes"], 32, "16 pixels of 0xFFFF");
+        assert_eq!(m["lit"], true);
+        assert_eq!(m["display_on"], true);
+        assert_eq!(m["brightness"], 0xFF);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_panel_reports_dark_on_every_field_the_bug_reported() {
+        let mut d = panel().with_powered(false);
+        drive_a_lit_frame(&mut d);
+
+        assert!(!d.is_lit(), "an unpowered AMOLED emits nothing");
+        assert!(!d.display_on(), "it cannot hold DISPON either");
+        let m = supply_meta(&d);
+        assert_eq!(m["painted_bytes"], 0, "no supply, no paint");
+        assert_eq!(m["lit"], false);
+        assert_eq!(m["display_on"], false);
+        assert_eq!(
+            m["brightness"], 0,
+            "WRDISBV never latched, so brightness is the reset value",
+        );
+        assert_eq!(m["asleep"], true, "the panel powers up asleep and stays so");
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is dark");
+    }
+
+    /// Paint must not ACCUMULATE, and the addressing window must not move.
+    #[test]
+    fn an_unpowered_panel_never_accumulates_paint() {
+        let mut d = panel().with_powered(false);
+        for _ in 0..5 {
+            drive_a_lit_frame(&mut d);
+        }
+        assert_eq!(
+            d.framebuffer().iter().filter(|&&b| b != 0).count(),
+            0,
+            "frame memory must be untouched, not just reported as zero",
+        );
+        assert_eq!((d.col_start, d.col_end), (0, (WIDTH as u16) - 1));
+        assert_eq!((d.row_start, d.row_end), (0, (HEIGHT as u16) - 1));
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest
+    /// declares no supply at all.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(panel().powered(), "the default must be powered");
+        assert!(
+            Rm67162::with_gpio_dc("P1.12", "P1.13").powered(),
+            "and so must the GPIO-D/C wiring",
+        );
+        assert!(
+            panel().with_powered(true).powered(),
+            "an explicit true is powered too — only `false` darkens",
+        );
     }
 }

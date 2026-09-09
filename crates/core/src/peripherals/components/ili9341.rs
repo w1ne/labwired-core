@@ -75,6 +75,15 @@ enum ProtoState {
 #[derive(Debug, serde::Serialize)]
 pub struct Ili9341 {
     cs_pin: String,
+    /// Whether the module's supply pins are actually connected in the design.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens the panel; an absent key means powered, because every
+    /// curated lab states signals and leaves the rails implicit. See
+    /// [`crate::peripherals::components::supply`] for the measurement behind
+    /// that asymmetry, and `st7789.rs` for the reference implementation this
+    /// mirrors.
+    powered: bool,
     display_on: bool,
     /// Current column pointer for RAMWR writes.
     cur_col: u16,
@@ -131,6 +140,8 @@ impl Ili9341 {
     pub fn new(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             display_on: false,
             cur_col: 0,
             cur_row: 0,
@@ -248,8 +259,26 @@ impl Ili9341 {
         )
     }
 
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
+    }
+
+    /// DISPON **and** a supply. An unpowered controller cannot hold DISPON, so
+    /// this is not a second opinion layered over the state — it is the state.
+    /// `transfer` already refuses the bus when unpowered, so `self.display_on`
+    /// can never be true here; the `&&` is the guard that survives someone
+    /// later adding another way to set it.
     pub fn display_on(&self) -> bool {
-        self.display_on
+        self.powered && self.display_on
     }
 
     pub fn dimensions(&self) -> (usize, usize) {
@@ -562,6 +591,10 @@ impl SpiDevice for Ili9341 {
                 "format": crate::inspect::artifact_format::RGB565_BE,
                 "generation": crate::inspect::artifact_generation(&fb),
                 "display_on": self.display_on(),
+                // Reported so a dark frame explains itself. Without this, a
+                // panel darkened for having no supply is indistinguishable
+                // from one whose firmware never sent DISPON.
+                "powered": self.powered,
                 "painted_bytes": painted,
                 "total_bytes": fb.len(),
                 "top_colour": top.map(|(v, _)| format!("0x{v:04X}")),
@@ -605,6 +638,16 @@ impl SpiDevice for Ili9341 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED PANEL BEHAVE LIKE ONE. Every
+        // state change this model has — DISPON, CASET/PASET, MADCTL and every
+        // pixel byte — arrives through `transfer`. Refusing the bus here is
+        // what an unpowered ILI9341 does (no supply, no input latches, no
+        // charge pump), and it means `display_on` / `painted_bytes` stay at
+        // their power-on-dark values by construction rather than by masking
+        // them at report time.
+        if !self.powered {
+            return 0;
+        }
         // With a D/C line wired, framing is the wire's, not a guess.
         if self.dc_pin.is_some() {
             if self.dc_level {
@@ -693,6 +736,7 @@ static ILI9341_METADATA: KitMetadata = KitMetadata {
                   silicon. Without it the model must infer framing from byte \
                   values, which a real driver's init sequence desynchronises.",
         },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
     ],
     labs: &[LabRef {
         board_id: "ili9341-tft-lab",
@@ -710,6 +754,12 @@ impl PeripheralKit for Ili9341Kit {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
         let dc_pin = ctx.config_str("dc_pin").map(|s| s.to_string());
         let mut dev = Ili9341::new(cs_pin);
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // `None` (no key at all — every hand-written lab manifest) and
+        // `Some(true)` both leave the panel powered.
+        if !crate::peripherals::components::supply::powered_from_config(ctx) {
+            dev = dev.with_powered(false);
+        }
         if let Some(dc) = dc_pin {
             // Resolving the pin to its GPIO output register is the half that
             // makes D/C real: the bus samples that register before each
@@ -1064,5 +1114,103 @@ mod tests {
         // (0,0) should now be green (0x07E0), overwritten by wrap
         assert_eq!(fb[0], 0x07, "wrapped pixel hi");
         assert_eq!(fb[1], 0xE0, "wrapped pixel lo");
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account). A diagram wiring
+    // only a panel's signal pins — no VCC, no GND — ran and came back painted
+    // and lit. On a bench that panel is dark. The pair below makes that
+    // impossible for the ILI9341: the same bytes into a powered panel and into
+    // an unpowered one, with the POWERED one asserted to still light and paint
+    // so a model that simply never works cannot fake the fix.
+
+    /// A firmware init that unambiguously lights the panel and paints a
+    /// 4x4 window of 0xFFFF (white).
+    ///
+    /// ⚠️ White, not red: `painted_bytes` counts NON-ZERO BYTES, so a 0xF800
+    /// pixel contributes ONE byte, not two, and the count would read half.
+    fn drive_a_frame(dev: &mut Ili9341) {
+        cmd(dev, 0x11, &[]); // SLPOUT
+        cmd(dev, 0x29, &[]); // DISPON
+        cmd(dev, 0x2A, &[0x00, 0x00, 0x00, 0x03]); // CASET 0..3
+        cmd(dev, 0x2B, &[0x00, 0x00, 0x00, 0x03]); // PASET 0..3
+        dc_send(dev, false, &[0x2C]); // RAMWR
+        for _ in 0..16 {
+            dc_send(dev, true, &[0xFF, 0xFF]);
+        }
+    }
+
+    fn supply_meta(dev: &Ili9341) -> serde_json::Value {
+        SpiDevice::artifacts(dev, "tft", &crate::inspect::InspectOpts::default())
+            .into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without it, "unpowered is dark" would also pass on
+    /// a model that never paints at all.
+    #[test]
+    fn a_powered_panel_driven_this_way_lights_and_paints() {
+        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
+        drive_a_frame(&mut dev);
+
+        assert!(dev.powered(), "no supply config at all must mean powered");
+        assert!(dev.display_on(), "DISPON reached a powered panel");
+
+        let m = supply_meta(&dev);
+        assert_eq!(m["painted_bytes"], 32, "16 pixels of 0xFFFF");
+        assert_eq!(m["display_on"], true);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_panel_reports_dark_on_every_field_the_bug_reported() {
+        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0").with_powered(false);
+        drive_a_frame(&mut dev);
+
+        assert!(
+            !dev.display_on(),
+            "an unpowered controller cannot hold DISPON"
+        );
+        let m = supply_meta(&dev);
+        assert_eq!(m["painted_bytes"], 0, "no supply, no paint");
+        assert_eq!(m["display_on"], false);
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is dark");
+    }
+
+    /// Paint must not ACCUMULATE either: the bus is refused, so frame memory
+    /// and the addressing window are untouched rather than under-reported.
+    #[test]
+    fn an_unpowered_panel_never_accumulates_paint() {
+        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0").with_powered(false);
+        for _ in 0..5 {
+            drive_a_frame(&mut dev);
+        }
+        assert_eq!(
+            dev.framebuffer().iter().filter(|&&b| b != 0).count(),
+            0,
+            "frame memory must be untouched, not just reported as zero",
+        );
+        assert_eq!((dev.col_start, dev.col_end), (0, (WIDTH as u16) - 1));
+        assert_eq!((dev.row_start, dev.row_end), (0, (HEIGHT as u16) - 1));
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest
+    /// declares no supply at all. If a missing key ever came to mean
+    /// "unpowered", all of them would go black.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(Ili9341::new("PA4").powered(), "the default must be powered");
+        assert!(
+            Ili9341::default().powered(),
+            "and so must the Default impl the factories use",
+        );
+        assert!(
+            Ili9341::new("PA4").with_powered(true).powered(),
+            "an explicit true is powered too — only `false` darkens",
+        );
     }
 }

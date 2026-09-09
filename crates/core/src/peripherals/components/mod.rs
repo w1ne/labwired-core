@@ -89,6 +89,7 @@ pub mod ssd1306;
 pub mod ssd1680_tricolor_290;
 pub mod st7789;
 pub mod step_dir_motor;
+pub mod supply;
 pub mod tca9548a;
 pub mod tm1637_7seg;
 pub mod tmp117;

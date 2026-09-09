@@ -68,8 +68,30 @@ use std::path::{Path, PathBuf};
 /// that would actually retire it is a `UartConsole` capability trait covering
 /// `set_sink` and `rx_buffer`, which retires all four existing arms too and is
 /// its own change, not a rider on a chip onboarding.
-const MAX_AS_ANY: usize = 194;
-const MAX_DOWNCAST_REF: usize = 210;
+/// 194 → 195: `components::supply::UnpoweredI2cDevice`, the decorator that
+/// makes an I²C part with no supply NACK its address. It is the second
+/// transparent decorator on the I²C attach chain — `bus_trace::TracingI2cDevice`
+/// is the first — and like that one it must forward `as_any()`, or every
+/// downcast that reaches an attached slave's concrete type today would start
+/// answering `None` for exactly the parts a user is trying to debug. That is
+/// evidence disappearing rather than reading dark, which is the failure mode
+/// `inspect::DeviceEvidence` exists to end. This is not a new concrete type
+/// joining the ~60 the row is about: it is one forward, on a wrapper that has
+/// no type of its own to reach for.
+///
+/// 195 → 196: `components::supply`'s own wiring test. The decorator's other
+/// tests build it by hand and so prove nothing about whether anything ever
+/// puts it on a device — the "guard not wired to the path that matters" trap.
+/// The test that closes it builds a real bus from a real manifest and asks the
+/// I²C controller what it would answer at 0x3C, which means reaching
+/// `bus.peripherals[..].dev` down to the concrete `peripherals::i2c::I2c`.
+/// That is the "a test reaching into a concrete model" case this module's doc
+/// names as justified; the alternative is a public accessor that exists solely
+/// so one test need not downcast. The same one call site is also the
+/// 210 → 211 `downcast_ref`: `as_any()` and `downcast_ref` are the two halves
+/// of one reach, and both counters see it.
+const MAX_AS_ANY: usize = 196;
+const MAX_DOWNCAST_REF: usize = 211;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
