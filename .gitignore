@@ -17,6 +17,10 @@ fixtures/
 !tests/fixtures/tier1/**
 /*.rlib
 
+# Renode portable unpacked by the hello speed gate (local or Actions cache).
+/.renode-portable/
+/renode-hello.json
+
 # Local release/test run outputs
 /final-release-verification/
 /release-demo/

@@ -2766,6 +2766,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             let chunk = remaining.min(JIT_RUN_CHUNK);
             (u64::from(chunk), chunk)
         } else if idle_ff_wide_observation
+            && assertions_first_passed_at.is_none()
             && machine
                 .cpu
                 .idle_fast_forward_budget(&machine.bus as &dyn labwired_core::Bus)
@@ -2775,6 +2776,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             // idle window goes in a few thousand skips instead of one cycle at
             // a time. The CPU batch width is still `current_batch` — see the
             // note beside `idle_ff_wide_observation`.
+            //
+            // Once `stop_when_assertions_pass` has latched, this arm stays
+            // OFF. Settle is "N more instructions" (print-then-bkpt). Wide
+            // idle-ff would skip to the next RTC overflow (~512 s on
+            // nRF52840) because WFI does not retire those N steps.
             (u64::from(remaining.min(IDLE_FF_RUN_CHUNK)), current_batch)
         } else {
             (u64::from(to_execute), current_batch)
@@ -3016,6 +3022,12 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     && step >= resolved_limits.stop_when_assertions_pass_min_steps
                 {
                     assertions_first_passed_at = Some(step);
+                    // Settle is "N more instructions" (print-then-bkpt). Leave
+                    // idle-ff on and a parked WFI never retires those N steps
+                    // — it skips to the next RTC overflow instead (~512 s on
+                    // nRF52840). Interpreting WFI for the window is cheap and
+                    // keeps the crash-during-settle contract.
+                    machine.config.idle_fast_forward_enabled = false;
                 }
             } else {
                 // A regression means the pass was not durable — restart the
