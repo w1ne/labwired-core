@@ -103,6 +103,42 @@ irq: nvic@
 }
 
 #[test]
+fn flattened_keys_land_in_config() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: nrf52840_uart
+base_address: 0x40002000
+easyDMA: true
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        p.config.get("easyDMA").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+}
+
+#[test]
+fn nested_config_wins_over_flattened_key() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: uart
+base_address: 0x4000
+easyDMA: true
+config:
+  easyDMA: false
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        p.config.get("easyDMA").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+}
+
+#[test]
 fn system_manifest_parses_cosim_models() {
     let yaml = r#"
 name: "plant-demo"

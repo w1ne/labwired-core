@@ -318,6 +318,8 @@ struct PeripheralConfigWire {
     clock: Option<ClockGates>,
     #[serde(default)]
     config: HashMap<String, serde_yaml::Value>,
+    #[serde(flatten)]
+    extra: HashMap<String, serde_yaml::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -346,6 +348,10 @@ pub struct PeripheralConfig {
 
 impl From<PeripheralConfigWire> for PeripheralConfig {
     fn from(wire: PeripheralConfigWire) -> Self {
+        let mut config = wire.config;
+        for (key, value) in wire.extra {
+            config.entry(key).or_insert(value);
+        }
         Self {
             id: wire.id,
             r#type: wire.r#type,
@@ -354,7 +360,7 @@ impl From<PeripheralConfigWire> for PeripheralConfig {
             irq: wire.irq.line,
             irq_controller: wire.irq.controller.or(wire.irq_controller),
             clock: wire.clock,
-            config: wire.config,
+            config,
         }
     }
 }
