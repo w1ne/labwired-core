@@ -371,14 +371,10 @@ assertions:
         .expect("labwired test");
     let elapsed = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        output.status.success(),
-        "labwired test failed: {stderr}"
-    );
-    let result: Value = serde_json::from_str(
-        &std::fs::read_to_string(temp_dir.join("result.json")).unwrap(),
-    )
-    .unwrap();
+    assert!(output.status.success(), "labwired test failed: {stderr}");
+    let result: Value =
+        serde_json::from_str(&std::fs::read_to_string(temp_dir.join("result.json")).unwrap())
+            .unwrap();
     assert_eq!(result["status"], "pass");
     assert_eq!(result["stop_reason"], "assertions_passed");
     let steps = result["steps_executed"].as_u64().unwrap();
