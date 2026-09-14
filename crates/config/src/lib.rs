@@ -235,7 +235,93 @@ impl ClockGates {
     }
 }
 
+/// Parsed `irq` YAML: a line number plus optional `controller@line` prefix.
+#[derive(Default)]
+struct IrqTarget {
+    line: Option<u32>,
+    controller: Option<String>,
+}
+
+fn irq_line_from_number(n: &serde_yaml::Number) -> Result<u32, String> {
+    if let Some(u) = n.as_u64() {
+        u32::try_from(u).map_err(|_| format!("irq: line {u} is out of range"))
+    } else if let Some(i) = n.as_i64() {
+        u32::try_from(i).map_err(|_| format!("irq: {i} is not a valid line number"))
+    } else {
+        Err(format!("irq: expected an integer line number, got {n}"))
+    }
+}
+
+fn parse_irq_string(s: &str) -> Result<IrqTarget, String> {
+    let s = s.trim();
+    if let Some((controller, line)) = s.split_once('@') {
+        if controller.is_empty() || line.is_empty() || !line.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(format!("irq: expected controller@<line>, got `{s}`"));
+        }
+        let line: u32 = line
+            .parse()
+            .map_err(|_| format!("irq: line `{line}` is out of range"))?;
+        Ok(IrqTarget {
+            line: Some(line),
+            controller: Some(controller.to_string()),
+        })
+    } else if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
+        let line: u32 = s
+            .parse()
+            .map_err(|_| format!("irq: line `{s}` is out of range"))?;
+        Ok(IrqTarget {
+            line: Some(line),
+            controller: None,
+        })
+    } else {
+        Err(format!(
+            "irq: expected a line number or controller@line, got `{s}`"
+        ))
+    }
+}
+
+fn parse_irq_value(value: serde_yaml::Value) -> Result<IrqTarget, String> {
+    match value {
+        serde_yaml::Value::Null => Ok(IrqTarget::default()),
+        serde_yaml::Value::Number(n) => Ok(IrqTarget {
+            line: Some(irq_line_from_number(&n)?),
+            controller: None,
+        }),
+        serde_yaml::Value::String(s) => parse_irq_string(&s),
+        other => Err(format!(
+            "irq: expected a line number or controller@line, got {other:?}"
+        )),
+    }
+}
+
+fn deserialize_irq_target<'de, D>(deserializer: D) -> Result<IrqTarget, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_yaml::Value::deserialize(deserializer)?;
+    parse_irq_value(value).map_err(serde::de::Error::custom)
+}
+
+#[derive(Deserialize)]
+struct PeripheralConfigWire {
+    id: String,
+    r#type: String,
+    #[serde(deserialize_with = "deserialize_u64_lax")]
+    base_address: u64,
+    #[serde(default)]
+    size: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_irq_target")]
+    irq: IrqTarget,
+    #[serde(default)]
+    irq_controller: Option<String>,
+    #[serde(default)]
+    clock: Option<ClockGates>,
+    #[serde(default)]
+    config: HashMap<String, serde_yaml::Value>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(from = "PeripheralConfigWire")]
 pub struct PeripheralConfig {
     pub id: String,
     pub r#type: String, // "uart", "timer", "gpio", etc.
@@ -245,6 +331,9 @@ pub struct PeripheralConfig {
     pub size: Option<String>,
     #[serde(default)]
     pub irq: Option<u32>,
+    /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
+    #[serde(default)]
+    pub irq_controller: Option<String>,
     /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
     /// peripheral to answer the CPU. `None` → the peripheral is never gated
     /// (the safe default — existing configs and firmware that never enable a
@@ -253,6 +342,21 @@ pub struct PeripheralConfig {
     pub clock: Option<ClockGates>,
     #[serde(default)]
     pub config: HashMap<String, serde_yaml::Value>,
+}
+
+impl From<PeripheralConfigWire> for PeripheralConfig {
+    fn from(wire: PeripheralConfigWire) -> Self {
+        Self {
+            id: wire.id,
+            r#type: wire.r#type,
+            base_address: wire.base_address,
+            size: wire.size,
+            irq: wire.irq.line,
+            irq_controller: wire.irq.controller.or(wire.irq_controller),
+            clock: wire.clock,
+            config: wire.config,
+        }
+    }
 }
 
 /// One entry in a chip's authoritative pin map: which GPIO peripheral this pin's
@@ -3242,6 +3346,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                         base_address: ir_p_base,
                         size: None,
                         irq: None,
+                        irq_controller: None,
                         clock: None,
                         config: std::collections::HashMap::from([(
                             "internal_ir_peripheral".to_string(),

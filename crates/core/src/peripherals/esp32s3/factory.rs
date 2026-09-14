@@ -176,6 +176,7 @@ mod tests {
             base_address: 0x6000_0000,
             size: None,
             irq: None,
+            irq_controller: None,
             clock: None,
             config: HashMap::new(),
         }

@@ -6,7 +6,7 @@
 
 use labwired_config::{
     ChipDescriptor, CosimAdapter, DeviceDescriptor, MemoryValueDetails, MotorModelConfig,
-    SystemManifest,
+    PeripheralConfig, SystemManifest,
 };
 
 #[test]
@@ -55,6 +55,51 @@ peripherals:
     assert_eq!(desc.peripherals[0].id, "uart1");
     assert_eq!(desc.peripherals[0].size, Some("1KB".to_string()));
     assert_eq!(desc.peripherals[0].irq, Some(37));
+}
+
+#[test]
+fn irq_accepts_bare_number() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: uart
+base_address: 0x40002000
+irq: 2
+"#,
+    )
+    .unwrap();
+    assert_eq!(p.irq, Some(2));
+    assert_eq!(p.irq_controller.as_deref(), None);
+}
+
+#[test]
+fn irq_accepts_controller_at_line() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: uart
+base_address: 0x40002000
+irq: nvic@2
+"#,
+    )
+    .unwrap();
+    assert_eq!(p.irq, Some(2));
+    assert_eq!(p.irq_controller.as_deref(), Some("nvic"));
+}
+
+#[test]
+fn irq_rejects_malformed_target() {
+    let err = serde_yaml::from_str::<PeripheralConfig>(
+        r#"
+id: uart0
+type: uart
+base_address: 0x40002000
+irq: nvic@
+"#,
+    )
+    .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("irq"), "{msg}");
 }
 
 #[test]

@@ -206,6 +206,7 @@ mod tests {
                 base_address: base,
                 size: None,
                 irq,
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             };
@@ -244,6 +245,7 @@ mod tests {
                 base_address: base,
                 size: None,
                 irq,
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             };

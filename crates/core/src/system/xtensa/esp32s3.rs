@@ -752,6 +752,7 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
             base_address: base,
             size: None,
             irq,
+            irq_controller: None,
             clock: None,
             config,
         };
