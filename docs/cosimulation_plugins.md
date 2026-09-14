@@ -384,6 +384,13 @@ so it needs no `sources:` entry.
 - Fixed internal step `h = step_ns / substeps`. Dense LU, own implementation.
   `N` nodes + `M` branch currents is capped at 64; a bigger circuit is an
   error naming the ngspice adapter.
+- The solver caches elimination pivots and multipliers until a switch, step
+  length, or integration rule changes. Source and reactive-history changes
+  refresh only the right-hand side. Multipliers replay in the original order,
+  preserving floating-point results. Exactly stationary reactive states reuse
+  the previous solution; there is no epsilon cutoff. Every co-simulation
+  boundary still samples inputs, routes outputs, and records its waveform row.
+  None of these caches adds work to a machine without co-simulation.
 - The operating point is solved at t = 0 from the netlist's own DC values,
   capacitors open and inductors shorted, then `.ic` / `ic=` override it. Routed
   inputs apply only once time runs — the same ordering the ngspice wrapper gets

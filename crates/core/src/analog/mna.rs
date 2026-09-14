@@ -69,7 +69,7 @@ pub enum Integration {
     Trapezoidal,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Stamp {
     /// t = 0: capacitors open, inductors short.
     OperatingPoint,
@@ -99,6 +99,13 @@ pub struct Solver {
     matrix: Vec<f64>,
     rhs: Vec<f64>,
     solution: Vec<f64>,
+    // Elimination multipliers are kept in the order they were applied, not
+    // permuted as a conventional L matrix. Replaying them preserves the old
+    // solver's RHS floating-point operation order exactly.
+    factors: Vec<f64>,
+    pivots: Vec<usize>,
+    cached_stamp: Option<Stamp>,
+    settled: bool,
 
     /// The next internal step must not trust the stored derivatives: a source
     /// or switch changed, or the state was just set by the operating point.
@@ -153,6 +160,10 @@ impl Solver {
             matrix: vec![0.0; unknowns * unknowns],
             rhs: vec![0.0; unknowns],
             solution: vec![0.0; unknowns],
+            factors: vec![0.0; unknowns * unknowns],
+            pivots: vec![0; unknowns],
+            cached_stamp: None,
+            settled: false,
             restart: true,
         };
         solver.solve_operating_point()?;
@@ -218,6 +229,7 @@ impl Solver {
         if self.voltage_source_values[index] != volts {
             self.voltage_source_values[index] = volts;
             self.restart = true;
+            self.settled = false;
         }
     }
 
@@ -226,6 +238,7 @@ impl Solver {
         if self.current_source_values[index] != amps {
             self.current_source_values[index] = amps;
             self.restart = true;
+            self.settled = false;
         }
     }
 
@@ -233,7 +246,9 @@ impl Solver {
     pub fn set_switch(&mut self, index: usize, closed: bool) {
         if self.switch_closed[index] != closed {
             self.switch_closed[index] = closed;
+            self.cached_stamp = None;
             self.restart = true;
+            self.settled = false;
         }
     }
 
@@ -267,8 +282,11 @@ impl Solver {
 
     /// Solve the DC operating point and reset the reactive state to it.
     pub fn solve_operating_point(&mut self) -> Result<(), AnalogError> {
+        self.cached_stamp = None;
+        self.settled = false;
         self.build(Stamp::OperatingPoint);
-        self.solve()?;
+        self.factorize()?;
+        self.solve();
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
         self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
         for index in 0..self.circuit.capacitors.len() {
@@ -329,9 +347,21 @@ impl Solver {
         } else {
             self.integration
         };
-        self.build(Stamp::Transient(h, rule));
-        self.solve()?;
+        let stamp = Stamp::Transient(h, rule);
+        if self.cached_stamp == Some(stamp) {
+            if self.settled && !self.restart {
+                return Ok(());
+            }
+            self.build_rhs(stamp);
+        } else {
+            self.cached_stamp = None;
+            self.build(stamp);
+            self.factorize()?;
+            self.cached_stamp = Some(stamp);
+        }
+        self.solve();
         self.restart = false;
+        self.settled = true;
 
         for index in 0..self.circuit.capacitors.len() {
             let capacitor = &self.circuit.capacitors[index];
@@ -344,12 +374,17 @@ impl Solver {
                 Integration::BackwardEuler => geq * (v_new - self.cap_v[index]),
                 Integration::Trapezoidal => geq * (v_new - self.cap_v[index]) - self.cap_i[index],
             };
+            self.settled &= self.cap_v[index].to_bits() == v_new.to_bits()
+                && self.cap_i[index].to_bits() == i_new.to_bits();
             self.cap_v[index] = v_new;
             self.cap_i[index] = i_new;
         }
         for index in 0..self.circuit.inductors.len() {
             let inductor = &self.circuit.inductors[index];
             let branch = self.nodes + self.circuit.voltage_sources.len() + index;
+            self.settled &= self.ind_i[index].to_bits() == self.solution[branch].to_bits()
+                && self.ind_v[index].to_bits()
+                    == node_diff(&self.solution[..self.nodes], inductor.a, inductor.b).to_bits();
             self.ind_i[index] = self.solution[branch];
             self.ind_v[index] = node_diff(&self.solution[..self.nodes], inductor.a, inductor.b);
         }
@@ -440,14 +475,48 @@ impl Solver {
         }
     }
 
+    /// Refresh only history and source terms when the conductances are unchanged.
+    fn build_rhs(&mut self, stamp: Stamp) {
+        self.rhs.fill(0.0);
+        for (index, source) in self.circuit.current_sources.iter().enumerate() {
+            let amps = self.current_source_values[index];
+            inject(&mut self.rhs, source.p, -amps);
+            inject(&mut self.rhs, source.n, amps);
+        }
+        for (index, value) in self.voltage_source_values.iter().enumerate() {
+            self.rhs[self.nodes + index] = *value;
+        }
+        if let Stamp::Transient(h, rule) = stamp {
+            for (index, inductor) in self.circuit.inductors.iter().enumerate() {
+                let row = self.nodes + self.circuit.voltage_sources.len() + index;
+                self.rhs[row] = match rule {
+                    Integration::BackwardEuler => -(inductor.henries / h) * self.ind_i[index],
+                    Integration::Trapezoidal => {
+                        -(2.0 * inductor.henries / h) * self.ind_i[index] - self.ind_v[index]
+                    }
+                };
+            }
+            for (index, capacitor) in self.circuit.capacitors.iter().enumerate() {
+                let ieq = match rule {
+                    Integration::BackwardEuler => (capacitor.farads / h) * self.cap_v[index],
+                    Integration::Trapezoidal => {
+                        (2.0 * capacitor.farads / h) * self.cap_v[index] + self.cap_i[index]
+                    }
+                };
+                inject(&mut self.rhs, capacitor.a, ieq);
+                inject(&mut self.rhs, capacitor.b, -ieq);
+            }
+        }
+    }
+
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
     /// implementation on purpose: the systems are at most 64×64, and a linear
     /// algebra dependency would have to compile to WASM and stay deterministic
     /// across hosts to buy nothing at this size.
-    fn solve(&mut self) -> Result<(), AnalogError> {
+    fn factorize(&mut self) -> Result<(), AnalogError> {
         let dim = self.dim();
         let matrix = &mut self.matrix;
-        let rhs = &mut self.rhs;
+        self.factors.fill(0.0);
 
         for column in 0..dim {
             let mut pivot_row = column;
@@ -462,11 +531,11 @@ impl Solver {
             if pivot_magnitude < 1e-30 {
                 return Err(AnalogError::Singular { row: column });
             }
+            self.pivots[column] = pivot_row;
             if pivot_row != column {
                 for index in 0..dim {
                     matrix.swap(pivot_row * dim + index, column * dim + index);
                 }
-                rhs.swap(pivot_row, column);
             }
             let pivot = matrix[column * dim + column];
             for row in (column + 1)..dim {
@@ -474,14 +543,30 @@ impl Solver {
                 if factor == 0.0 {
                     continue;
                 }
+                self.factors[column * dim + row] = factor;
                 matrix[row * dim + column] = 0.0;
                 for index in (column + 1)..dim {
                     matrix[row * dim + index] -= factor * matrix[column * dim + index];
                 }
-                rhs[row] -= factor * rhs[column];
             }
         }
 
+        Ok(())
+    }
+
+    fn solve(&mut self) {
+        let dim = self.dim();
+        let matrix = &self.matrix;
+        let rhs = &mut self.rhs;
+        for column in 0..dim {
+            rhs.swap(self.pivots[column], column);
+            for row in (column + 1)..dim {
+                let factor = self.factors[column * dim + row];
+                if factor != 0.0 {
+                    rhs[row] -= factor * rhs[column];
+                }
+            }
+        }
         for row in (0..dim).rev() {
             let mut accumulator = rhs[row];
             for index in (row + 1)..dim {
@@ -489,7 +574,6 @@ impl Solver {
             }
             self.solution[row] = accumulator / matrix[row * dim + row];
         }
-        Ok(())
     }
 }
 
@@ -515,5 +599,137 @@ fn conductance(matrix: &mut [f64], dim: usize, a: NodeRef, b: NodeRef, g: f64) {
 fn inject(rhs: &mut [f64], node: NodeRef, amps: f64) {
     if let Some(index) = node {
         rhs[index] += amps;
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use crate::analog::parse_netlist;
+
+    // Independent pre-cache Gaussian elimination oracle: RHS row operations
+    // are interleaved with matrix elimination, including multiple row pivots.
+    fn original_solution(solver: &mut Solver, h: f64) -> Vec<u64> {
+        let rule = if solver.restart {
+            Integration::BackwardEuler
+        } else {
+            solver.integration
+        };
+        solver.build(Stamp::Transient(h, rule));
+        let dim = solver.dim();
+        let matrix = &mut solver.matrix;
+        let rhs = &mut solver.rhs;
+        for column in 0..dim {
+            let mut pivot_row = column;
+            let mut magnitude = matrix[column * dim + column].abs();
+            for row in column + 1..dim {
+                let candidate = matrix[row * dim + column].abs();
+                if candidate > magnitude {
+                    magnitude = candidate;
+                    pivot_row = row;
+                }
+            }
+            assert!(magnitude >= 1e-30);
+            if pivot_row != column {
+                for index in 0..dim {
+                    matrix.swap(pivot_row * dim + index, column * dim + index);
+                }
+                rhs.swap(pivot_row, column);
+            }
+            let pivot = matrix[column * dim + column];
+            for row in column + 1..dim {
+                let factor = matrix[row * dim + column] / pivot;
+                if factor == 0.0 {
+                    continue;
+                }
+                matrix[row * dim + column] = 0.0;
+                for index in column + 1..dim {
+                    matrix[row * dim + index] -= factor * matrix[column * dim + index];
+                }
+                rhs[row] -= factor * rhs[column];
+            }
+        }
+        let mut solution = vec![0.0; dim];
+        for row in (0..dim).rev() {
+            let mut accumulator = rhs[row];
+            for index in row + 1..dim {
+                accumulator -= matrix[row * dim + index] * solution[index];
+            }
+            solution[row] = accumulator / matrix[row * dim + row];
+        }
+        bits(&solution)
+    }
+
+    fn bits(values: &[f64]) -> Vec<u64> {
+        values.iter().map(|value| value.to_bits()).collect()
+    }
+
+    #[test]
+    fn cached_steps_match_refactorization_across_discontinuities() {
+        for rule in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            let circuit = parse_netlist("V1 in 0 DC 5\nR1 in out 1000\nC1 out 0 1u ic=0\nL1 out tail 1m\nR2 tail 0 100\nI1 out 0 DC 0\nS1 out 0 touch ron=10 roff=1e9\n").unwrap();
+            let mut cached = Solver::new(circuit, rule).unwrap();
+            let mut reference = cached.clone();
+            for step in 0..400 {
+                let h = if step % 70 < 35 { 1e-6 } else { 2e-6 };
+                for solver in [&mut cached, &mut reference] {
+                    solver.set_voltage_source(0, if step % 90 < 45 { 5.0 } else { 0.0 });
+                    solver.set_current_source(0, if step % 60 < 30 { 0.001 } else { 0.0 });
+                    solver.set_switch(0, step % 100 >= 50);
+                    if step == 250 {
+                        solver.solve_operating_point().unwrap();
+                    }
+                }
+                let expected = original_solution(&mut reference, h);
+                reference.cached_stamp = None;
+                reference.settled = false;
+                cached.advance(h).unwrap();
+                reference.advance(h).unwrap();
+                assert_eq!(
+                    bits(&cached.solution),
+                    expected,
+                    "original solve, step {step} {rule:?}"
+                );
+                assert_eq!(
+                    bits(&cached.node_v),
+                    bits(&reference.node_v),
+                    "step {step} {rule:?}"
+                );
+                assert_eq!(bits(&cached.branch_i), bits(&reference.branch_i));
+                assert_eq!(bits(&cached.cap_i), bits(&reference.cap_i));
+                assert_eq!(bits(&cached.ind_v), bits(&reference.ind_v));
+            }
+        }
+    }
+
+    #[test]
+    fn settled_circuit_resumes_after_input_or_step_change() {
+        for rule in [Integration::BackwardEuler, Integration::Trapezoidal] {
+            for netlist in [
+                "V1 in 0 DC 5\nR1 in out 1000\nC1 out 0 1u\n",
+                "V1 in 0 DC 5\nR1 in out 1000\nR2 out 0 1000\n",
+            ] {
+                let circuit = parse_netlist(netlist).unwrap();
+                let mut solver = Solver::new(circuit, rule).unwrap();
+                for _ in 0..10000 {
+                    solver.advance(1e-3).unwrap();
+                }
+                assert!(solver.settled);
+                let mut reference = solver.clone();
+                for step in 0..50 {
+                    if step == 10 {
+                        solver.set_voltage_source(0, 0.0);
+                        reference.set_voltage_source(0, 0.0);
+                    }
+                    reference.cached_stamp = None;
+                    reference.settled = false;
+                    let h = if step < 5 { 1e-3 } else { 1e-4 };
+                    solver.advance(h).unwrap();
+                    reference.advance(h).unwrap();
+                    assert_eq!(bits(&solver.node_v), bits(&reference.node_v));
+                    assert_eq!(bits(&solver.cap_i), bits(&reference.cap_i));
+                }
+            }
+        }
     }
 }

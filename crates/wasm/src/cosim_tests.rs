@@ -578,3 +578,83 @@ cosim_models:
     step_until(&mut sim, target, 4_000);
     assert_eq!(pind(&sim) & 0x04, 0x04, "5 V on the pad reads high on PD2");
 }
+
+// ── Capacitive touch lab throughput ────────────────────────────────────────
+
+/// The capacitive touch lab exactly as the playground ships it: an Arduino Nano
+/// running CapacitiveSensor against the lab's own `cosim_models` block, whose
+/// 1 us step puts a model boundary every 16 AVR cycles.
+const TOUCH_LAB_SYSTEM: &str = include_str!("../../../examples/capacitive-touch-lab/system.yaml");
+const TOUCH_LAB_FIRMWARE: &[u8] =
+    include_bytes!("../../../tests/fixtures/avr/capacitive-touch-lab.elf");
+
+/// `step_batch` throughput of the touch lab, with and without its circuit.
+///
+/// One simulated second per round; the pad is pressed half-way through, as in
+/// the lab's `test.yaml`, so both the released and the pressed waveform are in
+/// the number. Ignored because a number is only meaningful from a release
+/// build:
+///
+/// ```text
+/// cargo test -p labwired-wasm --release --lib cosim_tests::touch_lab_step_batch_throughput \
+///     -- --ignored --nocapture
+/// ```
+#[test]
+#[ignore = "throughput measurement; run in release with --ignored --nocapture"]
+fn touch_lab_step_batch_throughput() {
+    const BATCH: u32 = 100_000;
+    const TOTAL_CYCLES: u64 = 16_000_000; // one simulated second at 16 MHz
+    const ROUNDS: usize = 3;
+
+    let mut plain: serde_yaml::Value =
+        serde_yaml::from_str(TOUCH_LAB_SYSTEM).expect("parse the touch lab manifest");
+    plain
+        .as_mapping_mut()
+        .expect("manifest is a mapping")
+        .remove("cosim_models");
+    let plain = serde_yaml::to_string(&plain).expect("re-serialise the manifest");
+
+    for (label, system) in [
+        ("no cosim", plain.as_str()),
+        ("touch lab", TOUCH_LAB_SYSTEM),
+    ] {
+        let mut rates = Vec::with_capacity(ROUNDS);
+        for round in 0..ROUNDS {
+            if let Ok(load) = std::fs::read_to_string("/proc/loadavg") {
+                println!("touch lab {label} round {round}: load {}", load.trim());
+            }
+            let mut sim = WasmSimulator::new_from_config(
+                system,
+                AVR_CHIP_YAML,
+                TOUCH_LAB_FIRMWARE,
+                JsValue::NULL,
+            )
+            .unwrap_or_else(|_| panic!("{label}: the touch lab builds"));
+            let has_circuit = sim.cosim.is_some();
+            let mut cycles = 0u64;
+            let mut pressed = false;
+            let start = std::time::Instant::now();
+            while cycles < TOTAL_CYCLES {
+                if has_circuit && !pressed && cycles >= TOTAL_CYCLES / 2 {
+                    sim.set_cosim_signal_number("ui.touch.pressed", 1.0)
+                        .expect("the circuit reads ui.touch.pressed");
+                    pressed = true;
+                }
+                let executed = sim.step_batch(BATCH).unwrap_or_else(|_| panic!("step"));
+                assert!(executed > 0, "{label}: step_batch made no progress");
+                cycles += u64::from(executed);
+            }
+            rates.push(cycles as f64 / start.elapsed().as_secs_f64());
+            let _ = sim.drain_uart_output();
+        }
+        rates.sort_by(f64::total_cmp);
+        println!(
+            "touch lab step_batch({BATCH}) {label}: median {:.2} Mcycles/s ({:.3}x real time; \
+             min {:.2}, max {:.2}) over {ROUNDS} runs",
+            rates[ROUNDS / 2] / 1e6,
+            rates[ROUNDS / 2] / 16e6,
+            rates[0] / 1e6,
+            rates[ROUNDS - 1] / 1e6,
+        );
+    }
+}
