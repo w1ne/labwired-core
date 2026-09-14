@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
-"""Generate the Arduino Uno R3 board illustration and pinout from one geometry.
+"""Compose the Arduino Uno R3 pinout around the board drawing.
 
-    python3 examples/arduino-uno-blinky/images/generate.py
+    python3 examples/arduino-uno-blinky/images/generate.py          # regenerate
+    python3 examples/arduino-uno-blinky/images/generate.py --check  # verify
 
-Writes board.svg and pinout.svg next to this file. Coordinates are the R3
-shield drawing in inches from the lower-left corner (headers on the 0.1 in and
-2.0 in rows, the 0.16 in D7-D8 gap, holes at (0.55, 0.1) (0.6, 2.0)
-(2.6, 1.4) (2.6, 0.3), right edge stepped from 2.6 in to 2.7 in), cross-checked
-against Arduino's A000066 front photograph. Pin functions come from
-ArduinoCore-avr variants/standard/pins_arduino.h and the ATmega328P datasheet.
-
-No vendor logo or wordmark is drawn: the silk shows the "UNO R3" model box
-only. Flat style per the LabWired illustration standard (gold contacts, dark
-packages, white ground).
+board.svg is NOT drawn here. It is exported from the Playground's canvas renderer
+(labwired: tools/boards/arduino-uno/export-art.mjs), whose layout is generated
+from Arduino's own board file UNO-TH_Rev3e.brd (CC BY-SA 4.0), so the docs, the
+pinout and the canvas show the same board. This script embeds that drawing and
+places a tag stack on every header pin: Arduino number, AVR port bit and
+alternate functions from ArduinoCore-avr variants/standard/pins_arduino.h and
+the ATmega328P datasheet. Header positions are the R3 shield drawing in inches
+from the lower-left corner (rows at 0.1 in and 2.0 in, the 0.16 in D7-D8 gap).
 """
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 FONT = "ui-sans-serif,system-ui,sans-serif"
-PCB, EDGE, GOLD, PKG, SILK, METAL = "#0e7c86", "#0d1013", "#d4a84b", "#20252a", "#e8eee9", "#c9ccce"
 
 # (x_in, silk, arduino, port, functions) left to right. functions: (label, kind)
 TOP = [
@@ -57,7 +55,6 @@ BOTTOM = [
     (2.40, "A4", "A4", "PC4", [("ADC4", "analog"), ("I2C SDA", "comm")]),
     (2.50, "A5", "A5", "PC5", [("ADC5", "analog"), ("I2C SCL", "comm")]),
 ]
-HOLES = [(0.55, 0.1), (0.6, 2.0), (2.6, 1.4), (2.6, 0.3)]
 
 KIND = {
     "pin": ("#1f2937", "#ffffff"),
@@ -88,84 +85,6 @@ class Board:
 
     def y(self, inch_from_bottom):
         return self.y0 + (2.1 - inch_from_bottom) * self.s
-
-    def rect(self, x_in, y_top_in, w_in, h_in, **attrs):
-        """Rect by its top-left in (x, y-from-bottom of TOP edge) inches."""
-        extra = " ".join(f'{k.replace("_", "-")}="{v}"' for k, v in attrs.items())
-        return (f'<rect x="{fmt(self.x(x_in))}" y="{fmt(self.y(y_top_in))}" '
-                f'width="{fmt(w_in * self.s)}" height="{fmt(h_in * self.s)}" {extra}/>')
-
-    def draw(self, silk_labels=True):
-        s, out = self.s, []
-        X, Y = self.x, self.y
-        # Outline with the stepped right edge.
-        pts = [(0, 0), (2.6, 0), (2.6, 0.1), (2.7, 0.2), (2.7, 1.5), (2.6, 1.6), (2.6, 2.1), (0, 2.1)]
-        d = "M" + " L".join(f"{fmt(X(a))} {fmt(Y(b))}" for a, b in pts) + " Z"
-        out.append(f'<path d="{d}" fill="{PCB}" stroke="{EDGE}" stroke-width="{fmt(max(1.25, s / 90))}"/>')
-        for hx, hy in HOLES:
-            out.append(f'<circle cx="{fmt(X(hx))}" cy="{fmt(Y(hy))}" r="{fmt(0.055 * s)}" fill="#ffffff" stroke="{GOLD}" stroke-width="{fmt(0.022 * s)}"/>')
-        # USB-B (overhangs the left edge) and the DC jack.
-        out.append(self.rect(-0.25, 1.79, 0.61, 0.49, fill=METAL, stroke=EDGE, stroke_width="1.25", rx=fmt(0.02 * s)))
-        out.append(self.rect(-0.2, 1.72, 0.08, 0.35, fill="#9ca3a6"))
-        out.append(self.rect(-0.12, 0.52, 0.58, 0.35, fill=PKG, stroke=EDGE, stroke_width="1.25", rx=fmt(0.02 * s)))
-        out.append(f'<circle cx="{fmt(X(0.02))}" cy="{fmt(Y(0.345))}" r="{fmt(0.09 * s)}" fill="#3a3f44"/>')
-        # Reset switch.
-        out.append(self.rect(0.1, 2.06, 0.25, 0.24, fill=METAL, stroke=EDGE, stroke_width="1"))
-        out.append(f'<circle cx="{fmt(X(0.225))}" cy="{fmt(Y(1.94))}" r="{fmt(0.065 * s)}" fill="#f4f1e8" stroke="{EDGE}" stroke-width="0.75"/>')
-        # 16U2 QFN, its crystal, its ICSP.
-        out.append(self.rect(0.69, 1.40, 0.2, 0.2, fill=PKG, rx=fmt(0.01 * s)))
-        out.append(self.rect(0.53, 1.10, 0.42, 0.18, fill=METAL, stroke=EDGE, stroke_width="1", rx=fmt(0.09 * s)))
-        for c in range(3):
-            for r in range(2):
-                out.append(self.rect(0.565 + c * 0.1, 1.87 - r * 0.1, 0.09, 0.09, fill=PKG))
-                out.append(self.rect(0.595 + c * 0.1, 1.84 - r * 0.1, 0.03, 0.03, fill=GOLD))
-        # Regulator, caps, diode.
-        out.append(self.rect(0.15, 0.78, 0.1, 0.16, fill=METAL))
-        out.append(self.rect(0.24, 0.79, 0.17, 0.19, fill=PKG))
-        for cx in (0.72, 1.0):
-            out.append(self.rect(cx - 0.12, 0.47, 0.24, 0.24, fill="#d9d9d4", stroke=EDGE, stroke_width="0.75"))
-            out.append(f'<circle cx="{fmt(X(cx))}" cy="{fmt(Y(0.35))}" r="{fmt(0.11 * s)}" fill="{METAL}" stroke="{EDGE}" stroke-width="0.75"/>')
-            out.append(f'<path d="M{fmt(X(cx - 0.11))} {fmt(Y(0.35))} A{fmt(0.11 * s)} {fmt(0.11 * s)} 0 0 1 {fmt(X(cx - 0.055))} {fmt(Y(0.445))} L{fmt(X(cx - 0.055))} {fmt(Y(0.255))} A{fmt(0.11 * s)} {fmt(0.11 * s)} 0 0 1 {fmt(X(cx - 0.11))} {fmt(Y(0.35))}Z" fill="{PKG}"/>')
-        out.append(self.rect(0.73, 0.155, 0.26, 0.085, fill=PKG))
-        # ATmega328P DIP-28 in its socket, notch toward the right edge.
-        out.append(self.rect(1.1, 0.87, 1.45, 0.44, fill="#15181a", rx=fmt(0.01 * s)))
-        for i in range(14):
-            lx = 1.185 + i * 0.1
-            out.append(self.rect(lx - 0.013, 0.86, 0.026, 0.05, fill=METAL))
-            out.append(self.rect(lx - 0.013, 0.48, 0.026, 0.05, fill=METAL))
-        out.append(self.rect(1.115, 0.81, 1.42, 0.28, fill=PKG, stroke=EDGE, stroke_width="0.75"))
-        out.append(f'<path d="M{fmt(X(2.535))} {fmt(Y(0.705))} A{fmt(0.035 * s)} {fmt(0.035 * s)} 0 0 0 {fmt(X(2.535))} {fmt(Y(0.635))}" fill="#101316"/>')
-        out.append(f'<text x="{fmt(X(1.825))}" y="{fmt(Y(0.65))}" text-anchor="middle" font-family="{FONT}" font-size="{fmt(0.065 * s)}" fill="#aeb4b8">ATMEGA328P</text>')
-        # 328P ICSP (2 x 3), op-amp, LEDs.
-        for c in range(2):
-            for r in range(3):
-                out.append(self.rect(2.455 + c * 0.1, 1.2 - r * 0.1, 0.09, 0.09, fill=PKG))
-                out.append(self.rect(2.485 + c * 0.1, 1.17 - r * 0.1, 0.03, 0.03, fill=GOLD))
-        out.append(self.rect(2.3, 1.14, 0.08, 0.19, fill=PKG))
-        for lx, ly, col in ((1.085, 1.61, "#f0b64b"), (1.085, 1.39, "#f0b64b"), (1.085, 1.30, "#f0b64b"), (2.305, 1.39, "#7bd36b")):
-            out.append(self.rect(lx - 0.03, ly + 0.015, 0.06, 0.03, fill=col, stroke=EDGE, stroke_width="0.5"))
-        # Headers: black strips with gold sockets.
-        for row, pins in ((2.0, TOP[:10]), (2.0, TOP[10:]), (0.1, BOTTOM[:8]), (0.1, BOTTOM[8:])):
-            a, b = pins[0][0], pins[-1][0]
-            out.append(self.rect(a - 0.05, row + 0.05, b - a + 0.1, 0.1, fill="#17191b", rx=fmt(0.006 * s)))
-            for p in pins:
-                out.append(self.rect(p[0] - 0.02, row + 0.02, 0.04, 0.04, fill=GOLD))
-        # Silk: model box and group legends.
-        out.append(self.rect(1.23, 1.19, 0.54, 0.15, fill="none", stroke=SILK, stroke_width=fmt(0.012 * s)))
-        out.append(f'<path d="M{fmt(X(1.5))} {fmt(Y(1.19))} V{fmt(Y(1.04))}" stroke="{SILK}" stroke-width="{fmt(0.012 * s)}"/>')
-        for tx, txt in ((1.365, "UNO"), (1.635, "R3")):
-            out.append(f'<text x="{fmt(X(tx))}" y="{fmt(Y(1.075))}" text-anchor="middle" font-family="{FONT}" font-size="{fmt(0.09 * s)}" font-weight="700" fill="{SILK}">{txt}</text>')
-        if silk_labels:
-            fs = fmt(0.045 * s)
-            for p in TOP:
-                if p[1]:
-                    out.append(f'<text transform="translate({fmt(X(p[0]) + 0.016 * s)} {fmt(Y(1.9))}) rotate(-90)" text-anchor="end" font-family="{FONT}" font-size="{fs}" font-weight="700" fill="{SILK}">{p[1]}</text>')
-            for p in BOTTOM:
-                if p[1]:
-                    out.append(f'<text transform="translate({fmt(X(p[0]) + 0.016 * s)} {fmt(Y(0.2))}) rotate(-90)" text-anchor="start" font-family="{FONT}" font-size="{fs}" font-weight="700" fill="{SILK}">{p[1]}</text>')
-            for tx, ty, txt in ((1.45, 1.66, "DIGITAL (PWM~)"), (1.45, 0.395, "POWER"), (2.25, 0.395, "ANALOG IN"), (2.53, 1.29, "ICSP"), (1.02, 1.585, "L"), (1.02, 1.365, "TX"), (1.02, 1.275, "RX"), (2.38, 1.365, "ON")):
-                out.append(f'<text x="{fmt(X(tx))}" y="{fmt(Y(ty))}" text-anchor="middle" font-family="{FONT}" font-size="{fs}" font-weight="700" fill="{SILK}">{txt}</text>')
-        return "\n".join(out)
 
 
 def tag_stack(x, y, tags, direction):
@@ -199,13 +118,20 @@ def pin_tags(arduino, port, fns):
     return tags + list(fns)
 
 
-def board_svg():
-    b = Board(120, 48, 24)
-    w, h = fmt(2.7 * 120 + 72), fmt(2.1 * 120 + 48)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">\n'
-            f'<title>UNO R3 top illustration</title>\n'
-            f'<desc>Flat vector of the ATmega328P board, top view, USB-B and DC jack on the left, digital header top, power and analog headers bottom. No vendor logos.</desc>\n'
-            f'<rect width="{w}" height="{h}" fill="#FFFFFF"/>\n{b.draw()}\n</svg>\n')
+# board.svg is in canvas units, 140 per inch, with the PCB's left edge at x=36
+# (the USB-B shell overhangs it). These must match arduino-uno-layout.generated.ts.
+CANVAS_PER_INCH = 140
+CANVAS_BOARD_LEFT = 36
+CANVAS_W, CANVAS_H = 414, 294
+
+
+def embedded_board(b):
+    """board.svg as a nested <svg>, scaled so its PCB lands on Board `b`."""
+    src = (HERE / "board.svg").read_text(encoding="utf-8")
+    inner = src[src.index(">", src.index("<svg")) + 1:src.rindex("</svg>")]
+    k = b.s / CANVAS_PER_INCH
+    return (f'<svg x="{fmt(b.x0 - CANVAS_BOARD_LEFT * k)}" y="{fmt(b.y0)}" width="{fmt(CANVAS_W * k)}" '
+            f'height="{fmt(CANVAS_H * k)}" viewBox="0 0 {CANVAS_W} {CANVAS_H}">{inner}</svg>')
 
 
 def pinout_svg():
@@ -218,7 +144,7 @@ def pinout_svg():
            f'<rect width="{W}" height="{H}" fill="#FFFFFF"/>',
            f'<text x="{W / 2}" y="44" text-anchor="middle" font-family="{FONT}" font-size="26" font-weight="700" fill="#111827">UNO R3 pinout</text>',
            f'<text x="{W / 2}" y="70" text-anchor="middle" font-family="{FONT}" font-size="14" fill="#4b5563">ATmega328P · 5 V logic · 16 MHz · LED_BUILTIN = D13 (PB5)</text>',
-           b.draw(silk_labels=False)]
+           embedded_board(b)]
     top_anchor = b.y(2.1) - 10
     for x_in, _silk, arduino, port, fns in TOP:
         px = b.x(x_in)
@@ -260,22 +186,26 @@ def pinout_svg():
 
 
 # The docs site builds from docs/, which cannot reach examples/, so the board
-# page embeds byte-identical copies from docs/assets. `--check` fails when any
-# copy differs from what this script generates.
+# page embeds byte-identical copies from docs/assets. `--check` fails when the
+# pinout is stale or any copy differs.
 DOCS_ASSETS = HERE.parents[2] / "docs" / "assets" / "boards" / "arduino-uno"
 
 if __name__ == "__main__":
     import sys
 
-    outputs = {"board.svg": board_svg(), "pinout.svg": pinout_svg()}
-    targets = [HERE / n for n in outputs] + [DOCS_ASSETS / n for n in outputs]
+    pinout = pinout_svg()
+    expected = {
+        HERE / "pinout.svg": pinout,
+        DOCS_ASSETS / "pinout.svg": pinout,
+        DOCS_ASSETS / "board.svg": (HERE / "board.svg").read_text(encoding="utf-8"),
+    }
     if "--check" in sys.argv:
-        stale = [str(t) for t in targets if not t.exists() or t.read_text(encoding="utf-8") != outputs[t.name]]
+        stale = [str(t) for t, text in expected.items() if not t.exists() or t.read_text(encoding="utf-8") != text]
         if stale:
             sys.exit("stale: " + ", ".join(stale) + "\nrun: python3 examples/arduino-uno-blinky/images/generate.py")
         print("uno images up to date")
         sys.exit(0)
     DOCS_ASSETS.mkdir(parents=True, exist_ok=True)
-    for target in targets:
-        target.write_text(outputs[target.name], encoding="utf-8")
+    for target, text in expected.items():
+        target.write_text(text, encoding="utf-8")
         print(f"wrote {target} ({target.stat().st_size} bytes)")

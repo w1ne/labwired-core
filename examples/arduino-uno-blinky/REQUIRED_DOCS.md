@@ -37,6 +37,9 @@ bandgap); UDR0 at 0xC6; SPCR/SPSR/SPDR at 0x4C-0x4E; TWBR..TWCR at 0xB8-0xBC.
    D0 back to SCL; confirms header positions and the 0.16 in D7-D8 gap):
    https://gitlab.com/kicad/libraries/kicad-footprints/-/blob/master/Module.pretty/Arduino_UNO_R3.kicad_mod
 
+9. Board design files (Eagle, CC BY-SA 4.0), source of the layout in `images/board.svg`:
+   https://github.com/arduino/docs-content/blob/main/content/hardware/02.uno/boards/uno-rev3/downloads/A000066-cad-files.zip
+
 ## Reference photograph
 
 Arduino's A000066 front photograph, used to place parts in the drawings and in

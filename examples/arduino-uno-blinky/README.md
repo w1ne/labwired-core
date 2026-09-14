@@ -3,7 +3,7 @@
 The Uno R3 smoke example and its onboarding docs pack. The board page is
 [`docs/boards/arduino-uno.md`](../../docs/boards/arduino-uno.md).
 
-![Uno R3 top illustration](images/board.svg)
+![Uno R3 top view](images/board.svg)
 
 ## What runs
 
@@ -20,7 +20,7 @@ UART, not only that the step budget ran out.
 | `REQUIRED_DOCS.md` | Vendor documents the model and pinout were read from |
 | `EXTERNAL_COMPONENTS.md` | Onboard parts and how the twin treats each |
 | `VALIDATION.md` | Runbook and validation record |
-| `images/` | Board illustration and pinout, plus the script that draws them |
+| `images/` | Board drawing and pinout (see images/README.md for source and licence) |
 
 For all three I/O ports and the ADC, see
 [`examples/arduino-uno-io`](../arduino-uno-io/README.md).
