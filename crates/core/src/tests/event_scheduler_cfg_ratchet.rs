@@ -126,9 +126,11 @@ const MAX_MODEL_SITES: usize = 179;
 
 /// The rest of `crates/**` — test harnesses and downstream crates.
 ///
-/// Measured at 75 on `c8172b917`: 70 in `crates/core/tests/**` (67 attributes,
-/// 3 `cfg!`) and 5 in `crates/cli` (2 `cfg!` in `commands/test.rs` and
-/// `lib.rs`, 3 `#[cfg]` attributes in `crates/cli/tests/`).
+/// Measured at 76 on `perf/renode-hello-nrf52840`: 70 in `crates/core/tests/**`
+/// (67 attributes, 3 `cfg!`) and 6 in `crates/cli` (2 `cfg!` in
+/// `commands/test.rs` and `lib.rs`, 4 `#[cfg]` attributes in
+/// `crates/cli/tests/`). The extra `#[cfg]` is the nRF52840 Zephyr-hello
+/// settle test, which only observes idle-ff under `--features event-scheduler`.
 ///
 /// Split from [`MAX_MODEL_SITES`] on purpose. `crates/core/tests/**` holds
 /// files whose *whole body* sits behind `#![cfg(feature = "event-scheduler")]`
@@ -136,7 +138,7 @@ const MAX_MODEL_SITES: usize = 179;
 /// `scheduler_lane_coverage` already govern — so those move for lane reasons,
 /// not model reasons. Counting them together would let a lane change mask an
 /// engine regression, or vice versa.
-const MAX_HARNESS_SITES: usize = 75;
+const MAX_HARNESS_SITES: usize = 76;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable
