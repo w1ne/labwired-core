@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 396 300" width="396" height="300">
+<title>UNO R3 top illustration</title>
+<desc>Flat vector of the ATmega328P board, top view, USB-B and DC jack on the left, digital header top, power and analog headers bottom. No vendor logos.</desc>
+<rect width="396" height="300" fill="#FFFFFF"/>
+<path d="M48 276 L360 276 L360 264 L372 252 L372 96 L360 84 L360 24 L48 24 Z" fill="#0e7c86" stroke="#0d1013" stroke-width="1.3"/>
+<circle cx="114" cy="264" r="6.6" fill="#ffffff" stroke="#d4a84b" stroke-width="2.6"/>
+<circle cx="120" cy="36" r="6.6" fill="#ffffff" stroke="#d4a84b" stroke-width="2.6"/>
+<circle cx="360" cy="108" r="6.6" fill="#ffffff" stroke="#d4a84b" stroke-width="2.6"/>
+<circle cx="360" cy="240" r="6.6" fill="#ffffff" stroke="#d4a84b" stroke-width="2.6"/>
+<rect x="18" y="61.2" width="73.2" height="58.8" fill="#c9ccce" stroke="#0d1013" stroke-width="1.25" rx="2.4"/>
+<rect x="24" y="69.6" width="9.6" height="42" fill="#9ca3a6"/>
+<rect x="33.6" y="213.6" width="69.6" height="42" fill="#20252a" stroke="#0d1013" stroke-width="1.25" rx="2.4"/>
+<circle cx="50.4" cy="234.6" r="10.8" fill="#3a3f44"/>
+<rect x="60" y="28.8" width="30" height="28.8" fill="#c9ccce" stroke="#0d1013" stroke-width="1"/>
+<circle cx="75" cy="43.2" r="7.8" fill="#f4f1e8" stroke="#0d1013" stroke-width="0.75"/>
+<rect x="130.8" y="108" width="24" height="24" fill="#20252a" rx="1.2"/>
+<rect x="111.6" y="144" width="50.4" height="21.6" fill="#c9ccce" stroke="#0d1013" stroke-width="1" rx="10.8"/>
+<rect x="115.8" y="51.6" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="119.4" y="55.2" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="115.8" y="63.6" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="119.4" y="67.2" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="127.8" y="51.6" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="131.4" y="55.2" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="127.8" y="63.6" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="131.4" y="67.2" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="139.8" y="51.6" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="143.4" y="55.2" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="139.8" y="63.6" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="143.4" y="67.2" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="66" y="182.4" width="12" height="19.2" fill="#c9ccce"/>
+<rect x="76.8" y="181.2" width="20.4" height="22.8" fill="#20252a"/>
+<rect x="120" y="219.6" width="28.8" height="28.8" fill="#d9d9d4" stroke="#0d1013" stroke-width="0.75"/>
+<circle cx="134.4" cy="234" r="13.2" fill="#c9ccce" stroke="#0d1013" stroke-width="0.75"/>
+<path d="M121.2 234 A13.2 13.2 0 0 1 127.8 222.6 L127.8 245.4 A13.2 13.2 0 0 1 121.2 234Z" fill="#20252a"/>
+<rect x="153.6" y="219.6" width="28.8" height="28.8" fill="#d9d9d4" stroke="#0d1013" stroke-width="0.75"/>
+<circle cx="168" cy="234" r="13.2" fill="#c9ccce" stroke="#0d1013" stroke-width="0.75"/>
+<path d="M154.8 234 A13.2 13.2 0 0 1 161.4 222.6 L161.4 245.4 A13.2 13.2 0 0 1 154.8 234Z" fill="#20252a"/>
+<rect x="135.6" y="257.4" width="31.2" height="10.2" fill="#20252a"/>
+<rect x="180" y="171.6" width="174" height="52.8" fill="#15181a" rx="1.2"/>
+<rect x="188.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="188.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="200.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="200.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="212.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="212.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="224.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="224.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="236.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="236.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="248.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="248.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="260.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="260.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="272.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="272.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="284.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="284.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="296.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="296.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="308.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="308.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="320.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="320.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="332.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="332.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="344.6" y="172.8" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="344.6" y="218.4" width="3.1" height="6" fill="#c9ccce"/>
+<rect x="181.8" y="178.8" width="170.4" height="33.6" fill="#20252a" stroke="#0d1013" stroke-width="0.75"/>
+<path d="M352.2 191.4 A4.2 4.2 0 0 0 352.2 199.8" fill="#101316"/>
+<text x="267" y="198" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="7.8" fill="#aeb4b8">ATMEGA328P</text>
+<rect x="342.6" y="132" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="346.2" y="135.6" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="342.6" y="144" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="346.2" y="147.6" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="342.6" y="156" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="346.2" y="159.6" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="354.6" y="132" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="358.2" y="135.6" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="354.6" y="144" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="358.2" y="147.6" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="354.6" y="156" width="10.8" height="10.8" fill="#20252a"/>
+<rect x="358.2" y="159.6" width="3.6" height="3.6" fill="#d4a84b"/>
+<rect x="324" y="139.2" width="9.6" height="22.8" fill="#20252a"/>
+<rect x="174.6" y="81" width="7.2" height="3.6" fill="#f0b64b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="174.6" y="107.4" width="7.2" height="3.6" fill="#f0b64b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="174.6" y="118.2" width="7.2" height="3.6" fill="#f0b64b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="321" y="107.4" width="7.2" height="3.6" fill="#7bd36b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="130.8" y="30" width="120" height="12" fill="#17191b" rx="0.7"/>
+<rect x="134.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="146.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="158.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="170.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="182.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="194.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="206.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="218.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="230.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="242.4" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="258" y="30" width="96" height="12" fill="#17191b" rx="0.7"/>
+<rect x="261.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="273.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="285.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="297.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="309.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="321.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="333.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="345.6" y="33.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="174" y="258" width="96" height="12" fill="#17191b" rx="0.7"/>
+<rect x="177.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="189.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="201.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="213.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="225.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="237.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="249.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="261.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="282" y="258" width="72" height="12" fill="#17191b" rx="0.7"/>
+<rect x="285.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="297.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="309.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="321.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="333.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="345.6" y="261.6" width="4.8" height="4.8" fill="#d4a84b"/>
+<rect x="195.6" y="133.2" width="64.8" height="18" fill="none" stroke="#e8eee9" stroke-width="1.4"/>
+<path d="M228 133.2 V151.2" stroke="#e8eee9" stroke-width="1.4"/>
+<text x="211.8" y="147" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.8" font-weight="700" fill="#e8eee9">UNO</text>
+<text x="244.2" y="147" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.8" font-weight="700" fill="#e8eee9">R3</text>
+<text transform="translate(162.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">AREF</text>
+<text transform="translate(174.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">GND</text>
+<text transform="translate(186.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">13</text>
+<text transform="translate(198.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">12</text>
+<text transform="translate(210.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">~11</text>
+<text transform="translate(222.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">~10</text>
+<text transform="translate(234.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">~9</text>
+<text transform="translate(246.7 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">8</text>
+<text transform="translate(265.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">7</text>
+<text transform="translate(277.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">~6</text>
+<text transform="translate(289.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">~5</text>
+<text transform="translate(301.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">4</text>
+<text transform="translate(313.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">~3</text>
+<text transform="translate(325.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">2</text>
+<text transform="translate(337.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">TX→1</text>
+<text transform="translate(349.9 48) rotate(-90)" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">RX←0</text>
+<text transform="translate(193.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">IOREF</text>
+<text transform="translate(205.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">RESET</text>
+<text transform="translate(217.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">3.3V</text>
+<text transform="translate(229.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">5V</text>
+<text transform="translate(241.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">GND</text>
+<text transform="translate(253.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">GND</text>
+<text transform="translate(265.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">Vin</text>
+<text transform="translate(289.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">A0</text>
+<text transform="translate(301.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">A1</text>
+<text transform="translate(313.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">A2</text>
+<text transform="translate(325.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">A3</text>
+<text transform="translate(337.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">A4</text>
+<text transform="translate(349.9 252) rotate(-90)" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">A5</text>
+<text x="222" y="76.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">DIGITAL (PWM~)</text>
+<text x="222" y="228.6" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">POWER</text>
+<text x="318" y="228.6" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">ANALOG IN</text>
+<text x="351.6" y="121.2" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">ICSP</text>
+<text x="170.4" y="85.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">L</text>
+<text x="170.4" y="112.2" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">TX</text>
+<text x="170.4" y="123" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">RX</text>
+<text x="333.6" y="112.2" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="5.4" font-weight="700" fill="#e8eee9">ON</text>
+</svg>

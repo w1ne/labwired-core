@@ -142,6 +142,11 @@ pub const AVR_PINB: u16 = 0x0023;
 pub const AVR_PINC: u16 = 0x0026;
 /// `PIND` data-space address; `DDRD`/`PORTD` follow it.
 pub const AVR_PIND: u16 = 0x0029;
+/// Bus base of the `avr_adc` input window: two bytes of millivolts per channel.
+pub const AVR_ADC_INPUT_BASE: u64 = 0x0001_0030;
+/// AVcc on the 5 V boards this part is modelled for, and the internal bandgap.
+const AVR_AVCC_MV: u32 = 5000;
+const AVR_BANDGAP_MV: u32 = 1100;
 
 pub const VEC_TIMER0_OVF: u32 = 17; // datasheet 1-based; @0x40 = __vector_16
 /// TWI_vect is `_VECTOR(24)` → PC 0x60; pending bit uses vec=25 (`(vec-1)*4`).
@@ -322,9 +327,9 @@ impl Avr {
             // answer alone.
             //
             // `self.io` only ever holds what firmware wrote, and nothing
-            // firmware writes lands in PINB (a write there toggles PORTB). So
+            // firmware writes lands in PINx (a write there toggles PORTx). So
             // reading the shadow made `digitalRead` on an input pin return 0
-            // forever: a `board_io` button attached to `portb` would drive its
+            // forever: a `board_io` button attached to a port would drive its
             // level into the bus-side model and the sketch would never see the
             // press.
             //
@@ -332,7 +337,7 @@ impl Avr {
             // half comes from the register that owns it: bits the firmware
             // drives (DDR set) read back its own PORT latch — the real chip's
             // behaviour, and what makes "set it, then confirm it" work — while
-            // bits left as inputs take the level the bus-side `portb` model
+            // bits left as inputs take the level the bus-side port model
             // holds. Only the input half of that model's answer is consulted,
             // so the two copies of PORT cannot disagree here.
             //
@@ -519,15 +524,24 @@ impl Avr {
                 Ok(())
             }
             0x007A => {
-                // ADSC (bit 6): write 1 starts a conversion; complete immediately
-                // with mid-scale 512 (~Vcc/2) so analogRead() never hangs.
+                // ADSC (bit 6): write 1 starts a conversion. It completes
+                // immediately (no conversion time is modelled), converting the
+                // millivolts the bus-side `avr_adc` model holds for the channel
+                // ADMUX selects, so a potentiometer on A0 moves analogRead(A0).
                 const ADSC: u8 = 1 << 6;
                 const ADIF: u8 = 1 << 4;
                 const ADEN: u8 = 1 << 7;
                 self.adcsra = value;
                 if value & ADEN != 0 && value & ADSC != 0 {
-                    self.adcl = 0x00;
-                    self.adch = 0x02; // 512
+                    let code = self.adc_convert(bus)?;
+                    let adlar = self.admux & (1 << 5) != 0;
+                    if adlar {
+                        self.adch = (code >> 2) as u8;
+                        self.adcl = ((code & 0x03) << 6) as u8;
+                    } else {
+                        self.adcl = (code & 0xFF) as u8;
+                        self.adch = (code >> 8) as u8;
+                    }
                     self.adcsra = (value & !ADSC) | ADIF;
                 }
                 Ok(())
@@ -558,6 +572,33 @@ impl Avr {
             }
             _ => Err(SimulationError::MemoryViolation(addr as u64)),
         }
+    }
+
+    /// One 10-bit conversion of the channel ADMUX selects.
+    ///
+    /// MUX 0..7 are the input pins, whose millivolts come from the bus-side
+    /// `avr_adc` model; 0x0E is the 1.1 V bandgap and 0x0F is GND. The other mux
+    /// codes (the temperature sensor at 0x08) are not modelled and read 0.
+    /// REFS selects the reference: 11 is the internal 1.1 V, anything else is
+    /// taken as 5 V AVcc (AREF is not a modelled pin).
+    fn adc_convert(&self, bus: &dyn Bus) -> SimResult<u16> {
+        let mux = self.admux & 0x0F;
+        let input_mv: u32 = match mux {
+            0..=7 => {
+                let base = AVR_ADC_INPUT_BASE + u64::from(mux) * 2;
+                let lo = bus.read_u8(base)?;
+                let hi = bus.read_u8(base + 1)?;
+                u32::from(u16::from_le_bytes([lo, hi]))
+            }
+            0x0E => AVR_BANDGAP_MV,
+            _ => 0,
+        };
+        let reference_mv = if self.admux >> 6 == 0b11 {
+            AVR_BANDGAP_MV
+        } else {
+            AVR_AVCC_MV
+        };
+        Ok((input_mv * 1024 / reference_mv).min(1023) as u16)
     }
 
     fn t0_prescaler(&self) -> u32 {
@@ -2272,6 +2313,46 @@ mod tests {
             (0x0001, 0),
             "a stale C is cleared"
         );
+    }
+
+    /// A conversion reads the selected channel's millivolts from the bus-side
+    /// `avr_adc` window, honours ADLAR, and answers the bandgap mux code
+    /// without touching the bus.
+    #[test]
+    fn adc_converts_the_selected_channel_and_left_adjusts() {
+        let mut cpu = Avr::new();
+        let mut bus = MockBus::new();
+        let cfg = SimulationConfig::default();
+        // 2000 mV on ADC2: 2000 * 1024 / 5000 = 409 = 0b01_1001_1001.
+        bus.write_u8(AVR_ADC_INPUT_BASE + 4, (2000u16 & 0xFF) as u8)
+            .unwrap();
+        bus.write_u8(AVR_ADC_INPUT_BASE + 5, (2000u16 >> 8) as u8)
+            .unwrap();
+        // LDI R16,0x42 (REFS=AVcc, MUX=2); STS ADMUX,R16; LDI R17,0xC0 (ADEN|ADSC); STS ADCSRA,R17
+        cpu.load_words(0, &[0xE402, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF]);
+        cpu.set_pc(0);
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+        }
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 409);
+        assert_eq!(cpu.adcsra & (1 << 6), 0, "ADSC clears when done");
+        assert_ne!(cpu.adcsra & (1 << 4), 0, "ADIF sets when done");
+
+        // Same input, ADLAR set (0x62): 409 << 6 split across ADCH:ADCL.
+        cpu.load_words(0, &[0xE602, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF]);
+        cpu.set_pc(0);
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+        }
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 409 << 6);
+
+        // MUX=0x0E is the 1.1 V bandgap: 1100 * 1024 / 5000 = 225.
+        cpu.load_words(0, &[0xE40E, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF]);
+        cpu.set_pc(0);
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &cfg).unwrap();
+        }
+        assert_eq!(u16::from(cpu.adch) << 8 | u16::from(cpu.adcl), 225);
     }
 
     #[test]

@@ -55,4 +55,6 @@ fixtures/
 # Python
 __pycache__/
 *.pyc
-examples/arduino-nano-blinky/.pio/
+# PlatformIO build output in any example (sources, platformio.ini and the
+# committed fixture ELF under tests/fixtures/ are what matter).
+.pio/

@@ -1,0 +1,14 @@
+# LabWired — Arduino Uno R3 I/O proof smoke test.
+#
+# Boots the three-port sketch through this example's system.yaml (button on D2,
+# LED on D7, potentiometer on A0) and asserts its first report line. The
+# per-port behaviour is proven in crates/core/tests/avr_uno_io.rs, which drives
+# the button and the knob and checks what the sketch prints.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/arduino-uno-io.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "D2=1 A0=337"

@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 1030" width="1010" height="1030">
+<title>UNO R3 pinout</title>
+<desc>Header pins of the ATmega328P UNO R3 with Arduino pin numbers, AVR port bits and alternate functions.</desc>
+<rect width="1010" height="1030" fill="#FFFFFF"/>
+<text x="505.0" y="44" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="26" font-weight="700" fill="#111827">UNO R3 pinout</text>
+<text x="505.0" y="70" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="14" fill="#4b5563">ATmega328P · 5 V logic · 16 MHz · LED_BUILTIN = D13 (PB5)</text>
+<path d="M210 712 L782 712 L782 690 L804 668 L804 382 L782 360 L782 250 L210 250 Z" fill="#0e7c86" stroke="#0d1013" stroke-width="2.4"/>
+<circle cx="331" cy="690" r="12.1" fill="#ffffff" stroke="#d4a84b" stroke-width="4.8"/>
+<circle cx="342" cy="272" r="12.1" fill="#ffffff" stroke="#d4a84b" stroke-width="4.8"/>
+<circle cx="782" cy="404" r="12.1" fill="#ffffff" stroke="#d4a84b" stroke-width="4.8"/>
+<circle cx="782" cy="646" r="12.1" fill="#ffffff" stroke="#d4a84b" stroke-width="4.8"/>
+<rect x="155" y="318.2" width="134.2" height="107.8" fill="#c9ccce" stroke="#0d1013" stroke-width="1.25" rx="4.4"/>
+<rect x="166" y="333.6" width="17.6" height="77" fill="#9ca3a6"/>
+<rect x="183.6" y="597.6" width="127.6" height="77" fill="#20252a" stroke="#0d1013" stroke-width="1.25" rx="4.4"/>
+<circle cx="214.4" cy="636.1" r="19.8" fill="#3a3f44"/>
+<rect x="232" y="258.8" width="55" height="52.8" fill="#c9ccce" stroke="#0d1013" stroke-width="1"/>
+<circle cx="259.5" cy="285.2" r="14.3" fill="#f4f1e8" stroke="#0d1013" stroke-width="0.75"/>
+<rect x="361.8" y="404" width="44" height="44" fill="#20252a" rx="2.2"/>
+<rect x="326.6" y="470" width="92.4" height="39.6" fill="#c9ccce" stroke="#0d1013" stroke-width="1" rx="19.8"/>
+<rect x="334.3" y="300.6" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="340.9" y="307.2" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="334.3" y="322.6" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="340.9" y="329.2" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="356.3" y="300.6" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="362.9" y="307.2" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="356.3" y="322.6" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="362.9" y="329.2" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="378.3" y="300.6" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="384.9" y="307.2" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="378.3" y="322.6" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="384.9" y="329.2" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="243" y="540.4" width="22" height="35.2" fill="#c9ccce"/>
+<rect x="262.8" y="538.2" width="37.4" height="41.8" fill="#20252a"/>
+<rect x="342" y="608.6" width="52.8" height="52.8" fill="#d9d9d4" stroke="#0d1013" stroke-width="0.75"/>
+<circle cx="368.4" cy="635" r="24.2" fill="#c9ccce" stroke="#0d1013" stroke-width="0.75"/>
+<path d="M344.2 635 A24.2 24.2 0 0 1 356.3 614.1 L356.3 655.9 A24.2 24.2 0 0 1 344.2 635Z" fill="#20252a"/>
+<rect x="403.6" y="608.6" width="52.8" height="52.8" fill="#d9d9d4" stroke="#0d1013" stroke-width="0.75"/>
+<circle cx="430" cy="635" r="24.2" fill="#c9ccce" stroke="#0d1013" stroke-width="0.75"/>
+<path d="M405.8 635 A24.2 24.2 0 0 1 417.9 614.1 L417.9 655.9 A24.2 24.2 0 0 1 405.8 635Z" fill="#20252a"/>
+<rect x="370.6" y="677.9" width="57.2" height="18.7" fill="#20252a"/>
+<rect x="452" y="520.6" width="319" height="96.8" fill="#15181a" rx="2.2"/>
+<rect x="467.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="467.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="489.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="489.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="511.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="511.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="533.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="533.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="555.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="555.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="577.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="577.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="599.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="599.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="621.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="621.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="643.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="643.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="665.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="665.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="687.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="687.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="709.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="709.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="731.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="731.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="753.8" y="522.8" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="753.8" y="606.4" width="5.7" height="11" fill="#c9ccce"/>
+<rect x="455.3" y="533.8" width="312.4" height="61.6" fill="#20252a" stroke="#0d1013" stroke-width="0.75"/>
+<path d="M767.7 556.9 A7.7 7.7 0 0 0 767.7 572.3" fill="#101316"/>
+<text x="611.5" y="569" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="14.3" fill="#aeb4b8">ATMEGA328P</text>
+<rect x="750.1" y="448" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="756.7" y="454.6" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="750.1" y="470" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="756.7" y="476.6" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="750.1" y="492" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="756.7" y="498.6" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="772.1" y="448" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="778.7" y="454.6" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="772.1" y="470" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="778.7" y="476.6" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="772.1" y="492" width="19.8" height="19.8" fill="#20252a"/>
+<rect x="778.7" y="498.6" width="6.6" height="6.6" fill="#d4a84b"/>
+<rect x="716" y="461.2" width="17.6" height="41.8" fill="#20252a"/>
+<rect x="442.1" y="354.5" width="13.2" height="6.6" fill="#f0b64b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="442.1" y="402.9" width="13.2" height="6.6" fill="#f0b64b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="442.1" y="422.7" width="13.2" height="6.6" fill="#f0b64b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="710.5" y="402.9" width="13.2" height="6.6" fill="#7bd36b" stroke="#0d1013" stroke-width="0.5"/>
+<rect x="361.8" y="261" width="220" height="22" fill="#17191b" rx="1.3"/>
+<rect x="368.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="390.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="412.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="434.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="456.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="478.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="500.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="522.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="544.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="566.4" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="595" y="261" width="176" height="22" fill="#17191b" rx="1.3"/>
+<rect x="601.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="623.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="645.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="667.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="689.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="711.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="733.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="755.6" y="267.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="441" y="679" width="176" height="22" fill="#17191b" rx="1.3"/>
+<rect x="447.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="469.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="491.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="513.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="535.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="557.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="579.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="601.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="639" y="679" width="132" height="22" fill="#17191b" rx="1.3"/>
+<rect x="645.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="667.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="689.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="711.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="733.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="755.6" y="685.6" width="8.8" height="8.8" fill="#d4a84b"/>
+<rect x="480.6" y="450.2" width="118.8" height="33" fill="none" stroke="#e8eee9" stroke-width="2.6"/>
+<path d="M540 450.2 V483.2" stroke="#e8eee9" stroke-width="2.6"/>
+<text x="510.3" y="475.5" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19.8" font-weight="700" fill="#e8eee9">UNO</text>
+<text x="569.7" y="475.5" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19.8" font-weight="700" fill="#e8eee9">R3</text>
+<line x1="372.8" y1="272" x2="372.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(372.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#1f2937"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">SCL</text><rect x="31.9" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="46.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC5</text><rect x="63.8" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="90.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">I2C SCL</text></g>
+<line x1="394.8" y1="272" x2="394.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(394.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#1f2937"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">SDA</text><rect x="31.9" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="46.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC4</text><rect x="63.8" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="90.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">I2C SDA</text></g>
+<line x1="416.8" y1="272" x2="416.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(416.8 236) rotate(-90)"><rect x="0" y="-8" width="35.2" height="16" rx="4" fill="#1f2937"/><text x="17.6" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">AREF</text><rect x="38.2" y="-8" width="54.1" height="16" rx="4" fill="#16a34a"/><text x="65.2" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC ref</text></g>
+<line x1="438.8" y1="272" x2="438.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(438.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#111827"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">GND</text></g>
+<line x1="460.8" y1="272" x2="460.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(460.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#1f2937"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D13</text><rect x="31.9" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="46.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PB5</text><rect x="63.8" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="90.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">SPI SCK</text><rect x="120.9" y="-8" width="28.9" height="16" rx="4" fill="#facc15"/><text x="135.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">LED</text></g>
+<line x1="482.8" y1="272" x2="482.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(482.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#1f2937"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D12</text><rect x="31.9" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="46.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PB4</text><rect x="63.8" y="-8" width="60.4" height="16" rx="4" fill="#0d9488"/><text x="94" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">SPI MISO</text></g>
+<line x1="504.8" y1="272" x2="504.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(504.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#1f2937"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D11</text><rect x="31.9" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="46.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PB3</text><rect x="63.8" y="-8" width="28.9" height="16" rx="4" fill="#f59e0b"/><text x="78.2" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PWM</text><rect x="95.7" y="-8" width="60.4" height="16" rx="4" fill="#0d9488"/><text x="125.9" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">SPI MOSI</text></g>
+<line x1="526.8" y1="272" x2="526.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(526.8 236) rotate(-90)"><rect x="0" y="-8" width="28.9" height="16" rx="4" fill="#1f2937"/><text x="14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D10</text><rect x="31.9" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="46.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PB2</text><rect x="63.8" y="-8" width="28.9" height="16" rx="4" fill="#f59e0b"/><text x="78.2" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PWM</text><rect x="95.7" y="-8" width="47.8" height="16" rx="4" fill="#0d9488"/><text x="119.6" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">SPI SS</text></g>
+<line x1="548.8" y1="272" x2="548.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(548.8 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D9</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PB1</text><rect x="57.5" y="-8" width="28.9" height="16" rx="4" fill="#f59e0b"/><text x="72" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PWM</text></g>
+<line x1="570.8" y1="272" x2="570.8" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(570.8 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D8</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PB0</text></g>
+<line x1="606" y1="272" x2="606" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(606 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D7</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD7</text></g>
+<line x1="628" y1="272" x2="628" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(628 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D6</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD6</text><rect x="57.5" y="-8" width="28.9" height="16" rx="4" fill="#f59e0b"/><text x="72" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PWM</text></g>
+<line x1="650" y1="272" x2="650" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(650 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D5</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD5</text><rect x="57.5" y="-8" width="28.9" height="16" rx="4" fill="#f59e0b"/><text x="72" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PWM</text></g>
+<line x1="672" y1="272" x2="672" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(672 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D4</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD4</text></g>
+<line x1="694" y1="272" x2="694" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(694 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D3</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD3</text><rect x="57.5" y="-8" width="28.9" height="16" rx="4" fill="#f59e0b"/><text x="72" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PWM</text><rect x="89.4" y="-8" width="35.2" height="16" rx="4" fill="#7c3aed"/><text x="107" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">INT1</text></g>
+<line x1="716" y1="272" x2="716" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(716 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D2</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD2</text><rect x="57.5" y="-8" width="35.2" height="16" rx="4" fill="#7c3aed"/><text x="75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">INT0</text></g>
+<line x1="738" y1="272" x2="738" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(738 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D1</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD1</text><rect x="57.5" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="84.5" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">UART TX</text></g>
+<line x1="760" y1="272" x2="760" y2="240" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(760 236) rotate(-90)"><rect x="0" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">D0</text><rect x="25.6" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PD0</text><rect x="57.5" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="84.5" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">UART RX</text></g>
+<line x1="452" y1="690" x2="452" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(452 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#9ca3af"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">NC</text></g>
+<line x1="474" y1="690" x2="474" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(474 726) rotate(-90)"><rect x="-41.5" y="-8" width="41.5" height="16" rx="4" fill="#dc2626"/><text x="-20.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">IOREF</text></g>
+<line x1="496" y1="690" x2="496" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(496 726) rotate(-90)"><rect x="-41.5" y="-8" width="41.5" height="16" rx="4" fill="#9ca3af"/><text x="-20.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">RESET</text></g>
+<line x1="518" y1="690" x2="518" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(518 726) rotate(-90)"><rect x="-35.2" y="-8" width="35.2" height="16" rx="4" fill="#dc2626"/><text x="-17.6" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">3.3V</text></g>
+<line x1="540" y1="690" x2="540" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(540 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#dc2626"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">5V</text></g>
+<line x1="562" y1="690" x2="562" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(562 726) rotate(-90)"><rect x="-28.9" y="-8" width="28.9" height="16" rx="4" fill="#111827"/><text x="-14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">GND</text></g>
+<line x1="584" y1="690" x2="584" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(584 726) rotate(-90)"><rect x="-28.9" y="-8" width="28.9" height="16" rx="4" fill="#111827"/><text x="-14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">GND</text></g>
+<line x1="606" y1="690" x2="606" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(606 726) rotate(-90)"><rect x="-28.9" y="-8" width="28.9" height="16" rx="4" fill="#dc2626"/><text x="-14.4" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">VIN</text></g>
+<line x1="650" y1="690" x2="650" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(650 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">A0</text><rect x="-54.5" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="-40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC0</text><rect x="-92.7" y="-8" width="35.2" height="16" rx="4" fill="#16a34a"/><text x="-75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC0</text></g>
+<line x1="672" y1="690" x2="672" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(672 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">A1</text><rect x="-54.5" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="-40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC1</text><rect x="-92.7" y="-8" width="35.2" height="16" rx="4" fill="#16a34a"/><text x="-75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC1</text></g>
+<line x1="694" y1="690" x2="694" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(694 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">A2</text><rect x="-54.5" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="-40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC2</text><rect x="-92.7" y="-8" width="35.2" height="16" rx="4" fill="#16a34a"/><text x="-75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC2</text></g>
+<line x1="716" y1="690" x2="716" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(716 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">A3</text><rect x="-54.5" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="-40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC3</text><rect x="-92.7" y="-8" width="35.2" height="16" rx="4" fill="#16a34a"/><text x="-75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC3</text></g>
+<line x1="738" y1="690" x2="738" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(738 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">A4</text><rect x="-54.5" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="-40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC4</text><rect x="-92.7" y="-8" width="35.2" height="16" rx="4" fill="#16a34a"/><text x="-75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC4</text><rect x="-149.8" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="-122.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">I2C SDA</text></g>
+<line x1="760" y1="690" x2="760" y2="722" stroke="#6b7280" stroke-width="1"/>
+<g transform="translate(760 726) rotate(-90)"><rect x="-22.6" y="-8" width="22.6" height="16" rx="4" fill="#1f2937"/><text x="-11.3" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">A5</text><rect x="-54.5" y="-8" width="28.9" height="16" rx="4" fill="#e5e7eb" stroke="#9ca3af" stroke-width="0.75"/><text x="-40" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#111827">PC5</text><rect x="-92.7" y="-8" width="35.2" height="16" rx="4" fill="#16a34a"/><text x="-75.1" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">ADC5</text><rect x="-149.8" y="-8" width="54.1" height="16" rx="4" fill="#0d9488"/><text x="-122.8" y="3.8" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5" font-weight="600" fill="#ffffff">I2C SCL</text></g>
+<line x1="259.5" y1="285.2" x2="150" y2="228" stroke="#6b7280" stroke-width="1"/>
+<text x="144" y="232" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">RESET button</text>
+<line x1="221" y1="371" x2="150" y2="371" stroke="#6b7280" stroke-width="1"/>
+<text x="144" y="375" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">USB-B</text>
+<text x="144" y="391" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">16U2 USB-serial</text>
+<text x="144" y="407" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">= Serial (D0/D1)</text>
+<line x1="383.8" y1="426" x2="150" y2="492" stroke="#6b7280" stroke-width="1"/>
+<text x="144" y="496" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">ATmega16U2</text>
+<line x1="254" y1="636.1" x2="150" y2="636.1" stroke="#6b7280" stroke-width="1"/>
+<text x="144" y="640.1" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">DC jack</text>
+<text x="144" y="656.1" text-anchor="end" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">7-12 V</text>
+<line x1="782" y1="470" x2="860" y2="470" stroke="#6b7280" stroke-width="1"/>
+<text x="866" y="474" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">ICSP</text>
+<text x="866" y="490" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">(ATmega328P)</text>
+<line x1="716" y1="564.6" x2="860" y2="564.6" stroke="#6b7280" stroke-width="1"/>
+<text x="866" y="568.6" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">ATmega328P-PU</text>
+<text x="866" y="584.6" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">DIP-28</text>
+<line x1="448.7" y1="354.5" x2="860" y2="305" stroke="#6b7280" stroke-width="1"/>
+<text x="866" y="309" text-anchor="start" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">L = D13</text>
+<rect x="40" y="914" width="16" height="16" rx="3" fill="#1f2937"/>
+<text x="62" y="927" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">Arduino pin</text>
+<rect x="275" y="914" width="16" height="16" rx="3" fill="#e5e7eb" stroke="#9ca3af"/>
+<text x="297" y="927" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">AVR port bit</text>
+<rect x="510" y="914" width="16" height="16" rx="3" fill="#f59e0b"/>
+<text x="532" y="927" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">PWM (analogWrite)</text>
+<rect x="745" y="914" width="16" height="16" rx="3" fill="#0d9488"/>
+<text x="767" y="927" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">UART / SPI / I2C</text>
+<rect x="40" y="940" width="16" height="16" rx="3" fill="#16a34a"/>
+<text x="62" y="953" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">Analog input</text>
+<rect x="275" y="940" width="16" height="16" rx="3" fill="#7c3aed"/>
+<text x="297" y="953" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">External interrupt</text>
+<rect x="510" y="940" width="16" height="16" rx="3" fill="#dc2626"/>
+<text x="532" y="953" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">Power</text>
+<rect x="745" y="940" width="16" height="16" rx="3" fill="#111827"/>
+<text x="767" y="953" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#111827">Ground</text>
+<text x="40" y="990" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12.5" fill="#4b5563">SCL/SDA on the top header are the same copper as A5/A4. The DIP-28 part has no ADC6/ADC7.</text>
+<text x="40" y="1010" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12.5" fill="#4b5563">Sources: ArduinoCore-avr variants/standard/pins_arduino.h, ATmega328P datasheet, Arduino A000066 datasheet and schematic.</text>
+</svg>

@@ -40,6 +40,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "uart",
     "gpio",
     "avr_gpio",
+    "avr_adc",
     "rcc",
     "systick",
     "timer",
@@ -459,6 +460,7 @@ pub fn try_build(
             }
         }
         "avr_gpio" => Box::new(crate::peripherals::avr_gpio::AvrGpioPort::new()),
+        "avr_adc" => Box::new(crate::peripherals::avr_adc::AvrAdcInputs::new()),
         "sam_sercom_usart" => {
             Box::new(crate::peripherals::sam::sercom_usart::SamSercomUsart::new())
         }

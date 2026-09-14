@@ -102,6 +102,7 @@ nav:
     - Target Support Rubric: target_support_rubric.md
 
   - Boards:
+    - Arduino Uno R3: boards/arduino-uno.md
     - ESP32-C3: boards/esp32c3.md
     - ESP32-S3: boards/esp32s3.md
     - nRF52840: boards/nrf52840.md

@@ -314,6 +314,15 @@ fn a_button_is_drivable_on_an_avr_port() {
     assert_button_attaches_and_moves_the_pin("atmega328p.yaml", "portb", 2);
 }
 
+/// PORTD (D0-D7) and PORTC (A0-A5) had no bus-side model at all, so a button
+/// on the Uno's D2 — the pin every Arduino button example uses — had nowhere
+/// to attach.
+#[test]
+fn a_button_is_drivable_on_avr_ports_c_and_d() {
+    assert_button_attaches_and_moves_the_pin("atmega328p.yaml", "portd", 2);
+    assert_button_attaches_and_moves_the_pin("atmega328p.yaml", "portc", 0);
+}
+
 // ---------------------------------------------------------------------------
 // End-to-end: real firmware, real board, the printed byte moves.
 //
