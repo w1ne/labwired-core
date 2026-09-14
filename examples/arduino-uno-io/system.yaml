@@ -1,0 +1,32 @@
+name: arduino-uno-io
+# Same board as configs/systems/arduino-uno.yaml, plus the three parts this
+# example drives: a button on D2, an LED on D7 and a potentiometer on A0.
+chip: ../../configs/chips/atmega328p.yaml
+cpu_hz: 16000000
+external_devices:
+  # Wiper on ADC0 (A0). The potentiometer model runs from a 3.3 V rail, so wire
+  # its top leg to 3.3V on the bench too; full travel then reads about 675.
+  - id: "knob"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 0
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5          # PB5 / D13 LED_BUILTIN
+    signal: "output"
+    active_high: true
+  - id: "led_d7"
+    kind: "led"
+    peripheral: "portd"
+    pin: 7          # PD7 / D7
+    signal: "output"
+    active_high: true
+  - id: "btn_d2"
+    kind: "button"
+    peripheral: "portd"
+    pin: 2          # PD2 / D2, to GND with INPUT_PULLUP
+    signal: "input"
+    active_high: false

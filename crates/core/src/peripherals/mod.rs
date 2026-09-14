@@ -6,6 +6,7 @@
 
 pub mod adc;
 pub mod afio;
+pub mod avr_adc;
 pub mod avr_gpio;
 pub mod ble_air;
 pub mod bxcan;

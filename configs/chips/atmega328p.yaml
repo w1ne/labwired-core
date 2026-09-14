@@ -38,10 +38,12 @@ peripherals:
     type: "i2c"
     base_address: 0x00010010
     size: "16"
-  # PORTB mirror for --watch-gpio portb:5 (LED_BUILTIN = PB5).
-  # Real PINB/DDRB/PORTB live at 0x23..0x25 in the CPU IO map; bus flash@0
-  # would swallow low MMIO writes, so the Avr interpreter mirrors PORTB
-  # updates to this high window (base + 0/1/2 = PIN/DDR/PORT).
+  # Port mirrors (base + 0/1/2 = PIN/DDR/PORT). The real PINx/DDRx/PORTx live
+  # at 0x23..0x2B in the CPU IO map; bus flash@0 would swallow low MMIO writes,
+  # so the Avr interpreter mirrors every port write to its high window, and
+  # reads each PINx input half back from here. Without portc/portd a canvas LED
+  # on D0-D7 never lit and a button on A0-A5 was never read.
+  # PORTB = D8-D13 (LED_BUILTIN = PB5).
   - id: "portb"
     type: "avr_gpio"
     base_address: 0x00010023
@@ -56,3 +58,10 @@ peripherals:
     type: "avr_gpio"
     base_address: 0x00010029
     size: "3"
+  # ADC input side: millivolts on ADC0..ADC7, two bytes per channel. The
+  # converter registers (ADMUX/ADCSRA/ADCL/ADCH) stay on the CPU; this is where
+  # a potentiometer or NTC on A0-A5 drives its level.
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010030
+    size: "16"
