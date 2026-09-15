@@ -90,8 +90,13 @@ use std::path::{Path, PathBuf};
 /// so one test need not downcast. The same one call site is also the
 /// 210 → 211 `downcast_ref`: `as_any()` and `downcast_ref` are the two halves
 /// of one reach, and both counters see it.
-const MAX_AS_ANY: usize = 196;
-const MAX_DOWNCAST_REF: usize = 211;
+///
+/// 196 → 197 / 211 → 212: Cortex-M wasm-JIT `try_compile_from_bus` needs the
+/// concrete `SystemBus` flash/RAM image (same reach RISC-V JIT already uses).
+/// The cycle-accurate JIT gate does **not** downcast: it goes through
+/// `Bus::requires_cycle_accurate`.
+const MAX_AS_ANY: usize = 197;
+const MAX_DOWNCAST_REF: usize = 212;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

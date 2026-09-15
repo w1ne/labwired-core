@@ -1027,6 +1027,16 @@ jobs:
           --test systick_walk_differential
           --test board_batch_width
 
+      # JIT-on vs interpreter on nRF TIMER0 / UART / WFI at tick 512. Needs
+      # `jit` as well as `event-scheduler` (`required-features` on the target).
+      # A separate step so the walk-differential list above stays event-scheduler
+      # only and does not silently change those binaries' feature set.
+      - name: Cortex-M JIT nRF differential (tick 512)
+        run: >
+          scripts/ci/cargo-test-nonvacuous.sh
+          -p labwired-core --features event-scheduler,jit
+          --test cortex_m_jit_nrf_differential
+
   # ── Workspace tests on PRs (sharded; advisory for now) ─────────────────────
   #
   # THE LANE THAT RAN THE NIGHT AFTER THE MERGE. A plain
@@ -1497,6 +1507,7 @@ jobs:
           --test stm32f103_dma_walk_differential
           --test systick_walk_differential
           --test board_batch_width
+          --test cortex_m_jit_nrf_differential
           --lib
 
       # HARDWARE ORACLE UNDER THE SCHEDULER FEATURE — the configuration that

@@ -1567,6 +1567,13 @@ pub trait Bus {
         None
     }
 
+    /// `true` when this bus cannot run a widened tick without losing a timed
+    /// waveform (HC-SR04, flash-ops, GPIO timing devices). CPU JIT gates use
+    /// this instead of downcasting to `SystemBus`. Default `false`.
+    fn requires_cycle_accurate(&self) -> bool {
+        false
+    }
+
     /// Plan 3: look up a registered ROM thunk by absolute PC. Used by the
     /// Xtensa LX7 `BREAK 1, 14` dispatch to redirect calls into the simulated
     /// ESP32-S3 mask ROM. Default returns None for buses that don't model

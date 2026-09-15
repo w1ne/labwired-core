@@ -674,13 +674,8 @@ impl CortexM {
         if bus.logic_tap().is_some_and(|t| t.push_armed()) {
             return false;
         }
-        if let Some(sb) = bus
-            .as_any()
-            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
-        {
-            if sb.requires_cycle_accurate() {
-                return false;
-            }
+        if bus.requires_cycle_accurate() {
+            return false;
         }
         true
     }
@@ -737,7 +732,9 @@ impl CortexM {
         // republish CycleClock (MMIO does that via `note_mmio_activity`).
         // The RISC-V JIT publishes before each dispatch and clamps to the
         // next scheduler deadline; Cortex-M interpreter does neither.
-        #[cfg(feature = "event-scheduler")]
+        // Computed unconditionally so this loop does not grow another
+        // `#[cfg(feature = "event-scheduler")]` site; the bump below is the
+        // one place the feature still forks (publish_cycle is cfg-gated).
         let live_step = u64::from(config.peripheral_tick_interval > 1);
 
         let mut retired: u32 = 0;
