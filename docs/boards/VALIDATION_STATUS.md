@@ -9,21 +9,21 @@ The models column is a content digest over everything that board's `models` list
 
 | Board | Tier | Last silicon capture | Models | Status |
 |-------|------|----------------------|--------|--------|
-| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `049d6cb825df757a` | ⚠ drift acked 2026-08-22, expires 2026-09-21 (re-capture pending) |
-| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `049d6cb825df757a` | ⚠ drift acked 2026-08-22, expires 2026-09-21 (re-capture pending) |
+| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `cd57e920beff4b54` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `cd57e920beff4b54` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `2bb02865dad7f44d` | ⚠ drift acked 2026-09-03, expires 2026-10-03 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `3118d78eefd2dbe3` | ⚠ drift acked 2026-08-22, expires 2026-09-21 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `7462a993e0bf17d7` | ⚠ drift acked 2026-09-03, expires 2026-10-03 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `dcb91b072dcfe5a4` | ⚠ drift acked 2026-09-03, expires 2026-10-03 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `b5365f3e5584bef3` | ⚠ drift acked 2026-09-03, expires 2026-10-03 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `df25451f57b6717c` | ⚠ drift acked 2026-09-03, expires 2026-10-03 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `e7683c76712ceff4` | ⚠ drift acked 2026-08-23, expires 2026-09-22 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `7501e03bc97d044a` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `0db896eb74f8ac52` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `54357ab00d5380ea` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `4868d947c79c522f` | no silicon capture |
 | `rp2040` | ⚪ structural | — | `6e1cabee387b55c3` | no silicon capture |
 | `rp2350` | 🟡 smoke-manual | — | `6f7286ef2a4a4c9a` | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `e5ba4b8f2db77227` | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `47da0a79c258e95c` | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `b703efb00e1a6a0e` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `71cf8eb793f49da2` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `54196a8a658ab075` | no silicon capture |
@@ -41,7 +41,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on ST-LINK V2 (V2J37S7, serial 48FF6B064884534929321087), openocd 0.12.0 hla_swd; nRF52840 FICR INFO.PART=0x00052840, DEVICEID 707dc298 — re-captured live 2026-08-09 with NRF52_STRICT=1: ALL 11 hw-oracle suites pass — conformance, cpu_conformance, mmio 16/16, gpio, onboarding, power, spis_twis, timer_rtc, spim_easydma, full_register, ccm. NOT a second board: DEVICEID 707dc298 matches the 2026-06-09 baseline, so this is a re-read of the SAME part (unlike the C3/S3 re-captures, which were cross-board). The run was NOT clean on arrival and found three real defects, all fixed in this commit: (1) seven nrf52_* hw-oracle tests had not COMPILED since the 2026-07-18 bus consolidation removed the inherent SystemBus read_u32/write_u32 shadows — they build only under --features hw-oracle-nrf52, which CI never enables, so the 're-capture pending' ack pointed at a path that could not build; (2) mmio was 15/16, SPIM0 PSEL_MISO sim=0x0 vs hw=0x2E, because the serial-instance broadcast PSEL WRITES to both halves but dispatched READS to TWIM, which models only 0x508/0x50C; (3) SPIM PSEL.CSN (0x514) was missing from Nrf52SpiRegs entirely — corroborated present on silicon (wrote 0x2B, read 0x2B). Guarded going forward by a hardware-free unit test, serial_instance::psel_block_reads_back_while_disabled.
   - offline (CI): nrf52_conformance::conformance_sim (digest vs frozen 2026-06-09 capture)
   - offline (CI): nrf52_mmio_diff / nrf52_gpio_conformance (sim halves)
-- Drift status: **⚠ drift acked 2026-08-22, expires 2026-09-21 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending)**
 
 ## `seeed-xiao-nrf52840-sense` — 🟢 silicon-verified
 
@@ -49,7 +49,7 @@ The models column is a content digest over everything that board's `models` list
 - Note: Same silicon as nrf52840 (the bench board IS a Seeed XIAO nRF52840 Sense).
 - Silicon: **2026-08-09** on ST-LINK V2 (V2J37S7, serial 48FF6B064884534929321087) — the same physical XIAO the nrf52840 entry describes — rides the nrf52840 re-capture of 2026-08-09: all 11 hw-oracle suites pass under NRF52_STRICT=1, mmio 16/16. This is not an independent run — it is the SAME board and the SAME suites, which is exactly what `note` says this entry means. See the nrf52840 result for the three defects that run uncovered and fixed.
   - offline (CI): nrf52.rs xiao_* (manifest build, GPIO task regs, SPIM0 EasyDMA)
-- Drift status: **⚠ drift acked 2026-08-22, expires 2026-09-21 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending)**
 
 ## `stm32h563` — 🟢 silicon-verified
 
@@ -111,7 +111,7 @@ The models column is a content digest over everything that board's `models` list
 - Silicon: **2026-08-09** on USB-JTAG built-in (USB 303a:1001, openocd-esp32 v0.12.0-esp32-20260703, both Tensilica taps 0x120034e5), board MAC 3c:0f:02:df:f3:c8 (QFN56 rev v0.2) — re-captured live 2026-08-09 on a SECOND physical S3 (MAC 3c:0f:02:df:f3:c8, QFN56 rev v0.2; the 2026-07-15 baseline came from an ESP32-S3-Zero, MAC 9c:13:9e:f4:40:c0, same rev) — cross-board corroboration, not a re-read of the same part. Both Xtensa taps (tap0+tap1) examined. 384 registers read across 10 windows (UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, RTC_CNTL): 9/9 RESET_VALUES matched, 0 mismatched. Scope is unchanged and still thin — this is a 9-register reset-state anchor, NOT a broad register or behavioural diff; see the KNOWN GAPS in `note`. Artifacts: scripts/hw-oracle/captures/esp32s3/recapture-20260809T130700Z/.
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **⚠ drift acked 2026-08-23, expires 2026-09-22 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending)**
 
 ## `stm32f401` — 🟡 smoke-manual
 

@@ -83,6 +83,7 @@
 boards:
   # ── Fresh: re-verified on live silicon 2026-06-17 ────────────────────────────
   - id: nrf52840
+    # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/nrf52840.md
     chip: configs/chips/nrf52840.yaml
     tier: silicon-verified
@@ -390,7 +391,7 @@ boards:
     # Ran: labwired-core --lib, nrf52_timer_walk_differential, stm32f401/stm32l476
     # walk differentials, bus_visibility and logic_wire_channels_cross_family under
     # (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
-    drift_ack: 2026-08-22
+    drift_ack: 2026-09-15
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
     # silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
@@ -407,7 +408,7 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: 049d6cb825df757acc4112bcb0bff33eb5d08261c3b2c87293947c96c60d00f4
+    drift_ack_digest: cd57e920beff4b54c87e94f1ee9fc03476e936f7c5228e0a2d1d9946c65fd001
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -415,6 +416,7 @@ boards:
       - configs/chips/nrf52840.yaml
 
   - id: seeed-xiao-nrf52840-sense
+    # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/seeed-xiao-nrf52840-sense.md
     chip: configs/chips/nrf52840.yaml
     tier: silicon-verified
@@ -655,7 +657,7 @@ boards:
     # Ran: labwired-core --lib, nrf52_timer_walk_differential, stm32f401/stm32l476
     # walk differentials, bus_visibility and logic_wire_channels_cross_family under
     # (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
-    drift_ack: 2026-08-22
+    drift_ack: 2026-09-15
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
     # silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
@@ -672,7 +674,7 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: 049d6cb825df757acc4112bcb0bff33eb5d08261c3b2c87293947c96c60d00f4
+    drift_ack_digest: cd57e920beff4b54c87e94f1ee9fc03476e936f7c5228e0a2d1d9946c65fd001
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -3869,6 +3871,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-03
   - id: esp32s3
+    # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml
     tier: silicon-verified
@@ -4292,7 +4295,7 @@ boards:
     #
     # No silicon-anchored reset value is reachable from this: it changes when a level
     # is recomputed, never what the registers hold. This is an ack, not a capture.
-    drift_ack: 2026-08-23
+    drift_ack: 2026-09-15
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -4389,7 +4392,7 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: e7683c76712ceff4cee2567725602441e4dc5fccf65122ffadd22b4fb8f8def7
+    drift_ack_digest: 7501e03bc97d044a3a1039783958597969391a8f366beba905e7ae49df0d3970
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs
