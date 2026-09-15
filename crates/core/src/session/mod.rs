@@ -36,6 +36,7 @@ use crate::sim_input::InputChannel;
 use crate::system::builder::{
     build_machine, BlobMap, BootMode, BuildOptions, BuildRequest, FirmwareSource,
 };
+use crate::HostTimeMode;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -61,6 +62,8 @@ pub struct OpenOptions {
     pub batch_fuel: u64,
     /// Echo the console to the host's stdout.
     pub echo_uart_stdout: bool,
+    /// Host wall-clock policy. Default `MaxSpeed` (never sleep).
+    pub host_time_mode: HostTimeMode,
 }
 
 impl Default for OpenOptions {
@@ -69,6 +72,7 @@ impl Default for OpenOptions {
             cpu_hz: None,
             batch_fuel: 20_000,
             echo_uart_stdout: false,
+            host_time_mode: HostTimeMode::MaxSpeed,
         }
     }
 }
@@ -259,8 +263,10 @@ impl Session {
         req.options.echo_uart_stdout |= opts.echo_uart_stdout;
         let build = OwnedBuild::from_request(&req);
         let built = build_machine(req)?;
+        let mut machine = built.machine;
+        machine.set_host_time_mode(opts.host_time_mode);
         Ok(Session {
-            machine: built.machine,
+            machine,
             uart: uart::UartStream::new(built.uart),
             board_io: built.board_io,
             firmware_bytes: built.firmware_bytes,
@@ -289,6 +295,16 @@ impl Session {
     /// The clock this session converts cycles with, in Hz.
     pub fn cpu_hz(&self) -> u64 {
         self.cpu_hz
+    }
+
+    /// Host wall-clock policy for [`Self::run_for`] / [`Self::run_cycles`].
+    pub fn host_time_mode(&self) -> HostTimeMode {
+        self.machine.host_time_mode()
+    }
+
+    /// Set the host wall-clock policy for subsequent advances.
+    pub fn set_host_time_mode(&mut self, mode: HostTimeMode) {
+        self.machine.set_host_time_mode(mode);
     }
 
     /// Virtual time: cycles / cpu_hz.

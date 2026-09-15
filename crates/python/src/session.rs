@@ -4,6 +4,7 @@ use labwired_core::session::{
 use labwired_core::system::builder::{
     BlobMap, BootMode, BuildOptions, BuildRequest, FirmwareSource,
 };
+use labwired_core::HostTimeMode;
 use pyo3::{
     create_exception,
     exceptions::{PyAssertionError, PyRuntimeError, PyValueError},
@@ -53,13 +54,14 @@ impl NativeSession {
 #[pymethods]
 impl NativeSession {
     #[new]
-    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None))]
+    #[pyo3(signature=(elf, chip_path, system_path=None, uart=None, catalog_root=None, time_mode=None))]
     fn new(
         elf: PathBuf,
         chip_path: Option<PathBuf>,
         system_path: Option<PathBuf>,
         uart: Option<String>,
         catalog_root: Option<PathBuf>,
+        time_mode: Option<String>,
     ) -> PyResult<Self> {
         let loaded = system_path
             .as_ref()
@@ -101,6 +103,12 @@ impl NativeSession {
         }
         let firmware =
             std::fs::read(elf).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let mut opts = OpenOptions::default();
+        if let Some(mode) = time_mode {
+            opts.host_time_mode = mode
+                .parse::<HostTimeMode>()
+                .map_err(PyValueError::new_err)?;
+        }
         let session = Session::open(
             BuildRequest {
                 chip: &chip,
@@ -113,7 +121,7 @@ impl NativeSession {
                     ..Default::default()
                 },
             },
-            OpenOptions::default(),
+            opts,
         )
         .map_err(build_error)?;
         Ok(Self {
@@ -130,6 +138,17 @@ impl NativeSession {
     #[getter]
     fn cycles(&self) -> PyResult<u64> {
         Ok(self.get()?.cycles())
+    }
+    #[getter]
+    fn time_mode(&self) -> PyResult<&'static str> {
+        Ok(self.get()?.host_time_mode().as_str())
+    }
+    fn set_time_mode(&mut self, mode: &str) -> PyResult<()> {
+        let parsed = mode
+            .parse::<HostTimeMode>()
+            .map_err(PyValueError::new_err)?;
+        self.get_mut()?.set_host_time_mode(parsed);
+        Ok(())
     }
     fn run_for(&mut self, ns: u64) -> PyResult<super::PyStopReason> {
         let session = self.get_mut()?;
