@@ -654,6 +654,11 @@ struct TestArgs {
     #[arg(long)]
     no_uart_stdout: bool,
 
+    /// Host wall-clock policy. `max-speed` (default) never sleeps; `realtime`
+    /// sleeps when virtual time (`cycles/cpu_hz`) is at least 1 ms ahead of wall.
+    #[arg(long = "time-mode", value_name = "MODE", default_value_t = labwired_core::HostTimeMode::MaxSpeed)]
+    time_mode: labwired_core::HostTimeMode,
+
     /// Directory to write test artifacts (result.json, uart.log)
     #[arg(long)]
     output_dir: Option<PathBuf>,
@@ -2086,6 +2091,8 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut pc_sample_budget: u64 = 0;
     // Best-effort exception count: SimulationError::ExceptionRaised only in P1.
     let mut exception_count: u64 = 0;
+
+    machine.config.host_time_mode = args.time_mode;
 
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -4964,5 +4971,28 @@ mod time_mode_cli {
             msg.contains("turbo") || msg.contains("time-mode") || msg.contains("invalid"),
             "unexpected clap error: {msg}"
         );
+    }
+}
+
+#[cfg(test)]
+mod time_mode_test_cli {
+    use super::TestArgs;
+    use clap::Parser;
+    use labwired_core::HostTimeMode;
+
+    fn parse(args: &[&str]) -> TestArgs {
+        TestArgs::try_parse_from(args).expect("TestArgs should parse")
+    }
+
+    #[test]
+    fn test_time_mode_defaults_to_max_speed() {
+        let args = parse(&["test", "--script", "t.yaml"]);
+        assert_eq!(args.time_mode, HostTimeMode::MaxSpeed);
+    }
+
+    #[test]
+    fn test_time_mode_accepts_realtime() {
+        let args = parse(&["test", "--script", "t.yaml", "--time-mode", "realtime"]);
+        assert_eq!(args.time_mode, HostTimeMode::Realtime);
     }
 }

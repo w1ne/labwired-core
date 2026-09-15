@@ -29,7 +29,7 @@ use crate::machine::{AdvanceReport, AdvanceRequest};
 use crate::network::{CanFrame, CanInjectError};
 use crate::sim_input::{InputChannel, SimInputError};
 use crate::snapshot::MachineSnapshot;
-use crate::{Bus, Cpu, DebugControl, Machine, SimResult};
+use crate::{Bus, Cpu, DebugControl, HostTimeMode, Machine, SimResult};
 
 /// Why [`SessionMachine::set_gpio_input`] did not drive a pin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +91,10 @@ pub trait SessionMachine: DebugControl + Send {
     /// Deliver a frame to the named CAN controller's receive path
     /// ([`crate::bus::SystemBus::inject_can_frame`]).
     fn inject_can(&mut self, controller: &str, frame: CanFrame) -> Result<(), CanInjectError>;
+    /// Host wall-clock policy for [`Self::advance`].
+    fn host_time_mode(&self) -> HostTimeMode;
+    /// Set the host wall-clock policy for subsequent [`Self::advance`] calls.
+    fn set_host_time_mode(&mut self, mode: HostTimeMode);
 }
 
 impl<C: Cpu + 'static> SessionMachine for Machine<C> {
@@ -173,5 +177,13 @@ impl<C: Cpu + 'static> SessionMachine for Machine<C> {
 
     fn inject_can(&mut self, controller: &str, frame: CanFrame) -> Result<(), CanInjectError> {
         self.bus.inject_can_frame(controller, frame)
+    }
+
+    fn host_time_mode(&self) -> HostTimeMode {
+        self.config.host_time_mode
+    }
+
+    fn set_host_time_mode(&mut self, mode: HostTimeMode) {
+        self.config.host_time_mode = mode;
     }
 }

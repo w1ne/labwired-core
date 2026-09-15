@@ -27,6 +27,7 @@ labwired --firmware <ELF> --system <YAML> [OPTIONS]
 - `--firmware <PATH>`: Path to the ELF binary to load (Required).
 - `--system <PATH>`: Path to the System Manifest YAML (Required).
 - `--max-steps <N>`: Stop simulation after N instructions (default: 20000).
+- `--time-mode max-speed|realtime`: Host wall-clock policy. `max-speed` (default) never sleeps. `realtime` sleeps when simulated time is ahead of wall time. Guest clock is still `cpu_hz`.
 - `--gdb <PORT>`: Start a GDB RSP server on the specified port (e.g., 3333).
 - `--breakpoint <ADDR>`: Breakpoint PC address (decimal or 0xHex). Repeatable.
 - `--snapshot <PATH>`: Write a state snapshot (JSON) upon exit.
@@ -49,6 +50,7 @@ labwired test --script <YAML> [OVERRIDES]
 - `--max-uart-bytes <N>`: Override UART output limit.
 - `--no-progress <N>`: Fail if PC doesn't change for N steps (detects hangs).
 - `--no-uart-stdout`: Disable echoing UART output to the console.
+- `--time-mode max-speed|realtime`: Same host policy as `run`. Default `max-speed`.
 - `--max-vcd-bytes <N>`: Limit the size of the generated VCD file.
 
 ### `asset`
