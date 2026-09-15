@@ -228,6 +228,7 @@ mod from_declaration {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         }
     }
 

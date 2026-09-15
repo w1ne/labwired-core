@@ -441,6 +441,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -642,6 +643,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -715,6 +717,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -783,6 +786,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -857,6 +861,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -1019,6 +1024,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
             reset_vector_offset: 0,
             atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         };
@@ -1090,6 +1096,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -1161,6 +1168,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -1232,6 +1240,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2465,6 +2474,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2563,6 +2573,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2646,6 +2657,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2863,6 +2875,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let mut oled_config = HashMap::new();
@@ -3013,6 +3026,7 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                include: None,
             };
             let mut oled_config = HashMap::new();
             oled_config.insert(

@@ -791,3 +791,132 @@ fn memory_value_details_public_fields_remain_struct_literal_constructible() {
         "ordinary node-less details should stay sparse: {serialized}"
     );
 }
+
+#[test]
+fn chip_yaml_include_merges_peripherals_and_fills_scalar_gaps() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("common.yaml"),
+        r#"
+name: nrf52-common
+arch: arm
+cpu_hz: 64000000
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals:
+  - id: uart0
+    type: uart
+    base_address: 0x40002000
+    irq: 1
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("child.yaml"),
+        r#"
+include: common.yaml
+name: nrf52840
+peripherals:
+  - id: uart0
+    type: uart
+    base_address: 0x40002000
+    irq: 2
+  - id: uart1
+    type: uart
+    base_address: 0x40028000
+    irq: 3
+"#,
+    )
+    .unwrap();
+
+    let chip = ChipDescriptor::from_file(dir.path().join("child.yaml")).unwrap();
+    assert_eq!(chip.name, "nrf52840");
+    assert_eq!(chip.cpu_hz, 64_000_000);
+    assert_eq!(chip.arch, labwired_config::Arch::Arm);
+    assert_eq!(chip.peripherals.len(), 2);
+    let uart0 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart0")
+        .expect("uart0 from include, irq overridden locally");
+    assert_eq!(uart0.irq, Some(2));
+    let uart1 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart1")
+        .expect("uart1 added by child");
+    assert_eq!(uart1.irq, Some(3));
+}
+
+#[test]
+fn chip_yaml_missing_include_errors_with_the_path() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("child.yaml"),
+        r#"
+include: does-not-exist.yaml
+name: nrf52840
+arch: arm
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+
+    let err = ChipDescriptor::from_file(dir.path().join("child.yaml")).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("does-not-exist.yaml"),
+        "missing include must name the path; got {msg}"
+    );
+}
+
+#[test]
+fn chip_yaml_include_cycle_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.yaml"),
+        r#"
+include: b.yaml
+name: chip-a
+arch: arm
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("b.yaml"),
+        r#"
+include: a.yaml
+name: chip-b
+arch: arm
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+
+    let err = ChipDescriptor::from_file(dir.path().join("a.yaml")).unwrap_err();
+    let msg = format!("{err:#}").to_ascii_lowercase();
+    assert!(msg.contains("cycle"), "cycle must be named; got {msg}");
+}

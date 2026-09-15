@@ -1220,6 +1220,7 @@ mod tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = labwired_config::SystemManifest {
@@ -1289,6 +1290,7 @@ mod tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = labwired_config::SystemManifest {
@@ -1372,6 +1374,7 @@ mod tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = labwired_config::SystemManifest {
