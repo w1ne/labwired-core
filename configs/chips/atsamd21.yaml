@@ -13,6 +13,8 @@
 name: "atsamd21g18a"
 arch: "arm"
 core: "cortex-m0+"
+# 48 MHz — DFLL48M, same as the Arduino Zero `atsamd21g18a.yaml` descriptor.
+cpu_hz: 48_000_000
 flash:
   base: 0x00000000
   size: "256KB"

@@ -30,6 +30,8 @@ name: "stm32f746"
 arch: "arm"
 core: "cortex-m7"
 registers_count: 150
+# STM32F746NG maximum core clock, 216 MHz (DS10916).
+cpu_hz: 216_000_000
 flash:
   base: 0x08000000
   # STM32F746NG = 1 MiB flash at 0x08000000 (AXI alias).

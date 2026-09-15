@@ -35,11 +35,7 @@ fn stm32f746_from_config_builds() {
     assert_eq!(chip.core.as_deref(), Some("cortex-m7"));
     assert_eq!(chip.flash.base, 0x0800_0000);
     assert_eq!(chip.ram.base, 0x2000_0000);
-    assert!(
-        chip.ram.size.contains("64"),
-        "DTCM primary RAM must be 64KB, got {}",
-        chip.ram.size
-    );
+    assert_eq!(chip.ram.size, 64 * 1024, "DTCM primary RAM must be 64KB");
 
     assert!(
         bus.find_peripheral_index_by_name("rcc").is_some(),
