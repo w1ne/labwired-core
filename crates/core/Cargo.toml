@@ -333,6 +333,11 @@ required-features = ["jit", "jit-framework"]
 name = "riscv_jit_lockstep"
 required-features = ["jit-framework"]
 
+# #![cfg(feature = "jit-framework")]
+[[test]]
+name = "thumb_jit_walk"
+required-features = ["jit-framework"]
+
 # #![cfg(all(feature = "jit-framework", feature = "jit"))]
 [[test]]
 name = "riscv_jit_mem_lockstep"

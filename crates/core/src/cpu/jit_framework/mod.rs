@@ -50,6 +50,7 @@ pub mod frontend;
 pub mod riscv;
 pub mod runtime;
 pub mod side_exit;
+pub mod thumb;
 
 /// Architecture-neutral guest program counter. Wide enough for every
 /// target LabWired models (Cortex-M / RISC-V 32-bit, Xtensa 32-bit) with
