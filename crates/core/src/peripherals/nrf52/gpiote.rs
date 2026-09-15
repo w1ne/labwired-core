@@ -443,6 +443,7 @@ mod tests {
             base_address: base,
             size: Some("4KB".to_string()),
             irq: None,
+            irq_controller: None,
             clock: None,
             config: Default::default(),
         }

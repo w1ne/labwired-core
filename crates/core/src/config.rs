@@ -39,6 +39,22 @@ pub struct SimulationConfig {
     /// Host wall-clock policy. Default [`HostTimeMode::MaxSpeed`] never sleeps.
     #[serde(default)]
     pub host_time_mode: HostTimeMode,
+
+    /// Opt into the Cortex-M (Thumb/Thumb-2) wasm-JIT fast path for
+    /// `Machine<CortexM>`. Off by default: with it `false` the interpreter
+    /// runs every instruction and behavior is bit-identical to a build
+    /// without the `jit` feature. When `true` *and* the `jit` feature is
+    /// compiled in *and* the correctness SafetyGate allows, hot basic
+    /// blocks are compiled to wasm and retired atomically; the interpreter
+    /// remains the oracle for WFI, IT, CPS/MRS/MSR, MMIO, and anything
+    /// else the JIT does not model. Has no effect without the `jit` feature.
+    #[serde(default)]
+    pub cortex_m_jit_enabled: bool,
+    /// Minimum compiled-block length. `0` = framework default (16). Lower
+    /// values compile more Zephyr-sized Thumb BBs; only safe once RAM
+    /// access is zero-copy (host load/store, no SRAM memcpy).
+    #[serde(default)]
+    pub cortex_m_jit_min_block_instrs: u32,
 }
 
 impl Default for SimulationConfig {
@@ -51,6 +67,8 @@ impl Default for SimulationConfig {
             idle_fast_forward_enabled: false,
             riscv_jit_enabled: false,
             host_time_mode: HostTimeMode::MaxSpeed,
+            cortex_m_jit_enabled: false,
+            cortex_m_jit_min_block_instrs: 0,
         }
     }
 }

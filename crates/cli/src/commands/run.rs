@@ -1754,6 +1754,11 @@ fn run_arm_batched_loop(
     let interval = machine.bus.max_safe_tick_interval();
     machine.config.peripheral_tick_interval = interval;
     machine.bus.config.peripheral_tick_interval = interval;
+    // Default-on for batched ARM, matching RISC-V `labwired run`. Escape
+    // hatch: LABWIRED_CORTEX_M_JIT=0 forces the interpreter.
+    let jit_on = std::env::var("LABWIRED_CORTEX_M_JIT").as_deref() != Ok("0");
+    machine.config.cortex_m_jit_enabled = jit_on;
+    machine.bus.config.cortex_m_jit_enabled = jit_on;
 
     // Chunk so an absent `--max-steps` (limit == u64::MAX) still bounds the fuel
     // handed to any single `advance` call, mirroring the RISC-V batched loop.

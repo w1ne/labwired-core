@@ -83,6 +83,8 @@
 boards:
   # ── Fresh: re-verified on live silicon 2026-06-17 ────────────────────────────
   - id: nrf52840
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/nrf52840.md
     chip: configs/chips/nrf52840.yaml
     tier: silicon-verified
@@ -390,7 +392,7 @@ boards:
     # Ran: labwired-core --lib, nrf52_timer_walk_differential, stm32f401/stm32l476
     # walk differentials, bus_visibility and logic_wire_channels_cross_family under
     # (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
-    drift_ack: 2026-08-22
+    drift_ack: 2026-09-15
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
     # silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
@@ -407,7 +409,7 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: 049d6cb825df757acc4112bcb0bff33eb5d08261c3b2c87293947c96c60d00f4
+    drift_ack_digest: d81a7fcef3bde407ff2dcbe6d3089b27294990b2ab391c2cd208282d0d42517d
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -415,6 +417,8 @@ boards:
       - configs/chips/nrf52840.yaml
 
   - id: seeed-xiao-nrf52840-sense
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
+    # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/seeed-xiao-nrf52840-sense.md
     chip: configs/chips/nrf52840.yaml
     tier: silicon-verified
@@ -655,7 +659,7 @@ boards:
     # Ran: labwired-core --lib, nrf52_timer_walk_differential, stm32f401/stm32l476
     # walk differentials, bus_visibility and logic_wire_channels_cross_family under
     # (none) / event-scheduler / jit,event-scheduler. This is an ack, not a capture.
-    drift_ack: 2026-08-22
+    drift_ack: 2026-09-15
     # 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
     # (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
     # silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
@@ -672,7 +676,7 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: 049d6cb825df757acc4112bcb0bff33eb5d08261c3b2c87293947c96c60d00f4
+    drift_ack_digest: d81a7fcef3bde407ff2dcbe6d3089b27294990b2ab391c2cd208282d0d42517d
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -680,6 +684,7 @@ boards:
       - configs/chips/nrf52840.yaml
 
   - id: stm32h563
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/stm32h563.md
     chip: configs/chips/stm32h563.yaml
     tier: silicon-verified
@@ -1103,7 +1108,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 26bf0a6fa12b2b6135d2a476ae28bafa3ec408c996711463def3d389dbb1d46d
+    drift_ack_digest: 6ceeb09ce732122897830c50d45138f8d3e40ff9fdc9d9171d99c0588dafbd71
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1955,6 +1960,7 @@ boards:
     # reset value would go red there, not hide here.
 
   - id: nucleo-l476rg
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/nucleo-l476rg.md
     chip: configs/chips/stm32l476.yaml
     tier: silicon-verified
@@ -2360,7 +2366,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: da7466bd4879faf54c2fc9692a5ce5a3210af6582cfd0e66d7856000c03ce046
+    drift_ack_digest: a6ca07252e1fdbacf918ded78eced6c36c310f63cdf397c6ba68e8278aee2f15
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2461,6 +2467,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: nucleo-l073rz
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/nucleo-l073rz.md
     chip: configs/chips/stm32l073.yaml
     tier: silicon-verified
@@ -2825,7 +2832,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 7bba8cfadb3623d50d832e771944d54534fa4ff7fbab3347ce7aad7b1d623053
+    drift_ack_digest: 181f8e640cf34580b6be3aa3cb0674487d63cfa785b238dc2a8f7fe30de757bf
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2894,6 +2901,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: stm32f103
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/stm32f103.md
     chip: configs/chips/stm32f103.yaml
     tier: silicon-verified
@@ -3312,7 +3320,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 50406ade741170409fa10c42f35fe6a373ff6e7d8b43f6de9c1fac67957137c4
+    drift_ack_digest: 76addaa54d6211b36ed44d7967395e3b51d4f1ddebad5d33852b6db06409171e
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3415,6 +3423,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: stm32f407
+    # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/stm32f407.md
     chip: configs/chips/stm32f407.yaml
     tier: silicon-smoke
@@ -3797,7 +3806,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 9dc3dfe2ef5840fcff025f0233b8e4323fe18da699d00ae2135ddce243e031b3
+    drift_ack_digest: 889b550fba4291964e89c674e7101ece258714477ac3fa07f08c299065ed2691
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3869,6 +3878,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: esp32s3
+    # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml
     tier: silicon-verified
@@ -4292,7 +4302,7 @@ boards:
     #
     # No silicon-anchored reset value is reachable from this: it changes when a level
     # is recomputed, never what the registers hold. This is an ack, not a capture.
-    drift_ack: 2026-08-23
+    drift_ack: 2026-09-15
     # 2026-08-10: GP-SPI2 CPU W-buffer transactions now deliver MOSI bytes to
     # attached devices and return their MISO bytes; display D/C observes the S3
     # GPIO output; GPIO labels resolve against the S3 register bank. This is an
@@ -4389,7 +4399,7 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: e7683c76712ceff4cee2567725602441e4dc5fccf65122ffadd22b4fb8f8def7
+    drift_ack_digest: 7501e03bc97d044a3a1039783958597969391a8f366beba905e7ae49df0d3970
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs

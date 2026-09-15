@@ -659,6 +659,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
             base_address: 0x4000_5400,
             size: Some("1KB".to_string()),
             irq: Some(31),
+            irq_controller: None,
             clock: None,
             config: HashMap::new(),
         }],
@@ -666,6 +667,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        include: None,
     };
 
     let mut config = HashMap::new();
@@ -1396,6 +1398,7 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
                 base_address: 0x6001_3000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
@@ -1405,6 +1408,7 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
                 base_address: 0x6000_4000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
@@ -1413,6 +1417,7 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        include: None,
     };
 
     let mut config = HashMap::new();
@@ -1550,6 +1555,7 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
                 base_address: 0x6001_3000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
@@ -1559,6 +1565,7 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
                 base_address: 0x6000_4000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
@@ -1567,6 +1574,7 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        include: None,
     };
 
     let mut config = HashMap::new();
@@ -2926,6 +2934,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
                 base_address: 0x4000_5400,
                 size: Some("1KB".to_string()),
                 irq: Some(31),
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             },
@@ -2935,6 +2944,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
                 base_address: 0x4000_3800,
                 size: Some("1KB".to_string()),
                 irq: Some(37),
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             },
@@ -2943,6 +2953,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
         analog_pins: Default::default(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
+        include: None,
     }
 }
 

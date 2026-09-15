@@ -122,7 +122,13 @@ const FEATURE: &str = "event-scheduler";
 /// requires the commit to say which of the two futures the new site serves: a
 /// step in the migration that ends the feature, or another permanent fork the
 /// migration will have to unpick later.
-const MAX_MODEL_SITES: usize = 179;
+///
+/// 179 → 180: Cortex-M JIT `run_jit_loop` mirrors the interpreter's in-place
+/// `current_cycle` bump after a compiled block retires (`publish_cycle` is
+/// cfg-gated on `Bus`). Same permanent fork the interpreter `step_batch` already
+/// carries; not a new kind of split. The `live_step` value itself is computed
+/// without a cfg so this is one site, not two.
+const MAX_MODEL_SITES: usize = 180;
 
 /// The rest of `crates/**` — test harnesses and downstream crates.
 ///
@@ -138,7 +144,12 @@ const MAX_MODEL_SITES: usize = 179;
 /// `scheduler_lane_coverage` already govern — so those move for lane reasons,
 /// not model reasons. Counting them together would let a lane change mask an
 /// engine regression, or vice versa.
-const MAX_HARNESS_SITES: usize = 76;
+///
+/// 76 → 77: `cortex_m_jit_nrf_differential` is crate-gated
+/// `#![cfg(all(feature = "jit", feature = "event-scheduler"))]`. It is in
+/// `pr-scheduler-observable` (and the core-integrity jit+scheduler backstop),
+/// so the vacuous-target hole is closed; this is the matching harness count.
+const MAX_HARNESS_SITES: usize = 77;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable

@@ -246,7 +246,113 @@ impl ClockGates {
     }
 }
 
+/// Parsed `irq` YAML: a line number plus optional `controller@line` prefix.
+#[derive(Default)]
+struct IrqTarget {
+    line: Option<u32>,
+    controller: Option<String>,
+}
+
+fn irq_line_from_number(n: &serde_yaml::Number) -> Result<u32, String> {
+    if let Some(u) = n.as_u64() {
+        u32::try_from(u).map_err(|_| format!("irq: line {u} is out of range"))
+    } else if let Some(i) = n.as_i64() {
+        u32::try_from(i).map_err(|_| format!("irq: {i} is not a valid line number"))
+    } else {
+        Err(format!("irq: expected an integer line number, got {n}"))
+    }
+}
+
+fn parse_irq_string(s: &str) -> Result<IrqTarget, String> {
+    let s = s.trim();
+    if let Some((controller, line)) = s.split_once('@') {
+        if controller.is_empty() || line.is_empty() || !line.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(format!("irq: expected controller@<line>, got `{s}`"));
+        }
+        let line: u32 = line
+            .parse()
+            .map_err(|_| format!("irq: line `{line}` is out of range"))?;
+        Ok(IrqTarget {
+            line: Some(line),
+            controller: Some(controller.to_string()),
+        })
+    } else if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
+        let line: u32 = s
+            .parse()
+            .map_err(|_| format!("irq: line `{s}` is out of range"))?;
+        Ok(IrqTarget {
+            line: Some(line),
+            controller: None,
+        })
+    } else {
+        Err(format!(
+            "irq: expected a line number or controller@line, got `{s}`"
+        ))
+    }
+}
+
+fn parse_irq_value(value: serde_yaml::Value) -> Result<IrqTarget, String> {
+    match value {
+        serde_yaml::Value::Null => Ok(IrqTarget::default()),
+        serde_yaml::Value::Number(n) => Ok(IrqTarget {
+            line: Some(irq_line_from_number(&n)?),
+            controller: None,
+        }),
+        serde_yaml::Value::String(s) => parse_irq_string(&s),
+        other => Err(format!(
+            "irq: expected a line number or controller@line, got {other:?}"
+        )),
+    }
+}
+
+fn deserialize_irq_target<'de, D>(deserializer: D) -> Result<IrqTarget, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_yaml::Value::deserialize(deserializer)?;
+    parse_irq_value(value).map_err(serde::de::Error::custom)
+}
+
+#[derive(Deserialize)]
+struct PeripheralConfigWire {
+    id: String,
+    r#type: String,
+    #[serde(deserialize_with = "deserialize_u64_lax")]
+    base_address: u64,
+    #[serde(default)]
+    size: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_irq_target")]
+    irq: IrqTarget,
+    #[serde(default)]
+    irq_controller: Option<String>,
+    #[serde(default)]
+    clock: Option<ClockGates>,
+    #[serde(default)]
+    config: HashMap<String, serde_yaml::Value>,
+    #[serde(flatten)]
+    extra: HashMap<String, serde_yaml::Value>,
+}
+
+/// One MMIO peripheral instance in a chip descriptor.
+///
+/// `irq` is a line number. `controller@line` also sets [`Self::irq_controller`]:
+///
+/// ```yaml
+/// irq: 2
+/// irq: nvic@2
+/// ```
+///
+/// Unknown instance keys flatten into [`Self::config`]. Nested `config:` wins
+/// on a colliding key:
+///
+/// ```yaml
+/// - id: uart0
+///   type: nrf52840_uart
+///   base_address: 0x40002000
+///   easyDMA: true
+/// ```
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(from = "PeripheralConfigWire")]
 pub struct PeripheralConfig {
     pub id: String,
     pub r#type: String, // "uart", "timer", "gpio", etc.
@@ -254,16 +360,41 @@ pub struct PeripheralConfig {
     pub base_address: u64,
     #[serde(default)]
     pub size: Option<String>,
+    /// IRQ line. YAML `irq: 2` or `irq: nvic@2`.
     #[serde(default)]
     pub irq: Option<u32>,
+    /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_controller: Option<String>,
     /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
     /// peripheral to answer the CPU. `None` → the peripheral is never gated
     /// (the safe default — existing configs and firmware that never enable a
     /// clock keep working unchanged).
     #[serde(default)]
     pub clock: Option<ClockGates>,
+    /// Instance knobs. Unknown top-level keys flatten here (`easyDMA: true`).
+    /// Nested `config:` wins on a colliding key.
     #[serde(default)]
     pub config: HashMap<String, serde_yaml::Value>,
+}
+
+impl From<PeripheralConfigWire> for PeripheralConfig {
+    fn from(wire: PeripheralConfigWire) -> Self {
+        let mut config = wire.config;
+        for (key, value) in wire.extra {
+            config.entry(key).or_insert(value);
+        }
+        Self {
+            id: wire.id,
+            r#type: wire.r#type,
+            base_address: wire.base_address,
+            size: wire.size,
+            irq: wire.irq.line,
+            irq_controller: wire.irq.controller.or(wire.irq_controller),
+            clock: wire.clock,
+            config,
+        }
+    }
 }
 
 /// One entry in a chip's authoritative pin map: which GPIO peripheral this pin's
@@ -445,6 +576,40 @@ where
     }
 }
 
+/// `include: nrf52-common.yaml` or `include: [a.yaml, b.yaml]`.
+///
+/// [`ChipDescriptor::from_file`] (and path [`ChipDescriptor::resolve`]) expand
+/// this relative to the including file. `serde_yaml::from_str` stores it and
+/// does not load files.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ChipInclude {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl ChipInclude {
+    fn paths(&self) -> &[String] {
+        match self {
+            Self::One(path) => std::slice::from_ref(path),
+            Self::Many(paths) => paths.as_slice(),
+        }
+    }
+}
+
+/// Chip silicon descriptor (`chips/<name>.yaml`).
+///
+/// Path-loaded YAML may `include:` another file (or a list). Paths are relative
+/// to the including file. Built-in `from_str` and bundled chips do **not**
+/// expand includes — there is no filesystem.
+///
+/// ```yaml
+/// include: nrf52-common.yaml
+/// name: nrf52840
+/// ```
+///
+/// or `include: [a.yaml, b.yaml]`. Includes load first; local keys win.
+/// `peripherals` union by `id`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -544,6 +709,10 @@ pub struct ChipDescriptor {
     /// rather than comparing against a made-up midpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input_thresholds: Option<GpioInputThresholds>,
+    /// Path-loaded YAML only (`include: common.yaml` or a list). Built-in
+    /// `from_str` does not expand includes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include: Option<ChipInclude>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1484,6 +1653,168 @@ fn optional_nonempty_interconnect_string<'a>(
     Ok(Some(value))
 }
 
+fn yaml_str_key(key: &str) -> serde_yaml::Value {
+    serde_yaml::Value::String(key.to_string())
+}
+
+/// `from_str` accepts `size: 1024` as a string field; `from_value` does not.
+/// Walk mappings and stringify numeric `size` so include-merge can deserialize
+/// without a YAML text round-trip.
+fn coerce_yaml_size_numbers(value: &mut serde_yaml::Value) {
+    match value {
+        serde_yaml::Value::Mapping(map) => {
+            let size_key = yaml_str_key("size");
+            if let Some(serde_yaml::Value::Number(n)) = map.get(&size_key) {
+                let s = n.to_string();
+                map.insert(size_key, serde_yaml::Value::String(s));
+            }
+            for (_, v) in map.iter_mut() {
+                coerce_yaml_size_numbers(v);
+            }
+        }
+        serde_yaml::Value::Sequence(seq) => {
+            for v in seq {
+                coerce_yaml_size_numbers(v);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn mapping_field<'a>(value: &'a serde_yaml::Value, key: &str) -> Option<&'a str> {
+    value.as_mapping()?.get(yaml_str_key(key))?.as_str()
+}
+
+fn take_includes(doc: &mut serde_yaml::Value) -> Result<Vec<String>> {
+    let Some(map) = doc.as_mapping_mut() else {
+        return Ok(Vec::new());
+    };
+    let Some(value) = map.remove(yaml_str_key("include")) else {
+        return Ok(Vec::new());
+    };
+    if matches!(value, serde_yaml::Value::Null) {
+        return Ok(Vec::new());
+    }
+    let include: ChipInclude =
+        serde_yaml::from_value(value).context("include must be a string or a list of strings")?;
+    Ok(include.paths().to_vec())
+}
+
+fn merge_seq_by(
+    base: serde_yaml::Value,
+    overlay: serde_yaml::Value,
+    field: &str,
+) -> Result<serde_yaml::Value> {
+    let mut items = match base {
+        serde_yaml::Value::Null => Vec::new(),
+        serde_yaml::Value::Sequence(seq) => seq,
+        other => anyhow::bail!("expected a sequence while merging {field}, got {other:?}"),
+    };
+    let overlay = match overlay {
+        serde_yaml::Value::Null => return Ok(serde_yaml::Value::Sequence(items)),
+        serde_yaml::Value::Sequence(seq) => seq,
+        other => anyhow::bail!("expected a sequence while merging {field}, got {other:?}"),
+    };
+    for item in overlay {
+        if let Some(id) = mapping_field(&item, field).map(str::to_string) {
+            if let Some(existing) = items
+                .iter_mut()
+                .find(|entry| mapping_field(entry, field) == Some(id.as_str()))
+            {
+                *existing = item;
+                continue;
+            }
+        }
+        items.push(item);
+    }
+    Ok(serde_yaml::Value::Sequence(items))
+}
+
+fn merge_yaml_maps(base: serde_yaml::Value, overlay: serde_yaml::Value) -> serde_yaml::Value {
+    let mut map = match base {
+        serde_yaml::Value::Mapping(map) => map,
+        _ => serde_yaml::Mapping::new(),
+    };
+    if let serde_yaml::Value::Mapping(overlay) = overlay {
+        for (key, value) in overlay {
+            map.insert(key, value);
+        }
+    }
+    serde_yaml::Value::Mapping(map)
+}
+
+fn merge_chip_yaml(
+    base: serde_yaml::Value,
+    overlay: serde_yaml::Value,
+) -> Result<serde_yaml::Value> {
+    let mut base_map = match base {
+        serde_yaml::Value::Mapping(map) => map,
+        serde_yaml::Value::Null => serde_yaml::Mapping::new(),
+        other => anyhow::bail!("chip YAML must be a mapping, got {other:?}"),
+    };
+    let overlay_map = match overlay {
+        serde_yaml::Value::Mapping(map) => map,
+        serde_yaml::Value::Null => return Ok(serde_yaml::Value::Mapping(base_map)),
+        other => anyhow::bail!("chip YAML must be a mapping, got {other:?}"),
+    };
+    for (key, value) in overlay_map {
+        let key_name = key.as_str().unwrap_or("");
+        let merged = match key_name {
+            "include" => continue,
+            "peripherals" => merge_seq_by(
+                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
+                value,
+                "id",
+            )?,
+            "memory_regions" => merge_seq_by(
+                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
+                value,
+                "name",
+            )?,
+            "pins" | "analog_pins" => merge_yaml_maps(
+                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
+                value,
+            ),
+            _ => value,
+        };
+        base_map.insert(key, merged);
+    }
+    Ok(serde_yaml::Value::Mapping(base_map))
+}
+
+fn expand_chip_includes(
+    path: &Path,
+    content: &str,
+    stack: &mut Vec<PathBuf>,
+) -> Result<serde_yaml::Value> {
+    let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if stack.contains(&canon) {
+        anyhow::bail!("cycle detected in chip YAML include of {}", path.display());
+    }
+    stack.push(canon);
+    let result = (|| {
+        let mut doc: serde_yaml::Value =
+            serde_yaml::from_str(content).context("Failed to parse Chip Descriptor YAML")?;
+        let includes = take_includes(&mut doc)?;
+        let dir = path.parent().unwrap_or_else(|| Path::new("."));
+        let mut merged = serde_yaml::Value::Mapping(serde_yaml::Mapping::new());
+        for rel in includes {
+            let inc_path = dir.join(&rel);
+            if !inc_path.is_file() {
+                anyhow::bail!("chip YAML include not found: {}", inc_path.display());
+            }
+            let inc_content = std::fs::read_to_string(&inc_path).with_context(|| {
+                format!("Failed to read chip YAML include {}", inc_path.display())
+            })?;
+            let included = expand_chip_includes(&inc_path, &inc_content, stack)?;
+            merged = merge_chip_yaml(merged, included)?;
+        }
+        merge_chip_yaml(merged, doc)
+    })();
+    stack.pop();
+    result
+}
+
 impl ChipDescriptor {
     /// Is this an ESP32-S3 (Xtensa LX7) part?
     ///
@@ -1510,7 +1841,22 @@ impl ChipDescriptor {
                 .with_context(|| format!("Failed to parse Strict IR from {:?}", path))?;
             Ok(Self::from(ir))
         } else {
-            serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor YAML")
+            let parsed: serde_yaml::Value =
+                serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor YAML")?;
+            if !parsed
+                .as_mapping()
+                .is_some_and(|m| m.contains_key(yaml_str_key("include")))
+            {
+                return serde_yaml::from_str(&content)
+                    .context("Failed to parse Chip Descriptor YAML");
+            }
+            let mut stack = Vec::new();
+            let mut value = expand_chip_includes(path, &content, &mut stack)?;
+            // YAML `size: 1024` is a number; `PeripheralConfig.size` is a
+            // string (`"1024"` / `"1KB"`). `from_str` coerces; `from_value`
+            // does not. Coerce in-place so we never round-trip through text.
+            coerce_yaml_size_numbers(&mut value);
+            serde_yaml::from_value(value).context("Failed to parse Chip Descriptor YAML")
         }
     }
 
@@ -3253,6 +3599,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                         base_address: ir_p_base,
                         size: None,
                         irq: None,
+                        irq_controller: None,
                         clock: None,
                         config: std::collections::HashMap::from([(
                             "internal_ir_peripheral".to_string(),
@@ -3265,6 +3612,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         }
     }
 }

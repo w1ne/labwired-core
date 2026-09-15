@@ -857,6 +857,7 @@ pub(crate) fn register_esp32_peripherals(bus: &mut SystemBus) {
             base_address: base,
             size: None,
             irq,
+            irq_controller: None,
             clock: None,
             config,
         };

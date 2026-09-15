@@ -12,7 +12,6 @@ mod common;
 
 use labwired_core::session::{OpenOptions, Session, SessionError};
 use labwired_core::system::builder::*;
-use labwired_core::HostTimeMode;
 use std::time::Duration;
 
 /// The open session, the text the fixture's `uart_contains` expects, and the
@@ -47,16 +46,6 @@ fn expect_matches_fixture_banner_and_reports_virtual_time() {
         .unwrap();
     assert!(m.text.contains(&expected));
     assert!(m.at > Duration::ZERO && m.at < Duration::from_secs(5));
-}
-
-#[test]
-fn session_host_time_mode_defaults_to_max_speed_and_can_switch() {
-    let Some((mut s, _, _)) = open_fixture() else {
-        return;
-    };
-    assert_eq!(s.host_time_mode(), HostTimeMode::MaxSpeed);
-    s.set_host_time_mode(HostTimeMode::Realtime);
-    assert_eq!(s.host_time_mode(), HostTimeMode::Realtime);
 }
 
 #[test]

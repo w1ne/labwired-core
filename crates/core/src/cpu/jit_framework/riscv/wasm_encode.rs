@@ -76,6 +76,7 @@ pub mod op {
     // ── locals / constants ─────────────────────────────────────────────
     pub const LOCAL_GET: u8 = 0x20;
     pub const LOCAL_SET: u8 = 0x21;
+    pub const LOCAL_TEE: u8 = 0x22;
     pub const I32_CONST: u8 = 0x41;
     pub const I64_CONST: u8 = 0x42;
     pub const DROP: u8 = 0x1a;
@@ -103,6 +104,9 @@ pub mod op {
     pub const I32_NE: u8 = 0x47;
     pub const I32_LT_S: u8 = 0x48;
     pub const I32_LT_U: u8 = 0x49;
+    pub const I32_GT_S: u8 = 0x4a;
+    pub const I32_GT_U: u8 = 0x4b;
+    pub const I32_LE_S: u8 = 0x4c;
     pub const I32_LE_U: u8 = 0x4d;
     pub const I32_GE_S: u8 = 0x4e;
     pub const I32_GE_U: u8 = 0x4f;
@@ -119,6 +123,13 @@ pub mod op {
     pub const I32_SHL: u8 = 0x74;
     pub const I32_SHR_S: u8 = 0x75;
     pub const I32_SHR_U: u8 = 0x76;
+    pub const I32_ROTL: u8 = 0x77;
+    pub const I32_ROTR: u8 = 0x78;
+    pub const I32_CLZ: u8 = 0x67;
+    /// `select` (ternary): `c ? a : b` with `[a, b, c]` on the stack.
+    pub const SELECT: u8 = 0x1b;
+    /// `call` — followed by a uleb function index.
+    pub const CALL: u8 = 0x10;
 
     // ── i64 (used only by the MULH family) ─────────────────────────────
     pub const I64_MUL: u8 = 0x7e;
@@ -212,6 +223,107 @@ pub fn build_module(local_i32_count: u32, mem_min_pages: u32, body: &[u8]) -> Ve
 
         let mut c = Vec::new();
         enc::uleb(&mut c, 1); // one code entry
+        enc::uleb(&mut c, func.len() as u64);
+        c.extend_from_slice(&func);
+        section(&mut m, 10, &c);
+    }
+
+    m
+}
+
+/// Cortex-M mem blocks: 1-page register memory plus host RAM load/store.
+///
+/// ```text
+/// (import "regs" "mem" (memory 1))
+/// (import "ram" "load" (func (param i32 i32 i32) (result i32)))
+/// (import "ram" "store" (func (param i32 i32 i32)))
+/// (func (export "run") (result i32) ...)
+/// ```
+///
+/// `run` is function index 2 (`call 0` = load, `call 1` = store). The
+/// imported RAM helpers take `(offset, width, signed_or_value)` so the
+/// wasm body never maps guest SRAM into linear memory.
+pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
+    let mut m = Vec::with_capacity(96 + body.len());
+    m.extend_from_slice(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+
+    {
+        let mut c = Vec::new();
+        enc::uleb(&mut c, 3);
+        // type 0: () -> i32
+        c.push(0x60);
+        enc::uleb(&mut c, 0);
+        enc::uleb(&mut c, 1);
+        c.push(op::T_I32);
+        // type 1: (i32, i32, i32) -> i32  load(offset, width, signed)
+        c.push(0x60);
+        enc::uleb(&mut c, 3);
+        c.push(op::T_I32);
+        c.push(op::T_I32);
+        c.push(op::T_I32);
+        enc::uleb(&mut c, 1);
+        c.push(op::T_I32);
+        // type 2: (i32, i32, i32) -> ()  store(offset, val, width)
+        c.push(0x60);
+        enc::uleb(&mut c, 3);
+        c.push(op::T_I32);
+        c.push(op::T_I32);
+        c.push(op::T_I32);
+        enc::uleb(&mut c, 0);
+        section(&mut m, 1, &c);
+    }
+
+    {
+        let mut c = Vec::new();
+        enc::uleb(&mut c, 3);
+        name(&mut c, REGS_IMPORT_MODULE);
+        name(&mut c, REGS_IMPORT_FIELD);
+        c.push(0x02);
+        c.push(0x00);
+        enc::uleb(&mut c, 1);
+
+        name(&mut c, "ram");
+        name(&mut c, "load");
+        c.push(0x00);
+        enc::uleb(&mut c, 1);
+
+        name(&mut c, "ram");
+        name(&mut c, "store");
+        c.push(0x00);
+        enc::uleb(&mut c, 2);
+        section(&mut m, 2, &c);
+    }
+
+    {
+        let mut c = Vec::new();
+        enc::uleb(&mut c, 1);
+        enc::uleb(&mut c, 0);
+        section(&mut m, 3, &c);
+    }
+
+    {
+        let mut c = Vec::new();
+        enc::uleb(&mut c, 1);
+        name(&mut c, RUN_EXPORT);
+        c.push(0x00);
+        enc::uleb(&mut c, 2);
+        section(&mut m, 7, &c);
+    }
+
+    {
+        let mut func = Vec::with_capacity(body.len() + 8);
+        if local_i32_count == 0 {
+            enc::uleb(&mut func, 0);
+        } else {
+            enc::uleb(&mut func, 1);
+            enc::uleb(&mut func, local_i32_count as u64);
+            func.push(op::T_I32);
+        }
+        func.extend_from_slice(body);
+        func.push(op::END);
+
+        let mut c = Vec::new();
+        enc::uleb(&mut c, 1);
         enc::uleb(&mut c, func.len() as u64);
         c.extend_from_slice(&func);
         section(&mut m, 10, &c);

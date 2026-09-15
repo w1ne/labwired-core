@@ -422,6 +422,7 @@ pub mod integration_tests {
                     base_address: 0x4000_C000,
                     size: None,
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -431,6 +432,7 @@ pub mod integration_tests {
                     base_address: 0x5000_0000,
                     size: None,
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -439,6 +441,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -614,6 +617,7 @@ pub mod integration_tests {
                     base_address: 0xE000_E010,
                     size: None,
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -623,6 +627,7 @@ pub mod integration_tests {
                     base_address: 0x4001_0800,
                     size: None,
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     // A bare `type: gpio` must name its layout explicitly — the
                     // factory no longer silently defaults to STM32F1 (see
@@ -638,6 +643,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -703,6 +709,7 @@ pub mod integration_tests {
                 base_address: 0x4000_C000,
                 size: Some("1KB".to_string()),
                 irq: Some(37),
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             }],
@@ -710,6 +717,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -770,6 +778,7 @@ pub mod integration_tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: gpio_config,
             }],
@@ -777,6 +786,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -843,6 +853,7 @@ pub mod integration_tests {
                 base_address: 0x4000_4800,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: uart_config,
             }],
@@ -850,6 +861,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -904,6 +916,7 @@ pub mod integration_tests {
                 base_address: 0x4000_0000,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config,
             }
@@ -992,6 +1005,7 @@ pub mod integration_tests {
                     base_address: 0x4000_C000,
                     size: Some("1KB".to_string()),
                     irq: Some(37),
+                    irq_controller: None,
                     config: HashMap::new(),
                     clock: None,
                 },
@@ -1001,6 +1015,7 @@ pub mod integration_tests {
                     base_address: 0x4000_D000,
                     size: Some("1KB".to_string()),
                     irq: Some(38),
+                    irq_controller: None,
                     config: HashMap::new(),
                     clock: None,
                 },
@@ -1009,6 +1024,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
             reset_vector_offset: 0,
             atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         };
@@ -1072,6 +1088,7 @@ pub mod integration_tests {
                 base_address: 0x4402_0C00,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: rcc_config,
             }],
@@ -1079,6 +1096,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -1142,6 +1160,7 @@ pub mod integration_tests {
                 base_address: 0x4002_3800,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: rcc_config,
             }],
@@ -1149,6 +1168,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -1212,6 +1232,7 @@ pub mod integration_tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: gpio_config,
             }],
@@ -1219,6 +1240,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2444,6 +2466,7 @@ pub mod integration_tests {
                 base_address: 0x6001_F000,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             }],
@@ -2451,6 +2474,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2541,6 +2565,7 @@ pub mod integration_tests {
                 base_address: 0x6000_4000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             }],
@@ -2548,6 +2573,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2612,6 +2638,7 @@ pub mod integration_tests {
                     base_address: 0x6000_4000,
                     size: Some("4KB".to_string()),
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -2621,6 +2648,7 @@ pub mod integration_tests {
                     base_address: 0x6002_4000,
                     size: Some("4KB".to_string()),
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -2629,6 +2657,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = SystemManifest {
@@ -2827,6 +2856,7 @@ pub mod integration_tests {
                     base_address: 0x6001_3000,
                     size: Some("4KB".to_string()),
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -2836,6 +2866,7 @@ pub mod integration_tests {
                     base_address: 0x6000_4000,
                     size: Some("4KB".to_string()),
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 },
@@ -2844,6 +2875,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         };
 
         let mut oled_config = HashMap::new();
@@ -2956,6 +2988,7 @@ pub mod integration_tests {
                 base_address: 0x4000_5400,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: i2c_cfg,
             }];
@@ -2966,6 +2999,7 @@ pub mod integration_tests {
                     base_address: 0x6000_4000,
                     size: Some("4KB".to_string()),
                     irq: None,
+                    irq_controller: None,
                     clock: None,
                     config: HashMap::new(),
                 });
@@ -2992,6 +3026,7 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                include: None,
             };
             let mut oled_config = HashMap::new();
             oled_config.insert(

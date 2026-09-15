@@ -6,7 +6,7 @@
 
 use labwired_config::{
     ChipDescriptor, CosimAdapter, DeviceDescriptor, MemoryValueDetails, MotorModelConfig,
-    SystemManifest,
+    PeripheralConfig, SystemManifest,
 };
 
 #[test]
@@ -55,6 +55,87 @@ peripherals:
     assert_eq!(desc.peripherals[0].id, "uart1");
     assert_eq!(desc.peripherals[0].size, Some("1KB".to_string()));
     assert_eq!(desc.peripherals[0].irq, Some(37));
+}
+
+#[test]
+fn irq_accepts_bare_number() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: uart
+base_address: 0x40002000
+irq: 2
+"#,
+    )
+    .unwrap();
+    assert_eq!(p.irq, Some(2));
+    assert_eq!(p.irq_controller.as_deref(), None);
+}
+
+#[test]
+fn irq_accepts_controller_at_line() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: uart
+base_address: 0x40002000
+irq: nvic@2
+"#,
+    )
+    .unwrap();
+    assert_eq!(p.irq, Some(2));
+    assert_eq!(p.irq_controller.as_deref(), Some("nvic"));
+}
+
+#[test]
+fn irq_rejects_malformed_target() {
+    let err = serde_yaml::from_str::<PeripheralConfig>(
+        r#"
+id: uart0
+type: uart
+base_address: 0x40002000
+irq: nvic@
+"#,
+    )
+    .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("irq"), "{msg}");
+}
+
+#[test]
+fn flattened_keys_land_in_config() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: nrf52840_uart
+base_address: 0x40002000
+easyDMA: true
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        p.config.get("easyDMA").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+}
+
+#[test]
+fn nested_config_wins_over_flattened_key() {
+    let p: PeripheralConfig = serde_yaml::from_str(
+        r#"
+id: uart0
+type: uart
+base_address: 0x4000
+easyDMA: true
+config:
+  easyDMA: false
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        p.config.get("easyDMA").and_then(|v| v.as_bool()),
+        Some(false)
+    );
 }
 
 #[test]
@@ -709,4 +790,167 @@ fn memory_value_details_public_fields_remain_struct_literal_constructible() {
         !serialized.contains("node:"),
         "ordinary node-less details should stay sparse: {serialized}"
     );
+}
+
+#[test]
+fn chip_yaml_include_merges_peripherals_and_fills_scalar_gaps() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("common.yaml"),
+        r#"
+name: nrf52-common
+arch: arm
+cpu_hz: 64000000
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals:
+  - id: uart0
+    type: uart
+    base_address: 0x40002000
+    irq: 1
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("child.yaml"),
+        r#"
+include: common.yaml
+name: nrf52840
+peripherals:
+  - id: uart0
+    type: uart
+    base_address: 0x40002000
+    irq: 2
+    size: 4096
+  - id: uart1
+    type: uart
+    base_address: 0x40028000
+    irq: 3
+"#,
+    )
+    .unwrap();
+
+    let chip = ChipDescriptor::from_file(dir.path().join("child.yaml")).unwrap();
+    assert_eq!(chip.name, "nrf52840");
+    assert_eq!(chip.cpu_hz, 64_000_000);
+    assert_eq!(chip.arch, labwired_config::Arch::Arm);
+    assert_eq!(chip.peripherals.len(), 2);
+    let uart0 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart0")
+        .expect("uart0 from include, irq overridden locally");
+    assert_eq!(uart0.irq, Some(2));
+    assert_eq!(
+        uart0.size.as_deref(),
+        Some("4096"),
+        "numeric YAML size must parse without a text round-trip"
+    );
+    let uart1 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart1")
+        .expect("uart1 added by child");
+    assert_eq!(uart1.irq, Some(3));
+}
+
+#[test]
+fn chip_yaml_missing_include_errors_with_the_path() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("child.yaml"),
+        r#"
+include: does-not-exist.yaml
+name: nrf52840
+arch: arm
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+
+    let err = ChipDescriptor::from_file(dir.path().join("child.yaml")).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("does-not-exist.yaml"),
+        "missing include must name the path; got {msg}"
+    );
+}
+
+#[test]
+fn chip_yaml_include_cycle_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("a.yaml"),
+        r#"
+include: b.yaml
+name: chip-a
+arch: arm
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("b.yaml"),
+        r#"
+include: a.yaml
+name: chip-b
+arch: arm
+flash:
+  base: 0x0
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+
+    let err = ChipDescriptor::from_file(dir.path().join("a.yaml")).unwrap_err();
+    let msg = format!("{err:#}").to_ascii_lowercase();
+    assert!(msg.contains("cycle"), "cycle must be named; got {msg}");
+}
+
+#[test]
+fn wiring_sugar_child_fixture_loads_via_from_file() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/wiring-sugar-child.yaml");
+    let chip = ChipDescriptor::from_file(&path).unwrap();
+    assert_eq!(chip.name, "nrf52840");
+    assert_eq!(chip.cpu_hz, 64_000_000);
+    assert_eq!(chip.arch, labwired_config::Arch::Arm);
+    assert_eq!(chip.peripherals.len(), 2);
+    let uart0 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart0")
+        .expect("uart0 from include, irq overridden locally");
+    assert_eq!(uart0.irq, Some(2));
+    assert_eq!(uart0.irq_controller.as_deref(), Some("nvic"));
+    assert_eq!(
+        uart0.config.get("easyDMA").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    let uart1 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart1")
+        .expect("uart1 added by child");
+    assert_eq!(uart1.irq, Some(3));
 }

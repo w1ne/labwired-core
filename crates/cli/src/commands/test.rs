@@ -66,6 +66,12 @@ use tracing::warn;
 fn apply_run_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Machine<C>) {
     let opted_out = std::env::var("LABWIRED_IDLE_FAST_FORWARD").as_deref() == Ok("0");
     machine.config.idle_fast_forward_enabled = !opted_out;
+    // Cortex-M JIT is opt-in for `labwired test` (same as RISC-V): the
+    // interpreter stays the default oracle. Set LABWIRED_CORTEX_M_JIT=1 to
+    // retire hot Thumb blocks; WFI / MMIO / IT still fall back.
+    let arm_jit = std::env::var("LABWIRED_CORTEX_M_JIT").as_deref() == Ok("1");
+    machine.config.cortex_m_jit_enabled = arm_jit;
+    machine.bus.config.cortex_m_jit_enabled = arm_jit;
     // Only say so when the setting can actually do something, so the line is
     // never a claim the build cannot honour.
     if cfg!(feature = "event-scheduler") {

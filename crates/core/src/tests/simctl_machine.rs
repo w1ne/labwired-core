@@ -220,6 +220,7 @@ mod from_declaration {
                 base_address: SIMCTL_BASE,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             }],
@@ -227,6 +228,7 @@ mod from_declaration {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            include: None,
         }
     }
 
