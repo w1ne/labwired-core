@@ -977,6 +977,17 @@ impl crate::Peripheral for Timer {
         Some(self)
     }
 
+    /// The timer's line IS a level — `irq_level_held()` is the same
+    /// conjunction the walk re-pends on every tick. Publishing it lets the
+    /// bus drop the pend again when firmware clears the flag inside the
+    /// handler, which is what silicon does and what the walk alone cannot
+    /// express (it only ever sets). Scheduler mode syncs first so a
+    /// post-MMIO-write reconcile reads the flag the write just cleared.
+    fn irq_line_level(&self) -> Option<bool> {
+        self.sync_from_clock();
+        Some(self.irq_level_held())
+    }
+
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
