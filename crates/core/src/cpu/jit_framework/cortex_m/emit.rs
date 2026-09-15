@@ -1162,24 +1162,96 @@ impl Body {
         self.buf.push(op::END);
     }
 
+    fn emit_push_ea_in_window(&mut self, ram_base: u32, hi: u32) {
+        // scratch = scratch - 4; result &= (scratch in [ram_base, hi])
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(4);
+        self.buf.push(op::I32_SUB);
+        self.local_tee(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_GE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(hi as i32);
+        self.buf.push(op::I32_LE_U);
+        self.buf.push(op::I32_AND);
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::I32_AND);
+        self.local_set(RESULT_LOCAL);
+    }
+
+    fn emit_store_sp_off(&mut self, pc: u32, off: i32, rs2: u8) {
+        let (ram_base, _) = self.window.expect("emit_store_sp_off without window");
+        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
+        self.read(13, pc);
+        self.i32_const(off);
+        self.buf.push(op::I32_ADD);
+        self.i32_const(delta as i32);
+        self.buf.push(op::I32_ADD);
+        self.read(rs2, pc);
+        self.buf.push(op::I32_STORE);
+        enc::uleb(&mut self.buf, 0);
+        enc::uleb(&mut self.buf, 0);
+        self.store_const_at(RES_FLAG_SLOT, 1);
+        self.has_store = true;
+    }
+
     fn emit_push(&mut self, pc: u32, registers: u8, m: bool) {
-        // Match interpreter: LR first (if M), then R7..R0.
+        // Interpreter decrements a local SP and commits r13 only after every
+        // store. Range-check the whole list first: any out-of-window EA
+        // side-exits with SP unchanged and no stores, so the interpreter
+        // re-executes the PUSH from the original SP.
+        let mut count = u32::from(m);
+        for i in 0..=7 {
+            if (registers & (1 << i)) != 0 {
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return;
+        }
+
+        let (ram_base, ram_len) = self.window.expect("emit_push without window");
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+
+        self.i32_const(1);
+        self.local_set(RESULT_LOCAL);
+        self.read(13, pc);
+        self.local_set(SCRATCH_LOCAL);
         if m {
-            self.read(13, pc);
-            self.i32_const(4);
-            self.buf.push(op::I32_SUB);
-            self.write(13);
-            self.emit_store_at_ea(pc, 14);
+            self.emit_push_ea_in_window(ram_base, hi);
         }
         for i in (0..=7).rev() {
             if (registers & (1 << i)) != 0 {
-                self.read(13, pc);
-                self.i32_const(4);
-                self.buf.push(op::I32_SUB);
-                self.write(13);
-                self.emit_store_at_ea(pc, i);
+                self.emit_push_ea_in_window(ram_base, hi);
             }
         }
+
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        let writes_before = self.writes;
+
+        let mut off: i32 = 0;
+        if m {
+            off -= 4;
+            self.emit_store_sp_off(pc, off, 14);
+        }
+        for i in (0..=7).rev() {
+            if (registers & (1 << i)) != 0 {
+                off -= 4;
+                self.emit_store_sp_off(pc, off, i);
+            }
+        }
+        self.read(13, pc);
+        self.i32_const((4 * count) as i32);
+        self.buf.push(op::I32_SUB);
+        self.write(13);
+
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
     }
 
     fn emit_pop(&mut self, pc: u32, registers: u8) {
@@ -1192,19 +1264,6 @@ impl Body {
                 self.write(13);
             }
         }
-    }
-
-    fn emit_store_at_ea(&mut self, pc: u32, rs2: u8) {
-        // SP is already the address (in local 13). Range-check and store.
-        self.emit_mem(
-            pc,
-            13,
-            0,
-            MemAccess::Store {
-                rs2,
-                opcode: op::I32_STORE,
-            },
-        );
     }
 
     fn emit_load_at_sp(&mut self, pc: u32, rd: u8) {

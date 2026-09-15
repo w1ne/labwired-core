@@ -3,6 +3,14 @@
 // SPDX-License-Identifier: MIT
 
 //! [`JitHost`] adapter and register marshalling for `Machine<CortexM>`.
+//!
+//! ## Flash invalidation
+//!
+//! * **There is no flash-dirty flag on the bus.** Nothing tracks flash
+//!   writes today, so [`take_flash_dirty`](JitHost::take_flash_dirty) is
+//!   conservatively `false`. That is correct for any run that does not
+//!   self-modify flash (the overwhelming common case, and every current
+//!   test); when flash self-write support lands it wires in here.
 
 use crate::cpu::CortexM;
 use crate::Machine;
@@ -137,6 +145,8 @@ impl JitHost for CortexMJitHost<'_> {
     }
 
     fn take_flash_dirty(&mut self) -> bool {
+        // No flash-write tracking on the bus (see module docs). Correct for
+        // any run that does not self-modify flash.
         false
     }
 }

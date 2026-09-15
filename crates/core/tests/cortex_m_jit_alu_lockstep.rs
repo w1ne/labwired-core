@@ -401,3 +401,92 @@ fn ldr_imm32_to_pc_stays_interpreter() {
         "LDR.W PC must match interpreter (interworking branch, not write(15))"
     );
 }
+
+fn push_regs(registers: u8, m: bool) -> u16 {
+    0xB400 | ((u16::from(m)) << 8) | u16::from(registers)
+}
+
+#[test]
+fn push_out_of_window_matches_interpreter() {
+    // 16 ALU nops + PUSH {r0-r7} compiles as one block (PUSH is mem-emittable).
+    // SP sits at ram.base+16 so the first PUSH slots would be in-window if
+    // stored incrementally, but the last of the 8 words is below RAM.
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00); // nop
+    }
+    h(&mut prog, push_regs(0xFF, false)); // PUSH {r0-r7}
+
+    let mut interp = build_machine(&prog);
+    let mut jit = build_machine(&prog);
+    let ram_base = jit.bus.ram.base_addr as u32;
+    let orig_sp = ram_base + 16;
+    let seed = |m: &mut Machine<CortexM>, sp: u32| {
+        m.cpu.sp = sp;
+        m.cpu.r0 = 0xA0A0_0000;
+        m.cpu.r1 = 0xA1A1_0001;
+        m.cpu.r2 = 0xA2A2_0002;
+        m.cpu.r3 = 0xA3A3_0003;
+        m.cpu.r4 = 0xA4A4_0004;
+        m.cpu.r5 = 0xA5A5_0005;
+        m.cpu.r6 = 0xA6A6_0006;
+        m.cpu.r7 = 0xA7A7_0007;
+    };
+    seed(&mut interp, orig_sp);
+    seed(&mut jit, orig_sp);
+
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    assert!(
+        engine.stats().compiled > 0,
+        "16 ALU + PUSH must compile: {:?}",
+        engine.stats()
+    );
+
+    let orig_ram = jit.bus.ram.data.clone();
+    let n = engine.step_unit(&mut jit);
+    assert!(
+        engine.stats().block_runs > 0,
+        "PUSH was not in a compiled block: {:?}",
+        engine.stats()
+    );
+    assert!(
+        engine.stats().block_instrs > 0,
+        "compiled block retired nothing: {:?}",
+        engine.stats()
+    );
+    assert_eq!(
+        n, 16,
+        "PUSH must mem-fault after the 16-ALU prefix (retired={n})"
+    );
+
+    for _ in 0..n {
+        interp.step().expect("ALU prefix must not fault");
+    }
+
+    assert_eq!(interp.cpu.pc, 32, "resume PC is the PUSH");
+    assert_eq!(
+        jit.cpu.pc, interp.cpu.pc,
+        "JIT resume PC must match interpreter"
+    );
+    assert_eq!(
+        interp.cpu.sp, orig_sp,
+        "interpreter SP is unchanged; PUSH has not committed r13"
+    );
+    assert_eq!(
+        jit.cpu.sp, orig_sp,
+        "JIT must not leave SP decremented on an out-of-window PUSH side-exit"
+    );
+    assert_eq!(
+        jit.cpu.sp, interp.cpu.sp,
+        "SP must match after PUSH side-exit"
+    );
+    assert_eq!(
+        jit.bus.ram.data, interp.bus.ram.data,
+        "JIT must not store any PUSH slot before the out-of-window side-exit"
+    );
+    assert_eq!(
+        jit.bus.ram.data, orig_ram,
+        "faulting compiled PUSH must leave RAM unchanged"
+    );
+}
