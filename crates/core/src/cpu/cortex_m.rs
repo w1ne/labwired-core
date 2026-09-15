@@ -735,16 +735,18 @@ impl CortexM {
 
         let mut retired: u32 = 0;
         while retired < max_count {
-            // Interpreter ends the batch once a takeable exception is pending
-            // *after* progress, so `Machine::run` can drain scheduler events
-            // before `step_internal` takes it. Taking the IRQ in-loop here
-            // skipped that boundary and desynced Zephyr hello vs JIT-off.
-            if retired > 0 && self.jit_takeable_exception() {
-                break;
-            }
-
             let mut n: u32 = 1;
-            if self.it_state != 0 {
+            if self.jit_takeable_exception() {
+                // Match interpreter `step_batch`: at executed==0 a takeable
+                // pending exception is DISPATCHED by `step_internal`. After
+                // progress, break so `Machine::run` can drain before the
+                // next batch takes it. Never `run_ready` while takeable.
+                if retired > 0 {
+                    break;
+                }
+                self.step(bus, observers, config)?;
+                engine.note_interpreted();
+            } else if self.it_state != 0 {
                 self.step(bus, observers, config)?;
                 engine.note_interpreted();
             } else {

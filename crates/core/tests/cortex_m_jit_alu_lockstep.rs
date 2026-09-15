@@ -18,7 +18,7 @@ use labwired_core::cpu::jit_framework::differential::{compare, DiffPolicy};
 use labwired_core::cpu::jit_framework::frontend::IsaFrontend;
 use labwired_core::cpu::jit_framework::CodeView;
 use labwired_core::cpu::CortexM;
-use labwired_core::Machine;
+use labwired_core::{Bus, Machine};
 
 fn h(bytes: &mut Vec<u8>, half: u16) {
     bytes.extend_from_slice(&half.to_le_bytes());
@@ -26,6 +26,9 @@ fn h(bytes: &mut Vec<u8>, half: u16) {
 
 fn movs(rd: u8, imm: u8) -> u16 {
     0x2000 | ((rd as u16) << 8) | imm as u16
+}
+fn mov_reg(rd: u8, rm: u8) -> u16 {
+    0x4600 | ((rm as u16) << 3) | rd as u16
 }
 fn adds_imm8(rd: u8, imm: u8) -> u16 {
     0x3000 | ((rd as u16) << 8) | imm as u16
@@ -242,4 +245,159 @@ fn ram_load_store_loop_matches_interpreter() {
     let stats = engine.stats();
     assert!(stats.block_runs > 0, "RAM loop never compiled: {stats:?}");
     assert_eq!(interp.cpu.r0, jit.cpu.r0);
+}
+
+fn ldr_imm32(rt: u8, rn: u8, imm12: u16) -> (u16, u16) {
+    (
+        0xF8D0 | (rn as u16 & 0xF),
+        ((rt as u16 & 0xF) << 12) | (imm12 & 0xFFF),
+    )
+}
+
+fn lockstep_until_compiled(
+    prog: &[u8],
+    seed: impl Fn(&mut Machine<CortexM>),
+) -> (Machine<CortexM>, Machine<CortexM>, CortexMJitEngine) {
+    let mut interp = build_machine(prog);
+    let mut jit = build_machine(prog);
+    seed(&mut interp);
+    seed(&mut jit);
+    let mut engine = CortexMJitEngine::new(4);
+    let policy = DiffPolicy {
+        ignore_indices: differential_cycle_ignore_indices(),
+        block_boundary_only: false,
+    };
+    let mut retired = 0u64;
+    for units in 1..=8_000u64 {
+        let n = engine.step_unit(&mut jit);
+        assert!(n > 0, "halt at unit {units}");
+        for _ in 0..n {
+            interp.step().expect("interpreter must not fault");
+        }
+        retired += n as u64;
+        if let Some(d) = compare(
+            units,
+            &snapshot_state(&interp.cpu),
+            &snapshot_state(&jit.cpu),
+            &policy,
+        ) {
+            panic!(
+                "JIT diverged from interpreter at unit {units} (retired {retired}): {d:?}\n\
+                 interp pc={:#x} r0={:#x} r1={:#x} xpsr={:#x}\n\
+                 jit    pc={:#x} r0={:#x} r1={:#x} xpsr={:#x}",
+                interp.cpu.pc,
+                interp.cpu.r0,
+                interp.cpu.r1,
+                interp.cpu.xpsr,
+                jit.cpu.pc,
+                jit.cpu.r0,
+                jit.cpu.r1,
+                jit.cpu.xpsr
+            );
+        }
+        if engine.stats().block_runs > 0 && retired > 32 {
+            break;
+        }
+    }
+    assert!(
+        engine.stats().block_runs > 0,
+        "block never compiled: {:?}",
+        engine.stats()
+    );
+    (interp, jit, engine)
+}
+
+fn pad_alu_then(op: u16, nops: usize) -> Vec<u8> {
+    let mut prog = Vec::new();
+    h(&mut prog, mov_reg(0, 1));
+    for _ in 0..nops {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, op);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+    prog
+}
+
+#[test]
+fn adds_rd_eq_rm_overflow_matches_interpreter() {
+    // Reload r0 from r1 each loop so the compiled block's last flag-setter
+    // is `adds r0, r0, r0` on 0x4000_0000 (signed overflow), not a later 0+0.
+    let prog = pad_alu_then(add_reg(0, 0, 0), 14);
+    let (interp, jit, _engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r1 = 0x4000_0000;
+    });
+    assert_ne!(
+        interp.cpu.xpsr & (1 << 28),
+        0,
+        "test must actually set V (signed overflow)"
+    );
+    assert_eq!(
+        interp.cpu.xpsr & 0xF000_0000,
+        jit.cpu.xpsr & 0xF000_0000,
+        "NZCV after adds r0, r0, r0 overflow"
+    );
+}
+
+#[test]
+fn subs_rd_eq_rm_matches_interpreter() {
+    let prog = pad_alu_then(sub_reg(0, 2, 0), 14);
+    let (interp, jit, _engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r1 = 0x8000_0000;
+        m.cpu.r2 = 0x8000_0000;
+    });
+    assert_eq!(
+        interp.cpu.xpsr & 0xF000_0000,
+        jit.cpu.xpsr & 0xF000_0000,
+        "NZCV after subs r0, r2, r0 with rd==rm"
+    );
+}
+
+#[test]
+fn add_high_from_pc_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, adds_imm8(1, 1));
+    }
+    h(&mut prog, 0x4478); // ADD r0, r15
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let (interp, jit, _engine) = lockstep_until_compiled(&prog, |_| {});
+    assert_eq!(
+        interp.cpu.r0, jit.cpu.r0,
+        "ADD r0, pc must use raw insn PC, not PC+4"
+    );
+}
+
+#[test]
+fn ldr_imm32_to_pc_stays_interpreter() {
+    use labwired_core::cpu::jit_framework::cortex_m::emit::is_mem_emittable;
+    use labwired_core::decoder::arm::Instruction;
+
+    assert!(
+        !is_mem_emittable(&Instruction::LdrImm32 {
+            rt: 15,
+            rn: 0,
+            imm12: 0
+        }),
+        "LDR.W PC must not be mem-emittable (interpreter owns branch_to)"
+    );
+
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, adds_imm8(1, 1));
+    }
+    let (h1, h2) = ldr_imm32(15, 0, 0);
+    h(&mut prog, h1);
+    h(&mut prog, h2);
+
+    let (interp, jit, _engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r0 = 0x2000_0000;
+        m.bus.write_u32(0x2000_0000, 1).expect("thumb target at 0");
+    });
+    assert_eq!(
+        interp.cpu.pc, jit.cpu.pc,
+        "LDR.W PC must match interpreter (interworking branch, not write(15))"
+    );
 }

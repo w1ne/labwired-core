@@ -25,7 +25,8 @@ pub const WIRE_UNSUPPORTED: i32 = 3;
 const XPSR_LOCAL: u32 = 15;
 const SCRATCH_LOCAL: u32 = 16;
 const RESULT_LOCAL: u32 = 17;
-const LOCAL_COUNT: u32 = 18;
+const OP2_LOCAL: u32 = 18;
+const LOCAL_COUNT: u32 = 19;
 
 pub const NEXT_PC_SLOT: i32 = 16 * 4;
 pub const FAULT_PC_SLOT: u32 = 68;
@@ -91,29 +92,31 @@ pub fn is_alu_emittable(inst: &Instruction) -> bool {
 
 pub fn is_mem_emittable(inst: &Instruction) -> bool {
     use Instruction::*;
-    matches!(
-        inst,
-        LdrImm { .. }
-            | StrImm { .. }
-            | LdrbImm { .. }
-            | StrbImm { .. }
-            | LdrhImm { .. }
-            | StrhImm { .. }
-            | LdrReg { .. }
-            | StrReg { .. }
-            | LdrbReg { .. }
-            | StrbReg { .. }
-            | LdrhReg { .. }
-            | StrhReg { .. }
-            | LdrsbReg { .. }
-            | LdrshReg { .. }
-            | LdrImm32 { .. }
-            | StrImm32 { .. }
-            | LdrSp { .. }
-            | StrSp { .. }
-            | Push { .. }
-            | Pop { p: false, .. }
-    )
+    match inst {
+        LdrImm { rt, rn, .. }
+        | StrImm { rt, rn, .. }
+        | LdrbImm { rt, rn, .. }
+        | StrbImm { rt, rn, .. }
+        | LdrhImm { rt, rn, .. }
+        | StrhImm { rt, rn, .. }
+        | LdrReg { rt, rn, .. }
+        | StrReg { rt, rn, .. }
+        | LdrbReg { rt, rn, .. }
+        | StrbReg { rt, rn, .. }
+        | LdrhReg { rt, rn, .. }
+        | StrhReg { rt, rn, .. }
+        | LdrsbReg { rt, rn, .. }
+        | LdrshReg { rt, rn, .. }
+        | LdrImm32 { rt, rn, .. }
+        | StrImm32 { rt, rn, .. }
+            if *rt != 15 && *rn != 15 =>
+        {
+            true
+        }
+        LdrSp { rt, .. } | StrSp { rt, .. } if *rt != 15 => true,
+        Push { .. } | Pop { p: false, .. } => true,
+        _ => false,
+    }
 }
 
 pub fn is_terminator_emittable(inst: &Instruction) -> bool {
@@ -290,6 +293,16 @@ impl Body {
         enc::uleb(&mut self.buf, r as u64);
     }
 
+    /// `read_reg(15)` is the raw insn PC, not PC+4. Used by high-register
+    /// ADD/MOV; Adr, LdrLit, and branch offsets keep `read`'s PC+4.
+    fn read_gpr_or_pc_raw(&mut self, r: u8, insn_pc: u32) {
+        if r == 15 {
+            self.i32_const(insn_pc as i32);
+            return;
+        }
+        self.read(r, insn_pc);
+    }
+
     fn write(&mut self, r: u8) {
         debug_assert!(r < 15);
         self.writes[r as usize] = true;
@@ -312,7 +325,6 @@ impl Body {
         enc::uleb(&mut self.buf, i as u64);
     }
 
-    #[allow(dead_code)]
     fn local_tee(&mut self, i: u32) {
         self.buf.push(op::LOCAL_TEE);
         enc::uleb(&mut self.buf, i as u64);
@@ -395,6 +407,7 @@ impl Body {
             (_, Some(r)) => self.read(r, insn_pc),
             _ => unreachable!(),
         }
+        self.local_tee(OP2_LOCAL);
         self.local_get(SCRATCH_LOCAL);
         self.buf.push(op::I32_ADD);
         self.set_result_from_stack();
@@ -407,13 +420,10 @@ impl Body {
         self.push_result();
         self.local_get(SCRATCH_LOCAL);
         self.buf.push(op::I32_LT_U);
-        // overflow = (~(op1^op2) & (op1^res)) >> 31
+        // overflow = (~(op1^op2) & (op1^res)) >> 31 — use OP2_LOCAL, never
+        // re-read rm (rd==rm would observe the result).
         self.local_get(SCRATCH_LOCAL); // op1
-        match (op2_imm, rm) {
-            (Some(imm), _) => self.i32_const(imm),
-            (_, Some(r)) => self.read(r, insn_pc),
-            _ => unreachable!(),
-        }
+        self.local_get(OP2_LOCAL);
         self.buf.push(op::I32_XOR);
         self.i32_const(-1);
         self.buf.push(op::I32_XOR);
@@ -442,6 +452,7 @@ impl Body {
             (_, Some(r)) => self.read(r, insn_pc),
             _ => unreachable!(),
         }
+        self.local_tee(OP2_LOCAL);
         self.buf.push(op::I32_SUB);
         self.set_result_from_stack();
         if let Some(d) = rd {
@@ -455,11 +466,7 @@ impl Body {
         self.buf.push(op::I32_LE_U);
         // overflow = (op1^op2) & (op1^res) >> 31
         self.local_get(SCRATCH_LOCAL);
-        match (op2_imm, rm) {
-            (Some(imm), _) => self.i32_const(imm),
-            (_, Some(r)) => self.read(r, insn_pc),
-            _ => unreachable!(),
-        }
+        self.local_get(OP2_LOCAL);
         self.buf.push(op::I32_XOR);
         self.local_get(SCRATCH_LOCAL);
         self.push_result();
@@ -635,7 +642,7 @@ impl Body {
                 self.write(rd);
             }
             MovReg { rd, rm } if rd != 15 => {
-                self.read(rm, pc);
+                self.read_gpr_or_pc_raw(rm, pc);
                 self.write(rd);
             }
             AddReg { rd, rn, rm } => self.add_with_flags(Some(rd), pc, rn, None, Some(rm)),
@@ -662,8 +669,8 @@ impl Body {
                 self.write(rd);
             }
             AddRegHigh { rd, rm } if rd != 15 => {
-                self.read(rd, pc);
-                self.read(rm, pc);
+                self.read_gpr_or_pc_raw(rd, pc);
+                self.read_gpr_or_pc_raw(rm, pc);
                 self.buf.push(op::I32_ADD);
                 self.write(rd);
             }

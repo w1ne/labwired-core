@@ -439,3 +439,81 @@ fn nrf52840_zephyr_hello_uart_and_cycles_match_at_tick_512() {
         "arch state after hello"
     );
 }
+
+fn plant_systick_handler(machine: &mut Machine<CortexM>) {
+    const HANDLER: u32 = 0x80;
+    machine
+        .bus
+        .write_u32(15 * 4, HANDLER | 1)
+        .expect("SysTick vector");
+    machine
+        .bus
+        .write_u16(HANDLER as u64, 0xE7FE)
+        .expect("SysTick handler b .");
+}
+
+#[test]
+fn takeable_irq_at_batch_start_is_taken_before_compiled_block() {
+    let mut off = alu_spin_machine(false, RECOMMENDED_TICK_INTERVAL);
+    let mut on = alu_spin_machine(true, RECOMMENDED_TICK_INTERVAL);
+    plant_systick_handler(&mut off);
+    plant_systick_handler(&mut on);
+
+    const MAX_HEAT: u32 = 16_000;
+    let mut heated = 0u32;
+    while on.cpu.jit_stats().map(|s| s.block_runs).unwrap_or(0) == 0 {
+        assert!(
+            heated < MAX_HEAT,
+            "ALU spin never ran a compiled block: {:?}",
+            on.cpu.jit_stats()
+        );
+        on.run(Some(64)).expect("heat jit");
+        heated += 64;
+    }
+    catch_up(&mut off, on.step_profile().cpu_instructions);
+    // The compiled spin lives at pc=2. Align there so the next batch is
+    // Lookup::Ready and would run the whole user block if dispatch is wrong.
+    const LOOP_PC: u32 = 2;
+    while on.cpu.pc != LOOP_PC {
+        on.run(Some(1)).expect("align jit to loop entry");
+    }
+    catch_up(&mut off, on.step_profile().cpu_instructions);
+    assert_eq!(
+        off.cpu.pc, LOOP_PC,
+        "interpreter twin must sit on the hot entry"
+    );
+    assert_eq!(
+        snapshot_state(&off.cpu),
+        snapshot_state(&on.cpu),
+        "pre-IRQ state must match after heat"
+    );
+    let r0_before = on.cpu.r0;
+
+    on.cpu.set_exception_pending(15);
+    off.cpu.set_exception_pending(15);
+    on.run(Some(64)).expect("jit take irq");
+    off.run(Some(64)).expect("interp take irq");
+
+    assert_eq!(
+        off.cpu.active_exception,
+        on.cpu.active_exception,
+        "SysTick must be taken on both; off={} on={} r0 off={:#x} on={:#x} pc off={:#x} on={:#x}",
+        off.cpu.active_exception,
+        on.cpu.active_exception,
+        off.cpu.r0,
+        on.cpu.r0,
+        off.cpu.pc,
+        on.cpu.pc
+    );
+    assert_eq!(
+        snapshot_state(&off.cpu),
+        snapshot_state(&on.cpu),
+        "JIT must take SysTick at batch start, not after a compiled user block; {}",
+        snapshot_diff(&snapshot_state(&off.cpu), &snapshot_state(&on.cpu))
+    );
+    assert_eq!(
+        on.cpu.r0, r0_before,
+        "JIT must not retire extra user ALU before taking SysTick (r0 {} -> {})",
+        r0_before, on.cpu.r0
+    );
+}
