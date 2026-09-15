@@ -47,6 +47,19 @@ impl SystemBus {
         Some((format!("gpio{port}"), num))
     }
 
+    /// RA PCNTR1 packs PODR in bits [31:16]; shift the sample bit accordingly.
+    fn ra_port_odr_bit(gpio: &crate::peripherals::gpio::GpioPort, bit: u8) -> Option<u8> {
+        use crate::peripherals::gpio::GpioRegisterLayout;
+        if gpio.register_layout() == GpioRegisterLayout::RaPort {
+            if bit >= 16 {
+                return None;
+            }
+            Some(bit + 16)
+        } else {
+            Some(bit)
+        }
+    }
+
     /// Resolve an STM32 pin label to its `(ODR address, bit)` so a display's
     /// D/C line can be sampled directly from the driving GPIO's output register.
     /// Public wrapper exposed via [`AttachCtx::resolve_pin_odr`] so kits can
@@ -63,25 +76,28 @@ impl SystemBus {
             let (gpio_name, bit) = bus.pin_map.get(&pin.to_ascii_uppercase())?;
             let idx = bus.find_peripheral_index_by_name(gpio_name)?;
             let base = bus.peripherals[idx].base;
-            let odr_off = bus.peripherals[idx]
+            let gpio = bus.peripherals[idx]
                 .dev
                 .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                .map(|g| g.odr_offset())?;
-            return Some((base + odr_off, *bit));
+                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())?;
+            let odr_off = gpio.odr_offset();
+            let bit = Self::ra_port_odr_bit(gpio, *bit)?;
+            return Some((base + odr_off, bit));
         }
         // 2. No chip pin map → standard STM32/Nordic label parse.
         // STM32/Nordic: "PA5" / "P0.13" → per-port GpioPort with an ODR offset.
         if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
             if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
                 let base = bus.peripherals[idx].base;
-                if let Some(odr_off) = bus.peripherals[idx]
+                if let Some(gpio) = bus.peripherals[idx]
                     .dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.odr_offset())
                 {
-                    return Some((base + odr_off, bit));
+                    let odr_off = gpio.odr_offset();
+                    if let Some(bit) = Self::ra_port_odr_bit(gpio, bit) {
+                        return Some((base + odr_off, bit));
+                    }
                 }
             }
         }

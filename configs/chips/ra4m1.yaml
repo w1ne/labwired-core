@@ -1,0 +1,66 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# SIM-DERIVED R7FA4M1AB descriptor for Arduino Uno R4 Minima bring-up.
+# Not silicon-verified. USB CDC Serial is intentionally out of scope —
+# only the MCU core, PORT (ra_port), SYSTEM (HOCO/OSCSF), SCI2 UART
+# (header Serial on P301/P302), SysTick, and a USBFS stub window are modelled.
+# Pin labels follow ArduinoCore-renesas variants/MINIMA.
+
+name: "r7fa4m1ab"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 48_000_000
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+pins:
+  # D0 / RX — MINIMA: P301 (SCI2 RXD).
+  P301: { gpio: port3, bit: 1, functions: [{ type: uart, peripheral: sci2, role: rx }] }
+  # D1 / TX — MINIMA: P302 (SCI2 TXD).
+  P302: { gpio: port3, bit: 2, functions: [{ type: uart, peripheral: sci2, role: tx }] }
+  # D13 / LED — MINIMA: P111.
+  P111: { gpio: port1, bit: 11, functions: [{ type: gpio, peripheral: port1 }] }
+peripherals:
+  # R_SYSTEM @ 0x4001E000 — HOCOCR/OSCSF (R01UH0887 / R7FA4M1AB.h).
+  - id: "ra_sysc"
+    type: "ra_sysc"
+    base_address: 0x4001E000
+    size: "256B"
+  # PORT n @ 0x40040000 + n*0x20 (R01UH0887 §19 / FSP IOPORT).
+  - id: "port1"
+    type: "gpio"
+    base_address: 0x40040020
+    size: "32B"
+    config:
+      profile: "ra_port"
+  - id: "port3"
+    type: "gpio"
+    base_address: 0x40040060
+    size: "32B"
+    config:
+      profile: "ra_port"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # Header Serial — SCI2 @ 0x40070040 (ra4m1-fsp-pac / R7FA4M1AB.h).
+  # NVIC line is an ICU IEL slot (0..31); SCI2_TXI is ELC event 0xA4 when
+  # linked via IELSR. Smoke TX is polled TDR writes — IEL4 is the model TXI line.
+  - id: "sci2"
+    type: "uart"
+    base_address: 0x40070040
+    size: "32B"
+    irq: 4
+    config:
+      profile: "sci"
+  # USBFS stub — USB CDC Serial out of scope for this bring-up.
+  - id: "usbfs"
+    type: "stub"
+    base_address: 0x40090000
+    size: "1KB"

@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Adafruit Metro M4 Express (SAMD51J19A). SIM-DERIVED — not silicon-verified.
+# Bench silicon may be ItsyBitsy M4 (SAMD51G19A); Playground pinout is Metro M4.
+# On-board QSPI flash, USB, and NeoPixel are not attached here.
+
+name: "metro-m4"
+chip: "../chips/atsamd51.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "porta"
+    pin: 16   # PA16 — Adafruit variants/metro_m4/variant.cpp D13
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "sercom3"
+    endpoint: "host_console"

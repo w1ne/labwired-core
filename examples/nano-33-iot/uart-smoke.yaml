@@ -1,0 +1,12 @@
+# LabWired - Arduino Nano 33 IoT UART smoke test
+schema_version: "1.0"
+inputs:
+  # Built by: cargo build -p firmware-atsamd21-demo --release --target thumbv6m-none-eabi
+  # Survival fixture (same bytes): tests/fixtures/atsamd21-nano33-smoke.elf
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-atsamd21-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

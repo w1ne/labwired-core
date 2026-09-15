@@ -567,11 +567,11 @@ impl SystemBus {
     ///
     /// `true` (always-on) for any peripheral without a declared clock-gate — the
     /// safe default that keeps every existing config/firmware working. For a
-    /// gated peripheral, reads the *live* RCC register map: every bit the gate
-    /// requires must be set right now. That is deliberately a read of the RCC
-    /// model rather than a value latched at build time, so firmware that turns a
-    /// clock back off silences the peripheral again mid-run, the way silicon
-    /// does.
+    /// gated peripheral, reads the *live* controller register map: every bit the
+    /// gate requires must be set right now. That is deliberately a read of the
+    /// clock-controller model rather than a value latched at build time, so
+    /// firmware that turns a clock back off silences the peripheral again
+    /// mid-run, the way silicon does.
     ///
     /// A gate may require more than one bit because silicon can withhold a clock
     /// for more than one reason: the bus-enable bit in an `xxxENR` register, and
@@ -580,10 +580,9 @@ impl SystemBus {
     /// peripheral model never needs (and must never grow) a clock check of its
     /// own; see [`crate::bus::ResolvedClockGate`].
     ///
-    /// If no RCC peripheral is registered, or its register read fails, the
-    /// peripheral is treated as clocked (fail-open: never wedge a chip that has
-    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path
-    /// one cached-index RCC register read per required bit.
+    /// When `gclk_id` is set, the SAM GCLK channel must also be enabled.
+    /// If a controller register read fails, the peripheral is treated as clocked
+    /// (fail-open: never wedge a chip that has no modelled clock unit).
     pub(crate) fn is_peripheral_clocked(&self, idx: usize) -> bool {
         // missing_clock fault: force the peripheral unclocked and count the
         // suppressed access as the runtime fired-observation. Checked before the
@@ -602,14 +601,37 @@ impl SystemBus {
         else {
             return true; // ungated → always accessible
         };
-        let Some(rcc_idx) = self.rcc_idx else {
-            return true; // no RCC modelled → don't gate
-        };
-        gate.requires.iter().all(|req| {
-            match self.peripherals[rcc_idx].dev.read_u32(req.reg_offset) {
-                Ok(reg) => (reg >> req.bit) & 1 != 0,
-                Err(_) => true, // unreadable RCC register → fail open
+        let bus_clocked = gate.requires.iter().all(|req| {
+            if req.controller_idx >= self.peripherals.len() {
+                return true; // stale index → don't gate
             }
-        })
+            match self.peripherals[req.controller_idx]
+                .dev
+                .read_u32(req.reg_offset)
+            {
+                Ok(reg) => (reg >> req.bit) & 1 != 0,
+                Err(_) => true, // unreadable controller register → fail open
+            }
+        });
+        if !bus_clocked {
+            return false;
+        }
+        let Some(gclk_id) = gate.gclk_id else {
+            return true; // PM/RCC bit alone (STM32 unchanged)
+        };
+        let Some(gclk_idx) = gate.gclk_idx else {
+            return false; // gclk_id declared but GCLK was not resolved at build
+        };
+        if gclk_idx >= self.peripherals.len() {
+            return false;
+        }
+        match self.peripherals[gclk_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
+        {
+            Some(g) => g.clk_enabled(gclk_id),
+            None => false,
+        }
     }
 }
