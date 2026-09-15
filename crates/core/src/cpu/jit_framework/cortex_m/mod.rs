@@ -123,6 +123,8 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | VmovF32Imm { .. }
         | VmovSnRt { .. }
         | VmovRtSn { .. }
+        | Vldr { .. }
+        | Vstr { .. }
         | LdrImm { .. }
         | StrImm { .. }
         | LdrbImm { .. }

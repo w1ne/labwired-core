@@ -141,6 +141,7 @@ pub fn is_mem_emittable(inst: &Instruction) -> bool {
             true
         }
         StmiaW { rn, .. } | StmdbW { rn, .. } if *rn != 15 => true,
+        Vldr { rn, .. } | Vstr { rn, .. } if *rn != 15 => true,
         _ => false,
     }
 }
@@ -282,10 +283,52 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
     })
 }
 
+fn it_body_len(mask: u8) -> u32 {
+    if mask == 0 {
+        0
+    } else {
+        4 - mask.trailing_zeros()
+    }
+}
+
 fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
     let mut ops = Vec::new();
     let mut cur = pc;
     while let Some((inst, len)) = decode_at(cur, code) {
+        if let Instruction::It { mask, .. } = inst {
+            let n = it_body_len(mask);
+            if n == 0 || n > 4 {
+                break;
+            }
+            let mut peek_pc = cur + len;
+            let mut body = Vec::new();
+            let mut ok = true;
+            for _ in 0..n {
+                let Some((pi, pl)) = decode_at(peek_pc, code) else {
+                    ok = false;
+                    break;
+                };
+                if !is_emittable(&pi, mem_ok) || matches!(pi, Instruction::It { .. }) {
+                    ok = false;
+                    break;
+                }
+                body.push(Op {
+                    pc: peek_pc as u32,
+                    inst: pi,
+                });
+                peek_pc += pl;
+            }
+            if !ok || ops.len() as u32 + 1 + n > super::MAX_BLOCK_INSTRS {
+                break;
+            }
+            ops.push(Op {
+                pc: cur as u32,
+                inst,
+            });
+            ops.extend(body);
+            cur = peek_pc;
+            continue;
+        }
         if !is_emittable(&inst, mem_ok) {
             break;
         }
@@ -355,6 +398,7 @@ struct Body {
     has_vfp: bool,
     has_unsupported: bool,
     emitted: u32,
+    it_state: u8,
 }
 
 impl Body {
@@ -491,6 +535,9 @@ impl Body {
         } else {
             self.buf.push(op::DROP);
         }
+        if self.it_state != 0 && rd.is_some() {
+            return;
+        }
         // carry = res <u op1
         self.push_result();
         self.local_get(SCRATCH_LOCAL);
@@ -534,6 +581,9 @@ impl Body {
             self.write(d);
         } else {
             self.buf.push(op::DROP);
+        }
+        if self.it_state != 0 && rd.is_some() {
+            return;
         }
         // ARM C = NOT borrow. borrow iff res >u op1. C = res <=u op1.
         self.push_result();
@@ -1180,6 +1230,50 @@ impl Body {
         self.has_store = true;
     }
 
+    fn emit_vfp_mem(&mut self, pc: u32, sd: u8, rn: u8, imm: i32, add: bool, is_load: bool) {
+        let (ram_base, ram_len) = self.window.expect("emit_vfp_mem without window");
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+        self.has_vfp = true;
+        self.read(rn, pc);
+        self.i32_const(imm);
+        self.buf.push(if add { op::I32_ADD } else { op::I32_SUB });
+        self.local_set(SCRATCH_LOCAL);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_GE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(hi as i32);
+        self.buf.push(op::I32_LE_U);
+        self.buf.push(op::I32_AND);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        let writes_before = self.writes;
+        if is_load {
+            self.i32_const(sd as i32);
+            self.emit_host_load(&MemAccess::Load {
+                rd: 0,
+                opcode: op::I32_LOAD,
+            });
+            self.buf.push(op::CALL);
+            enc::uleb(&mut self.buf, 3);
+        } else {
+            self.ram_offset_from_scratch();
+            self.i32_const(sd as i32);
+            self.buf.push(op::CALL);
+            enc::uleb(&mut self.buf, 2);
+            self.i32_const(4);
+            self.buf.push(op::CALL);
+            enc::uleb(&mut self.buf, 1);
+            self.store_const_at(RES_FLAG_SLOT, 1);
+            self.has_store = true;
+        }
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
+    }
+
     fn emit_vfp_binop(&mut self, sd: u8, sn: u8, sm: u8, fop: u8) {
         self.has_vfp = true;
         self.i32_const(sd as i32);
@@ -1263,8 +1357,35 @@ impl Body {
         }
     }
 
+    fn begin_pred(&mut self) -> bool {
+        if self.it_state == 0 {
+            return false;
+        }
+        self.push_condition(self.it_state >> 4);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        true
+    }
+
+    fn end_pred(&mut self, pred: bool) {
+        if !pred {
+            return;
+        }
+        self.buf.push(op::END);
+        self.it_state = (self.it_state & 0xE0) | (((self.it_state & 0x1F) << 1) & 0x1F);
+        if self.it_state & 0x0F == 0 {
+            self.it_state = 0;
+        }
+    }
+
     fn emit_instruction(&mut self, pc: u32, inst: &Instruction, code: &CodeView<'_>) {
         use Instruction::*;
+        if let It { cond, mask } = *inst {
+            self.it_state = (cond << 4) | mask;
+            self.emitted += 1;
+            return;
+        }
+        let pred = self.begin_pred();
         match *inst {
             Nop | Barrier => {}
             MovImm { rd, imm } => {
@@ -1752,6 +1873,8 @@ impl Body {
                     opcode: op::I32_STORE,
                 },
             ),
+            Vldr { sd, rn, imm, add } => self.emit_vfp_mem(pc, sd, rn, imm as i32, add, true),
+            Vstr { sd, rn, imm, add } => self.emit_vfp_mem(pc, sd, rn, imm as i32, add, false),
             VaddF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_ADD),
             VsubF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_SUB),
             VmulF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_MUL),
@@ -1840,6 +1963,7 @@ impl Body {
             } => self.emit_ldm_stm_wide(pc, rn, reg_list, writeback, false, true),
             _ => unreachable!("non-emittable instruction reached emit: {inst:?}"),
         }
+        self.end_pred(pred);
         self.emitted += 1;
     }
 

@@ -318,6 +318,196 @@ fn vadd_f32_matches_interpreter() {
     assert_eq!(interp.cpu.fpu_s[0], jit.cpu.fpu_s[0]);
 }
 
+fn it_eq() -> u16 {
+    0xBF08
+}
+
+fn it_eq_adds_loop() -> Vec<u8> {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, it_eq());
+    h(&mut prog, adds_imm8(0, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+    prog
+}
+
+#[test]
+fn it_eq_adds_compiles_as_one_block() {
+    let prog = it_eq_adds_loop();
+    let jit = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(7),
+        "IT EQ + ADDS must stay in the compiled block: {:?}",
+        engine.stats()
+    );
+}
+
+#[test]
+fn it_eq_adds_taken_matches_interpreter() {
+    let prog = it_eq_adds_loop();
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr |= 1 << 30; // Z=1 so EQ is taken
+        m.cpu.r0 = 0;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(7),
+        "taken path must run the compiled IT block: {:?}",
+        engine.stats()
+    );
+    assert_eq!(interp.cpu.r0, jit.cpu.r0);
+    assert_ne!(interp.cpu.r0, 0, "EQ-taken ADDS must increment r0");
+    assert_eq!(
+        interp.cpu.xpsr & 0xF000_0000,
+        jit.cpu.xpsr & 0xF000_0000,
+        "ADDS inside IT must not leak flags"
+    );
+}
+
+#[test]
+fn it_eq_adds_skipped_matches_interpreter() {
+    let prog = it_eq_adds_loop();
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr &= !(1 << 30); // Z=0 so EQ is skipped
+        m.cpu.r0 = 5;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(7),
+        "skipped path must run the compiled IT block: {:?}",
+        engine.stats()
+    );
+    assert_eq!(interp.cpu.r0, jit.cpu.r0);
+    assert_eq!(interp.cpu.r0, 5, "EQ-skipped ADDS must leave r0");
+}
+
+fn ite_eq() -> u16 {
+    0xBF0C
+}
+
+#[test]
+fn ite_eq_adds_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, ite_eq());
+    h(&mut prog, adds_imm8(0, 1));
+    h(&mut prog, adds_imm8(1, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let jit = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(8),
+        "ITE EQ + two ADDS must compile: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr |= 1 << 30;
+        m.cpu.r0 = 0;
+        m.cpu.r1 = 0;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r0, jit.cpu.r0);
+    assert_eq!(interp.cpu.r1, jit.cpu.r1);
+    assert_ne!(interp.cpu.r0, 0, "ITE THEN (EQ) must run");
+    assert_eq!(interp.cpu.r1, 0, "ITE ELSE (NE) must skip when Z=1");
+}
+
+fn vldr_s0_r0() -> (u16, u16) {
+    (0xED90, 0x0A00)
+}
+
+fn vstr_s0_r0() -> (u16, u16) {
+    (0xED80, 0x0A00)
+}
+
+#[test]
+fn vldr_f32_compiles_and_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    let (a, b) = vldr_s0_r0();
+    h(&mut prog, a);
+    h(&mut prog, b);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let bits = 1.0f32.to_bits();
+    let mut probe = build_machine(&prog);
+    probe.cpu.r0 = 0x2000_0000;
+    probe
+        .bus
+        .write_u32(0x2000_0000, bits)
+        .expect("seed VLDR word");
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(6),
+        "VLDR must compile into the block: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r0 = 0x2000_0000;
+        m.bus.write_u32(0x2000_0000, bits).expect("seed");
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.fpu_s[0], jit.cpu.fpu_s[0]);
+    assert_eq!(interp.cpu.fpu_s[0], bits);
+}
+
+#[test]
+fn vstr_f32_compiles_and_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    let (a, b) = vstr_s0_r0();
+    h(&mut prog, a);
+    h(&mut prog, b);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let bits = 2.0f32.to_bits();
+    let mut probe = build_machine(&prog);
+    probe.cpu.r0 = 0x2000_0000;
+    probe.cpu.fpu_s[0] = bits;
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(6),
+        "VSTR must compile into the block: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r0 = 0x2000_0000;
+        m.cpu.fpu_s[0] = bits;
+    });
+    assert!(engine.stats().block_runs > 0);
+    let got_i = u32::from_le_bytes(interp.bus.ram.data[0..4].try_into().unwrap());
+    let got_j = u32::from_le_bytes(jit.bus.ram.data[0..4].try_into().unwrap());
+    assert_eq!(got_i, got_j);
+    assert_eq!(got_i, bits);
+}
+
 #[test]
 fn every_alu_op_matches_interpreter() {
     let mut seed: u64 = 0x1234_5678_9abc_def0;
