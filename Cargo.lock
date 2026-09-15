@@ -1013,6 +1013,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-atsamd51-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ci-fixture"
 version = "0.19.2"
 dependencies = [
@@ -1216,6 +1225,15 @@ dependencies = [
 
 [[package]]
 name = "firmware-nrf52840-timer-blinky"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-ra4m1-demo"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
