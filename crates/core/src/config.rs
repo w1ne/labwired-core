@@ -50,6 +50,11 @@ pub struct SimulationConfig {
     /// else the JIT does not model. Has no effect without the `jit` feature.
     #[serde(default)]
     pub cortex_m_jit_enabled: bool,
+    /// Minimum compiled-block length. `0` = framework default (16). Lower
+    /// values compile more Zephyr-sized Thumb BBs; only safe once RAM
+    /// access is zero-copy (host load/store, no SRAM memcpy).
+    #[serde(default)]
+    pub cortex_m_jit_min_block_instrs: u32,
 }
 
 impl Default for SimulationConfig {
