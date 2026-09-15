@@ -1081,6 +1081,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-atsamd21-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-atsamd51-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-ci-fixture"
 version = "0.23.0"
 dependencies = [
@@ -1167,6 +1185,15 @@ dependencies = [
 name = "firmware-hil-showcase"
 version = "0.23.0"
 dependencies = [
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-imxrt1064-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
  "panic-halt",
 ]
 
@@ -1380,6 +1407,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-ra4m1-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-rp2040-demo"
 version = "0.1.0"
 dependencies = [
@@ -1408,6 +1444,15 @@ dependencies = [
 
 [[package]]
 name = "firmware-samd21-demo"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
+name = "firmware-stm32f746-demo"
 version = "0.1.0"
 dependencies = [
  "cortex-m",

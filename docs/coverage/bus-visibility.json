@@ -5,7 +5,15 @@
   },
   {
     "buses": [],
+    "name": "atsamd21"
+  },
+  {
+    "buses": [],
     "name": "atsamd21g18a"
+  },
+  {
+    "buses": [],
+    "name": "atsamd51"
   },
   {
     "buses": [
@@ -39,6 +47,10 @@
   },
   {
     "buses": [],
+    "name": "imxrt1064"
+  },
+  {
+    "buses": [],
     "name": "mkw41z4"
   },
   {
@@ -68,6 +80,10 @@
   {
     "buses": [],
     "name": "nrf54lm20a"
+  },
+  {
+    "buses": [],
+    "name": "ra4m1"
   },
   {
     "buses": [
@@ -128,6 +144,12 @@
       "UART"
     ],
     "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32f746"
   },
   {
     "buses": [

@@ -667,6 +667,106 @@
         "gap": "Same block, same gap as SPI: SERCOM I2CM/I2CS modes are not modelled.",
         "lane": "none"
       }
+    },
+    "atsamd21": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_atsamd21_nano33_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on SERCOM5 Serial1.",
+        "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "Nano 33 IoT twin models SERCOM5 USART only; SPI mode is not modelled.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Nano 33 IoT twin models SERCOM5 USART only; I2C mode is not modelled.",
+        "lane": "none"
+      }
+    },
+    "atsamd51": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_atsamd51_metro_m4_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on SERCOM3 Serial1.",
+        "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "Metro M4 twin models SERCOM3 USART only; SPI mode is not modelled.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Metro M4 twin models SERCOM3 USART only; I2C mode is not modelled.",
+        "lane": "none"
+      }
+    },
+    "ra4m1": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_ra4m1_uno_r4_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on SCI2.",
+        "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "Uno R4 Minima twin models SCI2 UART only; SPI is not modelled.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Uno R4 Minima twin models SCI2 UART only; I2C is not modelled.",
+        "lane": "none"
+      }
+    },
+    "imxrt1064": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_imxrt1064_teensy41_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on LPUART6 Serial1.",
+        "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "Teensy 4.1 twin models LPUART6 + GPIO2 only; LPSPI is not modelled.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "Teensy 4.1 twin models LPUART6 + GPIO2 only; LPI2C is not modelled.",
+        "lane": "none"
+      }
+    },
+    "stm32f746": {
+      "in_boards": true,
+      "uart": {
+        "state": "proven",
+        "file": "crates/core/tests/firmware_survival.rs",
+        "test": "test_stm32f746_discovery_smoke_survival",
+        "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'OK' on USART1.",
+        "lane": "core-ci / pr-workspace-tests: cargo test -p labwired-core --test firmware_survival"
+      },
+      "spi": {
+        "state": "none",
+        "gap": "F746 Discovery twin models USART1 + GPIO only; SPI is not modelled.",
+        "lane": "none"
+      },
+      "i2c": {
+        "state": "none",
+        "gap": "F746 Discovery twin models USART1 + GPIO only; I2C is not modelled.",
+        "lane": "none"
+      }
     }
   }
 }

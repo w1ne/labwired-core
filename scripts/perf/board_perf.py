@@ -271,6 +271,13 @@ WAIVED: dict[str, str] = {
     # P0 AVR twin: CPU + Timer0/USART only; no bare-metal spin fixture crate yet
     # (no firmware-perf-spin-avr / avr-unknown-gnu-atmega328 target in this gate).
     "atmega328p": "no perf-spin fixture for AVR8 yet; CPU P0 without linked spin ELF",
+    # Maker-five UART/GPIO smoke twins. Matching them onto an nRF/STM32
+    # perf-spin map would gate the wrong binary. No dedicated spin ELF yet.
+    "atsamd21": "Nano 33 IoT UART/GPIO smoke twin; no perf-spin fixture",
+    "atsamd51": "Metro M4 UART/GPIO smoke twin; no perf-spin fixture",
+    "ra4m1": "Uno R4 Minima UART/GPIO smoke twin; no perf-spin fixture",
+    "imxrt1064": "DTCM-linked Teensy smoke map; no perf-spin fixture at 0x20000000/0x20010000",
+    "stm32f746": "F746 Discovery UART/GPIO smoke twin; no perf-spin fixture",
 }
 
 # Descriptors that are CI plumbing rather than a modelled part.
@@ -507,11 +514,14 @@ def plan_coverage(chips: dict[str, dict]) -> tuple[dict[str, str], dict[str, str
     waived: dict[str, str] = {}
     unclassified: list[str] = []
     for board, chip in chips.items():
+        # Explicit waiver wins: a smoke twin can share flash/RAM bases with
+        # an nRF/STM32 perf-spin map and still must not gate that binary.
+        if board in WAIVED:
+            waived[board] = WAIVED[board]
+            continue
         fixture = fixture_for(chip)
         if fixture is not None:
             covered[board] = fixture
-        elif board in WAIVED:
-            waived[board] = WAIVED[board]
         else:
             flash = chip.get("flash", {}).get("base")
             ram = chip.get("ram", {}).get("base")

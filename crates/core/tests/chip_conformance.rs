@@ -305,6 +305,36 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks"),
     },
+    ChipConf {
+        name: "atsamd21",
+        yaml: "configs/chips/atsamd21.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_atsamd21_nano33_smoke_survival"),
+    },
+    ChipConf {
+        name: "atsamd51",
+        yaml: "configs/chips/atsamd51.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_atsamd51_metro_m4_smoke_survival"),
+    },
+    ChipConf {
+        name: "ra4m1",
+        yaml: "configs/chips/ra4m1.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_ra4m1_uno_r4_smoke_survival"),
+    },
+    ChipConf {
+        name: "imxrt1064",
+        yaml: "configs/chips/imxrt1064.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_imxrt1064_teensy41_smoke_survival"),
+    },
+    ChipConf {
+        name: "stm32f746",
+        yaml: "configs/chips/stm32f746.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_stm32f746_discovery_smoke_survival"),
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`

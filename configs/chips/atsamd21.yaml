@@ -1,0 +1,71 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# SIM-DERIVED SAMD21G18A descriptor for Arduino Nano 33 IoT bring-up.
+# Not silicon-verified. NINA (WiFi), ATECC608A, and IMU (LSM6DS3) are
+# intentionally omitted / stubbed — only the MCU core, PORT, PM/GCLK,
+# SERCOM5 UART (Serial1), SysTick, and a USB stub window are modelled here.
+# Pin labels follow ArduinoCore-samd variants/nano_33_iot/variant.cpp.
+
+name: "atsamd21"
+arch: "arm"
+core: "cortex-m0+"
+# 48 MHz — DFLL48M, same as the Arduino Zero `atsamd21g18a.yaml` descriptor.
+cpu_hz: 48_000_000
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+pins:
+  # D0 / RX — variant.cpp: PORTB 23 (SERCOM5/PAD[3]).
+  PB23: { gpio: portb, bit: 23, functions: [{ type: uart, peripheral: sercom5, role: rx }] }
+  # D1 / TX — variant.cpp: PORTB 22 (SERCOM5/PAD[2]).
+  PB22: { gpio: portb, bit: 22, functions: [{ type: uart, peripheral: sercom5, role: tx }] }
+  # D13 / LED — variant.cpp: PORTA 17.
+  PA17: { gpio: porta, bit: 17, functions: [{ type: gpio, peripheral: porta }] }
+peripherals:
+  - id: "pm"
+    type: "sam_pm"
+    base_address: 0x40000400
+    size: "256B"
+  - id: "gclk"
+    type: "sam_gclk"
+    base_address: 0x40000C00
+    size: "256B"
+  - id: "porta"
+    type: "gpio"
+    base_address: 0x41004400
+    size: "128B"
+    config:
+      profile: "sam_port"
+  - id: "portb"
+    type: "gpio"
+    base_address: 0x41004480
+    size: "128B"
+    config:
+      profile: "sam_port"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # Serial1 — SERCOM5 on PB22/PB23 (variant.cpp Uart Serial1(&sercom5, ...)).
+  - id: "sercom5"
+    type: "uart"
+    base_address: 0x42001C00
+    size: "256B"
+    irq: 14
+    clock:
+      controller: "pm"
+      reg: "APBCMASK"
+      bit: 7
+    config:
+      profile: "sercom"
+      gclk_id: 25
+  - id: "usb"
+    type: "stub"
+    base_address: 0x41005000
+    size: "1KB"

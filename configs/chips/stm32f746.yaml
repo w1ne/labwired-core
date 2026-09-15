@@ -1,0 +1,170 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# STM32F746NG — Arm Cortex-M7, STM32F7 Discovery (32F746GDISCOVERY).
+# Closest templates: stm32f401.yaml (F4-class RCC/GPIO/USART) + stm32h735.yaml
+# (Cortex-M7 DTCM primary RAM + extra SRAM regions).
+#
+# Source references:
+# - STM32F746xx datasheet DS10916 (memory map, peripheral bases).
+# - STM32F75xxx/F74xxx reference manual RM0385 (register offsets, IRQs).
+# - CMSIS device header stm32f746xx.h (USART1_IRQn = 37).
+#
+# Fidelity: SIM-DERIVED — LabWired has no F746 bench part. Reset values and
+# behaviour below are reference-manual-derived, not silicon-pinned. Catalog
+# copy must not claim silicon-verified.
+#
+# Peripheral models reused (no new GPIO/UART/RCC family types):
+#   - rcc   profile stm32f4   @ 0x40023800 (same AHB1/APB enable layout as F4)
+#   - gpio  profile stm32v2   @ 0x40020000… (MODER/BSRR — F7 shared IP)
+#   - uart  profile stm32v2   USART1 @ 0x40011000 (ISR/RDR/TDR)
+#
+# Stubbed (MMIO window only; no model): LTDC, ETH, DMA2D, USB OTG FS, QUADSPI.
+# Known omissions: FMC/SDRAM, SAI, SDMMC, DCMI, RNG, full GPIOJ/K — unmapped
+# holes until needed.
+
+name: "stm32f746"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 150
+# STM32F746NG maximum core clock, 216 MHz (DS10916).
+cpu_hz: 216_000_000
+flash:
+  base: 0x08000000
+  # STM32F746NG = 1 MiB flash at 0x08000000 (AXI alias).
+  size: "1024KB"
+ram:
+  # DTCM @ 0x20000000 (64 KiB) — Cortex-M7 default stack/.data link region.
+  base: 0x20000000
+  size: "64KB"
+memory_regions:
+  # SRAM1 (AXI/AHB), 240 KiB @ 0x20010000 (DS10916 / stm32f746xx.h).
+  - name: "sram1"
+    base: 0x20010000
+    size: "240KB"
+  # SRAM2, 16 KiB @ 0x2004C000.
+  - name: "sram2"
+    base: 0x2004C000
+    size: "16KB"
+  # ITCM RAM, 16 KiB @ 0x00000000.
+  - name: "itcm"
+    base: 0x00000000
+    size: "16KB"
+pins:
+  # ST-LINK VCP USART1 — PA9 TX / PA10 RX (Discovery default).
+  PA9: { gpio: gpioa, bit: 9, functions: [{ type: uart, peripheral: usart1, role: tx }] }
+  PA10: { gpio: gpioa, bit: 10, functions: [{ type: uart, peripheral: usart1, role: rx }] }
+  # Green user LED LD1 — PI1 (UM1974 STM32F7 Discovery).
+  PI1: { gpio: gpioi, bit: 1, functions: [{ type: gpio, peripheral: gpioi }] }
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40023800
+    size: "1KB"
+    config:
+      profile: "stm32f4"
+  # GPIOA..GPIOI — stm32v2 IP, AHB1 base 0x40020000, stride 0x400 (RM0385).
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # PA13/14/15 SWD/JTAG defaults (same class as F4).
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
+    clock: { reg: "ahb1enr", bit: 0 }
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 1 }
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 2 }
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 3 }
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 4 }
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x40021400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 5 }
+  - id: "gpiog"
+    type: "gpio"
+    base_address: 0x40021800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 6 }
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x40021C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb1enr", bit: 7 }
+  - id: "gpioi"
+    type: "gpio"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    # GPIOIEN — RCC_AHB1ENR bit 8 (RM0385 / stm32f746xx.h).
+    clock: { reg: "ahb1enr", bit: 8 }
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # USART1 (APB2) — ST-LINK VCP. stm32v2 TDR@0x28. USART1_IRQn = 37 (RM0385).
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    config:
+      profile: "stm32v2"
+    # USART1EN — RCC_APB2ENR bit 4.
+    clock: { reg: "apb2enr", bit: 4 }
+  # --- stubs (SIM-DERIVED windows; no behavioural model) ---
+  - id: "ltdc"
+    type: "stub"
+    base_address: 0x40016800
+    size: "1KB"
+  - id: "eth"
+    type: "stub"
+    base_address: 0x40028000
+    size: "2KB"
+  - id: "dma2d"
+    type: "stub"
+    base_address: 0x4002B000
+    size: "1KB"
+  - id: "usb"
+    type: "stub"
+    base_address: 0x50000000
+    size: "4KB"
+  - id: "quadspi"
+    type: "stub"
+    base_address: 0xA0001000
+    size: "1KB"

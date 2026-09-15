@@ -13,6 +13,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 * **atmega328p**
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
+* **atsamd21**
+  * UART: Nano 33 IoT twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
+* **atsamd51**
+  * UART: Metro M4 twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -25,6 +29,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: esp32s3-zero.yaml inherits the S3 address-map stub
   * SPI: esp32s3-zero.yaml inherits the S3 address-map stub
   * UART: esp32s3-zero.yaml inherits the S3 address-map stub
+* **imxrt1064**
+  * UART: no edge bring-up path for i.MX LPUART in this gate yet
 * **mkw41z4**
   * I2C: Kinetis I2C publishes no line_names / wire_lines (honest empty)
   * SPI: no edge bring-up path for Kinetis DSPI in this gate yet
@@ -41,6 +47,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * SPI: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
   * UART: nRF54L pad claims unwired: PSEL.PORT is 3 bits on this family and the claim engine decodes the nRF52840 1-bit field only, so no PadLines cell is installed and no wire waveform is narrated
+* **ra4m1**
+  * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
@@ -49,18 +57,22 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | Chip | I2C | SPI | UART |
 |------|-----|-----|------|
 | atmega328p | — | — | — |
+| atsamd21 | — | — | — |
 | atsamd21g18a | — | — | — |
+| atsamd51 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
 | esp32 | ✓ | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32s3 | — | — | — |
 | esp32s3-zero | — | — | — |
+| imxrt1064 | — | — | — |
 | mkw41z4 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |
 | nrf52840 | ✓ | ✓ | ✓ |
 | nrf5340 | — | — | — |
 | nrf54l15 | — | — | — |
 | nrf54lm20a | — | — | — |
+| ra4m1 | — | — | — |
 | rp2040 | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | stm32f103 | ✓ | ✓ | ✓ |
@@ -69,6 +81,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f405 | ✓ | ✓ | ✓ |
 | stm32f407 | ✓ | ✓ | ✓ |
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
+| stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
 | stm32h563 | ✓ | ✓ | ✓ |

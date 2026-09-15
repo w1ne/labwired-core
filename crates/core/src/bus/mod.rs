@@ -118,31 +118,39 @@ impl SystemBus {
     }
 }
 
-/// One RCC bit a peripheral's clock depends on, resolved to a concrete register
-/// offset at bus-build time (the symbolic `reg` name from the yaml is mapped to
-/// the active chip family's offset via [`Rcc::rcc_reg_offset`]).
+/// One clock-enable bit a peripheral's clock depends on, resolved to a concrete
+/// controller index + register offset at bus-build time (the symbolic `reg`
+/// name from the yaml is mapped via [`Peripheral::clock_gate_reg_offset`]).
 #[derive(Debug, Clone, Copy)]
 pub struct RccClockBit {
-    /// Byte offset of the RCC register within the rcc peripheral.
+    /// Index of the clock-controller peripheral (RCC / PM / MCLK / CMU) on the bus.
+    pub controller_idx: usize,
+    /// Byte offset of the enable register within the controller peripheral.
     pub reg_offset: u64,
     /// Bit position within that register that must be set.
     pub bit: u8,
 }
 
-/// A peripheral's RCC clock-gate: every bit in [`Self::requires`] must be set in
-/// the *live* RCC register map for a CPU access to the owning peripheral to take
-/// effect — modelling silicon clock-gating.
+/// A peripheral's clock-gate: every bit in [`Self::requires`] must be set in the
+/// *live* controller register map for a CPU access to the owning peripheral to
+/// take effect — modelling silicon clock-gating. Optional `gclk_id` additionally
+/// requires the SAM GCLK channel to be enabled.
 ///
 /// This is the ONE place the engine expresses "this model may only answer while
-/// the RCC says it is clocked", and [`SystemBus::is_peripheral_clocked`] is the
-/// ONE place it is evaluated. A peripheral model must never grow its own clock
-/// check: a bus-enable bit and a kernel-clock-source ready bit are both just
-/// entries in this list, so a new gating reason is a config line, not a second
-/// mechanism scattered into `peripherals/`.
+/// the clock controller says it is clocked", and [`SystemBus::is_peripheral_clocked`]
+/// is the ONE place it is evaluated. A peripheral model must never grow its own
+/// clock check: a bus-enable bit and a kernel-clock-source ready bit are both
+/// just entries in this list, so a new gating reason is a config line, not a
+/// second mechanism scattered into `peripherals/`.
 #[derive(Debug, Clone, Default)]
 pub struct ResolvedClockGate {
     /// The bits that must ALL be set. Never empty when the gate is `Some`.
     pub requires: Vec<RccClockBit>,
+    /// Optional SAM GCLK channel ID; when set, that channel must also be enabled.
+    pub gclk_id: Option<u8>,
+    /// Bus index of the GCLK peripheral, resolved at config-build when
+    /// [`Self::gclk_id`] is `Some`. `None` when no GCLK channel is required.
+    pub gclk_idx: Option<usize>,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
@@ -162,11 +170,12 @@ pub struct PeripheralEntry {
     pub irq: Option<u32>,
     pub dev: Box<dyn Peripheral>,
     pub ticks_remaining: u64,
-    /// Optional RCC clock-gate (silicon clock-gating model). `None` (the common
+    /// Optional clock-gate (silicon clock-gating model). `None` (the common
     /// case) → the peripheral is never gated and accesses always pass through.
     /// `Some` → accesses are dropped (writes ignored, reads return 0) while ANY
-    /// required bit is clear in the RCC, exactly like an unclocked peripheral on
-    /// real silicon. Resolved from `PeripheralConfig::clock` in `from_config`.
+    /// required bit is clear on the named controller (or the SAM GCLK channel
+    /// is off), exactly like an unclocked peripheral on real silicon. Resolved
+    /// from `PeripheralConfig::clock` in `from_config`.
     pub clock_gate: Option<ResolvedClockGate>,
 }
 

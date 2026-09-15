@@ -1,0 +1,23 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Arduino Nano 33 IoT (SAMD21G18A). SIM-DERIVED — not silicon-verified.
+# On-board NINA/ATECC/IMU devices are not attached here.
+
+name: "nano-33-iot"
+chip: "../chips/atsamd21.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "porta"
+    pin: 17   # PA17 — ArduinoCore-samd variants/nano_33_iot/variant.cpp D13
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "sercom5"
+    endpoint: "host_console"

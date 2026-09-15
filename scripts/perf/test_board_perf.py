@@ -108,6 +108,14 @@ def test_waivers_are_explicit():
         "atmega328p": (
             "no perf-spin fixture for AVR8 yet; CPU P0 without linked spin ELF"
         ),
+        "atsamd21": "Nano 33 IoT UART/GPIO smoke twin; no perf-spin fixture",
+        "atsamd51": "Metro M4 UART/GPIO smoke twin; no perf-spin fixture",
+        "ra4m1": "Uno R4 Minima UART/GPIO smoke twin; no perf-spin fixture",
+        "imxrt1064": (
+            "DTCM-linked Teensy smoke map; no perf-spin fixture at "
+            "0x20000000/0x20010000"
+        ),
+        "stm32f746": "F746 Discovery UART/GPIO smoke twin; no perf-spin fixture",
     }, f"unexpected waivers (add fixture or update this allowlist): {waived}"
 
 

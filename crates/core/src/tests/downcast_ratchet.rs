@@ -95,8 +95,12 @@ use std::path::{Path, PathBuf};
 /// concrete `SystemBus` flash/RAM image (same reach RISC-V JIT already uses).
 /// The cycle-accurate JIT gate does **not** downcast: it goes through
 /// `Bus::requires_cycle_accurate`.
-const MAX_AS_ANY: usize = 197;
-const MAX_DOWNCAST_REF: usize = 212;
+///
+/// 197 → 199 / 212 → 214: SAM PORT / RA PORT / i.MX GPIO family dispatch on
+/// the maker-five twins reaches the concrete gpio layout through `as_any` /
+/// `downcast_ref` (two new sites).
+const MAX_AS_ANY: usize = 199;
+const MAX_DOWNCAST_REF: usize = 214;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

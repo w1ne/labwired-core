@@ -4020,6 +4020,87 @@ board_io: []
     );
 }
 
+/// SAMD21 PM + GCLK gating: SERCOM UART stays inert until both APBCMASK and
+/// the GCLK channel (CLKCTRL.CLKEN for the configured `gclk_id`) are enabled.
+#[test]
+fn gated_peripheral_sam_pm_and_gclk() {
+    let chip: ChipDescriptor = serde_yaml::from_str(
+        r#"
+name: "samd21-clockgate-test"
+arch: "arm"
+core: "cortex-m0+"
+flash:
+  base: 0x00000000
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+peripherals:
+  - id: "pm"
+    type: "sam_pm"
+    base_address: 0x40000400
+    size: "1KB"
+  - id: "gclk"
+    type: "sam_gclk"
+    base_address: 0x40000C00
+    size: "1KB"
+  - id: "sercom2"
+    type: "uart"
+    base_address: 0x42001800
+    size: "1KB"
+    clock: { controller: pm, reg: APBCMASK, bit: 4 }
+    config:
+      profile: sercom
+      gclk_id: 22
+"#,
+    )
+    .unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: "sam-clockgate"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    assert!(
+        bus.attach_uart_tx_sink_named("sercom2", sink.clone(), false),
+        "sercom2 uart sink"
+    );
+
+    // SERCOM DATA @ 0x28. Both PM and GCLK are off → TX must not reach the sink.
+    const SERCOM2_DATA: u64 = 0x4200_1828;
+    const PM_APBCMASK: u64 = 0x4000_0420;
+    const GCLK_CLKCTRL: u64 = 0x4000_0C02;
+
+    bus.write_u8(SERCOM2_DATA, b'A').unwrap();
+    assert!(
+        sink.lock().unwrap().is_empty(),
+        "unclocked SERCOM2 must drop TX"
+    );
+
+    // PM alone is not enough when gclk_id is configured.
+    bus.write_u32(PM_APBCMASK, 1 << 4).unwrap();
+    bus.write_u8(SERCOM2_DATA, b'B').unwrap();
+    assert!(
+        sink.lock().unwrap().is_empty(),
+        "SERCOM2 still gated without GCLK CLKEN"
+    );
+
+    // CLKCTRL: ID=22, GEN=0, CLKEN=1 → 0x4016. Prefer write_u16 (16-bit reg).
+    bus.write_u16(GCLK_CLKCTRL, 0x4016).unwrap();
+    bus.write_u8(SERCOM2_DATA, b'C').unwrap();
+    assert_eq!(
+        sink.lock().unwrap().as_slice(),
+        b"C",
+        "SERCOM2 TX must reach sink once PM bit 4 and GCLK ID 22 are enabled"
+    );
+}
+
 #[test]
 fn gated_peripheral_resolves_l4_rcc_offsets() {
     // The SAME symbolic reg names that map to F1 offsets above must resolve

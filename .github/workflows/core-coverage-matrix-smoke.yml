@@ -72,6 +72,41 @@ jobs:
             profile_dir: release
             script: examples/stm32f401cdu6/uart-smoke.yaml
             system: configs/systems/stm32f401cdu6.yaml
+          - id: nano-33-iot
+            target: thumbv6m-none-eabi
+            crate: firmware-atsamd21-demo
+            profile: release
+            profile_dir: release
+            script: examples/nano-33-iot/uart-smoke.yaml
+            system: examples/nano-33-iot/system.yaml
+          - id: metro-m4
+            target: thumbv7em-none-eabi
+            crate: firmware-atsamd51-demo
+            profile: release
+            profile_dir: release
+            script: examples/metro-m4/uart-smoke.yaml
+            system: examples/metro-m4/system.yaml
+          - id: arduino-uno-r4-minima
+            target: thumbv7em-none-eabi
+            crate: firmware-ra4m1-demo
+            profile: release
+            profile_dir: release
+            script: examples/arduino-uno-r4-minima/uart-smoke.yaml
+            system: examples/arduino-uno-r4-minima/system.yaml
+          - id: teensy-41
+            target: thumbv7em-none-eabi
+            crate: firmware-imxrt1064-demo
+            profile: release
+            profile_dir: release
+            script: examples/teensy-41/uart-smoke.yaml
+            system: examples/teensy-41/system.yaml
+          - id: stm32f7-discovery
+            target: thumbv7em-none-eabi
+            crate: firmware-stm32f746-demo
+            profile: release
+            profile_dir: release
+            script: examples/stm32f7-discovery/uart-smoke.yaml
+            system: examples/stm32f7-discovery/system.yaml
           # The H735 telematics lab — the Cortex-M7 cell, and the only one here
           # whose script asserts PIXELS rather than a UART transcript.
           #

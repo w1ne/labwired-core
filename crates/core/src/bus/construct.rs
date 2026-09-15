@@ -858,31 +858,25 @@ impl SystemBus {
     }
 
     /// Resolve every peripheral's optional `clock:` declaration into a concrete
-    /// [`ResolvedClockGate`] — the list of live RCC (register offset, bit) pairs
-    /// that must all be set. Run as a post-pass by `from_config` after all
-    /// peripherals — crucially the RCC — are on the bus, so the symbolic `reg`
-    /// name can be mapped to the active chip family's RCC offset via
-    /// [`Rcc::rcc_reg_offset`] regardless of the order peripherals appear in the
-    /// config.
+    /// [`ResolvedClockGate`] — the list of live (controller, register offset, bit)
+    /// triples that must all be set, plus an optional SAM GCLK channel. Run as a
+    /// post-pass by `from_config` after all peripherals — crucially the clock
+    /// controller — are on the bus, so the symbolic `reg` name can be mapped via
+    /// [`Peripheral::clock_gate_reg_offset`] regardless of config order.
     ///
     /// A peripheral with no `clock` field is left ungated. A declared gate whose
-    /// `reg` name the family doesn't recognise is a hard config error (a silent
-    /// "never gate" would mask a typo that lets unclocked firmware falsely pass),
-    /// and so is an empty list (a `clock: []` that gates nothing reads as a gate
-    /// but is a false pass waiting to happen).
+    /// controller is missing or whose `reg` name the controller doesn't recognise
+    /// is a hard config error (a silent "never gate" would mask a typo that lets
+    /// unclocked firmware falsely pass), and so is an empty list (a `clock: []`
+    /// that gates nothing reads as a gate but is a false pass waiting to happen).
     pub(crate) fn resolve_clock_gates(
         &mut self,
         peripherals: &[labwired_config::PeripheralConfig],
     ) -> anyhow::Result<()> {
-        // Find the clock controller once (clock-gating requires one). Asked
-        // through `Peripheral::clock_gate_reg_offset`, not a downcast to one
-        // concrete model: a downcast to `rcc::Rcc` silently answered `None` for
-        // every other vendor's clock unit, so a Silicon Labs CMU could declare
-        // gates that never resolved.
-        let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
-            let idx = bus.rcc_idx?;
-            bus.peripherals[idx].dev.clock_gate_reg_offset(reg)
-        };
+        // Asked through `Peripheral::clock_gate_reg_offset`, not a downcast to
+        // one concrete model: a downcast to `rcc::Rcc` silently answered `None`
+        // for every other vendor's clock unit, so a Silicon Labs CMU or SAM PM
+        // could declare gates that never resolved.
         for p_cfg in peripherals {
             let Some(gates) = &p_cfg.clock else { continue };
             let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
@@ -899,21 +893,75 @@ impl SystemBus {
             }
             let mut requires = Vec::with_capacity(declared.len());
             for gate in declared {
-                let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+                let controller_name = gate.controller.as_str();
+                // Named controller first; default `"rcc"` still means "the chip's
+                // clock controller" so EFR32 `cmu` / GD32 `rcu` configs keep
+                // working without renaming the peripheral.
+                let controller_idx =
+                    self.find_peripheral_index_by_name(controller_name)
+                        .or_else(|| {
+                            if controller_name.eq_ignore_ascii_case("rcc") {
+                                self.rcc_idx
+                            } else {
+                                None
+                            }
+                        });
+                let Some(controller_idx) = controller_idx else {
                     return Err(anyhow::anyhow!(
-                        "peripheral '{}' declares clock gate reg '{}' which the chip's \
-                         RCC model does not expose (no such register on this family, \
-                         or no RCC peripheral is registered)",
+                        "peripheral '{}' declares clock gate controller '{}' which is \
+                         not registered on the bus",
                         p_cfg.id,
-                        gate.reg
+                        controller_name
+                    ));
+                };
+                let Some(reg_offset) = self.peripherals[controller_idx]
+                    .dev
+                    .clock_gate_reg_offset(&gate.reg)
+                else {
+                    return Err(anyhow::anyhow!(
+                        "peripheral '{}' declares clock gate reg '{}' which controller \
+                         '{}' does not expose (no such enable register, or controller \
+                         type is not a known clock model)",
+                        p_cfg.id,
+                        gate.reg,
+                        controller_name
                     ));
                 };
                 requires.push(RccClockBit {
+                    controller_idx,
                     reg_offset,
                     bit: gate.bit,
                 });
             }
-            self.peripherals[idx].clock_gate = Some(ResolvedClockGate { requires });
+            let gclk_id = p_cfg
+                .config
+                .get("gclk_id")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u8);
+            let gclk_idx = if gclk_id.is_some() {
+                let by_name = self.find_peripheral_index_by_name("gclk");
+                let by_type = self.peripherals.iter().position(|p| {
+                    p.dev
+                        .as_any()
+                        .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
+                        .is_some()
+                });
+                let Some(gclk_idx) = by_name.or(by_type) else {
+                    return Err(anyhow::anyhow!(
+                        "peripheral '{}' declares config.gclk_id but no GCLK peripheral \
+                         (id \"gclk\" or type sam_gclk) is registered on the bus",
+                        p_cfg.id
+                    ));
+                };
+                Some(gclk_idx)
+            } else {
+                None
+            };
+            self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+                requires,
+                gclk_id,
+                gclk_idx,
+            });
         }
         Ok(())
     }

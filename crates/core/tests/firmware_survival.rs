@@ -1230,6 +1230,73 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
         expected_uart_output: b"LW_L0_OK",
     },
+    SurvivalCase {
+        // SAMD21G18A Nano 33 IoT bare-metal UART smoke: PM APBCMASK + GCLK
+        // SERCOM5_CORE, then three DATA writes of "OK\n" on Serial1.
+        name: "atsamd21_nano33_smoke",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "atsamd21",
+        system: "nano-33-iot",
+        fixture: "atsamd21-nano33-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0003_FFFF), (0x2000_0000, 0x2000_7FFF)],
+        expected_uart_output: b"OK",
+    },
+    SurvivalCase {
+        // SAMD51J19A Metro M4 bare-metal UART smoke: MCLK APBBMASK + GCLK
+        // PCHCTRL[24] SERCOM3_CORE, then three DATA writes of "OK\n" on Serial1.
+        name: "atsamd51_metro_m4_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "atsamd51",
+        system: "metro-m4",
+        fixture: "atsamd51-metro-m4-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0007_FFFF), (0x2000_0000, 0x2002_FFFF)],
+        expected_uart_output: b"OK",
+    },
+    SurvivalCase {
+        // R7FA4M1AB Uno R4 Minima bare-metal UART smoke: HOCO/OSCSF, then
+        // three SCI2 TDR writes of "OK\n" and P111 toggle via POSR.
+        name: "ra4m1_uno_r4_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "ra4m1",
+        system: "arduino-uno-r4-minima",
+        fixture: "ra4m1-uno-r4-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0003_FFFF), (0x2000_0000, 0x2000_7FFF)],
+        expected_uart_output: b"OK",
+    },
+    SurvivalCase {
+        // Teensy 4.1 / i.MX RT106x (chip yaml imxrt1064, RT1064-class cousin of
+        // MIMXRT1062): CCM CCGR ungating, LPUART6 DATA "OK\n", GPIO2_IO03
+        // DR_TOGGLE. Soft-float image linked in DTCM (XIP skipped).
+        name: "imxrt1064_teensy41_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "imxrt1064",
+        system: "teensy-41",
+        fixture: "imxrt1064-teensy41-smoke.elf",
+        valid_pc_ranges: &[(0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"OK",
+    },
+    SurvivalCase {
+        // STM32F7 Discovery / STM32F746NG bare-metal UART smoke: RCC AHB1/APB2
+        // ungating, USART1 TDR "OK\n" (stm32v2), PI1 BSRR toggle. Soft-float
+        // flash @ 0x08000000 / DTCM @ 0x20000000. SIM-DERIVED.
+        name: "stm32f746_discovery_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        hal: Hal::Bare,
+        chip: "stm32f746",
+        system: "stm32f7-discovery",
+        fixture: "stm32f746-discovery-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2000_FFFF)],
+        expected_uart_output: b"OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -2187,6 +2254,31 @@ fn test_stm32wb55_arduino_serial_survival() {
 #[test]
 fn test_stm32wba52_arduino_serial_survival() {
     run_survival_case(case_by_name("stm32wba52_arduino_serial"));
+}
+
+#[test]
+fn test_atsamd21_nano33_smoke_survival() {
+    run_survival_case(case_by_name("atsamd21_nano33_smoke"));
+}
+
+#[test]
+fn test_atsamd51_metro_m4_smoke_survival() {
+    run_survival_case(case_by_name("atsamd51_metro_m4_smoke"));
+}
+
+#[test]
+fn test_ra4m1_uno_r4_smoke_survival() {
+    run_survival_case(case_by_name("ra4m1_uno_r4_smoke"));
+}
+
+#[test]
+fn test_imxrt1064_teensy41_smoke_survival() {
+    run_survival_case(case_by_name("imxrt1064_teensy41_smoke"));
+}
+
+#[test]
+fn test_stm32f746_discovery_smoke_survival() {
+    run_survival_case(case_by_name("stm32f746_discovery_smoke"));
 }
 
 #[test]

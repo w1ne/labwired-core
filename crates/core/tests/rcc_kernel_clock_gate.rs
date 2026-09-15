@@ -348,6 +348,7 @@ fn an_unknown_clock_register_name_fails_the_build_loudly() {
                     // Real register — on the WB/G4/H5 families, not on the L0.
                     reg: "apb1enr2".to_string(),
                     bit: 1,
+                    controller: "rcc".into(),
                 },
             ));
         }

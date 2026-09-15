@@ -1,0 +1,63 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Teensy 4.1 silicon is MIMXRT1062; this model is the RT1064-class cousin
+# (GPIO/LPUART/CCM class). Do not claim 4MB SiP flash or FlexSPI. SIM-DERIVED.
+# SRAM/DTCM linked only — no FlexSPI XIP @ 0x60000000 for smoke.
+# Pin labels follow PJRC Teensy 4.1 (GPIO2_IO03 = pin 13 LED; LPUART6 = Serial1).
+
+name: "imxrt1064"
+arch: "arm"
+core: "cortex-m7"
+cpu_hz: 600_000_000
+# Image linked into DTCM (XIP skipped). Split so cortex-m-rt FLASH/RAM do not overlap.
+flash:
+  base: 0x20000000
+  size: "64KB"
+ram:
+  base: 0x20010000
+  size: "64KB"
+memory_regions:
+  # Optional OCRAM window (IMXRT1060RM / MIMXRT1062.h).
+  - name: "ocram"
+    base: 0x20200000
+    size: "512KB"
+pins:
+  # D13 / LED — GPIO_B0_03 → GPIO2_IO03 (PJRC Teensy 4.1).
+  D13: { gpio: gpio2, bit: 3, functions: [{ type: gpio, peripheral: gpio2 }] }
+peripherals:
+  # CCM @ 0x400FC000 — CCGR ungating + COSC_READY (IMXRT1060RM / MIMXRT1062.h).
+  - id: "ccm"
+    type: "imx_ccm"
+    base_address: 0x400FC000
+    size: "4KB"
+  # IOMUXC sticky stub @ 0x401F8000 (no mux side effects).
+  - id: "iomuxc"
+    type: "imx_iomuxc"
+    base_address: 0x401F8000
+    size: "16KB"
+  # GPIO2 @ 0x401BC000 — DR/GDIR + DR_TOGGLE@0x8C (IMXRT1060RM §12).
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x401BC000
+    size: "256B"
+    config:
+      profile: "imxrt"
+  # LPUART6 @ 0x40198000 — Teensy Serial1 (MIMXRT1062.h LPUART6_BASE).
+  # DATA @ +0x0C (Kinetis / nxp_lpuart layout).
+  - id: "lpuart6"
+    type: "nxp_lpuart"
+    base_address: 0x40198000
+    size: "4KB"
+    irq: 21
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # FlexSPI stub only — no XIP model / no 4MB SiP flash claim.
+  - id: "flexspi"
+    type: "stub"
+    base_address: 0x402A8000
+    size: "4KB"
