@@ -684,6 +684,8 @@ boards:
       - configs/chips/nrf52840.yaml
 
   - id: stm32h563
+    # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
+    # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/stm32h563.md
     chip: configs/chips/stm32h563.yaml
@@ -1108,7 +1110,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 6ceeb09ce732122897830c50d45138f8d3e40ff9fdc9d9171d99c0588dafbd71
+    drift_ack_digest: 5e9f621e1e33c61b4006a51813977ab8a4e87148cefe1219025ac37afd34046d
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1960,6 +1962,8 @@ boards:
     # reset value would go red there, not hide here.
 
   - id: nucleo-l476rg
+    # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
+    # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/nucleo-l476rg.md
     chip: configs/chips/stm32l476.yaml
@@ -2366,7 +2370,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: a6ca07252e1fdbacf918ded78eced6c36c310f63cdf397c6ba68e8278aee2f15
+    drift_ack_digest: ed4d2d29cd365d6bfef7ed173c71d5adfcee7338fcc78f4278cf528a62db1346
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2467,6 +2471,8 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: nucleo-l073rz
+    # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
+    # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/nucleo-l073rz.md
     chip: configs/chips/stm32l073.yaml
@@ -2832,7 +2838,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 181f8e640cf34580b6be3aa3cb0674487d63cfa785b238dc2a8f7fe30de757bf
+    drift_ack_digest: 413a51ffd58d986ba31abd7978e236651a06f68a0c4a526513cc217a37d6a37f
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2901,6 +2907,8 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: stm32f103
+    # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
+    # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/stm32f103.md
     chip: configs/chips/stm32f103.yaml
@@ -3320,7 +3328,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 76addaa54d6211b36ed44d7967395e3b51d4f1ddebad5d33852b6db06409171e
+    drift_ack_digest: 521fc4bac299911e2cd474c97c96d6485fb42c872b5a2fbf94d15cabfba03b2d
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3423,6 +3431,8 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: stm32f407
+    # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
+    # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     doc: docs/boards/stm32f407.md
     chip: configs/chips/stm32f407.yaml
@@ -3806,7 +3816,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 889b550fba4291964e89c674e7101ece258714477ac3fa07f08c299065ed2691
+    drift_ack_digest: f8ee31f87efa5e6a2f98f6199fa8e4e53821c5bbe44af9d31a6ece2fb5664660
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
