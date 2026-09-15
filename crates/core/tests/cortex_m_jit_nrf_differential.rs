@@ -438,6 +438,15 @@ fn nrf52840_zephyr_hello_uart_and_cycles_match_at_tick_512() {
         snapshot_state(&on.cpu),
         "arch state after hello"
     );
+    let stats = on.cpu.jit_stats().expect("JIT engine must exist");
+    assert!(
+        stats.block_runs > 0,
+        "Zephyr hello compiled no blocks: {stats:?}"
+    );
+    assert!(
+        stats.block_instrs > 0,
+        "Zephyr hello retired no compiled insns: {stats:?}"
+    );
 }
 
 fn plant_systick_handler(machine: &mut Machine<CortexM>) {
