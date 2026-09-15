@@ -1,0 +1,12 @@
+# LabWired - STM32F7 Discovery UART smoke test
+schema_version: "1.0"
+inputs:
+  # Built by: cargo build -p firmware-stm32f746-demo --release --target thumbv7em-none-eabi
+  # Survival fixture (same bytes): tests/fixtures/stm32f746-discovery-smoke.elf
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

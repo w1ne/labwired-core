@@ -997,6 +997,19 @@ DONE\r\n",
         valid_pc_ranges: &[(0x2000_0000, 0x2001_FFFF)],
         expected_uart_output: b"OK",
     },
+    SurvivalCase {
+        // STM32F7 Discovery / STM32F746NG bare-metal UART smoke: RCC AHB1/APB2
+        // ungating, USART1 TDR "OK\n" (stm32v2), PI1 BSRR toggle. Soft-float
+        // flash @ 0x08000000 / DTCM @ 0x20000000. SIM-DERIVED.
+        name: "stm32f746_discovery_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        chip: "stm32f746",
+        system: "stm32f7-discovery",
+        fixture: "stm32f746-discovery-smoke.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2000_FFFF)],
+        expected_uart_output: b"OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1905,6 +1918,11 @@ fn test_ra4m1_uno_r4_smoke_survival() {
 #[test]
 fn test_imxrt1064_teensy41_smoke_survival() {
     run_survival_case(case_by_name("imxrt1064_teensy41_smoke"));
+}
+
+#[test]
+fn test_stm32f746_discovery_smoke_survival() {
+    run_survival_case(case_by_name("stm32f746_discovery_smoke"));
 }
 
 #[test]
