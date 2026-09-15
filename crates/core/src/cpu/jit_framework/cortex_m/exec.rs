@@ -79,13 +79,13 @@ impl CompiledBlock {
         }
 
         let mut clear_exclusive = false;
-        if self.ram_len > 0 {
+        // Loads never mutate the RAM window; skip the memcpy-out unless a
+        // compiled store ran.
+        if self.has_store && self.ram_len > 0 {
             self.regs
                 .read(&self.store, RAM_WINDOW_OFF as usize, &mut ram[..ram_n])
                 .expect("guest-RAM writeback");
-            if self.has_store {
-                clear_exclusive = self.read_slot(RES_FLAG_SLOT) != 0;
-            }
+            clear_exclusive = self.read_slot(RES_FLAG_SLOT) != 0;
         }
 
         let (exit, n) = match wire {

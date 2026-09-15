@@ -247,6 +247,75 @@ fn ram_load_store_loop_matches_interpreter() {
     assert_eq!(interp.cpu.r0, jit.cpu.r0);
 }
 
+#[test]
+fn ldr_only_block_does_not_need_writeback_lockstep() {
+    // Store-free mem block: 16 nops + in-window LDR + b. Seed still happens
+    // (loads read wasm RAM); writeback is skipped when `!has_store`. Host RAM
+    // matching a pre-run clone is true with or without the skip (writeback of
+    // identical bytes is a no-op).
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, ldr_imm(2, 1, 0));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let ram_base = probe.bus.ram.base_addr as u32;
+    let ram_len = probe.bus.ram.data.len() as u32;
+    let frontend = CortexMFrontend::with_ram_window(ram_base, ram_len);
+    let view = CodeView::new(0, &prog);
+    let (plan, binding) = frontend
+        .translate_block_thumb(0, &view)
+        .expect("translate LDR-only");
+    assert_eq!(plan.instr_count, 18, "16 nops + LDR + b");
+    assert!(
+        !binding.expect("LDR binds RAM").has_store,
+        "LDR-only block must not set has_store"
+    );
+
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(18),
+        "LDR-only must compile: {:?}",
+        engine_probe.stats()
+    );
+
+    let seed = |m: &mut Machine<CortexM>| {
+        m.cpu.r1 = m.bus.ram.base_addr as u32;
+        m.bus
+            .write_u32(u64::from(m.cpu.r1), 0xA5A5_5A5A)
+            .expect("seed RAM word");
+    };
+
+    let mut jit = build_machine(&prog);
+    seed(&mut jit);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    let orig_ram = jit.bus.ram.data.clone();
+    let n = engine.step_unit(&mut jit);
+    assert!(
+        engine.stats().block_runs > 0,
+        "LDR-only never ran compiled: {:?}",
+        engine.stats()
+    );
+    assert_eq!(n, 18, "compiled LDR-only block retired {n}");
+    assert_eq!(
+        jit.bus.ram.data, orig_ram,
+        "store-free compiled block must leave host RAM unchanged"
+    );
+    assert_eq!(jit.cpu.r2, 0xA5A5_5A5A, "LDR must observe seeded RAM");
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, seed);
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r2, jit.cpu.r2);
+    assert_eq!(interp.cpu.r2, 0xA5A5_5A5A);
+    assert_eq!(interp.cpu.pc, jit.cpu.pc);
+}
+
 fn ldr_imm32(rt: u8, rn: u8, imm12: u16) -> (u16, u16) {
     (
         0xF8D0 | (rn as u16 & 0xF),
