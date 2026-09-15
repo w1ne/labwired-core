@@ -565,6 +565,85 @@ fn pop_regs(registers: u8, p: bool) -> u16 {
 }
 
 #[test]
+fn pop_out_of_window_matches_interpreter() {
+    // Mirror of push_out_of_window: 16 nops + POP {r0-r7}. SP sits 16 bytes
+    // below RAM end so the first slots are in-window if loaded incrementally,
+    // but the last of the 8 words is past ram_end. JIT must not increment SP
+    // (or commit dest regs) before the side-exit.
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, pop_regs(0xFF, false)); // POP {r0-r7}
+
+    let mut interp = build_machine(&prog);
+    let mut jit = build_machine(&prog);
+    let ram_base = jit.bus.ram.base_addr as u32;
+    let ram_len = jit.bus.ram.data.len() as u32;
+    let orig_sp = ram_base + ram_len - 16;
+    let seed = |m: &mut Machine<CortexM>, sp: u32| {
+        m.cpu.sp = sp;
+        m.cpu.r0 = 0;
+        m.cpu.r1 = 0;
+        m.cpu.r2 = 0;
+        m.cpu.r3 = 0;
+        m.cpu.r4 = 0;
+        m.cpu.r5 = 0;
+        m.cpu.r6 = 0;
+        m.cpu.r7 = 0;
+    };
+    seed(&mut interp, orig_sp);
+    seed(&mut jit, orig_sp);
+
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    assert!(
+        engine.stats().compiled > 0,
+        "16 ALU + POP must compile: {:?}",
+        engine.stats()
+    );
+
+    let r0_before = jit.cpu.r0;
+    let n = engine.step_unit(&mut jit);
+    assert!(
+        engine.stats().block_runs > 0,
+        "POP was not in a compiled block: {:?}",
+        engine.stats()
+    );
+    assert_eq!(
+        n, 16,
+        "POP must mem-fault after the 16-ALU prefix (retired={n})"
+    );
+
+    for _ in 0..n {
+        interp.step().expect("ALU prefix must not fault");
+    }
+
+    assert_eq!(interp.cpu.pc, 32, "resume PC is the POP");
+    assert_eq!(
+        jit.cpu.pc, interp.cpu.pc,
+        "JIT resume PC must match interpreter"
+    );
+    assert_eq!(
+        interp.cpu.sp, orig_sp,
+        "interpreter SP is unchanged; POP has not committed r13"
+    );
+    assert_eq!(
+        jit.cpu.sp, orig_sp,
+        "JIT must not leave SP incremented on an out-of-window POP side-exit"
+    );
+    assert_eq!(
+        jit.cpu.r0, r0_before,
+        "JIT must not commit dest regs before the out-of-window POP side-exit"
+    );
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "arch state after POP side-exit"
+    );
+}
+
+#[test]
 fn pop_pc_terminator_matches_interpreter() {
     // 16 nops + POP {PC}. Without the terminator in is_terminator_emittable
     // the compiled block is 16 nops (fall-through); with it, 17 insns chain

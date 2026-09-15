@@ -1738,7 +1738,7 @@ impl Body {
                 }
             }
             Push { registers, m } => self.emit_push(pc, registers, m),
-            Pop { registers, p } if !p => self.emit_pop(pc, registers),
+            Pop { registers, p } if !p => self.emit_ldm_stm(pc, 13, registers, true),
             Ldm { rn, registers } => self.emit_ldm_stm(pc, rn, registers, true),
             Stm { rn, registers } => self.emit_ldm_stm(pc, rn, registers, false),
             LdmiaW {
@@ -2094,8 +2094,10 @@ impl Body {
             }
         }
         // 16-bit LDM writeback is suppressed when Rn is in the list (loaded
-        // value wins). STM always writebacks.
-        if !is_load || (registers & (1 << rn)) == 0 {
+        // value wins). STM always writebacks. POP is LDMIA SP! — Rn is 13,
+        // which is never in the 8-bit r0–r7 list.
+        let rn_in_list = rn < 8 && (registers & (1 << rn)) != 0;
+        if !is_load || !rn_in_list {
             self.local_get(OP2_LOCAL);
             self.i32_const((4 * count) as i32);
             self.buf.push(op::I32_ADD);
@@ -2284,30 +2286,6 @@ impl Body {
         self.buf.push(op::ELSE);
         self.emit_fault(pc, &writes_before);
         self.buf.push(op::END);
-    }
-
-    fn emit_pop(&mut self, pc: u32, registers: u8) {
-        for i in 0..=7u8 {
-            if (registers & (1 << i)) != 0 {
-                self.emit_load_at_sp(pc, i);
-                self.read(13, pc);
-                self.i32_const(4);
-                self.buf.push(op::I32_ADD);
-                self.write(13);
-            }
-        }
-    }
-
-    fn emit_load_at_sp(&mut self, pc: u32, rd: u8) {
-        self.emit_mem(
-            pc,
-            13,
-            0,
-            MemAccess::Load {
-                rd,
-                opcode: op::I32_LOAD,
-            },
-        );
     }
 
     fn emit_ldm_ea_in_window(&mut self, ram_base: u32, hi: u32) {

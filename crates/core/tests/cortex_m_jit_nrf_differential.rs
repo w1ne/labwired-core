@@ -504,6 +504,11 @@ fn takeable_irq_at_batch_start_is_taken_before_compiled_block() {
     off.run(Some(64)).expect("interp take irq");
 
     assert_eq!(
+        on.cpu.active_exception, 15,
+        "JIT must take SysTick (15), not skip it; active={} pc={:#x}",
+        on.cpu.active_exception, on.cpu.pc
+    );
+    assert_eq!(
         off.cpu.active_exception,
         on.cpu.active_exception,
         "SysTick must be taken on both; off={} on={} r0 off={:#x} on={:#x} pc off={:#x} on={:#x}",
