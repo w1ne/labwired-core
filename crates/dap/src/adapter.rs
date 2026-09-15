@@ -1018,6 +1018,11 @@ fn gpio_offsets_for_peripheral(
             idr_offset: 0x20,
             odr_offset: 0x10,
         }),
+        // Renesas RA PORT: PCNTR1 @0x00 (PODR in [31:16]), PCNTR2 PIDR @0x04.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::RaPort => Some(GpioOffsets {
+            idr_offset: 0x04,
+            odr_offset: 0x00,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,
@@ -1064,13 +1069,24 @@ fn resolve_board_io_bindings(
             labwired_config::BoardIoSignal::Output => gpio_offsets.odr_offset,
         };
 
+        // RA PCNTR1 packs PODR in bits [31:16]; sample output with pin+16.
+        let pin_shift = if binding.signal == labwired_config::BoardIoSignal::Output
+            && gpio_offsets.odr_offset == 0x00
+            && gpio_offsets.idr_offset == 0x04
+            && binding.pin < 16
+        {
+            binding.pin + 16
+        } else {
+            binding.pin
+        };
+
         resolved.push(ResolvedBoardIoBinding {
             id: binding.id.clone(),
             kind: binding.kind,
             signal: binding.signal,
             active_high: binding.active_high,
             register_addr: base_addr + register_offset,
-            pin_mask: 1u32 << binding.pin,
+            pin_mask: 1u32 << pin_shift,
         });
     }
 

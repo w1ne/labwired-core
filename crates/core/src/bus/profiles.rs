@@ -361,7 +361,7 @@ impl SystemBus {
                 "GPIO peripheral '{}' is declared with the vendor-neutral `type: gpio` but no \
                  `config.profile`; it will NOT be silently mapped onto STM32F1 (a wrong layout \
                  moves the output register and blanks a display's D/C line). Choose a layout \
-                 explicitly with `config: {{ profile: <stm32f1|stm32v2|nrf52|kinetis|sam_port> }}`.",
+                 explicitly with `config: {{ profile: <stm32f1|stm32v2|nrf52|kinetis|sam_port|ra_port> }}`.",
                 p_cfg.id
             );
         } else {

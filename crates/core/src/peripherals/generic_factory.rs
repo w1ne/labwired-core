@@ -107,6 +107,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_pm",
     "sam_gclk",
     "sam_mclk",
+    // Renesas RA SYSTEM (HOCO / OSCSF).
+    "ra_sysc",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -464,6 +466,7 @@ pub fn try_build(
         "sam_pm" => Box::new(crate::peripherals::sam_clock::SamPm::new()),
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
+        "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

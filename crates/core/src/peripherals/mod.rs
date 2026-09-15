@@ -41,6 +41,7 @@ pub mod nvic;
 pub mod pio;
 pub mod pwr;
 pub mod quadspi;
+pub mod ra_clock;
 pub mod radio;
 pub mod rcc;
 pub mod rng;
