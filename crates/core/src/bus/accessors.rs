@@ -94,6 +94,18 @@ impl crate::Bus for SystemBus {
         SystemBus::requires_cycle_accurate(self)
     }
 
+    fn systick_ticks_until_fire(&self) -> Option<u64> {
+        self.peripherals
+            .iter()
+            .find_map(|p| p.dev.systick_ticks_until_fire())
+    }
+
+    fn systick_consume_cycles(&mut self, n: u64) {
+        for p in &mut self.peripherals {
+            p.dev.systick_consume_cycles(n);
+        }
+    }
+
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {

@@ -695,6 +695,21 @@ impl CortexM {
             && !self.faultmask_blocks(exc)
     }
 
+    /// RISC-V `block_would_cross_irq` analogue: a compiled block of `n`
+    /// instructions is `n` cycles. If SysTick would underflow (TICKINT edge)
+    /// inside that span, interpret instead so exception 15 pends on the same
+    /// instruction the interpreter would pend it. Already-takeable exceptions
+    /// also refuse the block (the interpreter would trap within one insn).
+    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+        if self.jit_takeable_exception() {
+            return true;
+        }
+        match bus.systick_ticks_until_fire() {
+            Some(h) => u64::from(n) >= h,
+            None => false,
+        }
+    }
+
     fn step_batch_jit(
         &mut self,
         bus: &mut dyn Bus,
@@ -758,7 +773,9 @@ impl CortexM {
                 match engine.observe(pc) {
                     Lookup::Ready => {
                         let block_n = engine.ready_instr_count(pc).unwrap_or(0);
-                        let must_interpret = block_n == 0 || retired + block_n > max_count;
+                        let must_interpret = block_n == 0
+                            || retired + block_n > max_count
+                            || self.block_would_cross_irq(bus, block_n);
                         if must_interpret {
                             self.step(bus, observers, config)?;
                             engine.note_interpreted();
@@ -783,6 +800,8 @@ impl CortexM {
                                         self.step(bus, observers, config)?;
                                         engine.note_interpreted();
                                         n = 1;
+                                    } else if actual_n > 0 {
+                                        bus.systick_consume_cycles(u64::from(actual_n));
                                     }
                                 }
                                 None => {

@@ -83,6 +83,7 @@
 boards:
   # ── Fresh: re-verified on live silicon 2026-06-17 ────────────────────────────
   - id: nrf52840
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/nrf52840.md
@@ -409,7 +410,7 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: d81a7fcef3bde407ff2dcbe6d3089b27294990b2ab391c2cd208282d0d42517d
+    drift_ack_digest: 5eb77f1451513f0186e62d925f8deaecf4187db11352fee7d73e7eb9a6595cef
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -417,6 +418,7 @@ boards:
       - configs/chips/nrf52840.yaml
 
   - id: seeed-xiao-nrf52840-sense
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
     # 2026-09-15 (#1119): PeripheralConfig gained irq_controller (None). No silicon-visible behaviour change.
     doc: docs/boards/seeed-xiao-nrf52840-sense.md
@@ -676,7 +678,7 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: d81a7fcef3bde407ff2dcbe6d3089b27294990b2ab391c2cd208282d0d42517d
+    drift_ack_digest: 5eb77f1451513f0186e62d925f8deaecf4187db11352fee7d73e7eb9a6595cef
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -684,6 +686,7 @@ boards:
       - configs/chips/nrf52840.yaml
 
   - id: stm32h563
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
     # 2026-09-15 (#1120): Cortex-M wasm-JIT is opt-in (`cortex_m_jit_enabled` default off). Interpreter path unchanged; JIT-on vs off lockstep in cortex_m_jit_nrf_differential. No silicon capture pins JIT.
@@ -1110,7 +1113,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: a5d3362eea4e680c61b5f249e24c04d10a76a48dba3e4a5bc45d26e8ec0dcffd
+    drift_ack_digest: ef92affc1d0f212a358ce067613964ca3871fd2382ad464d58c03a487778f269
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1963,6 +1966,7 @@ boards:
     # reset value would go red there, not hide here.
 
   - id: nucleo-l476rg
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
@@ -2372,7 +2376,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: 8c46c54036e9df783ee83ae7d3089e0d38bf0b99208b03091985b189c88175a2
+    drift_ack_digest: 28f409fd51777b7fd56c377dd4b14c3e355e5eae7ccd3d774777b16bb9d6e485
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2473,6 +2477,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: nucleo-l073rz
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
@@ -2841,7 +2846,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: fc8139d84f5155b1ea8e288e89dded3c1cdb001e30a741cc0f0a725bec940eb5
+    drift_ack_digest: bd73ad0020177c38258a348910f32c7ae8835deca5c8da5ee65f43c44a37c745
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2910,6 +2915,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: stm32f103
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
@@ -3332,7 +3338,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 58bb611fcd8750f33dd9cca567b6405cb33faa045f354e4bf56287d77ef4a824
+    drift_ack_digest: 5c9026c380e564060be781c9b11f5dfc7b24dbe50cd0ded5aa49f2453b45bdb9
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3435,6 +3441,7 @@ boards:
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-15
   - id: stm32f407
+    # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
     # 2026-09-15 (#932): SPI edge sampling is opt-in (`SpiSampling::Byte` default). Byte-level golden pins the pre-feature path. Controllers without a bit engine reject opt-in at config time.
     # 2026-09-15 (#1124): gpio.rs gained SAM PORT / RA PORT / i.MX GPIO families behind profile discriminants the STM32 construction path never sets. No silicon-visible STM32 behaviour change.
     # 2026-09-15 (#1073): NVIC level-sensitive pending follows the IRQ line down (timer SR&DIER); software ISPR pends still fire once. Matches STM32 silicon; F103 integration tests. Re-capture still owed.
@@ -3821,7 +3828,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: e8623a6725bd36946daf1941f590cc236e4439a1abec81449e9441a878d68b0e
+    drift_ack_digest: 5978d0966122b681dbe7af813eba5d6c49228e074fa19cca597033d09b04efa7
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to

@@ -173,6 +173,34 @@ impl Systick {
         }
     }
 
+    /// Legacy-walk only: apply `n` processor cycles that a compiled JIT block
+    /// just retired. Caller must have refused the block when `n` would wrap
+    /// (`ticks_until_fire`). Scheduler mode is a no-op — the cycle-clock bump
+    /// is the source of truth.
+    pub(crate) fn consume_cycles(&self, n: u64) {
+        if n == 0 || self.scheduler_mode() {
+            return;
+        }
+        if (self.csr & 0x1) == 0 {
+            return;
+        }
+        let (val, wraps) =
+            Self::advance_counter(self.cvr.get() as u64, (self.rvr & 0x00FF_FFFF) as u64, n);
+        debug_assert!(
+            wraps == 0,
+            "JIT block consumed {n} cycles across a SysTick wrap (horizon {:?})",
+            self.ticks_until_fire()
+        );
+        self.cvr.set(val as u32);
+        if wraps > 0 {
+            self.countflag.set(true);
+            if (self.csr & 0x2) != 0 {
+                self.pending_fires
+                    .set(self.pending_fires.get().saturating_add(wraps as u32));
+            }
+        }
+    }
+
     /// Lazy advance to absolute published cycle `now` — callable from `&self`
     /// (all mutated state is in `Cell`). Idempotent; a `now` older than the
     /// anchor is ignored (the clock is monotonic within a run; a stale read
@@ -223,7 +251,11 @@ impl Systick {
     /// Walk ticks until the next zero-hit from the CURRENT (just-synced)
     /// state, when one is armed to fire: requires ENABLE and TICKINT, and a
     /// reachable wrap (`v > 0`, or `v == 0` with `r > 0`).
-    fn ticks_until_fire(&self) -> Option<u64> {
+    /// Cycles until the next TICKINT edge (exception 15). `None` if SysTick
+    /// cannot fire (ENABLE/TICKINT off, or RVR=0 parked at zero). Cortex-M JIT
+    /// uses this as the `block_would_cross_irq` analogue of RISC-V `mtime`.
+    pub(crate) fn ticks_until_fire(&self) -> Option<u64> {
+        self.sync_from_clock();
         if (self.csr & 0x3) != 0x3 {
             return None;
         }
@@ -293,6 +325,14 @@ impl Systick {
 }
 
 impl crate::Peripheral for Systick {
+    fn systick_ticks_until_fire(&self) -> Option<u64> {
+        self.ticks_until_fire()
+    }
+
+    fn systick_consume_cycles(&mut self, n: u64) {
+        self.consume_cycles(n);
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         self.sync_from_clock();
         let reg_offset = offset & !3;
@@ -553,6 +593,43 @@ mod tests {
         assert_eq!(csr & 0x1_0000, 0x1_0000, "COUNTFLAG set after wrap");
         let csr2 = st.read_u32(0x00).unwrap();
         assert_eq!(csr2 & 0x1_0000, 0, "COUNTFLAG cleared by the read");
+    }
+
+    /// Horizon used by Cortex-M JIT `block_would_cross_irq`: cycles until the
+    /// next TICKINT fire, matching `tick()`'s edge-triggered sequence.
+    #[test]
+    fn ticks_until_fire_matches_countdown_edge() {
+        let mut st = armed(4);
+        // CVR is 0 after the software CVR write → reload tick then 4 downs = 5.
+        assert_eq!(st.ticks_until_fire(), Some(5));
+        st.tick(); // reload to 4, no fire
+        assert_eq!(st.ticks_until_fire(), Some(4));
+        st.tick(); // 4→3
+        assert_eq!(st.ticks_until_fire(), Some(3));
+        for _ in 0..2 {
+            st.tick();
+        }
+        assert_eq!(st.ticks_until_fire(), Some(1));
+        st.tick(); // 1→0 fire
+                   // After the fire the counter sits at 0: next fire is reload + RVR.
+        assert_eq!(st.ticks_until_fire(), Some(5));
+    }
+
+    #[test]
+    fn ticks_until_fire_none_when_disabled_or_tickint_off() {
+        let mut st = Systick::new();
+        st.write(0x04, 10).unwrap();
+        st.write(0x08, 0).unwrap();
+        assert_eq!(st.ticks_until_fire(), None, "ENABLE=0");
+        st.write(0x00, 0x05).unwrap(); // ENABLE | CLKSOURCE, no TICKINT
+        st.tick();
+        assert_eq!(st.ticks_until_fire(), None, "TICKINT=0");
+    }
+
+    #[test]
+    fn ticks_until_fire_none_when_rvr_zero_parks() {
+        let st = armed(0);
+        assert_eq!(st.ticks_until_fire(), None);
     }
 
     /// A disabled SysTick (ENABLE=0) never ticks down or fires.

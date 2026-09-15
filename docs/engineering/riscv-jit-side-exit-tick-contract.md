@@ -77,14 +77,15 @@ Thumb emit without an equivalent gate on a **real** Cortex-M UART/timer demo is 
 
 ## 6. What landed vs what is still missing
 
-**#1120 (`jit_framework/cortex_m/`)** is the emit path: ALU + in-window RAM load/store + common control flow, MMIO/`WIRE_MEM_FAULT` side-exit, WFI interpreter-owned, tick-512 ALU lockstep, UART MMIO store match. Dispatch breaks the batch on a takeable exception (SysTick/NVIC already pending) instead of RISC-V `mtime` clamp.
+**#1120 (`jit_framework/cortex_m/`)** is the emit path: ALU + in-window RAM load/store + common control flow, MMIO/`WIRE_MEM_FAULT` side-exit, WFI interpreter-owned, tick-512 ALU lockstep, UART MMIO store match.
+
+**SysTick countdown clamp:** `CortexM::block_would_cross_irq` is the RISC-V `mtime` analogue. `Systick::ticks_until_fire` is the horizon; a compiled block of `n` cycles is refused when `n >= horizon` so exception 15 pends on the same instruction as the interpreter. After a block that does not wrap, `systick_consume_cycles` advances the legacy-walk CVR (scheduler-mode SysTick follows the cycle-clock bump). Dispatch still breaks the batch on an already-takeable exception.
 
 **#1121 (`jit_framework/thumb/`)** was an all-bail walker only. Superseded by #1120 — do not merge both.
 
 Still missing from the original “before emit” list:
 
-- Firmware UART hello **JIT-on vs JIT-off** (Zephyr L0 / nRF), not a 12-byte ADD loop
-- Explicit SysTick-countdown `block_would_cross_irq` analogue (pending-exception break is the current substitute)
+- Firmware UART hello **JIT-on vs JIT-off** (Zephyr L0 / nRF) as a CI-weighted tick-interval gate (nRF differential covers hello at tick 512; a C3-style 1-vs-64 UART+inspect gate is the remaining analogue)
 
 That proves dispatch/host/snapshot **plumbing**. It does **not**:
 
