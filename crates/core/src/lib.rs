@@ -46,8 +46,8 @@ pub mod vfi;
 pub mod world;
 
 pub use config::SimulationConfig;
-pub use host_time::HostTimeMode;
 pub use cycle_clock::CycleClock;
+pub use host_time::HostTimeMode;
 pub use machine::{
     AdvanceLimits, AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy,
     IdlePolicy,

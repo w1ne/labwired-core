@@ -708,7 +708,13 @@ impl CortexM {
         max_count: u32,
     ) -> SimResult<u32> {
         let mut engine = self.jit_engine.take().unwrap_or_else(|| {
-            crate::cpu::jit_framework::cortex_m::CortexMJitEngine::new(CORTEX_M_JIT_HOT_THRESHOLD)
+            let mut e = crate::cpu::jit_framework::cortex_m::CortexMJitEngine::new(
+                CORTEX_M_JIT_HOT_THRESHOLD,
+            );
+            if config.cortex_m_jit_min_block_instrs != 0 {
+                e.set_min_profitable(config.cortex_m_jit_min_block_instrs);
+            }
+            e
         });
         let out = self.run_jit_loop(&mut engine, bus, observers, config, max_count);
         self.jit_engine = Some(engine);
