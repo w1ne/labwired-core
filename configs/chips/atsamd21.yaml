@@ -7,7 +7,7 @@
 # SIM-DERIVED SAMD21G18A descriptor for Arduino Nano 33 IoT bring-up.
 # Not silicon-verified. NINA (WiFi), ATECC608A, and IMU (LSM6DS3) are
 # intentionally omitted / stubbed — only the MCU core, PORT, PM/GCLK,
-# SERCOM2 UART, SysTick, and a USB stub window are modelled here.
+# SERCOM5 UART (Serial1), SysTick, and a USB stub window are modelled here.
 # Pin labels follow ArduinoCore-samd variants/nano_33_iot/variant.cpp.
 
 name: "atsamd21g18a"
@@ -20,10 +20,10 @@ ram:
   base: 0x20000000
   size: "32KB"
 pins:
-  # D0 / RX — variant.cpp: PORTB 23 (SERCOM5/PAD[3] on the board UART).
-  PB23: { gpio: portb, bit: 23, functions: [{ type: uart, peripheral: sercom2, role: rx }] }
-  # D1 / TX — variant.cpp: PORTB 22 (SERCOM5/PAD[2] on the board UART).
-  PB22: { gpio: portb, bit: 22, functions: [{ type: uart, peripheral: sercom2, role: tx }] }
+  # D0 / RX — variant.cpp: PORTB 23 (SERCOM5/PAD[3]).
+  PB23: { gpio: portb, bit: 23, functions: [{ type: uart, peripheral: sercom5, role: rx }] }
+  # D1 / TX — variant.cpp: PORTB 22 (SERCOM5/PAD[2]).
+  PB22: { gpio: portb, bit: 22, functions: [{ type: uart, peripheral: sercom5, role: tx }] }
   # D13 / LED — variant.cpp: PORTA 17.
   PA17: { gpio: porta, bit: 17, functions: [{ type: gpio, peripheral: porta }] }
 peripherals:
@@ -50,18 +50,19 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
-  - id: "sercom2"
+  # Serial1 — SERCOM5 on PB22/PB23 (variant.cpp Uart Serial1(&sercom5, ...)).
+  - id: "sercom5"
     type: "uart"
-    base_address: 0x42001000
+    base_address: 0x42001C00
     size: "256B"
-    irq: 11
+    irq: 14
     clock:
       controller: "pm"
       reg: "APBCMASK"
-      bit: 4
+      bit: 7
     config:
       profile: "sercom"
-      gclk_id: 22
+      gclk_id: 25
   - id: "usb"
     type: "stub"
     base_address: 0x41005000

@@ -19,5 +19,5 @@ board_io:
     active_high: true
 connectors:
   - type: "uart"
-    peripheral: "sercom2"
+    peripheral: "sercom5"
     endpoint: "host_console"

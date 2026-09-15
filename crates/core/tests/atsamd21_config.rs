@@ -26,5 +26,10 @@ fn atsamd21_from_config_builds() {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load chip for nano-33-iot: {e}"));
     manifest.chip = chip_path.to_str().expect("utf-8 chip path").to_string();
-    SystemBus::from_config(&chip, &manifest).expect("atsamd21 / nano-33-iot must build");
+    let bus = SystemBus::from_config(&chip, &manifest).expect("atsamd21 / nano-33-iot must build");
+    // Nano 33 IoT Serial1 is SERCOM5 on PB22/PB23 (ArduinoCore-samd variant.cpp).
+    assert!(
+        bus.find_peripheral_index_by_name("sercom5").is_some(),
+        "bus must expose sercom5 (Serial1), not sercom2"
+    );
 }
