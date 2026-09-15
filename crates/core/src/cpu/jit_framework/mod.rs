@@ -43,6 +43,7 @@
 //! untouched.
 
 pub mod block_cache;
+pub mod cortex_m;
 pub mod differential;
 pub mod dispatch;
 pub mod fallback;

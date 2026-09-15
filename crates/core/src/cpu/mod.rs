@@ -51,9 +51,9 @@ pub mod xtensa_jit_bytes;
 //
 // Compiled under EITHER `jit-framework` (the pure-Rust scaffold + lockstep
 // tests) OR `jit` (the production/wasm feature set): chunk H wires the
-// RISC-V frontend's native `wasmtime` executor (`riscv::exec`, itself gated
-// on `jit`) into `Machine<RiscV>`'s dispatch, so the production `jit` build
-// needs this module present too. Both features are off by default, so the
+// RISC-V and Cortex-M frontends' native `wasmtime` executors into
+// `Machine<RiscV>` / `Machine<CortexM>` dispatch, so the production `jit`
+// build needs this module present too. Both features are off by default, so the
 // default build is unaffected. See
 #[cfg(any(feature = "jit", feature = "jit-framework"))]
 pub mod jit_framework;

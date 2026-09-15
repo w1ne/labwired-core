@@ -76,6 +76,7 @@ pub mod op {
     // ── locals / constants ─────────────────────────────────────────────
     pub const LOCAL_GET: u8 = 0x20;
     pub const LOCAL_SET: u8 = 0x21;
+    pub const LOCAL_TEE: u8 = 0x22;
     pub const I32_CONST: u8 = 0x41;
     pub const I64_CONST: u8 = 0x42;
     pub const DROP: u8 = 0x1a;
@@ -103,6 +104,9 @@ pub mod op {
     pub const I32_NE: u8 = 0x47;
     pub const I32_LT_S: u8 = 0x48;
     pub const I32_LT_U: u8 = 0x49;
+    pub const I32_GT_S: u8 = 0x4a;
+    pub const I32_GT_U: u8 = 0x4b;
+    pub const I32_LE_S: u8 = 0x4c;
     pub const I32_LE_U: u8 = 0x4d;
     pub const I32_GE_S: u8 = 0x4e;
     pub const I32_GE_U: u8 = 0x4f;
@@ -119,6 +123,10 @@ pub mod op {
     pub const I32_SHL: u8 = 0x74;
     pub const I32_SHR_S: u8 = 0x75;
     pub const I32_SHR_U: u8 = 0x76;
+    pub const I32_ROTL: u8 = 0x77;
+    pub const I32_CLZ: u8 = 0x67;
+    /// `select` (ternary): `c ? a : b` with `[a, b, c]` on the stack.
+    pub const SELECT: u8 = 0x1b;
 
     // ── i64 (used only by the MULH family) ─────────────────────────────
     pub const I64_MUL: u8 = 0x7e;

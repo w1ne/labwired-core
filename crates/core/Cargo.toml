@@ -305,6 +305,16 @@ required-features = ["esp32s3-fixtures"]
 
 # #![cfg(all(feature = "jit-framework", feature = "jit"))]
 [[test]]
+name = "cortex_m_jit_alu_lockstep"
+required-features = ["jit", "jit-framework"]
+
+# #![cfg(all(feature = "jit", feature = "event-scheduler"))]
+[[test]]
+name = "cortex_m_jit_nrf_differential"
+required-features = ["event-scheduler", "jit"]
+
+# #![cfg(all(feature = "jit-framework", feature = "jit"))]
+[[test]]
 name = "riscv_jit_alu_lockstep"
 required-features = ["jit", "jit-framework"]
 
