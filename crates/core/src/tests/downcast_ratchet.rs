@@ -99,8 +99,12 @@ use std::path::{Path, PathBuf};
 /// 197 → 199 / 212 → 214: SAM PORT / RA PORT / i.MX GPIO family dispatch on
 /// the maker-five twins reaches the concrete gpio layout through `as_any` /
 /// `downcast_ref` (two new sites).
-const MAX_AS_ANY: usize = 199;
-const MAX_DOWNCAST_REF: usize = 214;
+///
+/// 199 → 202 / 214 → 217: SPI edge-sampling tests inspect the attached
+/// `EdgeSlave`/`EdgeDev` (latched MOSI bytes / call count). Production path
+/// does not grow a downcast; these three are test-only.
+const MAX_AS_ANY: usize = 202;
+const MAX_DOWNCAST_REF: usize = 217;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
