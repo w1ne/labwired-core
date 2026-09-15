@@ -353,7 +353,7 @@ pub struct PeripheralConfig {
     #[serde(default)]
     pub irq: Option<u32>,
     /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub irq_controller: Option<String>,
     /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
     /// peripheral to answer the CPU. `None` → the peripheral is never gated
@@ -1646,6 +1646,30 @@ fn yaml_str_key(key: &str) -> serde_yaml::Value {
     serde_yaml::Value::String(key.to_string())
 }
 
+/// `from_str` accepts `size: 1024` as a string field; `from_value` does not.
+/// Walk mappings and stringify numeric `size` so include-merge can deserialize
+/// without a YAML text round-trip.
+fn coerce_yaml_size_numbers(value: &mut serde_yaml::Value) {
+    match value {
+        serde_yaml::Value::Mapping(map) => {
+            let size_key = yaml_str_key("size");
+            if let Some(serde_yaml::Value::Number(n)) = map.get(&size_key) {
+                let s = n.to_string();
+                map.insert(size_key, serde_yaml::Value::String(s));
+            }
+            for (_, v) in map.iter_mut() {
+                coerce_yaml_size_numbers(v);
+            }
+        }
+        serde_yaml::Value::Sequence(seq) => {
+            for v in seq {
+                coerce_yaml_size_numbers(v);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn mapping_field<'a>(value: &'a serde_yaml::Value, key: &str) -> Option<&'a str> {
     value.as_mapping()?.get(yaml_str_key(key))?.as_str()
 }
@@ -1816,12 +1840,12 @@ impl ChipDescriptor {
                     .context("Failed to parse Chip Descriptor YAML");
             }
             let mut stack = Vec::new();
-            let value = expand_chip_includes(path, &content, &mut stack)?;
-            // `from_value` rejects YAML integers in string fields (`size: 768`);
-            // `from_str` coerces them, matching the historical loader.
-            let yaml = serde_yaml::to_string(&value)
-                .context("Failed to reserialize merged Chip Descriptor YAML")?;
-            serde_yaml::from_str(&yaml).context("Failed to parse Chip Descriptor YAML")
+            let mut value = expand_chip_includes(path, &content, &mut stack)?;
+            // YAML `size: 1024` is a number; `PeripheralConfig.size` is a
+            // string (`"1024"` / `"1KB"`). `from_str` coerces; `from_value`
+            // does not. Coerce in-place so we never round-trip through text.
+            coerce_yaml_size_numbers(&mut value);
+            serde_yaml::from_value(value).context("Failed to parse Chip Descriptor YAML")
         }
     }
 

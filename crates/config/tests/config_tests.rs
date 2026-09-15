@@ -825,6 +825,7 @@ peripherals:
     type: uart
     base_address: 0x40002000
     irq: 2
+    size: 4096
   - id: uart1
     type: uart
     base_address: 0x40028000
@@ -844,6 +845,11 @@ peripherals:
         .find(|p| p.id == "uart0")
         .expect("uart0 from include, irq overridden locally");
     assert_eq!(uart0.irq, Some(2));
+    assert_eq!(
+        uart0.size.as_deref(),
+        Some("4096"),
+        "numeric YAML size must parse without a text round-trip"
+    );
     let uart1 = chip
         .peripherals
         .iter()
