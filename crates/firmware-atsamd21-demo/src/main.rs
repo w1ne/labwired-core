@@ -26,7 +26,7 @@ const PORTA_DIRSET: *mut u32 = 0x4100_4408 as *mut u32;
 const PORTA_OUTTGL: *mut u32 = 0x4100_441C as *mut u32;
 
 const LED: u32 = 1 << 17; // PA17 — D13 / LED_BUILTIN
-// CLKCTRL: ID=25 (SERCOM5_CORE), GEN=0, CLKEN=1 → 0x4019
+                          // CLKCTRL: ID=25 (SERCOM5_CORE), GEN=0, CLKEN=1 → 0x4019
 const GCLK_SERCOM5_CORE: u16 = 25 | (1 << 14);
 
 #[entry]

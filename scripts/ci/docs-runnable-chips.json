@@ -171,6 +171,36 @@
       "firmware": "tests/fixtures/samd21-smoke.elf",
       "expect": "samd21 sercom0 up",
       "note": "Bare-metal SERCOM0 bring-up for the Arduino Zero / Feather M0 class. Same ELF `cargo build -p firmware-samd21-demo --release` produces from crates/firmware-samd21-demo (build from that directory, not the workspace root: its -Tlink.x comes from its own .cargo/config.toml, and a root build links entry 0x0 and boots nowhere while succeeding). Committed so a clone plus the CLI is the whole prerequisite. The expected line is the SECOND the firmware prints, so a model that sets INTFLAG.DRE once and forgets emits only the first and fails here."
+    },
+    "atsamd21": {
+      "how": "committed",
+      "firmware": "tests/fixtures/atsamd21-nano33-smoke.elf",
+      "expect": "OK",
+      "note": "Arduino Nano 33 IoT UART/LED smoke. Serial1 is SERCOM5."
+    },
+    "atsamd51": {
+      "how": "committed",
+      "firmware": "tests/fixtures/atsamd51-metro-m4-smoke.elf",
+      "expect": "OK",
+      "note": "Adafruit Metro M4 UART/LED smoke. Serial1 is SERCOM3."
+    },
+    "ra4m1": {
+      "how": "committed",
+      "firmware": "tests/fixtures/ra4m1-uno-r4-smoke.elf",
+      "expect": "OK",
+      "note": "Arduino Uno R4 Minima UART/LED smoke. Header Serial is SCI2."
+    },
+    "imxrt1064": {
+      "how": "committed",
+      "firmware": "tests/fixtures/imxrt1064-teensy41-smoke.elf",
+      "expect": "OK",
+      "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
+    },
+    "stm32f746": {
+      "how": "committed",
+      "firmware": "tests/fixtures/stm32f746-discovery-smoke.elf",
+      "expect": "OK",
+      "note": "STM32F746G-DISCO UART/LED smoke. ST-LINK VCP is USART1."
     }
   }
 }

@@ -897,15 +897,15 @@ impl SystemBus {
                 // Named controller first; default `"rcc"` still means "the chip's
                 // clock controller" so EFR32 `cmu` / GD32 `rcu` configs keep
                 // working without renaming the peripheral.
-                let controller_idx = self
-                    .find_peripheral_index_by_name(controller_name)
-                    .or_else(|| {
-                        if controller_name.eq_ignore_ascii_case("rcc") {
-                            self.rcc_idx
-                        } else {
-                            None
-                        }
-                    });
+                let controller_idx =
+                    self.find_peripheral_index_by_name(controller_name)
+                        .or_else(|| {
+                            if controller_name.eq_ignore_ascii_case("rcc") {
+                                self.rcc_idx
+                            } else {
+                                None
+                            }
+                        });
                 let Some(controller_idx) = controller_idx else {
                     return Err(anyhow::anyhow!(
                         "peripheral '{}' declares clock gate controller '{}' which is \

@@ -271,6 +271,9 @@ WAIVED: dict[str, str] = {
     # P0 AVR twin: CPU + Timer0/USART only; no bare-metal spin fixture crate yet
     # (no firmware-perf-spin-avr / avr-unknown-gnu-atmega328 target in this gate).
     "atmega328p": "no perf-spin fixture for AVR8 yet; CPU P0 without linked spin ELF",
+    # Teensy 4.1 smoke is DTCM-linked (flash@0x20000000 ram@0x20010000). No
+    # firmware-perf-spin image for that map yet.
+    "imxrt1064": "DTCM-linked Teensy smoke map; no perf-spin fixture at 0x20000000/0x20010000",
 }
 
 # Descriptors that are CI plumbing rather than a modelled part.

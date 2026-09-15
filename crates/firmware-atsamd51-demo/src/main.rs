@@ -26,7 +26,7 @@ const PORTA_DIRSET: *mut u32 = 0x4100_8008 as *mut u32;
 const PORTA_OUTTGL: *mut u32 = 0x4100_801C as *mut u32;
 
 const LED: u32 = 1 << 16; // PA16 — D13 / LED_BUILTIN
-// PCHCTRL: GEN=0 | CHEN=1 → bit 6
+                          // PCHCTRL: GEN=0 | CHEN=1 → bit 6
 const GCLK_PCHCTRL_CHEN: u32 = 1 << 6;
 
 #[entry]

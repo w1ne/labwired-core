@@ -1103,7 +1103,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 2bb02865dad7f44d550fe67353786584800736859e06922bd16986015df9d29a
+    drift_ack_digest: 26bf0a6fa12b2b6135d2a476ae28bafa3ec408c996711463def3d389dbb1d46d
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1207,7 +1207,7 @@ boards:
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
+    drift_ack: 2026-09-15
   - id: esp32c3
     doc: docs/boards/esp32c3.md
     chip: configs/chips/esp32c3.yaml
@@ -2360,7 +2360,7 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: 7462a993e0bf17d7e12cdaa03c21a561d00f1da8f8aee23c4d86e7aa9dfb5965
+    drift_ack_digest: da7466bd4879faf54c2fc9692a5ce5a3210af6582cfd0e66d7856000c03ce046
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2459,7 +2459,7 @@ boards:
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
+    drift_ack: 2026-09-15
   - id: nucleo-l073rz
     doc: docs/boards/nucleo-l073rz.md
     chip: configs/chips/stm32l073.yaml
@@ -2825,7 +2825,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: dcb91b072dcfe5a460bcac8fcb1ff16f6a81cf725942b986b12e131a275e2571
+    drift_ack_digest: 7bba8cfadb3623d50d832e771944d54534fa4ff7fbab3347ce7aad7b1d623053
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2892,7 +2892,7 @@ boards:
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
+    drift_ack: 2026-09-15
   - id: stm32f103
     doc: docs/boards/stm32f103.md
     chip: configs/chips/stm32f103.yaml
@@ -3312,7 +3312,7 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: b5365f3e5584bef3956c253e8724c1349c9f12d1ff34cb12a0fa23b0fc8713d3
+    drift_ack_digest: 50406ade741170409fa10c42f35fe6a373ff6e7d8b43f6de9c1fac67957137c4
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3413,7 +3413,7 @@ boards:
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
+    drift_ack: 2026-09-15
   - id: stm32f407
     doc: docs/boards/stm32f407.md
     chip: configs/chips/stm32f407.yaml
@@ -3797,7 +3797,7 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: df25451f57b6717c44bec2d85721a87727a6c9d7ec81ee3dc361366f5775c9ee
+    drift_ack_digest: 9dc3dfe2ef5840fcff025f0233b8e4323fe18da699d00ae2135ddce243e031b3
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -3867,7 +3867,7 @@ boards:
     # e2e_spi3_dc_epaper, nrf52_spim_easydma_executing, esp32s3_gpspi_oracle,
     # i2c_component, i2c_mux_tca9548a and i2c_factory_kit_coverage, all green.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
-    drift_ack: 2026-09-03
+    drift_ack: 2026-09-15
   - id: esp32s3
     doc: docs/boards/esp32s3.md
     chip: configs/chips/esp32s3.yaml

@@ -242,6 +242,29 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Spi,
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),
+    (
+        "atsamd21",
+        BusKind::Uart,
+        "Nano 33 IoT twin uses generic type:uart (sercom layout); no UART \
+         bring-up for this chip family in the edge gate yet",
+    ),
+    (
+        "atsamd51",
+        BusKind::Uart,
+        "Metro M4 twin uses generic type:uart (sercom layout); no UART \
+         bring-up for this chip family in the edge gate yet",
+    ),
+    (
+        "ra4m1",
+        BusKind::Uart,
+        "Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART \
+         bring-up for this chip family in the edge gate yet",
+    ),
+    (
+        "imxrt1064",
+        BusKind::Uart,
+        "no edge bring-up path for i.MX LPUART in this gate yet",
+    ),
 ];
 
 fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {
