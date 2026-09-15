@@ -68,6 +68,7 @@ impl Default for SimulationConfig {
             riscv_jit_enabled: false,
             host_time_mode: HostTimeMode::MaxSpeed,
             cortex_m_jit_enabled: false,
+            cortex_m_jit_min_block_instrs: 0,
         }
     }
 }
