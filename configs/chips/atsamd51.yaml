@@ -1,0 +1,76 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# SIM-DERIVED SAMD51J19A descriptor for Adafruit Metro M4 bring-up.
+# Not silicon-verified. Bench silicon may be ItsyBitsy M4 (SAMD51G19A);
+# Playground pinout is Metro M4. QSPI, USB, NeoPixel, and unused SERCOMs
+# are intentionally stubbed / omitted — only the MCU core, PORT, MCLK/GCLK,
+# SERCOM3 UART (Serial1), and SysTick are modelled here.
+# Pin labels follow Adafruit ArduinoCore-samd variants/metro_m4/variant.cpp.
+
+name: "atsamd51j19a"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 120_000_000
+flash:
+  base: 0x00000000
+  size: "512KB"
+ram:
+  base: 0x20000000
+  size: "192KB"
+pins:
+  # D0 / RX — variant.cpp: PORTA 23 (SERCOM3/PAD[1]).
+  PA23: { gpio: porta, bit: 23, functions: [{ type: uart, peripheral: sercom3, role: rx }] }
+  # D1 / TX — variant.cpp: PORTA 22 (SERCOM3/PAD[0]).
+  PA22: { gpio: porta, bit: 22, functions: [{ type: uart, peripheral: sercom3, role: tx }] }
+  # D13 / LED — variant.cpp: PORTA 16.
+  PA16: { gpio: porta, bit: 16, functions: [{ type: gpio, peripheral: porta }] }
+peripherals:
+  - id: "mclk"
+    type: "sam_mclk"
+    base_address: 0x40000800
+    size: "256B"
+  - id: "gclk"
+    type: "sam_gclk"
+    base_address: 0x40001C00
+    size: "1KB"
+  - id: "porta"
+    type: "gpio"
+    base_address: 0x41008000
+    size: "128B"
+    config:
+      profile: "sam_port"
+  - id: "portb"
+    type: "gpio"
+    base_address: 0x41008080
+    size: "128B"
+    config:
+      profile: "sam_port"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+  # Serial1 — SERCOM3 on PA22/PA23 (variant.cpp Uart Serial1(&sercom3, ...)).
+  # MCLK.APBBMASK bit 10; GCLK PCHCTRL[24] = SERCOM3_CORE (DS60001507).
+  - id: "sercom3"
+    type: "uart"
+    base_address: 0x41014000
+    size: "256B"
+    irq: 58
+    clock:
+      controller: "mclk"
+      reg: "APBBMASK"
+      bit: 10
+    config:
+      profile: "sercom"
+      gclk_id: 24
+  - id: "usb"
+    type: "stub"
+    base_address: 0x41000000
+    size: "1KB"
+  - id: "qspi"
+    type: "stub"
+    base_address: 0x42003400
+    size: "1KB"
