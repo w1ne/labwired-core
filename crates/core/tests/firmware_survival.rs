@@ -948,6 +948,18 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0800_0000, 0x0802_FFFF), (0x2000_0000, 0x2000_4FFF)],
         expected_uart_output: b"DEV=20086447\nCLK=00000004\nCRC=B874177A\nDMA=OK\n",
     },
+    SurvivalCase {
+        // SAMD21G18A Nano 33 IoT bare-metal UART smoke: PM APBCMASK + GCLK
+        // SERCOM5_CORE, then three DATA writes of "OK\n" on Serial1.
+        name: "atsamd21_nano33_smoke",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "atsamd21",
+        system: "nano-33-iot",
+        fixture: "atsamd21-nano33-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0003_FFFF), (0x2000_0000, 0x2000_7FFF)],
+        expected_uart_output: b"OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1836,6 +1848,11 @@ fn test_nucleo_f407_i2c_survival() {
 #[test]
 fn test_nucleo_l073rz_smoke_survival() {
     run_survival_case(case_by_name("nucleo_l073rz_smoke"));
+}
+
+#[test]
+fn test_atsamd21_nano33_smoke_survival() {
+    run_survival_case(case_by_name("atsamd21_nano33_smoke"));
 }
 
 #[test]
