@@ -984,6 +984,19 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0000_0000, 0x0003_FFFF), (0x2000_0000, 0x2000_7FFF)],
         expected_uart_output: b"OK",
     },
+    SurvivalCase {
+        // Teensy 4.1 / i.MX RT106x (chip yaml imxrt1064 Renode cousin of
+        // MIMXRT1062): CCM CCGR ungating, LPUART6 DATA "OK\n", GPIO2_IO03
+        // DR_TOGGLE. Soft-float image linked in DTCM (XIP skipped).
+        name: "imxrt1064_teensy41_smoke",
+        core: "cortex-m7",
+        family: CpuFamily::CortexM,
+        chip: "imxrt1064",
+        system: "teensy-41",
+        fixture: "imxrt1064-teensy41-smoke.elf",
+        valid_pc_ranges: &[(0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1887,6 +1900,11 @@ fn test_atsamd51_metro_m4_smoke_survival() {
 #[test]
 fn test_ra4m1_uno_r4_smoke_survival() {
     run_survival_case(case_by_name("ra4m1_uno_r4_smoke"));
+}
+
+#[test]
+fn test_imxrt1064_teensy41_smoke_survival() {
+    run_survival_case(case_by_name("imxrt1064_teensy41_smoke"));
 }
 
 #[test]
