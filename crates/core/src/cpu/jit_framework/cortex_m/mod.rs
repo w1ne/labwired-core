@@ -24,7 +24,9 @@ pub use host::{snapshot_state, CortexMJitHost};
 #[cfg(feature = "jit")]
 pub mod exec;
 #[cfg(feature = "jit")]
-pub use exec::{CompiledBlock, CortexMJitEngine, CortexMWasmJit, EngineStats};
+pub use exec::{
+    CompiledBlock, CortexMJitEngine, CortexMWasmJit, EngineStats, MIN_PROFITABLE_BLOCK_INSTRS,
+};
 
 /// Nothing in the Cortex-M [`StateVec`](super::StateVec) is cycle-derived
 /// (SysTick lives on the bus, not in the core), so the differential harness
@@ -113,6 +115,14 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | Rev16 { .. }
         | RevSh { .. }
         | Adr { .. }
+        | VaddF32 { .. }
+        | VsubF32 { .. }
+        | VmulF32 { .. }
+        | VdivF32 { .. }
+        | VmovF32Reg { .. }
+        | VmovF32Imm { .. }
+        | VmovSnRt { .. }
+        | VmovRtSn { .. }
         | LdrImm { .. }
         | StrImm { .. }
         | LdrbImm { .. }
@@ -127,7 +137,6 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | StrhReg { .. }
         | LdrsbReg { .. }
         | LdrshReg { .. }
-        | LdrImm32 { .. }
         | StrImm32 { .. }
         | StrImm32Idx { .. }
         | LdrLit { .. }
@@ -140,6 +149,8 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | StmiaW { .. }
         | StmdbW { .. } => InstrClass::Sequential,
 
+        LdrImm32 { rt, .. } if *rt != 15 => InstrClass::Sequential,
+        LdrImm32 { .. } => InstrClass::ControlFlow,
         LdrImm32Idx { rt, .. } if *rt != 15 => InstrClass::Sequential,
         LdrImm32Idx { .. } => InstrClass::ControlFlow,
 
@@ -376,6 +387,30 @@ mod tests {
         );
         assert_eq!(
             classify(&Instruction::MovReg { rd: 0, rm: 1 }),
+            InstrClass::Sequential
+        );
+        assert_eq!(
+            classify(&Instruction::LdrImm32 {
+                rt: 15,
+                rn: 0,
+                imm12: 0
+            }),
+            InstrClass::ControlFlow
+        );
+        assert_eq!(
+            classify(&Instruction::LdrImm32 {
+                rt: 0,
+                rn: 0,
+                imm12: 0
+            }),
+            InstrClass::Sequential
+        );
+        assert_eq!(
+            classify(&Instruction::VaddF32 {
+                sd: 0,
+                sn: 0,
+                sm: 0
+            }),
             InstrClass::Sequential
         );
     }

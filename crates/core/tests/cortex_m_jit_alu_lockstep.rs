@@ -12,13 +12,13 @@
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::jit_framework::cortex_m::{
     differential_cycle_ignore_indices, snapshot_state, CortexMFrontend, CortexMJitEngine,
-    CortexMWasmJit,
+    CortexMWasmJit, MIN_PROFITABLE_BLOCK_INSTRS,
 };
 use labwired_core::cpu::jit_framework::differential::{compare, DiffPolicy};
 use labwired_core::cpu::jit_framework::frontend::IsaFrontend;
 use labwired_core::cpu::jit_framework::CodeView;
 use labwired_core::cpu::CortexM;
-use labwired_core::{Bus, Machine};
+use labwired_core::{Bus, DebugControl, Machine};
 
 fn h(bytes: &mut Vec<u8>, half: u16) {
     bytes.extend_from_slice(&half.to_le_bytes());
@@ -150,6 +150,11 @@ fn alu_hot_loop_is_byte_identical_and_compiles() {
 }
 
 #[test]
+fn default_compile_floor_is_four() {
+    assert_eq!(MIN_PROFITABLE_BLOCK_INSTRS, 4);
+}
+
+#[test]
 fn eight_insn_loop_compiles_when_min_profitable_is_4() {
     let mut prog = Vec::new();
     for _ in 0..7 {
@@ -199,6 +204,121 @@ fn eight_insn_loop_compiles_when_min_profitable_is_4() {
 }
 
 #[test]
+fn machine_run_chains_compiled_self_loop() {
+    let mut prog = Vec::new();
+    for _ in 0..7 {
+        h(&mut prog, adds_imm8(0, 1));
+    }
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let mut machine = build_machine(&prog);
+    machine.config.cortex_m_jit_enabled = true;
+    machine.bus.config.cortex_m_jit_enabled = true;
+    machine.config.cortex_m_jit_min_block_instrs = 4;
+    machine.config.peripheral_tick_interval = 64;
+    machine.bus.config.peripheral_tick_interval = 64;
+    for _ in 0..200 {
+        machine.run(Some(64)).expect("heat");
+        if machine.cpu.jit_stats().map(|s| s.chained).unwrap_or(0) > 0 {
+            break;
+        }
+    }
+    let stats = machine.cpu.jit_stats().expect("engine");
+    assert!(
+        stats.chained > 0,
+        "self-loop should chain compiled blocks: {stats:?}"
+    );
+    assert!(stats.block_runs > 1);
+}
+
+#[test]
+fn it_does_not_disable_compiled_remainder_of_batch() {
+    let mut prog = Vec::new();
+    for _ in 0..7 {
+        h(&mut prog, adds_imm8(0, 1));
+    }
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let mut machine = build_machine(&prog);
+    machine.config.cortex_m_jit_enabled = true;
+    machine.bus.config.cortex_m_jit_enabled = true;
+    machine.config.cortex_m_jit_min_block_instrs = 4;
+    machine.config.peripheral_tick_interval = 64;
+    machine.bus.config.peripheral_tick_interval = 64;
+    for _ in 0..200 {
+        machine.run(Some(64)).expect("heat");
+        if machine.cpu.jit_stats().map(|s| s.block_runs).unwrap_or(0) > 0 {
+            break;
+        }
+    }
+    let runs_before = machine.cpu.jit_stats().map(|s| s.block_runs).unwrap_or(0);
+    assert!(runs_before > 0, "loop must compile before IT probe");
+    // One remaining AL-predicated instruction: interpret that one, then
+    // keep dispatching compiled blocks in the same batch.
+    machine.cpu.it_state = 0xE8;
+    machine.run(Some(64)).expect("post-it");
+    let stats = machine.cpu.jit_stats().expect("engine");
+    assert_eq!(machine.cpu.it_state, 0, "IT must be consumed");
+    assert!(
+        stats.block_runs > runs_before,
+        "IT must not disable the rest of the batch: before={runs_before} after={stats:?}"
+    );
+}
+
+fn vadd_s0() -> (u16, u16) {
+    (0xEE30, 0x0A00)
+}
+
+#[test]
+fn vadd_f32_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    let (a, b) = vadd_s0();
+    h(&mut prog, a);
+    h(&mut prog, b);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let frontend = CortexMFrontend::with_ram_window(
+        probe.bus.ram.base_addr as u32,
+        probe.bus.ram.data.len() as u32,
+    );
+    let view = CodeView::new(0, &prog);
+    let (plan, _binding) = frontend
+        .translate_block_thumb(0, &view)
+        .expect("translate VADD");
+    assert!(
+        !plan.code.is_empty(),
+        "VADD block must emit wasm, instrs={}",
+        plan.instr_count
+    );
+    wasmtime::Module::new(&wasmtime::Engine::default(), &plan.code)
+        .expect("VADD wasm module must validate");
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert!(
+        engine.stats().compiled > 0,
+        "VADD must instantiate: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.fpu_s[0] = 1.0f32.to_bits();
+    });
+    assert!(
+        engine.stats().block_runs > 0,
+        "VADD must compile: {:?}",
+        engine.stats()
+    );
+    assert_eq!(interp.cpu.fpu_s[0], jit.cpu.fpu_s[0]);
+}
+
+#[test]
 fn every_alu_op_matches_interpreter() {
     let mut seed: u64 = 0x1234_5678_9abc_def0;
     let mut rng = move || {
@@ -229,7 +349,8 @@ fn every_alu_op_matches_interpreter() {
         labwired_core::cpu::jit_framework::cortex_m::host::pack_regs(&interp.cpu, &mut x);
         let start_r0 = interp.cpu.r0;
         interp.step().unwrap();
-        let (exit, n, _) = block.run(&mut x, &mut []);
+        let mut fpu = [0u32; 32];
+        let (exit, n, _) = block.run(&mut x, &mut [], &mut fpu);
         assert_eq!(n, 2, "adds + branch");
         assert_eq!(x[0], interp.cpu.r0, "r0 imm={imm} start={start_r0:#x}");
         assert_eq!(x[15] & 0xF000_0000, interp.cpu.xpsr & 0xF000_0000, "NZCV");
@@ -493,8 +614,10 @@ fn add_high_from_pc_matches_interpreter() {
 }
 
 #[test]
-fn ldr_imm32_to_pc_stays_interpreter() {
-    use labwired_core::cpu::jit_framework::cortex_m::emit::is_mem_emittable;
+fn ldr_imm32_to_pc_is_compiled_terminator() {
+    use labwired_core::cpu::jit_framework::cortex_m::emit::{
+        is_mem_emittable, is_terminator_emittable,
+    };
     use labwired_core::decoder::arm::Instruction;
 
     assert!(
@@ -503,7 +626,15 @@ fn ldr_imm32_to_pc_stays_interpreter() {
             rn: 0,
             imm12: 0
         }),
-        "LDR.W PC must not be mem-emittable (interpreter owns branch_to)"
+        "LDR.W PC must not be mem-emittable (it is a terminator)"
+    );
+    assert!(
+        is_terminator_emittable(&Instruction::LdrImm32 {
+            rt: 15,
+            rn: 0,
+            imm12: 0
+        }),
+        "LDR.W PC must be a compiled terminator"
     );
 
     let mut prog = Vec::new();

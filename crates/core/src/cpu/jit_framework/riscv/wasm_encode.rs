@@ -130,6 +130,12 @@ pub mod op {
     pub const SELECT: u8 = 0x1b;
     /// `call` — followed by a uleb function index.
     pub const CALL: u8 = 0x10;
+    pub const F32_ADD: u8 = 0x92;
+    pub const F32_SUB: u8 = 0x93;
+    pub const F32_MUL: u8 = 0x94;
+    pub const F32_DIV: u8 = 0x95;
+    pub const I32_REINTERPRET_F32: u8 = 0xbc;
+    pub const F32_REINTERPRET_I32: u8 = 0xbe;
 
     // ── i64 (used only by the MULH family) ─────────────────────────────
     pub const I64_MUL: u8 = 0x7e;
@@ -231,25 +237,28 @@ pub fn build_module(local_i32_count: u32, mem_min_pages: u32, body: &[u8]) -> Ve
     m
 }
 
-/// Cortex-M mem blocks: 1-page register memory plus host RAM load/store.
+/// Cortex-M mem / VFP blocks: 1-page register memory plus host RAM and VFP.
 ///
 /// ```text
 /// (import "regs" "mem" (memory 1))
 /// (import "ram" "load" (func (param i32 i32 i32) (result i32)))
 /// (import "ram" "store" (func (param i32 i32 i32)))
+/// (import "vfp" "get" (func (param i32) (result i32)))
+/// (import "vfp" "set" (func (param i32 i32)))
 /// (func (export "run") (result i32) ...)
 /// ```
 ///
-/// `run` is function index 2 (`call 0` = load, `call 1` = store). The
-/// imported RAM helpers take `(offset, width, signed_or_value)` so the
-/// wasm body never maps guest SRAM into linear memory.
+/// `run` is function index 4 (`call 0` = load, `call 1` = store,
+/// `call 2` = vfp.get, `call 3` = vfp.set). The imported RAM helpers take
+/// `(offset, width, signed_or_value)` so the wasm body never maps guest
+/// SRAM into linear memory.
 pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
     let mut m = Vec::with_capacity(96 + body.len());
     m.extend_from_slice(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
 
     {
         let mut c = Vec::new();
-        enc::uleb(&mut c, 3);
+        enc::uleb(&mut c, 5);
         // type 0: () -> i32
         c.push(0x60);
         enc::uleb(&mut c, 0);
@@ -270,12 +279,24 @@ pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
         c.push(op::T_I32);
         c.push(op::T_I32);
         enc::uleb(&mut c, 0);
+        // type 3: (i32) -> i32  vfp_get(sn)
+        c.push(0x60);
+        enc::uleb(&mut c, 1);
+        c.push(op::T_I32);
+        enc::uleb(&mut c, 1);
+        c.push(op::T_I32);
+        // type 4: (i32, i32) -> ()  vfp_set(sd, bits)
+        c.push(0x60);
+        enc::uleb(&mut c, 2);
+        c.push(op::T_I32);
+        c.push(op::T_I32);
+        enc::uleb(&mut c, 0);
         section(&mut m, 1, &c);
     }
 
     {
         let mut c = Vec::new();
-        enc::uleb(&mut c, 3);
+        enc::uleb(&mut c, 5);
         name(&mut c, REGS_IMPORT_MODULE);
         name(&mut c, REGS_IMPORT_FIELD);
         c.push(0x02);
@@ -291,6 +312,16 @@ pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
         name(&mut c, "store");
         c.push(0x00);
         enc::uleb(&mut c, 2);
+
+        name(&mut c, "vfp");
+        name(&mut c, "get");
+        c.push(0x00);
+        enc::uleb(&mut c, 3);
+
+        name(&mut c, "vfp");
+        name(&mut c, "set");
+        c.push(0x00);
+        enc::uleb(&mut c, 4);
         section(&mut m, 2, &c);
     }
 
@@ -306,7 +337,7 @@ pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
         enc::uleb(&mut c, 1);
         name(&mut c, RUN_EXPORT);
         c.push(0x00);
-        enc::uleb(&mut c, 2);
+        enc::uleb(&mut c, 4);
         section(&mut m, 7, &c);
     }
 
