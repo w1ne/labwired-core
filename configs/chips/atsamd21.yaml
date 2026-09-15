@@ -10,7 +10,7 @@
 # SERCOM5 UART (Serial1), SysTick, and a USB stub window are modelled here.
 # Pin labels follow ArduinoCore-samd variants/nano_33_iot/variant.cpp.
 
-name: "atsamd21g18a"
+name: "atsamd21"
 arch: "arm"
 core: "cortex-m0+"
 # 48 MHz — DFLL48M, same as the Arduino Zero `atsamd21g18a.yaml` descriptor.
