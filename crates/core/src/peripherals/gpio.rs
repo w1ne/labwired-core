@@ -48,6 +48,9 @@ pub enum GpioRegisterLayout {
     /// NXP Kinetis (KW41Z GPIOA/B/C): PDOR @0x0 (output), PSOR/PCOR/PTOR
     /// set/clear/toggle, PDIR @0x10 (input), PDDR @0x14 (direction).
     Kinetis,
+    /// Microchip SAM PORT group (SAMD21/51): DIR/DIRCLR/DIRSET/DIRTGL,
+    /// OUT/OUTCLR/OUTSET/OUTTGL, IN (DS40001882).
+    SamPort,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -60,8 +63,9 @@ impl FromStr for GpioRegisterLayout {
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
+            "sam_port" | "samd" | "samd21" | "samd51" => Ok(Self::SamPort),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis, sam_port",
                 value
             )),
         }
@@ -303,6 +307,41 @@ impl KinetisGpio {
     }
 }
 
+// ── Microchip SAM PORT (SAMD21/51 group A or B) ──────────────────────────────
+// DIR @0x00, DIRCLR @0x04, DIRSET @0x08, DIRTGL @0x0C,
+// OUT @0x10, OUTCLR @0x14, OUTSET @0x18, OUTTGL @0x1C, IN @0x20.
+// PINCFG/PMUX/WRCONFIG writes are ignored (stay 0).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct SamPortGpio {
+    dir: u32, // 0x00
+    out: u32, // 0x10
+}
+
+impl SamPortGpio {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.dir,
+            0x10 => self.out,
+            // IN follows driven outputs; undriven pins read 0.
+            0x20 => self.out & self.dir,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.dir = value,   // DIR
+            0x04 => self.dir &= !value, // DIRCLR
+            0x08 => self.dir |= value,  // DIRSET
+            0x0C => self.dir ^= value,  // DIRTGL
+            0x10 => self.out = value,   // OUT
+            0x14 => self.out &= !value, // OUTCLR
+            0x18 => self.out |= value,  // OUTSET
+            0x1C => self.out ^= value,  // OUTTGL
+            _ => {}
+        }
+    }
+}
+
 /// The per-family register set of a [`GpioPort`]. Register sets are fully
 /// isolated — a register from one family cannot exist on another.
 #[derive(Debug, serde::Serialize)]
@@ -311,6 +350,7 @@ pub enum GpioFamily {
     Stm32V2(V2Gpio),
     Nrf52(Nrf52Gpio),
     Kinetis(KinetisGpio),
+    SamPort(SamPortGpio),
 }
 
 impl GpioFamily {
@@ -320,6 +360,7 @@ impl GpioFamily {
             Self::Stm32V2(g) => g.read_reg(offset),
             Self::Nrf52(g) => g.read_reg(offset),
             Self::Kinetis(g) => g.read_reg(offset),
+            Self::SamPort(g) => g.read_reg(offset),
         }
     }
 
@@ -329,6 +370,7 @@ impl GpioFamily {
             Self::Stm32V2(g) => g.write_reg(offset, value),
             Self::Nrf52(g) => g.write_reg(offset, value),
             Self::Kinetis(g) => g.write_reg(offset, value),
+            Self::SamPort(g) => g.write_reg(offset, value),
         }
     }
 
@@ -377,6 +419,14 @@ impl GpioFamily {
                     bit(g.read_reg(0x00))
                 } else {
                     bit(g.read_reg(0x10))
+                })
+            }
+            Self::SamPort(g) => {
+                let dir = g.read_reg(0x00);
+                Some(if (dir & (1u32 << pin)) != 0 {
+                    bit(g.read_reg(0x10))
+                } else {
+                    bit(g.read_reg(0x20))
                 })
             }
         }
@@ -458,6 +508,7 @@ impl GpioPort {
             GpioRegisterLayout::Stm32V2 => GpioFamily::Stm32V2(V2Gpio::default()),
             GpioRegisterLayout::Nrf52 => GpioFamily::Nrf52(Nrf52Gpio::default()),
             GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
+            GpioRegisterLayout::SamPort => GpioFamily::SamPort(SamPortGpio::default()),
         })
     }
 
@@ -497,6 +548,7 @@ impl GpioPort {
             GpioFamily::Stm32V2(_) => 0x14,
             GpioFamily::Nrf52(_) => 0x504,
             GpioFamily::Kinetis(_) => 0x00,
+            GpioFamily::SamPort(_) => 0x10,
         }
     }
 
@@ -508,6 +560,7 @@ impl GpioPort {
             GpioFamily::Stm32V2(_) => 0x10,
             GpioFamily::Nrf52(_) => 0x510,
             GpioFamily::Kinetis(_) => 0x10,
+            GpioFamily::SamPort(_) => 0x20,
         }
     }
 
@@ -519,6 +572,7 @@ impl GpioPort {
             GpioFamily::Stm32V2(_) => GpioRegisterLayout::Stm32V2,
             GpioFamily::Nrf52(_) => GpioRegisterLayout::Nrf52,
             GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
+            GpioFamily::SamPort(_) => GpioRegisterLayout::SamPort,
         }
     }
 
@@ -815,6 +869,13 @@ impl crate::Peripheral for GpioPort {
                     GpioMode::Input
                 }
             }
+            GpioFamily::SamPort(g) => {
+                if (g.read_reg(0x00) & (1u32 << pin)) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
         };
         // func: a pad whose AF routing resolves to a wired SPI signal names it
         // ("SPI1_SCK"); otherwise STM32 V2 exposes the raw AFR nibble → "AF<n>"
@@ -901,6 +962,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Stm32V2(g) => serde_json::to_value(g),
             GpioFamily::Nrf52(g) => serde_json::to_value(g),
             GpioFamily::Kinetis(g) => serde_json::to_value(g),
+            GpioFamily::SamPort(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -984,6 +1046,26 @@ mod routing_tests {
         g.write_u32(0x14, 1 << 3).unwrap(); // PDDR: pin3 output
         assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Output);
         assert_eq!(g.gpio_routing(4).unwrap().mode, GpioMode::Input);
+    }
+
+    #[test]
+    fn sam_port_dirset_outset_in_follows_output() {
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::SamPort);
+        p.write_u32(0x08, 1 << 17).unwrap(); // DIRSET PA17
+        p.write_u32(0x18, 1 << 17).unwrap(); // OUTSET
+        assert_eq!(p.read_u32(0x00).unwrap() & (1 << 17), 1 << 17); // DIR
+        assert_eq!(p.read_u32(0x10).unwrap() & (1 << 17), 1 << 17); // OUT
+        assert_eq!(p.read_u32(0x20).unwrap() & (1 << 17), 1 << 17); // IN follows OUT when driven
+        p.write_u32(0x14, 1 << 17).unwrap(); // OUTCLR
+        assert_eq!(p.read_u32(0x20).unwrap() & (1 << 17), 0);
+    }
+
+    #[test]
+    fn sam_port_from_str() {
+        assert_eq!(
+            "sam_port".parse::<GpioRegisterLayout>().unwrap(),
+            GpioRegisterLayout::SamPort
+        );
     }
 }
 
