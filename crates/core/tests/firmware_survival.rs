@@ -972,6 +972,18 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0000_0000, 0x0007_FFFF), (0x2000_0000, 0x2002_FFFF)],
         expected_uart_output: b"OK",
     },
+    SurvivalCase {
+        // R7FA4M1AB Uno R4 Minima bare-metal UART smoke: HOCO/OSCSF, then
+        // three SCI2 TDR writes of "OK\n" and P111 toggle via POSR.
+        name: "ra4m1_uno_r4_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "ra4m1",
+        system: "arduino-uno-r4-minima",
+        fixture: "ra4m1-uno-r4-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0003_FFFF), (0x2000_0000, 0x2000_7FFF)],
+        expected_uart_output: b"OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1870,6 +1882,11 @@ fn test_atsamd21_nano33_smoke_survival() {
 #[test]
 fn test_atsamd51_metro_m4_smoke_survival() {
     run_survival_case(case_by_name("atsamd51_metro_m4_smoke"));
+}
+
+#[test]
+fn test_ra4m1_uno_r4_smoke_survival() {
+    run_survival_case(case_by_name("ra4m1_uno_r4_smoke"));
 }
 
 #[test]
