@@ -165,7 +165,7 @@ mod spi_byte_level_golden_tests {
     /// Recording generator. Run with:
     ///   cargo test -p labwired-core --lib spi_byte_level_golden -- --ignored --nocapture
     #[test]
-    #[ignore]
+    #[ignore = "recording generator; run with --ignored --nocapture to recapture WIRE/DR"]
     fn print_golden() {
         let (hex, drs) = capture();
         println!("WIRE = \"{hex}\";");
