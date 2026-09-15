@@ -490,3 +490,399 @@ fn push_out_of_window_matches_interpreter() {
         "faulting compiled PUSH must leave RAM unchanged"
     );
 }
+
+fn pop_regs(registers: u8, p: bool) -> u16 {
+    0xBC00 | ((u16::from(p)) << 8) | u16::from(registers)
+}
+
+#[test]
+fn pop_pc_terminator_matches_interpreter() {
+    // 16 nops + POP {PC}. Without the terminator in is_terminator_emittable
+    // the compiled block is 16 nops (fall-through); with it, 17 insns chain
+    // to the stacked Thumb return address.
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, pop_regs(0, true)); // POP {PC} = 0xBD00
+
+    let mut interp = build_machine(&prog);
+    let mut jit = build_machine(&prog);
+    let ram_base = jit.bus.ram.base_addr as u32;
+    let stacked = 1u32; // Thumb return to PC=0
+    let seed = |m: &mut Machine<CortexM>| {
+        m.cpu.sp = ram_base;
+        for i in 0..256u32 {
+            m.bus
+                .write_u32(u64::from(ram_base + i * 4), stacked)
+                .expect("stack a Thumb return address");
+        }
+    };
+    seed(&mut interp);
+    seed(&mut jit);
+
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(17),
+        "POP {{PC}} must be a compiled terminator: {:?}",
+        engine.stats()
+    );
+
+    let policy = DiffPolicy {
+        ignore_indices: differential_cycle_ignore_indices(),
+        block_boundary_only: false,
+    };
+    let mut retired = 0u64;
+    for units in 1..=8_000u64 {
+        let n = engine.step_unit(&mut jit);
+        assert!(n > 0, "halt at unit {units}");
+        for _ in 0..n {
+            interp.step().expect("interpreter must not fault");
+        }
+        retired += n as u64;
+        if let Some(d) = compare(
+            units,
+            &snapshot_state(&interp.cpu),
+            &snapshot_state(&jit.cpu),
+            &policy,
+        ) {
+            panic!(
+                "POP PC diverged at unit {units} (retired {retired}): {d:?}\n\
+                 interp pc={:#x} sp={:#x}\n jit    pc={:#x} sp={:#x}",
+                interp.cpu.pc, interp.cpu.sp, jit.cpu.pc, jit.cpu.sp
+            );
+        }
+        if engine.stats().block_runs > 0 && retired > 32 {
+            break;
+        }
+    }
+    assert!(
+        engine.stats().block_runs > 0,
+        "POP PC block never ran: {:?}",
+        engine.stats()
+    );
+    assert_eq!(interp.cpu.pc, jit.cpu.pc, "JIT PC must match interpreter");
+    assert_eq!(interp.cpu.sp, jit.cpu.sp, "SP after POP PC");
+}
+
+fn stm(rn: u8, registers: u8) -> u16 {
+    0xC000 | ((rn as u16) << 8) | u16::from(registers)
+}
+fn ldm(rn: u8, registers: u8) -> u16 {
+    0xC800 | ((rn as u16) << 8) | u16::from(registers)
+}
+
+#[test]
+fn ldm_stm_roundtrip_matches_interpreter() {
+    // 16 nops + STM r1!, {r0,r2,r3} + LDM r4!, {r5,r6,r7} + b back.
+    // r1 and r4 start at the same RAM buffer; roundtrip r5..r7 == r0,r2,r3.
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, stm(1, 0b0000_1101)); // STM r1!, {r0, r2, r3}
+    h(&mut prog, ldm(4, 0b1110_0000)); // LDM r4!, {r5, r6, r7}
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let mut engine_probe = CortexMJitEngine::new(4);
+    let probe = build_machine(&prog);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(19),
+        "STM/LDM must be inside the compiled block: {:?}",
+        engine_probe.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        let ram_base = m.bus.ram.base_addr as u32;
+        m.cpu.r1 = ram_base;
+        m.cpu.r4 = ram_base;
+        m.cpu.r0 = 0xA0A0_0000;
+        m.cpu.r2 = 0xA2A2_0002;
+        m.cpu.r3 = 0xA3A3_0003;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r5, jit.cpu.r5);
+    assert_eq!(interp.cpu.r6, jit.cpu.r6);
+    assert_eq!(interp.cpu.r7, jit.cpu.r7);
+    assert_eq!(interp.cpu.r1, jit.cpu.r1, "STM writeback");
+    assert_eq!(interp.cpu.r4, jit.cpu.r4, "LDM writeback");
+    assert_eq!(interp.cpu.sp, jit.cpu.sp);
+    assert_eq!(interp.cpu.r5, interp.cpu.r0);
+    assert_eq!(interp.cpu.r6, interp.cpu.r2);
+    assert_eq!(interp.cpu.r7, interp.cpu.r3);
+}
+
+fn stmdb_w(rn: u8, reg_list: u16, writeback: bool) -> (u16, u16) {
+    let mut h1 = 0xE800 | u16::from(rn & 0xF);
+    if writeback {
+        h1 |= 0x20;
+    }
+    (h1, reg_list)
+}
+fn ldmia_w(rn: u8, reg_list: u16, writeback: bool) -> (u16, u16) {
+    let mut h1 = 0xE890 | u16::from(rn & 0xF);
+    if writeback {
+        h1 |= 0x20;
+    }
+    (h1, reg_list)
+}
+
+#[test]
+fn ldmia_w_stmdb_w_roundtrip_matches_interpreter() {
+    // 16 nops + STMDB.W r1!, {r0,r2} + LDMIA.W r1!, {r3,r4} + b back.
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    let (s1, s2) = stmdb_w(1, 0x0005, true);
+    h(&mut prog, s1);
+    h(&mut prog, s2);
+    let (l1, l2) = ldmia_w(1, 0x0018, true);
+    h(&mut prog, l1);
+    h(&mut prog, l2);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(19),
+        "LDMIA.W/STMDB.W must be inside the compiled block: {:?}",
+        engine_probe.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r1 = m.bus.ram.base_addr as u32 + 64;
+        m.cpu.r0 = 0x1111_0000;
+        m.cpu.r2 = 0x2222_0002;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r3, jit.cpu.r3);
+    assert_eq!(interp.cpu.r4, jit.cpu.r4);
+    assert_eq!(interp.cpu.r1, jit.cpu.r1);
+    assert_eq!(interp.cpu.r3, interp.cpu.r0);
+    assert_eq!(interp.cpu.r4, interp.cpu.r2);
+}
+
+fn adc(rd: u8, rm: u8) -> u16 {
+    0x4140 | ((rm as u16) << 3) | rd as u16
+}
+fn sbc(rd: u8, rm: u8) -> u16 {
+    0x4180 | ((rm as u16) << 3) | rd as u16
+}
+fn rsbs(rd: u8, rn: u8) -> u16 {
+    0x4240 | ((rn as u16) << 3) | rd as u16
+}
+fn lsl_reg(rd: u8, rm: u8) -> u16 {
+    0x4080 | ((rm as u16) << 3) | rd as u16
+}
+fn lsr_reg(rd: u8, rm: u8) -> u16 {
+    0x40C0 | ((rm as u16) << 3) | rd as u16
+}
+fn asr_reg(rd: u8, rm: u8) -> u16 {
+    0x4100 | ((rm as u16) << 3) | rd as u16
+}
+fn ror_reg(rd: u8, rm: u8) -> u16 {
+    0x41C0 | ((rm as u16) << 3) | rd as u16
+}
+fn mul32(rd: u8, rn: u8, rm: u8) -> (u16, u16) {
+    (
+        0xFB00 | u16::from(rn & 0xF),
+        0xF000 | ((rd as u16 & 0xF) << 8) | u16::from(rm & 0xF),
+    )
+}
+
+fn assert_nzcv(interp: &Machine<CortexM>, jit: &Machine<CortexM>, what: &str) {
+    assert_eq!(
+        interp.cpu.xpsr & 0xF000_0000,
+        jit.cpu.xpsr & 0xF000_0000,
+        "NZCV after {what}"
+    );
+}
+
+#[test]
+fn adc_sbc_rsbs_shift_mul32_match_interpreter() {
+    let cases: &[(&str, Vec<u8>, fn(&mut Machine<CortexM>))] = &[
+        (
+            "adcs r0, r2",
+            pad_alu_then(adc(0, 2), 14),
+            (|m| {
+                m.cpu.r1 = 0x7FFF_FFFF;
+                m.cpu.r2 = 0;
+                m.cpu.xpsr |= 1 << 29;
+            }) as fn(&mut Machine<CortexM>),
+        ),
+        ("sbcs r0, r2", pad_alu_then(sbc(0, 2), 14), |m| {
+            m.cpu.r1 = 0x8000_0000;
+            m.cpu.r2 = 1;
+            m.cpu.xpsr &= !(1 << 29);
+        }),
+        (
+            "rsbs r0, r2",
+            {
+                let mut p = Vec::new();
+                h(&mut p, mov_reg(2, 1));
+                for _ in 0..14 {
+                    h(&mut p, 0xBF00);
+                }
+                h(&mut p, rsbs(0, 2));
+                let from = p.len() as i32;
+                h(&mut p, b_to(from, 0));
+                p
+            },
+            |m| {
+                m.cpu.r1 = 1;
+            },
+        ),
+        ("lsls r0, r2", pad_alu_then(lsl_reg(0, 2), 14), |m| {
+            m.cpu.r1 = 0x8000_0001;
+            m.cpu.r2 = 1;
+        }),
+        ("lsrs r0, r2", pad_alu_then(lsr_reg(0, 2), 14), |m| {
+            m.cpu.r1 = 0x8000_0001;
+            m.cpu.r2 = 1;
+        }),
+        ("asrs r0, r2", pad_alu_then(asr_reg(0, 2), 14), |m| {
+            m.cpu.r1 = 0x8000_0000;
+            m.cpu.r2 = 1;
+        }),
+        ("rors r0, r2", pad_alu_then(ror_reg(0, 2), 14), |m| {
+            m.cpu.r1 = 0x0000_0001;
+            m.cpu.r2 = 1;
+        }),
+    ];
+
+    for (name, prog, seed) in cases {
+        let probe = build_machine(prog);
+        let mut engine_probe = CortexMJitEngine::new(4);
+        engine_probe.try_compile_from_bus(0, &probe.bus);
+        assert!(
+            engine_probe.ready_instr_count(0).unwrap_or(0) >= 16,
+            "{name} must compile a profitable block: {:?}",
+            engine_probe.stats()
+        );
+        let (interp, jit, engine) = lockstep_until_compiled(prog, *seed);
+        assert!(
+            engine.stats().block_runs > 0,
+            "{name} never ran compiled: {:?}",
+            engine.stats()
+        );
+        assert_nzcv(&interp, &jit, name);
+        assert_eq!(interp.cpu.r0, jit.cpu.r0, "r0 after {name}");
+    }
+
+    let mut prog = Vec::new();
+    h(&mut prog, mov_reg(0, 1));
+    for _ in 0..14 {
+        h(&mut prog, 0xBF00);
+    }
+    let (h1, h2) = mul32(0, 0, 2);
+    h(&mut prog, h1);
+    h(&mut prog, h2);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+    let probe = build_machine(&prog);
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert!(
+        engine_probe.ready_instr_count(0).unwrap_or(0) >= 16,
+        "MUL.W must compile: {:?}",
+        engine_probe.stats()
+    );
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r1 = 7;
+        m.cpu.r2 = 9;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r0, jit.cpu.r0, "r0 after MUL.W");
+}
+
+fn ands_w(rd: u8, rn: u8, imm8: u8) -> (u16, u16) {
+    // ANDS.W rd, rn, #imm8 (ThumbExpandImm of 00:000:imm8)
+    (
+        0xF010 | u16::from(rn & 0xF),
+        ((rd as u16 & 0xF) << 8) | u16::from(imm8),
+    )
+}
+
+#[test]
+fn ands_w_imm_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    let (h1, h2) = ands_w(0, 0, 0xFF);
+    h(&mut prog, h1);
+    h(&mut prog, h2);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(18),
+        "ANDS.W must be inside the compiled block: {:?}",
+        engine_probe.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.r0 = 0xFFFF_00F0;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r0, jit.cpu.r0);
+    assert_nzcv(&interp, &jit, "ands.w r0, r0, #0xff");
+    assert_eq!(interp.cpu.r0, 0xF0);
+}
+
+fn ldr_w_post(rt: u8, rn: u8, imm8: u8) -> (u16, u16) {
+    // LDR.W rt, [rn], #imm8  (P=0, U=1, W=1, bit11=1)
+    (
+        0xF850 | u16::from(rn & 0xF),
+        ((rt as u16 & 0xF) << 12) | 0x0800 | 0x0200 | 0x0100 | u16::from(imm8),
+    )
+}
+
+#[test]
+fn ldr_w_postindex_sp_matches_interpreter() {
+    let mut prog = Vec::new();
+    for _ in 0..16 {
+        h(&mut prog, 0xBF00);
+    }
+    let (h1, h2) = ldr_w_post(0, 13, 4);
+    h(&mut prog, h1);
+    h(&mut prog, h2);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(18),
+        "LDR.W [sp], #4 must be inside the compiled block: {:?}",
+        engine_probe.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        let ram_base = m.bus.ram.base_addr as u32;
+        m.cpu.sp = ram_base;
+        for i in 0..64u32 {
+            m.bus
+                .write_u32(u64::from(ram_base + i * 4), 0xA000_0000 + i)
+                .expect("seed RAM");
+        }
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r0, jit.cpu.r0);
+    assert_eq!(interp.cpu.sp, jit.cpu.sp);
+}

@@ -124,6 +124,7 @@ pub mod op {
     pub const I32_SHR_S: u8 = 0x75;
     pub const I32_SHR_U: u8 = 0x76;
     pub const I32_ROTL: u8 = 0x77;
+    pub const I32_ROTR: u8 = 0x78;
     pub const I32_CLZ: u8 = 0x67;
     /// `select` (ternary): `c ? a : b` with `[a, b, c]` on the stack.
     pub const SELECT: u8 = 0x1b;

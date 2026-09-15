@@ -101,6 +101,8 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | Rsbs { .. }
         | Mul { .. }
         | Mul32 { .. }
+        | DataProc32 { .. }
+        | DataProcImm32 { .. }
         | Uxtb { .. }
         | Uxth { .. }
         | Sxtb { .. }
@@ -127,13 +129,23 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | LdrshReg { .. }
         | LdrImm32 { .. }
         | StrImm32 { .. }
+        | StrImm32Idx { .. }
         | LdrLit { .. }
         | LdrSp { .. }
         | StrSp { .. }
         | Push { .. }
         | Pop { p: false, .. }
         | Ldm { .. }
-        | Stm { .. } => InstrClass::Sequential,
+        | Stm { .. }
+        | StmiaW { .. }
+        | StmdbW { .. } => InstrClass::Sequential,
+
+        LdrImm32Idx { rt, .. } if *rt != 15 => InstrClass::Sequential,
+        LdrImm32Idx { .. } => InstrClass::ControlFlow,
+
+        LdmiaW { reg_list, .. } | LdmdbW { reg_list, .. } if (*reg_list & (1 << 15)) == 0 => {
+            InstrClass::Sequential
+        }
 
         Branch { .. }
         | BranchCond { .. }
@@ -143,7 +155,9 @@ pub fn classify(inst: &Instruction) -> InstrClass {
         | Bx { .. }
         | BlxReg { .. }
         | Pop { p: true, .. }
-        | MovReg { rd: 15, .. } => InstrClass::ControlFlow,
+        | MovReg { rd: 15, .. }
+        | LdmiaW { .. }
+        | LdmdbW { .. } => InstrClass::ControlFlow,
 
         MovReg { .. } => InstrClass::Sequential,
 

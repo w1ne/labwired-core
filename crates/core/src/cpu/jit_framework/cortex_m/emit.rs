@@ -73,7 +73,15 @@ pub fn is_alu_emittable(inst: &Instruction) -> bool {
         | Lsl { .. }
         | Lsr { .. }
         | Asr { .. }
+        | LslReg { .. }
+        | LsrReg { .. }
+        | AsrReg { .. }
+        | Ror { .. }
+        | Adc { .. }
+        | Sbc { .. }
+        | Rsbs { .. }
         | Mul { .. }
+        | Mul32 { .. }
         | Uxtb { .. }
         | Uxth { .. }
         | Sxtb { .. }
@@ -86,6 +94,7 @@ pub fn is_alu_emittable(inst: &Instruction) -> bool {
         | Adr { .. }
         | LdrLit { .. } => true,
         AddRegHigh { rd, .. } | MovReg { rd, .. } if *rd != 15 => true,
+        DataProcImm32 { op, .. } | DataProc32 { op, .. } if dataproc_op_emittable(*op) => true,
         _ => false,
     }
 }
@@ -109,12 +118,21 @@ pub fn is_mem_emittable(inst: &Instruction) -> bool {
         | LdrshReg { rt, rn, .. }
         | LdrImm32 { rt, rn, .. }
         | StrImm32 { rt, rn, .. }
+        | LdrImm32Idx { rt, rn, .. }
+        | StrImm32Idx { rt, rn, .. }
             if *rt != 15 && *rn != 15 =>
         {
             true
         }
         LdrSp { rt, .. } | StrSp { rt, .. } if *rt != 15 => true,
         Push { .. } | Pop { p: false, .. } => true,
+        Ldm { .. } | Stm { .. } => true,
+        LdmiaW { rn, reg_list, .. } | LdmdbW { rn, reg_list, .. }
+            if *rn != 15 && (*reg_list & (1 << 15)) == 0 =>
+        {
+            true
+        }
+        StmiaW { rn, .. } | StmdbW { rn, .. } if *rn != 15 => true,
         _ => false,
     }
 }
@@ -131,11 +149,43 @@ pub fn is_terminator_emittable(inst: &Instruction) -> bool {
             | Bx { .. }
             | BlxReg { .. }
             | MovReg { rd: 15, .. }
+            | Pop { p: true, .. }
+    ) || matches!(
+        inst,
+        LdmiaW { rn, reg_list, .. } | LdmdbW { rn, reg_list, .. }
+            if *rn != 15 && (*reg_list & (1 << 15)) != 0
     )
 }
 
 fn is_emittable(inst: &Instruction, mem_ok: bool) -> bool {
     is_alu_emittable(inst) || (mem_ok && is_mem_emittable(inst))
+}
+
+fn dataproc_op_emittable(op: u8) -> bool {
+    matches!(
+        op,
+        0x0 | 0x1 | 0x2 | 0x3 | 0x4 | 0x8 | 0xA | 0xB | 0xD | 0xE
+    )
+}
+
+/// ARM ThumbExpandImm — same as `cortex_m::thumb_expand_imm`.
+fn thumb_expand_imm(imm12: u32) -> u32 {
+    let i = (imm12 >> 11) & 1;
+    let imm3 = (imm12 >> 8) & 7;
+    let imm8 = imm12 & 0xFF;
+    if i == 0 && (imm3 >> 2) == 0 {
+        match imm3 {
+            0 => imm8,
+            1 => (imm8 << 16) | imm8,
+            2 => (imm8 << 24) | (imm8 << 8),
+            3 => (imm8 << 24) | (imm8 << 16) | (imm8 << 8) | imm8,
+            _ => unreachable!(),
+        }
+    } else {
+        let val = 0x80 | (imm8 & 0x7F);
+        let n = (i << 4) | (imm3 << 1) | (imm8 >> 7);
+        val.rotate_right(n)
+    }
 }
 
 struct Op {
@@ -251,6 +301,13 @@ fn inst_len_of(pc: u32, code: &CodeView<'_>) -> u64 {
 enum MemAccess {
     Load { rd: u8, opcode: u8 },
     Store { rs2: u8, opcode: u8 },
+}
+
+enum ShiftKind {
+    Lsl,
+    Lsr,
+    Asr,
+    Ror,
 }
 
 impl MemAccess {
@@ -474,6 +531,550 @@ impl Body {
         self.buf.push(op::I32_AND);
         self.i32_const(31);
         self.buf.push(op::I32_SHR_U);
+        self.update_nzcv(true);
+    }
+
+    fn push_old_carry(&mut self) {
+        self.local_get(XPSR_LOCAL);
+        self.i32_const(29);
+        self.buf.push(op::I32_SHR_U);
+        self.i32_const(1);
+        self.buf.push(op::I32_AND);
+    }
+
+    fn push_old_overflow(&mut self) {
+        self.local_get(XPSR_LOCAL);
+        self.i32_const(28);
+        self.buf.push(op::I32_SHR_U);
+        self.i32_const(1);
+        self.buf.push(op::I32_AND);
+    }
+
+    fn emit_adc(&mut self, pc: u32, rd: u8, rm: u8) {
+        self.xpsr_touch();
+        self.read(rd, pc);
+        self.local_set(SCRATCH_LOCAL);
+        self.read(rm, pc);
+        self.local_set(OP2_LOCAL);
+        self.push_old_carry();
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_ADD);
+        self.buf.push(op::I32_ADD);
+        self.set_result_from_stack();
+        self.write(rd);
+        // C = (op1+op2 <u op1) | (res <u op1+op2)
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_ADD);
+        self.local_get(SCRATCH_LOCAL);
+        self.buf.push(op::I32_LT_U);
+        self.push_result();
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_ADD);
+        self.buf.push(op::I32_LT_U);
+        self.buf.push(op::I32_OR);
+        // V = (~(op1^op2) & (op1^res)) >> 31
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_XOR);
+        self.i32_const(-1);
+        self.buf.push(op::I32_XOR);
+        self.local_get(SCRATCH_LOCAL);
+        self.push_result();
+        self.buf.push(op::I32_XOR);
+        self.buf.push(op::I32_AND);
+        self.i32_const(31);
+        self.buf.push(op::I32_SHR_U);
+        self.update_nzcv(true);
+    }
+
+    fn emit_sbc(&mut self, pc: u32, rd: u8, rm: u8) {
+        self.xpsr_touch();
+        self.read(rd, pc);
+        self.local_set(SCRATCH_LOCAL);
+        self.read(rm, pc);
+        self.local_set(OP2_LOCAL);
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_SUB);
+        self.push_old_carry();
+        self.buf.push(op::I32_EQZ); // borrow_in = !C
+        self.buf.push(op::I32_SUB);
+        self.set_result_from_stack();
+        self.write(rd);
+        // C = !((tmp >u op1) | (res >u tmp)), tmp = op1 - op2
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_SUB);
+        self.local_get(SCRATCH_LOCAL);
+        self.buf.push(op::I32_GT_U);
+        self.push_result();
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_SUB);
+        self.buf.push(op::I32_GT_U);
+        self.buf.push(op::I32_OR);
+        self.buf.push(op::I32_EQZ);
+        // V = (op1^op2) & (op1^res) >> 31
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_XOR);
+        self.local_get(SCRATCH_LOCAL);
+        self.push_result();
+        self.buf.push(op::I32_XOR);
+        self.buf.push(op::I32_AND);
+        self.i32_const(31);
+        self.buf.push(op::I32_SHR_U);
+        self.update_nzcv(true);
+    }
+
+    fn emit_rsbs(&mut self, pc: u32, rd: u8, rn: u8) {
+        self.i32_const(0);
+        self.local_set(SCRATCH_LOCAL);
+        self.local_get(SCRATCH_LOCAL);
+        self.read(rn, pc);
+        self.local_tee(OP2_LOCAL);
+        self.buf.push(op::I32_SUB);
+        self.set_result_from_stack();
+        self.write(rd);
+        self.push_result();
+        self.local_get(SCRATCH_LOCAL);
+        self.buf.push(op::I32_LE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_XOR);
+        self.local_get(SCRATCH_LOCAL);
+        self.push_result();
+        self.buf.push(op::I32_XOR);
+        self.buf.push(op::I32_AND);
+        self.i32_const(31);
+        self.buf.push(op::I32_SHR_U);
+        self.update_nzcv(true);
+    }
+
+    fn maybe_write(&mut self, rd: u8) {
+        if rd != 15 {
+            self.write(rd);
+        } else {
+            self.buf.push(op::DROP);
+        }
+    }
+
+    fn finish_dataproc_logical(&mut self, rd: u8, set_flags: bool) {
+        self.set_result_from_stack();
+        self.maybe_write(rd);
+        if set_flags {
+            self.xpsr_touch();
+            self.push_old_carry();
+            self.push_old_overflow();
+            self.update_nzcv(true);
+        }
+    }
+
+    fn emit_dataproc_add_flags(&mut self, rd: u8, set_flags: bool) {
+        // op1 in SCRATCH, op2 in OP2, compute res = op1+op2
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_ADD);
+        self.set_result_from_stack();
+        self.maybe_write(rd);
+        if !set_flags {
+            return;
+        }
+        self.push_result();
+        self.local_get(SCRATCH_LOCAL);
+        self.buf.push(op::I32_LT_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::I32_XOR);
+        self.i32_const(-1);
+        self.buf.push(op::I32_XOR);
+        self.local_get(SCRATCH_LOCAL);
+        self.push_result();
+        self.buf.push(op::I32_XOR);
+        self.buf.push(op::I32_AND);
+        self.i32_const(31);
+        self.buf.push(op::I32_SHR_U);
+        self.update_nzcv(true);
+    }
+
+    fn emit_dataproc_sub_flags(&mut self, rd: u8, set_flags: bool, reverse: bool) {
+        // op1 in SCRATCH, op2 in OP2. reverse => op2 - op1 (RSB).
+        if reverse {
+            self.local_get(OP2_LOCAL);
+            self.local_get(SCRATCH_LOCAL);
+        } else {
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+        }
+        self.buf.push(op::I32_SUB);
+        self.set_result_from_stack();
+        self.maybe_write(rd);
+        if !set_flags {
+            return;
+        }
+        let op1 = if reverse { OP2_LOCAL } else { SCRATCH_LOCAL };
+        let op2 = if reverse { SCRATCH_LOCAL } else { OP2_LOCAL };
+        self.push_result();
+        self.local_get(op1);
+        self.buf.push(op::I32_LE_U);
+        self.local_get(op1);
+        self.local_get(op2);
+        self.buf.push(op::I32_XOR);
+        self.local_get(op1);
+        self.push_result();
+        self.buf.push(op::I32_XOR);
+        self.buf.push(op::I32_AND);
+        self.i32_const(31);
+        self.buf.push(op::I32_SHR_U);
+        self.update_nzcv(true);
+    }
+
+    fn emit_dataproc_adc_sbc(&mut self, rd: u8, set_flags: bool, is_sbc: bool) {
+        self.xpsr_touch();
+        if is_sbc {
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_SUB);
+            self.push_old_carry();
+            self.buf.push(op::I32_EQZ);
+            self.buf.push(op::I32_SUB);
+        } else {
+            self.push_old_carry();
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_ADD);
+            self.buf.push(op::I32_ADD);
+        }
+        self.set_result_from_stack();
+        self.maybe_write(rd);
+        if !set_flags {
+            return;
+        }
+        if is_sbc {
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_SUB);
+            self.local_get(SCRATCH_LOCAL);
+            self.buf.push(op::I32_GT_U);
+            self.push_result();
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_SUB);
+            self.buf.push(op::I32_GT_U);
+            self.buf.push(op::I32_OR);
+            self.buf.push(op::I32_EQZ);
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_XOR);
+            self.local_get(SCRATCH_LOCAL);
+            self.push_result();
+            self.buf.push(op::I32_XOR);
+            self.buf.push(op::I32_AND);
+            self.i32_const(31);
+            self.buf.push(op::I32_SHR_U);
+        } else {
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_ADD);
+            self.local_get(SCRATCH_LOCAL);
+            self.buf.push(op::I32_LT_U);
+            self.push_result();
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_ADD);
+            self.buf.push(op::I32_LT_U);
+            self.buf.push(op::I32_OR);
+            self.local_get(SCRATCH_LOCAL);
+            self.local_get(OP2_LOCAL);
+            self.buf.push(op::I32_XOR);
+            self.i32_const(-1);
+            self.buf.push(op::I32_XOR);
+            self.local_get(SCRATCH_LOCAL);
+            self.push_result();
+            self.buf.push(op::I32_XOR);
+            self.buf.push(op::I32_AND);
+            self.i32_const(31);
+            self.buf.push(op::I32_SHR_U);
+        }
+        self.update_nzcv(true);
+    }
+
+    fn emit_dataproc_from_ops(&mut self, op: u8, rn: u8, rd: u8, set_flags: bool) {
+        // op1 in SCRATCH, op2 in OP2.
+        match op {
+            0x0 => {
+                self.local_get(SCRATCH_LOCAL);
+                self.local_get(OP2_LOCAL);
+                self.buf.push(op::I32_AND);
+                self.finish_dataproc_logical(rd, set_flags);
+            }
+            0x1 => {
+                self.local_get(SCRATCH_LOCAL);
+                self.local_get(OP2_LOCAL);
+                self.i32_const(-1);
+                self.buf.push(op::I32_XOR);
+                self.buf.push(op::I32_AND);
+                self.finish_dataproc_logical(rd, set_flags);
+            }
+            0x2 => {
+                if rn == 0xF {
+                    self.local_get(OP2_LOCAL);
+                } else {
+                    self.local_get(SCRATCH_LOCAL);
+                    self.local_get(OP2_LOCAL);
+                    self.buf.push(op::I32_OR);
+                }
+                self.finish_dataproc_logical(rd, set_flags);
+            }
+            0x3 => {
+                if rn == 0xF {
+                    self.local_get(OP2_LOCAL);
+                    self.i32_const(-1);
+                    self.buf.push(op::I32_XOR);
+                } else {
+                    self.local_get(SCRATCH_LOCAL);
+                    self.local_get(OP2_LOCAL);
+                    self.i32_const(-1);
+                    self.buf.push(op::I32_XOR);
+                    self.buf.push(op::I32_OR);
+                }
+                self.finish_dataproc_logical(rd, set_flags);
+            }
+            0x4 => {
+                self.local_get(SCRATCH_LOCAL);
+                self.local_get(OP2_LOCAL);
+                self.buf.push(op::I32_XOR);
+                self.finish_dataproc_logical(rd, set_flags);
+            }
+            0x8 => self.emit_dataproc_add_flags(rd, set_flags),
+            0xA => self.emit_dataproc_adc_sbc(rd, set_flags, false),
+            0xB => self.emit_dataproc_adc_sbc(rd, set_flags, true),
+            0xD => self.emit_dataproc_sub_flags(rd, set_flags, false),
+            0xE => self.emit_dataproc_sub_flags(rd, set_flags, true),
+            _ => unreachable!("non-emittable dataproc op {op:#x}"),
+        }
+    }
+
+    fn emit_dataproc_imm(&mut self, pc: u32, op: u8, rn: u8, rd: u8, imm12: u32, set_flags: bool) {
+        let imm = thumb_expand_imm(imm12) as i32;
+        self.read_gpr_or_pc_raw(rn, pc);
+        self.local_set(SCRATCH_LOCAL);
+        self.i32_const(imm);
+        self.local_set(OP2_LOCAL);
+        self.emit_dataproc_from_ops(op, rn, rd, set_flags);
+    }
+
+    fn emit_shifted_rm(&mut self, pc: u32, rm: u8, imm5: u8, shift_type: u8) {
+        self.read_gpr_or_pc_raw(rm, pc);
+        match shift_type {
+            0 if imm5 != 0 => {
+                self.i32_const(imm5 as i32);
+                self.buf.push(op::I32_SHL);
+            }
+            1 if imm5 == 0 => {
+                self.buf.push(op::DROP);
+                self.i32_const(0);
+            }
+            1 => {
+                self.i32_const(imm5 as i32);
+                self.buf.push(op::I32_SHR_U);
+            }
+            2 if imm5 == 0 => {
+                self.i32_const(31);
+                self.buf.push(op::I32_SHR_S);
+            }
+            2 => {
+                self.i32_const(imm5 as i32);
+                self.buf.push(op::I32_SHR_S);
+            }
+            3 if imm5 != 0 => {
+                self.i32_const(imm5 as i32);
+                self.buf.push(op::I32_ROTR);
+            }
+            _ => {}
+        }
+    }
+
+    fn emit_dataproc_reg(
+        &mut self,
+        pc: u32,
+        op: u8,
+        rn: u8,
+        rd: u8,
+        rm: u8,
+        imm5: u8,
+        shift_type: u8,
+        set_flags: bool,
+    ) {
+        self.read_gpr_or_pc_raw(rn, pc);
+        self.local_set(SCRATCH_LOCAL);
+        self.emit_shifted_rm(pc, rm, imm5, shift_type);
+        self.local_set(OP2_LOCAL);
+        self.emit_dataproc_from_ops(op, rn, rd, set_flags);
+    }
+
+    fn emit_shift_reg(&mut self, pc: u32, rd: u8, rm: u8, kind: ShiftKind) {
+        self.xpsr_touch();
+        self.read(rd, pc);
+        self.local_set(OP2_LOCAL);
+        self.read(rm, pc);
+        self.i32_const(0xFF);
+        self.buf.push(op::I32_AND);
+        self.local_set(SCRATCH_LOCAL);
+
+        self.local_get(SCRATCH_LOCAL);
+        self.buf.push(op::I32_EQZ);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_I32);
+        self.local_get(OP2_LOCAL);
+        self.buf.push(op::ELSE);
+        match kind {
+            ShiftKind::Lsl => {
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_LT_U);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.local_get(SCRATCH_LOCAL);
+                self.buf.push(op::I32_SHL);
+                self.buf.push(op::ELSE);
+                self.i32_const(0);
+                self.buf.push(op::END);
+            }
+            ShiftKind::Lsr => {
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_LT_U);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.local_get(SCRATCH_LOCAL);
+                self.buf.push(op::I32_SHR_U);
+                self.buf.push(op::ELSE);
+                self.i32_const(0);
+                self.buf.push(op::END);
+            }
+            ShiftKind::Asr => {
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_LT_U);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.local_get(SCRATCH_LOCAL);
+                self.buf.push(op::I32_SHR_S);
+                self.buf.push(op::ELSE);
+                self.local_get(OP2_LOCAL);
+                self.i32_const(31);
+                self.buf.push(op::I32_SHR_S);
+                self.buf.push(op::END);
+            }
+            ShiftKind::Ror => {
+                self.local_get(OP2_LOCAL);
+                self.local_get(SCRATCH_LOCAL);
+                self.buf.push(op::I32_ROTR);
+            }
+        }
+        self.buf.push(op::END);
+        self.set_result_from_stack();
+        self.write(rd);
+
+        self.local_get(SCRATCH_LOCAL);
+        self.buf.push(op::I32_EQZ);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_I32);
+        self.push_old_carry();
+        self.buf.push(op::ELSE);
+        match kind {
+            ShiftKind::Lsl => {
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_LT_U);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.i32_const(32);
+                self.local_get(SCRATCH_LOCAL);
+                self.buf.push(op::I32_SUB);
+                self.buf.push(op::I32_SHR_U);
+                self.i32_const(1);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::ELSE);
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_EQ);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.i32_const(1);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::ELSE);
+                self.i32_const(0);
+                self.buf.push(op::END);
+                self.buf.push(op::END);
+            }
+            ShiftKind::Lsr => {
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_LT_U);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(1);
+                self.buf.push(op::I32_SUB);
+                self.buf.push(op::I32_SHR_U);
+                self.i32_const(1);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::ELSE);
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_EQ);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.i32_const(31);
+                self.buf.push(op::I32_SHR_U);
+                self.i32_const(1);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::ELSE);
+                self.i32_const(0);
+                self.buf.push(op::END);
+                self.buf.push(op::END);
+            }
+            ShiftKind::Asr => {
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(32);
+                self.buf.push(op::I32_LT_U);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_I32);
+                self.local_get(OP2_LOCAL);
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(1);
+                self.buf.push(op::I32_SUB);
+                self.buf.push(op::I32_SHR_U);
+                self.i32_const(1);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::ELSE);
+                self.local_get(OP2_LOCAL);
+                self.i32_const(31);
+                self.buf.push(op::I32_SHR_U);
+                self.i32_const(1);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::END);
+            }
+            ShiftKind::Ror => {
+                self.push_result();
+                self.i32_const(31);
+                self.buf.push(op::I32_SHR_U);
+            }
+        }
+        self.buf.push(op::END);
+        self.push_old_overflow();
         self.update_nzcv(true);
     }
 
@@ -795,6 +1396,35 @@ impl Body {
                 self.write(rd);
                 self.update_nz();
             }
+            Mul32 { rd, rn, rm } => {
+                self.read(rn, pc);
+                self.read(rm, pc);
+                self.buf.push(op::I32_MUL);
+                self.write(rd);
+            }
+            Adc { rd, rm } => self.emit_adc(pc, rd, rm),
+            Sbc { rd, rm } => self.emit_sbc(pc, rd, rm),
+            Rsbs { rd, rn } => self.emit_rsbs(pc, rd, rn),
+            DataProcImm32 {
+                op,
+                rn,
+                rd,
+                imm12,
+                set_flags,
+            } => self.emit_dataproc_imm(pc, op, rn, rd, imm12, set_flags),
+            DataProc32 {
+                op,
+                rn,
+                rd,
+                rm,
+                imm5,
+                shift_type,
+                set_flags,
+            } => self.emit_dataproc_reg(pc, op, rn, rd, rm, imm5, shift_type, set_flags),
+            LslReg { rd, rm } => self.emit_shift_reg(pc, rd, rm, ShiftKind::Lsl),
+            LsrReg { rd, rm } => self.emit_shift_reg(pc, rd, rm, ShiftKind::Lsr),
+            AsrReg { rd, rm } => self.emit_shift_reg(pc, rd, rm, ShiftKind::Asr),
+            Ror { rd, rm } => self.emit_shift_reg(pc, rd, rm, ShiftKind::Ror),
             Uxtb { rd, rm } => {
                 self.read(rm, pc);
                 self.i32_const(0xFF);
@@ -1045,6 +1675,22 @@ impl Body {
                     opcode: op::I32_STORE,
                 },
             ),
+            LdrImm32Idx {
+                rt,
+                rn,
+                imm8,
+                pre_index,
+                add,
+                writeback,
+            } => self.emit_mem_idx(pc, rt, rn, imm8, pre_index, add, writeback, true),
+            StrImm32Idx {
+                rt,
+                rn,
+                imm8,
+                pre_index,
+                add,
+                writeback,
+            } => self.emit_mem_idx(pc, rt, rn, imm8, pre_index, add, writeback, false),
             LdrSp { rt, imm } => self.emit_mem(
                 pc,
                 13,
@@ -1093,6 +1739,28 @@ impl Body {
             }
             Push { registers, m } => self.emit_push(pc, registers, m),
             Pop { registers, p } if !p => self.emit_pop(pc, registers),
+            Ldm { rn, registers } => self.emit_ldm_stm(pc, rn, registers, true),
+            Stm { rn, registers } => self.emit_ldm_stm(pc, rn, registers, false),
+            LdmiaW {
+                rn,
+                reg_list,
+                writeback,
+            } => self.emit_ldm_stm_wide(pc, rn, reg_list, writeback, true, false),
+            LdmdbW {
+                rn,
+                reg_list,
+                writeback,
+            } => self.emit_ldm_stm_wide(pc, rn, reg_list, writeback, true, true),
+            StmiaW {
+                rn,
+                reg_list,
+                writeback,
+            } => self.emit_ldm_stm_wide(pc, rn, reg_list, writeback, false, false),
+            StmdbW {
+                rn,
+                reg_list,
+                writeback,
+            } => self.emit_ldm_stm_wide(pc, rn, reg_list, writeback, false, true),
             _ => unreachable!("non-emittable instruction reached emit: {inst:?}"),
         }
         self.emitted += 1;
@@ -1112,6 +1780,96 @@ impl Body {
         self.buf.push(op::I32_SHL);
         self.buf.push(op::I32_OR);
         self.local_set(SCRATCH_LOCAL);
+    }
+
+    fn emit_mem_idx(
+        &mut self,
+        pc: u32,
+        rt: u8,
+        rn: u8,
+        imm8: u8,
+        pre_index: bool,
+        add: bool,
+        writeback: bool,
+        is_load: bool,
+    ) {
+        let (ram_base, ram_len) = self.window.expect("emit_mem_idx without window");
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
+        self.has_mem = true;
+
+        self.read(rn, pc);
+        self.local_set(OP2_LOCAL);
+        if pre_index {
+            self.local_get(OP2_LOCAL);
+            self.i32_const(imm8 as i32);
+            if add {
+                self.buf.push(op::I32_ADD);
+            } else {
+                self.buf.push(op::I32_SUB);
+            }
+        } else {
+            self.local_get(OP2_LOCAL);
+        }
+        self.local_set(SCRATCH_LOCAL);
+
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_GE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(hi as i32);
+        self.buf.push(op::I32_LE_U);
+        self.buf.push(op::I32_AND);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        let writes_before = self.writes;
+
+        if is_load {
+            self.local_get(SCRATCH_LOCAL);
+            self.i32_const(delta as i32);
+            self.buf.push(op::I32_ADD);
+            self.buf.push(op::I32_LOAD);
+            enc::uleb(&mut self.buf, 0);
+            enc::uleb(&mut self.buf, 0);
+            self.local_set(RESULT_LOCAL);
+            if writeback {
+                self.local_get(OP2_LOCAL);
+                self.i32_const(imm8 as i32);
+                if add {
+                    self.buf.push(op::I32_ADD);
+                } else {
+                    self.buf.push(op::I32_SUB);
+                }
+                self.write(rn);
+            }
+            self.local_get(RESULT_LOCAL);
+            self.write(rt);
+        } else {
+            self.local_get(SCRATCH_LOCAL);
+            self.i32_const(delta as i32);
+            self.buf.push(op::I32_ADD);
+            self.read(rt, pc);
+            self.buf.push(op::I32_STORE);
+            enc::uleb(&mut self.buf, 0);
+            enc::uleb(&mut self.buf, 0);
+            self.store_const_at(RES_FLAG_SLOT, 1);
+            self.has_store = true;
+            if writeback {
+                self.local_get(OP2_LOCAL);
+                self.i32_const(imm8 as i32);
+                if add {
+                    self.buf.push(op::I32_ADD);
+                } else {
+                    self.buf.push(op::I32_SUB);
+                }
+                self.write(rn);
+            }
+        }
+
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
     }
 
     fn emit_mem_reg(&mut self, pc: u32, rn: u8, rm: u8, access: MemAccess) {
@@ -1254,6 +2012,280 @@ impl Body {
         self.buf.push(op::END);
     }
 
+    fn emit_word_at_base_off(&mut self, pc: u32, off: i32, access: MemAccess) {
+        let (ram_base, _) = self.window.expect("emit_word_at_base_off without window");
+        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
+        self.local_get(OP2_LOCAL);
+        self.i32_const(off);
+        self.buf.push(op::I32_ADD);
+        self.i32_const(delta as i32);
+        self.buf.push(op::I32_ADD);
+        match access {
+            MemAccess::Load { rd, opcode } => {
+                self.buf.push(opcode);
+                enc::uleb(&mut self.buf, 0);
+                enc::uleb(&mut self.buf, 0);
+                self.write(rd);
+            }
+            MemAccess::Store { rs2, opcode } => {
+                self.read_gpr_or_pc_raw(rs2, pc);
+                self.buf.push(opcode);
+                enc::uleb(&mut self.buf, 0);
+                enc::uleb(&mut self.buf, 0);
+                self.store_const_at(RES_FLAG_SLOT, 1);
+                self.has_store = true;
+            }
+        }
+    }
+
+    fn emit_ldm_stm(&mut self, pc: u32, rn: u8, registers: u8, is_load: bool) {
+        let mut count = 0u32;
+        for i in 0..=7 {
+            if (registers & (1 << i)) != 0 {
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return;
+        }
+        let (ram_base, ram_len) = self.window.expect("emit_ldm_stm without window");
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+
+        self.i32_const(1);
+        self.local_set(RESULT_LOCAL);
+        self.read(rn, pc);
+        self.local_set(SCRATCH_LOCAL);
+        for _ in 0..count {
+            self.emit_ldm_ea_in_window(ram_base, hi);
+        }
+
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        let writes_before = self.writes;
+
+        self.read(rn, pc);
+        self.local_set(OP2_LOCAL);
+        let mut off: i32 = 0;
+        for i in 0..=7u8 {
+            if (registers & (1 << i)) != 0 {
+                if is_load {
+                    self.emit_word_at_base_off(
+                        pc,
+                        off,
+                        MemAccess::Load {
+                            rd: i,
+                            opcode: op::I32_LOAD,
+                        },
+                    );
+                } else {
+                    self.emit_word_at_base_off(
+                        pc,
+                        off,
+                        MemAccess::Store {
+                            rs2: i,
+                            opcode: op::I32_STORE,
+                        },
+                    );
+                }
+                off += 4;
+            }
+        }
+        // 16-bit LDM writeback is suppressed when Rn is in the list (loaded
+        // value wins). STM always writebacks.
+        if !is_load || (registers & (1 << rn)) == 0 {
+            self.local_get(OP2_LOCAL);
+            self.i32_const((4 * count) as i32);
+            self.buf.push(op::I32_ADD);
+            self.write(rn);
+        }
+
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
+    }
+
+    fn emit_ldm_stm_wide(
+        &mut self,
+        pc: u32,
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+        is_load: bool,
+        decrement_before: bool,
+    ) {
+        let last = if is_load || !decrement_before { 14 } else { 15 };
+        let mut count = 0u32;
+        for i in 0..=last {
+            if (reg_list & (1 << i)) != 0 {
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return;
+        }
+        let (ram_base, ram_len) = self.window.expect("emit_ldm_stm_wide without window");
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+
+        self.i32_const(1);
+        self.local_set(RESULT_LOCAL);
+        self.read(rn, pc);
+        if decrement_before {
+            self.i32_const((4 * count) as i32);
+            self.buf.push(op::I32_SUB);
+        }
+        self.local_set(SCRATCH_LOCAL);
+        for _ in 0..count {
+            self.emit_ldm_ea_in_window(ram_base, hi);
+        }
+
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        let writes_before = self.writes;
+
+        self.read(rn, pc);
+        if decrement_before {
+            self.i32_const((4 * count) as i32);
+            self.buf.push(op::I32_SUB);
+        }
+        self.local_set(OP2_LOCAL);
+        let mut off: i32 = 0;
+        for i in 0..=last {
+            if (reg_list & (1 << i)) != 0 {
+                if is_load {
+                    self.emit_word_at_base_off(
+                        pc,
+                        off,
+                        MemAccess::Load {
+                            rd: i,
+                            opcode: op::I32_LOAD,
+                        },
+                    );
+                } else {
+                    self.emit_word_at_base_off(
+                        pc,
+                        off,
+                        MemAccess::Store {
+                            rs2: i,
+                            opcode: op::I32_STORE,
+                        },
+                    );
+                }
+                off += 4;
+            }
+        }
+        if writeback {
+            if decrement_before {
+                self.local_get(OP2_LOCAL);
+                self.write(rn);
+            } else {
+                self.local_get(OP2_LOCAL);
+                self.i32_const((4 * count) as i32);
+                self.buf.push(op::I32_ADD);
+                self.write(rn);
+            }
+        }
+
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
+    }
+
+    fn emit_ldm_w_pc(
+        &mut self,
+        pc: u32,
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+        decrement_before: bool,
+    ) {
+        let mut count = 1u32;
+        for i in 0..=14 {
+            if (reg_list & (1 << i)) != 0 {
+                count += 1;
+            }
+        }
+        let writes_before = self.writes;
+        let Some((ram_base, ram_len)) = self.window else {
+            self.emit_unsupported(pc, &writes_before);
+            return;
+        };
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+
+        self.i32_const(1);
+        self.local_set(RESULT_LOCAL);
+        self.read(rn, pc);
+        if decrement_before {
+            self.i32_const((4 * count) as i32);
+            self.buf.push(op::I32_SUB);
+        }
+        self.local_set(SCRATCH_LOCAL);
+        for _ in 0..count {
+            self.emit_ldm_ea_in_window(ram_base, hi);
+        }
+
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+
+        self.read(rn, pc);
+        if decrement_before {
+            self.i32_const((4 * count) as i32);
+            self.buf.push(op::I32_SUB);
+        }
+        self.local_set(OP2_LOCAL);
+        let mut off: i32 = 0;
+        for i in 0..=14u8 {
+            if (reg_list & (1 << i)) != 0 {
+                self.emit_word_at_base_off(
+                    pc,
+                    off,
+                    MemAccess::Load {
+                        rd: i,
+                        opcode: op::I32_LOAD,
+                    },
+                );
+                off += 4;
+            }
+        }
+        let (ram_base, _) = self.window.expect("emit_ldm_w_pc window");
+        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
+        self.local_get(OP2_LOCAL);
+        self.i32_const(off);
+        self.buf.push(op::I32_ADD);
+        self.i32_const(delta as i32);
+        self.buf.push(op::I32_ADD);
+        self.buf.push(op::I32_LOAD);
+        enc::uleb(&mut self.buf, 0);
+        enc::uleb(&mut self.buf, 0);
+        self.local_set(SCRATCH_LOCAL);
+
+        if writeback {
+            if decrement_before {
+                self.local_get(OP2_LOCAL);
+                self.write(rn);
+            } else {
+                self.local_get(OP2_LOCAL);
+                self.i32_const((4 * count) as i32);
+                self.buf.push(op::I32_ADD);
+                self.write(rn);
+            }
+        }
+
+        self.emit_exc_return_or_next_pc(pc, &writes_before);
+
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
+    }
+
     fn emit_pop(&mut self, pc: u32, registers: u8) {
         for i in 0..=7u8 {
             if (registers & (1 << i)) != 0 {
@@ -1276,6 +2308,118 @@ impl Body {
                 opcode: op::I32_LOAD,
             },
         );
+    }
+
+    fn emit_ldm_ea_in_window(&mut self, ram_base: u32, hi: u32) {
+        // result &= (scratch in [ram_base, hi]); scratch += 4
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_GE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(hi as i32);
+        self.buf.push(op::I32_LE_U);
+        self.buf.push(op::I32_AND);
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::I32_AND);
+        self.local_set(RESULT_LOCAL);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(4);
+        self.buf.push(op::I32_ADD);
+        self.local_set(SCRATCH_LOCAL);
+    }
+
+    fn emit_load_sp_off(&mut self, pc: u32, off: i32, rd: u8) {
+        let (ram_base, _) = self.window.expect("emit_load_sp_off without window");
+        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
+        self.read(13, pc);
+        self.i32_const(off);
+        self.buf.push(op::I32_ADD);
+        self.i32_const(delta as i32);
+        self.buf.push(op::I32_ADD);
+        self.buf.push(op::I32_LOAD);
+        enc::uleb(&mut self.buf, 0);
+        enc::uleb(&mut self.buf, 0);
+        self.write(rd);
+    }
+
+    fn emit_exc_return_or_next_pc(&mut self, pc: u32, writes_before: &[bool; 16]) {
+        // EXC_RETURN: (addr & 0xFFFFFFF0) == 0xFFFFFFF0 → interpreter.
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(0xFFFFFFF0_u32 as i32);
+        self.buf.push(op::I32_AND);
+        self.i32_const(0xFFFFFFF0_u32 as i32);
+        self.buf.push(op::I32_EQ);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        self.emit_unsupported(pc, writes_before);
+        self.buf.push(op::END);
+        self.i32_const(NEXT_PC_SLOT);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(!1);
+        self.buf.push(op::I32_AND);
+        self.store_next_pc();
+    }
+
+    fn emit_pop_pc(&mut self, pc: u32, registers: u8) {
+        // Interpreter loads r0-r7, then PC, commits SP, then branch_to.
+        // Range-check the whole list first; any out-of-window EA side-exits
+        // with SP unchanged so the interpreter re-executes the POP.
+        let mut count = 1u32;
+        for i in 0..=7 {
+            if (registers & (1 << i)) != 0 {
+                count += 1;
+            }
+        }
+        let writes_before = self.writes;
+        let Some((ram_base, ram_len)) = self.window else {
+            self.emit_unsupported(pc, &writes_before);
+            return;
+        };
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+
+        self.i32_const(1);
+        self.local_set(RESULT_LOCAL);
+        self.read(13, pc);
+        self.local_set(SCRATCH_LOCAL);
+        for _ in 0..count {
+            self.emit_ldm_ea_in_window(ram_base, hi);
+        }
+
+        self.local_get(RESULT_LOCAL);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+
+        let mut off: i32 = 0;
+        for i in 0..=7u8 {
+            if (registers & (1 << i)) != 0 {
+                self.emit_load_sp_off(pc, off, i);
+                off += 4;
+            }
+        }
+        let (ram_base, _) = self.window.expect("emit_pop_pc window");
+        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
+        self.read(13, pc);
+        self.i32_const(off);
+        self.buf.push(op::I32_ADD);
+        self.i32_const(delta as i32);
+        self.buf.push(op::I32_ADD);
+        self.buf.push(op::I32_LOAD);
+        enc::uleb(&mut self.buf, 0);
+        enc::uleb(&mut self.buf, 0);
+        self.local_set(SCRATCH_LOCAL);
+
+        self.read(13, pc);
+        self.i32_const((4 * count) as i32);
+        self.buf.push(op::I32_ADD);
+        self.write(13);
+
+        self.emit_exc_return_or_next_pc(pc, &writes_before);
+
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
     }
 
     fn store_next_pc(&mut self) {
@@ -1438,41 +2582,25 @@ impl Body {
                 }
                 self.read(rm, pc);
                 self.local_set(SCRATCH_LOCAL);
-                // EXC_RETURN: (rm & 0xFFFFFFF0) == 0xFFFFFFF0 → interpreter.
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(0xFFFFFFF0_u32 as i32);
-                self.buf.push(op::I32_AND);
-                self.i32_const(0xFFFFFFF0_u32 as i32);
-                self.buf.push(op::I32_EQ);
-                self.buf.push(op::IF);
-                self.buf.push(op::T_EMPTY);
-                self.emit_unsupported(pc, &writes_before);
-                self.buf.push(op::END);
-                self.i32_const(NEXT_PC_SLOT);
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(!1);
-                self.buf.push(op::I32_AND);
-                self.store_next_pc();
+                self.emit_exc_return_or_next_pc(pc, &writes_before);
             }
             MovReg { rd: 15, rm } => {
                 let writes_before = self.writes;
                 self.read(rm, pc);
                 self.local_set(SCRATCH_LOCAL);
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(0xFFFFFFF0_u32 as i32);
-                self.buf.push(op::I32_AND);
-                self.i32_const(0xFFFFFFF0_u32 as i32);
-                self.buf.push(op::I32_EQ);
-                self.buf.push(op::IF);
-                self.buf.push(op::T_EMPTY);
-                self.emit_unsupported(pc, &writes_before);
-                self.buf.push(op::END);
-                self.i32_const(NEXT_PC_SLOT);
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(!1);
-                self.buf.push(op::I32_AND);
-                self.store_next_pc();
+                self.emit_exc_return_or_next_pc(pc, &writes_before);
             }
+            Pop { registers, p: true } => self.emit_pop_pc(pc, registers),
+            LdmiaW {
+                rn,
+                reg_list,
+                writeback,
+            } => self.emit_ldm_w_pc(pc, rn, reg_list, writeback, false),
+            LdmdbW {
+                rn,
+                reg_list,
+                writeback,
+            } => self.emit_ldm_w_pc(pc, rn, reg_list, writeback, true),
             other => unreachable!("non-terminator reached emit_terminator: {other:?}"),
         }
     }
