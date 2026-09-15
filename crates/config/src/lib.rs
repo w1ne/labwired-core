@@ -322,6 +322,24 @@ struct PeripheralConfigWire {
     extra: HashMap<String, serde_yaml::Value>,
 }
 
+/// One MMIO peripheral instance in a chip descriptor.
+///
+/// `irq` is a line number. `controller@line` also sets [`Self::irq_controller`]:
+///
+/// ```yaml
+/// irq: 2
+/// irq: nvic@2
+/// ```
+///
+/// Unknown instance keys flatten into [`Self::config`]. Nested `config:` wins
+/// on a colliding key:
+///
+/// ```yaml
+/// - id: uart0
+///   type: nrf52840_uart
+///   base_address: 0x40002000
+///   easyDMA: true
+/// ```
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(from = "PeripheralConfigWire")]
 pub struct PeripheralConfig {
@@ -331,6 +349,7 @@ pub struct PeripheralConfig {
     pub base_address: u64,
     #[serde(default)]
     pub size: Option<String>,
+    /// IRQ line. YAML `irq: 2` or `irq: nvic@2`.
     #[serde(default)]
     pub irq: Option<u32>,
     /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
@@ -342,6 +361,8 @@ pub struct PeripheralConfig {
     /// clock keep working unchanged).
     #[serde(default)]
     pub clock: Option<ClockGates>,
+    /// Instance knobs. Unknown top-level keys flatten here (`easyDMA: true`).
+    /// Nested `config:` wins on a colliding key.
     #[serde(default)]
     pub config: HashMap<String, serde_yaml::Value>,
 }
@@ -565,6 +586,19 @@ impl ChipInclude {
     }
 }
 
+/// Chip silicon descriptor (`chips/<name>.yaml`).
+///
+/// Path-loaded YAML may `include:` another file (or a list). Paths are relative
+/// to the including file. Built-in `from_str` and bundled chips do **not**
+/// expand includes — there is no filesystem.
+///
+/// ```yaml
+/// include: nrf52-common.yaml
+/// name: nrf52840
+/// ```
+///
+/// or `include: [a.yaml, b.yaml]`. Includes load first; local keys win.
+/// `peripherals` union by `id`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -664,7 +698,8 @@ pub struct ChipDescriptor {
     /// rather than comparing against a made-up midpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input_thresholds: Option<GpioInputThresholds>,
-    /// Path-loaded YAML only. Built-in `from_str` does not expand includes.
+    /// Path-loaded YAML only (`include: common.yaml` or a list). Built-in
+    /// `from_str` does not expand includes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include: Option<ChipInclude>,
 }

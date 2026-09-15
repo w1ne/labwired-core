@@ -920,3 +920,31 @@ peripherals: []
     let msg = format!("{err:#}").to_ascii_lowercase();
     assert!(msg.contains("cycle"), "cycle must be named; got {msg}");
 }
+
+#[test]
+fn wiring_sugar_child_fixture_loads_via_from_file() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/wiring-sugar-child.yaml");
+    let chip = ChipDescriptor::from_file(&path).unwrap();
+    assert_eq!(chip.name, "nrf52840");
+    assert_eq!(chip.cpu_hz, 64_000_000);
+    assert_eq!(chip.arch, labwired_config::Arch::Arm);
+    assert_eq!(chip.peripherals.len(), 2);
+    let uart0 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart0")
+        .expect("uart0 from include, irq overridden locally");
+    assert_eq!(uart0.irq, Some(2));
+    assert_eq!(uart0.irq_controller.as_deref(), Some("nvic"));
+    assert_eq!(
+        uart0.config.get("easyDMA").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    let uart1 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "uart1")
+        .expect("uart1 added by child");
+    assert_eq!(uart1.irq, Some(3));
+}

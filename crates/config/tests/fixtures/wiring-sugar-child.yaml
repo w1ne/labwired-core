@@ -1,0 +1,12 @@
+include: wiring-sugar-common.yaml
+name: nrf52840
+peripherals:
+  - id: uart0
+    type: uart
+    base_address: 0x40002000
+    irq: nvic@2
+    easyDMA: true
+  - id: uart1
+    type: uart
+    base_address: 0x40028000
+    irq: 3
