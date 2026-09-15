@@ -1270,7 +1270,7 @@ DONE\r\n",
         expected_uart_output: b"OK",
     },
     SurvivalCase {
-        // Teensy 4.1 / i.MX RT106x (chip yaml imxrt1064 Renode cousin of
+        // Teensy 4.1 / i.MX RT106x (chip yaml imxrt1064, RT1064-class cousin of
         // MIMXRT1062): CCM CCGR ungating, LPUART6 DATA "OK\n", GPIO2_IO03
         // DR_TOGGLE. Soft-float image linked in DTCM (XIP skipped).
         name: "imxrt1064_teensy41_smoke",

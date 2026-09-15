@@ -4,7 +4,7 @@
 
 //! Config-build gate for the native i.MX RT1064 / Teensy 4.1 descriptors.
 //!
-//! Teensy 4.1 silicon is MIMXRT1062; this model is the Renode RT1064 cousin
+//! Teensy 4.1 silicon is MIMXRT1062; this model is the RT1064-class cousin
 //! (GPIO / LPUART / CCM class). SIM-DERIVED.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
