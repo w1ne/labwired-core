@@ -9,7 +9,8 @@
 //! SAMD21 PM mask registers (DS40001882 §16): AHBMASK@0x14, APBAMASK@0x18,
 //! APBBMASK@0x1C, APBCMASK@0x20. GCLK: CLKCTRL@0x02 (16-bit), GENCTRL@0x04,
 //! GENDIV@0x08. SAMD51 MCLK uses a similar APB*MASK naming with different
-//! offsets (AHBMASK@0x10 … APBDMASK@0x20).
+//! offsets (AHBMASK@0x10 … APBDMASK@0x20). SAMD51 GCLK is PCHCTRL-based:
+//! PCHCTRL[n] @ 0x80+4*n with CHEN at bit 6 (DS60001507) — not D21 CLKCTRL.
 
 use crate::{Peripheral, SimResult};
 use std::any::Any;
@@ -114,19 +115,25 @@ const GCLK_STATUS: u64 = 0x01;
 const GCLK_CLKCTRL: u64 = 0x02;
 const GCLK_GENCTRL: u64 = 0x04;
 const GCLK_GENDIV: u64 = 0x08;
+/// SAMD51: PCHCTRL[0] base; channel *n* lives at `GCLK_PCHCTRL0 + 4*n`.
+const GCLK_PCHCTRL0: u64 = 0x80;
+const PCHCTRL_COUNT: usize = 64;
 
 const CLKCTRL_CLKEN: u16 = 1 << 14;
 const GENCTRL_GENEN: u32 = 1 << 16;
+const PCHCTRL_CHEN: u32 = 1 << 6;
 
-/// SAMD21 Generic Clock Controller — tracks per-channel CLKEN and generator GENEN.
+/// SAM Generic Clock Controller — D21 CLKCTRL and D51 PCHCTRL channel enables.
 #[derive(Debug)]
 pub struct SamGclk {
     ctrl: u8,
     clkctrl: u16,
-    /// Last written GENCTRL word (ID-selected on silicon).
+    /// Last written GENCTRL word (ID-selected on silicon / D21 layout).
     genctrl: u32,
     gendiv: u32,
-    /// Peripheral channel enable latched from CLKCTRL writes (by ID).
+    /// SAMD51 PCHCTRL[n] words (also drive [`Self::enabled`]).
+    pchctrl: [u32; PCHCTRL_COUNT],
+    /// Peripheral channel enable latched from CLKCTRL / PCHCTRL writes (by ID).
     enabled: [bool; 64],
     /// Generator enable; generator 0 defaults on (silicon GCLKGEN0).
     gen_enabled: [bool; 16],
@@ -147,12 +154,13 @@ impl SamGclk {
             clkctrl: 0,
             genctrl: GENCTRL_GENEN, // ID=0, GENEN=1
             gendiv: 0,
+            pchctrl: [0; PCHCTRL_COUNT],
             enabled: [false; 64],
             gen_enabled,
         }
     }
 
-    /// Whether CLKCTRL has enabled the peripheral channel `id`.
+    /// Whether the peripheral channel `id` is enabled (D21 CLKCTRL or D51 PCHCTRL).
     pub fn clk_enabled(&self, id: u8) -> bool {
         self.enabled.get(id as usize).copied().unwrap_or(false)
     }
@@ -173,7 +181,33 @@ impl SamGclk {
         }
     }
 
+    fn apply_pchctrl(&mut self, id: usize, value: u32) {
+        if id >= self.pchctrl.len() {
+            return;
+        }
+        self.pchctrl[id] = value;
+        if id < self.enabled.len() {
+            self.enabled[id] = value & PCHCTRL_CHEN != 0;
+        }
+    }
+
+    fn pchctrl_index(offset: u64) -> Option<(usize, u32)> {
+        if offset < GCLK_PCHCTRL0 {
+            return None;
+        }
+        let rel = offset - GCLK_PCHCTRL0;
+        let id = (rel / 4) as usize;
+        if id >= PCHCTRL_COUNT {
+            return None;
+        }
+        let byte = (rel % 4) as u32;
+        Some((id, byte))
+    }
+
     fn read_byte(&self, offset: u64) -> u8 {
+        if let Some((id, byte)) = Self::pchctrl_index(offset) {
+            return ((self.pchctrl[id] >> (byte * 8)) & 0xFF) as u8;
+        }
         match offset {
             GCLK_CTRL => self.ctrl,
             GCLK_STATUS => 0, // never SYNCBUSY in the sim
@@ -192,6 +226,13 @@ impl SamGclk {
     }
 
     fn write_byte(&mut self, offset: u64, value: u8) {
+        if let Some((id, byte)) = Self::pchctrl_index(offset) {
+            let mut v = self.pchctrl[id];
+            let mask: u32 = 0xFF << (byte * 8);
+            v = (v & !mask) | ((value as u32) << (byte * 8));
+            self.apply_pchctrl(id, v);
+            return;
+        }
         match offset {
             GCLK_CTRL => self.ctrl = value,
             GCLK_STATUS => {}
@@ -386,6 +427,20 @@ mod tests {
         g.write_u16(0x02, 0x4016).unwrap(); // ID=22, GEN=0, CLKEN=1
         assert!(g.clk_enabled(22));
         assert!(!g.clk_enabled(21));
+    }
+
+    /// SAMD51 GCLK: PCHCTRL[n] at 0x80+4*n, CHEN=bit 6 (DS60001507).
+    #[test]
+    fn pchctrl_chen_enables_channel() {
+        let mut g = SamGclk::new();
+        assert!(!g.clk_enabled(24));
+        // PCHCTRL[24] @ 0x80+4*24 = 0xE0; GEN=0 | CHEN=1 → 0x40
+        g.write_u32(0x80 + 4 * 24, 0x40).unwrap();
+        assert!(g.clk_enabled(24));
+        assert!(!g.clk_enabled(23));
+        // Clearing CHEN disables the channel.
+        g.write_u32(0x80 + 4 * 24, 0x00).unwrap();
+        assert!(!g.clk_enabled(24));
     }
 
     #[test]
