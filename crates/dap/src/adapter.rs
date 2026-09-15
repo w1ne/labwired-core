@@ -1023,6 +1023,11 @@ fn gpio_offsets_for_peripheral(
             idr_offset: 0x04,
             odr_offset: 0x00,
         }),
+        // NXP i.MX RT GPIO: DR @0x00, PSR @0x08.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Imxrt => Some(GpioOffsets {
+            idr_offset: 0x08,
+            odr_offset: 0x00,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,

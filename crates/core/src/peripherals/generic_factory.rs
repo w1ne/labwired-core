@@ -109,6 +109,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
+    // NXP i.MX RT CCM / IOMUXC.
+    "imx_ccm",
+    "imx_iomuxc",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -467,6 +470,8 @@ pub fn try_build(
         "sam_gclk" => Box::new(crate::peripherals::sam_clock::SamGclk::new()),
         "sam_mclk" => Box::new(crate::peripherals::sam_clock::SamMclk::new()),
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
+        "imx_ccm" => Box::new(crate::peripherals::imx_ccm::ImxCcm::new()),
+        "imx_iomuxc" => Box::new(crate::peripherals::imx_iomuxc::ImxIomuxc::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

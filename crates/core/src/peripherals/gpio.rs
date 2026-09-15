@@ -54,6 +54,9 @@ pub enum GpioRegisterLayout {
     /// Renesas RA PORT (RA4M1 R01UH0887 §19): PCNTR1 PDR[15:0]/PODR[31:16],
     /// PCNTR2 PIDR[15:0], PCNTR3 POSR[15:0]/PORR[31:16]. One instance = 16 pins.
     RaPort,
+    /// NXP i.MX RT GPIO: DR@0x00, GDIR@0x04, PSR@0x08,
+    /// DR_SET@0x84, DR_CLEAR@0x88, DR_TOGGLE@0x8C (IMXRT1060RM).
+    Imxrt,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -68,8 +71,9 @@ impl FromStr for GpioRegisterLayout {
             "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
             "sam_port" | "samd" | "samd21" | "samd51" => Ok(Self::SamPort),
             "ra_port" | "ra4m1" | "renesas_port" => Ok(Self::RaPort),
+            "imxrt" | "imxrt_gpio" => Ok(Self::Imxrt),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis, sam_port, ra_port",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis, sam_port, ra_port, imxrt",
                 value
             )),
         }
@@ -348,6 +352,43 @@ impl SamPortGpio {
     }
 }
 
+// ── NXP i.MX RT GPIO (IMXRT1060RM §12) ───────────────────────────────────────
+// DR @0x00, GDIR @0x04 (1=output), PSR @0x08 (pad status / input latch),
+// DR_SET @0x84, DR_CLEAR @0x88, DR_TOGGLE @0x8C (write-only w1s variants).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct ImxrtGpio {
+    dr: u32,   // 0x00 data output
+    gdir: u32, // 0x04 direction
+    psr: u32,  // 0x08 input latch (host/button injection)
+}
+
+impl ImxrtGpio {
+    fn psr_view(&self) -> u32 {
+        (self.dr & self.gdir) | (self.psr & !self.gdir)
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.dr,
+            0x04 => self.gdir,
+            0x08 => self.psr_view(),
+            _ => 0, // DR_SET/CLEAR/TOGGLE are write-only
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.dr = value,
+            0x04 => self.gdir = value,
+            0x08 => self.psr = value,  // input latch via set_gpio_input
+            0x84 => self.dr |= value,  // DR_SET
+            0x88 => self.dr &= !value, // DR_CLEAR
+            0x8C => self.dr ^= value,  // DR_TOGGLE
+            _ => {}
+        }
+    }
+}
+
 // ── Renesas RA PORT (RA4M1 / R7FA4M1, R01UH0887 §19) ─────────────────────────
 // Port n @ 0x40040000 + n*0x20. 16 pins. FSP IOPORT v1 uses 32-bit PCNTR*:
 //   PCNTR1 @0x00: PDR[15:0] direction, PODR[31:16] output data
@@ -404,6 +445,7 @@ pub enum GpioFamily {
     Kinetis(KinetisGpio),
     SamPort(SamPortGpio),
     RaPort(RaPortGpio),
+    Imxrt(ImxrtGpio),
 }
 
 impl GpioFamily {
@@ -415,6 +457,7 @@ impl GpioFamily {
             Self::Kinetis(g) => g.read_reg(offset),
             Self::SamPort(g) => g.read_reg(offset),
             Self::RaPort(g) => g.read_reg(offset),
+            Self::Imxrt(g) => g.read_reg(offset),
         }
     }
 
@@ -426,6 +469,7 @@ impl GpioFamily {
             Self::Kinetis(g) => g.write_reg(offset, value),
             Self::SamPort(g) => g.write_reg(offset, value),
             Self::RaPort(g) => g.write_reg(offset, value),
+            Self::Imxrt(g) => g.write_reg(offset, value),
         }
     }
 
@@ -494,6 +538,11 @@ impl GpioFamily {
                     (g.pidr_view() & (1u16 << pin)) != 0
                 })
             }
+            Self::Imxrt(g) => Some(if (g.gdir & (1u32 << pin)) != 0 {
+                bit(g.dr)
+            } else {
+                bit(g.psr_view())
+            }),
         }
     }
 }
@@ -575,6 +624,7 @@ impl GpioPort {
             GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
             GpioRegisterLayout::SamPort => GpioFamily::SamPort(SamPortGpio::default()),
             GpioRegisterLayout::RaPort => GpioFamily::RaPort(RaPortGpio::default()),
+            GpioRegisterLayout::Imxrt => GpioFamily::Imxrt(ImxrtGpio::default()),
         })
     }
 
@@ -617,6 +667,7 @@ impl GpioPort {
             GpioFamily::SamPort(_) => 0x10,
             // PCNTR1 holds PODR in [31:16]; consumers sample bit (pin+16).
             GpioFamily::RaPort(_) => 0x00,
+            GpioFamily::Imxrt(_) => 0x00, // DR
         }
     }
 
@@ -630,6 +681,7 @@ impl GpioPort {
             GpioFamily::Kinetis(_) => 0x10,
             GpioFamily::SamPort(_) => 0x20,
             GpioFamily::RaPort(_) => 0x04, // PCNTR2 PIDR[15:0]
+            GpioFamily::Imxrt(_) => 0x08,  // PSR
         }
     }
 
@@ -643,6 +695,7 @@ impl GpioPort {
             GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
             GpioFamily::SamPort(_) => GpioRegisterLayout::SamPort,
             GpioFamily::RaPort(_) => GpioRegisterLayout::RaPort,
+            GpioFamily::Imxrt(_) => GpioRegisterLayout::Imxrt,
         }
     }
 
@@ -956,6 +1009,13 @@ impl crate::Peripheral for GpioPort {
                     GpioMode::Input
                 }
             }
+            GpioFamily::Imxrt(g) => {
+                if (g.gdir & (1u32 << pin)) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
         };
         // func: a pad whose AF routing resolves to a wired SPI signal names it
         // ("SPI1_SCK"); otherwise STM32 V2 exposes the raw AFR nibble → "AF<n>"
@@ -1050,6 +1110,7 @@ impl crate::Peripheral for GpioPort {
             GpioFamily::Kinetis(g) => serde_json::to_value(g),
             GpioFamily::SamPort(g) => serde_json::to_value(g),
             GpioFamily::RaPort(g) => serde_json::to_value(g),
+            GpioFamily::Imxrt(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -1206,6 +1267,49 @@ mod routing_tests {
         p.write_u32(0x00, bit | (bit << 16)).unwrap();
         p.set_gpio_input(11, false);
         assert_eq!(p.read_u32(0x04).unwrap() & bit, bit);
+    }
+
+    #[test]
+    fn imxrt_dr_set_clear_toggle() {
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::Imxrt);
+        let bit = 1u32 << 3;
+        p.write_u32(0x04, bit).unwrap(); // GDIR: pin3 output
+        p.write_u32(0x84, bit).unwrap(); // DR_SET
+        assert_eq!(p.read_u32(0x00).unwrap() & bit, bit);
+        p.write_u32(0x8C, bit).unwrap(); // DR_TOGGLE
+        assert_eq!(p.read_u32(0x00).unwrap() & bit, 0);
+        p.write_u32(0x8C, bit).unwrap(); // toggle back high
+        assert_eq!(p.read_u32(0x00).unwrap() & bit, bit);
+        p.write_u32(0x88, bit).unwrap(); // DR_CLEAR
+        assert_eq!(p.read_u32(0x00).unwrap() & bit, 0);
+    }
+
+    #[test]
+    fn imxrt_from_str() {
+        assert_eq!(
+            "imxrt".parse::<GpioRegisterLayout>().unwrap(),
+            GpioRegisterLayout::Imxrt
+        );
+        assert_eq!(
+            "imxrt_gpio".parse::<GpioRegisterLayout>().unwrap(),
+            GpioRegisterLayout::Imxrt
+        );
+    }
+
+    #[test]
+    fn imxrt_input_latch_via_set_gpio_input() {
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::Imxrt);
+        // pin 5 is input (GDIR bit clear)
+        assert!(p.set_gpio_input(5, true));
+        assert_eq!(p.read_u32(0x08).unwrap() & (1 << 5), 1 << 5);
+        assert!(p.set_gpio_input(5, false));
+        assert_eq!(p.read_u32(0x08).unwrap() & (1 << 5), 0);
+        // driven output still wins over latch
+        let bit = 1u32 << 5;
+        p.write_u32(0x04, bit).unwrap(); // GDIR output
+        p.write_u32(0x00, bit).unwrap(); // DR high
+        p.set_gpio_input(5, false);
+        assert_eq!(p.read_u32(0x08).unwrap() & bit, bit);
     }
 }
 
