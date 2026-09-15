@@ -27,6 +27,6 @@ Expected result:
 
 1. `system.yaml`: local board mapping for simulation runs.
 2. `uart-smoke.yaml`: deterministic UART smoke assertion.
-3. `REQUIRED_DOCS.md`: source-grounding references (DS40001882, pinout; Renode as address cross-check only).
+3. `REQUIRED_DOCS.md`: source-grounding references (DS40001882, pinout).
 4. `EXTERNAL_COMPONENTS.md`: external component declaration.
 5. `VALIDATION.md`: reproducible validation/audit commands.

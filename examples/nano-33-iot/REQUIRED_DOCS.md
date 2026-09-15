@@ -14,4 +14,4 @@
 
 ## Address Cross-Check Only (not a source of truth)
 
-1. Renode `ATSAMD21G18A` / Nano 33 IoT platform files may be used to **cross-check** peripheral base addresses against DS40001882. Do not treat Renode semantics as authoritative for LabWired models.
+1. CMSIS / SAM D21 device headers may be used to **cross-check** peripheral base addresses against DS40001882. Do not treat third-party simulator platform files as authoritative for LabWired models.

@@ -14,5 +14,4 @@
 
 ## Address Cross-Check Only (not a source of truth)
 
-1. Renode `imxrt1064` / `mimxrt1064_evk` platform YAMLs may be used to **cross-check** base addresses. Do not treat Renode peripheral semantics as authoritative for LabWired models.
-2. Teensy 4.1 silicon is MIMXRT1062; this LabWired chip id `imxrt1064` is the Renode RT1064 cousin (GPIO/LPUART/CCM class) — not a claim of 4MB SiP flash.
+1. Teensy 4.1 silicon is MIMXRT1062; this LabWired chip id `imxrt1064` is the RT1064-class cousin (GPIO/LPUART/CCM class) — not a claim of 4MB SiP flash. Do not treat third-party simulator platform files as authoritative for LabWired models.

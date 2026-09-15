@@ -4,7 +4,7 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Teensy 4.1 (MIMXRT1062 silicon; chip yaml is Renode RT1064 cousin).
+# Teensy 4.1 (MIMXRT1062 silicon; chip yaml is the RT1064-class cousin).
 # SIM-DERIVED — not silicon-verified. LED on GPIO2_IO03; Serial1 = LPUART6.
 
 name: "teensy-41-example"

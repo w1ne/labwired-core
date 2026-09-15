@@ -14,4 +14,4 @@
 
 ## Address Cross-Check Only (not a source of truth)
 
-1. FSP / `ra4m1-fsp-pac` / `R7FA4M1AB.h` may be used to **cross-check** peripheral base addresses (SCI2 `0x40070040`, SYSTEM `0x4001E000`, PORT1 `0x40040020`, USBFS `0x40090000`). Do not treat Renode or FSP driver semantics as authoritative for LabWired models.
+1. FSP / `ra4m1-fsp-pac` / `R7FA4M1AB.h` may be used to **cross-check** peripheral base addresses (SCI2 `0x40070040`, SYSTEM `0x4001E000`, PORT1 `0x40040020`, USBFS `0x40090000`). Do not treat FSP driver semantics as authoritative for LabWired models.

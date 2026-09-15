@@ -15,5 +15,5 @@
 
 ## Address Cross-Check Only (not a source of truth)
 
-1. Renode `stm32f7_discovery` / `stm32f746` platform YAMLs may be used to **cross-check** base addresses. Do not treat Renode peripheral semantics as authoritative for LabWired models.
-2. Do not promote `core/configs/chips/onboarding/stm32f746.yaml` — that file uses Renode type names and incorrect flash/RAM sizing.
+1. CMSIS `stm32f746xx.h` may be used to **cross-check** peripheral base addresses against RM0385 / DS10916. Do not treat third-party simulator platform files as authoritative for LabWired models.
+2. Do not promote `core/configs/chips/onboarding/stm32f746.yaml` — that catalog stub uses non-native type names and incorrect flash/RAM sizing.

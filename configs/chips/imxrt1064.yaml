@@ -4,7 +4,7 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Teensy 4.1 silicon is MIMXRT1062; this model is the Renode RT1064 cousin
+# Teensy 4.1 silicon is MIMXRT1062; this model is the RT1064-class cousin
 # (GPIO/LPUART/CCM class). Do not claim 4MB SiP flash or FlexSPI. SIM-DERIVED.
 # SRAM/DTCM linked only — no FlexSPI XIP @ 0x60000000 for smoke.
 # Pin labels follow PJRC Teensy 4.1 (GPIO2_IO03 = pin 13 LED; LPUART6 = Serial1).

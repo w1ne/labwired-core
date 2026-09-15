@@ -14,4 +14,4 @@
 
 ## Address Cross-Check Only (not a source of truth)
 
-1. Renode / CMSIS SAMD51J19A headers may be used to **cross-check** peripheral base addresses against DS60001507. Do not treat Renode semantics as authoritative for LabWired models.
+1. CMSIS SAMD51J19A headers may be used to **cross-check** peripheral base addresses against DS60001507. Do not treat third-party simulator platform files as authoritative for LabWired models.
