@@ -130,9 +130,13 @@ pub fn pace(
 }
 
 /// Test clock: records sleeps and advances `now` by the slept amount.
+///
+/// `Clone` shares the inner state so a handle can inspect sleeps after the
+/// clock is moved into [`crate::Machine::with_host_clock`].
 #[cfg(test)]
+#[derive(Clone)]
 pub(crate) struct FakeClock {
-    inner: std::sync::Mutex<FakeClockInner>,
+    inner: std::sync::Arc<std::sync::Mutex<FakeClockInner>>,
 }
 
 #[cfg(test)]
@@ -145,10 +149,10 @@ struct FakeClockInner {
 impl FakeClock {
     pub(crate) fn new() -> Self {
         Self {
-            inner: std::sync::Mutex::new(FakeClockInner {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(FakeClockInner {
                 now: Duration::ZERO,
                 sleeps: Vec::new(),
-            }),
+            })),
         }
     }
 

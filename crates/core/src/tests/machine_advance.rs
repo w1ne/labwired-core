@@ -8,11 +8,12 @@ use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use crate::{
     AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy, Bus, Cpu,
-    DebugControl, IdlePolicy, Machine, SimResult, SimulationConfig, SimulationError,
+    DebugControl, HostTimeMode, IdlePolicy, Machine, SimResult, SimulationConfig, SimulationError,
     SimulationObserver, StepProfile, StopReason,
 };
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Debug, Default)]
 pub(crate) struct CountingCpu {
@@ -1270,4 +1271,49 @@ fn rom_boot_reset_edge_releases_the_secondary_core() {
         !APPCPU_RESET_RELEASED.with(|s| s.get()),
         "the edge must be consumed, not left latched for the next boundary"
     );
+}
+
+#[test]
+fn realtime_advance_sleeps_when_virtual_time_leads_wall() {
+    let clock = crate::host_time::FakeClock::new();
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty())
+        .with_host_clock(Box::new(clock.clone()));
+    machine.config.host_time_mode = HostTimeMode::Realtime;
+    machine.bus.cpu_hz = 1_000_000;
+
+    // 1000 cycles at 1 MHz = 1 ms, the realtime threshold with wall origin 0.
+    let report = machine.advance(AdvanceRequest::run(Some(1000))).unwrap();
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.elapsed_cycles, 1000);
+    let sleeps = clock.sleeps();
+    assert_eq!(
+        sleeps.len(),
+        1,
+        "expected one catch-up sleep, got {sleeps:?}"
+    );
+    assert_eq!(sleeps[0], Duration::from_millis(1));
+}
+
+#[test]
+fn max_speed_advance_does_not_sleep() {
+    let clock = crate::host_time::FakeClock::new();
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty())
+        .with_host_clock(Box::new(clock.clone()));
+    machine.config.host_time_mode = HostTimeMode::MaxSpeed;
+    machine.bus.cpu_hz = 1_000_000;
+
+    machine.advance(AdvanceRequest::run(Some(1000))).unwrap();
+    assert!(clock.sleeps().is_empty());
+}
+
+#[test]
+fn realtime_advance_cpu_hz_zero_does_not_sleep() {
+    let clock = crate::host_time::FakeClock::new();
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty())
+        .with_host_clock(Box::new(clock.clone()));
+    machine.config.host_time_mode = HostTimeMode::Realtime;
+    machine.bus.cpu_hz = 0;
+
+    machine.advance(AdvanceRequest::run(Some(1000))).unwrap();
+    assert!(clock.sleeps().is_empty());
 }

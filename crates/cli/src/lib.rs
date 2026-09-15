@@ -464,6 +464,11 @@ pub struct RunArgs {
     /// prove which path executed rather than assume it.
     #[arg(long = "batched")]
     pub batched: bool,
+
+    /// Host wall-clock policy. `max-speed` (default) never sleeps; `realtime`
+    /// sleeps when virtual time (`cycles/cpu_hz`) is at least 1 ms ahead of wall.
+    #[arg(long = "time-mode", value_name = "MODE", default_value_t = labwired_core::HostTimeMode::MaxSpeed)]
+    pub time_mode: labwired_core::HostTimeMode,
 }
 
 #[derive(Parser, Debug)]
@@ -1049,6 +1054,8 @@ fn run_two_c3_ble(
         Ok(m) => m,
         Err(c) => return c,
     };
+    a.config.host_time_mode = args.time_mode;
+    b.config.host_time_mode = args.time_mode;
     eprintln!(
         "[ble] two-C3 BLE over the shared air: A={} (LABWIRED_ESP32C3_FLASH), \
          B={} (LABWIRED_ESP32C3_FLASH_B)",
@@ -1154,6 +1161,8 @@ fn run_two_c3_wifi(
         Ok(m) => m,
         Err(c) => return c,
     };
+    a.config.host_time_mode = args.time_mode;
+    b.config.host_time_mode = args.time_mode;
     eprintln!(
         "[dual] two-C3 WiFi over shared VirtualWifi: A={}, B={}",
         format_efuse_mac(&a),
@@ -1242,6 +1251,7 @@ pub(crate) fn run_one_c3_wifi(
         Ok(m) => m,
         Err(c) => return c,
     };
+    m.config.host_time_mode = args.time_mode;
     eprintln!(
         "[solo] one C3 on VirtualWifi: STA={} (AP hosts DHCP + HTTP)",
         format_efuse_mac(&m)
@@ -4890,5 +4900,69 @@ mod simctl_exit_tests {
             parsed.err()
         );
         assert_eq!(parsed.unwrap().firmware_exit_code, None);
+    }
+}
+
+#[cfg(test)]
+mod time_mode_cli {
+    use super::RunArgs;
+    use clap::Parser;
+    use labwired_core::HostTimeMode;
+
+    fn parse(args: &[&str]) -> RunArgs {
+        RunArgs::try_parse_from(args).expect("RunArgs should parse")
+    }
+
+    #[test]
+    fn time_mode_defaults_to_max_speed() {
+        let args = parse(&["labwired", "--chip", "c.yaml", "--firmware", "f.elf"]);
+        assert_eq!(args.time_mode, HostTimeMode::MaxSpeed);
+    }
+
+    #[test]
+    fn time_mode_accepts_realtime() {
+        let args = parse(&[
+            "labwired",
+            "--chip",
+            "c.yaml",
+            "--firmware",
+            "f.elf",
+            "--time-mode",
+            "realtime",
+        ]);
+        assert_eq!(args.time_mode, HostTimeMode::Realtime);
+    }
+
+    #[test]
+    fn time_mode_accepts_max_speed() {
+        let args = parse(&[
+            "labwired",
+            "--chip",
+            "c.yaml",
+            "--firmware",
+            "f.elf",
+            "--time-mode",
+            "max-speed",
+        ]);
+        assert_eq!(args.time_mode, HostTimeMode::MaxSpeed);
+    }
+
+    #[test]
+    fn time_mode_rejects_unknown() {
+        let err = RunArgs::try_parse_from([
+            "labwired",
+            "--chip",
+            "c.yaml",
+            "--firmware",
+            "f.elf",
+            "--time-mode",
+            "turbo",
+        ])
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("turbo") || msg.contains("time-mode") || msg.contains("invalid"),
+            "unexpected clap error: {msg}"
+        );
     }
 }

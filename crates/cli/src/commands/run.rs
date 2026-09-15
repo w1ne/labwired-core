@@ -219,6 +219,7 @@ pub(crate) fn run_firmware_riscv(
         machine.cpu.set_sp(sp_top & !0xF);
         machine
     };
+    machine.config.host_time_mode = args.time_mode;
 
     // Keep the RISC-V fast-boot path observable through the same UART capture
     // mechanism as ARM/Xtensa. This is an output transport, not a timing or
@@ -687,6 +688,7 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
     // cycle clock, which freezes every `uses_scheduler()` peripheral under
     // `--features event-scheduler`.
     let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.config.host_time_mode = args.time_mode;
 
     while steps < limit {
         match machine.step() {
@@ -1008,6 +1010,7 @@ pub(crate) fn run_firmware(
         Some(c1) => labwired_core::Machine::new(cpu, bus).with_secondary_cpu(c1),
         None => labwired_core::Machine::new(cpu, bus),
     };
+    machine.config.host_time_mode = args.time_mode;
     let mut steps = 0u64;
     // Ring buffer of recent PCs for post-mortem on exceptions.
     const RING_LEN: usize = 1024;
@@ -1526,6 +1529,7 @@ pub(crate) fn run_firmware_arm(
     // Configure Cortex-M CPU.
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
+    machine.config.host_time_mode = args.time_mode;
 
     // Load ELF.
     let mut image = match labwired_loader::load_elf(&args.firmware) {
