@@ -313,8 +313,9 @@ impl KinetisGpio {
 // PINCFG/PMUX/WRCONFIG writes are ignored (stay 0).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct SamPortGpio {
-    dir: u32, // 0x00
-    out: u32, // 0x10
+    dir: u32,  // 0x00
+    out: u32,  // 0x10
+    r#in: u32, // 0x20 input latch (host/button injection)
 }
 
 impl SamPortGpio {
@@ -322,8 +323,8 @@ impl SamPortGpio {
         match offset {
             0x00 => self.dir,
             0x10 => self.out,
-            // IN follows driven outputs; undriven pins read 0.
-            0x20 => self.out & self.dir,
+            // Driven pins follow OUT; undriven pins return the input latch.
+            0x20 => (self.out & self.dir) | (self.r#in & !self.dir),
             _ => 0,
         }
     }
@@ -337,6 +338,7 @@ impl SamPortGpio {
             0x14 => self.out &= !value, // OUTCLR
             0x18 => self.out |= value,  // OUTSET
             0x1C => self.out ^= value,  // OUTTGL
+            0x20 => self.r#in = value,  // IN latch
             _ => {}
         }
     }
@@ -1066,6 +1068,21 @@ mod routing_tests {
             "sam_port".parse::<GpioRegisterLayout>().unwrap(),
             GpioRegisterLayout::SamPort
         );
+    }
+
+    #[test]
+    fn sam_port_input_latch_via_set_gpio_input() {
+        let mut p = GpioPort::new_with_layout(GpioRegisterLayout::SamPort);
+        // pin 17 is input (DIR bit clear)
+        assert!(p.set_gpio_input(17, true));
+        assert_eq!(p.read_u32(0x20).unwrap() & (1 << 17), 1 << 17);
+        assert!(p.set_gpio_input(17, false));
+        assert_eq!(p.read_u32(0x20).unwrap() & (1 << 17), 0);
+        // driven output still wins over latch
+        p.write_u32(0x08, 1 << 17).unwrap(); // DIRSET
+        p.write_u32(0x18, 1 << 17).unwrap(); // OUTSET
+        p.set_gpio_input(17, false);
+        assert_eq!(p.read_u32(0x20).unwrap() & (1 << 17), 1 << 17);
     }
 }
 
