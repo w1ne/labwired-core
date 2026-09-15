@@ -693,6 +693,21 @@ impl CortexM {
             && !self.faultmask_blocks(exc)
     }
 
+    /// RISC-V `block_would_cross_irq` analogue: a compiled block of `n`
+    /// instructions is `n` cycles. If SysTick would underflow (TICKINT edge)
+    /// inside that span, interpret instead so exception 15 pends on the same
+    /// instruction the interpreter would pend it. Already-takeable exceptions
+    /// also refuse the block (the interpreter would trap within one insn).
+    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+        if self.jit_takeable_exception() {
+            return true;
+        }
+        match bus.systick_ticks_until_fire() {
+            Some(h) => u64::from(n) >= h,
+            None => false,
+        }
+    }
+
     fn step_batch_jit(
         &mut self,
         bus: &mut dyn Bus,
@@ -756,7 +771,9 @@ impl CortexM {
                 match engine.observe(pc) {
                     Lookup::Ready => {
                         let block_n = engine.ready_instr_count(pc).unwrap_or(0);
-                        let must_interpret = block_n == 0 || retired + block_n > max_count;
+                        let must_interpret = block_n == 0
+                            || retired + block_n > max_count
+                            || self.block_would_cross_irq(bus, block_n);
                         if must_interpret {
                             self.step(bus, observers, config)?;
                             engine.note_interpreted();
@@ -781,41 +798,56 @@ impl CortexM {
                                         self.step(bus, observers, config)?;
                                         engine.note_interpreted();
                                         n = 1;
-                                    } else if actual_n > 0 && !needs_interp {
-                                        // Chain to the next compiled block without
-                                        // observe() (hot-counter) or interpreter.
-                                        while retired + n < max_count
-                                            && !self.jit_takeable_exception()
-                                            && self.it_state == 0
-                                        {
-                                            let npc = self.pc as u64;
-                                            let bn = engine.ready_instr_count(npc).unwrap_or(0);
-                                            if bn == 0 || retired + n + bn > max_count {
-                                                break;
-                                            }
-                                            let more = if let Some(sb) = bus
-                                                .as_any_mut()
-                                                .and_then(|a| a.downcast_mut::<SystemBus>())
+                                    } else if actual_n > 0 {
+                                        bus.systick_consume_cycles(u64::from(actual_n));
+                                        if !needs_interp {
+                                            // Chain to the next compiled block without
+                                            // observe() (hot-counter) or interpreter.
+                                            while retired + n < max_count
+                                                && !self.jit_takeable_exception()
+                                                && self.it_state == 0
                                             {
-                                                let (extra, next_pc, clear_exclusive, needs_interp) =
-                                                    engine.run_ready(npc, self, &mut sb.ram.data);
-                                                if clear_exclusive {
-                                                    self.exclusive_byte = None;
+                                                let npc = self.pc as u64;
+                                                let bn = engine.ready_instr_count(npc).unwrap_or(0);
+                                                if bn == 0
+                                                    || retired + n + bn > max_count
+                                                    || self.block_would_cross_irq(bus, bn)
+                                                {
+                                                    break;
                                                 }
-                                                self.pc = next_pc as u32;
-                                                engine.note_chained();
-                                                Some((extra, needs_interp))
-                                            } else {
-                                                None
-                                            };
-                                            match more {
-                                                Some((extra, needs_interp)) => {
-                                                    n += extra;
-                                                    if extra == 0 || needs_interp {
-                                                        break;
+                                                let more = if let Some(sb) = bus
+                                                    .as_any_mut()
+                                                    .and_then(|a| a.downcast_mut::<SystemBus>())
+                                                {
+                                                    let (
+                                                        extra,
+                                                        next_pc,
+                                                        clear_exclusive,
+                                                        needs_interp,
+                                                    ) = engine.run_ready(npc, self, &mut sb.ram.data);
+                                                    if clear_exclusive {
+                                                        self.exclusive_byte = None;
                                                     }
+                                                    self.pc = next_pc as u32;
+                                                    engine.note_chained();
+                                                    Some((extra, needs_interp))
+                                                } else {
+                                                    None
+                                                };
+                                                match more {
+                                                    Some((extra, needs_interp)) => {
+                                                        if extra > 0 {
+                                                            bus.systick_consume_cycles(u64::from(
+                                                                extra,
+                                                            ));
+                                                        }
+                                                        n += extra;
+                                                        if extra == 0 || needs_interp {
+                                                            break;
+                                                        }
+                                                    }
+                                                    None => break,
                                                 }
-                                                None => break,
                                             }
                                         }
                                     }

@@ -640,6 +640,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn tick_elapsed(&mut self, _cycles: u64) -> PeripheralTickResult {
         self.tick()
     }
+
+    /// Cycles until this device would raise a processor-clock-tied IRQ that a
+    /// compiled JIT block of that length would skip. SysTick is the only
+    /// in-tree override (Cortex-M analogue of RISC-V `mtime`). Default `None`.
+    fn systick_ticks_until_fire(&self) -> Option<u64> {
+        None
+    }
+
+    /// Consume `n` processor cycles on a core-tied timer after a compiled
+    /// block that was clamped not to wrap. Default no-op.
+    fn systick_consume_cycles(&mut self, _n: u64) {}
     /// Specialized compatibility hook for a bare-CPU hardware oracle that
     /// freezes the CPU and settles peripherals through their historical walk
     /// even when the production event scheduler owns them.
@@ -1593,6 +1604,18 @@ pub trait Bus {
     fn requires_cycle_accurate(&self) -> bool {
         false
     }
+
+    /// Cycles until SysTick would raise exception 15. Default `None` (no
+    /// SysTick, or it cannot fire). Cortex-M JIT uses this to refuse a
+    /// compiled block that would skip the countdown edge.
+    fn systick_ticks_until_fire(&self) -> Option<u64> {
+        None
+    }
+
+    /// Advance SysTick by `n` cycles after a compiled block that did not wrap.
+    /// Scheduler-mode SysTick is driven by the cycle clock bump; this is the
+    /// legacy-walk path. Default no-op.
+    fn systick_consume_cycles(&mut self, _n: u64) {}
 
     /// Plan 3: look up a registered ROM thunk by absolute PC. Used by the
     /// Xtensa LX7 `BREAK 1, 14` dispatch to redirect calls into the simulated

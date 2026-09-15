@@ -100,6 +100,60 @@ fn alu_spin_matches_at_tick_512() {
     }
 }
 
+/// SysTick CURRENT is the Cortex-M analogue of RISC-V `mtime`. A compiled
+/// block of `n` instructions is `n` cycles; if the countdown would wrap with
+/// TICKINT set, the JIT must interpret so exception 15 pends on the same
+/// instruction as JIT-off. PRIMASK holds the take so we do not need a vector.
+#[test]
+fn systick_countdown_clamp_matches_interpreter() {
+    fn arm(machine: &mut Machine<CortexM>) {
+        machine.cpu.primask = true;
+        // SystemBus::new() builds Systick without add_peripheral, so the
+        // cycle clock is not attached. Attach it so TICKINT is a scheduled
+        // event on the same timebase JIT consume/clock-bump uses.
+        let clock = machine.bus.cycle_clock.clone();
+        if let Some(idx) = machine.bus.find_peripheral_index_by_name("systick") {
+            machine.bus.peripherals[idx].dev.attach_cycle_clock(clock);
+        }
+        machine.bus.recompute_walk_deletable();
+        // RVR large enough that a 21-insn ALU block can run compiled until
+        // the countdown enters the last block. CSR = ENABLE|TICKINT|CLKSOURCE.
+        machine.bus.write_u32(0xE000_E014, 200).unwrap();
+        machine.bus.write_u32(0xE000_E018, 0).unwrap();
+        machine.bus.write_u32(0xE000_E010, 0x7).unwrap();
+    }
+
+    let mut off = alu_spin_machine(false, RECOMMENDED_TICK_INTERVAL);
+    let mut on = alu_spin_machine(true, RECOMMENDED_TICK_INTERVAL);
+    arm(&mut off);
+    arm(&mut on);
+
+    const STEPS: u32 = 2_000;
+    off.run(Some(STEPS)).unwrap();
+    on.run(Some(STEPS)).unwrap();
+
+    let pend = |m: &Machine<CortexM>| (m.cpu.pending_exceptions[0] >> 15) & 1;
+    assert_eq!(
+        pend(&off),
+        1,
+        "interpreter must pend SysTick within {STEPS} cycles"
+    );
+    assert_eq!(
+        pend(&on),
+        1,
+        "JIT must not skip the SysTick wrap; pending={:#x}",
+        on.cpu.pending_exceptions[0]
+    );
+    assert_eq!(off.total_cycles, on.total_cycles);
+    assert_eq!(off.cpu.r0, on.cpu.r0, "ALU progress must still match");
+    if let Some(stats) = on.cpu.jit_stats() {
+        assert!(
+            stats.block_runs > 0,
+            "clamp must not disable compilation; stats={stats:?}"
+        );
+    }
+}
+
 #[test]
 fn uart_mmio_store_exits_and_matches() {
     // STR r0, [r1, #0] to UART data (MMIO) then branch back. The store must
