@@ -98,6 +98,9 @@ pub struct ResolvedClockGate {
     pub bit: u8,
     /// Optional SAM GCLK channel ID; when set, that channel must also be enabled.
     pub gclk_id: Option<u8>,
+    /// Bus index of the GCLK peripheral, resolved at config-build when
+    /// [`Self::gclk_id`] is `Some`. `None` when no GCLK channel is required.
+    pub gclk_idx: Option<usize>,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven

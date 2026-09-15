@@ -679,11 +679,31 @@ impl SystemBus {
                 .get("gclk_id")
                 .and_then(|v| v.as_u64())
                 .map(|n| n as u8);
+            let gclk_idx = if gclk_id.is_some() {
+                let by_name = self.find_peripheral_index_by_name("gclk");
+                let by_type = self.peripherals.iter().position(|p| {
+                    p.dev
+                        .as_any()
+                        .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
+                        .is_some()
+                });
+                let Some(gclk_idx) = by_name.or(by_type) else {
+                    return Err(anyhow::anyhow!(
+                        "peripheral '{}' declares config.gclk_id but no GCLK peripheral \
+                         (id \"gclk\" or type sam_gclk) is registered on the bus",
+                        p_cfg.id
+                    ));
+                };
+                Some(gclk_idx)
+            } else {
+                None
+            };
             self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
                 controller_idx,
                 reg_offset,
                 bit: gate.bit,
                 gclk_id,
+                gclk_idx,
             });
         }
         Ok(())

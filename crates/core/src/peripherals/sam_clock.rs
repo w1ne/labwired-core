@@ -383,7 +383,7 @@ mod tests {
     #[test]
     fn gclk_clkctrl_clken_sticks() {
         let mut g = SamGclk::new();
-        g.write_u32(0x02, 0x4016).unwrap(); // ID=22, GEN=0, CLKEN=1
+        g.write_u16(0x02, 0x4016).unwrap(); // ID=22, GEN=0, CLKEN=1
         assert!(g.clk_enabled(22));
         assert!(!g.clk_enabled(21));
     }

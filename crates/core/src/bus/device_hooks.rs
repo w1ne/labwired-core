@@ -552,26 +552,19 @@ impl SystemBus {
         let Some(gclk_id) = gate.gclk_id else {
             return true; // PM/RCC bit alone (STM32 unchanged)
         };
-        // Optional GCLK channel: find "gclk" by name, else first sam_gclk model.
-        let gclk = self
-            .find_peripheral_index_by_name("gclk")
-            .and_then(|i| self.peripherals.get(i))
-            .or_else(|| {
-                self.peripherals.iter().find(|p| {
-                    p.dev
-                        .as_any()
-                        .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
-                        .is_some()
-                })
-            });
-        match gclk.and_then(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
-        }) {
+        let Some(gclk_idx) = gate.gclk_idx else {
+            return false; // gclk_id declared but GCLK was not resolved at build
+        };
+        if gclk_idx >= self.peripherals.len() {
+            return false;
+        }
+        match self.peripherals[gclk_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
+        {
             Some(g) => g.clk_enabled(gclk_id),
-            // No GCLK modelled → fail-open on the channel check (PM bit already passed).
-            None => true,
+            None => false,
         }
     }
 }
