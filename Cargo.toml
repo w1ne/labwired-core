@@ -15,6 +15,7 @@ members = [
     "crates/egress-relay",
     "crates/firmware",
     "crates/firmware-atsamd21-demo",
+    "crates/firmware-atsamd51-demo",
     "crates/firmware-ci-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
