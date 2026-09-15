@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::host_time::HostTimeMode;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationConfig {
     /// Enable the instruction decode cache for the CPU core.
@@ -33,6 +35,10 @@ pub struct SimulationConfig {
     /// the `jit` feature.
     #[serde(default)]
     pub riscv_jit_enabled: bool,
+
+    /// Host wall-clock policy. Default [`HostTimeMode::MaxSpeed`] never sleeps.
+    #[serde(default)]
+    pub host_time_mode: HostTimeMode,
 }
 
 impl Default for SimulationConfig {
@@ -44,6 +50,7 @@ impl Default for SimulationConfig {
             batch_mode_enabled: true,
             idle_fast_forward_enabled: false,
             riscv_jit_enabled: false,
+            host_time_mode: HostTimeMode::MaxSpeed,
         }
     }
 }

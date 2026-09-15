@@ -17,6 +17,7 @@ pub mod cpu;
 pub mod cycle_clock;
 pub mod decoder;
 pub mod fidelity;
+pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
 pub mod logic_capture;
@@ -46,6 +47,7 @@ pub mod world;
 
 pub use config::SimulationConfig;
 pub use cycle_clock::CycleClock;
+pub use host_time::HostTimeMode;
 pub use machine::{
     AdvanceLimits, AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy,
     IdlePolicy,
