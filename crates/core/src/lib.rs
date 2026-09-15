@@ -17,6 +17,7 @@ pub mod cpu;
 pub mod cycle_clock;
 pub mod decoder;
 pub mod fidelity;
+pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
 pub mod logic_capture;
@@ -45,6 +46,7 @@ pub mod vfi;
 pub mod world;
 
 pub use config::SimulationConfig;
+pub use host_time::HostTimeMode;
 pub use cycle_clock::CycleClock;
 pub use machine::{
     AdvanceLimits, AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy,
@@ -1755,6 +1757,8 @@ pub struct Machine<C: Cpu> {
     /// either FF is off or firmware never parks in a skippable idle.
     pub idle_fast_forward_cycles_skipped: u64,
     pub config: SimulationConfig,
+    /// Injectable host clock used by [`HostTimeMode::Realtime`] pacing.
+    host_clock: Box<dyn host_time::HostClock + Send>,
     step_profile: StepProfile,
 
     /// Phase 2B.1 (issue #192): event-driven peripheral scheduler. Active
@@ -2406,6 +2410,7 @@ impl<C: Cpu> Machine<C> {
             total_cycles: 0,
             idle_fast_forward_cycles_skipped: 0,
             config: SimulationConfig::default(),
+            host_clock: Box::new(host_time::StdHostClock::new()),
             step_profile: StepProfile::default(),
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
@@ -2479,6 +2484,12 @@ impl<C: Cpu> Machine<C> {
     /// ESP32 configs to model APP_CPU alongside PRO_CPU.
     pub fn with_secondary_cpu(mut self, cpu1: C) -> Self {
         self.cpu_secondary = Some(cpu1);
+        self
+    }
+
+    /// Replace the host clock. Tests inject a fake that records sleeps.
+    pub fn with_host_clock(mut self, clock: Box<dyn host_time::HostClock + Send>) -> Self {
+        self.host_clock = clock;
         self
     }
 
