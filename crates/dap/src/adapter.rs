@@ -1013,6 +1013,11 @@ fn gpio_offsets_for_peripheral(
             idr_offset: 0x10,
             odr_offset: 0x00,
         }),
+        // Microchip SAM PORT: OUT @0x10, IN @0x20.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::SamPort => Some(GpioOffsets {
+            idr_offset: 0x20,
+            odr_offset: 0x10,
+        }),
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,
@@ -1228,6 +1233,78 @@ mod tests {
         assert_eq!(resolved.len(), 2);
         assert_eq!(resolved[0].register_addr, 0x4202_0400 + GPIO_V2_ODR_OFFSET);
         assert_eq!(resolved[1].register_addr, 0x4202_0400 + GPIO_V2_IDR_OFFSET);
+    }
+
+    #[test]
+    fn test_resolve_board_io_bindings_uses_sam_port_gpio_offsets() {
+        let mut gpio_config = HashMap::new();
+        gpio_config.insert("profile".to_string(), "sam_port".into());
+        let chip = labwired_config::ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            name: "test".to_string(),
+            arch: labwired_config::Arch::Arm,
+            core: None,
+            flash: labwired_config::MemoryRange {
+                base: 0x0000_0000,
+                size: "256KB".to_string(),
+            },
+            ram: labwired_config::MemoryRange {
+                base: 0x2000_0000,
+                size: "32KB".to_string(),
+            },
+            peripherals: vec![labwired_config::PeripheralConfig {
+                id: "porta".to_string(),
+                r#type: "gpio".to_string(),
+                base_address: 0x4100_4400,
+                size: None,
+                irq: None,
+                clock: None,
+                config: gpio_config,
+            }],
+            pins: Default::default(),
+        };
+
+        let manifest = labwired_config::SystemManifest {
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "test-system".to_string(),
+            chip: "test-chip".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            cosim_models: Vec::new(),
+            board_io: vec![
+                labwired_config::BoardIoBinding {
+                    id: "led".to_string(),
+                    kind: labwired_config::BoardIoKind::Led,
+                    peripheral: "porta".to_string(),
+                    pin: 17,
+                    signal: labwired_config::BoardIoSignal::Output,
+                    active_high: true,
+                    device_type: None,
+                    i2c_address: None,
+                },
+                labwired_config::BoardIoBinding {
+                    id: "button".to_string(),
+                    kind: labwired_config::BoardIoKind::Button,
+                    peripheral: "porta".to_string(),
+                    pin: 15,
+                    signal: labwired_config::BoardIoSignal::Input,
+                    active_high: true,
+                    device_type: None,
+                    i2c_address: None,
+                },
+            ],
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let resolved = resolve_board_io_bindings(&chip, &manifest);
+        assert_eq!(resolved.len(), 2);
+        assert_eq!(resolved[0].register_addr, 0x4100_4400 + 0x10); // OUT
+        assert_eq!(resolved[1].register_addr, 0x4100_4400 + 0x20); // IN
     }
 
     #[test]
