@@ -4,7 +4,7 @@
 
 //! Native (`wasmtime`) executor for Cortex-M compiled blocks.
 
-use wasmtime::{Caller, Engine, Func, Instance, Memory, MemoryType, Module, Store, TypedFunc};
+use wasmtime::{Engine, Instance, Memory, MemoryType, Module, Store, TypedFunc};
 
 use crate::cpu::CortexM;
 use crate::Machine;
@@ -14,8 +14,8 @@ use super::super::frontend::BlockPlan;
 use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
 use super::emit::{
-    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
-    WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RAM_WINDOW_OFF, RES_FLAG_SLOT,
+    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
 };
 use super::host::{pack_regs, unpack_regs};
 use super::CortexMFrontend;
@@ -23,65 +23,8 @@ use crate::bus::SystemBus;
 
 const REG_SYNC_BYTES: usize = NEXT_PC_SLOT as usize + 4;
 
-struct RamHost {
-    ptr: *mut u8,
-    len: usize,
-}
-
-unsafe impl Send for RamHost {}
-unsafe impl Sync for RamHost {}
-
-fn host_ram_load(caller: Caller<'_, RamHost>, off: i32, width: i32, signed: i32) -> i32 {
-    let host = caller.data();
-    let off = off as u32 as usize;
-    let width = width as u32 as usize;
-    if host.ptr.is_null() || width == 0 || off.saturating_add(width) > host.len {
-        return 0;
-    }
-    unsafe {
-        let p = host.ptr.add(off);
-        match (width, signed) {
-            (1, 0) => i32::from(*p),
-            (1, _) => i32::from(*p as i8),
-            (2, 0) => i32::from(u16::from_le_bytes([*p, *p.add(1)])),
-            (2, _) => i32::from(i16::from_le_bytes([*p, *p.add(1)])),
-            (4, _) => i32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]),
-            _ => 0,
-        }
-    }
-}
-
-fn host_ram_store(caller: Caller<'_, RamHost>, off: i32, val: i32, width: i32) {
-    let host = caller.data();
-    let off = off as u32 as usize;
-    let width = width as u32 as usize;
-    if host.ptr.is_null() || width == 0 || off.saturating_add(width) > host.len {
-        return;
-    }
-    let v = val as u32;
-    unsafe {
-        let p = host.ptr.add(off);
-        match width {
-            1 => *p = v as u8,
-            2 => {
-                let b = (v as u16).to_le_bytes();
-                *p = b[0];
-                *p.add(1) = b[1];
-            }
-            4 => {
-                let b = v.to_le_bytes();
-                *p = b[0];
-                *p.add(1) = b[1];
-                *p.add(2) = b[2];
-                *p.add(3) = b[3];
-            }
-            _ => {}
-        }
-    }
-}
-
 pub struct CompiledBlock {
-    store: Store<RamHost>,
+    store: Store<()>,
     run: TypedFunc<(), i32>,
     regs: Memory,
     end_pc: Pc,
@@ -108,9 +51,11 @@ impl CompiledBlock {
             .write(&mut self.store, 0, &bytes)
             .expect("register-file memory write");
 
+        let ram_n = self.ram_len.min(ram.len());
         if self.ram_len > 0 {
-            self.store.data_mut().ptr = ram.as_mut_ptr();
-            self.store.data_mut().len = ram.len();
+            self.regs
+                .write(&mut self.store, RAM_WINDOW_OFF as usize, &ram[..ram_n])
+                .expect("guest-RAM seed");
             self.regs
                 .write(&mut self.store, RES_FLAG_SLOT as usize, &[0u8; 4])
                 .expect("reservation-flag clear");
@@ -120,8 +65,6 @@ impl CompiledBlock {
             .run
             .call(&mut self.store, ())
             .expect("compiled block never traps");
-        self.store.data_mut().ptr = std::ptr::null_mut();
-        self.store.data_mut().len = 0;
 
         self.regs
             .read(&self.store, 0, &mut bytes)
@@ -136,7 +79,12 @@ impl CompiledBlock {
         }
 
         let mut clear_exclusive = false;
-        if self.has_store {
+        // Loads never mutate the RAM window; skip the memcpy-out unless a
+        // compiled store ran.
+        if self.has_store && self.ram_len > 0 {
+            self.regs
+                .read(&self.store, RAM_WINDOW_OFF as usize, &mut ram[..ram_n])
+                .expect("guest-RAM writeback");
             clear_exclusive = self.read_slot(RES_FLAG_SLOT) != 0;
         }
 
@@ -197,30 +145,17 @@ impl CortexMWasmJit {
             return None;
         }
         let module = Module::new(&self.engine, &plan.code).ok()?;
-        let mut store = Store::new(
-            &self.engine,
-            RamHost {
-                ptr: std::ptr::null_mut(),
-                len: 0,
-            },
-        );
-        let (ram_len, has_store) = match binding {
-            Some(b) => (b.ram_len, b.has_store),
-            None => (0usize, false),
+        let mut store = Store::new(&self.engine, ());
+        let (ram_len, has_store, pages) = match binding {
+            Some(b) => {
+                let bytes = (RAM_WINDOW_OFF as usize + b.ram_len).max(1);
+                let pages = bytes.div_ceil(65536).max(1) as u32;
+                (b.ram_len, b.has_store, pages)
+            }
+            None => (0usize, false, 1u32),
         };
-        let regs = Memory::new(&mut store, MemoryType::new(1, None)).ok()?;
-        let instance = if ram_len > 0 {
-            let load = Func::wrap(&mut store, host_ram_load);
-            let store_fn = Func::wrap(&mut store, host_ram_store);
-            Instance::new(
-                &mut store,
-                &module,
-                &[regs.into(), load.into(), store_fn.into()],
-            )
-            .ok()?
-        } else {
-            Instance::new(&mut store, &module, &[regs.into()]).ok()?
-        };
+        let regs = Memory::new(&mut store, MemoryType::new(pages, None)).ok()?;
+        let instance = Instance::new(&mut store, &module, &[regs.into()]).ok()?;
         let run = instance.get_typed_func::<(), i32>(&mut store, "run").ok()?;
         Some(CompiledBlock {
             store,
@@ -242,9 +177,6 @@ pub struct EngineStats {
     pub block_runs: u64,
     pub block_instrs: u64,
     pub interpreted: u64,
-    /// Bytes memcpy'd between wasm linear memory and guest RAM. Zero-copy
-    /// host load/store keeps this at 0 even for mem blocks.
-    pub ram_bytes_synced: u64,
 }
 
 pub struct CortexMJitEngine {
@@ -252,7 +184,6 @@ pub struct CortexMJitEngine {
     jit: CortexMWasmJit,
     cache: BlockCache<CompiledBlock>,
     stats: EngineStats,
-    min_profitable: u32,
 }
 
 impl std::fmt::Debug for CortexMJitEngine {
@@ -271,12 +202,7 @@ impl CortexMJitEngine {
             jit: CortexMWasmJit::new(),
             cache: BlockCache::new(hot_threshold),
             stats: EngineStats::default(),
-            min_profitable: MIN_PROFITABLE_BLOCK_INSTRS,
         }
-    }
-
-    pub fn set_min_profitable(&mut self, n: u32) {
-        self.min_profitable = n.max(1);
     }
 
     pub fn stats(&self) -> EngineStats {
@@ -327,7 +253,7 @@ impl CortexMJitEngine {
         let Ok((plan, binding)) = self.frontend.translate_block_thumb(pc, &view) else {
             return;
         };
-        if plan.instr_count < self.min_profitable {
+        if plan.instr_count < MIN_PROFITABLE_BLOCK_INSTRS {
             return;
         }
         if let Some(block) = self.jit.compile(&plan, binding) {

@@ -150,55 +150,6 @@ fn alu_hot_loop_is_byte_identical_and_compiles() {
 }
 
 #[test]
-fn eight_insn_loop_compiles_when_min_profitable_is_4() {
-    let mut prog = Vec::new();
-    for _ in 0..7 {
-        h(&mut prog, adds_imm8(0, 1));
-    }
-    let from = prog.len() as i32;
-    h(&mut prog, b_to(from, 0));
-
-    let mut interp = build_machine(&prog);
-    let mut jit = build_machine(&prog);
-    let mut engine = CortexMJitEngine::new(4);
-    engine.set_min_profitable(4);
-    engine.try_compile_from_bus(0, &jit.bus);
-    assert!(
-        engine.stats().compiled > 0,
-        "8-insn loop must compile at min_profitable=4: {:?}",
-        engine.stats()
-    );
-    assert_eq!(engine.ready_instr_count(0), Some(8));
-
-    let policy = DiffPolicy {
-        ignore_indices: differential_cycle_ignore_indices(),
-        block_boundary_only: false,
-    };
-    let mut retired = 0u64;
-    for units in 1..=2_000u64 {
-        let n = engine.step_unit(&mut jit);
-        assert!(n > 0, "halt at unit {units}");
-        for _ in 0..n {
-            interp.step().expect("interp 8-insn loop");
-        }
-        retired += n as u64;
-        if let Some(d) = compare(
-            units,
-            &snapshot_state(&interp.cpu),
-            &snapshot_state(&jit.cpu),
-            &policy,
-        ) {
-            panic!("8-insn loop diverged at unit {units}: {d:?}");
-        }
-        if retired > 400 {
-            break;
-        }
-    }
-    assert!(engine.stats().block_runs > 0);
-    assert_eq!(engine.stats().ram_bytes_synced, 0);
-}
-
-#[test]
 fn every_alu_op_matches_interpreter() {
     let mut seed: u64 = 0x1234_5678_9abc_def0;
     let mut rng = move || {
@@ -293,10 +244,6 @@ fn ram_load_store_loop_matches_interpreter() {
     }
     let stats = engine.stats();
     assert!(stats.block_runs > 0, "RAM loop never compiled: {stats:?}");
-    assert_eq!(
-        stats.ram_bytes_synced, 0,
-        "mem blocks must not memcpy guest RAM: {stats:?}"
-    );
     assert_eq!(interp.cpu.r0, jit.cpu.r0);
 }
 

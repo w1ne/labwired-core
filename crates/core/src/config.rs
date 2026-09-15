@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::host_time::HostTimeMode;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationConfig {
     /// Enable the instruction decode cache for the CPU core.
@@ -34,6 +36,10 @@ pub struct SimulationConfig {
     #[serde(default)]
     pub riscv_jit_enabled: bool,
 
+    /// Host wall-clock policy. Default [`HostTimeMode::MaxSpeed`] never sleeps.
+    #[serde(default)]
+    pub host_time_mode: HostTimeMode,
+
     /// Opt into the Cortex-M (Thumb/Thumb-2) wasm-JIT fast path for
     /// `Machine<CortexM>`. Off by default: with it `false` the interpreter
     /// runs every instruction and behavior is bit-identical to a build
@@ -44,11 +50,6 @@ pub struct SimulationConfig {
     /// else the JIT does not model. Has no effect without the `jit` feature.
     #[serde(default)]
     pub cortex_m_jit_enabled: bool,
-    /// Minimum compiled-block length. `0` = framework default (16). Lower
-    /// values compile more Zephyr-sized Thumb BBs; only safe once RAM
-    /// access is zero-copy (host load/store, no SRAM memcpy).
-    #[serde(default)]
-    pub cortex_m_jit_min_block_instrs: u32,
 }
 
 impl Default for SimulationConfig {
@@ -60,8 +61,8 @@ impl Default for SimulationConfig {
             batch_mode_enabled: true,
             idle_fast_forward_enabled: false,
             riscv_jit_enabled: false,
+            host_time_mode: HostTimeMode::MaxSpeed,
             cortex_m_jit_enabled: false,
-            cortex_m_jit_min_block_instrs: 0,
         }
     }
 }
