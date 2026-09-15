@@ -82,17 +82,22 @@ impl SystemBus {
     }
 }
 
-/// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
-/// bit at bus-build time (the symbolic `reg` name from the yaml is mapped to the
-/// active chip family's offset via [`Rcc::enable_reg_offset`]). When present, a
-/// CPU access to the owning peripheral only takes effect while `bit` is set in
-/// the RCC enable register at `reg_offset` — modelling silicon clock-gating.
+/// A peripheral's clock-gate, resolved to a concrete controller index + register
+/// offset + bit at bus-build time (the symbolic `reg` name from the yaml is
+/// mapped via the controller's `enable_reg_offset`). When present, a CPU access
+/// to the owning peripheral only takes effect while `bit` is set in that enable
+/// register — modelling silicon clock-gating. Optional `gclk_id` additionally
+/// requires the SAM GCLK channel to be enabled.
 #[derive(Debug, Clone, Copy)]
 pub struct ResolvedClockGate {
-    /// Byte offset of the RCC enable register within the rcc peripheral.
+    /// Index of the clock-controller peripheral (RCC / PM / MCLK) on the bus.
+    pub controller_idx: usize,
+    /// Byte offset of the enable register within the controller peripheral.
     pub reg_offset: u64,
     /// Enable-bit position within that register.
     pub bit: u8,
+    /// Optional SAM GCLK channel ID; when set, that channel must also be enabled.
+    pub gclk_id: Option<u8>,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
@@ -112,11 +117,12 @@ pub struct PeripheralEntry {
     pub irq: Option<u32>,
     pub dev: Box<dyn Peripheral>,
     pub ticks_remaining: u64,
-    /// Optional RCC clock-gate (silicon clock-gating model). `None` (the common
+    /// Optional clock-gate (silicon clock-gating model). `None` (the common
     /// case) → the peripheral is never gated and accesses always pass through.
     /// `Some` → accesses are dropped (writes ignored, reads return 0) while the
-    /// gate bit is clear in the RCC, exactly like an unclocked peripheral on
-    /// real silicon. Resolved from `PeripheralConfig::clock` in `from_config`.
+    /// gate bit is clear on the named controller, exactly like an unclocked
+    /// peripheral on real silicon. Resolved from `PeripheralConfig::clock` in
+    /// `from_config`.
     pub clock_gate: Option<ResolvedClockGate>,
 }
 

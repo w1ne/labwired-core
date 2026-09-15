@@ -615,46 +615,75 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Resolve every peripheral's optional `clock: { reg, bit }` declaration into
-    /// a concrete [`ResolvedClockGate`] (RCC register offset + bit). Run as a
-    /// post-pass by `from_config` after all peripherals — crucially the RCC —
-    /// are on the bus, so the symbolic `reg` name can be mapped to the active
-    /// chip family's RCC offset via [`Rcc::enable_reg_offset`] regardless of the
-    /// order peripherals appear in the config.
+    /// Resolve every peripheral's optional `clock: { reg, bit [, controller] }`
+    /// declaration into a concrete [`ResolvedClockGate`]. Run as a post-pass by
+    /// `from_config` after all peripherals — crucially the clock controller —
+    /// are on the bus, so the symbolic `reg` name can be mapped via the
+    /// controller's `enable_reg_offset` regardless of config order.
     ///
     /// A peripheral with no `clock` field is left ungated. A declared gate whose
-    /// `reg` name the family doesn't recognise is a hard config error (a silent
-    /// "never gate" would mask a typo that lets unclocked firmware falsely pass).
+    /// controller is missing or whose `reg` name the controller doesn't recognise
+    /// is a hard config error (a silent "never gate" would mask a typo that lets
+    /// unclocked firmware falsely pass).
     pub(crate) fn resolve_clock_gates(
         &mut self,
         peripherals: &[labwired_config::PeripheralConfig],
     ) -> anyhow::Result<()> {
-        // Find the RCC model once (clock-gating requires one).
-        let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
-            let idx = bus.rcc_idx?;
-            bus.peripherals[idx]
-                .dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
-                .and_then(|rcc| rcc.enable_reg_offset(reg))
-        };
         for p_cfg in peripherals {
             let Some(gate) = &p_cfg.clock else { continue };
             let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
                 continue;
             };
-            let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+            let controller_name = gate.controller.as_str();
+            let Some(controller_idx) = self.find_peripheral_index_by_name(controller_name) else {
                 return Err(anyhow::anyhow!(
-                    "peripheral '{}' declares clock gate reg '{}' which the chip's \
-                     RCC model does not expose (no such enable register, or no RCC \
-                     peripheral is registered)",
+                    "peripheral '{}' declares clock gate controller '{}' which is \
+                     not registered on the bus",
                     p_cfg.id,
-                    gate.reg
+                    controller_name
                 ));
             };
+            let reg_offset = {
+                let dev = &*self.peripherals[controller_idx].dev;
+                if let Some(rcc) = dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
+                {
+                    rcc.enable_reg_offset(&gate.reg)
+                } else if let Some(pm) = dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamPm>())
+                {
+                    pm.enable_reg_offset(&gate.reg)
+                } else if let Some(mclk) = dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamMclk>())
+                {
+                    mclk.enable_reg_offset(&gate.reg)
+                } else {
+                    None
+                }
+            };
+            let Some(reg_offset) = reg_offset else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' declares clock gate reg '{}' which controller \
+                     '{}' does not expose (no such enable register, or controller \
+                     type is not a known clock model)",
+                    p_cfg.id,
+                    gate.reg,
+                    controller_name
+                ));
+            };
+            let gclk_id = p_cfg
+                .config
+                .get("gclk_id")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u8);
             self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+                controller_idx,
                 reg_offset,
                 bit: gate.bit,
+                gclk_id,
             });
         }
         Ok(())

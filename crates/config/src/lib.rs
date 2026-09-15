@@ -83,21 +83,29 @@ pub struct NamedMemoryRange {
     pub image_env: Option<String>,
 }
 
-/// Optional RCC clock-gate declaration for a peripheral. When present, the bus
+/// Optional clock-gate declaration for a peripheral. When present, the bus
 /// models silicon clock-gating: a CPU access to the peripheral only takes effect
-/// while `bit` is set in the RCC peripheral's `reg` enable register. Peripherals
-/// without a `clock:` field are never gated (safe default — existing configs and
-/// firmware that don't enable a clock keep working unchanged).
+/// while `bit` is set in the named controller's `reg` enable register.
+/// Peripherals without a `clock:` field are never gated (safe default — existing
+/// configs and firmware that don't enable a clock keep working unchanged).
 ///
 /// `reg` is the symbolic enable-register name (e.g. "apb1enr", "apb2enr",
-/// "ahbenr", "ahb2enr"); the bus maps it to the chip family's actual RCC offset
-/// at build time, so the same name resolves correctly on F1 vs L4.
+/// "ahbenr", "APBCMASK"); the bus maps it to the controller's actual offset at
+/// build time. `controller` selects which peripheral owns that register
+/// (default `"rcc"` preserves STM32 configs; SAMD21 uses `"pm"` / `"sam_pm"`).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClockGate {
-    /// Symbolic RCC enable-register name, e.g. "apb1enr" / "apb2enr" / "ahbenr".
+    /// Symbolic enable-register name, e.g. "apb1enr" / "APBCMASK".
     pub reg: String,
     /// Enable-bit position within that register.
     pub bit: u8,
+    /// Clock controller peripheral id. Default `"rcc"` preserves STM32 configs.
+    #[serde(default = "default_clock_controller")]
+    pub controller: String,
+}
+
+fn default_clock_controller() -> String {
+    "rcc".into()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

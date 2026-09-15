@@ -514,11 +514,10 @@ impl SystemBus {
     /// Whether peripheral `idx` is currently clocked. `true` (always-on) for any
     /// peripheral without a declared clock-gate — the safe default that keeps
     /// every existing config/firmware working. For a gated peripheral, reads the
-    /// RCC enable register the gate points at and returns whether the gate bit is
-    /// set. If no RCC peripheral is registered, or its register read fails, the
-    /// peripheral is treated as clocked (fail-open: never wedge a chip that has
-    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path a
-    /// single cached-index RCC register read.
+    /// controller enable register the gate points at and returns whether the gate
+    /// bit is set. If the controller register read fails, the peripheral is
+    /// treated as clocked (fail-open). When `gclk_id` is set, the SAM GCLK
+    /// channel must also be enabled.
     pub(crate) fn is_peripheral_clocked(&self, idx: usize) -> bool {
         // missing_clock fault: force the peripheral unclocked and count the
         // suppressed access as the runtime fired-observation. Checked before the
@@ -537,12 +536,42 @@ impl SystemBus {
         else {
             return true; // ungated → always accessible
         };
-        let Some(rcc_idx) = self.rcc_idx else {
-            return true; // no RCC modelled → don't gate
-        };
-        match self.peripherals[rcc_idx].dev.read_u32(gate.reg_offset) {
+        if gate.controller_idx >= self.peripherals.len() {
+            return true; // stale index → don't gate
+        }
+        let bus_clocked = match self.peripherals[gate.controller_idx]
+            .dev
+            .read_u32(gate.reg_offset)
+        {
             Ok(reg) => (reg >> gate.bit) & 1 != 0,
             Err(_) => true,
+        };
+        if !bus_clocked {
+            return false;
+        }
+        let Some(gclk_id) = gate.gclk_id else {
+            return true; // PM/RCC bit alone (STM32 unchanged)
+        };
+        // Optional GCLK channel: find "gclk" by name, else first sam_gclk model.
+        let gclk = self
+            .find_peripheral_index_by_name("gclk")
+            .and_then(|i| self.peripherals.get(i))
+            .or_else(|| {
+                self.peripherals.iter().find(|p| {
+                    p.dev
+                        .as_any()
+                        .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
+                        .is_some()
+                })
+            });
+        match gclk.and_then(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::sam_clock::SamGclk>())
+        }) {
+            Some(g) => g.clk_enabled(gclk_id),
+            // No GCLK modelled → fail-open on the channel check (PM bit already passed).
+            None => true,
         }
     }
 }
