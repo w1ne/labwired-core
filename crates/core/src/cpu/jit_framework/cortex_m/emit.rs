@@ -12,7 +12,7 @@
 use crate::decoder::arm::Instruction;
 
 use super::super::frontend::ExitEdge;
-use super::super::riscv::wasm_encode::{build_module, enc, op};
+use super::super::riscv::wasm_encode::{build_module, build_module_ram_host, enc, op};
 use super::super::side_exit::BailReason;
 use super::super::{CodeView, Pc};
 use super::decode_at;
@@ -240,14 +240,11 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
     } else {
         None
     };
-    let mem_pages = match &binding {
-        Some(b) => (RAM_WINDOW_OFF as usize + b.ram_len)
-            .max(1)
-            .div_ceil(65536)
-            .max(1) as u32,
-        None => 1,
+    let code_bytes = if body.has_mem {
+        build_module_ram_host(LOCAL_COUNT, &expr)
+    } else {
+        build_module(LOCAL_COUNT, 1, &expr)
     };
-    let code_bytes = build_module(LOCAL_COUNT, mem_pages, &expr);
 
     let mut exits = vec![ExitEdge {
         wire_code: wire,
@@ -324,6 +321,16 @@ impl MemAccess {
                 _ => 4,
             },
         }
+    }
+
+    fn load_signed(&self) -> bool {
+        matches!(
+            self,
+            MemAccess::Load {
+                opcode: op::I32_LOAD8_S | op::I32_LOAD16_S,
+                ..
+            }
+        )
     }
 }
 
@@ -1132,12 +1139,40 @@ impl Body {
         self.buf.push(op::RETURN);
     }
 
+    fn ram_offset_from_scratch(&mut self) {
+        let ram_base = self.window.expect("ram_offset without window").0;
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_SUB);
+    }
+
+    fn emit_host_load(&mut self, access: &MemAccess) {
+        self.ram_offset_from_scratch();
+        self.i32_const(access.width() as i32);
+        self.i32_const(i32::from(access.load_signed()));
+        self.buf.push(op::CALL);
+        enc::uleb(&mut self.buf, 0);
+    }
+
+    fn emit_host_store(&mut self, pc: u32, rs2: u8, width: u32, raw_pc: bool) {
+        self.ram_offset_from_scratch();
+        if raw_pc {
+            self.read_gpr_or_pc_raw(rs2, pc);
+        } else {
+            self.read(rs2, pc);
+        }
+        self.i32_const(width as i32);
+        self.buf.push(op::CALL);
+        enc::uleb(&mut self.buf, 1);
+        self.store_const_at(RES_FLAG_SLOT, 1);
+        self.has_store = true;
+    }
+
     fn emit_mem(&mut self, pc: u32, addr_reg: u8, imm: i32, access: MemAccess) {
         let (ram_base, ram_len) = self.window.expect("emit_mem without window");
         let ram_end = ram_base.wrapping_add(ram_len);
         let width = access.width();
         let hi = ram_end.wrapping_sub(width);
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.has_mem = true;
         self.read(addr_reg, pc);
         self.i32_const(imm);
@@ -1154,25 +1189,12 @@ impl Body {
         self.buf.push(op::T_EMPTY);
         let writes_before = self.writes;
         match access {
-            MemAccess::Load { rd, opcode } => {
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(delta as i32);
-                self.buf.push(op::I32_ADD);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
+            MemAccess::Load { rd, .. } => {
+                self.emit_host_load(&access);
                 self.write(rd);
             }
-            MemAccess::Store { rs2, opcode } => {
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(delta as i32);
-                self.buf.push(op::I32_ADD);
-                self.read(rs2, pc);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
-                self.store_const_at(RES_FLAG_SLOT, 1);
-                self.has_store = true;
+            MemAccess::Store { rs2, .. } => {
+                self.emit_host_store(pc, rs2, access.width(), false);
             }
         }
         self.buf.push(op::ELSE);
@@ -1199,23 +1221,15 @@ impl Body {
             return;
         }
         self.has_mem = true;
-        let wasm_addr = addr.wrapping_sub(ram_base).wrapping_add(RAM_WINDOW_OFF);
+        self.i32_const(addr as i32);
+        self.local_set(SCRATCH_LOCAL);
         match access {
-            MemAccess::Load { rd, opcode } => {
-                self.i32_const(wasm_addr as i32);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
+            MemAccess::Load { rd, .. } => {
+                self.emit_host_load(&access);
                 self.write(rd);
             }
-            MemAccess::Store { rs2, opcode } => {
-                self.i32_const(wasm_addr as i32);
-                self.read(rs2, pc);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
-                self.store_const_at(RES_FLAG_SLOT, 1);
-                self.has_store = true;
+            MemAccess::Store { rs2, .. } => {
+                self.emit_host_store(pc, rs2, access.width(), false);
             }
         }
     }
@@ -1796,7 +1810,6 @@ impl Body {
         let (ram_base, ram_len) = self.window.expect("emit_mem_idx without window");
         let ram_end = ram_base.wrapping_add(ram_len);
         let hi = ram_end.wrapping_sub(4);
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.has_mem = true;
 
         self.read(rn, pc);
@@ -1826,12 +1839,10 @@ impl Body {
         let writes_before = self.writes;
 
         if is_load {
-            self.local_get(SCRATCH_LOCAL);
-            self.i32_const(delta as i32);
-            self.buf.push(op::I32_ADD);
-            self.buf.push(op::I32_LOAD);
-            enc::uleb(&mut self.buf, 0);
-            enc::uleb(&mut self.buf, 0);
+            self.emit_host_load(&MemAccess::Load {
+                rd: rt,
+                opcode: op::I32_LOAD,
+            });
             self.local_set(RESULT_LOCAL);
             if writeback {
                 self.local_get(OP2_LOCAL);
@@ -1846,15 +1857,7 @@ impl Body {
             self.local_get(RESULT_LOCAL);
             self.write(rt);
         } else {
-            self.local_get(SCRATCH_LOCAL);
-            self.i32_const(delta as i32);
-            self.buf.push(op::I32_ADD);
-            self.read(rt, pc);
-            self.buf.push(op::I32_STORE);
-            enc::uleb(&mut self.buf, 0);
-            enc::uleb(&mut self.buf, 0);
-            self.store_const_at(RES_FLAG_SLOT, 1);
-            self.has_store = true;
+            self.emit_host_store(pc, rt, 4, false);
             if writeback {
                 self.local_get(OP2_LOCAL);
                 self.i32_const(imm8 as i32);
@@ -1877,7 +1880,6 @@ impl Body {
         let ram_end = ram_base.wrapping_add(ram_len);
         let width = access.width();
         let hi = ram_end.wrapping_sub(width);
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.has_mem = true;
         self.read(rn, pc);
         self.read(rm, pc);
@@ -1894,25 +1896,12 @@ impl Body {
         self.buf.push(op::T_EMPTY);
         let writes_before = self.writes;
         match access {
-            MemAccess::Load { rd, opcode } => {
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(delta as i32);
-                self.buf.push(op::I32_ADD);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
+            MemAccess::Load { rd, .. } => {
+                self.emit_host_load(&access);
                 self.write(rd);
             }
-            MemAccess::Store { rs2, opcode } => {
-                self.local_get(SCRATCH_LOCAL);
-                self.i32_const(delta as i32);
-                self.buf.push(op::I32_ADD);
-                self.read(rs2, pc);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
-                self.store_const_at(RES_FLAG_SLOT, 1);
-                self.has_store = true;
+            MemAccess::Store { rs2, .. } => {
+                self.emit_host_store(pc, rs2, access.width(), false);
             }
         }
         self.buf.push(op::ELSE);
@@ -1938,19 +1927,11 @@ impl Body {
     }
 
     fn emit_store_sp_off(&mut self, pc: u32, off: i32, rs2: u8) {
-        let (ram_base, _) = self.window.expect("emit_store_sp_off without window");
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.read(13, pc);
         self.i32_const(off);
         self.buf.push(op::I32_ADD);
-        self.i32_const(delta as i32);
-        self.buf.push(op::I32_ADD);
-        self.read(rs2, pc);
-        self.buf.push(op::I32_STORE);
-        enc::uleb(&mut self.buf, 0);
-        enc::uleb(&mut self.buf, 0);
-        self.store_const_at(RES_FLAG_SLOT, 1);
-        self.has_store = true;
+        self.local_set(SCRATCH_LOCAL);
+        self.emit_host_store(pc, rs2, 4, false);
     }
 
     fn emit_push(&mut self, pc: u32, registers: u8, m: bool) {
@@ -2013,27 +1994,17 @@ impl Body {
     }
 
     fn emit_word_at_base_off(&mut self, pc: u32, off: i32, access: MemAccess) {
-        let (ram_base, _) = self.window.expect("emit_word_at_base_off without window");
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.local_get(OP2_LOCAL);
         self.i32_const(off);
         self.buf.push(op::I32_ADD);
-        self.i32_const(delta as i32);
-        self.buf.push(op::I32_ADD);
+        self.local_set(SCRATCH_LOCAL);
         match access {
-            MemAccess::Load { rd, opcode } => {
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
+            MemAccess::Load { rd, .. } => {
+                self.emit_host_load(&access);
                 self.write(rd);
             }
-            MemAccess::Store { rs2, opcode } => {
-                self.read_gpr_or_pc_raw(rs2, pc);
-                self.buf.push(opcode);
-                enc::uleb(&mut self.buf, 0);
-                enc::uleb(&mut self.buf, 0);
-                self.store_const_at(RES_FLAG_SLOT, 1);
-                self.has_store = true;
+            MemAccess::Store { rs2, .. } => {
+                self.emit_host_store(pc, rs2, access.width(), true);
             }
         }
     }
@@ -2257,16 +2228,14 @@ impl Body {
                 off += 4;
             }
         }
-        let (ram_base, _) = self.window.expect("emit_ldm_w_pc window");
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.local_get(OP2_LOCAL);
         self.i32_const(off);
         self.buf.push(op::I32_ADD);
-        self.i32_const(delta as i32);
-        self.buf.push(op::I32_ADD);
-        self.buf.push(op::I32_LOAD);
-        enc::uleb(&mut self.buf, 0);
-        enc::uleb(&mut self.buf, 0);
+        self.local_set(SCRATCH_LOCAL);
+        self.emit_host_load(&MemAccess::Load {
+            rd: 0,
+            opcode: op::I32_LOAD,
+        });
         self.local_set(SCRATCH_LOCAL);
 
         if writeback {
@@ -2307,16 +2276,14 @@ impl Body {
     }
 
     fn emit_load_sp_off(&mut self, pc: u32, off: i32, rd: u8) {
-        let (ram_base, _) = self.window.expect("emit_load_sp_off without window");
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.read(13, pc);
         self.i32_const(off);
         self.buf.push(op::I32_ADD);
-        self.i32_const(delta as i32);
-        self.buf.push(op::I32_ADD);
-        self.buf.push(op::I32_LOAD);
-        enc::uleb(&mut self.buf, 0);
-        enc::uleb(&mut self.buf, 0);
+        self.local_set(SCRATCH_LOCAL);
+        self.emit_host_load(&MemAccess::Load {
+            rd,
+            opcode: op::I32_LOAD,
+        });
         self.write(rd);
     }
 
@@ -2376,16 +2343,14 @@ impl Body {
                 off += 4;
             }
         }
-        let (ram_base, _) = self.window.expect("emit_pop_pc window");
-        let delta = RAM_WINDOW_OFF.wrapping_sub(ram_base);
         self.read(13, pc);
         self.i32_const(off);
         self.buf.push(op::I32_ADD);
-        self.i32_const(delta as i32);
-        self.buf.push(op::I32_ADD);
-        self.buf.push(op::I32_LOAD);
-        enc::uleb(&mut self.buf, 0);
-        enc::uleb(&mut self.buf, 0);
+        self.local_set(SCRATCH_LOCAL);
+        self.emit_host_load(&MemAccess::Load {
+            rd: 0,
+            opcode: op::I32_LOAD,
+        });
         self.local_set(SCRATCH_LOCAL);
 
         self.read(13, pc);

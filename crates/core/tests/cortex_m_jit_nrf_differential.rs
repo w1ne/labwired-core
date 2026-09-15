@@ -449,6 +449,53 @@ fn nrf52840_zephyr_hello_uart_and_cycles_match_at_tick_512() {
     );
 }
 
+#[test]
+fn nrf52840_zephyr_hello_matches_at_min_block_4() {
+    let (mut off, sink_off) = zephyr_hello(false);
+    let (mut on, sink_on) = zephyr_hello(true);
+    on.config.cortex_m_jit_min_block_instrs = 4;
+    on.bus.config.cortex_m_jit_min_block_instrs = 4;
+    const MARKER: &[u8] = b"LW_Z0_OK";
+    const MAX: u64 = 80_000;
+    let mut chunks = 0u32;
+    while off.step_profile().cpu_instructions < MAX
+        && on.step_profile().cpu_instructions < MAX
+        && (!has_marker(&sink_off, MARKER) || !has_marker(&sink_on, MARKER))
+    {
+        off.run(Some(64)).expect("interp chunk");
+        on.run(Some(64)).expect("jit chunk");
+        let target = off
+            .step_profile()
+            .cpu_instructions
+            .max(on.step_profile().cpu_instructions);
+        catch_up(&mut off, target);
+        catch_up(&mut on, target);
+        chunks += 1;
+        let snap_off = snapshot_state(&off.cpu);
+        let snap_on = snapshot_state(&on.cpu);
+        if snap_off != snap_on {
+            panic!(
+                "min4 diverged after {chunks} chunks insns={} {}",
+                off.step_profile().cpu_instructions,
+                snapshot_diff(&snap_off, &snap_on)
+            );
+        }
+    }
+    assert!(has_marker(&sink_off, MARKER) && has_marker(&sink_on, MARKER));
+    let stats = on.cpu.jit_stats().expect("JIT");
+    eprintln!(
+        "hello min4: insns={} pc={:#x} uart={} jit={:?}",
+        on.step_profile().cpu_instructions,
+        on.cpu.pc,
+        sink_on.lock().unwrap().len(),
+        stats
+    );
+    assert_eq!(off.cpu.pc, on.cpu.pc);
+    assert_eq!(snapshot_state(&off.cpu), snapshot_state(&on.cpu));
+    assert!(stats.block_instrs >= 4, "min4 compiled nothing: {stats:?}");
+    assert_eq!(stats.ram_bytes_synced, 0, "hello min4 memcpy: {stats:?}");
+}
+
 fn plant_systick_handler(machine: &mut Machine<CortexM>) {
     const HANDLER: u32 = 0x80;
     machine

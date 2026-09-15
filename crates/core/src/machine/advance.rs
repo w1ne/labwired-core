@@ -2,10 +2,9 @@
 
 use super::boundary::ExecutionMode;
 use crate::{
-    AdvanceReport, AdvanceRequest, AdvanceStop, BreakpointPolicy, Cpu, HostTimeMode, IdlePolicy,
-    Machine, SimResult,
+    AdvanceReport, AdvanceRequest, AdvanceStop, BreakpointPolicy, Cpu, IdlePolicy, Machine,
+    SimResult,
 };
-use std::time::Duration;
 
 #[derive(Default)]
 struct AdvanceState {
@@ -27,23 +26,6 @@ impl AdvanceState {
             self.idle_cycles,
             self.cpu_batches,
         )
-    }
-}
-
-impl<C: Cpu> Machine<C> {
-    fn pace_realtime(&self, start_cycles: u64, start_wall: Duration) {
-        if self.config.host_time_mode != HostTimeMode::Realtime {
-            return;
-        }
-        crate::host_time::pace(
-            self.config.host_time_mode,
-            self.bus.cpu_hz,
-            start_cycles,
-            self.total_cycles,
-            start_wall,
-            self.host_clock.now(),
-            self.host_clock.as_ref(),
-        );
     }
 }
 
@@ -71,7 +53,6 @@ impl<C: Cpu> Machine<C> {
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
         let start_cycles = self.total_cycles;
-        let start_wall = self.host_clock.now();
         let mut state = AdvanceState::default();
 
         loop {
@@ -156,7 +137,6 @@ impl<C: Cpu> Machine<C> {
                     state.fuel_consumed += skipped;
                     state.idle_cycles += skipped;
                     self.logic_observe(self.total_cycles);
-                    self.pace_realtime(start_cycles, start_wall);
                     continue;
                 }
             }
@@ -196,7 +176,6 @@ impl<C: Cpu> Machine<C> {
                 state.primary_steps += u64::from(progress.primary_steps);
                 state.secondary_steps += u64::from(progress.secondary_steps);
                 state.cpu_batches += 1;
-                self.pace_realtime(start_cycles, start_wall);
                 return Ok(state.report(
                     AdvanceStop::FirmwareExit { code },
                     self.total_cycles - start_cycles,
@@ -207,7 +186,6 @@ impl<C: Cpu> Machine<C> {
             state.primary_steps += u64::from(progress.primary_steps);
             state.secondary_steps += u64::from(progress.secondary_steps);
             state.cpu_batches += 1;
-            self.pace_realtime(start_cycles, start_wall);
         }
     }
 }
