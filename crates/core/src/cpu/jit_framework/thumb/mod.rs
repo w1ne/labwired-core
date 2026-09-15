@@ -35,6 +35,22 @@ use super::frontend::{BlockPlan, ExitEdge, FrontendRefusal, IsaFrontend};
 use super::side_exit::BailReason;
 use super::{CodeView, Pc};
 
+pub mod host;
+
+pub use host::{snapshot_state, CortexMJitHost};
+
+/// Indices into the Cortex-M [`StateVec`](super::StateVec) that a batched
+/// JIT run may legitimately compute differently from a per-instruction
+/// interpreter run and which the differential harness should mask.
+///
+/// In this all-bail foundation milestone the JIT executes **zero**
+/// instructions itself — every block side-exits and the interpreter runs
+/// each instruction — so nothing is volatile and this is empty. It is the
+/// designated hook for the codegen chunks.
+pub fn differential_cycle_ignore_indices() -> Vec<usize> {
+    Vec::new()
+}
+
 /// Hard cap on how many instructions one basic block may span. A basic
 /// block is bounded by construction (it ends at the first control-flow or
 /// unmodeled instruction), but flash could in principle contain a very long
