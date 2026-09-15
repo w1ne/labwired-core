@@ -960,6 +960,18 @@ DONE\r\n",
         valid_pc_ranges: &[(0x0000_0000, 0x0003_FFFF), (0x2000_0000, 0x2000_7FFF)],
         expected_uart_output: b"OK",
     },
+    SurvivalCase {
+        // SAMD51J19A Metro M4 bare-metal UART smoke: MCLK APBBMASK + GCLK
+        // PCHCTRL[24] SERCOM3_CORE, then three DATA writes of "OK\n" on Serial1.
+        name: "atsamd51_metro_m4_smoke",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "atsamd51",
+        system: "metro-m4",
+        fixture: "atsamd51-metro-m4-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0007_FFFF), (0x2000_0000, 0x2002_FFFF)],
+        expected_uart_output: b"OK",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -1853,6 +1865,11 @@ fn test_nucleo_l073rz_smoke_survival() {
 #[test]
 fn test_atsamd21_nano33_smoke_survival() {
     run_survival_case(case_by_name("atsamd21_nano33_smoke"));
+}
+
+#[test]
+fn test_atsamd51_metro_m4_smoke_survival() {
+    run_survival_case(case_by_name("atsamd51_metro_m4_smoke"));
 }
 
 #[test]
