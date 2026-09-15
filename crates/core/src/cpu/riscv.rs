@@ -408,7 +408,7 @@ impl RiscV {
         if mode == 1 && (cause & 0x80000000) != 0 {
             // Vectored interrupt
             let irq = cause & 0x7FFFFFFF;
-            self.pc = base + irq * 4;
+            self.pc = base.wrapping_add(irq.wrapping_mul(4));
         } else {
             self.pc = base;
         }
@@ -823,15 +823,15 @@ impl Cpu for RiscV {
                 self.write_reg(rd, res);
             }
             Instruction::Slli { rd, rs1, shamt } => {
-                let res = self.read_reg(rs1) << shamt;
+                let res = self.read_reg(rs1).wrapping_shl(shamt as u32);
                 self.write_reg(rd, res);
             }
             Instruction::Srli { rd, rs1, shamt } => {
-                let res = self.read_reg(rs1) >> shamt;
+                let res = self.read_reg(rs1).wrapping_shr(shamt as u32);
                 self.write_reg(rd, res);
             }
             Instruction::Srai { rd, rs1, shamt } => {
-                let res = (self.read_reg(rs1) as i32) >> shamt;
+                let res = (self.read_reg(rs1) as i32).wrapping_shr(shamt as u32);
                 self.write_reg(rd, res as u32);
             }
             Instruction::Add { rd, rs1, rs2 } => {
@@ -1124,7 +1124,7 @@ impl Cpu for RiscV {
             }
             Instruction::CSli { rd, shamt } => {
                 if rd != 0 {
-                    let res = self.read_reg(rd) << shamt;
+                    let res = self.read_reg(rd).wrapping_shl(shamt as u32);
                     self.write_reg(rd, res);
                 }
             }
@@ -1490,11 +1490,7 @@ impl Cpu for RiscV {
         }
     }
 
-    fn supports_runtime_snapshot(&self) -> bool {
-        true
-    }
-
-    fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
+    fn runtime_snapshot(&self) -> Option<(crate::runtime_snapshot::CpuKind, Vec<u8>)> {
         use crate::runtime_snapshot::RiscVRuntimeSnapshot;
         let snap = RiscVRuntimeSnapshot {
             x: self.x,
@@ -1512,7 +1508,7 @@ impl Cpu for RiscV {
             reservation: self.reservation,
         };
         let bytes = bincode::serialize(&snap).expect("bincode serialize RiscVRuntimeSnapshot");
-        (crate::runtime_snapshot::CpuKind::RiscV, bytes)
+        Some((crate::runtime_snapshot::CpuKind::RiscV, bytes))
     }
 
     fn apply_runtime_snapshot(
@@ -1965,9 +1961,9 @@ mod tests {
         bus.write_u32(0x4, 0x00000013).unwrap();
         // Line 5 vector (0x2000 + 5*4 = 0x2014): MRET.
         bus.write_u32(0x2014, 0x30200073).unwrap();
-        // Assert external line 5 (esp32c3_irq_routing stays false, so the C3
-        // aggregation leaves riscv_irq_lines untouched between ticks).
-        bus.riscv_irq_lines = 1 << 5;
+        // Assert external line 5 (irq_fabric.esp32c3.routing stays false, so the C3
+        // aggregation leaves irq_fabric.esp32c3.irq_lines untouched between ticks).
+        bus.irq_fabric.esp32c3.irq_lines = 1 << 5;
 
         cpu.pc = 0x0;
         let mut machine = Machine::new(cpu, bus);
@@ -1985,7 +1981,7 @@ mod tests {
         assert_eq!(machine.cpu.mstatus & (1 << 3), 0, "MIE cleared on trap");
         assert_ne!(machine.cpu.mstatus & (1 << 7), 0, "MPIE holds prior MIE");
         // Drop the line so MRET doesn't immediately re-trap, then MRET.
-        machine.bus.riscv_irq_lines = 0;
+        machine.bus.irq_fabric.esp32c3.irq_lines = 0;
         machine.step().unwrap();
         assert_ne!(
             machine.cpu.mstatus & (1 << 3),
@@ -2534,6 +2530,27 @@ mod tests {
             machine.cpu.read_reg(7),
             1,
             "self-modifying store into the IRAM fetch window must be visible"
+        );
+    }
+
+    /// A vectored trap whose `mtvec` base sits at the top of the address space
+    /// must WRAP to the vector, not panic.
+    ///
+    /// `self.pc = base + irq * 4` used plain `+` on `u32`. `mtvec` is written
+    /// by the guest with `csrw mtvec, rN` and RISC-V only requires the base to
+    /// be 4-byte aligned, so a base near 0xFFFF_FFFF plus a vectored interrupt
+    /// overflowed `u32` — a simulator panic on legal guest input. The hardware
+    /// wraps the address like every other address computation.
+    #[test]
+    fn riscv_vectored_trap_wraps_at_the_top_of_the_address_space() {
+        let mut cpu = RiscV::new();
+        // Vectored mode (mode == 1) with base 0xFFFF_FFF0.
+        cpu.mtvec = 0xFFFF_FFF1;
+        // Machine timer interrupt: cause = 0x8000_0007, so irq == 7.
+        cpu.handle_trap(0x8000_0007, 0x0000_0100);
+        assert_eq!(
+            cpu.pc, 0x0000_000C,
+            "0xFFFF_FFF0 + 7*4 must wrap to 0x0000_000C"
         );
     }
 }

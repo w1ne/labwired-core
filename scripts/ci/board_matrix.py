@@ -47,6 +47,36 @@ def select(entries: list[dict], event: str) -> list[dict]:
     return list(entries)
 
 
+def check_selection(selected: list[dict], entries: list[dict], event: str) -> list[str]:
+    """Refuse to emit an EMPTY matrix for an event that is supposed to gate.
+
+    `validate()` above answers "is this manifest well formed"; it cannot
+    answer the question the workflow actually depends on. `core-board-ci.yml`
+    pipes this script's stdout straight into `strategy.matrix` and has no
+    aggregator job, so `{"include": []}` skips the `board` job and the whole
+    workflow reports SUCCESS having compiled no firmware. A manifest with
+    every entry `gate: false` is perfectly valid and produces exactly that.
+
+    Today only the data keeps the gate alive: 2 of 5 entries in
+    `configs/ci/boards.yml` carry `gate: true`. Flip those two flags and the
+    board gate goes silent with a green tick — no error, no skipped-job
+    warning, nothing to read in a log. So the emptiness of the SELECTED list
+    is the assertion, not the emptiness of the manifest.
+
+    Scoped to GATE_EVENTS on purpose: `schedule` and `workflow_dispatch` take
+    every entry, so an empty selection there means an empty manifest, which
+    `validate()` already rejects.
+    """
+    if event in GATE_EVENTS and not selected:
+        return [
+            f"event {event!r} selected 0 of {len(entries)} board(s): every entry "
+            "is `gate: false`. That emits {\"include\": []}, which skips the "
+            "`board` job in core-board-ci.yml and reports the workflow GREEN "
+            "having built nothing. Mark at least one entry `gate: true`."
+        ]
+    return []
+
+
 def to_matrix(entries: list[dict]) -> dict:
     include = []
     for e in entries:
@@ -71,13 +101,16 @@ def main() -> int:
 
     manifest = args.manifest if Path(args.manifest).is_absolute() else str(Path(args.repo_root) / args.manifest)
     entries = load_manifest(manifest)
-    errors = validate(entries, args.repo_root)
+    selected = select(entries, args.event)
+    errors = validate(entries, args.repo_root) + check_selection(
+        selected, entries, args.event
+    )
     if errors:
         print("Manifest validation failed:", file=sys.stderr)
         for err in errors:
             print(f"  - {err}", file=sys.stderr)
         return 1
-    print(json.dumps(to_matrix(select(entries, args.event))))
+    print(json.dumps(to_matrix(selected)))
     return 0
 
 

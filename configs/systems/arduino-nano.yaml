@@ -1,0 +1,13 @@
+name: arduino-nano
+chip: ../chips/atmega328p.yaml
+# 16 MHz crystal. This used to be nested under a `clock:` key that
+# SystemManifest does not model, so serde dropped it and nothing said so; the
+# top-level key is the one the engine reads.
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5          # PB5 / Arduino D13 LED_BUILTIN
+    signal: "output"
+    active_high: true

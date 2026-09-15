@@ -226,6 +226,103 @@ board_io:
     assert_eq!(level(&mut bus), Some(false), "pressing pulls GPIO2 LOW");
 }
 
+/// Build `chip` with one active-low button on `peripheral`/`pin` and prove the
+/// contact is both discoverable and able to move the pin the firmware samples.
+///
+/// The attach pass drops a button whose GPIO model cannot demonstrate an
+/// externally driven level, so a family that never implemented `set_gpio_input`
+/// failed here at `list_inputs` — silently, with only a log line. Asserting the
+/// pin level as well is what separates "a device is in the list" from "the
+/// firmware can see the press".
+fn assert_button_attaches_and_moves_the_pin(chip_file: &str, peripheral: &str, pin: u8) {
+    let chip_path = workspace_root().join("configs/chips").join(chip_file);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");
+    let manifest_yaml = format!(
+        r#"
+name: "board-io-button"
+chip: "{}"
+external_devices: []
+board_io:
+  - id: "btn"
+    kind: "button"
+    peripheral: "{peripheral}"
+    pin: {pin}
+    signal: "input"
+    active_high: false
+"#,
+        chip_path.display()
+    );
+    let manifest: SystemManifest = serde_yaml::from_str(&manifest_yaml).expect("parse manifest");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+
+    assert!(
+        bus.list_inputs()
+            .iter()
+            .any(|(owner, ch)| owner == "btn" && ch.key == "pressed"),
+        "{chip_file}: the button must be discoverable; got {:?}",
+        bus.list_inputs()
+    );
+
+    let idx = bus
+        .find_peripheral_index_by_name(peripheral)
+        .unwrap_or_else(|| panic!("{chip_file} registers '{peripheral}'"));
+
+    settle(&mut bus);
+    assert_eq!(
+        bus.peripherals[idx].dev.read_gpio_input(pin),
+        Some(true),
+        "{chip_file}: a released pull-up button must hold its pin HIGH"
+    );
+
+    bus.set_input(Some("btn"), "pressed", 1.0).expect("press");
+    settle(&mut bus);
+    assert_eq!(
+        bus.peripherals[idx].dev.read_gpio_input(pin),
+        Some(false),
+        "{chip_file}: pressing must pull the pin LOW"
+    );
+
+    bus.set_input(Some("btn"), "pressed", 0.0).expect("release");
+    settle(&mut bus);
+    assert_eq!(
+        bus.peripherals[idx].dev.read_gpio_input(pin),
+        Some(true),
+        "{chip_file}: releasing must return the pin to its pull-up level"
+    );
+}
+
+/// RP2040: the pad state lives in SIO, which had no externally driven input at
+/// all — `GPIO_IN` was `GPIO_OUT & GPIO_OE`, so an input pin floated to 0 and
+/// nothing outside the chip could move it.
+#[test]
+fn a_button_is_drivable_on_rp2040_sio() {
+    assert_button_attaches_and_moves_the_pin("rp2040.yaml", "sio", 14);
+}
+
+/// RP2350 uses the SAME `rp2040_sio` model (see its chip yaml), so this is the
+/// guard that the two boards cannot drift apart — not a copy of the fix.
+#[test]
+fn a_button_is_drivable_on_rp2350_sio() {
+    assert_button_attaches_and_moves_the_pin("rp2350.yaml", "sio", 14);
+}
+
+/// ATmega328P (Arduino Nano): the port model answers PINx/DDRx/PORTx but had no
+/// `set_gpio_input`, so the attach pass could not demonstrate the drive and
+/// dropped the contact.
+#[test]
+fn a_button_is_drivable_on_an_avr_port() {
+    assert_button_attaches_and_moves_the_pin("atmega328p.yaml", "portb", 2);
+}
+
+/// PORTD (D0-D7) and PORTC (A0-A5) had no bus-side model at all, so a button
+/// on the Uno's D2 — the pin every Arduino button example uses — had nowhere
+/// to attach.
+#[test]
+fn a_button_is_drivable_on_avr_ports_c_and_d() {
+    assert_button_attaches_and_moves_the_pin("atmega328p.yaml", "portd", 2);
+    assert_button_attaches_and_moves_the_pin("atmega328p.yaml", "portc", 0);
+}
+
 // ---------------------------------------------------------------------------
 // End-to-end: real firmware, real board, the printed byte moves.
 //

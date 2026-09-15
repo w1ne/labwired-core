@@ -189,9 +189,7 @@ impl Rp2040Pwm {
         (0..SLICES).fold(0u32, |acc, i| acc | ((self.slices[i].csr & CSR_EN) << i))
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     fn free_running_active(&self) -> bool {
         self.slices.iter().any(|s| s.enabled() && s.free_running())

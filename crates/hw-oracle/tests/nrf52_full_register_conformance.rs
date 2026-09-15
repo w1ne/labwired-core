@@ -2175,7 +2175,9 @@ fn periph_key(label: &str) -> &str {
 // ── Main test ─────────────────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: sweeps every remaining nRF52840 peripheral register against real silicon \
+            over SWD (OpenOcd::spawn_nrf52), so it requires an attached board. The whole file is \
+            behind `--features hw-oracle-nrf52`; set NRF52_STRICT=1 to make divergence fail"]
 fn nrf52840_full_register_conformance() {
     let _guard = HW_LOCK.lock().unwrap();
     let mut sim = build_sim_bus();

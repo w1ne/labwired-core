@@ -62,3 +62,55 @@ impl CycleClock {
         self.inner.store(cycle, Ordering::Relaxed);
     }
 }
+
+/// Define the private `scheduler_mode()` drive-mode predicate on a peripheral
+/// that stores its bus clock in a `clock: Option<CycleClock>` field.
+///
+/// Invoke it inside the type's own inherent `impl`, where the hand-written
+/// method used to sit:
+///
+/// ```ignore
+/// impl Timer {
+///     crate::cycle_clock::scheduler_mode!();
+/// }
+/// ```
+///
+/// # What the predicate means
+///
+/// True when the event scheduler owns this model's time base: the
+/// `event-scheduler` feature is compiled in AND the bus handed this instance
+/// its shared [`CycleClock`] at attach time. Everything drive-mode-related
+/// branches on this ONE predicate so the two modes can never mix.
+///
+/// The clock is the only evidence a peripheral has that it went through
+/// `SystemBus::add_peripheral`/`push_peripheral`, and therefore that it sits on
+/// a bus whose `Machine` drains the event scheduler. Hand-built buses (tests,
+/// embedders that push a `PeripheralEntry` directly and settle with
+/// `tick_peripherals*`) stay on the legacy walk with exact historical
+/// semantics — the contract documented on [`crate::Peripheral::attach_cycle_clock`].
+/// `force_legacy_walk()` drops the clock to pin a model back onto the walk,
+/// which is how the walk-vs-scheduler differential gates build their reference
+/// lane from the same bus assembly.
+///
+/// # Why a macro
+///
+/// This is a *private inherent* method on 30 unrelated peripheral types, so a
+/// trait default cannot supply it without widening its visibility, adding a
+/// per-type accessor impl and a per-file import, and putting a trait method in
+/// name-resolution competition with the four models that keep a hand-written
+/// `scheduler_mode` of their own (`Exti`, `Fdcan`, the `I2c` enum, and the nRF52
+/// `Timer`, whose bodies are all genuinely different). Expanding the method in
+/// place keeps it private, inherent, and callable exactly as before — a pure
+/// refactor with no name-resolution change at any call site — while collapsing
+/// 30 copies of the `cfg!(feature = "event-scheduler")` conditional-compilation
+/// site into this one. See `crate::tests::event_scheduler_cfg_ratchet`.
+macro_rules! scheduler_mode {
+    () => {
+        #[inline]
+        fn scheduler_mode(&self) -> bool {
+            cfg!(feature = "event-scheduler") && self.clock.is_some()
+        }
+    };
+}
+
+pub(crate) use scheduler_mode;

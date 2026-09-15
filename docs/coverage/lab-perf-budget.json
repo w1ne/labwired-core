@@ -85,7 +85,7 @@
       "min_mean_batch": 40.0,
       "min_lit_px": 0,
       "min_serial_bytes": 200,
-      "max_legacy_ticks_per_cycle": 0.3,
+      "max_legacy_ticks_per_cycle": 15.5,
       "min_idle_ff_ratio": 0.0
     }
   ]

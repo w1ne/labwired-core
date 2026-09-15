@@ -98,7 +98,7 @@ pub(crate) fn run_machine_load(
         labwired_config::Arch::Arm => {
             let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
             let mut machine = labwired_core::Machine::new(cpu, bus);
-            machine.observers.push(metrics.clone());
+            machine.add_observer(metrics.clone());
             if let Err(e) = machine.load_firmware(&program) {
                 error!("Failed to load firmware: {}", e);
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
@@ -139,7 +139,7 @@ pub(crate) fn run_machine_load(
         labwired_config::Arch::RiscV => {
             let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
             let mut machine = labwired_core::Machine::new(cpu, bus);
-            machine.observers.push(metrics.clone());
+            machine.add_observer(metrics.clone());
             if let Err(e) = machine.load_firmware(&program) {
                 error!("Failed to load firmware: {}", e);
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
@@ -179,7 +179,7 @@ pub(crate) fn run_machine_load(
         labwired_config::Arch::Xtensa => {
             let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
             let mut machine = labwired_core::Machine::new(cpu, bus);
-            machine.observers.push(metrics.clone());
+            machine.add_observer(metrics.clone());
             if let Err(e) = machine.load_firmware(&program) {
                 error!("Failed to load firmware: {}", e);
                 return ExitCode::from(EXIT_RUNTIME_ERROR);

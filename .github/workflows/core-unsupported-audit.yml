@@ -1,5 +1,11 @@
 name: Core Unsupported Audit
 
+# Scheduled runs are gated to this repository: every job below carries
+# `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
+# GitHub attributes a cron run to whoever last edited the schedule, so a fork
+# with Actions enabled mails this workflow's failures to a maintainer here,
+# about a run they can neither see nor stop. Only the cron is gated: a manual
+# dispatch in a fork still runs every job here.
 on:
   schedule:
     - cron: "40 2 * * *"
@@ -7,6 +13,7 @@ on:
 
 jobs:
   unsupported-audit:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

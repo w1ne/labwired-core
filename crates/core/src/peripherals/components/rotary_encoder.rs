@@ -232,17 +232,34 @@ impl crate::bus::BusResidentDevice for RotaryEncoder {
     /// Advance the shaft to `now` and drive whichever of its CLK/DT input-register
     /// bits changed. This is the body of the former
     /// `SystemBus::drive_rotary_encoder`, moved onto the device; the register IO
-    /// stays on the bus via [`drive_idr_bit`](crate::bus::SystemBus). Two
-    /// independent pins, each a transition-only IDR write.
-    fn service(&mut self, bus: &mut crate::bus::SystemBus, now: u64) {
+    /// stays on the far side of the [`DevicePins`](crate::bus::DevicePins) port.
+    /// Two independent pins, each a transition-only IDR write.
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, now: u64) {
         // Inherent `RotaryEncoder::service` (chosen over the trait method here —
         // inherent methods win resolution) does the phase advance + change flags.
         let ((clk_high, dt_high), (clk_changed, dt_changed)) = self.service(now);
+        // ⚠️ BOTH SEAMS, THE SAME PAIR THE DHT22 DRIVES — and driving only the
+        // second made this knob inert on half the catalog. `drive_idr_bit` is an
+        // ordinary MMIO store to the input register, which works only where the
+        // model lets a store to IDR land (STM32). On silicon whose input word is
+        // READ-ONLY the store is correctly ignored and the pin never moves:
+        // EFR32 Series 2 (DIN @0x14, `gpio.rs` write_reg drops it by design),
+        // SAM PORT (IN @0x20) and ESP32-C3. `drive_input_bit` is the external-
+        // world seam (`set_external_input`) those models actually sample.
+        //
+        // Measured 2026-09-05: on brd2709a the encoder read CLK=0 DT=0 forever,
+        // at rest and after a 3-detent stimulus, while nucleo-f401re walked the
+        // Gray code correctly from the identical diagram. The stimulus reported
+        // `outcome: applied` both times — the exact "attach succeeds, set_input
+        // returns Ok, and the pin never moves" failure `gpio_devices_walk_free`
+        // was written about, arriving through a different door.
         if clk_changed {
-            bus.drive_idr_bit(self.clk_idr_addr, self.clk_bit, clk_high);
+            let _ = pins.drive_input_bit(self.clk_idr_addr, self.clk_bit, clk_high);
+            pins.drive_idr_bit(self.clk_idr_addr, self.clk_bit, clk_high);
         }
         if dt_changed {
-            bus.drive_idr_bit(self.dt_idr_addr, self.dt_bit, dt_high);
+            let _ = pins.drive_input_bit(self.dt_idr_addr, self.dt_bit, dt_high);
+            pins.drive_idr_bit(self.dt_idr_addr, self.dt_bit, dt_high);
         }
     }
 

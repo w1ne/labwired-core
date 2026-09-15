@@ -29,10 +29,12 @@ pub(crate) mod embedded_descriptors;
 pub(crate) mod external_devices;
 mod faults;
 mod from_config;
+pub mod interrupt_fabric;
 pub mod known_stubs;
 mod mmio_activity;
 mod mmio_words;
 mod motors;
+mod observed_device;
 pub(crate) mod part_pack;
 mod pms;
 mod policy;
@@ -43,9 +45,14 @@ pub mod sim_inputs;
 mod tick;
 
 pub use can_devices::*;
-pub use resident_device::BusResidentDevice;
+pub use observed_device::ObservedDevice;
+pub use resident_device::{BusResidentDevice, DevicePins};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
+pub use interrupt_fabric::{
+    Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
+    InterruptFabric,
+};
 pub use motors::MotorSnapshot;
 
 impl SystemBus {
@@ -86,6 +93,27 @@ impl SystemBus {
                 .peripherals
                 .iter()
                 .all(|p| p.dev.uses_scheduler() || !p.dev.legacy_tick_active())
+    }
+
+    /// Arm the ESP32-S3 walk-free interrupt differential audit on this bus.
+    ///
+    /// From here every walk-free bus boundary computes the routed S3 state both
+    /// the CACHED way (what the write choke and the event path left behind) and
+    /// the POLLED way (a fresh poll of every scheduler-driven peripheral), and
+    /// records disagreements. Test harness only — see [`Esp32s3IrqAudit`] for
+    /// what the audit is for and why it does not repair what it finds.
+    #[doc(hidden)]
+    pub fn install_esp32s3_irq_audit(&mut self) {
+        self.esp32s3_irq_audit = Some(Box::default());
+    }
+
+    /// Read the audit's findings so far, leaving it armed. `None` if
+    /// [`Self::install_esp32s3_irq_audit`] was never called — which a gate must
+    /// distinguish from "armed and clean", because an audit that never ran
+    /// reads exactly like one that found nothing.
+    #[doc(hidden)]
+    pub fn esp32s3_irq_audit(&self) -> Option<&Esp32s3IrqAudit> {
+        self.esp32s3_irq_audit.as_deref()
     }
 }
 
@@ -141,17 +169,11 @@ pub struct PeripheralEntry {
     pub clock_gate: Option<ResolvedClockGate>,
 }
 
-/// RP2040 atomic register-alias operation (see
-/// [`SystemBus::atomic_alias_redirect`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AtomicAliasOp {
-    /// `+0x1000`: write XORs the bits, read returns the base register.
-    Xor,
-    /// `+0x2000`: write sets (ORs) the bits.
-    Set,
-    /// `+0x3000`: write clears (AND-NOT) the bits.
-    Clr,
-}
+/// Atomic register-alias operation (see [`SystemBus::atomic_alias_redirect`]).
+/// Which alias index means which op is a per-family fact and lives with the
+/// descriptor, in [`labwired_config::AtomicAliasFlavour`] — re-exported here
+/// because the bus is where it is applied.
+pub use labwired_config::{AtomicAliasFlavour, AtomicAliasOp};
 
 // True while SystemBus::write_u32 is applying an RP2040 CLR-alias (+0x3000)
 // as an absolute final value. Write-clear status registers (USB SIE_STATUS /
@@ -167,6 +189,35 @@ pub fn is_clr_alias_write() -> bool {
     CLR_ALIAS_WRITE.with(|c| c.get())
 }
 
+// True while `SystemBus::write_u32` is applying ANY atomic alias (SET / CLR /
+// TGL) — the value reaching the peripheral is the computed FINAL image, not the
+// mask firmware wrote. A peripheral whose register is not plain
+// read-write needs this to tell "firmware stored V" from "an alias computed V".
+//
+// ⚠️ Deliberately NOT the same flag as `CLR_ALIAS_WRITE` above, which means
+// specifically the RP2040 CLR alias and is what the RP2040 USB model keys off.
+// Widening that one to cover SET would change how an RP2040 SET-alias write to
+// a W1C status register is interpreted, which nothing has measured.
+thread_local! {
+    static ALIAS_ABSOLUTE_WRITE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// See [`ALIAS_ABSOLUTE_WRITE`].
+#[inline]
+pub fn is_alias_absolute_write() -> bool {
+    ALIAS_ABSOLUTE_WRITE.with(|c| c.get())
+}
+
+#[inline]
+pub(crate) fn with_alias_absolute_write<R>(f: impl FnOnce() -> R) -> R {
+    ALIAS_ABSOLUTE_WRITE.with(|c| {
+        let prev = c.replace(true);
+        let r = f();
+        c.set(prev);
+        r
+    })
+}
+
 #[inline]
 pub(crate) fn with_clr_alias_write<R>(f: impl FnOnce() -> R) -> R {
     CLR_ALIAS_WRITE.with(|c| {
@@ -175,27 +226,6 @@ pub(crate) fn with_clr_alias_write<R>(f: impl FnOnce() -> R) -> R {
         c.set(prev);
         r
     })
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct Esp32c3IrqCache {
-    pub int_enable: u32,
-    pub int_thresh: u8,
-    pub source_line: [u8; 128],
-    pub line_pri: [u8; 32],
-    pub from_cpu_pending: u8,
-}
-
-impl Default for Esp32c3IrqCache {
-    fn default() -> Self {
-        Self {
-            int_enable: 0,
-            int_thresh: 0,
-            source_line: [0; 128],
-            line_pri: [0; 32],
-            from_cpu_pending: 0,
-        }
-    }
 }
 
 pub struct SystemBus {
@@ -227,6 +257,19 @@ pub struct SystemBus {
     pub nvic: Option<Arc<NvicState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
     pub config: crate::SimulationConfig,
+    /// The clock this system's core runs at, in Hz: the manifest's `cpu_hz:`
+    /// when it declares one, otherwise the chip descriptor's.
+    ///
+    /// Every device that times its own waveform reads it from here. Before
+    /// this field the number was a literal at each attach site — `80_000_000`
+    /// in the declarative-device arms, `160_000_000` in the WS2812 kit — and a
+    /// board's declared clock reached none of them.
+    ///
+    /// `0` when neither the manifest nor the chip declares one; each attach
+    /// site keeps its former literal as the fallback for that case, so a chip
+    /// YAML predating [`labwired_config::ChipDescriptor::cpu_hz`] behaves
+    /// exactly as it did.
+    pub cpu_hz: u64,
     /// Enable Cortex-M peripheral/SRAM bit-band alias translation.
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
@@ -237,11 +280,12 @@ pub struct SystemBus {
     /// descriptor so `Machine::load_firmware` can relocate the reset vector
     /// past the stage-2 blob. See `ChipDescriptor::reset_vector_offset`.
     pub reset_vector_offset: u64,
-    /// RP2040 atomic register aliases enabled (see
-    /// `ChipDescriptor::atomic_register_aliases`). When set, word accesses in
-    /// the APB peripheral window whose offset has bits [13:12] set decode as
-    /// XOR/SET/CLR atomic ops on the aligned base register.
-    pub atomic_register_aliases: bool,
+    /// Which family's atomic register aliases this chip implements (see
+    /// `ChipDescriptor::atomic_register_aliases`). When enabled, word accesses
+    /// in the peripheral window whose address has bits [13:12] set decode as a
+    /// read-modify-write on the aligned base register; the flavour decides
+    /// which of the three aliases is SET, which CLR and which XOR/TGL.
+    pub atomic_register_aliases: AtomicAliasFlavour,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
@@ -327,7 +371,23 @@ pub struct SystemBus {
     /// scheduler-driven models. `Option` rather than a companion flag so a
     /// construction site cannot silently spell "not yet sampled" as "sampled
     /// zero".
-    last_gpio_in: Option<[u32; 2]>,
+    last_gpio_in: Option<[u32; 4]>,
+    /// Cached bus indices of GPIO ports 0..3, resolved on the first
+    /// edge-detection pass and never again.
+    ///
+    /// That pass runs on every boundary tick and used to resolve them by name
+    /// each time: eight `find_peripheral_index_by_name` calls, each a linear
+    /// scan of the whole peripheral list with a string compare per entry, to
+    /// arrive at the same four answers. On nrf52840 (49 peripherals) that is up
+    /// to 392 string compares per tick, and it was measurable on every chip
+    /// including the ones that have no port under any of those names.
+    ///
+    /// Same fixed-set assumption the `Machine` index caches make (`scb_index`,
+    /// `nvmc_index`): nothing removes or reorders `peripherals` after the bus is
+    /// assembled, and appends never move an existing index. Resolved lazily
+    /// rather than at construction because the assembly path clears and refills
+    /// `peripherals`; the first tick is strictly after that.
+    gpio_port_idx: Option<[Option<usize>; 4]>,
     /// Phase 2B.2 (issue #192): the current CPU cycle count, mirrored from
     /// `Machine::total_cycles` once per step. Read by the MMIO write path to
     /// lazily sync scheduler-driven peripherals (`uses_scheduler() == true`)
@@ -363,6 +423,14 @@ pub struct SystemBus {
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,
+    /// Run-lifetime successful RAM / flash / extra_mem reads (any width).
+    /// Always-on, cheap; not MMIO (see [`Self::peripheral_accesses`]).
+    memory_reads: std::cell::Cell<u64>,
+    /// Run-lifetime successful RAM / flash / extra_mem writes (any width).
+    memory_writes: std::cell::Cell<u64>,
+    /// Run-lifetime peripheral MMIO accesses (read or write), counted at
+    /// [`Self::note_mmio_activity`]. Never double-counts memory.
+    peripheral_accesses: std::cell::Cell<u64>,
     /// Phase 2B.3c (issue #192): when true, `tick_peripherals_phase1` skips the
     /// entire per-cycle peripheral walk — the actual ~2.4x win. Set ONLY for a
     /// config whose every peripheral is migrated (`uses_scheduler`) or inert
@@ -370,6 +438,12 @@ pub struct SystemBus {
     /// Read only under the `event-scheduler` feature; flag-off the walk always
     /// runs, so the shipped build is unchanged.
     pub legacy_walk_disabled: bool,
+    /// Differential audit of the walk-free ESP32-S3 interrupt path, installed
+    /// only by [`Self::install_esp32s3_irq_audit`]. `None` in every production
+    /// build and every other test, where the cost is one null check per
+    /// walk-free boundary. See [`Esp32s3IrqAudit`].
+    #[doc(hidden)]
+    pub esp32s3_irq_audit: Option<Box<Esp32s3IrqAudit>>,
     /// HC-SR04 ultrasonic sensors wired to GPIO TRIG/ECHO pins. The echo window
     /// is armed by the TRIG GPIO write-hook (`maybe_arm_hcsr04`); a cheap
     /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
@@ -386,33 +460,19 @@ pub struct SystemBus {
     ///
     /// [`service_gpio_devices`]: Self::service_gpio_devices
     pub gpio_devices: Vec<Box<dyn BusResidentDevice>>,
-    /// WS2812 / NeoPixel strips. Each is installed as a GPIO observer on its data
-    /// pin (ESP32-S3 only today — the RMT drives the pad), so decode is fully
-    /// edge-driven with no per-tick pass. Held here as `Arc` clones purely so the
-    /// UI/oracle can read the decoded pixels back. Empty by default → zero cost.
-    pub ws2812: Vec<std::sync::Arc<crate::peripherals::components::ws2812::Ws2812>>,
-    /// Hobby PWM servos (SG90 / MG996R-class). Driven by GPIO edges and/or LEDC
-    /// duty observers; held as `Arc` clones so the UI can poll shaft angle via
-    /// `get_actuator_states`. Empty by default → zero cost.
-    pub servos: Vec<std::sync::Arc<crate::peripherals::components::servo::Servo>>,
-    /// STEP/DIR steppers (A4988/DRV8825/TMC2209). GPIO-observer driven.
-    pub step_dir_motors:
-        Vec<std::sync::Arc<crate::peripherals::components::step_dir_motor::StepDirMotor>>,
-    /// H-bridge channels (L298N/TB6612). GPIO-observer driven.
-    pub h_bridge_motors:
-        Vec<std::sync::Arc<crate::peripherals::components::h_bridge_motor::HBridgeMotor>>,
+    /// Off-chip models the bus holds ONLY so something can read them back — the
+    /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
+    /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO
+    /// (or LEDC duty) observer holding its own `Arc` clone; the bus never ticks,
+    /// routes or reads one. Six typed `Vec<Arc<Concrete>>` fields used to sit
+    /// here, one per part, and the bus therefore had to be edited to add a part
+    /// that it does nothing with. See [`ObservedDevice`]. Empty by default →
+    /// zero cost.
+    pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>,
     /// Deterministic typed motor plants, resolved from the system manifest.
     motors: Vec<motors::MotorRuntime>,
     /// Last simulator-cycle boundary applied to `motors`.
     motor_cycle_anchor: u64,
-    /// ILI9341 16-bit 8080 parallel panels (GPIO bit-bang). Observer-driven on
-    /// ESP32 / ESP32-S3; held as `Arc` clones so inspect can read the RGB565
-    /// framebuffer. Empty by default → zero cost. Distinct from SPI `ili9341`.
-    pub ili9341_parallel:
-        Vec<std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>>,
-    /// 4-phase unipolar steppers (28BYJ-48 + ULN2003). GPIO-observer driven.
-    pub unipolar_steppers:
-        Vec<std::sync::Arc<crate::peripherals::components::unipolar_stepper::UnipolarStepper>>,
     /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
     /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
     /// line transitions to the display's protocol state machine. Purely
@@ -448,41 +508,15 @@ pub struct SystemBus {
     /// pre-parsed frames into a named bxCAN/FDCAN peripheral at scheduled
     /// tick offsets. Empty by default → zero per-tick cost.
     pub can_log_players: Vec<CanLogPlayer>,
-    /// ESP32-C3 (RISC-V) interrupt routing: when true, each tick the bus routes
-    /// asserted peripheral sources and the SYSTEM FROM_CPU IPI registers
-    /// (0x600C0028..0x34) through the INTERRUPT_CORE0 matrix MAP registers into
-    /// `riscv_irq_lines`. Set by the C3 rom-boot setup; false everywhere else
-    /// so no other architecture's bus is affected.
-    pub esp32c3_irq_routing: bool,
-    /// ESP32-C3 level-sensitive bitmask of asserted CPU interrupt lines (1..31),
-    /// recomputed every tick by `aggregate_esp32c3_irqs`. Read by the RISC-V
-    /// core via `Bus::external_irq_lines`. 0 when `esp32c3_irq_routing` is false.
-    pub riscv_irq_lines: u32,
-    /// ESP32-C3 declarative interrupt banks. Cached separately from S3's
-    /// intmatrix so each chip keeps its own interrupt-controller abstraction.
-    esp32c3_system_idx: Option<usize>,
-    esp32c3_interrupt_core0_idx: Option<usize>,
-    esp32c3_irq_cache: Option<Esp32c3IrqCache>,
-    /// Bitmap (128 sources) of the interrupt-matrix source IDs asserted by the
-    /// most recent peripheral tick (`explicit_irqs` from the walk — e.g. the
-    /// SYSTIMER alarm on source 37). Stored so the write-choke re-aggregation
-    /// (`sync_esp32c3_irq_cache_write` → `recompute_esp32c3_irq_lines`) can
-    /// recombine them with the FROM_CPU/INTC state without waiting for the
-    /// next tick. Level semantics: rebuilt from scratch each tick, so a source
-    /// that stops asserting drops out at the next tick boundary (≤ one
-    /// `peripheral_tick_interval` — the same bound as the write path).
-    esp32c3_asserted_sources: [u64; 2],
-    /// C3 matrix sources asserted by SCHEDULER-driven peripherals (currently
-    /// the SYSTIMER alarm once migrated off the walk). The per-cycle walk
-    /// rebuilds `esp32c3_asserted_sources` from scratch each tick and skips
-    /// scheduler-driven peripherals, so their level would drop every tick;
-    /// this bitmap is re-derived from `Peripheral::matrix_irq_sources` at the
-    /// event path (`apply_event_result`) and the walk-tick aggregation, and
-    /// OR-ed with `esp32c3_asserted_sources` in `recompute_esp32c3_irq_lines`.
-    /// Same level semantics (a source that stops asserting drops out at the
-    /// next re-derivation), so delivery matches the legacy walk cycle-for-cycle
-    /// at a given tick interval.
-    esp32c3_sched_asserted_sources: [u64; 2],
+    /// Chip-specific interrupt-fabric state (ESP32-C3 RISC-V matrix, ESP32-S3
+    /// Xtensa matrix), behind ONE field instead of the eleven loose ones this
+    /// shared bus used to carry — three of them `pub`, two named for a chip.
+    ///
+    /// The fabrics keep their chip names and their separate state: a C3 routes
+    /// into a RISC-V line mask, an S3 into a per-core CPU-slot bitmap plus an
+    /// INTR_STATUS mirror, and that difference is silicon, not an abstraction
+    /// leak. What moved is WHERE it lives. See [`interrupt_fabric`].
+    pub irq_fabric: InterruptFabric,
     /// Index of the ESP32-C3 `SENSITIVE` peripheral (0x600C_1000), which owns
     /// the permission-control (PMS) register file. `None` on every other bus.
     esp32c3_sensitive_idx: Option<usize>,
@@ -502,29 +536,6 @@ pub struct SystemBus {
     /// never enables memory protection pays a single predictable branch and
     /// behaves byte-identically to before the PMS model existed.
     esp32c3_pms_armed: bool,
-    /// ESP32-S3 interrupt routing is present only when the S3 interrupt matrix
-    /// peripheral is registered. Cached separately from C3's RISC-V routing so
-    /// each chip model owns its own interrupt abstraction.
-    pub esp32s3_irq_routing: bool,
-    esp32s3_intmatrix_idx: Option<usize>,
-    /// Bitmap (128 sources) of the intmatrix source IDs asserted by the most
-    /// recent peripheral WALK tick (`explicit_irqs`, e.g. a not-yet-migrated
-    /// timer_group source). Persisted — mirror of C3's `esp32c3_asserted_sources`
-    /// — so the event path (`recompute_esp32s3_irq_lines`) can re-derive the
-    /// routed `pending_cpu_irqs` + intmatrix INTR_STATUS mirror from the union of
-    /// walk + scheduler levels without dropping a concurrent walk source. Level
-    /// semantics: rebuilt from scratch each walk tick, so a source that stops
-    /// asserting drops out at the next tick boundary.
-    esp32s3_asserted_sources: [u64; 2],
-    /// S3 intmatrix sources asserted by SCHEDULER-driven peripherals (the
-    /// SYSTIMER alarm once migrated off the walk). The per-cycle walk skips
-    /// scheduler-driven peripherals, so their level would never reach the
-    /// intmatrix; this bitmap is re-derived from `Peripheral::matrix_irq_sources`
-    /// at the event path (`apply_event_result` → `deliver_scheduled_irq_levels`)
-    /// and the walk-tick aggregation, and UNIONED with `esp32s3_asserted_sources`
-    /// in `recompute_esp32s3_irq_lines`. Same level semantics as the C3 field, so
-    /// delivery matches the legacy walk cycle-for-cycle at a given tick interval.
-    esp32s3_sched_asserted_sources: [u64; 2],
     /// True when a FLASH peripheral on this bus models hardware operations
     /// (H5 sector erase / bank swap) as pending ops that the machine layer must
     /// drain and apply per instruction. Cached in `rebuild_peripheral_ranges`
@@ -574,6 +585,17 @@ pub struct SystemBus {
     /// Authoritative pin → (gpio peripheral, bit) map, built from the chip
     /// config's `pins:`. Empty when the chip declares none (→ label parse).
     pub(crate) pin_map: std::collections::HashMap<String, (String, u8)>,
+    /// Pad label (uppercased) → `(ADC peripheral id, input channel)`, from the
+    /// chip descriptor's `analog_pins:`. Empty when the chip names no analog
+    /// pads — which callers must treat as "unknown", never as channel 0.
+    pub(crate) analog_pin_map: std::collections::HashMap<String, (String, u8)>,
+    /// The chip descriptor's `io_voltage_v`: the supply its GPIO pads run from.
+    /// `None` when the descriptor does not transcribe one.
+    pub(crate) io_voltage_v: Option<f64>,
+    /// The chip descriptor's `gpio_input_thresholds` (ratios of
+    /// [`Self::io_voltage_v`]). `None` when the descriptor does not transcribe
+    /// them, which co-simulation must refuse rather than guess at.
+    pub(crate) gpio_input_thresholds: Option<labwired_config::GpioInputThresholds>,
     /// What the system manifest DECLARED under `external_devices:`, verbatim.
     ///
     /// Purely identity metadata for [`crate::Machine::inspect`], which joins it

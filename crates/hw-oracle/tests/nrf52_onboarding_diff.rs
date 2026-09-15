@@ -446,7 +446,9 @@ fn run_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &MmioCase) -> Outcome {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: probes the 24 peripherals the onboarding nRF52840 yaml claims against \
+            real silicon over SWD (OpenOcd::spawn_nrf52), so it requires an attached board. The \
+            whole file is behind `--features hw-oracle-nrf52`"]
 fn nrf52840_onboarding_diff() {
     let _guard = HW_LOCK.lock().unwrap();
 

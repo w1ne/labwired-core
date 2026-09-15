@@ -62,7 +62,9 @@ def test_snapshot_restore(machine):
     assert "cpu" in snapshot
     
     # 4. Modify state again (mess it up)
-    machine.step(10)
+    # A firmware loop may return to the same PC after ten instructions.
+    # Move the PC deliberately so restore is tested independently of the ELF.
+    machine.write_register(15, pc_before + 2)
     machine.write_register(0, 0x00000000)
     assert machine.read_register(0) == 0
     assert machine.get_pc() != pc_before

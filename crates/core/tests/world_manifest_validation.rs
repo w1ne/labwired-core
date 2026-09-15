@@ -287,3 +287,60 @@ fn world_rejects_riscv_firmware_for_a_cortex_m_node_before_execution() {
         "{error}"
     );
 }
+
+/// A world steps its nodes with `World::step_all`, which runs no co-simulation
+/// session. A node that declares `cosim_models` would therefore run with its
+/// models silently absent, so the world refuses to build instead — through the
+/// one constructor both `World::from_manifest` (the CLI environment runner)
+/// and `World::from_resolved` (the browser `WasmWorld`) go through.
+#[test]
+fn world_refuses_a_node_that_declares_cosim_models() {
+    let (dir, manifest) = temporary_arm_world(Some("cortex-m3"), 0x0800_0001);
+    let system: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: temporary-arm
+chip: chip.yaml
+cosim_models:
+  - id: plant
+    adapter: mock
+    step_ns: 100000
+    inputs: {}
+    outputs: { v: plant.v }
+    config:
+      outputs: { v: 1.0 }
+  - id: probe
+    adapter: mock
+    step_ns: 100000
+    inputs: {}
+    outputs: { w: plant.w }
+    config:
+      outputs: { w: 2.0 }
+"#,
+    )
+    .unwrap();
+    let chip: labwired_config::ChipDescriptor =
+        serde_yaml::from_str(&std::fs::read_to_string(dir.path().join("chip.yaml")).unwrap())
+            .unwrap();
+    let firmware =
+        NodeFirmware::from_bytes(std::fs::read(dir.path().join("firmware.elf")).unwrap());
+    drop(dir);
+
+    let error = match World::from_resolved(
+        manifest,
+        vec![ResolvedWorldNode {
+            id: "node".into(),
+            system,
+            chip,
+            firmware,
+        }],
+    ) {
+        Ok(_) => panic!("a world whose node declares cosim_models must not build"),
+        Err(error) => format!("{error:#}"),
+    };
+    assert!(
+        error.contains(
+            "co-simulation models are not supported in multi-node worlds yet; node 'node' declares 2"
+        ),
+        "{error}"
+    );
+}

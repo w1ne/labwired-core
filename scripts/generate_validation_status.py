@@ -23,7 +23,10 @@ Drift
 For each board with `silicon.last_capture`, the newest git commit date across
 `models` is compared to the capture date. If newer, the board has drifted. A
 dated `drift_ack` (>= the newest model date) is an explicit human acknowledgement
-that keeps it green; any later model change re-breaks the gate.
+that keeps it green; any later model change re-breaks the gate. An ack also
+LAPSES: it covers the board for ACK_TTL_DAYS (30), or until an explicit
+`drift_ack_expires`, after which --drift fails again. An ack is a promise to
+re-capture, and a promise with no date is a waiver.
 
 Drift-watch coverage
 --------------------
@@ -56,7 +59,7 @@ import posixpath
 import re
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 try:
@@ -347,8 +350,41 @@ def as_date(v) -> date | None:
     return parse_iso(str(v)).date()
 
 
-def evaluate(board: dict) -> dict:
-    """Compute drift status for one board."""
+# How long a `drift_ack` covers a drifted board before it must be renewed.
+#
+# WHY AN ACK NEEDS A CLOCK. The digest rule makes an ack precise -- it covers
+# exactly the tree a human looked at -- but it made it PERMANENT: while the
+# models hold still, an ack from any date keeps the board green forever. Every
+# acked board on this manifest reads "re-capture pending", and nothing ever
+# made the pending part come due. An ack is a promise to re-capture, and a
+# promise with no date is a waiver.
+#
+# 30 days. Override per board with `drift_ack_expires:` when a re-capture is
+# genuinely blocked (no probe, board on order) -- an explicit later date in the
+# manifest is reviewable; a silent forever is not.
+ACK_TTL_DAYS = 30
+
+
+def ack_expiry(board: dict) -> date | None:
+    """When this board's ack stops covering it. None if it carries no ack.
+
+    A manifest may name `drift_ack_expires:` explicitly; otherwise the ack runs
+    for ACK_TTL_DAYS from the day it was written.
+    """
+    explicit = as_date(board.get("drift_ack_expires"))
+    if explicit:
+        return explicit
+    ack = as_date(board.get("drift_ack"))
+    return ack + timedelta(days=ACK_TTL_DAYS) if ack else None
+
+
+def evaluate(board: dict, today: date | None = None) -> dict:
+    """Compute drift status for one board.
+
+    `today` is injectable so the expiry rule is testable; it affects the
+    GATE only, never the rendered document (see the note on `status`).
+    """
+    today = today or date.today()
     silicon = board.get("silicon")
     models = board.get("models", [])
     newest = newest_commit_date(models)
@@ -377,18 +413,37 @@ def evaluate(board: dict) -> dict:
     # "any model change PAST the ack date re-fails the gate. No silent decay."
     recorded = board.get("drift_ack_digest")
     if ack and recorded:
-        acked = recorded == model_digest(models)
+        covers_content = recorded == model_digest(models)
     else:
-        acked = bool(ack and newest and ack >= newest)
+        covers_content = bool(ack and newest and ack >= newest)
+
+    # An ack also has to still be in date. See ACK_TTL_DAYS: the digest rule
+    # made acks precise and permanent, and permanent is the failure mode --
+    # every acked board here reads "re-capture pending" and nothing made it come
+    # due.
+    expires = ack_expiry(board)
+    expired = bool(expires and today > expires)
+    acked = covers_content and not expired
+
     # A board with no silicon capture cannot "drift" — it never claimed silicon.
     failing = drifted and not acked
 
+    # WHY `status` DOES NOT MENTION EXPIRY.
+    #
+    # It is rendered into a COMMITTED document that `--check` diffs. Anything
+    # here that moves with the calendar would make the doc go stale on a day
+    # nobody committed, and every PR after that would demand a regen commit
+    # carrying no information — precisely the #834 / #798 defect the digest rule
+    # was introduced to end. So the row states the two dates a reader needs (the
+    # ack, and when it lapses), both of which come from the manifest and hold
+    # still. The GATE is what notices the day it lapses: `--drift` reads
+    # `failing`, which does depend on today.
     if not silicon:
         status = "no silicon capture"
     elif not drifted:
         status = "✅ fresh"
-    elif acked:
-        status = f"⚠ drift acked {ack:%Y-%m-%d} (re-capture pending)"
+    elif covers_content:
+        status = f"⚠ drift acked {ack:%Y-%m-%d}, expires {expires:%Y-%m-%d} (re-capture pending)"
     else:
         status = f"✖ DRIFT — model {newest:%Y-%m-%d} > capture; RE-CAPTURE"
 
@@ -397,12 +452,21 @@ def evaluate(board: dict) -> dict:
         "digest": model_digest(models),
         "capture": capture,
         "drifted": drifted,
+        "expires": expires,
+        "expired": expired,
         "failing": failing,
         "status": status,
     }
 
 
-def render(manifest: dict) -> str:
+def render(manifest: dict, today: date | None = None) -> str:
+    """Render the committed doc.
+
+    `today` exists so a test can PROVE the output does not move with the
+    calendar. It is threaded into evaluate() and must change nothing here:
+    an expiry that leaked into this document would make it go stale on a day
+    nobody committed. See the note on `status` in evaluate().
+    """
     boards = manifest["boards"]
     lines: list[str] = []
     lines.append("<!-- GENERATED by scripts/generate_validation_status.py — DO NOT EDIT BY HAND.")
@@ -429,7 +493,7 @@ def render(manifest: dict) -> str:
     lines.append("| Board | Tier | Last silicon capture | Models | Status |")
     lines.append("|-------|------|----------------------|--------|--------|")
     for b in boards:
-        ev = evaluate(b)
+        ev = evaluate(b, today=today)
         tier = TIER_BADGE.get(b["tier"], b["tier"])
         cap = f"{ev['capture']:%Y-%m-%d}" if ev["capture"] else "—"
         dg = f"`{ev['digest'][:16]}`" if ev["digest"] else "—"
@@ -438,7 +502,7 @@ def render(manifest: dict) -> str:
 
     # Per-board detail
     for b in boards:
-        ev = evaluate(b)
+        ev = evaluate(b, today=today)
         lines.append(f"## `{b['id']}` — {TIER_BADGE.get(b['tier'], b['tier'])}")
         lines.append("")
         lines.append(f"- Doc: [`{b['doc']}`]({Path(b['doc']).name})  ·  Chip: `{b['chip']}`")
@@ -458,7 +522,47 @@ def render(manifest: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_ack_digests(manifest: dict) -> int:
+def print_digests(manifest: dict) -> int:
+    """Print every board's CURRENT model digest beside the ones it recorded.
+
+    The drift gate's whole argument for hashing content instead of comparing
+    dates (see `model_digest`) is that the digest "is the thing that IS knowable
+    pre-merge". That only holds if an author can actually print it, so this is
+    load-bearing documentation, not a convenience: the manifest header has told
+    people to run `--digests` since the gate landed, and the flag did not exist.
+
+    The verdict comes from `evaluate()`, the same function `--drift` and the
+    generated doc use, so this can never report a board differently from the
+    gate that fails it.
+
+    Read-only by construction: it reads the manifest and hashes files. Stamping
+    an ack is `--write-ack-digests`, and acking is a human act.
+    """
+    boards = manifest.get("boards", [])
+    if not boards:
+        print("manifest lists no boards")
+        return 0
+    width = max(len(board["id"]) for board in boards)
+
+    for board in boards:
+        verdict = evaluate(board)
+        digest = verdict["digest"] or "(no model path resolves; nothing to hash)"
+        print(f"{board['id']:<{width}}  {digest}  {verdict['status']}")
+
+        # Only when they disagree, so the common case stays one line per board.
+        # These are what a re-capture or a re-ack has to move.
+        captured = (board.get("silicon") or {}).get("models_digest")
+        acked = board.get("drift_ack_digest")
+        for label, recorded in (("capture", captured), ("ack", acked)):
+            if recorded and recorded != verdict["digest"]:
+                print(f"{'':<{width}}  {label} recorded {recorded}")
+
+    # A report, not a gate: `--drift` is what fails. Exit 0 even with failing
+    # boards, so this stays usable while investigating one.
+    return 0
+
+
+def write_ack_digests(manifest: dict, stamp_all: bool = False) -> int:
     """Stamp `drift_ack_digest` next to every existing `drift_ack`.
 
     Deliberately only touches boards that ALREADY carry a human-written
@@ -470,10 +574,29 @@ def write_ack_digests(manifest: dict) -> int:
     Edits the YAML as text rather than round-tripping through the loader: the
     manifest is a hand-maintained document whose comments carry the reasoning
     for every ack, and PyYAML would drop all of them.
+
+    ⚠️ ONLY DRIFTED BOARDS ARE STAMPED, and that restriction is the point.
+
+    `evaluate()` consults a `drift_ack_digest` for exactly one purpose: deciding
+    whether an ack still covers a DRIFTED board. For a board that is not
+    drifted, the field is dead weight — no gate reads it, and re-stamping it
+    rewrites a line nothing consults.
+
+    That was not a theoretical cost. Stamping every acked board whose digest had
+    gone stale swept four unrelated boards into every model-sized change
+    (mkw41z4, rp2040, stm32f411ceu6, stm32h735 — the SAME four, four separate
+    times on 2026-08-31), and each time they had to be reverted by hand so that
+    every moved digest could be attributed to a file the change actually
+    touched. A tool that reliably produces work its user must undo is a defect,
+    not a convenience.
+
+    `--write-ack-digests-all` restores the old sweep for when a stale field
+    genuinely wants tidying — deliberately, and on its own.
     """
     text = MANIFEST.read_text()
     lines = text.split("\n")
     stamped = 0
+    skipped_not_drifted: list[str] = []
 
     for board in manifest.get("boards", []):
         if not board.get("drift_ack"):
@@ -482,6 +605,11 @@ def write_ack_digests(manifest: dict) -> int:
         if not digest:
             continue
         if board.get("drift_ack_digest") == digest:
+            continue
+        # `evaluate()` is the same function `--drift` and the rendered doc use,
+        # so this can never disagree with the gate about which boards are in play.
+        if not stamp_all and not evaluate(board)["drifted"]:
+            skipped_not_drifted.append(board["id"])
             continue
 
         # Find this board's `drift_ack:` line: scan from its `- id:` header to
@@ -517,6 +645,14 @@ def write_ack_digests(manifest: dict) -> int:
 
     MANIFEST.write_text("\n".join(lines))
     print(f"stamped {stamped} drift_ack_digest value(s)")
+    # Name what was left alone and why. The old sweep's cost stayed invisible
+    # until someone diffed the manifest and found boards they never touched.
+    if skipped_not_drifted:
+        print(
+            f"left {len(skipped_not_drifted)} stale digest(s) alone — not drifted, so "
+            f"nothing reads them: {', '.join(sorted(skipped_not_drifted))}"
+        )
+        print("  (use --write-ack-digests-all to tidy those deliberately)")
     return 0
 
 
@@ -524,6 +660,20 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="fail if committed doc is stale")
     ap.add_argument("--drift", action="store_true", help="fail if any board drifted past its ack")
+    ap.add_argument(
+        "--digests",
+        action="store_true",
+        help="print each board's current model digest against what it recorded",
+    )
+    ap.add_argument(
+        "--write-ack-digests-all",
+        action="store_true",
+        help=(
+            "stamp EVERY acked board whose digest moved, including boards that are "
+            "not drifted. The plain flag stamps only drifted boards, whose digest is "
+            "the only one any gate reads."
+        ),
+    )
     ap.add_argument(
         "--write-ack-digests",
         action="store_true",
@@ -538,8 +688,11 @@ def main() -> int:
 
     manifest = yaml.safe_load(MANIFEST.read_text())
 
-    if args.write_ack_digests:
-        return write_ack_digests(manifest)
+    if args.digests:
+        return print_digests(manifest)
+
+    if args.write_ack_digests or args.write_ack_digests_all:
+        return write_ack_digests(manifest, stamp_all=args.write_ack_digests_all)
 
     rendered = render(manifest)
 
@@ -577,11 +730,32 @@ def main() -> int:
         print(f"wrote {OUT_DOC.relative_to(CORE_ROOT)}")
 
     if args.drift:
-        failing = [b["id"] for b in manifest["boards"] if evaluate(b)["failing"]]
-        if failing:
+        verdicts = {b["id"]: evaluate(b) for b in manifest["boards"]}
+        # Two different asks, so two different messages. An EXPIRED ack means a
+        # human already looked at this drift and promised a re-capture; the
+        # promise has come due. An unacked drift has never been looked at.
+        expired = [i for i, v in verdicts.items() if v["failing"] and v["expired"]]
+        unacked = [i for i, v in verdicts.items() if v["failing"] and not v["expired"]]
+        if expired:
+            print(
+                "ERROR: drift_ack EXPIRED — the promised re-capture is now due:\n  "
+                + "\n  ".join(
+                    f"{i} (acked {as_date(next(b for b in manifest['boards'] if b['id'] == i).get('drift_ack')):%Y-%m-%d}, "
+                    f"expired {verdicts[i]['expires']:%Y-%m-%d})"
+                    for i in expired
+                )
+                + "\n"
+                "       Re-run the live diff and bump silicon.last_capture + models_digest,\n"
+                "       or renew the ack (new drift_ack date, re-stamp with --write-ack-digests).\n"
+                "       If a re-capture is genuinely blocked, set an explicit drift_ack_expires\n"
+                "       with the reason in a note — a later date is reviewable, forever is not.",
+                file=sys.stderr,
+            )
+            rc = 1
+        if unacked:
             print(
                 "ERROR: silicon validation has DRIFTED (model changed after last capture, "
-                "no covering drift_ack):\n  " + "\n  ".join(failing) + "\n"
+                "no covering drift_ack):\n  " + "\n  ".join(unacked) + "\n"
                 "       Re-run the live diff and bump silicon.last_capture, or set a dated "
                 "drift_ack in validation/manifest.yaml.",
                 file=sys.stderr,

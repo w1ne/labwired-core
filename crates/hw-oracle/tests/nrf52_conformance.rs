@@ -225,7 +225,9 @@ const BASELINE_MATCHED: usize = 16;
 
 #[cfg(feature = "hw-oracle-nrf52")]
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: requires an SWD-attached nRF52840 driven by OpenOCD, plus a built \
+            firmware-nrf52840-conformance ELF — and flashing it overwrites the board's restored \
+            UF2 bootloader (see BASELINE_MATCHED above). Needs `--features hw-oracle-nrf52`"]
 fn conformance_diff() {
     let elf = firmware_elf().expect(
         "build firmware-nrf52840-conformance first: \

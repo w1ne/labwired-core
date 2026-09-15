@@ -1,0 +1,25 @@
+# Firmware-driven mixed-signal run: the committed NUCLEO-F401RE Arduino blink
+# image drives LD2 (PA5) into the RC low-pass declared in system.yaml, and the
+# probed node voltage comes back on ADC1 channel 0 (PA0) every 100 us. Nothing
+# here injects a value: the only thing moving the circuit is a firmware pin.
+#
+# Deliberately NOT named test*.yaml. scripts/example_smokes.sh runs every
+# examples/*/test*.yaml whose firmware exists, and this one also needs
+# libngspice0 and python3 — an example smoke that fails on a machine without
+# them would be reporting the machine, not the example.
+#
+#   sudo apt install libngspice0
+#   RUST_LOG=info,cosim=debug labwired test --script examples/cosim-spice-rc/rc-blink.yaml
+#
+# The rising node voltage is in the `cosim` log lines, one per model step.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/stm32f401-blinky.elf"
+  system: "./system.yaml"
+limits:
+  # ~24 ms of simulated time at 84 MHz — 24 RC time constants, so the node has
+  # long since settled at the rail by the time the run ends.
+  max_steps: 2000000
+assertions:
+  # Proves the sketch reached loop(), which is where it drives LD2 high.
+  - uart_contains: "LED ON"

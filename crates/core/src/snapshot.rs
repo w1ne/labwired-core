@@ -48,6 +48,15 @@ pub enum CpuSnapshot {
     Arm(ArmCpuSnapshot),
     RiscV(RiscVCpuSnapshot),
     XtensaLx7(XtensaLx7CpuSnapshot),
+    Avr(AvrCpuSnapshot),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AvrCpuSnapshot {
+    pub registers: Vec<u8>,
+    pub pc: u32,
+    pub sp: u16,
+    pub sreg: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

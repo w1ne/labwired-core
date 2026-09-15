@@ -368,6 +368,10 @@ mod tests {
     #[test]
     fn cortex_m_load_from_unmapped_address_stops_the_run() {
         let mut machine = machine_with_instr(LDR_R0_R1);
+        // The #880 abort contract is the opt-out behaviour now that fault
+        // escalation defaults on (`LABWIRED_CORTEXM_FAULTS=0`); pin it
+        // explicitly rather than depending on the process default.
+        machine.cpu.set_faults_enabled(false);
         machine.cpu.set_register(1, UNMAPPED); // base address: unmapped
         machine.cpu.set_register(0, SENTINEL); // destination: pre-loaded sentinel
 
@@ -387,6 +391,9 @@ mod tests {
     #[test]
     fn cortex_m_store_to_unmapped_address_stops_the_run() {
         let mut machine = machine_with_instr(STR_R0_R1);
+        // See the load twin above: the abort contract is pinned with fault
+        // escalation explicitly off.
+        machine.cpu.set_faults_enabled(false);
         machine.cpu.set_register(1, UNMAPPED); // base address: unmapped
         machine.cpu.set_register(0, SENTINEL);
 

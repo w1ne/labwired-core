@@ -146,6 +146,15 @@ pub struct FlashSpiMemStub {
 }
 
 impl Peripheral for FlashSpiMemStub {
+    /// A word map plus one constant (`CMD` always reads 0). Command completion
+    /// is reported at read time, not advanced on a clock. No
+    /// `tick`/`tick_elapsed` override, so the walk gets the trait default
+    /// (`PeripheralTickResult::default()`) — no IRQ, DMA request, mmio-write
+    /// or fired event, for every reachable state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         if word_off == 0 {
@@ -386,6 +395,16 @@ impl TimgStub {
 }
 
 impl Peripheral for TimgStub {
+    /// A word map whose only state machine — the RTC calibration in
+    /// [`Self::maybe_complete_calibration`] — runs from `write`, not from a
+    /// clock: exactly the "lazily-evaluated model that advances on MMIO
+    /// access" case in the [`Peripheral::needs_legacy_walk`] contract. No
+    /// `tick`/`tick_elapsed` override, so the walk gets the trait default
+    /// (`PeripheralTickResult::default()`) — no IRQ, DMA request, mmio-write
+    /// or fired event, for every reachable state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

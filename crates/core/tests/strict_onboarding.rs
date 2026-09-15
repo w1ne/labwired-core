@@ -260,7 +260,6 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
     let target = parts[target_idx + 1].clone();
     let profile = parts[target_idx + 2].clone();
     let package = parts[target_idx + 3].clone();
-    let needs_thumbv6m_link_arg = target == "thumbv6m-none-eabi";
 
     // The io-smoke YAML declares `firmware: ../../target/...` — a literal
     // path, which the CLI later resolves relative to the script. That
@@ -301,15 +300,25 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
         project_root.to_path_buf()
     };
 
+    // Build each firmware exactly the way its own documented command does:
+    // no injected RUSTFLAGS. A linker script is the crate's business and every
+    // thumbv6m crate this gate builds now passes its own -Tlink.x from build.rs.
+    //
+    // This used to set RUSTFLAGS="-C link-arg=-Tlink.x" for thumbv6m targets.
+    // Two things were wrong with it. It hid a real defect: a crate that did not
+    // pass the script itself linked correctly under the gate and produced an
+    // unrunnable entry-0x0 ELF for anyone building it by hand. And once
+    // firmware-l073-demo started passing the script itself -- to fix exactly
+    // that -- the script was passed TWICE, memory.x's MEMORY block with it, and
+    // the build died on "region 'FLASH' already defined". The gate was red for
+    // an unrelated reason (an undiscoverable atmega328p example), so nobody saw
+    // it.
     let mut command = Command::new("cargo");
     command
         .current_dir(&build_dir)
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTFLAGS")
         .args(args);
-    if needs_thumbv6m_link_arg {
-        command.env("RUSTFLAGS", "-C link-arg=-Tlink.x");
-    }
 
     let status = command.status()?;
     if !status.success() {
@@ -346,6 +355,63 @@ fn firmware_path_from_smoke(smoke_test: &Path) -> anyhow::Result<Option<PathBuf>
     Ok(None)
 }
 
+/// Does this example exercise `chip_name`?
+///
+/// Two ways an example can say so, and BOTH have to be checked:
+///
+/// * a local `system.yaml` naming the chip, which is the common case; or
+/// * an `io-smoke.yaml` whose `inputs.system` points at a SHARED manifest
+///   under `configs/systems/`, which is what an example does when its board
+///   manifest is not example-local.
+///
+/// Only the first was checked, and the second is not hypothetical: it is how
+/// `examples/arduino-nano-blinky` is wired (`inputs.system:
+/// ../../configs/systems/arduino-nano.yaml`). That example has a WORKING
+/// io-smoke -- it passes in 0.14s -- and the gate reported atmega328p as an
+/// "unexpected example gap" purely because it could not find it, so the whole
+/// test was red while the thing it gates was fine. A discovery rule that
+/// cannot see a passing smoke reports the wrong failure.
+///
+/// The alternative fix was to add a local `system.yaml` mirroring the shared
+/// one (the arrangement `examples/nrf54l15-dk` uses, whose header says it
+/// exists for exactly this gate). That duplicates a board manifest to satisfy
+/// a matcher, and a copy drifts; following the reference the smoke already
+/// declares does not.
+fn example_uses_chip(dir: &std::path::Path, chip_name: &str) -> bool {
+    let names_chip = |content: &str| -> bool {
+        content.contains(&format!("chips/{}.yaml", chip_name))
+            || content.contains(&format!("chips/{}", chip_name))
+    };
+
+    let system_yaml = dir.join("system.yaml");
+    if system_yaml.exists() && names_chip(&fs::read_to_string(&system_yaml).unwrap_or_default()) {
+        return true;
+    }
+
+    // Follow the smoke's own `inputs.system:` to whatever manifest it names.
+    let smoke = dir.join("io-smoke.yaml");
+    if !smoke.exists() {
+        return false;
+    }
+    let smoke_text = fs::read_to_string(&smoke).unwrap_or_default();
+    let Some(referenced) = smoke_text
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("system:"))
+        .map(|value| {
+            value
+                .trim()
+                .trim_matches(['"', '\''].as_slice())
+                .to_string()
+        })
+    else {
+        return false;
+    };
+    // Relative to the example directory, the way the runner resolves it.
+    let manifest = dir.join(&referenced);
+    names_chip(&fs::read_to_string(&manifest).unwrap_or_default())
+}
+
 fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<PathBuf> {
     // Collect every example whose system.yaml references this chip, then
     // prefer a canonical "smoke" example over richer sensor labs. The
@@ -361,16 +427,8 @@ fn find_example_for_chip(root: &std::path::Path, chip_name: &str) -> Option<Path
     let mut candidates: Vec<PathBuf> = Vec::new();
     for entry in fs::read_dir(examples).ok()? {
         let entry = entry.ok()?;
-        if entry.path().is_dir() {
-            let system_yaml = entry.path().join("system.yaml");
-            if system_yaml.exists() {
-                let content = fs::read_to_string(&system_yaml).unwrap_or_default();
-                if content.contains(&format!("chips/{}.yaml", chip_name))
-                    || content.contains(&format!("chips/{}", chip_name))
-                {
-                    candidates.push(entry.path());
-                }
-            }
+        if entry.path().is_dir() && example_uses_chip(&entry.path(), chip_name) {
+            candidates.push(entry.path());
         }
     }
 

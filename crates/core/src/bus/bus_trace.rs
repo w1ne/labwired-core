@@ -92,6 +92,64 @@ pub enum BusPayload {
     },
 }
 
+/// One-line human summary of a payload, e.g. `addr 0x48 W ack`,
+/// `data 0x0f nack`, `mosi 0x9f miso 0xef`, `tx 0x41`,
+/// `rx id=0x7e0 ext fd [03 22]`.
+///
+/// I²C address phases print the 7-bit address and the direction bit, decoded
+/// from the wire byte the trace records; every other byte prints as it moved.
+impl std::fmt::Display for BusPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn dir(d: &BusDir) -> &'static str {
+            match d {
+                BusDir::Tx => "tx",
+                BusDir::Rx => "rx",
+            }
+        }
+        match self {
+            BusPayload::I2c { kind, byte, ack } => {
+                let ack = if *ack { "ack" } else { "nack" };
+                match kind {
+                    I2cSym::AddrWrite => write!(f, "addr {:#04x} W {ack}", byte >> 1),
+                    I2cSym::AddrRead => write!(f, "addr {:#04x} R {ack}", byte >> 1),
+                    I2cSym::Data => write!(f, "data {byte:#04x} {ack}"),
+                }
+            }
+            BusPayload::Spi { mosi, miso } => write!(f, "mosi {mosi:#04x} miso {miso:#04x}"),
+            BusPayload::Uart { direction, byte } => write!(f, "{} {byte:#04x}", dir(direction)),
+            BusPayload::Can {
+                direction,
+                id,
+                data,
+                extended,
+                fd,
+                bitrate_switch,
+                remote,
+            } => {
+                write!(f, "{} id={id:#x}", dir(direction))?;
+                for (set, flag) in [
+                    (*extended, "ext"),
+                    (*fd, "fd"),
+                    (*bitrate_switch, "brs"),
+                    (*remote, "rtr"),
+                ] {
+                    if set {
+                        write!(f, " {flag}")?;
+                    }
+                }
+                f.write_str(" [")?;
+                for (i, b) in data.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(" ")?;
+                    }
+                    write!(f, "{b:02x}")?;
+                }
+                f.write_str("]")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct BusTraceEvent {
     pub seq: u64,
@@ -565,5 +623,39 @@ mod tests {
             snap[1].cycle, 4242,
             "second event carries the advanced cycle"
         );
+    }
+
+    #[test]
+    fn payload_summaries_name_what_moved() {
+        let i2c = |kind, byte, ack| BusPayload::I2c { kind, byte, ack }.to_string();
+        assert_eq!(i2c(I2cSym::AddrWrite, 0x90, true), "addr 0x48 W ack");
+        assert_eq!(i2c(I2cSym::AddrRead, 0x91, false), "addr 0x48 R nack");
+        assert_eq!(i2c(I2cSym::Data, 0x0F, true), "data 0x0f ack");
+        assert_eq!(
+            BusPayload::Spi {
+                mosi: 0x9F,
+                miso: 0xEF
+            }
+            .to_string(),
+            "mosi 0x9f miso 0xef"
+        );
+        assert_eq!(
+            BusPayload::Uart {
+                direction: BusDir::Rx,
+                byte: 0x41
+            }
+            .to_string(),
+            "rx 0x41"
+        );
+        let can = BusPayload::Can {
+            direction: BusDir::Tx,
+            id: 0x7E0,
+            data: vec![0x03, 0x22],
+            extended: true,
+            fd: false,
+            bitrate_switch: false,
+            remote: false,
+        };
+        assert_eq!(can.to_string(), "tx id=0x7e0 ext [03 22]");
     }
 }

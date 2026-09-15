@@ -1,0 +1,16 @@
+name: "cosim-spice-rc"
+chip: "../../configs/chips/stm32f401.yaml"
+cosim_models:
+  - id: "rc_lowpass"
+    adapter: "external_process"
+    model: "./models/rc_lowpass.py"
+    step_ns: 100000            # 100 us; RC tau is 1 ms
+    inputs:
+      gpio: "board.gpio.pa5"
+    outputs:
+      v_out: "board.analog.pa0_volts"
+    config:
+      protocol: "jsonl"
+      engine: "ngspice"
+      netlist: "./rc.cir"
+external_devices: []

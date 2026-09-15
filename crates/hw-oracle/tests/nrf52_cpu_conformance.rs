@@ -272,7 +272,9 @@ fn run_hw(elf: &PathBuf) -> Vec<u32> {
 
 #[cfg(feature = "hw-oracle-nrf52")]
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: requires an SWD-attached nRF52840 driven by OpenOCD, plus a built \
+            firmware-nrf52840-cpu-conformance ELF; needs `--features hw-oracle-nrf52` and \
+            `-- --ignored`"]
 fn cpu_conformance_diff() {
     let elf = firmware_elf().expect(
         "build firmware-nrf52840-cpu-conformance first: \

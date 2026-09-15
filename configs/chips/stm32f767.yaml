@@ -15,9 +15,17 @@ name: "stm32f767zi"
 arch: "arm"
 core: "cortex-m7"
 registers_count: 150
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F767ZI maximum core clock, 216 MHz.
+cpu_hz: 216_000_000
+
 flash:
   base: 0x08000000
-  size: "2MB"
+  # 2 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "2MB" would be
+  # 2_000_000, 97_152 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "2048KB"
 ram:
   base: 0x20000000
   size: "512KB"
@@ -144,6 +152,13 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+    # I2C1 is clock-gated by RCC_APB1ENR.I2C1EN (bit 21) on this part, as
+    # it is on the F407 whose descriptor has always declared it. Without
+    # this the peripheral answers before it is enabled, and firmware that
+    # forgets the gate works here and hangs on silicon.
+    clock:
+      reg: "apb1enr"
+      bit: 21
     config:
       debug_schema: "../peripherals/stm32f767/i2c1.yaml"
       profile: "stm32l4"
@@ -288,3 +303,24 @@ peripherals:
       debug_schema: "../peripherals/stm32f767/dma2.yaml"
       dma2: true
       stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+
+# Regular ADC inputs by pad, from the STM32F765/767/768/769 datasheet (DS11532), LQFP144 pinout: ADC123_IN0..IN3, ADC12_IN4..IN15.
+# ADC123/ADC12 inputs are shared with ADC2/ADC3, which this descriptor does not model.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }

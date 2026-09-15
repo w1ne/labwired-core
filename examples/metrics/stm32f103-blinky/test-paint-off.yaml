@@ -1,0 +1,20 @@
+# Same behavioral stop as test-pass, but stack paint disabled.
+# No max_main_stack_bytes assert (paint/high-water is unavailable).
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "../../../tests/fixtures/stm32f103-blinky.elf"
+limits:
+  # 150000 cycles, below max_steps (200000), so the cycle budget is the limit
+  # that ends the run. The machine clock on this Cortex-M core advances one
+  # cycle per retired instruction (plus peripheral tick cost), so a cycle
+  # budget equal to the step budget would race it.
+  max_steps: 200000
+  max_cycles: 150000
+stack_paint: false
+assertions:
+  - resource_budget:
+      max_flash_bytes: 20000
+  - resource_budget:
+      max_ram_static_bytes: 8000
+  - expected_stop_reason: max_cycles

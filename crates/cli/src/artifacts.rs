@@ -44,8 +44,14 @@ pub(crate) const STIMULUS_NOT_REACHED: &str = "not_reached";
 /// class here, a surface that reports success having proved nothing.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct StimulusOutcome {
-    /// The `sim_input` channel key the script asked to drive.
+    /// The `sim_input` channel key the script asked to drive, or the signal
+    /// path of a `cosim_signal` stimulus.
     pub(crate) channel: String,
+    /// True for a `cosim_signal` stimulus, whose `channel` is a co-simulation
+    /// signal path rather than a device input. Omitted for a device input, so
+    /// the block reads exactly as it did before co-simulation signals existed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) cosim_signal: bool,
     /// The disambiguating component the script named, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) component: Option<String>,
@@ -66,6 +72,33 @@ pub(crate) struct StimulusOutcome {
 }
 
 impl StimulusOutcome {
+    /// The outcome record for `spec`, whichever shape it has.
+    pub(crate) fn new(
+        spec: &labwired_config::StimulusSpec,
+        outcome: &str,
+        at_cycle: u64,
+        error: Option<String>,
+    ) -> Self {
+        let (channel, component, cosim_signal) = match &spec.action {
+            labwired_config::StimulusAction::Input { target, .. } => {
+                (target.channel.clone(), target.component.clone(), false)
+            }
+            labwired_config::StimulusAction::CosimSignal(signal) => {
+                (signal.path.clone(), None, true)
+            }
+        };
+        Self {
+            channel,
+            cosim_signal,
+            component,
+            value: spec.value(),
+            trigger: spec.trigger.clone(),
+            outcome: outcome.to_string(),
+            at_cycle,
+            error,
+        }
+    }
+
     pub(crate) fn is_rejected(&self) -> bool {
         self.outcome == STIMULUS_REJECTED
     }
@@ -143,6 +176,100 @@ pub(crate) struct TestResult {
     /// the ones that never fired.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) stimuli: Vec<StimulusOutcome>,
+    /// ELF Berkeley-style flash/RAM footprint (text/data/bss). Absent when
+    /// footprint was not computed for this run (e.g. config error, or not yet
+    /// wired). Optional totals/pct fields omitted when device limits unknown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) footprint: Option<FootprintReport>,
+    /// Main-stack paint / high-water report. Absent when not collected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) memory: Option<labwired_core::stack_paint::MainStackReport>,
+    /// Always-on cheap execution metrics (cycles, bus accesses, PC samples).
+    /// Present on successful machine runs; omitted on config-error paths that
+    /// never built a machine. Top-level `cycles` / `instructions` /
+    /// `steps_executed` remain for compatibility.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) metrics: Option<ExecutionMetrics>,
+}
+
+/// Industry-standard execution counters for `result.json` (`metrics`).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct ExecutionMetrics {
+    pub cycles: u64,
+    pub instructions: u64,
+    pub steps_executed: u64,
+    pub memory_reads: u64,
+    pub memory_writes: u64,
+    pub peripheral_accesses: u64,
+    /// Best-effort: counts `SimulationError::ExceptionRaised` stop paths in P1.
+    /// Handled NVIC/exception entries that do not fault the run are not counted.
+    pub exceptions: u64,
+    /// Top PC histogram samples (descending by count). Empty when no samples.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pc_samples: Vec<PcSample>,
+}
+
+/// One hot PC from statistical sampling during the test loop.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct PcSample {
+    pub pc: u64,
+    pub count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+}
+
+/// Berkeley-style firmware footprint for `result.json` (`footprint`).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct FootprintReport {
+    pub method: String,
+    pub text_bytes: u64,
+    pub data_bytes: u64,
+    pub bss_bytes: u64,
+    pub flash_used_bytes: u64,
+    pub ram_static_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ram_total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_used_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ram_static_pct: Option<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
+}
+
+/// Percent used of total, half-up to 2 decimal places. Returns 0.0 if total is 0.
+pub(crate) fn pct2(used: u64, total: u64) -> f64 {
+    if total == 0 {
+        return 0.0;
+    }
+    let v = (used as f64) * 100.0 / (total as f64);
+    (v * 100.0).round() / 100.0
+}
+
+/// Build a [`FootprintReport`] from loader ELF section totals and optional
+/// device flash/RAM capacities.
+pub(crate) fn footprint_from_elf_totals(
+    totals: &labwired_loader::ElfSectionTotals,
+    flash_total: Option<u64>,
+    ram_total: Option<u64>,
+) -> FootprintReport {
+    let flash_used = totals.flash_used();
+    let ram_static = totals.ram_static();
+    FootprintReport {
+        method: labwired_loader::FOOTPRINT_METHOD.to_string(),
+        text_bytes: totals.text,
+        data_bytes: totals.data,
+        bss_bytes: totals.bss,
+        flash_used_bytes: flash_used,
+        ram_static_bytes: ram_static,
+        flash_total_bytes: flash_total,
+        ram_total_bytes: ram_total,
+        flash_used_pct: flash_total.map(|t| pct2(flash_used, t)),
+        ram_static_pct: ram_total.map(|t| pct2(ram_static, t)),
+        notes: Vec::new(),
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -174,6 +301,12 @@ pub(crate) enum AssertionEvidence {
         token_cycle: u64,
         latency_cycles: u64,
         configured_max_cycles: u64,
+    },
+    ResourceBudget {
+        name: String,
+        measured: Option<u64>,
+        limit: u64,
+        method: String,
     },
 }
 

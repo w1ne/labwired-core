@@ -20,7 +20,7 @@
 //! emissions against what the core actually did, and it derives the core list
 //! from the source tree rather than trusting the list below.
 
-use labwired_core::cpu::{CortexM, RiscV, XtensaLx7};
+use labwired_core::cpu::{Avr, CortexM, RiscV, XtensaLx7};
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
 };
@@ -139,7 +139,12 @@ struct CoreUnderTest {
     program: Vec<u8>,
     /// Bytes each instruction advances PC by.
     step_len: u32,
-    build: fn() -> Box<dyn Cpu>,
+    /// Build the core with `program` already loaded at `entry`.
+    ///
+    /// Takes the program because not every core fetches from the bus. AVR is a
+    /// Harvard machine: it executes from its OWN flash array, so a program
+    /// written only into `RamBus` would leave it stepping over zeros.
+    build: fn(u32, &[u8]) -> Box<dyn Cpu>,
 }
 
 /// Every core that implements `Cpu`. Completeness is enforced by
@@ -152,7 +157,7 @@ fn cores() -> Vec<CoreUnderTest> {
             // `movs r0, #1` ×4 (Thumb, 2 bytes each).
             program: vec![0x01, 0x20, 0x01, 0x20, 0x01, 0x20, 0x01, 0x20],
             step_len: 2,
-            build: || {
+            build: |_entry, _program| {
                 let mut cpu = CortexM::new();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
@@ -166,8 +171,27 @@ fn cores() -> Vec<CoreUnderTest> {
                 .flat_map(u32::to_le_bytes)
                 .collect(),
             step_len: 4,
-            build: || {
+            build: |_entry, _program| {
                 let mut cpu = RiscV::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Avr",
+            entry: 0x100,
+            // `ldi r16, 1` x4 (2 bytes each, little-endian in flash).
+            //
+            // LDI and not NOP on purpose: NOP encodes as 0x0000, so the
+            // "opcode must be the real encoding" assertion below would hold
+            // for a core that reported a hard-coded zero. 0xE001 cannot be
+            // produced by accident.
+            program: vec![0x01, 0xE0, 0x01, 0xE0, 0x01, 0xE0, 0x01, 0xE0],
+            step_len: 2,
+            build: |entry, program| {
+                let mut cpu = Avr::new();
+                // Harvard: instructions come from flash, not from the bus.
+                cpu.load_flash(entry, program);
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },
@@ -178,7 +202,7 @@ fn cores() -> Vec<CoreUnderTest> {
             // `movi.n a2, 1` ×4 (narrow, 2 bytes each).
             program: vec![0x0C, 0x12, 0x0C, 0x12, 0x0C, 0x12, 0x0C, 0x12],
             step_len: 2,
-            build: || {
+            build: |_entry, _program| {
                 let mut cpu = XtensaLx7::new();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
@@ -194,7 +218,7 @@ fn every_core_emits_the_full_per_instruction_trace() {
     const STEPS: usize = 4;
 
     for core in cores() {
-        let mut cpu = (core.build)();
+        let mut cpu = (core.build)(core.entry, &core.program);
         cpu.set_pc(core.entry);
         let mut bus = RamBus::with_program(core.entry as u64, &core.program);
         let recorder = Arc::new(Recorder::default());
@@ -279,7 +303,7 @@ fn no_core_traces_when_nobody_is_observing() {
     // it the hot path would pay for a register snapshot on every instruction,
     // which is the reason the emission is conditional in the first place.
     for core in cores() {
-        let mut cpu = (core.build)();
+        let mut cpu = (core.build)(core.entry, &core.program);
         cpu.set_pc(core.entry);
         let mut bus = RamBus::with_program(core.entry as u64, &core.program);
         let none: Vec<Arc<dyn SimulationObserver>> = Vec::new();

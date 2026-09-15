@@ -299,7 +299,9 @@ fn run_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &MmioCase) -> Outcome {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: diffs every MMIO register the production nRF52840 yaml models against \
+            real silicon over SWD (OpenOcd::spawn_nrf52), so it requires an attached board. The \
+            whole file is behind `--features hw-oracle-nrf52`; NRF52_STRICT=1 makes it assert"]
 fn nrf52840_mmio_diff() {
     let _guard = HW_LOCK.lock().unwrap();
 

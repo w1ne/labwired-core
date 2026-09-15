@@ -135,6 +135,7 @@ fn nvic_and_scb_trip_the_factory_counter_but_are_not_live_stubs() {
         schema_version: "1.0".to_string(),
         name: "census-probe".to_string(),
         chip: chip_rel.to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

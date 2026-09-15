@@ -1361,7 +1361,7 @@ fn run_cortex_m_firmware(
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);
     let trace = Arc::new(TraceObserver::new(5000));
-    machine.observers.push(trace.clone());
+    machine.add_observer(trace.clone());
 
     let image = labwired_loader::load_elf(&firmware_path)
         .unwrap_or_else(|e| panic!("Failed to load ELF {:?}: {e}", firmware_path));
@@ -1432,7 +1432,7 @@ fn run_riscv_firmware(
     bus.attach_uart_tx_sink(uart_sink.clone(), false);
     let mut machine = Machine::new(RiscV::new(), bus);
     let trace = Arc::new(TraceObserver::new(5000));
-    machine.observers.push(trace.clone());
+    machine.add_observer(trace.clone());
 
     let image = labwired_loader::load_elf(&firmware_path)
         .unwrap_or_else(|e| panic!("Failed to load ELF {:?}: {e}", firmware_path));
@@ -2218,7 +2218,9 @@ fn test_nucleo_l476rg_arduino_serial_survival() {
 /// the bytes into a survival case. Marked `#[ignore]` so it doesn't run in
 /// CI — invoke with `cargo test ... -- --ignored capture_l4periphs2`.
 #[test]
-#[ignore]
+#[ignore = "one-shot UART capture helper, not a gate: prints the trace for a human to audit and \
+            asserts nothing. Run with `cargo test -p labwired-core --test firmware_survival -- \
+            --ignored capture_l4periphs2`"]
 fn capture_l4periphs2_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-l4periphs2.elf");
     let (_pc, uart) =
@@ -2231,7 +2233,9 @@ fn capture_l4periphs2_sim_output() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "one-shot UART capture helper for nucleo-l476rg-r12.elf, not a gate: prints the trace \
+            and asserts nothing. Run with `cargo test -p labwired-core --test firmware_survival \
+            -- --ignored capture_r12`"]
 fn capture_r12_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-r12.elf");
     let (_pc, uart) =
@@ -2244,7 +2248,9 @@ fn capture_r12_sim_output() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "one-shot UART capture helper for nucleo-l476rg-r11.elf, not a gate: prints the trace \
+            and asserts nothing. Run with `cargo test -p labwired-core --test firmware_survival \
+            -- --ignored capture_r11`"]
 fn capture_r11_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-r11.elf");
     let (_pc, uart) =
@@ -2257,7 +2263,9 @@ fn capture_r11_sim_output() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "one-shot UART capture helper for nucleo-l476rg-tim1-advanced.elf, not a gate: prints \
+            the trace and asserts nothing. Run with `cargo test -p labwired-core --test \
+            firmware_survival -- --ignored capture_tim1_advanced`"]
 fn capture_tim1_advanced_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-tim1-advanced.elf");
     let (_pc, uart) =
@@ -2270,7 +2278,9 @@ fn capture_tim1_advanced_sim_output() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "one-shot UART capture helper for nucleo-l476rg-cubemx-hal.elf, not a gate: prints the \
+            trace and final PC, and asserts nothing. Run with `cargo test -p labwired-core --test \
+            firmware_survival -- --ignored capture_cubemx_hal`"]
 fn capture_cubemx_hal_sim_output() {
     let firmware = fixtures().join("nucleo-l476rg-cubemx-hal.elf");
     let (pc, uart) =

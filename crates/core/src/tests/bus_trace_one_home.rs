@@ -81,6 +81,7 @@ fn dummy_manifest(chip_path: &str) -> SystemManifest {
         schema_version: "1.0".to_string(),
         name: "bus-trace-one-home".to_string(),
         chip: chip_path.to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

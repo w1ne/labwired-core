@@ -363,7 +363,9 @@ pub fn install_arduino_esp32_profile<C: Cpu>(
     // `g_ticks_per_us_pro` / `_app` — CPU MHz, written by
     // `ets_update_cpu_frequency()`. On silicon the ROM bootloader calls that
     // before it hands control to the app image; we start at the app entry
-    // (see the CHEAT(SKIP) above that seeds PC), so nothing ever writes them
+    // (the boot-ROM skip lives in the CLI entry points — `commands/run.rs`
+    // and `commands/snapshot.rs`, both marked there), so nothing ever writes
+    // them
     // and they stay 0.
     //
     // That is not cosmetic. `esp_clk_apb_freq()` on ESP32-classic is

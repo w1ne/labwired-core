@@ -48,6 +48,53 @@ pub struct CanFrame {
     pub remote: bool,
 }
 
+/// Why a CAN controller did not take a frame onto its receive path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanRxRejection {
+    /// The controller's bus clock is gated off.
+    Unclocked,
+    /// The controller is in initialization (bxCAN `MCR.INRQ`, FDCAN
+    /// `CCCR.INIT`), so it takes no part in bus traffic.
+    NotRunning,
+    /// No active acceptance filter matched the frame (bxCAN).
+    NoFilterMatch,
+    /// A filter accepted the frame into RX FIFO1, which the bxCAN model does
+    /// not queue.
+    Fifo1NotModeled,
+    /// RX FIFO0 was already full; the frame is lost, as on silicon.
+    FifoFull,
+    /// A CAN-FD frame reached a classic-CAN controller.
+    FdOnClassicController,
+}
+
+impl std::fmt::Display for CanRxRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            CanRxRejection::Unclocked => "controller clock is not enabled",
+            CanRxRejection::NotRunning => "controller is in initialization mode",
+            CanRxRejection::NoFilterMatch => "no active acceptance filter matches",
+            CanRxRejection::Fifo1NotModeled => {
+                "the matching filter routes to RX FIFO1, which is not modeled"
+            }
+            CanRxRejection::FifoFull => "RX FIFO0 is full",
+            CanRxRejection::FdOnClassicController => {
+                "a CAN-FD frame cannot be received by a classic CAN controller"
+            }
+        })
+    }
+}
+
+/// Why [`crate::bus::SystemBus::inject_can_frame`] did not deliver a frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CanInjectError {
+    /// No peripheral on the bus has that name.
+    UnknownPeripheral,
+    /// The named peripheral is not a CAN controller.
+    NotACanController,
+    /// The controller refused the frame.
+    Rejected(CanRxRejection),
+}
+
 impl CanFrame {
     pub fn classic(id: u32, data: Vec<u8>) -> Self {
         Self {

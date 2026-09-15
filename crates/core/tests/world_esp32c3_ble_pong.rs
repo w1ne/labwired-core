@@ -9,20 +9,18 @@
 //! IT IS A FROZEN COPY, NOT A LIVE FETCH. CI has no network, so this test runs
 //! a COMMITTED flash image (`fixtures/esp32c3-ble-pong-flash.bin`) built from a
 //! COMMITTED copy of the sketch (`fixtures/esp32c3-ble-pong.ino`). Nothing here
-//! contacts api.labwired.com. Two separate mechanisms keep that copy honest,
-//! and neither is optional:
+//! contacts api.labwired.com, and nothing should: a published lab is a living
+//! product artifact and is SUPPOSED to change, so this test must not depend on
+//! what the owner has on the live site today.
 //!
-//! * `tests/fixture_ble_pong_provenance.rs` pins the sha256 of BOTH files, so
-//!   editing the `.ino` without rebuilding the `.bin` — or swapping the `.bin`
-//!   without recording which source it came from — fails there instead of
-//!   silently testing firmware nobody runs. It is not `cfg`-gated, so unlike
-//!   this file it also runs on PRs. That is exactly how this file rotted once
-//!   already: the fixture was frozen at the #828 build while the published
-//!   sketch moved on repeatedly, and the test stayed green against firmware
-//!   that no longer existed — while the lab was visibly broken in the browser.
-//! * `scripts/ci/check-published-lab-drift.sh` runs in a networked lane and fails if
-//!   the OWNER edits the live project so it no longer matches the committed
-//!   `.ino`. A hash pinned in-tree cannot notice that on its own.
+//! `tests/fixture_ble_pong_provenance.rs` pins the sha256 of BOTH files, so
+//! editing the `.ino` without rebuilding the `.bin` — or swapping the `.bin`
+//! without recording which source it came from — fails there instead of
+//! silently testing firmware nobody runs. It is not `cfg`-gated, so unlike
+//! this file it also runs on PRs. That is exactly how this file rotted once
+//! already: the fixture was frozen at the #828 build while the published
+//! sketch moved on repeatedly, and the test stayed green against firmware
+//! that no longer existed — while the lab was visibly broken in the browser.
 //!
 //! The sketch elects its host over the air: each node publishes its state in
 //! the manufacturer data of its advertisement, and in its scan callback
@@ -89,6 +87,10 @@ use labwired_core::boot::esp32s3_rom::RomImages;
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::RiscV;
 use labwired_core::memory::ProgramImage;
+use labwired_core::network::SimMqttFabric;
+use labwired_core::peripherals::ble_air::BleAirBus;
+use labwired_core::peripherals::nrf52::radio::VirtualAirBus;
+use labwired_core::peripherals::rf_medium::{PathLossParams, RfMedium};
 use labwired_core::{Arch, Bus, Cpu, Machine};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -133,10 +135,41 @@ impl Node {
     }
 }
 
+/// One lab's radio fabric — the same trio `World` mints per lab
+/// (`world.rs`), bound to both nodes of a pair via `attach_lab_air`.
+///
+/// Why this exists (issue #928): an `Esp32c3Bt` that nobody binds falls back
+/// to the PROCESS-GLOBAL `default_ble_air_bus()`. This binary holds TWO
+/// independent two-node labs — the election pair (`run_pong`) and the ADC
+/// pair (`shipped_pong_firmware_observes_gp2y_…`) — and the test harness runs
+/// them on parallel threads, so all four controllers advertised into one
+/// shared air and the election lab heard the ADC lab's frames. Which frames
+/// landed depended on thread interleaving, which is why the election flaked
+/// ~2 runs in 3 while every solo run passed. The browser never hits this: a
+/// lab gets its own worker there, and `World` mints one `BleAirBus` per lab —
+/// binding the same way here restores that isolation.
+struct LabAir {
+    nrf: VirtualAirBus,
+    ble: BleAirBus,
+    fabric: SimMqttFabric,
+}
+
+impl LabAir {
+    fn new() -> Self {
+        let nrf = VirtualAirBus::new();
+        nrf.attach_medium(RfMedium::new(1).with_params(PathLossParams::default()));
+        Self {
+            nrf,
+            ble: BleAirBus::new(),
+            fabric: SimMqttFabric::new(),
+        }
+    }
+}
+
 /// The browser fast-start assembly for one C3 node, identical to the shipped
 /// lab batch gate's `build_lab` — same ROM injection, same rom-boot options,
 /// same browser tick policy — so what runs here is what runs in the tab.
-fn build_node(flash: &[u8]) -> Node {
+fn build_node(flash: &[u8], lab: &LabAir, node_id: &str) -> Node {
     let chip = ChipDescriptor::from_file(root().join("../../configs/chips/esp32c3.yaml"))
         .expect("load esp32c3 chip yaml");
     let manifest =
@@ -173,9 +206,26 @@ fn build_node(flash: &[u8]) -> Node {
             // Unpinned: each node is its own die, exactly as the browser builds
             // one bridge per MCU on the canvas.
             pinned_efuse_mac: None,
-            usb_serial_sink: None,
+            // The board contract builds native-USB ESP boards with
+            // ARDUINO_USB_CDC_ON_BOOT=1 (monorepo 26d37c11d: a SuperMini's USB-C
+            // is the C3's own USB-Serial-JTAG, so that is where `Serial`
+            // prints). UART0 then carries only the ROM/bootloader banner; every
+            // sketch byte this test asserts on comes out of the USB-CDC port,
+            // which natively has no sink unless wired here. Without this the
+            // console is the banner and nothing else — the #927 "empty
+            // console", which was a capture gap, not a boot failure.
+            usb_serial_sink: Some(serial.clone()),
         },
         |c| c,
+    );
+    // Bind this node's radios to the lab-private air (see LabAir). Both nodes
+    // of a pair get clones of the same trio, so they hear each other and no
+    // other lab in the process.
+    machine.bus.attach_lab_air(
+        node_id,
+        lab.nrf.clone(),
+        lab.ble.clone(),
+        lab.fabric.clone(),
     );
     for segment in &bootloader.segments {
         if machine.bus.flash.load_from_segment(segment)
@@ -195,7 +245,7 @@ fn build_node(flash: &[u8]) -> Node {
                 .expect("load bootloader segment");
         }
     }
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    let sp_top = (chip.ram.base + chip.ram.size) as u32;
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(bootloader.entry_point as u32);
 
@@ -215,8 +265,9 @@ const SLICE_CYCLES: usize = 100_000;
 fn run_pong(cycles_per_node: usize) -> (Node, Node) {
     let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin"))
         .expect("read BLE Pong flash image");
-    let mut a = build_node(&flash);
-    let mut b = build_node(&flash);
+    let lab = LabAir::new();
+    let mut a = build_node(&flash, &lab, "nodeA");
+    let mut b = build_node(&flash, &lab, "nodeB");
     let mut done = 0usize;
     while done < cycles_per_node {
         let slice = SLICE_CYCLES.min(cycles_per_node - done);
@@ -388,8 +439,11 @@ fn two_c3_nodes_running_one_ble_pong_image_start_the_game() {
 fn shipped_pong_firmware_observes_gp2y_distance_through_gpio1_adc() {
     let flash = std::fs::read(root().join("tests/fixtures/esp32c3-ble-pong-flash.bin"))
         .expect("read BLE Pong flash image");
-    let mut near = build_node(&flash);
-    let mut far = build_node(&flash);
+    // A second, independent lab — its own air, so its advertisements never
+    // reach the election pair above even when both run concurrently (#928).
+    let lab = LabAir::new();
+    let mut near = build_node(&flash, &lab, "near");
+    let mut far = build_node(&flash, &lab, "far");
     near.machine
         .set_input_on("vl", "distance", 100.0)
         .expect("drive near GP2Y distance");

@@ -1,5 +1,6 @@
+use crate::analog::{AnalogChannel, AnalogCosimAdapter, AnalogTraceBatch, AnalogTraceRegistry};
 use crate::cosim::{
-    CosimAdapter, CosimSignalValue, CosimSignals, CosimStep, CosimStepResult,
+    CosimAdapter, CosimInputKind, CosimSignalValue, CosimSignals, CosimStep, CosimStepResult,
     ExternalProcessCosimAdapter, StaticCosimAdapter,
 };
 use crate::{SimResult, SimulationError};
@@ -32,10 +33,38 @@ pub fn build_cosim_adapter_with_base(
                 &program, &arg_refs,
             )?))
         }
+        ManifestCosimAdapter::Analog => {
+            let adapter =
+                AnalogCosimAdapter::from_manifest_config(config, base_dir).map_err(|err| {
+                    SimulationError::Other(format!("analog co-sim model '{}': {err}", config.id))
+                })?;
+            Ok(Box::new(adapter))
+        }
         ManifestCosimAdapter::Fmi => Err(SimulationError::NotImplemented(
             "co-sim adapter 'fmi' is declared but FMI import is not wired yet".to_string(),
         )),
     }
+}
+
+/// Validate every `adapter: analog` entry by actually parsing its netlist.
+///
+/// This is where an unsupported element becomes a manifest error rather than a
+/// runtime surprise: the netlist parser lives in the core crate, so the config
+/// crate cannot see it, and a manifest that names a diode should be rejected
+/// before any firmware runs. Returns one issue string per problem, in manifest
+/// order, prefixed with `cosim_models[i]` the way
+/// [`labwired_config::SystemManifest::validate_cosim_models`] does.
+pub fn validate_analog_models(configs: &[CosimModelConfig], base_dir: &Path) -> Vec<String> {
+    let mut issues = Vec::new();
+    for (index, config) in configs.iter().enumerate() {
+        if config.adapter != ManifestCosimAdapter::Analog {
+            continue;
+        }
+        if let Err(err) = AnalogCosimAdapter::from_manifest_config(config, base_dir) {
+            issues.push(format!("cosim_models[{index}] (id '{}'): {err}", config.id));
+        }
+    }
+    issues
 }
 
 fn resolve_model_path(model: &str, base_dir: &Path) -> PathBuf {
@@ -135,11 +164,26 @@ pub struct CosimRoutedModelStep {
 #[derive(Default)]
 pub struct CosimRunner {
     models: Vec<CosimRunnerModel>,
+    analog_trace: AnalogTraceRegistry,
 }
 
 impl CosimRunner {
-    pub fn new(models: Vec<CosimRunnerModel>) -> Self {
-        Self { models }
+    pub fn new(mut models: Vec<CosimRunnerModel>) -> Self {
+        let analog_trace = AnalogTraceRegistry::new();
+        let handle = analog_trace.handle();
+        // Every channel is `<model id>.<name>`, however many analog models
+        // share the ring. A name that depends on how many OTHER models exist
+        // cannot be computed by whoever wires the probe: the playground names a
+        // scope channel `circuit.v_<net>` from the canvas alone, and adding a
+        // second circuit must not rename the first one's channels under it.
+        for model in &mut models {
+            let prefix = format!("{}.", model.config.id);
+            model.adapter.attach_analog_trace(&handle, &prefix);
+        }
+        Self {
+            models,
+            analog_trace,
+        }
     }
 
     pub fn from_configs(configs: &[CosimModelConfig]) -> SimResult<Self> {
@@ -158,6 +202,65 @@ impl CosimRunner {
             ));
         }
         Ok(Self::new(models))
+    }
+
+    /// How many models this runner steps.
+    pub fn model_count(&self) -> usize {
+        self.models.len()
+    }
+
+    /// Every signal-store path some model's `inputs:` reads, sorted and
+    /// deduplicated.
+    pub fn input_paths(&self) -> Vec<&str> {
+        let paths: std::collections::BTreeSet<&str> = self
+            .models
+            .iter()
+            .flat_map(|model| model.config.inputs.values().map(String::as_str))
+            .collect();
+        paths.into_iter().collect()
+    }
+
+    /// Does any model's `inputs:` read `path`?
+    pub fn reads_path(&self, path: &str) -> bool {
+        self.models
+            .iter()
+            .any(|model| model.config.inputs.values().any(|source| source == path))
+    }
+
+    /// The value shape the models reading `path` expect: [`CosimInputKind::Bool`]
+    /// only when every model that can say calls it a logic level, `Number` when
+    /// any calls it a number, `None` when no reader can say.
+    pub fn input_kind(&self, path: &str) -> Option<CosimInputKind> {
+        let mut kind = None;
+        for model in &self.models {
+            for (name, source) in &model.config.inputs {
+                if source != path {
+                    continue;
+                }
+                match model.adapter.input_kind(name) {
+                    Some(CosimInputKind::Number) => return Some(CosimInputKind::Number),
+                    Some(CosimInputKind::Bool) => kind = Some(CosimInputKind::Bool),
+                    None => {}
+                }
+            }
+        }
+        kind
+    }
+
+    /// The shared analog-sample ring, for a machine to publish to instruments.
+    pub fn analog_trace_registry(&self) -> AnalogTraceRegistry {
+        self.analog_trace.clone()
+    }
+
+    /// Channel table of the analog trace (empty when no analog model is
+    /// declared).
+    pub fn analog_channels(&self) -> Vec<AnalogChannel> {
+        self.analog_trace.channels()
+    }
+
+    /// Analog samples newer than `cursor`, by sample sequence number.
+    pub fn analog_trace_snapshot(&self, cursor: u64) -> AnalogTraceBatch {
+        self.analog_trace.snapshot(cursor)
     }
 
     pub fn step_until(

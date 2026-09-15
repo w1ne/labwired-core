@@ -1,0 +1,8 @@
+# LabWired — Waveshare ESP32-S3-Zero, bare MCU.
+#
+# No external devices: this system exists so a CLI gate can boot an ESP32-S3
+# image. Every other S3 board manifest in the tree carries a display or a
+# sensor, which makes it a lab for that part rather than a check on the chip.
+name: "esp32s3-zero"
+chip: "../../configs/chips/esp32s3-zero.yaml"
+external_devices: []

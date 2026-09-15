@@ -23,6 +23,10 @@ const DISPLAY_TYPES: &[&str] = &[
     "ili9341",
     "ssd1306",
     "sh1107",
+    // Emissive panel, same rule. Added with the part rather than after someone
+    // dual-declares it: this list is hand-maintained, so a display type that is
+    // not in it is a display this gate cannot see.
+    "amoled-rm67162",
 ];
 
 fn workspace_root() -> PathBuf {

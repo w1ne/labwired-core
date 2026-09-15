@@ -1,0 +1,269 @@
+# LabWired - Microchip ATSAMD21G18A chip descriptor
+#
+# The first Microchip part in the engine. Cortex-M0+, 256 KB flash, 32 KB SRAM,
+# 48-pin — the silicon behind the Arduino Zero / MKR line, the Adafruit Feather
+# M0 / QT Py / Trinket M0 family, and CircuitPython's original target.
+#
+# SOURCE OF TRUTH for every address and size below: `ATSAMD21G18A.svd`
+# (Microchip Technology Inc., **Apache-2.0**), vendored at
+# `tests/fixtures/real_world/atsamd21g18a.svd`. Peripheral bases and
+# addressBlock extents were read off that file, not off a port of someone
+# else's platform description.
+#
+# ⚠️ There is a Renode-derived `configs/chips/onboarding/atsamd21j17d-aft.yaml`
+# in the tree with a different part's geometry and a documented import bug that
+# truncated every base to its top 16 bits. It is NOT the ancestor of this file
+# and must not be used to "correct" it.
+name: "atsamd21g18a"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 240
+# 48 MHz — the DFLL48M output every SAM D21 board runs from once the Arduino
+# core's SystemInit() has closed the loop on the 32 kHz reference. The part is
+# rated to 48 MHz; nothing in tree runs it slower.
+cpu_hz: 48_000_000
+
+flash:
+  base: 0x00000000
+  # 256 KB. Spelled in KB because `parse_size` reads MB as 10^6 — see
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "256KB"
+ram:
+  base: 0x20000000
+  size: "32KB"
+
+# ── Pin map ─────────────────────────────────────────────────────────────────
+# WHY THIS IS DECLARED RATHER THAN LEFT TO THE LABEL PARSE.
+#
+# `SystemBus::parse_stm32_pin` would be WRONG for this part twice over, not
+# merely approximate:
+#   1. it rejects any bit above 15 ("STM32 ports stop at 15"), and PA17 is
+#      LED_BUILTIN on every board in this family — the parse returns None for
+#      the single most-used pin on the chip;
+#   2. it builds a port name as `gpio<letter>`, and these ports are `gpio_a` /
+#      `gpio_b`, because one LabWired port is one PORT GROUP.
+# So this part is NOT a `PARSE_FALLBACK_CHIPS` entry: recording it there would
+# record a falsehood. See crates/config/tests/chip_pins_ratchet.rs.
+#
+# WHAT THIS MAP ASSERTS, EXACTLY: which port register and which bit a pin LABEL
+# resolves to. That is mechanical on this family — Microchip labels pins
+# `P<group><bit>` straight through the datasheet, and the SVD's PORT cluster
+# has two GROUPs of 32 — so no number here is transcribed or guessed.
+#
+# WHAT IT DOES NOT ASSERT: package bond-out. The G18A is a 48-pin part and does
+# NOT bring every one of these 64 pads to a ball; this map says where PA17
+# lives if you name it, not that PA31 exists on your package. A board manifest
+# is the thing that may only name pins its package has.
+pins:
+  PA0: { gpio: gpio_a, bit: 0 }
+  PA1: { gpio: gpio_a, bit: 1 }
+  PA2: { gpio: gpio_a, bit: 2 }
+  PA3: { gpio: gpio_a, bit: 3 }
+  PA4: { gpio: gpio_a, bit: 4 }
+  PA5: { gpio: gpio_a, bit: 5 }
+  PA6: { gpio: gpio_a, bit: 6 }
+  PA7: { gpio: gpio_a, bit: 7 }
+  PA8: { gpio: gpio_a, bit: 8 }
+  PA9: { gpio: gpio_a, bit: 9 }
+  PA10: { gpio: gpio_a, bit: 10 }
+  PA11: { gpio: gpio_a, bit: 11 }
+  PA12: { gpio: gpio_a, bit: 12 }
+  PA13: { gpio: gpio_a, bit: 13 }
+  PA14: { gpio: gpio_a, bit: 14 }
+  PA15: { gpio: gpio_a, bit: 15 }
+  PA16: { gpio: gpio_a, bit: 16 }
+  PA17: { gpio: gpio_a, bit: 17 }
+  PA18: { gpio: gpio_a, bit: 18 }
+  PA19: { gpio: gpio_a, bit: 19 }
+  PA20: { gpio: gpio_a, bit: 20 }
+  PA21: { gpio: gpio_a, bit: 21 }
+  PA22: { gpio: gpio_a, bit: 22 }
+  PA23: { gpio: gpio_a, bit: 23 }
+  PA24: { gpio: gpio_a, bit: 24 }
+  PA25: { gpio: gpio_a, bit: 25 }
+  PA26: { gpio: gpio_a, bit: 26 }
+  PA27: { gpio: gpio_a, bit: 27 }
+  PA28: { gpio: gpio_a, bit: 28 }
+  PA29: { gpio: gpio_a, bit: 29 }
+  PA30: { gpio: gpio_a, bit: 30 }
+  PA31: { gpio: gpio_a, bit: 31 }
+  PB0: { gpio: gpio_b, bit: 0 }
+  PB1: { gpio: gpio_b, bit: 1 }
+  PB2: { gpio: gpio_b, bit: 2 }
+  PB3: { gpio: gpio_b, bit: 3 }
+  PB4: { gpio: gpio_b, bit: 4 }
+  PB5: { gpio: gpio_b, bit: 5 }
+  PB6: { gpio: gpio_b, bit: 6 }
+  PB7: { gpio: gpio_b, bit: 7 }
+  PB8: { gpio: gpio_b, bit: 8 }
+  PB9: { gpio: gpio_b, bit: 9 }
+  PB10: { gpio: gpio_b, bit: 10 }
+  PB11: { gpio: gpio_b, bit: 11 }
+  PB12: { gpio: gpio_b, bit: 12 }
+  PB13: { gpio: gpio_b, bit: 13 }
+  PB14: { gpio: gpio_b, bit: 14 }
+  PB15: { gpio: gpio_b, bit: 15 }
+  PB16: { gpio: gpio_b, bit: 16 }
+  PB17: { gpio: gpio_b, bit: 17 }
+  PB18: { gpio: gpio_b, bit: 18 }
+  PB19: { gpio: gpio_b, bit: 19 }
+  PB20: { gpio: gpio_b, bit: 20 }
+  PB21: { gpio: gpio_b, bit: 21 }
+  PB22: { gpio: gpio_b, bit: 22 }
+  PB23: { gpio: gpio_b, bit: 23 }
+  PB24: { gpio: gpio_b, bit: 24 }
+  PB25: { gpio: gpio_b, bit: 25 }
+  PB26: { gpio: gpio_b, bit: 26 }
+  PB27: { gpio: gpio_b, bit: 27 }
+  PB28: { gpio: gpio_b, bit: 28 }
+  PB29: { gpio: gpio_b, bit: 29 }
+  PB30: { gpio: gpio_b, bit: 30 }
+  PB31: { gpio: gpio_b, bit: 31 }
+
+peripherals:
+  # ── Clocks and reset ───────────────────────────────────────────────────────
+  # PM — the power manager: the AHB/APB clock masks and the CPU/APB dividers.
+  #
+  # ⚠️ Declared as a register bank, NOT as a clock-gate controller. Nothing on
+  # this chip is gated by PM.APBCMASK in this model: a peripheral answers
+  # whether or not its clock mask bit is set. That is PERMISSIVE — firmware
+  # that forgets to unmask a SERCOM still gets a working SERCOM here and fails
+  # on silicon. It is recorded rather than silently accepted; wiring the gate
+  # needs the `clock_gate_reg_offset` capability, which a declarative
+  # descriptor cannot implement.
+  - id: "pm"
+    type: "declarative"
+    base_address: 0x40000400
+    size: "128B"
+    irq: 0
+    config:
+      path: "../peripherals/atsamd21g18a/pm.yaml"
+  # SYSCTRL — oscillators and the DFLL. PCLKSR's ready flags are the boot
+  # gate: see the header comment in the descriptor for why its reset value is
+  # hand-set and what is deliberately left clear.
+  - id: "sysctrl"
+    type: "declarative"
+    base_address: 0x40000800
+    size: "128B"
+    irq: 1
+    config:
+      path: "../peripherals/atsamd21g18a/sysctrl.yaml"
+  # GCLK — the generic clock generators and the per-peripheral channel mux.
+  # STATUS.SYNCBUSY reads 0: synchronisation is instantaneous here, so the
+  # `while (GCLK->STATUS.bit.SYNCBUSY)` in every SAM D21 startup falls through.
+  - id: "gclk"
+    type: "declarative"
+    base_address: 0x40000C00
+    size: "16B"
+    config:
+      path: "../peripherals/atsamd21g18a/gclk.yaml"
+  # WDT — declared because the Arduino SAMD core and the UF2 bootloader both
+  # touch it on the way up. Register bank only: this watchdog never bites, so a
+  # firmware that stops petting it will NOT be reset here.
+  - id: "wdt"
+    type: "declarative"
+    base_address: 0x40001000
+    size: "16B"
+    irq: 2
+    config:
+      path: "../peripherals/atsamd21g18a/wdt.yaml"
+  # NVMCTRL — flash controller. CTRLB.RWS (wait states) is the one field the
+  # startup code writes before raising the clock to 48 MHz.
+  - id: "nvmctrl"
+    type: "declarative"
+    base_address: 0x41004000
+    size: "128B"
+    irq: 5
+    config:
+      path: "../peripherals/atsamd21g18a/nvmctrl.yaml"
+
+  # ── PORT ───────────────────────────────────────────────────────────────────
+  # One PORT block (0x41004400, addressBlock 0x200) holding two GROUPs at a
+  # 0x80 stride. Each GROUP is declared as its own window at its true base,
+  # because a LabWired GPIO port IS one group's register set — the same shape
+  # the EFR32 Series-2 ports use.
+  #
+  # `profile: sam` selects GpioRegisterLayout::SamPort (DIR/OUT with their
+  # CLR/SET/TGL aliases, IN, WRCONFIG, PMUX, PINCFG).
+  - id: "gpio_a"
+    type: "gpio"
+    base_address: 0x41004400
+    size: "128B"
+    config:
+      profile: "sam"
+      num_pins: 32
+  - id: "gpio_b"
+    type: "gpio"
+    base_address: 0x41004480
+    size: "128B"
+    config:
+      profile: "sam"
+      num_pins: 32
+
+  # ── SERCOM 0..5 ────────────────────────────────────────────────────────────
+  # Six identical SERCOM instances on APB-C at a 0x400 stride, each modelled in
+  # USART mode. A SERCOM whose firmware puts it into SPI or I²C mode
+  # (CTRLA.MODE) goes inert rather than answering out of the wrong register
+  # map — those modes are not implemented yet.
+  #
+  # `size` is the SVD addressBlock (0x40), not the 0x400 APB slot: the gap
+  # between instances stays UNMAPPED on purpose, so a driver reaching past the
+  # register block is reported instead of being quietly absorbed.
+  #
+  # Which SERCOM is the console is a BOARD fact, not a chip fact — the Arduino
+  # Zero's `Serial1` is SERCOM0 while its EDBG virtual COM port is SERCOM5.
+  # The system manifest picks; this file only declares the silicon.
+  - id: "sercom0"
+    type: "sam_sercom_usart"
+    base_address: 0x42000800
+    size: "64B"
+    irq: 9
+  - id: "sercom1"
+    type: "sam_sercom_usart"
+    base_address: 0x42000C00
+    size: "64B"
+    irq: 10
+  - id: "sercom2"
+    type: "sam_sercom_usart"
+    base_address: 0x42001000
+    size: "64B"
+    irq: 11
+  - id: "sercom3"
+    type: "sam_sercom_usart"
+    base_address: 0x42001400
+    size: "64B"
+    irq: 12
+  - id: "sercom4"
+    type: "sam_sercom_usart"
+    base_address: 0x42001800
+    size: "64B"
+    irq: 13
+  - id: "sercom5"
+    type: "sam_sercom_usart"
+    base_address: 0x42001C00
+    size: "64B"
+    irq: 14
+
+  # ── Cortex-M0+ core peripherals ────────────────────────────────────────────
+  # No `debug_schema` on either: they are Arm core blocks in the PPB, which the
+  # Microchip SVD does not describe, so there is no base to attach one to.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
+# ── Declared NOT modelled ────────────────────────────────────────────────────
+# Present on the silicon, absent here, and absent honestly — an access to one
+# of these windows is unmapped and gets reported, rather than being served a
+# plausible zero:
+#   EIC 0x40001800 (external interrupts / attachInterrupt), RTC 0x40001400,
+#   DSU 0x41002000 (device identity, CoreSight), DMAC 0x41004800,
+#   USB 0x41005000 (the native-USB `Serial` on a Zero/Feather M0 — a board
+#   whose console is USB CDC cannot print here yet), EVSYS 0x42000400,
+#   TCC0-2 0x42002000..0x42002800, TC3-5 0x42002C00..0x42003400,
+#   ADC 0x42004000, AC 0x42004400, DAC 0x42004800, I2S 0x42005000,
+#   PAC0/1/2, HMATRIX, MTB, and the PORT_IOBUS alias at 0x60000000.

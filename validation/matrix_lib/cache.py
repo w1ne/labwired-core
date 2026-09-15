@@ -41,6 +41,27 @@ def compile_fingerprint(
     return h.hexdigest()
 
 
+def cacheable_cell(external_compile: dict[str, Any] | None) -> bool:
+    """False when the cell's compiler lies outside the fingerprint's reach.
+
+    ``compile_fingerprint`` hashes the sketch sources and the PlatformIO
+    platform/board/framework strings. For a PlatformIO cell those strings pin
+    the toolchain, so the digest describes every input to the ELF.
+
+    A cell that declares ``external_compile:`` is compiled by a driver in
+    ANOTHER repository, and not one byte of that driver reaches the digest — so
+    editing it changes the ELF and leaves the digest identical, and the cell
+    would hit a cache built from the previous compiler. Measured 2026-08-24 on
+    the brd2709a lane: five consecutive green runs, 8/8 "cache hit", zero
+    compiles, two of them triggered BY a change to that compiler.
+
+    Fingerprinting the driver would mean reaching into a repo this one does not
+    own and guessing which of its files matter. Refusing to cache is the honest
+    answer: a cache that cannot see its own compiler must not claim a hit.
+    """
+    return external_compile is None
+
+
 def fingerprint_path(cell_out: Path) -> Path:
     return cell_out / ".compile_fingerprint"
 

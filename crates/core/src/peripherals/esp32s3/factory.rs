@@ -58,7 +58,19 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             Box::new(timer_group::Esp32s3TimerGroup::new(src(50), cpu_clock_hz))
         }
         "esp32s3_gdma" => Box::new(gdma::Esp32s3Gdma::new(src(66))),
-        "esp32s3_spi" => Box::new(gpspi::Esp32s3Spi::new(src(21))),
+        "esp32s3_spi" => {
+            let irq = p_cfg
+                .irq
+                .or_else(|| {
+                    p_cfg
+                        .config
+                        .get("irq")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u32)
+                })
+                .unwrap_or(21);
+            Box::new(gpspi::Esp32s3Spi::new(src(irq)))
+        }
         "esp32s3_i2s" => Box::new(i2s::Esp32s3I2s::new(src(25))),
         "esp32s3_mcpwm" => Box::new(mcpwm::Esp32s3Mcpwm::new(src(38))),
         "esp32s3_rmt" => Box::new(rmt::Esp32s3Rmt::new(src(40))),
@@ -86,6 +98,8 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
         "esp32s3_io_mux" => Box::new(io_mux::Esp32s3IoMux::new()),
         "esp32s3_usb_serial_jtag" => Box::new(usb_serial_jtag::UsbSerialJtag::new_esp32s3()),
+        // Same WDEV MAC IP as the C3 (`0x6003_3000`, ETS source 0).
+        "esp32s3_wifi_mac" => Box::new(wifi_mac::Esp32s3WifiMac::new()),
         "esp32s3_systimer" => {
             let cpu_clock_hz = p_cfg
                 .config
@@ -145,6 +159,7 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s3_gpio",
     "esp32s3_io_mux",
     "esp32s3_usb_serial_jtag",
+    "esp32s3_wifi_mac",
     "esp32s3_systimer",
     "esp32s3_i2c",
 ];
@@ -161,6 +176,7 @@ mod tests {
             base_address: 0x6000_0000,
             size: None,
             irq: None,
+            irq_controller: None,
             clock: None,
             config: HashMap::new(),
         }

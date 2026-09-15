@@ -316,25 +316,14 @@ impl Peripheral for Esp32s3Aes {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
         // For TRIGGER/INT_CLEAR (action-on-write) we must not lose the intent
-        // of a byte-granular write. The bus also calls `write_word_32` for the
-        // coherent 32-bit view, but firmware uses `REG_WRITE` (a full word
-        // store), so the common path is a 4-byte sequence ending here. To keep
-        // byte writes coherent we read-modify-write the word, then re-dispatch.
+        // of a byte-granular write. Firmware uses `REG_WRITE` (a full word
+        // store), which the bus delivers as the default `write_u32` — a
+        // 4-byte sequence ending here. To keep byte writes coherent we
+        // read-modify-write the word, then re-dispatch.
         let mut word = self.read_word(word_off);
         word &= !(0xFFu32 << byte_off);
         word |= (value as u32) << byte_off;
         self.write_word(word_off, word);
-        Ok(())
-    }
-
-    fn write_word_32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        // The bus delivers a coherent 32-bit view after the four byte writes.
-        // Byte writes above already dispatched (and, for TRIGGER, may have run
-        // the transform on the byte carrying bit 0). Re-dispatching the full
-        // word here is idempotent for data registers and harmless for TRIGGER
-        // (a second `value&1` start recomputes the same block); the canonical
-        // single-word `REG_WRITE` path lands here cleanly.
-        self.write_word(offset & !3, value);
         Ok(())
     }
 
@@ -589,14 +578,11 @@ mod tests {
     /// ETS_AES_INTR_SOURCE on ESP32-S3.
     const AES_SOURCE: u32 = 77;
 
-    /// Helper: write a 32-bit word through the byte-granular Peripheral API
-    /// the way firmware's `REG_WRITE` would (4 byte stores + the coherent
-    /// word callback).
+    /// Helper: write a 32-bit word exactly the way the bus does for a
+    /// firmware `REG_WRITE` — `Peripheral::write_u32`, whose default
+    /// expands to the four byte stores this peripheral coalesces.
     fn wr(a: &mut Esp32s3Aes, off: u64, val: u32) {
-        for i in 0..4 {
-            a.write(off + i, ((val >> (i * 8)) & 0xFF) as u8).unwrap();
-        }
-        a.write_word_32(off, val).unwrap();
+        a.write_u32(off, val).unwrap();
     }
 
     fn rd(a: &Esp32s3Aes, off: u64) -> u32 {

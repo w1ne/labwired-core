@@ -8,24 +8,25 @@
 # only the labwired CLI, so `docker run ... image test --script ...` uses the
 # same command line as a native release archive.
 
-# Stage 1: Builder
-FROM rust:1.95-slim-bookworm AS builder
+# The image ships the RELEASED binary rather than a rebuild of it. It used to
+# compile the CLI from source in a builder stage, which meant the image and the
+# release archive of the same tag were two different builds of that commit —
+# and, because a Rust compile under emulation is unaffordable, it also meant the
+# image could only ever be published for one architecture. `docker pull` then
+# failed outright on Apple Silicon and on arm64 Linux:
+#
+#   no matching manifest for linux/arm64/v8 in the manifest list entries
+#
+# Copying the archive's own binary makes both architectures cheap (the only
+# emulated work is one `apt-get install ca-certificates`) and makes the image
+# and the archive the same bytes.
 
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-COPY . .
-
-RUN cargo build --release -p labwired-cli --locked
-
-# Stage 2: Runtime
 FROM debian:bookworm-slim
 
 ARG VERSION
 ARG REVISION
+# Set by buildx per platform: amd64 | arm64.
+ARG TARGETARCH
 
 LABEL org.opencontainers.image.source="https://github.com/w1ne/labwired-core" \
       org.opencontainers.image.version="${VERSION}" \
@@ -35,7 +36,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/labwired /usr/local/bin/labwired
+COPY dist/${TARGETARCH}/labwired /usr/local/bin/labwired
 
 WORKDIR /workspace
 RUN labwired --version

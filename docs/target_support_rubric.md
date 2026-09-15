@@ -1,55 +1,65 @@
-# Target Support Rubric
+# Target support levels
 
-Date: February 22, 2026  
-Purpose: Define when a target can be described as "supported" in docs and release notes.
+When can you say a board or chip is **supported** in docs or release notes?
 
-## Support Levels
+---
 
-| Level | Label | Minimum Requirements |
-|---|---|---|
-| L0 | `declared` | Chip and system config files exist and validate. No smoke evidence required. |
-| L1 | `smoke-supported` | Deterministic smoke script exists and passes in CI with reproducible artifacts. PC/SP reset path validated. |
-| L2 | `ci-qualified` | L1 plus repeated CI pass history and known-limitations file. Unsupported-instruction audit generated and reviewed. |
-| L3 | `production-ready` | L2 plus Tier-1 peripheral baseline validated (`clock/rcc`, `gpio`, `uart`, `timer`, `dma`, `irq`) and stable benchmark variance. |
+## Levels
 
-## Definition of Supported
+| Level | Label | Minimum bar |
+|-------|--------|-------------|
+| **L0** | declared | Chip + system configs exist and validate. No smoke required. |
+| **L1** | smoke-supported | Deterministic smoke script passes; reset path works; artifacts reproducible. |
+| **L2** | ci-qualified | L1 + repeated CI passes + known-limitations file + instruction audit reviewed. |
+| **L3** | production-ready | L2 + tier-1 peripherals proven for the documented scenarios. |
 
-A target is "supported" for public communication only at `L1` or above.
+---
 
-## Mandatory Evidence for L1+
+## Public language
 
-1. Runnable example script under `examples/`.
-2. Deterministic CI artifact bundle with:
-   - execution result JSON,
-   - UART output log (if UART is used),
-   - summary fingerprint/hash.
-3. Captured stop reason and assertion outcomes.
-4. Explicit known limitations section in target docs.
+Call a target **supported** only at **L1 or above**.
 
-## Tier-1 Peripheral Checklist
+L0 is fine for “in progress” / experimental — say so explicitly.
 
-Mark each as `pass`, `partial`, or `blocked`:
+---
 
-1. `clock/rcc`
-2. `gpio`
-3. `uart`
-4. `timer`
-5. `dma`
-6. `interrupt controller / irq delivery`
+## Evidence for L1+
 
-`L3` requires all six at `pass` for the documented scenario set.
+1. Runnable example under `examples/` (or equivalent product lab)  
+2. Deterministic CI (or local) artifact bundle: result JSON, UART log if used, fingerprint  
+3. Clear stop reason and assertion outcomes  
+4. **Known limitations** on the board page  
 
-## Promotion Rules
+---
 
-1. `L0 -> L1`: add deterministic smoke and CI evidence.
-2. `L1 -> L2`: add audit artifacts and trend stability over repeated runs.
-3. `L2 -> L3`: complete Tier-1 peripheral checklist with no blocking gaps.
+## Tier-1 peripherals (for L3)
 
-## Demotion Rules
+Mark each `pass` / `partial` / `blocked` for the scenarios you document:
 
-Demote one level when any of the following occurs:
+1. Clock / RCC  
+2. GPIO  
+3. UART  
+4. Timer  
+5. DMA  
+6. Interrupt delivery  
 
-1. deterministic smoke no longer passes in CI.
-2. reset path or core assertions regress.
-3. known limitations are missing or stale for current behavior.
+L3 needs all six at **pass** for those scenarios.
 
+---
+
+## Promote / demote
+
+| Change | When |
+|--------|------|
+| L0 → L1 | Add smoke + evidence |
+| L1 → L2 | Stable CI + audits |
+| L2 → L3 | Tier-1 complete |
+| Demote | Smoke broken, missing limitations, or reset path regresses |
+
+---
+
+## Related
+
+- [Board playbook](board_onboarding_playbook.md)
+- [Fidelity](fidelity.md)
+- [Chip conformance scoreboard](coverage/chip-conformance.md)

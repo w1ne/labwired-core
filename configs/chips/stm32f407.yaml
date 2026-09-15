@@ -17,9 +17,26 @@ name: "stm32f407vgt6"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 150
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F407VGT6 maximum core clock, 168 MHz.
+cpu_hz: 168_000_000
+# GPIO supply and digital input thresholds (ratios of io_voltage_v), used when
+# co-simulation turns a circuit node voltage into the level the firmware reads.
+# DS8626 Rev 9 (STM32F405xx/STM32F407xx), section 5.3.16, Table 48 "I/O static
+# characteristics", FT, TTa and NRST I/O, 1.75 V <= VDD <= 3.6 V (tested in
+# production): VIL max 0.3·VDD, VIH min 0.7·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
-  size: "1MB"
+  # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
+  # 1_000_000, 48_576 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "1024KB"
 ram:
   base: 0x20000000
   size: "128KB"
@@ -225,6 +242,15 @@ peripherals:
     clock: { reg: "apb2enr", bit: 8 }
     config:
       debug_schema: "../peripherals/stm32f407/adc1.yaml"
+  # bxCAN1 — basic-extended CAN (RM0090 §32). Same IP as F1/L4; matrix L8
+  # loopback uses BTR.LBKM + filter accept-all. Clock: RCC_APB1ENR.CAN1EN bit 25.
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+    clock: { reg: "apb1enr", bit: 25 }
+    config:
+      debug_schema: "../peripherals/stm32f407/can1.yaml"
   - id: "exti"
     type: "exti"
     base_address: 0x40013C00
@@ -312,3 +338,24 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f407/pwr.yaml"
+
+# Regular ADC inputs by pad, from the STM32F405xx/407xx datasheet (DS8626), LQFP100 pinout: ADC123_IN0..IN3, ADC12_IN4..IN15.
+# ADC123/ADC12 inputs are shared with ADC2/ADC3, which this descriptor does not model.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }

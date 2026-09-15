@@ -1569,3 +1569,160 @@ assertions: []
         "expected the rom-boot ceiling to still bound the run, got: {message}"
     );
 }
+
+/// A world could assert only on memory. Both gates that enforced that said so
+/// loudly, so nothing was silently wrong — but `uart_regex` is the repo's
+/// primary assertion contract and a multi-MCU world could not use it at all,
+/// even though every node's TX is already captured into a sink.
+///
+/// Covers both directions in one run, because a test that only shows a UART
+/// assertion passing cannot tell "evaluated correctly" from "returns true".
+#[test]
+fn environment_runner_evaluates_uart_assertions_against_every_node() {
+    let dir = unique_dir("uart-assertions");
+    write_two_node_environment(&dir);
+
+    // The fixture firmware prints "OK" on both nodes.
+    let matching = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "OK"
+  - uart_regex: "O+K"
+"#,
+        &[],
+    );
+    assert!(
+        output_is_pass(&matching),
+        "a UART assertion the world satisfies must pass: stdout={} stderr={}",
+        String::from_utf8_lossy(&matching.stdout),
+        String::from_utf8_lossy(&matching.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["assertions"][0]["passed"], true);
+    assert_eq!(result["assertions"][1]["passed"], true);
+
+    // The negative control. Exit 2 here would mean the script was refused
+    // rather than evaluated, which is the state this test exists to move off.
+    let absent = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NOTHING PRINTS THIS"
+"#,
+        &[],
+    );
+    assert_eq!(
+        absent.status.code(),
+        Some(1),
+        "an unsatisfied UART assertion must FAIL the world, not error or pass: stdout={} stderr={}",
+        String::from_utf8_lossy(&absent.stdout),
+        String::from_utf8_lossy(&absent.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["assertions"][0]["passed"], false);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn output_is_pass(output: &std::process::Output) -> bool {
+    output.status.success()
+}
+
+/// `labwired test` on an environment steps its nodes through the world, which
+/// runs no co-simulation session. A node system that declares `cosim_models`
+/// is a config error rather than a run whose models silently never step.
+#[test]
+fn environment_runner_refuses_a_node_that_declares_cosim_models() {
+    let dir = unique_dir("cosim-node");
+    let root = workspace_root();
+    let firmware = std::fs::canonicalize(root.join("tests/fixtures/uart-ok-thumbv7m.elf"))
+        .expect("fixture firmware");
+    let chip = std::fs::canonicalize(root.join("configs/chips/ci-fixture-cortex-m3-uart1.yaml"))
+        .expect("fixture chip descriptor");
+    std::fs::write(
+        dir.join("plant-node.yaml"),
+        format!(
+            r#"name: "plant-node"
+chip: "{}"
+external_devices: []
+cosim_models:
+  - id: plant
+    adapter: mock
+    step_ns: 100000
+    inputs: {{}}
+    outputs: {{ v: plant.v }}
+    config:
+      outputs: {{ v: 1.0 }}
+"#,
+            chip.display()
+        ),
+    )
+    .expect("write node system manifest");
+    std::fs::write(
+        dir.join("world.yaml"),
+        format!(
+            r#"schema_version: "1.0"
+name: cosim-world
+nodes:
+  - id: plant
+    system: "plant-node.yaml"
+    firmware: "{}"
+"#,
+            firmware.display()
+        ),
+    )
+    .expect("write environment manifest");
+
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "world.yaml"
+limits:
+  max_steps: 1
+assertions:
+  - memory_value:
+      node: plant
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["stop_reason"], "config_error");
+    let message = result["message"].as_str().expect("config error message");
+    assert!(
+        message.contains(
+            "co-simulation models are not supported in multi-node worlds yet; node 'plant' declares 1"
+        ),
+        "{message}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

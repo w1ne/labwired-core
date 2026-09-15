@@ -91,13 +91,7 @@ impl Dwt {
         }
     }
 
-    /// True when the event scheduler owns this counter's time base (feature on
-    /// AND bus clock attached). Everything time-related branches on this ONE
-    /// predicate so the two drive modes can never mix.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock, pinning the model to the
     /// legacy walk path (`uses_scheduler() == false`). Used by the

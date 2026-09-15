@@ -32,6 +32,11 @@ name: "stm32l073rz"
 arch: "arm"
 core: "cortex-m0+"
 registers_count: 200
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32L073RZ maximum core clock, 32 MHz.
+cpu_hz: 32_000_000
+
 flash:
   base: 0x08000000
   size: "192KB"

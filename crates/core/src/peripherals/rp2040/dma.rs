@@ -223,9 +223,7 @@ impl Rp2040Dma {
         }
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// True while there is transfer work or a held IRQ level to re-pend.
     fn needs_event_chain(&self) -> bool {

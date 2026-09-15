@@ -610,6 +610,51 @@ impl SystemBus {
     /// player, advance its tick counter and deliver every due frame
     /// (`due_tick < now`) into the connected peripheral, filter-gated the
     /// same way a real bus would drop unmatched frames.
+    /// Put `frame` on the receive path of the CAN controller named
+    /// `controller`, as if it had arrived from the bus.
+    ///
+    /// The frame goes through the controller's own acceptance: the bus clock
+    /// must be enabled, the controller out of initialization, and (bxCAN) an
+    /// active filter must match, with room in RX FIFO0. An accepted frame is
+    /// recorded as `rx` in the bus trace. On a scheduler-driven controller the
+    /// wake-ups the arrival arms (the RX interrupt) are collected exactly as
+    /// after an MMIO write, so the interrupt reaches the core on the next
+    /// advance.
+    pub fn inject_can_frame(
+        &mut self,
+        controller: &str,
+        frame: crate::network::CanFrame,
+    ) -> Result<(), crate::network::CanInjectError> {
+        use crate::network::{CanInjectError, CanRxRejection};
+        let idx = self
+            .find_peripheral_index_by_name(controller)
+            .ok_or(CanInjectError::UnknownPeripheral)?;
+        let clocked = self.is_peripheral_clocked(idx);
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or(CanInjectError::NotACanController)?;
+        let result = if let Some(bx) = any.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+            if !clocked {
+                Err(CanRxRejection::Unclocked)
+            } else if frame.fd {
+                Err(CanRxRejection::FdOnClassicController)
+            } else {
+                bx.try_deliver_rx(frame)
+            }
+        } else if let Some(fd) = any.downcast_mut::<crate::peripherals::fdcan::Fdcan>() {
+            if !clocked {
+                Err(CanRxRejection::Unclocked)
+            } else {
+                fd.try_receive_frame(frame)
+            }
+        } else {
+            return Err(CanInjectError::NotACanController);
+        };
+        self.collect_scheduled_events(idx);
+        result.map_err(CanInjectError::Rejected)
+    }
+
     pub(crate) fn service_can_log_players(&mut self) {
         if self.can_log_players.is_empty() {
             return;

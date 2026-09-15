@@ -231,6 +231,14 @@ pub fn new_mmu_table() -> SharedMmuTable {
     })
 }
 
+/// Which external chip a translated cache address lands in. The S3 maps flash
+/// and PSRAM through the same MMU table, so translation has to say which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum XipTarget {
+    Flash,
+    Psram,
+}
+
 /// Per-chip flash-cache MMU entry format. The MMU table register block is the
 /// same (`0x600C_5000`) and the entries are u32, but the valid/invalid flag and
 /// physical-page-number field differ by SoC (soc/<chip>/ext_mem_defs.h).
@@ -242,6 +250,10 @@ pub struct MmuFmt {
     pub valid_val_mask: u32,
     /// Linear virtual-address span mask (entry_num*64KiB - 1).
     pub vaddr_mask: u32,
+    /// Bit that routes an entry to external RAM instead of flash
+    /// (`SOC_MMU_ACCESS_SPIRAM`, S3: BIT(15)). Zero on chips whose cache
+    /// windows only ever map flash.
+    pub spiram_bit: u32,
 }
 
 /// ESP32-S3 MMU format: 512 × 64 KiB entries, invalid = BIT(14).
@@ -249,6 +261,9 @@ pub const MMU_FMT_S3: MmuFmt = MmuFmt {
     invalid_bit: 1 << 14,
     valid_val_mask: 0x3FFF,
     vaddr_mask: 0x1FF_FFFF, // 32 MiB
+    // The S3 shares one MMU table between flash and PSRAM; this bit picks the
+    // target (soc/esp32s3/ext_mem_defs.h: SOC_MMU_ACCESS_SPIRAM).
+    spiram_bit: 1 << 15,
 };
 
 /// ESP32-C3 MMU format: 128 × 64 KiB entries, invalid = BIT(8), 8 MiB span.
@@ -256,6 +271,7 @@ pub const MMU_FMT_C3: MmuFmt = MmuFmt {
     invalid_bit: 1 << 8,
     valid_val_mask: 0xFF,
     vaddr_mask: 0x7F_FFFF, // 8 MiB
+    spiram_bit: 0,         // no PSRAM path on the C3
 };
 
 /// ESP32 classic (LX6) MMU format (`soc/esp32/ext_mem_defs.h`):
@@ -266,6 +282,7 @@ pub const MMU_FMT_ESP32: MmuFmt = MmuFmt {
     invalid_bit: 1 << 8,
     valid_val_mask: 0xFF,
     vaddr_mask: 0x3F_FFFF,
+    spiram_bit: 0,
 };
 
 /// ESP32 classic PRO/APP flash MMU table length (DPORT 0x3FF10000 / 0x3FF12000).
@@ -297,6 +314,10 @@ pub struct FlashXipPeripheral {
     xlat_gen: AtomicU64,
     xlat_entry_id: AtomicU32,
     xlat_phys_page: AtomicU32,
+    /// Whether the cached translation resolved to PSRAM (1) or flash (0).
+    /// Part of the cached tuple: without it a PSRAM page and a flash page with
+    /// the same physical index would alias on the hot path.
+    xlat_is_psram: AtomicU32,
     /// Mirrored physical pages — steady-state instruction fetch never takes
     /// `backing`'s mutex (profile: ~half of post-word-read_u32 cost was
     /// `pthread_mutex_lock` on the flash Vec). Filled under the backing lock
@@ -304,6 +325,10 @@ pub struct FlashXipPeripheral {
     /// update status regs), so the mirror stays coherent for current models.
     /// See [`MIRROR_WAYS`] for why this holds several pages rather than one.
     page_mirror: PageMirrorSet,
+    /// External RAM array, when the module has PSRAM. An MMU entry tagged
+    /// `spiram_bit` resolves into this instead of the flash backing — and,
+    /// unlike flash, it is writable through the cache window.
+    psram: Option<Arc<Mutex<Vec<u8>>>>,
 }
 
 // Manual Clone: atomics copy by load; cache is a hint so a clone starting cold
@@ -319,7 +344,9 @@ impl Clone for FlashXipPeripheral {
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
+            xlat_is_psram: AtomicU32::new(0),
             page_mirror: PageMirrorSet::empty(),
+            psram: self.psram.clone(),
         }
     }
 }
@@ -343,8 +370,16 @@ impl FlashXipPeripheral {
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
+            xlat_is_psram: AtomicU32::new(0),
             page_mirror: PageMirrorSet::empty(),
+            psram: None,
         }
+    }
+
+    /// Attach the external RAM array this window can map. Both cache windows
+    /// share one PSRAM, exactly as they share one flash backing.
+    pub fn attach_psram(&mut self, psram: Arc<Mutex<Vec<u8>>>) {
+        self.psram = Some(psram);
     }
 
     pub fn new_shared(backing: Arc<Mutex<Vec<u8>>>, base: u32) -> Self {
@@ -394,7 +429,7 @@ impl FlashXipPeripheral {
         self.page_table.iter().filter(|p| p.is_some()).count()
     }
 
-    fn translate(&self, offset: u64) -> Option<u64> {
+    fn translate(&self, offset: u64) -> Option<(XipTarget, u64)> {
         // Proper-model path: translate through the real hardware MMU table.
         if let Some(mmu) = &self.mmu_table {
             let vaddr = self.base.wrapping_add(offset as u32);
@@ -418,10 +453,15 @@ impl FlashXipPeripheral {
                 && self.xlat_entry_id.load(Ordering::Relaxed) == entry_id
             {
                 let phys_page = self.xlat_phys_page.load(Ordering::Relaxed) as u64;
+                let target = if self.xlat_is_psram.load(Ordering::Relaxed) == 1 {
+                    XipTarget::Psram
+                } else {
+                    XipTarget::Flash
+                };
                 // Re-check generation so a concurrent MMU write cannot leave us
                 // with a stale phys_page under a recycled entry_id.
                 if mmu.generation.load(Ordering::Acquire) == gen {
-                    return Some(phys_page * PAGE_SIZE as u64 + in_page);
+                    return Some((target, phys_page * PAGE_SIZE as u64 + in_page));
                 }
             }
             let table = mmu.entries.lock().unwrap();
@@ -430,11 +470,21 @@ impl FlashXipPeripheral {
                 return None; // unmapped MMU entry
             }
             let phys_page = entry & self.fmt.valid_val_mask;
+            // Same table, two chips: the SPIRAM bit picks which one.
+            let target = if self.fmt.spiram_bit != 0 && entry & self.fmt.spiram_bit != 0 {
+                XipTarget::Psram
+            } else {
+                XipTarget::Flash
+            };
             // Publish cache for subsequent fetches in this page.
             self.xlat_phys_page.store(phys_page, Ordering::Relaxed);
+            self.xlat_is_psram.store(
+                if target == XipTarget::Psram { 1 } else { 0 },
+                Ordering::Relaxed,
+            );
             self.xlat_entry_id.store(entry_id, Ordering::Relaxed);
             self.xlat_gen.store(gen, Ordering::Release);
-            return Some(phys_page as u64 * PAGE_SIZE as u64 + in_page);
+            return Some((target, phys_page as u64 * PAGE_SIZE as u64 + in_page));
         }
         // Fast-boot static mapping.
         let virt_page = (offset / PAGE_SIZE as u64) as usize;
@@ -443,7 +493,11 @@ impl FlashXipPeripheral {
             return None;
         }
         let phys_page = self.page_table[virt_page]?;
-        Some(phys_page as u64 * PAGE_SIZE as u64 + in_page)
+        // Fast-boot's static table only ever maps flash.
+        Some((
+            XipTarget::Flash,
+            phys_page as u64 * PAGE_SIZE as u64 + in_page,
+        ))
     }
 
     /// Ensure some way holds `phys_page`, filling from `backing` on miss, and
@@ -475,10 +529,17 @@ impl FlashXipPeripheral {
         if out.is_empty() {
             return;
         }
-        let Some(phys0) = self.translate(offset) else {
+        let Some((target, phys0)) = self.translate(offset) else {
             out.fill(0);
             return;
         };
+        // PSRAM is writable, so it must NOT go through the page mirror: the
+        // mirror caches immutable flash bytes and would hand back a stale copy
+        // of memory the guest has since written.
+        if target == XipTarget::Psram {
+            self.read_psram(phys0, out);
+            return;
+        }
         let in_page = (offset % PAGE_SIZE as u64) as usize;
         if in_page + out.len() <= PAGE_BYTES {
             let phys_page = (phys0 / PAGE_SIZE as u64) as u32;
@@ -489,7 +550,12 @@ impl FlashXipPeripheral {
         // Rare: multi-page span — fall back to per-byte path via mirror.
         for (i, b) in out.iter_mut().enumerate() {
             match self.translate(offset + i as u64) {
-                Some(phys) => {
+                Some((XipTarget::Psram, phys)) => {
+                    let mut one = [0u8; 1];
+                    self.read_psram(phys, &mut one);
+                    *b = one[0];
+                }
+                Some((XipTarget::Flash, phys)) => {
                     let phys_page = (phys / PAGE_SIZE as u64) as u32;
                     let in_p = (phys % PAGE_SIZE as u64) as usize;
                     let way = self.ensure_page_mirror(phys_page);
@@ -498,6 +564,67 @@ impl FlashXipPeripheral {
                     *b = one[0];
                 }
                 None => *b = 0,
+            }
+        }
+    }
+
+    /// Read straight out of the external RAM array. Out-of-range reads return
+    /// zero rather than flash bytes: an unpopulated PSRAM page is not a flash
+    /// page, and silently substituting one for the other is how a memory bug
+    /// gets mistaken for a working boot.
+    fn read_psram(&self, phys: u64, out: &mut [u8]) {
+        let Some(psram) = &self.psram else {
+            out.fill(0);
+            return;
+        };
+        let array = psram.lock().unwrap();
+        let start = phys as usize;
+        for (i, b) in out.iter_mut().enumerate() {
+            *b = array.get(start + i).copied().unwrap_or(0);
+        }
+    }
+
+    /// Write consecutive bytes at `offset`, taking one translation and one
+    /// lock for the whole span when it stays inside a page (the common case —
+    /// a u16/u32 store never straddles a 64 KiB boundary unless it is
+    /// misaligned across one, which the per-byte fallback still handles).
+    fn write_span(&mut self, offset: u64, bytes: &[u8]) -> SimResult<()> {
+        let in_page = (offset % PAGE_SIZE as u64) as usize;
+        if in_page + bytes.len() > PAGE_BYTES {
+            for (i, b) in bytes.iter().enumerate() {
+                self.write(offset + i as u64, *b)?;
+            }
+            return Ok(());
+        }
+
+        match self.translate(offset) {
+            Some((XipTarget::Psram, phys)) => {
+                let Some(psram) = &self.psram else {
+                    return Err(SimulationError::MemoryViolation(self.base as u64 + offset));
+                };
+                let mut array = psram.lock().unwrap();
+                let i = phys as usize;
+                if i + bytes.len() <= array.len() {
+                    array[i..i + bytes.len()].copy_from_slice(bytes);
+                    Ok(())
+                } else {
+                    Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+                }
+            }
+            other => {
+                let phys = other.map(|(_, p)| p).unwrap_or(offset);
+                let mut b = self.backing.lock().unwrap();
+                let i = phys as usize;
+                if i + bytes.len() <= b.len() {
+                    b[i..i + bytes.len()].copy_from_slice(bytes);
+                    drop(b);
+                    // Only flash pages are mirrored; a PSRAM write above never
+                    // reaches here, so the mirror is not invalidated for it.
+                    self.invalidate_page_mirror();
+                    Ok(())
+                } else {
+                    Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+                }
             }
         }
     }
@@ -561,7 +688,22 @@ impl Peripheral for FlashXipPeripheral {
         // Honour writes into the shared flash backing at the translated
         // physical address (identity fallback when the page is still
         // unmapped so seeds can land before MMU init).
-        let phys = self.translate(offset).unwrap_or(offset);
+        // A PSRAM page is genuinely writable memory on silicon — this is the
+        // path every `heap_caps_malloc(MALLOC_CAP_SPIRAM)` store takes.
+        if let Some((XipTarget::Psram, phys)) = self.translate(offset) {
+            let Some(psram) = &self.psram else {
+                return Err(SimulationError::MemoryViolation(self.base as u64 + offset));
+            };
+            let mut array = psram.lock().unwrap();
+            let i = phys as usize;
+            return if i < array.len() {
+                array[i] = value;
+                Ok(())
+            } else {
+                Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+            };
+        }
+        let phys = self.translate(offset).map(|(_, p)| p).unwrap_or(offset);
         let mut b = self.backing.lock().unwrap();
         let i = phys as usize;
         if i < b.len() {
@@ -571,6 +713,19 @@ impl Peripheral for FlashXipPeripheral {
         } else {
             Err(SimulationError::MemoryViolation(self.base as u64 + offset))
         }
+    }
+
+    /// Bulk writes. Doom's renderer and zone heap live in PSRAM, so a
+    /// framebuffer blit is millions of stores through this path — and the
+    /// default `Peripheral::write_u32` splits every one into four calls, each
+    /// paying a translate plus a mutex acquire. Translating once and locking
+    /// once per access is a 4x cut on the hottest path a PSRAM firmware has.
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        self.write_span(offset, &value.to_le_bytes())
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write_span(offset, &value.to_le_bytes())
     }
 
     fn legacy_tick_active(&self) -> bool {
@@ -775,6 +930,82 @@ mod tests {
         assert_eq!(d.read(0x80_0001).unwrap(), 0xAD);
         // Word fetch (instruction path) must match byte path.
         assert_eq!(d.read_u32(0x80_0000).unwrap() & 0xFFFF, 0xADDE);
+    }
+
+    /// H1 diagnosis for the ESP32-S3 Doom lab: does the IWAD mmap window
+    /// itself return flash bytes?
+    ///
+    /// Sourced from the shipped flash image
+    /// `packages/playground/public/wasm/demo-esp32s3-doom-lab-flash.bin`
+    /// (8,455,860 B, FNV-1a-64 0xeb9f_1b30_4ac0_8435): its partition table at
+    /// 0x8000 places a `wad` data partition (type 1, subtype 0x40) at flash
+    /// 0x41_0000, and the IWAD header there reads numlumps=1264,
+    /// infotableofs=0x3f_b7b4, i.e. 4,196,020 bytes. ESP-IDF maps that as
+    /// `div_ceil(4_196_020, 64 KiB)` = 65 D-cache pages at vaddr 0x3C88_0000,
+    /// which on the S3 format is MMU entries 0x88..=0xC8.
+    ///
+    /// Markers are planted at the first and the LAST word of the WAD, so the
+    /// last page has to translate too — a window that is short by one page
+    /// fails here rather than silently returning 0.
+    #[test]
+    fn doom_wad_mmap_window_returns_planted_bytes() {
+        const FLASH_SIZE: usize = 16 * 1024 * 1024;
+        const WAD_FLASH_OFF: usize = 0x41_0000;
+        const WAD_BYTES: usize = 4_196_020;
+        const WINDOW_OFF: u64 = 0x0088_0000; // vaddr 0x3C88_0000 - base 0x3C00_0000
+        const ENTRY0: usize = (WINDOW_OFF >> 16) as usize; // 0x88 == 136
+        const PHYS0: u32 = (WAD_FLASH_OFF >> 16) as u32; // 0x41
+
+        let wad_pages = WAD_BYTES.div_ceil(PAGE_SIZE as usize);
+        assert_eq!(
+            wad_pages, 65,
+            "4,196,020 B of IWAD is 65 64-KiB pages, not 64 and not 66"
+        );
+
+        let mut flash = vec![0xFFu8; FLASH_SIZE];
+        flash[WAD_FLASH_OFF..WAD_FLASH_OFF + 4].copy_from_slice(b"IWAD");
+        let last = WAD_FLASH_OFF + WAD_BYTES - 4;
+        flash[last..last + 4].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+
+        let backing = Arc::new(Mutex::new(flash));
+        let mmu = new_mmu_table();
+        {
+            let mut entries = mmu.entries.lock().unwrap();
+            for i in 0..wad_pages {
+                let entry_id = ENTRY0 + i;
+                assert!(entry_id < SOC_MMU_ENTRY_NUM);
+                // VALID on the S3 format is bit 14 CLEAR.
+                entries[entry_id] = (PHYS0 + i as u32) & MMU_FMT_S3.valid_val_mask;
+            }
+        }
+        mmu.generation.fetch_add(1, Ordering::Release);
+
+        let d = FlashXipPeripheral::new_mmu(backing, 0x3C00_0000, mmu);
+
+        // WAD header: byte path and word (instruction/XIP) path must agree.
+        assert_eq!(d.read(WINDOW_OFF).unwrap(), b'I');
+        assert_eq!(d.read(WINDOW_OFF + 1).unwrap(), b'W');
+        assert_eq!(d.read(WINDOW_OFF + 2).unwrap(), b'A');
+        assert_eq!(d.read(WINDOW_OFF + 3).unwrap(), b'D');
+        assert_eq!(
+            d.read_u32(WINDOW_OFF).unwrap(),
+            u32::from_le_bytes(*b"IWAD")
+        );
+
+        // Last word of the WAD — page 64 of 65 (entry 0xC8).
+        let last_off = WINDOW_OFF + WAD_BYTES as u64 - 4;
+        assert_eq!(last_off >> 16, (ENTRY0 + wad_pages - 1) as u64);
+        assert_eq!(d.read(last_off).unwrap(), 0xDE);
+        assert_eq!(d.read(last_off + 1).unwrap(), 0xAD);
+        assert_eq!(d.read(last_off + 2).unwrap(), 0xBE);
+        assert_eq!(d.read(last_off + 3).unwrap(), 0xEF);
+        assert_eq!(d.read_u32(last_off).unwrap(), 0xEFBE_ADDE);
+
+        // A page one PAST the mapped window is still invalid: the window is
+        // exactly 65 pages wide, it does not accidentally cover the rest of
+        // the 5 MiB partition.
+        let past = WINDOW_OFF + (wad_pages as u64) * u64::from(PAGE_SIZE);
+        assert_eq!(d.read(past).unwrap(), 0);
     }
 
     #[test]

@@ -126,6 +126,7 @@ mod stm32h5_spi_visibility_tests {
             schema_version: "1.0".to_string(),
             name: "stm32h5-spi-visibility".to_string(),
             chip: chip_path.to_string(),
+            cpu_hz: None,
             external_devices: vec![],
             cosim_models: Vec::new(),
             motor_models: Vec::new(),

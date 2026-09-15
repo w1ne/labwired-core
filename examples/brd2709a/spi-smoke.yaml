@@ -1,0 +1,23 @@
+# LabWired - BRD2709A SPI smoke: a MAX31855 frame clocked out of USART0.
+#
+# ⚠️ Series 2 has no separate SPI peripheral — this is a USART with CTRL.SYNC
+# set and CMD.MASTEREN issued. USART0 is the SPI here because USART1 is the
+# VCOM console, and one instance cannot be both.
+#
+# The MAX31855 is read-only: four dummy bytes clock its 32-bit big-endian frame
+# out. `0x01901600` decodes as the datasheet says (configs/devices/max31855.yaml):
+#   [31:18] = 0x064 = 100 → 100 × 0.25 °C  = 25 °C thermocouple
+#   [15:4]  = 0x160 = 352 → 352 × 0.0625 °C = 22 °C internal
+# The whole word is the test: a controller that clocked a byte per BYTE of a
+# word write would emit four frames per byte and shift the whole thing, and one
+# that never enabled SYNC would read zeroes.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-spi"
+  system: "./spi-system.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "MG26-SPI"
+  - uart_regex: "frame=01901600"
+  - expected_stop_reason: max_steps

@@ -189,6 +189,24 @@ fn validate_system(path: &PathBuf, plugins: &[&dyn labwired_core::plugin::ChipPl
         );
     }
 
+    // `adapter: analog` circuits are checked by actually parsing the netlist,
+    // which only the core crate can do. An element outside the in-core subset
+    // (a diode, a transistor, a `.include`) is a manifest error here, naming
+    // the line and the adapter that does support it.
+    let manifest_dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    for issue in labwired_core::cosim::validate_analog_models(&system.cosim_models, manifest_dir) {
+        result.add_error(
+            "INVALID_COSIM_MODEL",
+            issue,
+            Some(
+                "Fix the netlist line, or switch the model to \
+                 `adapter: external_process` with tools/cosim/labwired_ngspice.py"
+                    .to_string(),
+            ),
+            Some("cosim_models[]".to_string()),
+        );
+    }
+
     // 2. Load Referenced Chip
     // Resolving chip path relative to system file
     let chip_dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
@@ -332,8 +350,8 @@ fn validate_chip(path: &PathBuf) -> ExitCode {
     }
 
     // 2. Memory Region Validation
-    let flash_size = labwired_config::parse_size(&chip.flash.size).unwrap_or(0);
-    let ram_size = labwired_config::parse_size(&chip.ram.size).unwrap_or(0);
+    let flash_size = chip.flash.size;
+    let ram_size = chip.ram.size;
 
     if flash_size == 0 {
         result.add_error(

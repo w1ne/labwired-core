@@ -1,0 +1,8 @@
+# LabWired - BRD2709A with a TMP102 on I2C0, for the I²C smoke.
+name: "brd2709a-i2c"
+chip: "../../configs/chips/efr32mg26.yaml"
+external_devices:
+  - id: "tmp102"
+    type: "tmp102"
+    connection: "i2c0"
+board_io: []

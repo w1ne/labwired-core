@@ -500,7 +500,7 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // sources + the SYSTEM FROM_CPU IPI registers through the INTERRUPT_CORE0
     // matrix into the CPU's external interrupt lines. FreeRTOS's first
     // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
     // Re-derive walk-deletion over the COMPLETE rom-boot bus. `from_config`
     // computed `legacy_walk_disabled` from the chip-yaml peripheral set alone,
     // BEFORE the rom-boot path appended its real walk workers above (notably the

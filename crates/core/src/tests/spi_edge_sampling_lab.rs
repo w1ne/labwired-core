@@ -34,18 +34,19 @@ mod spi_edge_sampling_lab_tests {
         ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
+            cpu_hz: 0,
             arch: Arch::Arm,
             core: None,
             flash: MemoryRange {
                 base: 0x0800_0000,
-                size: "64KB".to_string(),
+                size: 64 * 1024,
             },
             ram: MemoryRange {
                 base: 0x2000_0000,
-                size: "20KB".to_string(),
+                size: 20 * 1024,
             },
             peripherals: vec![PeripheralConfig {
                 id: "spi1".to_string(),
@@ -53,10 +54,15 @@ mod spi_edge_sampling_lab_tests {
                 base_address: SPI1_BASE,
                 size: Some("1KB".to_string()),
                 irq: Some(35),
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             }],
             pins: Default::default(),
+            analog_pins: Default::default(),
+            io_voltage_v: None,
+            gpio_input_thresholds: None,
+            include: None,
         }
     }
 
@@ -81,6 +87,7 @@ mod spi_edge_sampling_lab_tests {
             schema_version: "1.0".to_string(),
             name: "max31855-edge-sampling".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: vec![ExternalDevice {
                 id: "tc1".to_string(),

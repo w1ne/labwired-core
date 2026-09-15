@@ -193,12 +193,12 @@ impl GenericI2cDevice {
         address: u8,
         channels: &'static [InputChannel],
     ) -> Result<Self> {
+        validate_descriptor(descriptor)?;
         let spec = descriptor
             .behavior
             .i2c
             .as_ref()
             .context("declarative i2c device is missing behavior.i2c")?;
-        validate_spec(spec)?;
 
         let address = if address == 0 {
             spec.default_address
@@ -990,6 +990,25 @@ impl SimInput for GenericI2cDevice {
     }
 }
 
+/// Validate the static descriptor contract for the `i2c_device` primitive.
+///
+/// Kept separate from construction so a manifest can preflight every carried
+/// pack without leaking runtime channel tables for leaves it does not attach.
+pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
+    if descriptor.behavior.primitive != "i2c_device" {
+        bail!(
+            "declarative i2c kit requires behavior.primitive: i2c_device, got '{}'",
+            descriptor.behavior.primitive
+        );
+    }
+    let spec = descriptor
+        .behavior
+        .i2c
+        .as_ref()
+        .context("declarative i2c kit is missing behavior.i2c")?;
+    validate_spec(spec)
+}
+
 /// A descriptor is exactly one shape (registers XOR commands XOR register_file),
 /// and command devices with CRC framing must use even-width words (CRC is
 /// computed per 16-bit word).
@@ -1338,18 +1357,12 @@ pub struct DeclarativeI2cKit {
 impl DeclarativeI2cKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
-        if descriptor.behavior.primitive != "i2c_device" {
-            bail!(
-                "declarative i2c kit requires behavior.primitive: i2c_device, got '{}'",
-                descriptor.behavior.primitive
-            );
-        }
+        validate_descriptor(&descriptor)?;
         let spec = descriptor
             .behavior
             .i2c
             .as_ref()
             .context("declarative i2c kit is missing behavior.i2c")?;
-        validate_spec(spec)?;
         let default_address = spec.default_address;
 
         let channels = leak_channels(&descriptor);

@@ -18,6 +18,8 @@ belief about it — a stub would have happily agreed with the broken version too
 import datetime
 import subprocess
 import sys
+
+import yaml
 from pathlib import Path
 
 import pytest
@@ -152,6 +154,13 @@ def test_require_full_history_exits_with_the_fix(tmp_path, monkeypatch, capsys):
 # four cases are the whole contract.
 
 
+# Inside the fixture ack's window (2026-06-01 + ACK_TTL_DAYS). The cases below
+# assert the CONTENT rule, so they pin the clock rather than drift into the
+# expiry rule as the wall clock moves past the fixture's ack. Expiry has its own
+# cases further down.
+IN_WINDOW = datetime.date(2026, 6, 15)
+
+
 def _board_with_digest(tmp_path, monkeypatch, model_body: bytes):
     """A one-board manifest whose ack is pinned to `model_body`'s digest."""
     root = tmp_path / "repo"
@@ -183,7 +192,7 @@ def test_digest_ack_tracks_content_not_dates(tmp_path, monkeypatch, redated, mut
         lambda paths: datetime.date(2099, 1, 1) if redated else datetime.date(2026, 5, 1),
     )
 
-    failing = gvs.evaluate(board)["failing"]
+    failing = gvs.evaluate(board, today=IN_WINDOW)["failing"]
     assert failing is mutated, (
         f"redated={redated} mutated={mutated}: a digest-pinned ack must fail iff the "
         "model CONTENT moved — a re-date alone must not fail, and a same-day edit "
@@ -197,10 +206,10 @@ def test_ack_without_a_digest_keeps_the_legacy_date_rule(tmp_path, monkeypatch):
     assert "drift_ack_digest" not in board
 
     monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
-    assert gvs.evaluate(board)["failing"] is False, "ack (06-01) >= newest (05-01) still covers"
+    assert gvs.evaluate(board, today=IN_WINDOW)["failing"] is False, "ack (06-01) >= newest (05-01) still covers"
 
     monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 7, 1))
-    assert gvs.evaluate(board)["failing"] is True, "model newer than the ack still fails"
+    assert gvs.evaluate(board, today=IN_WINDOW)["failing"] is True, "model newer than the ack still fails"
 
 
 def test_write_ack_digests_never_acks_an_unacked_board(tmp_path, monkeypatch):
@@ -214,3 +223,212 @@ def test_write_ack_digests_never_acks_an_unacked_board(tmp_path, monkeypatch):
 
     gvs.write_ack_digests({"boards": [board]})
     assert "drift_ack_digest" not in manifest_path.read_text()
+
+
+def test_digests_reports_the_same_verdict_as_the_gate(tmp_path, monkeypatch, capsys):
+    """`--digests` exists because the manifest documents it, and it must not be
+    a second opinion: the manifest header tells authors to print the digest so
+    they can write an ack pre-merge, which only helps if what it prints is what
+    `--drift` will judge them on.
+    """
+    body = b"fn model() {}\n"
+    board, model = _board_with_digest(tmp_path, monkeypatch, body)
+    board["drift_ack_digest"] = gvs.model_digest(board["models"])
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+
+    # Covered by the ack: the digest prints, and the gate agrees it is not failing.
+    assert gvs.print_digests({"boards": [board]}) == 0
+    printed = capsys.readouterr().out
+    assert gvs.model_digest(board["models"]) in printed
+    assert gvs.evaluate(board, today=IN_WINDOW)["status"] in printed
+    assert not gvs.evaluate(board, today=IN_WINDOW)["failing"]
+
+    # The negative control. Move a byte of the model: the printed digest must
+    # change, the recorded ack must be shown as the thing that no longer
+    # matches, and the gate must now be failing.
+    model.write_bytes(body + b"// a real change\n")
+    assert gvs.print_digests({"boards": [board]}) == 0
+    printed = capsys.readouterr().out
+    assert gvs.model_digest(board["models"]) in printed
+    assert f"ack recorded {board['drift_ack_digest']}" in printed
+    assert gvs.evaluate(board, today=IN_WINDOW)["failing"]
+
+
+def test_digests_never_writes(tmp_path, monkeypatch, capsys):
+    """A report, not a stamper. `--write-ack-digests` is the writing one."""
+    board, _ = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
+    manifest_path = tmp_path / "manifest.yaml"
+    original = "boards:\n  - id: demo\n    models:\n      - models/periph.rs\n"
+    manifest_path.write_text(original)
+    monkeypatch.setattr(gvs, "MANIFEST", manifest_path)
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+
+    gvs.print_digests({"boards": [board]})
+    capsys.readouterr()
+    assert manifest_path.read_text() == original
+
+
+# ── An ack lapses ────────────────────────────────────────────────────────────
+#
+# The digest rule made acks precise and, in doing so, PERMANENT: while the
+# models hold still, an ack from any date keeps a drifted board green forever.
+# Every acked board on the manifest reads "re-capture pending" and nothing ever
+# made the pending part come due. An ack is a promise to re-capture; a promise
+# with no date is a waiver.
+#
+# Two properties, and the second matters as much as the first: the GATE must
+# move with the calendar, and the DOCUMENT must not.
+
+
+def _acked_drifted_board(tmp_path, monkeypatch):
+    """A board that has genuinely drifted and carries a content-covering ack."""
+    board, model = _board_with_digest(tmp_path, monkeypatch, b"fn model() {}\n")
+    board["drift_ack_digest"] = gvs.model_digest(board["models"])
+    # Newer than the 2026-01-01 capture, so `drifted` is true and the ack is
+    # the only thing keeping this board green.
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2026, 5, 1))
+    return board
+
+
+def test_a_fresh_ack_covers_the_board(tmp_path, monkeypatch):
+    board = _acked_drifted_board(tmp_path, monkeypatch)
+    v = gvs.evaluate(board, today=datetime.date(2026, 6, 2))
+    assert v["drifted"] is True, "the fixture must actually be drifted or this proves nothing"
+    assert v["expired"] is False
+    assert v["failing"] is False
+
+
+def test_the_ack_lapses_on_the_day_after_its_expiry(tmp_path, monkeypatch):
+    """The whole point: unchanged content, unchanged manifest, red anyway."""
+    board = _acked_drifted_board(tmp_path, monkeypatch)
+    expires = board["drift_ack"] + datetime.timedelta(days=gvs.ACK_TTL_DAYS)
+
+    assert gvs.evaluate(board, today=expires)["failing"] is False, "valid through its last day"
+    lapsed = gvs.evaluate(board, today=expires + datetime.timedelta(days=1))
+    assert lapsed["expired"] is True
+    assert lapsed["failing"] is True, "an expired ack must stop covering the board"
+
+
+def test_an_explicit_expiry_overrides_the_default_window(tmp_path, monkeypatch):
+    """For a re-capture that is genuinely blocked — reviewable, unlike forever."""
+    board = _acked_drifted_board(tmp_path, monkeypatch)
+    board["drift_ack_expires"] = datetime.date(2027, 1, 1)
+
+    assert gvs.evaluate(board, today=datetime.date(2026, 12, 31))["failing"] is False
+    assert gvs.evaluate(board, today=datetime.date(2027, 1, 2))["failing"] is True
+
+
+def test_expiry_cannot_fail_a_board_that_never_drifted(tmp_path, monkeypatch):
+    """A stale ack on a board whose models never moved is not a finding."""
+    board = _acked_drifted_board(tmp_path, monkeypatch)
+    # Model older than the capture: nothing drifted, so nothing to acknowledge.
+    monkeypatch.setattr(gvs, "newest_commit_date", lambda paths: datetime.date(2025, 6, 1))
+    v = gvs.evaluate(board, today=datetime.date(2099, 1, 1))
+    assert v["drifted"] is False
+    assert v["failing"] is False
+
+
+def test_a_board_with_no_ack_is_unchanged_by_expiry(tmp_path, monkeypatch):
+    board = _acked_drifted_board(tmp_path, monkeypatch)
+    del board["drift_ack"]
+    del board["drift_ack_digest"]
+    v = gvs.evaluate(board, today=datetime.date(2026, 6, 2))
+    assert v["expires"] is None
+    assert v["expired"] is False
+    assert v["failing"] is True, "still failing for the original reason — unacked drift"
+
+
+def test_the_generated_document_does_not_move_with_the_calendar(tmp_path, monkeypatch):
+    """The other half of the contract, and the easy half to get wrong.
+
+    `--check` diffs a COMMITTED document. If an expiry verdict leaked into a row,
+    the doc would go stale on a day nobody committed and every later PR would
+    demand a regen commit carrying no information — exactly the #834 / #798
+    defect the digest rule was introduced to end. The row states the two dates
+    (both from the manifest, both still); only the gate reads the clock.
+    """
+    board = _acked_drifted_board(tmp_path, monkeypatch)
+    board.update({"tier": "silicon-verified", "doc": "boards/demo.md", "chip": "demo"})
+    manifest = {"boards": [board]}
+
+    baseline = gvs.render(manifest, today=datetime.date(2026, 6, 2))
+    for far in (datetime.date(2026, 7, 5), datetime.date(2027, 1, 1), datetime.date(2099, 1, 1)):
+        assert gvs.render(manifest, today=far) == baseline, (
+            f"the document changed at {far} — an expiry verdict leaked into a row, "
+            "which makes the committed doc rot on a day nobody committed"
+        )
+
+    # And the row must still SHOW the expiry, or a reader cannot see it coming.
+    assert "expires 2026-07-01" in baseline
+
+
+def test_the_committed_manifest_is_not_already_expired():
+    """Reads the real manifest: this change must cost nothing on the day it lands.
+
+    Not a restatement of the manifest — it asserts the property that made this
+    safe to merge, and it will fail loudly the day a real ack comes due, which
+    is the entire intent.
+    """
+    manifest = yaml.safe_load(gvs.MANIFEST.read_text())
+    stale = [
+        b["id"]
+        for b in manifest["boards"]
+        if gvs.evaluate(b, today=datetime.date.today())["expired"]
+    ]
+    assert not stale, (
+        "drift acks have come due: " + ", ".join(stale) + ". Re-capture and bump "
+        "silicon.last_capture, or renew the ack — do not widen ACK_TTL_DAYS to clear this."
+    )
+
+def test_write_ack_digests_leaves_undrifted_boards_alone(tmp_path, monkeypatch):
+    """The stamper must not sweep boards whose digest nothing reads.
+
+    A `drift_ack_digest` is consulted by `evaluate()` for exactly one purpose:
+    deciding whether an ack still covers a DRIFTED board. Stamping a board that
+    is not drifted rewrites a line no gate consults, and on 2026-08-31 that put
+    the SAME four unrelated boards into four separate pull requests, each time
+    to be reverted by hand.
+    """
+    boards = [
+        {"id": "drifted-one", "drift_ack": "2026-08-31", "drift_ack_digest": "stale",
+         "models": ["m.rs"], "silicon": {"last_capture": "2020-01-01"}},
+        {"id": "fresh-one", "drift_ack": "2026-08-31", "drift_ack_digest": "stale",
+         "models": ["m.rs"], "silicon": {"last_capture": "2099-01-01"}},
+    ]
+    seen = {"drifted": False, "fresh": False}
+
+    def fake_evaluate(board, today=None):
+        return {"drifted": board["id"] == "drifted-one"}
+
+    def fake_digest(models):
+        return "newdigest"
+
+    monkeypatch.setattr(gvs, "evaluate", fake_evaluate)
+    monkeypatch.setattr(gvs, "model_digest", fake_digest)
+
+    manifest_text = (
+        "boards:\n"
+        "  - id: drifted-one\n"
+        "    drift_ack: 2026-08-31\n"
+        "    drift_ack_digest: stale\n"
+        "  - id: fresh-one\n"
+        "    drift_ack: 2026-08-31\n"
+        "    drift_ack_digest: stale\n"
+    )
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_text)
+    monkeypatch.setattr(gvs, "MANIFEST", manifest_file)
+
+    gvs.write_ack_digests({"boards": boards})
+    after = manifest_file.read_text()
+
+    drifted_line = [ln for ln in after.splitlines() if "drift_ack_digest" in ln][0]
+    fresh_line = [ln for ln in after.splitlines() if "drift_ack_digest" in ln][1]
+    assert "newdigest" in drifted_line, "a drifted board must be stamped"
+    assert "stale" in fresh_line, "an undrifted board must be left alone"
+
+    # And the escape hatch still does the old thing, deliberately.
+    manifest_file.write_text(manifest_text)
+    gvs.write_ack_digests({"boards": boards}, stamp_all=True)
+    lines = [ln for ln in manifest_file.read_text().splitlines() if "drift_ack_digest" in ln]
+    assert all("newdigest" in ln for ln in lines), "--all must stamp both"

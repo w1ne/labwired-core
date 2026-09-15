@@ -16,7 +16,10 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+pub mod footprint;
 pub mod multi_image;
+
+pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
 pub fn load_elf(path: &Path) -> Result<ProgramImage> {
     let buffer = fs::read(path).with_context(|| format!("Failed to read ELF file: {:?}", path))?;
@@ -413,22 +416,21 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
 
     info!("ELF Entry Point: {:#x}", elf.entry);
 
-    let arch = match elf.header.e_machine {
-        goblin::elf::header::EM_ARM => labwired_core::Arch::Arm,
-        goblin::elf::header::EM_RISCV => labwired_core::Arch::RiscV,
-        94 => labwired_core::Arch::XtensaLx7, // EM_XTENSA = 94
-        _ => {
+    // The mapping itself lives in `labwired_core::system::arch_policy`; this
+    // crate only chooses what to do when it says "not modelled". It records
+    // Unknown rather than failing, because a caller that never runs the image
+    // (a symboliser, a disassembler) is still served by a parsed one.
+    let arch =
+        labwired_core::system::arch_policy::elf_arch(elf.header.e_machine).unwrap_or_else(|| {
             warn!("Unknown ELF machine type: {}", elf.header.e_machine);
             labwired_core::Arch::Unknown
-        }
-    };
+        });
 
     let mut program_image = ProgramImage::new(elf.entry, arch);
 
     for ph in elf.program_headers {
         if ph.p_type == PT_LOAD {
             // We only care about loadable segments
-            let start_addr = ph.p_paddr; // Physical address (LMA) is usually what we want for flash programming
             let size = ph.p_filesz as usize;
             let offset = ph.p_offset as usize;
 
@@ -436,17 +438,52 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                 continue;
             }
 
-            debug!(
-                "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
-                start_addr, size, offset
-            );
-
             if offset + size > buffer.len() {
                 return Err(anyhow!("Segment out of bounds in ELF file"));
             }
 
             let segment_data = buffer[offset..offset + size].to_vec();
-            program_image.add_segment(start_addr, segment_data);
+
+            if arch == labwired_core::Arch::Avr {
+                // avr-gcc: .text at low VMA; .data has VMA 0x800000+data and LMA in flash
+                // so CRT can LPM-copy. Emit BOTH a flash LMA segment and a data VMA segment.
+                let v = if ph.p_vaddr != 0 {
+                    ph.p_vaddr
+                } else {
+                    ph.p_paddr
+                };
+                let (space, data_addr) = labwired_core::cpu::avr::classify_avr_vma(v);
+                match space {
+                    labwired_core::cpu::avr::AvrLoadSpace::Flash => {
+                        let flash_addr = if ph.p_paddr != 0 {
+                            ph.p_paddr
+                        } else {
+                            data_addr
+                        };
+                        debug!("AVR flash segment {:#x} size {}", flash_addr, size);
+                        program_image.add_segment(flash_addr, segment_data);
+                    }
+                    labwired_core::cpu::avr::AvrLoadSpace::Data
+                    | labwired_core::cpu::avr::AvrLoadSpace::Eeprom => {
+                        // Flash LMA holds the initializer image (for LPM / __do_copy_data).
+                        if ph.p_paddr < 0x8000 {
+                            debug!("AVR data LMA flash {:#x} size {}", ph.p_paddr, size);
+                            program_image.add_segment(ph.p_paddr, segment_data.clone());
+                        }
+                        // Keep the *biased* VMA so load_program_image can tell
+                        // data-space from program-space (0x100..RAMEND overlaps LMA).
+                        debug!("AVR data VMA (biased) {:#x} size {}", v, size);
+                        program_image.add_segment(v, segment_data);
+                    }
+                }
+            } else {
+                let start_addr = ph.p_paddr;
+                debug!(
+                    "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
+                    start_addr, size, offset
+                );
+                program_image.add_segment(start_addr, segment_data);
+            }
         }
     }
 

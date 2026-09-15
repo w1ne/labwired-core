@@ -165,21 +165,26 @@ infer_failure_hint() {
 run_smoke_output_dir="${OUT_DIR}/simulation-output"
 mkdir -p "${run_smoke_output_dir}"
 
-firmware_build_env=()
-if [[ "${TARGET}" == "thumbv6m-none-eabi" ]]; then
-  firmware_build_env=(env RUSTFLAGS="-C link-arg=-Tlink.x")
-fi
+# No RUSTFLAGS here. A firmware crate passes its own linker script from its
+# build.rs, so `cargo build -p <crate> --target <t>` links on its own.
+#
+# ⚠️ Exactly one place may pass `-Tlink.x`. This block used to add it for every
+# thumbv6m target; when firmware-rp2040-pio-onboarding's build.rs started
+# passing its own (labwired-core#1064), the script included link.x — and the
+# memory.x it consumes — twice, and the build died with "region 'FLASH'
+# already defined". This gate does not run on pull requests, so that break
+# only appeared on main.
 
 if ! run_stage build_cli cargo build -p labwired-cli; then
   :
 elif [[ "${PROFILE}" == "release" ]]; then
-  if ! run_stage build_firmware "${firmware_build_env[@]}" cargo build -p "${CRATE}" --release --target "${TARGET}"; then
+  if ! run_stage build_firmware cargo build -p "${CRATE}" --release --target "${TARGET}"; then
     :
   elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
     :
   fi
 else
-  if ! run_stage build_firmware "${firmware_build_env[@]}" cargo build -p "${CRATE}" --target "${TARGET}"; then
+  if ! run_stage build_firmware cargo build -p "${CRATE}" --target "${TARGET}"; then
     :
   elif ! run_stage run_smoke cargo run -q -p labwired-cli -- test --script "${SCRIPT}" --output-dir "${run_smoke_output_dir}" --no-uart-stdout; then
     :

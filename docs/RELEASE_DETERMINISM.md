@@ -1,63 +1,67 @@
-# Release-Gated Determinism Report
+# Determinism: Current Guarantees and Release Gaps
 
-## 1. Introduction: The Determinism Mandate
+## Current execution model
 
-In the era of Agentic AI, fuzzing, and complex Cyber-Physical Systems (CPS), simulation is only valuable if it is strictly reproducible. If a Reinforcement Learning agent discovers a zero-day vulnerability at epoch 40,000, that execution path must be 100% reproducible on a developer's local machine to be actionable.
+LabWired advances simulated state from the instruction/cycle budget rather than
+host wall-clock time. A host pause delays completion in real time but does not by
+itself advance simulated time.
 
-LabWired guarantees **Strict Determinism**. A simulation run with the same Configuration, System Manifest, and Firmware Binary will produce the exact same observable state (registers, memory, output traces, and step count) across any supported host platform (Linux, macOS, and Windows via WSL2) and independent of host load.
+For a multi-machine `World`, `World::step_all` currently sorts machine IDs and
+steps each machine sequentially before ticking interconnects. This fixed order is
+the current synchronization mechanism. Global Virtual Time (GVT), speculative
+actors, and distributed snapshots are future work, as stated by the method's
+source documentation.
 
-This document outlines the architectural guarantees and the mandatory "Golden Board" release gating process that ensures this contract is never broken.
+These choices are foundations for repeatability, but they do not by themselves
+prove that every observable state is identical on every supported host.
 
----
+## Floating-point scope
 
-## 2. Core Architectural Guarantees
+The repository does not currently provide a workspace-wide SoftFloat guarantee.
+Do not infer bit-exact cross-host FPU behavior from the deterministic scheduler.
+A future guarantee would need an identified implementation plus cross-platform
+fixtures that exercise each claimed floating-point instruction path.
 
-LabWired achieves determinism by decoupling simulation progress from the host machine's wall-clock time.
+## Evidence available today
 
-### 2.1 Instruction-Level Time Advancement
-The fundamental unit of time in LabWired is the **Retired Instruction** (or simulated core clock cycle).
-*   Peripherals do not use `std::time::Instant` or any host OS timers.
-*   The `SystemBus` ticks peripherals strictly advancing based on the CPU's instruction execution budget.
-*   If a host machine suffers a 500ms latency spike due to an OS context switch, the simulated CPU simply halts until the host recovers. The simulation time does not "drift."
+Determinism and fidelity are supported by narrower, inspectable channels:
 
-### 2.2 The Lock-Free Actor Model and GVT
-LabWired utilizes a message-passing Actor Model for multi-core and multi-peripheral simulation. To prevent race conditions between simulated actors running on different host threads, we enforce a **Global Virtual Time (GVT)** algorithm.
-*   Actors compute local state speculatively.
-*   State mutations (e.g., asserting an IRQ, writing to shared memory) are only committed when the GVT catches up to the actor's local time.
-*   This ensures that concurrent events are resolved in the exact same order on an M2 Mac as they are on an x86 Linux CI runner.
+- repository tests that run the same model and assert stable outputs;
+- committed golden-reference artifacts for selected boards;
+- hardware-versus-simulator PC-trace comparisons described in
+  [Golden Reference](golden_reference.md);
+- per-board validation and the limitations cataloged in
+  [`FIDELITY.md`](../FIDELITY.md).
 
-### 2.3 Floating-Point Determinism
-To avoid cross-platform floating-point discrepancies (e.g., fused multiply-add variations or 80-bit x87 precision leaks on older x86), LabWired strictly uses `softfloat` implementations for FPU instructions (like the Cortex-M4F `vadd.f32`), guaranteeing bit-exact IEEE-754 compliance across all targets.
+The PC-trace audit establishes PC equality only over its declared exact,
+bounded, or prefix scope. It does not currently hash firmware or compare complete
+register, memory, UART, or peripheral state.
 
----
+## Current release gate
 
-## 3. The "Golden Board" Methodology
+`.github/workflows/core-release.yml` builds and packages the CLI and DAP for the
+declared platforms, asserts the Linux glibc floor, and starts the Linux artifacts
+on supported distribution images before publishing a tag.
 
-To systematically prevent regressions, the LabWired core team maintains a suite of **Golden Boards**. A Golden Board is a paired artifact consisting of:
-1.  A pre-compiled, frozen firmware binary (e.g., `stm32f4_freertos_blinky.elf`).
-2.  A frozen LabWired configuration (`test_script.yaml`, `system.yaml`).
-3.  A **known-good signature** of the final execution state.
+The release workflow does **not** currently compare cross-platform VCD hashes
+against an `expected_hashes.json` manifest. There is no repository-wide release
+gate proving identical VCD, register, memory, and step-count state across every
+host. Such a gate remains a future hardening target.
 
-### 3.1 Trace Hashing (The State Signature)
-The ultimate test of determinism is the Value Change Dump (VCD) trace. Because the VCD captures the state of every observable pin and register at every simulated cycle, it represents the complete sum of the simulation.
+## Requirements for a stronger cross-platform guarantee
 
-During the release process, the CI pipeline runs the Golden Boards and generates a `trace.vcd` and `result.json`. These files are then hashed (SHA-256).
+Before claiming repository-wide, bit-exact cross-host determinism, a release
+gate should:
 
-If a pull request introduces an optimization that subtly changes the timing of a single instruction by one cycle, the resulting VCD hash will differ from the Golden Hash, and the CI build will fail immediately.
+1. identify a frozen firmware binary and system manifest by digest;
+2. run the same cases on every claimed host;
+3. define which trace, register, memory, UART, and peripheral fields belong to
+   the comparison contract;
+4. compare complete declared scopes rather than accepting an undeclared common
+   prefix;
+5. retain expected artifacts or digests under version control;
+6. fail a release when any required observation is absent or differs;
+7. document any intentional behavioral change and its hardware justification.
 
----
-
-## 4. The Release Gate Checklist
-
-Before any tag (e.g., `v1.2.0`) is cut and published to crates.io or GitHub Releases, the following mandatory steps are executed automatically via GitHub Actions:
-
-- [ ] **Cross-Platform Verification**: The Golden Board suite is executed on `ubuntu-latest` and `macos-latest`, with Windows support exercised through WSL2 userland validation.
-- [ ] **Hash Verification**: The SHA-256 hashes of the resulting `trace.vcd` and `result.json` artifacts for *every* Golden Board must match the version-controlled `expected_hashes.json` exactly across the supported release-gated platforms.
-- [ ] **Instruction Parity Check**: The `steps_executed` and `cycles` fields in `result.json` must exactly match the expected values.
-- [ ] **RTL Co-simulation Sync**: (If applicable) Any Verilator-backed peripherals must complete their integration tests proving zero-copy IPC did not drop or reorder bus transactions.
-
-### 4.1 Handling Legitimate State Changes
-If a PR genuinely fixes a timing bug in a peripheral (meaning the previous "Golden" hash was technically incorrect behavior), the PR author must:
-1.  Document the exact hardware justification for the timing change (referencing the vendor datasheet).
-2.  Update `expected_hashes.json` in the same commit.
-3.  The PR must be tagged as a `Behavioral Change` and cannot be merged as a generic patch without explicit maintainer approval.
+Until that gate exists, state determinism claims at the level of the specific
+runner and evidence artifact that measured them.

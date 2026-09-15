@@ -10,4 +10,11 @@ external_devices:
     route: { sda: "GPIO21", scl: "GPIO22" }
     config:
       i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on default Arduino SPI (spi3).
+  # Single-device bus: CS soft-ignored by SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi3"
+    config:
+      cs_pin: "GPIO5"
 board_io: []

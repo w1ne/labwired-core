@@ -1,219 +1,244 @@
-# ESP32-S3 Interrupt Matrix - CPU Core 0
-# Based on ESP32-S3 Technical Reference Manual
+# ESP32-S3 Interrupt Matrix - CPU Core 0 (INTERRUPT_CORE0, base 0x600C_2000)
+#
+# Offsets, register names and reset values are taken from the vendored Espressif
+# SVD, tests/fixtures/svd/esp32s3.svd, peripheral INTERRUPT_CORE0. That map is a
+# uniform array: INTERRUPT_CORE0_<source>_MAP_REG sits at 4 * source_id, so an
+# offset here IS the source ID times four, and PRO_INTR_STATUS_0..3 / CLOCK_GATE
+# follow the last map register.
+#
+# ⚠️ This file previously carried the ESP32-C3's map, not the S3's. The C3 lacks
+# GPIO_INTERRUPT_APP_MAP (0x48), GPIO_INTERRUPT_APP_NMI_MAP (0x4C) and
+# SPI_INTR_1_MAP (0x50); with those three rows missing every later register was
+# modelled 8, then 20, then 40 bytes low (SPI_INTR_2_MAP 0x4C vs 0x54,
+# UART_INTR_MAP 0x58 vs 0x6C, TG_T0_INT_MAP 0xA0 vs 0xC8). The first register
+# was also named MAC_INTR_MAP — the C3's name; the S3 calls it PRO_MAC_INTR_MAP,
+# and because the names differed nothing ever compared the two maps. The block
+# at 0x104..0x194 held CPU_INT_ENABLE / CPU_INT_TYPE / CPU_INT_CLEAR /
+# CPU_INT_EIP_STATUS / CPU_INT_PRI_n / CPU_INT_THRESH: those are the C3's RISC-V
+# INTC control registers. The S3 is Xtensa LX7 and has none of them — those
+# offsets are ordinary source-map registers on this silicon.
+#
+# Coverage: this descriptor models the source rows the S3 models actually drive,
+# not all 99. Unlisted source offsets stay undecoded (read-as-zero, writes
+# dropped) exactly as before — that gap is pre-existing and unchanged here. The
+# behavioural S3 model is crates/core/src/peripherals/esp32s3/intmatrix.rs,
+# which decodes all 99 sources plus the CORE1 window at +0x800; this descriptor
+# must not disagree with it. Deliberately unmodelled: DATE (0x7FC, an
+# informational silicon-revision stamp) and the INTERRUPT_CORE1 mirror
+# (+0x800), which the SVD carries as its own peripheral.
+#
+# Every *_MAP register resets to 0x10 on this part (SVD resetValue), not 0x0.
 
 peripheral: "INTERRUPT_CORE0"
-version: "0.1.0"
+version: "0.2.0"
 
 registers:
-  - id: "MAC_INTR_MAP"
+  - id: "PRO_MAC_INTR_MAP"
     address_offset: 0x000
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "MAC_NMI_MAP"
     address_offset: 0x004
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "PWR_INTR_MAP"
     address_offset: 0x008
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "BB_INT_MAP"
     address_offset: 0x00C
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "BT_MAC_INT_MAP"
     address_offset: 0x010
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "BT_BB_INT_MAP"
     address_offset: 0x014
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "BT_BB_NMI_MAP"
     address_offset: 0x018
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "GPIO_INTERRUPT_PRO_MAP"
     address_offset: 0x040
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "GPIO_INTERRUPT_PRO_NMI_MAP"
     address_offset: 0x044
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
-  - id: "SPI_INTR_2_MAP"
+  # 0x048/0x04C/0x050 exist on the S3 and not on the C3. Their absence is what
+  # pushed every register below them onto a C3 offset.
+  - id: "GPIO_INTERRUPT_APP_MAP"
+    address_offset: 0x048
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000010
+
+  - id: "GPIO_INTERRUPT_APP_NMI_MAP"
     address_offset: 0x04C
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
-  - id: "SPI_INTR_3_MAP"
+  - id: "SPI_INTR_1_MAP"
     address_offset: 0x050
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
-  - id: "UART_INTR_MAP"
+  - id: "SPI_INTR_2_MAP"
+    address_offset: 0x054
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000010
+
+  - id: "SPI_INTR_3_MAP"
     address_offset: 0x058
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
+
+  - id: "UART_INTR_MAP"
+    address_offset: 0x06C
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000010
 
   - id: "UART1_INTR_MAP"
-    address_offset: 0x05C
+    address_offset: 0x070
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "UART2_INTR_MAP"
-    address_offset: 0x060
+    address_offset: 0x074
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "LEDC_INT_MAP"
-    address_offset: 0x068
+    address_offset: 0x08C
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "USB_INTR_MAP"
-    address_offset: 0x088
+    address_offset: 0x098
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
-  - id: "TG_T0_INT_MAP"
-    address_offset: 0x0A0
-    size: 32
-    access: "R/W"
-    reset_value: 0x00000000
-
-  - id: "TG_T1_INT_MAP"
-    address_offset: 0x0A4
-    size: 32
-    access: "R/W"
-    reset_value: 0x00000000
-
-  - id: "TG_WDT_INT_MAP"
+  # Source 42. The Tier-1 S3 fixture binds this row through the matrix
+  # (examples/tier1-fixture/esp32s3/src/main.rs, check_irq), so it is a proven
+  # consumer of a decoded offset, not a row added to raise a count.
+  - id: "I2C_EXT0_INTR_MAP"
     address_offset: 0x0A8
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
+
+  - id: "TG_T0_INT_MAP"
+    address_offset: 0x0C8
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000010
+
+  - id: "TG_T1_INT_MAP"
+    address_offset: 0x0CC
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000010
+
+  - id: "TG_WDT_INT_MAP"
+    address_offset: 0x0D0
+    size: 32
+    access: "R/W"
+    reset_value: 0x00000010
 
   - id: "TG1_T0_INT_MAP"
-    address_offset: 0x0AC
+    address_offset: 0x0D4
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "TG1_T1_INT_MAP"
-    address_offset: 0x0B0
+    address_offset: 0x0D8
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
   - id: "TG1_WDT_INT_MAP"
-    address_offset: 0x0B4
+    address_offset: 0x0DC
     size: 32
     access: "R/W"
-    reset_value: 0x00000000
+    reset_value: 0x00000010
 
-  - id: "CPU_INT_ENABLE"
-    address_offset: 0x104
-    size: 32
-    access: "R/W"
-    reset_value: 0x00000000
-    fields:
-      - name: "ENABLE"
-        bit_range: [31, 0]
-        description: "Enable each of 32 CPU interrupts"
-
-  - id: "CPU_INT_TYPE"
-    address_offset: 0x108
-    size: 32
-    access: "R/W"
-    reset_value: 0x00000000
-    fields:
-      - name: "TYPE"
-        bit_range: [31, 0]
-        description: "Interrupt type (0=level, 1=edge)"
-
-  - id: "CPU_INT_CLEAR"
-    address_offset: 0x10C
-    size: 32
-    access: "WO"
-    reset_value: 0x00000000
-    side_effects:
-      write_action: oneToClear
-
-  - id: "CPU_INT_EIP_STATUS"
-    address_offset: 0x110
+  # Source-assertion bitmap, read-only. Four words at 0x18C..0x198 cover source
+  # bits 0..127 (99 sources). The native model uses exactly these offsets — see
+  # INTR_STATUS_BASE in crates/core/src/peripherals/esp32s3/intmatrix.rs. The
+  # names INTR_STATUS_REG_0/1 at 0x198/0x19C that used to sit here are the C3's.
+  - id: "PRO_INTR_STATUS_0"
+    address_offset: 0x18C
     size: 32
     access: "RO"
     reset_value: 0x00000000
 
-  # CPU interrupt priority registers (0-31)
-  - id: "CPU_INT_PRI_0"
-    address_offset: 0x114
+  - id: "PRO_INTR_STATUS_1"
+    address_offset: 0x190
     size: 32
-    access: "R/W"
+    access: "RO"
     reset_value: 0x00000000
 
-  - id: "CPU_INT_PRI_1"
-    address_offset: 0x118
-    size: 32
-    access: "R/W"
-    reset_value: 0x00000000
-
-  - id: "CPU_INT_THRESH"
+  - id: "PRO_INTR_STATUS_2"
     address_offset: 0x194
     size: 32
-    access: "R/W"
+    access: "RO"
     reset_value: 0x00000000
 
-  - id: "INTR_STATUS_REG_0"
+  - id: "PRO_INTR_STATUS_3"
     address_offset: 0x198
     size: 32
     access: "RO"
     reset_value: 0x00000000
 
-  - id: "INTR_STATUS_REG_1"
-    address_offset: 0x19C
-    size: 32
-    access: "RO"
-    reset_value: 0x00000000
-
   - id: "CLOCK_GATE"
-    address_offset: 0x1A0
+    address_offset: 0x19C
     size: 32
     access: "R/W"
     reset_value: 0x00000001
 
+# Source IDs, i.e. the map register's offset / 4 on this part. FROM_CPU_INTR0..3
+# were 50..53 here — the C3's numbers. On the S3 CPU_INTR_FROM_CPU_0_MAP is at
+# 0x13C, so the sources are 79..82, which is also what the S3 cross-core IPI
+# model uses (crates/core/src/peripherals/esp32s3/crosscore_ipi.rs: 79 for core
+# 0, 80 for core 1).
 interrupts:
   WIFI_MAC: 0
   WIFI_MAC_NMI: 1
   GPIO: 16
   GPIO_NMI: 17
-  FROM_CPU_INTR0: 50
-  FROM_CPU_INTR1: 51
-  FROM_CPU_INTR2: 52
-  FROM_CPU_INTR3: 53
+  FROM_CPU_INTR0: 79
+  FROM_CPU_INTR1: 80
+  FROM_CPU_INTR2: 81
+  FROM_CPU_INTR3: 82

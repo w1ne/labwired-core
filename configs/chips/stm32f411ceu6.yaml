@@ -45,6 +45,20 @@ name: "stm32f411ceu6"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 150
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F411CEU6 maximum core clock, 100 MHz.
+cpu_hz: 100_000_000
+# GPIO supply and digital input thresholds (ratios of io_voltage_v), used when
+# co-simulation turns a circuit node voltage into the level the firmware reads.
+# DS10314 Rev 8 (STM32F411xC/xE), section 6.3.16, Table 53 "I/O static
+# characteristics", FT, TC and NRST I/O, 1.7 V <= VDD <= 3.6 V (tested in
+# production): VIL max 0.3·VDD, VIH min 0.7·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
   size: "512KB"
@@ -399,3 +413,18 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f411/dbg.yaml"
+
+# Regular ADC inputs by pad, from the STM32F411xC/xE datasheet (DS10314), UFQFPN48 pinout: ADC1_IN0..IN9.
+# UFQFPN48 (CE) bonds out no PC0..PC5, so ADC inputs 10..15 have no pad on this part.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }

@@ -1,5 +1,20 @@
 [
   {
+    "buses": [],
+    "name": "atmega328p"
+  },
+  {
+    "buses": [],
+    "name": "atsamd21g18a"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI"
+    ],
+    "name": "efr32mg26"
+  },
+  {
     "buses": [
       "I2C",
       "UART"
@@ -49,6 +64,10 @@
   {
     "buses": [],
     "name": "nrf54l15"
+  },
+  {
+    "buses": [],
+    "name": "nrf54lm20a"
   },
   {
     "buses": [

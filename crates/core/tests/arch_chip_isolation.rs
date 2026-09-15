@@ -29,6 +29,32 @@ const ALLOWED: &[(&str, &str, &str)] = &[
         "peripherals::esp32::spi::",
         "test-only: shared SPI register-bit constants",
     ),
+    // ⚠️ NOT a test helper and NOT generic infra — a PRODUCTION peripheral model
+    // shared across two CPU architectures. `esp32s3::wifi_mac` is a type alias
+    // of `Esp32c3WifiMac` (#1019), so an edit to `esp32c3/wifi_mac.rs` ALSO
+    // changes the ESP32-S3: one model, one register map, two chips.
+    //
+    // The "same WDEV IP" claim is NOT established in this repo. Every offset in
+    // that model — MAC-ready `0xD14`, RX ring `0x88`, event `0xC3C`/`0xC40`,
+    // PLCP0 `0xD08` — was reverse-engineered on live *C3* silicon (see
+    // docs/esp32c3_radio_reverse_engineering.md, scripts/hw-oracle/wifi-re,
+    // captures/esp32c3/wifi-radio-20260611T214340Z). There is no S3 radio
+    // capture, and the vendored S3 SVD (tests/fixtures/svd/esp32s3.svd) carries
+    // no Wi-Fi MAC peripheral at all. The one S3-corroborated claim is the
+    // interrupt source: INTERRUPT_CORE0 `PRO_MAC_INTR_MAP` @ 0x000 ⇒ source 0.
+    // validation/manifest.yaml already tracks the owed live capture of
+    // 0x60033D14. Precedent for caution: esp32s3/interrupt_core0.yaml carried
+    // the C3's map until 2026-08-20 and was wrong by 8/20/40 bytes.
+    //
+    // Drop this entry when the S3 gets its own model. That needs the virtual-
+    // WiFi medium relocated to a chip-neutral module first: the MAC struct
+    // holds an `esp32c3::virtual_wifi::VirtualWifiBus` by value, so a
+    // self-contained S3 model is not reachable by copying wifi_mac.rs alone.
+    (
+        "esp32s3/wifi_mac.rs",
+        "peripherals::esp32c3::wifi_mac::",
+        "UNVERIFIED on S3 silicon: the S3 MAC is an alias of the C3 model (#1019)",
+    ),
 ];
 
 /// Strip a `//`-comment tail (best-effort; ignores `//` inside string literals,

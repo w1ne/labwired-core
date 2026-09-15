@@ -15,7 +15,7 @@
 //! pin map (CS=5, SCK=18, MOSI=23, DC=17, RST=16, BUSY=4) is all in 0..31.
 //! Writes to those offsets are no-ops; reads return 0.
 //!
-//! Observer protocol matches `peripherals::esp32s3::gpio::GpioObserver` —
+//! Observer protocol is the shared `peripherals::device::GpioObserver` —
 //! a single trait makes observer code work on both chip variants.
 
 use crate::peripherals::pad_routing::PadRoutes;
@@ -188,12 +188,17 @@ struct Esp32PortTap {
     scratch: Vec<Option<bool>>,
 }
 
-/// Notified synchronously inside the bus write path on every GPIO pin
-/// transition. Observers must not panic — a panic propagates out of
-/// `bus.write_u8` and crashes the simulator.
-pub trait GpioObserver: Send + Sync + std::fmt::Debug {
-    fn on_pin_change(&self, pin: u8, from: bool, to: bool, sim_cycle: u64);
-}
+/// Edge-observation contract for anything watching this port's pads.
+/// Declared in [`peripherals::device`](crate::peripherals::device) — ONE
+/// declaration shared by every GPIO family — and re-exported here so every
+/// existing `impl`, bound and intra-doc link at this path keeps resolving.
+///
+/// It used to be declared separately, byte for byte, in the classic-ESP32
+/// and S3 GPIO models. Two identical traits are two types: a component that
+/// wanted edges on both families wrote the same `impl` twice, and every
+/// call site accepting an observer carried a two-trait bound that no third
+/// family could satisfy without a third copy of all of it.
+pub use crate::peripherals::device::GpioObserver;
 
 /// ESP32-classic GPIO peripheral.
 pub struct Esp32Gpio {

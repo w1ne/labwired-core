@@ -16,31 +16,31 @@ use std::sync::Arc;
 /// Process-wide default for ARMv7-M fault escalation, read once from
 /// `LABWIRED_CORTEXM_FAULTS`.
 ///
-/// **False unless the variable is set.** This is the opt-in that lets the lab
-/// corpus be measured both ways without a per-call-site plumbing change to
-/// `configure_cortex_m`, which has ~150 callers. `CortexM::set_faults_enabled`
-/// remains the explicit per-core override, and is what the in-tree guards use.
-///
-/// Flipping the default is deliberately NOT part of this change: it is a second
-/// PR, taken once the measured lab diff has been triaged. When that happens this
-/// function is where it happens.
+/// **True unless the variable is explicitly set to `0` or `false`.** Fault
+/// escalation is the default; the variable is the opt-*out* that keeps the
+/// legacy #880 abort behaviour for a corpus that needs it, without a
+/// per-call-site plumbing change to `configure_cortex_m`, which has ~150
+/// callers. `CortexM::set_faults_enabled` remains the explicit per-core
+/// override, and is what the in-tree guards use.
 ///
 /// Hoisted into a `OnceLock` for the same reason `trace_insn_enabled` is: an
 /// `std::env::var` call walks the environment, and `configure_cortex_m` runs on
 /// every machine build.
 ///
-/// The notice is not decoration: a blast-radius measurement that compares "flag
-/// off" against "flag on" is vacuous unless the flag demonstrably reached the
-/// engine, and an identical corpus is exactly what a silently-ignored
-/// environment variable also produces.
+/// The notice fires only on the opt-out: escalation-on is the default, so the
+/// noteworthy event is a run that deliberately disabled it. Keeping the default
+/// path silent also keeps lab `stderr` free of a per-run banner.
 fn faults_enabled_default() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
-        let on = std::env::var("LABWIRED_CORTEXM_FAULTS").is_ok_and(|v| v != "0");
-        if on {
-            eprintln!("[cortex-m] ARMv7-M fault escalation ENABLED (B1.5.14)");
+        let off = matches!(
+            std::env::var("LABWIRED_CORTEXM_FAULTS").as_deref(),
+            Ok("0") | Ok("false")
+        );
+        if off {
+            eprintln!("[cortex-m] ARMv7-M fault escalation DISABLED (LABWIRED_CORTEXM_FAULTS)");
         }
-        on
+        !off
     })
 }
 
@@ -57,10 +57,10 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // Cortex-M bus just to keep the reset boundary exact.
     let sysreset_signal = Arc::new(AtomicBool::new(false));
     // Shared ARMv7-M fault register file (SHCSR/CFSR/HFSR/BFAR) + the master
-    // switch for fault escalation. Created DISABLED: with it off the SCB does
-    // not serve those offsets at all and the core keeps #880's abort contract,
-    // so every existing board is byte-identical. `CortexM::set_faults_enabled`
-    // is the one door that flips it.
+    // switch for fault escalation. Seeded from the process default: escalation
+    // is ON unless `LABWIRED_CORTEXM_FAULTS` opts out; with it off the SCB does
+    // not serve those offsets at all and the core keeps #880's abort contract.
+    // `CortexM::set_faults_enabled` is the per-core override.
     let faults = Arc::new(ScbFaultState::new(faults_enabled_default()));
 
     let mut cpu = CortexM::default();

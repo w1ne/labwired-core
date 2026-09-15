@@ -117,6 +117,13 @@ impl AdvanceRequest {
         self
     }
 
+    /// Replaces the fuel budget, keeping every other policy — how a request
+    /// is split into chunks that together spend the original budget.
+    pub(crate) fn with_fuel_limit(mut self, fuel: Option<u64>) -> Self {
+        self.limits.fuel = fuel;
+        self
+    }
+
     /// Caps each CPU batch without changing the request's other policies.
     pub fn with_batch_cap(mut self, cap: NonZeroU32) -> Self {
         self.batching = BatchPolicy::AtMost(cap);

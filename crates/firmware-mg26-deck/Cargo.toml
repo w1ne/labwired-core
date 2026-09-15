@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+[package]
+name = "firmware-mg26-deck"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+panic-halt = "0.2"
+
+[[bin]]
+name = "firmware-mg26-deck"
+path = "src/main.rs"
+test = false
+bench = false
+
+[features]
+default = []
+# Link at 0x08008000 so the image can be XMODEM'd into the UART bootloader.
+app-slot = []

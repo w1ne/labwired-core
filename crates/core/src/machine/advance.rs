@@ -2,9 +2,10 @@
 
 use super::boundary::ExecutionMode;
 use crate::{
-    AdvanceReport, AdvanceRequest, AdvanceStop, BreakpointPolicy, Cpu, IdlePolicy, Machine,
-    SimResult,
+    AdvanceReport, AdvanceRequest, AdvanceStop, BreakpointPolicy, Cpu, HostTimeMode, IdlePolicy,
+    Machine, SimResult,
 };
+use std::time::Duration;
 
 #[derive(Default)]
 struct AdvanceState {
@@ -26,6 +27,23 @@ impl AdvanceState {
             self.idle_cycles,
             self.cpu_batches,
         )
+    }
+}
+
+impl<C: Cpu> Machine<C> {
+    fn pace_realtime(&self, start_cycles: u64, start_wall: Duration) {
+        if self.config.host_time_mode != HostTimeMode::Realtime {
+            return;
+        }
+        crate::host_time::pace(
+            self.config.host_time_mode,
+            self.bus.cpu_hz,
+            start_cycles,
+            self.total_cycles,
+            start_wall,
+            self.host_clock.now(),
+            self.host_clock.as_ref(),
+        );
     }
 }
 
@@ -53,10 +71,41 @@ impl<C: Cpu> Machine<C> {
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
         let start_cycles = self.total_cycles;
+        let start_wall = self.host_clock.now();
         let mut state = AdvanceState::default();
 
         loop {
             let elapsed = self.total_cycles - start_cycles;
+
+            // Release a dual-core ESP32-S3's APP_CPU on the real hardware edge:
+            // the PRO_CPU clearing `SYSTEM_CORE_1_CONTROL_0.RESETING`, surfaced
+            // by the SYSTEM peripheral as `APPCPU_RESET_RELEASED`.
+            //
+            // This belongs here rather than in a frontend because *every*
+            // consumer needs it. It used to live only in the native runner's
+            // step loop, so a dual-core ESP-IDF image booted natively and
+            // stalled forever at `cpu_start: Multicore app` in the browser —
+            // core 1 was constructed but never let out of reset. Taking the
+            // flag here is harmless for a frontend that also checks it (the
+            // first taker wins and both unhalt the same core) and a no-op on
+            // every chip that never sets it.
+            //
+            // Not, however, when the secondary has no ROM to boot. A fast-boot
+            // frontend swaps the mask ROM for a thunk harness, so the reset
+            // vector core 1 is constructed on holds no startup code: releasing
+            // it there runs the harness and faults as `cause=0 at pc=0x0` a few
+            // hundred steps in. Such frontends set `secondary_awaits_boot_addr`
+            // and hand core 1 over at `call_start_cpu1` (`APPCPU_BOOT_ADDR`)
+            // instead, which is what `release_secondary_cpu_if_requested` acts
+            // on. Drain the flag either way so it cannot fire later.
+            if crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED
+                .with(|s| s.take())
+                && !self.secondary_awaits_boot_addr
+            {
+                if let Some(cpu1) = self.cpu_secondary.as_mut() {
+                    cpu1.unhalt();
+                }
+            }
 
             if request.breakpoint_policy() == BreakpointPolicy::Honor {
                 let pc = self.cpu.get_pc();
@@ -107,6 +156,7 @@ impl<C: Cpu> Machine<C> {
                     state.fuel_consumed += skipped;
                     state.idle_cycles += skipped;
                     self.logic_observe(self.total_cycles);
+                    self.pace_realtime(start_cycles, start_wall);
                     continue;
                 }
             }
@@ -146,6 +196,7 @@ impl<C: Cpu> Machine<C> {
                 state.primary_steps += u64::from(progress.primary_steps);
                 state.secondary_steps += u64::from(progress.secondary_steps);
                 state.cpu_batches += 1;
+                self.pace_realtime(start_cycles, start_wall);
                 return Ok(state.report(
                     AdvanceStop::FirmwareExit { code },
                     self.total_cycles - start_cycles,
@@ -156,6 +207,7 @@ impl<C: Cpu> Machine<C> {
             state.primary_steps += u64::from(progress.primary_steps);
             state.secondary_steps += u64::from(progress.secondary_steps);
             state.cpu_batches += 1;
+            self.pace_realtime(start_cycles, start_wall);
         }
     }
 }

@@ -96,10 +96,19 @@ def test_unknown_riscv_map_is_an_error_not_a_silent_skip():
         bp.plan_coverage({"someriscv": _chip(0x80000000, 0x80020000, arch="riscv")})
 
 
-def test_nothing_is_waived():
-    """Every chip in the tree has a fixture. A new waiver needs a reason here."""
+def test_waivers_are_explicit():
+    """WAIVED must stay a deliberate shortlist — not a dumping ground.
+
+    atmega328p is P0 AVR without a firmware-perf-spin-avr crate / linked ELF
+    yet; it is waived in board_perf.WAIVED until that fixture exists. Any other
+    chip here is a regression that needs a fixture or a new documented reason.
+    """
     _, waived = bp.plan_coverage(bp.discover_chips())
-    assert waived == {}, f"chips fell out of the gate: {waived}"
+    assert waived == {
+        "atmega328p": (
+            "no perf-spin fixture for AVR8 yet; CPU P0 without linked spin ELF"
+        ),
+    }, f"unexpected waivers (add fixture or update this allowlist): {waived}"
 
 
 def test_real_chip_tree_is_fully_classified():

@@ -211,7 +211,9 @@ fn run_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &Case) -> Outcome {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: sweeps the nRF52840 POWER register surface against real silicon over SWD \
+            (OpenOcd::spawn_nrf52), so it requires an attached board. The whole file is behind \
+            `--features hw-oracle-nrf52`; set NRF52_STRICT=1 to make divergence fail"]
 fn nrf52840_power_conformance() {
     let _guard = HW_LOCK.lock().unwrap();
     let mut sim = build_sim_bus();

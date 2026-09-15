@@ -1,0 +1,156 @@
+name: Core Renode speed (Zephyr hello nRF52840)
+
+# Same pinned ELF on LabWired and Renode. Stop when UART contains LW_Z0_OK.
+# Fail if LabWired process wall time is worse than Renode's beyond 20% slack.
+#
+# This is a wall-time job-completion gate, not an ALU-spin vs tlib MIPS gate.
+# LabWired uses the fidelity-preserving settle path (1000 more instructions
+# after the marker; idle-ff is off for that window).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "crates/core/**"
+      - "crates/cli/**"
+      - "crates/config/**"
+      - "configs/chips/nrf52840.yaml"
+      - "validation/zephyr-matrix/systems/nrf52840.yaml"
+      - "tests/fixtures/nrf52840-zephyr-l0-hello.elf"
+      - "scripts/perf/compare_renode_hello.py"
+      - "scripts/perf/test_compare_renode_hello.py"
+      - ".github/workflows/core-renode-speed.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "crates/core/**"
+      - "crates/cli/**"
+      - "crates/config/**"
+      - "configs/chips/nrf52840.yaml"
+      - "validation/zephyr-matrix/systems/nrf52840.yaml"
+      - "tests/fixtures/nrf52840-zephyr-l0-hello.elf"
+      - "scripts/perf/compare_renode_hello.py"
+      - "scripts/perf/test_compare_renode_hello.py"
+      - ".github/workflows/core-renode-speed.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: core-renode-speed-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  RENODE_VERSION: "1.17.0"
+  RENODE_URL: "https://github.com/renode/renode/releases/download/v1.17.0/renode-1.17.0.linux-portable.tar.gz"
+  RENODE_SHA256: "4ba7c68b59e2447f188ef4b4b112fcccd2802582c460beedceb63b84e5605a5f"
+
+jobs:
+  unit:
+    name: compare-script-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit-test comparison math and ELF pin
+        run: |
+          python -m pip install --quiet pytest
+          python3 -m pytest -q scripts/perf/test_compare_renode_hello.py
+
+  vs-renode:
+    name: labwired-vs-renode-hello
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-renode-speed
+          workspaces: |
+            . -> target
+
+      - name: GTK2 for Renode portable (headless still links it)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk2.0-0t64 || sudo apt-get install -y libgtk2.0-0
+
+      - name: Cache Renode portable
+        id: renode-cache
+        uses: actions/cache@v4
+        with:
+          path: .renode-portable
+          key: renode-${{ env.RENODE_VERSION }}-linux-portable-${{ env.RENODE_SHA256 }}
+
+      - name: Install Renode portable
+        run: |
+          set -euo pipefail
+          if [ ! -x .renode-portable/renode ]; then
+            curl -L --fail --retry 3 -o /tmp/renode.tgz "$RENODE_URL"
+            echo "$RENODE_SHA256  /tmp/renode.tgz" | sha256sum -c -
+            mkdir -p .renode-portable
+            tar xf /tmp/renode.tgz -C .renode-portable --strip-components=1
+          fi
+          .renode-portable/renode --disable-gui --console -e 'quit' >/tmp/renode-help.txt 2>&1 || true
+          grep -q 'Renode, version' /tmp/renode-help.txt
+
+      - name: Build LabWired CLI (event-scheduler)
+        run: cargo build --release -p labwired-cli --features event-scheduler
+
+      - name: Compare wall time to LW_Z0_OK
+        run: |
+          python3 scripts/perf/compare_renode_hello.py \
+            --labwired target/release/labwired \
+            --renode "$PWD/.renode-portable/renode" \
+            --slack 0.20 \
+            --output-json renode-hello.json
+
+      - name: Write comparison onto the Actions run page
+        if: always() && hashFiles('renode-hello.json') != ''
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          d = json.loads(Path("renode-hello.json").read_text())
+          lw, rd = d["labwired"], d["renode"]
+          ratio = d.get("ratio_labwired_over_renode")
+          ratio_s = f"{ratio:.3f}×" if isinstance(ratio, float) else "n/a"
+          verdict = "PASS — LabWired is not slower than Renode" if d["pass"] else "FAIL — LabWired slower than Renode beyond slack"
+          lines = [
+              "## LabWired vs Renode — Zephyr hello nRF52840",
+              "",
+              f"**{verdict}**",
+              "",
+              "| | LabWired | Renode 1.17.0 |",
+              "|---|---:|---:|",
+              f"| Process wall | {lw['wall_s']:.3f} s | {rd['wall_s']:.3f} s |",
+              f"| Guest work | {lw.get('steps')} steps / {lw.get('cycles')} cycles | {rd.get('instructions')} instructions |",
+              f"| UART `LW_Z0_OK` | {lw.get('uart_ok')} | {rd.get('uart_ok')} |",
+              f"| LabWired / Renode | {ratio_s} | |",
+              "",
+              f"Slack {d['slack']:.0%}. Same ELF `{d['elf_sha256'][:12]}…`. Stop at UART marker `LW_Z0_OK`.",
+              "",
+              "```json",
+              json.dumps(d, indent=2),
+              "```",
+              "",
+          ]
+          Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text("\n".join(lines))
+          PY
+
+      - name: Upload comparison JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renode-hello-speed
+          path: renode-hello.json

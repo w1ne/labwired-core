@@ -578,7 +578,9 @@ static HW_LOCK: Mutex<()> = Mutex::new(());
 // ── Main test entry point ─────────────────────────────────────────────────────
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: sweeps the nRF52840 P0/P1 GPIO register map against real silicon over SWD \
+            (OpenOcd::spawn_nrf52), so it requires an attached board. The whole file is behind \
+            `--features hw-oracle-nrf52`; set NRF52_STRICT=1 to make divergence fail"]
 fn nrf52840_gpio_conformance() {
     let _guard = HW_LOCK.lock().unwrap();
 

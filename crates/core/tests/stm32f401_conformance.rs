@@ -32,6 +32,7 @@ fn f401_bus() -> labwired_core::bus::SystemBus {
         schema_version: "1.0".to_string(),
         name: "stm32f401-conformance".to_string(),
         chip: path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         board_io: vec![],
         debug_uart: None,

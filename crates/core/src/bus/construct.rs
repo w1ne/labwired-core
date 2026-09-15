@@ -56,6 +56,7 @@ impl SystemBus {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            cpu_hz: 0,
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -71,24 +72,23 @@ impl SystemBus {
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
             last_gpio_in: None,
+            gpio_port_idx: None,
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
+            memory_reads: std::cell::Cell::new(0),
+            memory_writes: std::cell::Cell::new(0),
+            peripheral_accesses: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
-            ws2812: Vec::new(),
-            servos: Vec::new(),
-            step_dir_motors: Vec::new(),
-            h_bridge_motors: Vec::new(),
+            observed: Vec::new(),
             motors: Vec::new(),
             motor_cycle_anchor: 0,
-            ili9341_parallel: Vec::new(),
-            unipolar_steppers: Vec::new(),
             tm1637: Vec::new(),
             hx711: Vec::new(),
             seven_segment: Vec::new(),
@@ -96,21 +96,12 @@ impl SystemBus {
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
-            esp32c3_irq_routing: false,
-            riscv_irq_lines: 0,
-            esp32c3_system_idx: None,
-            esp32c3_interrupt_core0_idx: None,
-            esp32c3_irq_cache: None,
-            esp32c3_asserted_sources: [0; 2],
-            esp32c3_sched_asserted_sources: [0; 2],
+            irq_fabric: InterruptFabric::default(),
+            esp32s3_irq_audit: None,
             esp32c3_sensitive_idx: None,
             esp32c3_pms: None,
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
-            esp32s3_irq_routing: false,
-            esp32s3_intmatrix_idx: None,
-            esp32s3_asserted_sources: [0; 2],
-            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -119,6 +110,9 @@ impl SystemBus {
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
+            analog_pin_map: std::collections::HashMap::new(),
+            io_voltage_v: None,
+            gpio_input_thresholds: None,
             external_device_decls: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
@@ -141,6 +135,7 @@ impl SystemBus {
             nvic: None,
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
+            cpu_hz: 0,
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
@@ -156,24 +151,23 @@ impl SystemBus {
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
             last_gpio_in: None,
+            gpio_port_idx: None,
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
+            memory_reads: std::cell::Cell::new(0),
+            memory_writes: std::cell::Cell::new(0),
+            peripheral_accesses: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
-            ws2812: Vec::new(),
-            servos: Vec::new(),
-            step_dir_motors: Vec::new(),
-            h_bridge_motors: Vec::new(),
+            observed: Vec::new(),
             motors: Vec::new(),
             motor_cycle_anchor: 0,
-            ili9341_parallel: Vec::new(),
-            unipolar_steppers: Vec::new(),
             tm1637: Vec::new(),
             hx711: Vec::new(),
             seven_segment: Vec::new(),
@@ -181,21 +175,12 @@ impl SystemBus {
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
-            esp32c3_irq_routing: false,
-            riscv_irq_lines: 0,
-            esp32c3_system_idx: None,
-            esp32c3_interrupt_core0_idx: None,
-            esp32c3_irq_cache: None,
-            esp32c3_asserted_sources: [0; 2],
-            esp32c3_sched_asserted_sources: [0; 2],
+            irq_fabric: InterruptFabric::default(),
+            esp32s3_irq_audit: None,
             esp32c3_sensitive_idx: None,
             esp32c3_pms: None,
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
-            esp32s3_irq_routing: false,
-            esp32s3_intmatrix_idx: None,
-            esp32s3_asserted_sources: [0; 2],
-            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -204,6 +189,9 @@ impl SystemBus {
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
+            analog_pin_map: std::collections::HashMap::new(),
+            io_voltage_v: None,
+            gpio_input_thresholds: None,
             external_device_decls: Vec::new(),
         };
         bus.rebuild_peripheral_ranges();
@@ -243,6 +231,7 @@ impl SystemBus {
         dev.attach_cycle_clock(self.cycle_clock.clone());
         // Twin of the `push_peripheral` attach — see there.
         dev.attach_irq_line(irq);
+        dev.attach_cpu_hz(self.cpu_hz);
         dev.attach_bus_trace(name, &self.bus_trace);
         self.peripherals.push(PeripheralEntry {
             name: name.to_string(),
@@ -273,6 +262,7 @@ impl SystemBus {
     ) {
         dev.attach_cycle_clock(self.cycle_clock.clone());
         dev.attach_irq_line(irq);
+        dev.attach_cpu_hz(self.cpu_hz);
         dev.attach_bus_trace(name, &self.bus_trace);
         if let Some(idx) = self.peripherals.iter().position(|p| p.name == name) {
             let e = &mut self.peripherals[idx];
@@ -360,7 +350,7 @@ impl SystemBus {
     /// `core_id` (0 = PRO_CPU, 1 = APP_CPU) via the registered interrupt
     /// matrix's per-core map table. None if unregistered or unbound.
     pub fn route_irq_source_to_cpu_irq_core(&self, source_id: u32, core_id: u8) -> Option<u8> {
-        let idx = self.esp32s3_intmatrix_idx?;
+        let idx = self.irq_fabric.esp32s3.intmatrix_idx?;
         self.peripherals
             .get(idx)?
             .dev
@@ -459,6 +449,17 @@ impl SystemBus {
                 uarte.set_sink(Some(sink.clone()), echo_stdout);
                 continue;
             }
+            // Microchip SERCOM in USART mode — the SAM console. Its own model
+            // (one block that is also the SPI and I2C controller), so it needs
+            // its own arm: without it a SAM board runs, prints to the host
+            // stdout, and captures an EMPTY uart.log, so every serial
+            // assertion in `labwired test` silently has nothing to match.
+            if let Some(sercom) =
+                any.downcast_mut::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+            {
+                sercom.set_sink(Some(sink.clone()), echo_stdout);
+                continue;
+            }
             // ESP32-S3 UART0 — the faithful ROM-boot console. The real mask ROM
             // and 2nd-stage bootloader print their banner/progress here, and
             // esp-hal's default `esp_println` targets UART0 too. Without this the
@@ -478,6 +479,17 @@ impl SystemBus {
             // not UART0. Route it into the same capture sink.
             if let Some(usb) = any.downcast_mut::<crate::peripherals::rp2040::usb::Rp2040Usb>() {
                 usb.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // ESP32-C3/S3 USB-Serial-JTAG: native-USB boards compile Arduino
+            // `Serial` to this block, not UART0. Same generic tap as RP2040 USB
+            // CDC — the twin finds the console, firmware does not special-case
+            // the board.
+            if let Some(jtag) =
+                any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            {
+                jtag.set_sink(Some(sink.clone()), echo_stdout);
+                continue;
             }
         }
     }
@@ -523,14 +535,26 @@ impl SystemBus {
         console: &crate::console::HostConsole,
         sink: Arc<Mutex<Vec<u8>>>,
     ) -> Result<(), String> {
+        self.attach_host_console_echo(console, sink, false)
+    }
+
+    /// [`Self::attach_host_console`] that also echoes the console to the host's
+    /// stdout when `echo_stdout` is set. Same resolution and the same errors;
+    /// only the echo differs.
+    pub fn attach_host_console_echo(
+        &mut self,
+        console: &crate::console::HostConsole,
+        sink: Arc<Mutex<Vec<u8>>>,
+        echo_stdout: bool,
+    ) -> Result<(), String> {
         use crate::console::{HostConsole, USB_SERIAL_JTAG};
         match console {
             HostConsole::Undeclared => {
-                self.attach_uart_tx_sink(sink, false);
+                self.attach_uart_tx_sink(sink, echo_stdout);
                 Ok(())
             }
             HostConsole::Uart(name) => {
-                if self.attach_uart_tx_sink_named(name, sink, false) {
+                if self.attach_uart_tx_sink_named(name, sink, echo_stdout) {
                     Ok(())
                 } else {
                     Err(format!(
@@ -541,7 +565,7 @@ impl SystemBus {
                 }
             }
             HostConsole::UsbSerialJtag => {
-                if self.attach_usb_serial_jtag_sink(sink) {
+                if self.attach_usb_serial_jtag_sink_echo(sink, echo_stdout) {
                     Ok(())
                 } else {
                     Err(format!(
@@ -557,6 +581,16 @@ impl SystemBus {
     /// Route the ESP32-C3/S3 USB-Serial-JTAG block's TX into `sink`.
     /// Returns false when this bus carries no such block.
     pub fn attach_usb_serial_jtag_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) -> bool {
+        self.attach_usb_serial_jtag_sink_echo(sink, false)
+    }
+
+    /// [`Self::attach_usb_serial_jtag_sink`] that also echoes the console to
+    /// the host's stdout when `echo_stdout` is set.
+    pub fn attach_usb_serial_jtag_sink_echo(
+        &mut self,
+        sink: Arc<Mutex<Vec<u8>>>,
+        echo_stdout: bool,
+    ) -> bool {
         use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
         for p in &mut self.peripherals {
             if p.name != crate::console::USB_SERIAL_JTAG {
@@ -566,7 +600,7 @@ impl SystemBus {
                 return false;
             };
             if let Some(jtag) = any.downcast_mut::<UsbSerialJtag>() {
-                jtag.set_sink(Some(sink), false);
+                jtag.set_sink(Some(sink), echo_stdout);
                 return true;
             }
             // A declarative register stub answering at 0x6004_3000 is NOT the
@@ -593,6 +627,10 @@ impl SystemBus {
                 uart.set_sink(None, false);
             } else if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(None);
+            } else if let Some(sercom) =
+                any.downcast_mut::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+            {
+                sercom.set_sink(None, false);
             }
         }
 
@@ -613,6 +651,18 @@ impl SystemBus {
             if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(Some(sink));
                 uart.silence_stdout_echo_if(echo_stdout);
+                return true;
+            }
+            if let Some(jtag) =
+                any.downcast_mut::<crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag>()
+            {
+                jtag.set_sink(Some(sink), echo_stdout);
+                return true;
+            }
+            if let Some(sercom) =
+                any.downcast_mut::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+            {
+                sercom.set_sink(Some(sink), echo_stdout);
                 return true;
             }
             return false;
@@ -642,6 +692,10 @@ impl SystemBus {
                 any.downcast_ref::<crate::peripherals::nrf54l::uarte::Nrf54lUarte>()
             {
                 sources.push(uarte.rx_buffer());
+            } else if let Some(sercom) =
+                any.downcast_ref::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+            {
+                sources.push(sercom.rx_buffer());
             }
         }
         sources
@@ -675,6 +729,12 @@ impl SystemBus {
             {
                 return Some(uarte.rx_buffer());
             }
+            // Microchip SERCOM in USART mode: same injection queue contract.
+            if let Some(sercom) =
+                any.downcast_ref::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+            {
+                return Some(sercom.rx_buffer());
+            }
             return any
                 .downcast_ref::<crate::peripherals::esp_uart::EspUart>()
                 .map(|uart| uart.rx_buffer());
@@ -704,24 +764,32 @@ impl SystemBus {
         }
     }
 
-    /// Decode an RP2040 atomic register-alias access. Returns the aligned base
-    /// register address and the atomic op when `addr` lands on a `+0x1000`
-    /// (XOR), `+0x2000` (SET) or `+0x3000` (CLR) alias of a peripheral register
-    /// in the APB/AHB-Lite peripheral window; `None` for a normal (`+0x0000`)
-    /// access or any address outside the window. Only consulted when
-    /// `atomic_register_aliases` is set, so it is a no-op for other parts.
+    /// Decode an atomic register-alias access. Returns the aligned base
+    /// register address and the atomic op when `addr` lands on a `+0x1000`,
+    /// `+0x2000` or `+0x3000` alias of a peripheral register in the peripheral
+    /// window; `None` for a normal (`+0x0000`) access or any address outside
+    /// the window. Which alias is which op is the chip's
+    /// [`AtomicAliasFlavour`]; the flavour is `None` for most parts, so this
+    /// costs one enum test on their hot path.
+    ///
+    /// The window spans both the RP2040 APB/AHB-Lite range and the Silicon Labs
+    /// Series-2 peripheral ranges, which are NOT one contiguous block: the RM's
+    /// peripheral map puts the bulk at `0x4000_0000`, but RADIOAES/SMU at
+    /// `0x4400_0000`, LETIMER0/IADC0/VDAC at `0x4900_0000`, HFXO at
+    /// `0x4A00_0000`, I2C0/WDOG/EUSART0 at `0x4B00_0000`, SEMAILBOX at
+    /// `0x4C00_0000` and MVP at `0x4D00_0000` (EFR32xG26 RM rev 1.0 §4.2.4.1).
+    /// A range that stopped at `0x5040_0000` still covers all of them, and the
+    /// non-secure aliases at `0x5xxx_xxxx` are a separate mapping this chip
+    /// does not declare.
     #[inline]
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
-        const APB_AHB: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
-        if !APB_AHB.contains(&addr) {
+        const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
+        if !PERIPHERAL_WINDOW.contains(&addr) {
             return None;
         }
-        let op = match (addr >> 12) & 0x3 {
-            0 => return None,
-            1 => AtomicAliasOp::Xor,
-            2 => AtomicAliasOp::Set,
-            _ => AtomicAliasOp::Clr,
-        };
+        let op = self
+            .atomic_register_aliases
+            .op_for_index((addr >> 12) & 0x3)?;
         Some((addr & !0x3000, op))
     }
 
@@ -770,6 +838,7 @@ impl SystemBus {
         // wired, so one whose only per-cycle wakeup holds a level-triggered IRQ
         // can stop scheduling itself on a bus where that pend is dropped.
         dev.attach_irq_line(p_cfg.irq);
+        dev.attach_cpu_hz(self.cpu_hz);
         // Same choke point again: the ONE universal bus trace. A UART or CAN
         // model has no attachable slave to wrap, so it records for itself —
         // being registered is what gets it the shared ring.
@@ -805,14 +874,14 @@ impl SystemBus {
         &mut self,
         peripherals: &[labwired_config::PeripheralConfig],
     ) -> anyhow::Result<()> {
-        // Find the RCC model once (clock-gating requires one).
+        // Find the clock controller once (clock-gating requires one). Asked
+        // through `Peripheral::clock_gate_reg_offset`, not a downcast to one
+        // concrete model: a downcast to `rcc::Rcc` silently answered `None` for
+        // every other vendor's clock unit, so a Silicon Labs CMU could declare
+        // gates that never resolved.
         let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
             let idx = bus.rcc_idx?;
-            bus.peripherals[idx]
-                .dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
-                .and_then(|rcc| rcc.rcc_reg_offset(reg))
+            bus.peripherals[idx].dev.clock_gate_reg_offset(reg)
         };
         for p_cfg in peripherals {
             let Some(gates) = &p_cfg.clock else { continue };

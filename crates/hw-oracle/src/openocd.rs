@@ -647,7 +647,8 @@ mod tests {
     /// Live hardware test — requires ESP32-S3 board connected via USB-JTAG.
     /// Run with: cargo test -p labwired-hw-oracle -- --ignored
     #[test]
-    #[ignore]
+    #[ignore = "hw-oracle: requires a USB-JTAG-attached ESP32-S3 and a working OpenOCD; run with \
+                `cargo test -p labwired-hw-oracle -- --ignored`"]
     fn openocd_halts_and_reads_reg() {
         let _guard = HW_LOCK.lock().unwrap();
         let mut oc = OpenOcd::spawn_default().unwrap();
@@ -660,7 +661,9 @@ mod tests {
     /// Live hardware test — reads 4 words from IRAM and writes/reads back a
     /// scratch value in DRAM.
     #[test]
-    #[ignore]
+    #[ignore = "hw-oracle: requires a USB-JTAG-attached ESP32-S3 and a working OpenOCD — it \
+                writes a sentinel into that board's DRAM; run with `cargo test -p \
+                labwired-hw-oracle -- --ignored`"]
     fn openocd_read_write_memory() {
         let _guard = HW_LOCK.lock().unwrap();
         let mut oc = OpenOcd::spawn_default().unwrap();
@@ -681,7 +684,9 @@ mod tests {
 
     /// Live hardware test — write a register value and read it back.
     #[test]
-    #[ignore]
+    #[ignore = "hw-oracle: requires a USB-JTAG-attached ESP32-S3 and a working OpenOCD — it \
+                writes a sentinel into that board's a0; run with `cargo test -p \
+                labwired-hw-oracle -- --ignored`"]
     fn openocd_write_read_register() {
         let _guard = HW_LOCK.lock().unwrap();
         let mut oc = OpenOcd::spawn_default().unwrap();

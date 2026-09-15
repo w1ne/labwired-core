@@ -8,7 +8,6 @@ use super::pad_lines::PadLines;
 use super::uart_waveform::{UartFraming, UartNarrator};
 use super::wave_plan::NarrationFit;
 use crate::SimResult;
-use std::any::Any;
 use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::str::FromStr;
@@ -52,64 +51,13 @@ pub struct UartTraceEvent {
     pub byte: u8,
 }
 
-/// A UART model that can host a [`UartStreamDevice`] — the contract an
-/// inter-chip cross-link binds to.
-///
-/// This exists so the cross-link seam names a CAPABILITY rather than one
-/// concrete struct. It used to downcast to [`Uart`], which silently excluded
-/// every chip family with its own UART model: an ESP32-C3's `uart1` reported
-/// "is not a UART" and two C3s could not be wired together at all. A new UART
-/// model now joins by implementing this trait, not by editing the seam.
-pub trait UartStreamHost {
-    /// Bind a peer to this UART's RX/TX paths.
-    fn attach_stream_device(&mut self, dev: Box<dyn UartStreamDevice>);
-
-    /// Stop mirroring TX to the console/capture sink. A cross-linked UART
-    /// carries raw protocol octets, not console text, and letting those into
-    /// the serial monitor floods it with binary that looks identical on both
-    /// peers.
-    fn detach_console_sink(&mut self);
-
-    /// True when any attached peer carries protocol octets — the test
-    /// `attach_uart_tx_sink` uses to leave a linked UART off the console sink.
-    fn hosts_protocol_peer(&self) -> bool;
-}
-
-/// A device that emits bytes through the UART's RX path (e.g. a GPS module).
-pub trait UartStreamDevice: Send {
-    /// Called periodically by the bus tick. Returns the next byte to push into UART RX,
-    /// or None if no byte is pending. Implementations should respect `elapsed_us` to
-    /// pace output (e.g. 9600 baud → ~1 ms/byte → emit one byte per ~1000 us tick).
-    fn poll(&mut self, elapsed_us: u32) -> Option<u8>;
-    /// Observe a byte transmitted by firmware on the TX path. Default: ignore.
-    /// Bidirectional peers (e.g. an IO-Link master) override this to receive the
-    /// device's responses, complementing `poll` which drives the RX path.
-    fn on_tx_byte(&mut self, _byte: u8) {}
-
-    /// True when this peer's traffic is raw protocol octets rather than console
-    /// text, so the UART hosting it must be kept OFF the console capture sink.
-    ///
-    /// Without this, a node's link UART and its console UART push into the same
-    /// buffer and the two byte streams splice together — a two-chip run prints
-    /// `pPiInNgGer up` and no serial assertion can be trusted. Default `false`:
-    /// an ordinary stream device (a GPS emitting NMEA) is console-safe.
-    fn carries_protocol_octets(&self) -> bool {
-        false
-    }
-    fn as_any(&self) -> Option<&dyn Any> {
-        None
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
-        None
-    }
-    /// Runtime-drivable view of this device, if it accepts simulated input.
-    /// Same contract as the hook on `I2cDevice`: input devices override it so
-    /// the generic [`crate::Machine::set_input`] resolver can reach them
-    /// without a downcast. Default `None` = not an input device.
-    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
-        None
-    }
-}
+/// The UART cross-link contracts — a model that can HOST a stream peer
+/// ([`UartStreamHost`]) and the peer itself ([`UartStreamDevice`]). Declared
+/// in [`peripherals::device`](crate::peripherals::device) — the ONE home for
+/// the vocabulary of things that hang off a wire — and re-exported here so
+/// every existing `impl`, bound and intra-doc link at this path keeps
+/// resolving.
+pub use crate::peripherals::device::{UartStreamDevice, UartStreamHost};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -137,6 +85,12 @@ pub enum UartRegisterLayout {
     Efm32,
     /// Silicon Labs EFR32 USART (Series 1) — STATUS@0x10, reset 0x2040.
     Efr32,
+    /// Silicon Labs EFR32 Series-2 USART (xG21–xG29) — the Series-1 register
+    /// block shifted: STATUS@0x18, RXDATA@0x24, TXDATA@0x38. Flag semantics and
+    /// the STATUS reset value are unchanged (TXBL|TXIDLE = 0x2040). Offsets
+    /// from the vendor CMSIS header (simplicity_sdk `efr32mg26_usart.h`,
+    /// `USART_TypeDef`).
+    Efr32s2,
     /// Silicon Labs LEUART (Low Energy UART) — STATUS@0x08, reset 0x10.
     Leuart,
     /// Renesas SCI (classic SH/RX and RA-series) — SSR@0x04, byte registers.
@@ -197,6 +151,7 @@ impl FromStr for UartRegisterLayout {
             "cadence" | "cdns" | "zynq" => Ok(Self::Cadence),
             "efm32" => Ok(Self::Efm32),
             "efr32" => Ok(Self::Efr32),
+            "efr32s2" | "efr32_series2" | "efr32xg2" => Ok(Self::Efr32s2),
             "leuart" => Ok(Self::Leuart),
             "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
             "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
@@ -216,7 +171,7 @@ impl FromStr for UartRegisterLayout {
             "picosoc" | "simpleuart" => Ok(Self::PicoUart),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
-                 lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, leuart, sci, \
+                 lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, efr32s2, leuart, sci, \
                  gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
                  coreuart, k6xf, pulp",
                 value
@@ -413,6 +368,27 @@ impl UartRegisterLayout {
                 status: 0x10,
                 tx: 0x34,
                 rx: 0x1C,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x2040,    // TXBL | TXIDLE
+                rx_present_set: 1 << 7, // RXDATAV
+                rx_present_clear: 0,
+            },
+            // Silicon Labs EFR32 Series-2 USART (xG21/xG24/xG26/…): the flag
+            // semantics are Series-1-identical (TXBL(6) ready, RXDATAV(7) set
+            // on data, reset TXBL|TXIDLE = 0x2040) but the register block
+            // shifted — STATUS 0x10→0x18, RXDATA 0x1C→0x24, TXDATA 0x34→0x38
+            // (simplicity_sdk `efr32mg26_usart.h`, `USART_TypeDef`). A firmware
+            // built for Series 1 writes TXDATA at 0x34, which on this map is
+            // TXDATAX — treating them as one layout transmits nothing and hangs
+            // the driver's TXBL poll at the wrong address.
+            UartRegisterLayout::Efr32s2 => UartRegMap {
+                status: 0x18,
+                tx: 0x38,
+                rx: 0x24,
                 cr3: 0xF00,
                 cr1: None,
                 txeie_mask: 0,
@@ -695,6 +671,16 @@ impl UartRegisterLayout {
 #[derive(serde::Serialize)]
 pub struct Uart {
     layout: UartRegisterLayout,
+    /// EFR32 only: "my TX currently reaches a pad", published by
+    /// `GPIO_USARTROUTE`.
+    ///
+    /// ⚠️ A USART'S TX REACHES NO PIN UNTIL ITS ROUTE NAMES ONE. Firmware that
+    /// skips it prints nothing on a real board, and this model used to hand
+    /// the byte to the console sink regardless — a serial assertion that
+    /// passed in the twin and produced silence on the bench. `None` means no
+    /// route block is wired (every other family), and the gate is open.
+    #[serde(skip)]
+    route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
     #[serde(skip)]
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     #[serde(skip)]
@@ -872,6 +858,7 @@ impl Uart {
     pub fn new_with_layout_cr3(layout: UartRegisterLayout, cr3_mask: u32) -> Self {
         Self {
             layout,
+            route_gate: None,
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: true,
@@ -972,9 +959,10 @@ impl Uart {
     /// so they are evaluated once; only the RX-stream pacing is replayed `n`
     /// times. Replaying it — rather than handing a stream one poll carrying
     /// `n * TICK_US` — is what keeps this refactor byte-exact: the
-    /// [`UartStreamDevice::poll`] contract emits at most ONE byte per call, so
-    /// `n` polls is the only way to produce the `n` bytes the per-cycle path
-    /// would have produced, in the same order.
+    /// [`UartStreamDevice::poll`] contract emits at most ONE byte per call
+    /// (times the peer's [`UartStreamDevice::max_bytes_per_tick`] budget, 1 by
+    /// default), so `n` polls is the only way to produce the `n` bytes the
+    /// per-cycle path would have produced, in the same order.
     fn advance_ticks(&mut self, n: u32) -> (bool, Vec<u32>) {
         // Publish any burst the wire has now had time to carry. Cheap and
         // inert when nothing is buffered, which is every tick on a UART that
@@ -1010,9 +998,19 @@ impl Uart {
                     *elapsed_us = 0; // consumed this tick
 
                     for stream in attached_streams.iter_mut() {
-                        if let Some(byte) = stream.poll(elapsed) {
+                        // Time is credited once per tick; the remaining calls
+                        // pass 0, so a fast peer drains what it earned without
+                        // being handed the tick again. The default budget of 1
+                        // is exactly the old single-poll behaviour.
+                        let budget = stream.max_bytes_per_tick().max(1);
+                        let mut credit = elapsed;
+                        for _ in 0..budget {
+                            let Some(byte) = stream.poll(credit) else {
+                                break;
+                            };
                             rx_guard.push_back(byte);
                             rx_trace.push(byte);
+                            credit = 0;
                         }
                     }
                 }
@@ -1364,7 +1362,27 @@ impl Uart {
         (Vec::new(), now)
     }
 
+    /// Can this UART's TX reach a pin at all?
+    fn reaches_a_pad(&self) -> bool {
+        self.route_gate
+            .as_ref()
+            .is_none_or(|g| g.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// Install the `GPIO_USARTROUTE` gate for this instance.
+    pub(crate) fn set_route_gate(
+        &mut self,
+        gate: crate::peripherals::efr32::usart_route::RouteGate,
+    ) {
+        self.route_gate = Some(gate);
+    }
+
     fn push_tx(&mut self, value: u8) {
+        // The byte leaves the shift register either way — what an unrouted TX
+        // cannot do is reach a wire, so nothing downstream sees it.
+        if !self.reaches_a_pad() {
+            return;
+        }
         self.record_trace("tx", value);
         self.wire_push(value);
 
@@ -1880,6 +1898,7 @@ mod tests {
             (Cadence, 0x30, 0x2C),
             (Efm32, 0x34, 0x10),
             (Efr32, 0x34, 0x10),
+            (Efr32s2, 0x38, 0x18),
             (Leuart, 0x28, 0x08),
             (Sci, 0x03, 0x04),
             (Gaisler, 0x00, 0x04),
@@ -1917,6 +1936,36 @@ mod tests {
                 "{layout:?}: idle status at {status:#x}"
             );
         }
+    }
+
+    /// Series-2 USART (EFR32MG26 and the whole xG2 family): the register block
+    /// shifted vs Series 1, so the Series-1 TXDATA offset (0x34) must NOT
+    /// transmit, STATUS lives at 0x18 and resets to TXBL|TXIDLE (0x2040) — the
+    /// value a polling driver spins on before its first byte — and RXDATAV /
+    /// RXDATA moved with it (bit 7 / 0x24, same bit as Series 1).
+    #[test]
+    fn test_uart_efr32s2_transmit_and_status() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Efr32s2);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+
+        assert_eq!(uart.read_u32(0x18).unwrap(), 0x2040, "STATUS reset");
+        // Series-1 TXDATA offset: on Series 2 that is TXDATAX, which this
+        // model does not treat as the byte-TX register.
+        uart.write(0x34, b'X').unwrap();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "the Series-1 TX offset must not transmit on a Series-2 map"
+        );
+        // Series-2 TXDATA @ 0x38 transmits.
+        uart.write(0x38, b'K').unwrap();
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
+        // RXDATAV (STATUS bit 7) sets while a byte is pending; RXDATA @ 0x24
+        // pops it and the flag clears.
+        uart.rx_buffer().lock().unwrap().push_back(b'Z');
+        assert_eq!(uart.read_u32(0x18).unwrap() & (1 << 7), 1 << 7);
+        assert_eq!(uart.read(0x24).unwrap(), b'Z');
+        assert_eq!(uart.read_u32(0x18).unwrap() & (1 << 7), 0);
     }
 
     /// Empty-flag families (PL011 FR.RXFE, Cadence SR.RxEMPTY, OpenTitan

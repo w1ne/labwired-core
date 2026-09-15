@@ -15,11 +15,12 @@
 //! this model implements directly.
 //!
 //! Modelled behaviour: a 30-bit `GPIO_OUT` output latch and a `GPIO_OE` output
-//! enable, each driven by direct / set / clear / xor registers. `GPIO_IN`
-//! reads back the level a pin is *driving*: `GPIO_OUT & GPIO_OE`. With no
-//! external wiring in the chip model an output pin reads back its own driven
-//! level (a real, observable set-drive-readback round-trip) and an input
-//! (OE=0) pin floats to 0. `CPUID` reads 0 (core 0).
+//! enable, each driven by direct / set / clear / xor registers, plus an
+//! externally driven input word (`ext_in`) the outside world holds through
+//! [`Peripheral::set_gpio_input`]. `GPIO_IN` reports the pad: a pin whose
+//! output driver is enabled reads back the level it is *driving*, and only a
+//! pin left as an input reports what the outside world put there. An input pin
+//! nothing drives still floats to 0. `CPUID` reads 0 (core 0).
 
 use crate::{Peripheral, SimResult};
 use std::cell::Cell;
@@ -62,6 +63,12 @@ const SPINLOCK31: u64 = 0x17c;
 
 // The RP2040 exposes 30 GPIOs (0..29) on bank 0.
 const GPIO_MASK: u32 = 0x3fff_ffff;
+/// Pads this model answers for, named so the register mask and the per-pin
+/// capability methods (`read_gpio_pad`, `read_gpio_input`, `set_gpio_input`)
+/// cannot drift apart — a pin the mask drops must also be a pin the external
+/// world cannot drive, or a `board_io` button would report a level `GPIO_IN`
+/// never shows.
+const PAD_COUNT: u8 = 30;
 
 /// Push-mode logic capture for SIO bank-0 pads (Arduino `digitalWrite` / LED).
 struct SioTap {
@@ -83,6 +90,13 @@ impl std::fmt::Debug for SioTap {
 pub struct Rp2040Sio {
     gpio_out: u32,
     gpio_oe: u32,
+    /// Level the OUTSIDE WORLD holds on each pad — a `board_io` button wired to
+    /// the pin, a sensor's output line — applied through
+    /// [`Peripheral::set_gpio_input`]. Separate from `gpio_out` because it must
+    /// survive the firmware driving the same pad in the other direction: a
+    /// button holds its released level from boot, and the pin must return to it
+    /// the moment the firmware releases the output driver.
+    ext_in: u32,
     /// Pads bound to peripheral wires, resolved against IO_BANK0's live
     /// FUNCSEL. Empty until `SystemBus::wire_rp2040_pads` binds them.
     pad_routes: crate::peripherals::pad_routing::PadRoutes,
@@ -112,10 +126,19 @@ impl Rp2040Sio {
         Self::default()
     }
 
-    /// Level each pin is driving onto the (unwired) pads: a pin reads back its
-    /// own output when its output-enable is set, otherwise it floats to 0.
+    /// Level at the pads — what `GPIO_IN` reports.
+    ///
+    /// A pin whose output driver is enabled reads back the level it is
+    /// DRIVING; only a pin left as an input reports what the outside world put
+    /// there, and a pad nothing drives floats to 0.
+    ///
+    /// If a pin is both driven and externally forced, the output driver wins.
+    /// Real silicon has a contention whose winner depends on drive strength; we
+    /// do not model that, and taking the driver is the case that matches a
+    /// correctly wired board — the same rule the ESP32 model states at
+    /// `pad_level_bank0`, so both families answer a button identically.
     fn gpio_in(&self) -> u32 {
-        self.gpio_out & self.gpio_oe
+        (self.gpio_out & self.gpio_oe) | (self.ext_in & !self.gpio_oe)
     }
 
     /// The function IO_BANK0 currently selects for `pin` — the selector the
@@ -150,7 +173,7 @@ impl Rp2040Sio {
     }
 
     fn pad_level(&self, pin: u8) -> Option<bool> {
-        if pin >= 30 {
+        if pin >= PAD_COUNT {
             return None;
         }
         // A pad IO_BANK0 has handed to a peripheral is driven by that
@@ -159,12 +182,10 @@ impl Rp2040Sio {
         if let Some(level) = self.pad_routes.level(pin, |p| self.pad_function(p)) {
             return Some(level);
         }
-        let bit = 1u32 << pin;
-        // Match GPIO_IN: only OE-enabled pins drive a known level.
-        if self.gpio_oe & bit == 0 {
-            return Some(false);
-        }
-        Some(self.gpio_out & bit != 0)
+        // ONE definition of "pad level": whatever firmware reads on GPIO_IN is
+        // what a probe clipped to the pad sees, so a host-driven input and a
+        // firmware-driven output can never disagree between the two readers.
+        Some(self.gpio_in() & (1u32 << pin) != 0)
     }
 
     /// Re-register watched pads with the wires that drive them, so a pad that
@@ -441,6 +462,34 @@ impl Peripheral for Rp2040Sio {
         self.pad_level(pin)
     }
 
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        if pin >= PAD_COUNT {
+            return None;
+        }
+        // The firmware-visible input level, which on this block IS `GPIO_IN` —
+        // the pad. Answering from `ext_in` alone would report a level the
+        // firmware cannot read back on a pin it is driving itself.
+        Some(self.gpio_in() & (1u32 << pin) != 0)
+    }
+
+    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= PAD_COUNT {
+            return false;
+        }
+        // Bracketed like every SIO latch write: a host-driven input change is
+        // an edge a probe armed on this pad must see, and `pad_level` already
+        // folds `ext_in` in, so the snapshot/report pair reports it for free.
+        self.tap_snapshot();
+        let bit = 1u32 << pin;
+        if level {
+            self.ext_in |= bit;
+        } else {
+            self.ext_in &= !bit;
+        }
+        self.tap_report();
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -526,6 +575,94 @@ mod tests {
         assert_eq!(sio.read_u32(GPIO_IN).unwrap() & PIN25, PIN25);
         sio.write_u32(GPIO_OUT_XOR, PIN25).unwrap();
         assert_eq!(sio.read_u32(GPIO_IN).unwrap() & PIN25, 0);
+    }
+
+    /// A `board_io` button drives its pin through `set_gpio_input`; the level
+    /// has to be visible to firmware reading GPIO_IN and to the bus's own
+    /// read-back proof (`read_gpio_input`), or `attach_board_io_buttons` drops
+    /// the button as undrivable — which is exactly what SIO used to do.
+    #[test]
+    fn externally_driven_input_reads_back_on_an_input_pin() {
+        use crate::Peripheral;
+        const PIN14: u32 = 1 << 14;
+        let mut sio = Rp2040Sio::new();
+        // OE clear: pin 14 is an input, and undriven it floats low.
+        assert_eq!(sio.read_u32(GPIO_IN).unwrap() & PIN14, 0);
+        assert_eq!(sio.read_gpio_input(14), Some(false));
+
+        assert!(sio.set_gpio_input(14, true), "bank-0 pad must be drivable");
+        assert_eq!(
+            sio.read_u32(GPIO_IN).unwrap() & PIN14,
+            PIN14,
+            "firmware reading GPIO_IN must see the external level"
+        );
+        assert_eq!(sio.read_gpio_input(14), Some(true));
+        assert_eq!(
+            sio.read_gpio_pad(14),
+            Some(true),
+            "probe agrees with GPIO_IN"
+        );
+
+        // Releasing the contact takes the pin back down.
+        assert!(sio.set_gpio_input(14, false));
+        assert_eq!(sio.read_u32(GPIO_IN).unwrap() & PIN14, 0);
+    }
+
+    /// Contention rule: the output driver wins. A pin the firmware drives reads
+    /// back its OWN level, so the set-drive-readback round-trip still holds
+    /// with an external source attached to the same pad.
+    #[test]
+    fn output_driver_wins_over_an_external_level() {
+        use crate::Peripheral;
+        const PIN14: u32 = 1 << 14;
+        let mut sio = Rp2040Sio::new();
+        assert!(sio.set_gpio_input(14, true));
+        // Firmware takes the pin as a low output.
+        sio.write_u32(GPIO_OE_SET, PIN14).unwrap();
+        assert_eq!(
+            sio.read_u32(GPIO_IN).unwrap() & PIN14,
+            0,
+            "driven pin reads its own low, not the external high"
+        );
+        assert_eq!(sio.read_gpio_input(14), Some(false));
+        // …and releasing the driver hands the pad back to the outside world.
+        sio.write_u32(GPIO_OE_CLR, PIN14).unwrap();
+        assert_eq!(sio.read_u32(GPIO_IN).unwrap() & PIN14, PIN14);
+    }
+
+    /// Out of range is a REFUSAL, not a silent no-op: `attach_board_io_buttons`
+    /// reads the return value to decide whether the button can be driven at
+    /// all, so a pad this block does not have must answer `false`.
+    #[test]
+    fn set_gpio_input_refuses_a_pad_outside_bank0() {
+        use crate::Peripheral;
+        let mut sio = Rp2040Sio::new();
+        assert!(
+            sio.set_gpio_input(29, true),
+            "GPIO29 is the last bank-0 pad"
+        );
+        assert!(!sio.set_gpio_input(30, true), "GPIO30 is not brought out");
+        assert_eq!(sio.read_gpio_input(30), None);
+    }
+
+    /// A probe armed on a pad must see the button's edge, not just the
+    /// firmware's own writes — the external drive is bracketed by the same
+    /// tap snapshot/report pair every SIO latch write uses.
+    #[test]
+    fn logic_tap_sees_an_externally_driven_edge() {
+        use crate::logic_capture::LogicTap;
+        use crate::Peripheral;
+        let mut sio = Rp2040Sio::new();
+        let tap = LogicTap::new();
+        assert!(sio.install_logic_tap(&tap, &[(14, 0)]));
+        tap.set_armed(true);
+        sio.set_gpio_input(14, true);
+        sio.set_gpio_input(14, false);
+        let events = tap.take_events();
+        assert!(
+            events.len() >= 2,
+            "expected a press and a release edge, got {events:?}"
+        );
     }
 
     #[test]

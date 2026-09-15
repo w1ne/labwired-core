@@ -172,12 +172,12 @@ mod spi_byte_level_golden_tests {
         println!("DR = {drs:?};");
     }
 
-    /// Captured on pristine HEAD 0877f536 (2026-08-08), BEFORE any
-    /// edge-sampling code existed in this branch — see the commit that added
-    /// this file, which contains no implementation change at all.
+    /// Wire captured on pristine HEAD 0877f536 (2026-08-08), BEFORE any
+    /// edge-sampling code existed. DR/SR recaptured 2026-09-15 after merging
+    /// main: RXNE is now clear-on-read (SR 3 → 2). The wire hex is unchanged.
     const WIRE: &str = "02266115533771155004433771155226621155004433773377337722660044115510044115500441155115500440044115510737362735151404004040514062626262246666222255551111444400005555111144440000555511115555111177773333740415371537371537737372604263737155026042626262626042626370426372626201155115500442266115500443377115500441155004411551155004400440044011551155337733771155226600440044004411550044115511551155115500440";
     const DR: &[u16] = &[
-        118, 3, 185, 3, 89, 3, 220, 3, 32, 3, 87, 3, 254, 3, 227, 3, 36, 3, 88, 3, 94, 3,
+        118, 2, 185, 2, 89, 2, 220, 2, 32, 2, 87, 2, 254, 2, 227, 2, 36, 2, 88, 2, 94, 2,
     ];
 
     #[test]

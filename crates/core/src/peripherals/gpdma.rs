@@ -173,10 +173,7 @@ impl Gpdma {
         self
     }
 
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock so the model stays
     /// on the legacy walk (`uses_scheduler() == false`).

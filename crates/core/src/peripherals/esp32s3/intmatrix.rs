@@ -101,6 +101,18 @@ impl Esp32s3IntMatrix {
     pub fn set_pending_sources(&mut self, sources: [u32; 4]) {
         self.intr_status = sources;
     }
+
+    /// The `PRO_INTR_STATUS_REG_0..3` mirror as the bus last routed it — the
+    /// half of the S3 fabric's output that is NOT `pending_cpu_irqs`, and the
+    /// half esp-hal's `__level_*_interrupt` actually reads to discover which
+    /// source fired. Exposed so the walk-free differential gate
+    /// (`esp32s3_irq_cache_differential`) can compare the whole routed result,
+    /// not just the per-core slot bitmap: a cache that got the slots right and
+    /// the status mirror wrong would dispatch the ISR and then hand it the
+    /// wrong source.
+    pub fn pending_sources(&self) -> [u32; 4] {
+        self.intr_status
+    }
 }
 
 impl Default for Esp32s3IntMatrix {

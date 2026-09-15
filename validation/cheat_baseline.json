@@ -1,0 +1,137 @@
+{
+  "entries": {
+    "0b1b04d003843679": {
+      "category": "NOP",
+      "clause": "returns pdTRUE unconditionally \u2014 real: the wrapped FreeRTOS call computes its result. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "return_pd_true"
+    },
+    "134b9017d1526231": {
+      "category": "THUNK-LIB",
+      "clause": "echoes the static buffer back as the queue handle instead of running xQueueCreateMutexStatic \u2014 real: FreeRTOS initializes the queue structure. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "x_queue_create_mutex_static_echo"
+    },
+    "2e22344b56e475e5": {
+      "category": "SKIP",
+      "clause": "bypasses the boot ROM and hand-seeds PC (SP seeded below) \u2014 real: the boot ROM executes and hands over at its own entry See FIDELITY.md \u00a7C",
+      "file": "crates/cli/src/commands/snapshot.rs",
+      "symbol": "<module>"
+    },
+    "317b5787723c9369": {
+      "category": "STUB",
+      "clause": "SDIO SLC peripheral faked as plain RAM \u2014 real: model the SLC registers/DMA. (host_slc below is a smarter FSM stub.) See FIDELITY.md \u00a7D",
+      "file": "crates/core/src/system/xtensa/esp32.rs",
+      "symbol": "<module>"
+    },
+    "46de94e639ba65de": {
+      "category": "THUNK-LIB",
+      "clause": "fakes SPIClass::beginTransaction (populates _spi->dev so transfer finds SPI3) \u2014 real: the compiled Arduino code configures clock/mode on the SPI peripheral. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "spi_class_begin_transaction"
+    },
+    "4969b34f12af8a4f": {
+      "category": "THUNK-LIB",
+      "clause": "writes a canned esp_chip_info_t \u2014 real: reads eFuse/DPORT to report cores/features/revision. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "esp_chip_info_stub"
+    },
+    "572d1aa17659971e": {
+      "category": "STUB",
+      "clause": "SDMMC host peripheral faked as plain RAM \u2014 real: model the SDMMC controller registers. See FIDELITY.md \u00a7D",
+      "file": "crates/core/src/system/xtensa/esp32.rs",
+      "symbol": "<module>"
+    },
+    "5b325c5b3006c04d": {
+      "category": "THUNK-LIB",
+      "clause": "fakes the Arduino spiStartBus() so later transfers find a \"bus up\" \u2014 real: the compiled IDF/Arduino SPI bus-init code runs against the SPI peripheral + GPIO matrix. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "spi_start_bus_fake"
+    },
+    "60255674f3030bed": {
+      "category": "THUNK-LIB",
+      "clause": "bump-allocates from a Rust-side arena instead of running the compiled heap_caps allocator \u2014 real: the IDF allocator manages the heap regions. (Sibling thunks: init/calloc/free/realloc.) See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "esp_idf_heap_caps_malloc"
+    },
+    "73ac3f1a28fd5497": {
+      "category": "THUNK",
+      "clause": "every fn in this module fakes a function instead of executing it \u2014 real: the CPU executes the ROM routine or the library code that is already present in the image. Two kinds (see FIDELITY.md \u00a7A): THUNK-ROM (boot-ROM helpers we have no binary to run \u2014 math, memcpy, cache, printf \u2014 reasonable to emulate) and THUNK-LIB / BYPASS / NOP (firmware library code that IS in the ELF but we skip \u2014 heap_caps, FreeRTOS, the SPI/GxEPD path \u2014 genuine fidelity debt) Individual cheats below carry their own CHEAT(...) marker",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "<module>"
+    },
+    "760b1187ade0d38f": {
+      "category": "SKIP",
+      "clause": "bypasses the boot ROM and hand-seeds PC/SP \u2014 real: the boot ROM executes and leaves PC/SP where it puts them. See FIDELITY.md \u00a7C",
+      "file": "crates/cli/src/commands/run.rs",
+      "symbol": "<module>"
+    },
+    "774915942f0cd48a": {
+      "category": "INFER",
+      "clause": "no D/C line wired \u2014 guess command vs data from protocol state \u2014 real: sample the D/C GPIO. See FIDELITY.md \u00a7E",
+      "file": "crates/core/src/peripherals/components/ssd1680_tricolor_290.rs",
+      "symbol": "<module>"
+    },
+    "84bd3d25acaf0a7c": {
+      "category": "NOP",
+      "clause": "halts the sim on abort() instead of running the real abort path \u2014 real: the firmware's abort() runs the panic handler and prints a backtrace, then resets. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "abort_halt"
+    },
+    "8591fdbe22da2cc4": {
+      "category": "THUNK-ROM",
+      "clause": "emulates xthal_window_spill (flush windowed regs to stack) in Rust \u2014 real: the ROM routine spills via ROTW + S32I and ends with WINDOWSTART = 1<<WB (only the current frame live). See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "xthal_window_spill_thunk"
+    },
+    "96f0ac1a4858216e": {
+      "category": "THUNK-LIB",
+      "clause": "returns an incrementing counter as a fake timestamp \u2014 real: the IDF reads a hardware timer (systimer/CCOUNT). See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "monotonic_counter_32"
+    },
+    "ab23fa4c41d1b614": {
+      "category": "THUNK-LIB",
+      "clause": "returns a fabricated current-task handle \u2014 real: the compiled FreeRTOS scheduler tracks pxCurrentTCB. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "x_task_get_current_task_handle"
+    },
+    "b28fbfe81dc6aaf6": {
+      "category": "STUB",
+      "clause": "SYSTEM/RTC_CNTL/EFUSE are register stubs \u2014 read-as-zero / write-accept with a few round-tripped or canned fields, no real behavior Real: model the register semantics (clock tree, RTC, eFuse). FIDELITY.md \u00a7D",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/system_stub.rs",
+      "symbol": "<module>"
+    },
+    "bb2d84e5020a064a": {
+      "category": "NOP",
+      "clause": "returns a fixed DRAM address as the per-task reent struct \u2014 real: __getreent returns the running task's _reent. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "getreent_dram_fake_ptr"
+    },
+    "c86435d61543e04f": {
+      "category": "INFER",
+      "clause": "no D/C line wired \u2014 can't tell command from data, so treat every byte as data \u2014 real: sample the D/C GPIO. FIDELITY.md \u00a7E",
+      "file": "crates/core/src/peripherals/components/uc8151d_tricolor_290.rs",
+      "symbol": "dc_pin"
+    },
+    "e66fabdce77a2c75": {
+      "category": "NOP",
+      "clause": "swallows the call and returns 0 \u2014 real: execute the function's actual effect. Installed at ~25 ROM/IDF addresses. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "nop_return_zero"
+    },
+    "f76588d19464e2c0": {
+      "category": "NOP",
+      "clause": "returns a fabricated non-null pointer so the caller proceeds \u2014 real: the function allocates/returns a genuine structure. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs",
+      "symbol": "nop_return_fake_ptr"
+    },
+    "fb58c803779eb03f": {
+      "category": "THUNK-LIB",
+      "clause": "every fn here short-circuits the WiFi/lwIP stack to a canned functional outcome (WL_CONNECTED, fake sockets) instead of running it \u2014 real: the lwIP/socket code compiled into the ELF executes Unlike most cheats this is partly unavoidable \u2014 the WiFi MAC/PHY is a closed RF-coprocessor blob with no executable image \u2014 but the lwIP/socket layer above it is real compiled code we skip. See FIDELITY.md \u00a7A",
+      "file": "crates/core/src/peripherals/esp32s3/wifi_thunks.rs",
+      "symbol": "<module>"
+    }
+  },
+  "waived": []
+}

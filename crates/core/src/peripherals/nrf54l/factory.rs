@@ -94,6 +94,16 @@ pub fn try_build(
             }
             Box::new(twim)
         }
+        "nrf54l_spim" => {
+            // The nRF54L SPIM is the shared `Spi` model on this family's offset
+            // map — see `NrfSpimMap` for why that is one engine and not a
+            // second copy. Devices attach through the universal kit pass after
+            // the peripheral is on the bus (the same contract the STM32 `spi`
+            // arm documents), so there is no attach loop here.
+            Box::new(crate::peripherals::spi::Spi::new_with_layout(
+                crate::peripherals::spi::SpiRegisterLayout::Nrf54lSpim,
+            ))
+        }
         "nrf54l_clock" => Box::new(crate::peripherals::nrf54l::clock::Nrf54lClock::new()),
         _ => return None,
     };

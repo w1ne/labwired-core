@@ -38,6 +38,43 @@ for w in json.load(open('$TARGET'))['windows']: print(w['id'], w['base'], w['cou
       echo "capture attempt $attempt: examination flaky, retrying"; sleep 1
     done
     ;;
+  openocd-jlink)
+    # SEGGER J-Link OB over SWD — what every Silicon Labs kit carries. Same
+    # openocd invocation as the ST-Link branch; the only difference is that SWD
+    # must be selected explicitly BEFORE the target cfg is sourced, because
+    # jlink.cfg defaults to JTAG and efm32.cfg has no TAP to find there.
+    #
+    # ⚠️ probe-rs is NOT used here even though the rest of this board's tooling
+    # is probe-rs. Its CLI has no reset-halt, and `--connect-under-reset` times
+    # out on BRD2709A ("target is not responding to the reset sequence") — the
+    # probe's nRESET is not wired through. Without a halt at reset the capture
+    # reads whatever firmware left behind, which is not a reset-state oracle:
+    # measured on this board, CLKEN0/1/2 read c4010010/16014bff/00000080 with
+    # the BLE beacon running and 00000000 x3 under openocd `reset halt`.
+    oocd=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport'].get('openocd','openocd'))")
+    icfg=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport']['interface_cfg'])")
+    tcfg=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport']['target_cfg'])")
+    tsel=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport'].get('transport_select','swd'))")
+    cmds="init; reset halt;"
+    # OPTIONAL PREAMBLE, and on this chip it is not optional in practice.
+    # A Series-2 peripheral that is not clocked does not read as zero over the
+    # debug port — it FAULTS, and openocd abandons the rest of the command list
+    # after "Failed to read memory at ...". Measured: a bare `reset halt`
+    # capture on BRD2709A returns the CMU window and then dies at GPIO.
+    # So the preamble un-gates the peripherals this oracle reads, and nothing
+    # else: every register captured below is still its reset value.
+    while read -r addr val; do
+      cmds+=" mww $addr $val;"
+    done < <(python3 -c "import json
+for s in json.load(open('$TARGET')).get('preamble', []):
+    print(s['write32']['address'], s['write32']['value'])")
+    while read -r id base count; do
+      cmds+=" echo {@@$id $base}; echo [capture {mdw $base $count}];"
+    done < <(python3 -c "import json
+for w in json.load(open('$TARGET'))['windows']: print(w['id'], w['base'], w['count'])")
+    cmds+=" exit"
+    "$oocd" -f "$icfg" -c "transport select $tsel" -f "$tcfg" -c "$cmds" > "$OUT/openocd.log" 2>&1
+    ;;
   openocd-stlink)
     oocd=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport'].get('openocd','openocd'))")
     icfg=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport']['interface_cfg'])")
@@ -55,7 +92,7 @@ for w in json.load(open('$TARGET'))['windows']: print(w['id'], w['base'], w['cou
 esac
 
 # Parse the @@id markers + mdw word rows into the standard reg_oracle.json schema.
-python3 - "$OUT/openocd.log" "$OUT/reg_oracle.json" "$chip" "$schema" <<'PY'
+python3 - "$OUT/openocd.log" "$OUT/reg_oracle.json" "$chip" "$schema" "$TARGET" <<'PY'
 import sys,re,json
 log,outp,chip,schema=open(sys.argv[1]).read(),sys.argv[2],sys.argv[3],sys.argv[4]
 blocks={};cur=base=None
@@ -67,7 +104,14 @@ for line in log.splitlines():
         a=int(m.group(1),16)
         for i,w in enumerate(re.findall(r'[0-9a-fA-F]{8}',m.group(2))):
             blocks[cur]['words'][hex(a+4*i)]=f'0x{int(w,16):08x}'
-json.dump({'schema':schema,'chip':chip,'state':'reset_halt','blocks':blocks},open(outp,'w'),indent=1)
+# A capture that ran a preamble is NOT a pure reset_halt, and a file that says
+# it is would be lying about how it was taken. Record the writes.
+pre=json.load(open(sys.argv[5])).get('preamble', []) if len(sys.argv)>5 else []
+doc={'schema':schema,'chip':chip,'state':'reset_halt','blocks':blocks}
+if pre:
+    doc['state']='reset_halt+preamble'
+    doc['preamble']=pre
+json.dump(doc,open(outp,'w'),indent=1)
 n=sum(len(b['words']) for b in blocks.values())
 print(f"captured {n} words across {len(blocks)} windows -> {outp}")
 PY

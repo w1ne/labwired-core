@@ -87,13 +87,25 @@ def render_scoreboard(
     lines.append("")
     c = Counter(r["status"] for r in rows)
     total = len(rows)
+    n_pass = c.get("pass", 0)
+    n_skip = c.get("skipped", 0) + c.get("skip", 0)
+    n_fail = total - n_pass - n_skip
     lines.append("## Summary")
     lines.append("")
     lines.append(f"- Cells: **{total}**")
+    lines.append(f"- **pass: {n_pass}** · **skip: {n_skip}** · **fail: {n_fail}**")
+    lines.append("")
+    lines.append("### Status breakdown")
+    lines.append("")
     for k, v in sorted(c.items(), key=lambda x: (-x[1], x[0])):
         lines.append(f"- `{k}`: {v}")
     lines.append("")
-    lines.append("## Failures (detail)")
+    lines.append(
+        "_Skips are explicit `boards.yaml` gaps (honest non-runs). "
+        "Do not report pass+skip as a single “green” total._"
+    )
+    lines.append("")
+    lines.append("## Non-pass detail (fails + skips)")
     lines.append("")
     for r in rows:
         if r["status"] == "pass":

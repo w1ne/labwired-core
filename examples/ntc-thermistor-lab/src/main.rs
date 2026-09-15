@@ -131,8 +131,13 @@ fn uart2_init() {
 /// Configure ADC1 channel 0.
 fn adc1_init() {
     unsafe {
-        // Enable ADC clock via RCC_APB2ENR (bit 9 = ADC1EN).
-        // Skipped in sim — peripheral is always available.
+        // Enable the ADC1 clock via RCC_APB2ENR (bit 9 = ADC1EN, RM0008 §7.3.7).
+        // ADC1 is unclocked out of reset, and LabWired's chip YAML gates the
+        // peripheral the same way silicon does: with the clock off every ADC1
+        // register read returns 0 and every write is dropped, so SR never
+        // raises EOC and conversions never complete.
+        let apb2 = core::ptr::read_volatile(RCC_APB2ENR);
+        core::ptr::write_volatile(RCC_APB2ENR, apb2 | (1 << 9));
         // Set ADC CR1: no interrupts, single channel mode.
         core::ptr::write_volatile(ADC1_CR1, 0);
         // CR2: ADON = 0 initially; software trigger (EXTSEL = 0b111, EXTTRIG = 1).

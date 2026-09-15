@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" width="640" height="520">
+  <title>RP2350-Zero pinout (USB-C at top)</title>
+  <desc>Castellated P1 from RP2350_Zero.pdf and wiki silk. GP16 is onboard WS2812. Twin UART is GP0/GP1, not USB-C.</desc>
+  <rect width="640" height="520" fill="#FFFFFF"/>
+  <text x="320" y="28" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" fill="#0d1013">RP2350-Zero · USB-C up · 18.00 × 23.50 mm</text>
+  <g transform="translate(210,48)">
+    <rect x="0" y="0" width="216" height="282" rx="8" fill="#1e4d8c" stroke="#0d1013" stroke-width="2"/>
+    <rect x="73" y="0" width="70" height="28" rx="6" fill="#d4a84b" stroke="#0d1013" stroke-width="1.25"/>
+    <rect x="80" y="6" width="56" height="16" rx="4" fill="#20252a"/>
+    <rect x="78" y="118" width="60" height="60" rx="3" fill="#20252a" stroke="#0d1013"/>
+    <text x="108" y="152" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="9" fill="#cbd1d4">RP2350A</text>
+    <circle cx="70" cy="86" r="10" fill="#e8eee9" stroke="#0d1013" stroke-width="1.25"/>
+    <text x="70" y="74" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="8" fill="#e8eee9">BOOT</text>
+    <circle cx="146" cy="86" r="10" fill="#e8eee9" stroke="#0d1013" stroke-width="1.25"/>
+    <text x="146" y="74" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="8" fill="#e8eee9">RUN</text>
+    <rect x="98" y="190" width="20" height="14" rx="2" fill="#38e88a" stroke="#0d1013"/>
+    <text x="108" y="220" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="8" fill="#e8eee9">GP16 WS2812</text>
+    <g fill="#d4a84b" stroke="#0d1013" stroke-width="1">
+      <!-- right GP0–GP7 -->
+      <circle cx="216" cy="40" r="7"/><circle cx="216" cy="70" r="7"/>
+      <circle cx="216" cy="100" r="7"/><circle cx="216" cy="130" r="7"/>
+      <circle cx="216" cy="160" r="7"/><circle cx="216" cy="190" r="7"/>
+      <circle cx="216" cy="220" r="7"/><circle cx="216" cy="250" r="7"/>
+      <!-- left 5V…GP14 -->
+      <circle cx="0" cy="40" r="7"/><circle cx="0" cy="68" r="7"/>
+      <circle cx="0" cy="96" r="7"/><circle cx="0" cy="124" r="7"/>
+      <circle cx="0" cy="152" r="7"/><circle cx="0" cy="180" r="7"/>
+      <circle cx="0" cy="208" r="7"/><circle cx="0" cy="236" r="7"/>
+      <circle cx="0" cy="264" r="7"/>
+      <!-- bottom GP13–GP8 -->
+      <circle cx="36" cy="282" r="7"/><circle cx="68" cy="282" r="7"/>
+      <circle cx="100" cy="282" r="7"/><circle cx="132" cy="282" r="7"/>
+      <circle cx="164" cy="282" r="7"/><circle cx="196" cy="282" r="7"/>
+    </g>
+  </g>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#0d1013">
+    <text x="448" y="92">GP0  UART0 TX</text>
+    <text x="448" y="122">GP1  UART0 RX</text>
+    <text x="448" y="152">GP2</text>
+    <text x="448" y="182">GP3</text>
+    <text x="448" y="212">GP4</text>
+    <text x="448" y="242">GP5</text>
+    <text x="448" y="272">GP6  I2C1 SDA</text>
+    <text x="448" y="302">GP7  I2C1 SCL</text>
+    <text x="8" y="92">5V</text>
+    <text x="8" y="120">GND</text>
+    <text x="8" y="148">3V3</text>
+    <text x="8" y="176">GP29 ADC3</text>
+    <text x="8" y="204">GP28 ADC2</text>
+    <text x="8" y="232">GP27 ADC1</text>
+    <text x="8" y="260">GP26 ADC0</text>
+    <text x="8" y="288">GP15</text>
+    <text x="8" y="316">GP14</text>
+    <text x="234" y="360" text-anchor="middle">13</text>
+    <text x="266" y="360" text-anchor="middle">12</text>
+    <text x="298" y="360" text-anchor="middle">11</text>
+    <text x="330" y="360" text-anchor="middle">10</text>
+    <text x="362" y="360" text-anchor="middle">9</text>
+    <text x="394" y="360" text-anchor="middle">8</text>
+  </g>
+  <text x="320" y="384" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#0d1013">Bottom GP13–GP8 (SPI1 SCK/TX/RX/CSN = GP10–13)</text>
+  <text x="320" y="408" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#445">Underside solder: GP17–GP25 + GND · SWCLK / SWDIO</text>
+  <text x="320" y="428" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#445">Twin console = UART0 on GP0/GP1 — not the USB-C CDC</text>
+  <text x="320" y="500" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10" fill="#667">Sources: RP2350_Zero.pdf P1 · wiki silk · pico-sdk waveshare_rp2350_zero.h</text>
+</svg>

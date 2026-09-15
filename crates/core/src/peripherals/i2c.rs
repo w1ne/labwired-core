@@ -22,112 +22,11 @@ use crate::{CycleClock, SimResult};
 use std::cell::{Cell, RefCell};
 use std::str::FromStr;
 
-pub trait I2cDevice: Send {
-    fn address(&self) -> u8;
-    fn read(&mut self) -> u8;
-    fn write(&mut self, data: u8);
-    fn start(&mut self) {}
-    fn stop(&mut self) {}
-
-    /// What this device can show of itself — its own inspect evidence.
-    ///
-    /// The ONE place a an I²C device's artifacts are decided is the model
-    /// itself, next to the buffers it owns. Default: nothing, which is correct
-    /// for a sensor with no display surface and honest for anything else —
-    /// absent means "this engine has nothing to show", never "the screen was
-    /// blank". See [`crate::inspect::DeviceEvidence`] for why this is not a
-    /// central match on concrete types.
-    ///
-    /// Implementations must read the model's REAL buffer and synthesize
-    /// nothing; a panel that was never painted reports zero.
-    fn artifacts(
-        &self,
-        _id: &str,
-        _opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
-        Vec::new()
-    }
-
-    /// Does this device answer to `addr` on the wire *right now*?
-    ///
-    /// A plain slave owns exactly one address, so the default is the obvious
-    /// `self.address() == addr` — every existing model keeps its behaviour with
-    /// no edit. The hook exists for devices whose answered-address set is not a
-    /// singleton and is not static: an I²C **bus switch** (TCA9548A) answers to
-    /// its own control address *and*, while a channel is enabled, to every
-    /// address reachable behind that channel. That set changes whenever
-    /// firmware rewrites the switch's control register, so it cannot be
-    /// flattened into one `address()` at attach time.
-    ///
-    /// Controllers MUST resolve a slave with this, never by comparing
-    /// `address()` — a flat `position(|d| d.address() == addr)` is first-match
-    /// and makes four identical sensors behind a mux collapse into one.
-    fn claims_address(&self, addr: u8) -> bool {
-        self.address() == addr
-    }
-
-    /// Tell the device which address the master just selected, immediately
-    /// after [`claims_address`](Self::claims_address) returned `true` for it and
-    /// before any `start`/`write`/`read`/`stop` of that transaction.
-    ///
-    /// Default no-op: a single-address slave already knows who it is. A bus
-    /// switch uses it to decide whether this transaction targets its own
-    /// control register or is to be forwarded to the downstream device(s) that
-    /// claim `addr` on the currently enabled channel(s).
-    fn select_address(&mut self, addr: u8) {
-        let _ = addr;
-    }
-
-    /// Walk every [`SimInput`](crate::sim_input::SimInput) surface this device
-    /// exposes, including devices nested *behind* it. Returns `true` if `f`
-    /// asked to stop early.
-    ///
-    /// The default is exactly the old behaviour — a device offers at most its
-    /// own [`as_sim_input_mut`](Self::as_sim_input_mut). It is overridden by
-    /// containers (the TCA9548A mux) so their children stay reachable from the
-    /// ONE stimulus walk in [`crate::bus::SystemBus::for_each_sim_input`].
-    /// Without it, putting a sensor behind a mux would silently subtract it
-    /// from `list_inputs` / `set_input` — the same class of invisible-device
-    /// bug the controller-level seam was introduced to kill.
-    fn for_each_sim_input(
-        &mut self,
-        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
-    ) -> bool {
-        match self.as_sim_input_mut() {
-            Some(si) => f(si),
-            None => false,
-        }
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        None
-    }
-    /// Runtime-drivable view of this device, if it accepts simulated input.
-    /// Overridden by input devices (accelerometers, …) so the generic
-    /// [`crate::Machine::set_input`] resolver can reach them without a
-    /// downcast. Default `None` = not an input device.
-    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
-        None
-    }
-
-    /// Advance this device's free-running sample/measurement clock by `us`
-    /// microseconds of wall-clock time.
-    ///
-    /// Real sensors sample on their own oscillator, independent of when the CPU
-    /// gets around to reading them: a PPG FIFO keeps filling at its configured
-    /// rate whether or not firmware is draining it. A bus master that knows the
-    /// elapsed wall-clock calls this on a slave immediately before servicing it,
-    /// so a *late* poll observes exactly the samples that accrued while the CPU
-    /// was busy elsewhere — and a FIFO that was allowed to overrun reports the
-    /// overflow it really would have. Without this hook a model only advances on
-    /// the very transactions that would have prevented the overflow, which hides
-    /// precisely the CPU-starvation failures worth simulating.
-    ///
-    /// Default no-op: a purely register-mapped device has no clock to advance.
-    fn advance_time_us(&mut self, _us: u64) {}
-}
+/// The off-chip I²C slave contract. Declared in
+/// [`peripherals::device`](crate::peripherals::device) — the ONE home for the
+/// vocabulary of things that hang off a wire — and re-exported here so every
+/// existing `impl`, bound and intra-doc link at this path keeps resolving.
+pub use crate::peripherals::device::I2cDevice;
 
 /// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C
 /// peripheral; STM32L4/F7/H5/G0 share the modern peripheral. The config-facing
@@ -143,6 +42,9 @@ pub enum I2cRegisterLayout {
     /// NXP Kinetis classic I2C (KW41Z / K series): byte-oriented A1/F/C1/S/D,
     /// interrupt-driven master matching the fsl_i2c HAL.
     Kinetis,
+    /// Silicon Labs EFR32/EFM32 Series-2: CMD/STATE/STATUS/TXDATA/RXDATA with
+    /// an IF flag per event, driven by `emlib`'s `I2C_Transfer`.
+    Efr32s2,
 }
 
 impl FromStr for I2cRegisterLayout {
@@ -154,8 +56,9 @@ impl FromStr for I2cRegisterLayout {
                 Ok(Self::Stm32L4)
             }
             "kinetis" | "nxp" | "nxp_i2c" | "kw41z" | "mkw41z4" => Ok(Self::Kinetis),
+            "efr32s2" | "efr32" | "efm32" | "gecko" => Ok(Self::Efr32s2),
             _ => Err(format!(
-                "unsupported I2C register layout '{}'; supported: stm32f1, stm32l4, kinetis",
+                "unsupported I2C register layout '{}'; supported: stm32f1, stm32l4, kinetis, efr32s2",
                 value
             )),
         }
@@ -456,12 +359,7 @@ impl F1I2c {
         self.cr1 & 0x0400 != 0
     }
 
-    /// True when the event scheduler owns this controller's transaction engine
-    /// (feature on AND bus clock attached).
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Cycles on which the legacy `tick()` does observable work: any in-flight
     /// countdown (`state != Idle`), the master transfer window (SR2.BUSY), a
@@ -1054,11 +952,7 @@ impl L4I2c {
         let addr = ((self.cr2 >> 1) & 0x7F) as u8;
         (addr << 1) | u8::from(self.is_reading)
     }
-    /// True when the event scheduler owns this controller's engine.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Clearing CR1.PE puts the transaction engine and every status bit back to
     /// their reset values, exactly as silicon does (RM0367 §26.7.1 / RM0351
@@ -1596,12 +1490,7 @@ impl Default for KinetisI2c {
 }
 
 impl KinetisI2c {
-    /// True when the event scheduler owns this controller's level IRQ (feature
-    /// on AND bus clock attached).
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// The level the legacy `tick()` re-asserts every cycle: IICIF latched AND
     /// IICIE enabled.
@@ -1751,12 +1640,568 @@ impl KinetisI2c {
     }
 }
 
+// ── Silicon Labs EFR32 Series-2 I²C ────────────────────────────────────────
+
+/// EFR32/EFM32 I²C master.
+///
+/// # Sources
+///
+/// Offsets walked from `I2C_TypeDef` in `efr32mg26_i2c.h` (`simplicity_sdk`
+/// tag `sisdk-2025.6`) — `IPVERSION_SET` lands at exactly `+0x1000`, which is
+/// the check that the walk is right. Bit positions are the
+/// `_I2C_<REG>_<FIELD>_SHIFT` defines from the same header.
+///
+/// # The flow this models, which is `emlib`'s
+///
+/// `I2C_TransferInit` / `I2C_Transfer` drive the controller like this, and so
+/// does every Gecko SDK driver above them:
+///
+/// 1. `EN.EN = 1`, `CLKDIV` for the bit rate, `CTRL.SLAVE = 0`.
+/// 2. `CMD.START`, then `TXDATA = (addr << 1) | rw`.
+/// 3. The slave's answer arrives as `IF.ACK` or `IF.NACK`.
+/// 4. Writing: `TXDATA` per byte, each answered by `IF.ACK`/`IF.NACK`.
+///    Reading: wait `IF.RXDATAV`, read `RXDATA`, then `CMD.ACK` for another
+///    byte or `CMD.NACK` to end.
+/// 5. `CMD.STOP`, answered by `IF.MSTOP`.
+///
+/// # Faithfully modelled
+///
+/// * `EN.EN` gating: a disabled controller accepts nothing and flags nothing.
+/// * Address matching through [`I2cDevice::claims_address`], never
+///   `address()` — a flat address compare is first-match and collapses four
+///   identical sensors behind a mux into one.
+/// * An address no attached device claims raises `IF.NACK`, not `IF.ACK`.
+///   That is the whole point of having a bus: a sketch that talks to a sensor
+///   nobody wired gets the silicon's answer.
+/// * `STATUS.TXBL`/`TXC` (the transmit buffer is always ready here, since a
+///   byte completes synchronously) and `STATUS.RXDATAV`, plus the matching
+///   `IF` flags. `IF` is write-1-to-clear.
+/// * `STATE.BUSY`/`MASTER`/`TRANSMITTER`/`NACKED`, which `I2C_TransferInit`
+///   reads before starting.
+/// * `CMD.ABORT` and `CMD.CLEARTX` return the controller to idle.
+///
+/// # Idealised — present, but not physical
+///
+/// * **A byte transfers instantly.** `CLKDIV` is stored and ignored, so a
+///   transaction costs no simulated time and no SCL edges are published — this
+///   controller does not appear on a logic analyzer yet.
+/// * **No arbitration, no bus errors, no timeouts.** `ARBLOST`, `BUSERR`,
+///   `BITO` and `CLTO` never fire; a multi-master bus is not modelled.
+/// * **Master only.** `CTRL.SLAVE`, `SADDR` and `SADDRMASK` store; the
+///   controller never answers as a slave, and `IF.ADDR`/`SSTOP` never fire.
+/// * **No double buffering.** `RXDOUBLE`/`TXDOUBLE`/`RXDOUBLEP` read the
+///   single-byte path, and `AUTOACK`/`AUTOSE`/`AUTOSN` are stored and ignored.
+#[derive(serde::Serialize)]
+pub struct Efr32s2I2c {
+    /// See [`Self::resolve`] — the route gate this controller obeys.
+    #[serde(skip)]
+    route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
+    en: u32,
+    ctrl: u32,
+    clkdiv: u32,
+    saddr: u32,
+    saddrmask: u32,
+    iflag: Cell<u32>,
+    ien: u32,
+
+    /// A START has been issued and the next `TXDATA` write is the address.
+    expect_address: bool,
+    /// The transaction in flight is a master read.
+    is_reading: bool,
+    /// Byte waiting in RXDATA for firmware, if any.
+    rx_byte: Cell<Option<u8>>,
+    /// The controller holds the bus (START seen, no STOP yet).
+    busy: bool,
+    /// The last address was not claimed by any attached device.
+    nacked: bool,
+    /// A transfer has completed since reset — what `STATUS.TXC` reports. Out of
+    /// reset none has, which is why STATUS reads 0x80 (TXBL alone) and not 0xC0.
+    txc: bool,
+    /// The controller has seen the bus reach a known-idle state — a STOP or an
+    /// ABORT. FALSE out of reset, which is why `STATE` reads 0x1 (BUSY) on a
+    /// chip nothing has driven yet, and why emlib's `I2C_Init` opens with an
+    /// ABORT. Once set it stays set; BUSY then follows the transfer.
+    bus_idle_known: bool,
+
+    /// The routed pads' live SCL/SDA levels, when a GPIO model points at this
+    /// controller. `None` until something routes them, and the narration path
+    /// then costs one branch.
+    #[serde(skip)]
+    lines: Option<std::sync::Arc<PadLines>>,
+    /// Bytes this transaction has put on the wire, `(byte, acked)`, buffered
+    /// until STOP — see [`Efr32s2I2c::wire_flush`].
+    #[serde(skip)]
+    wire_frames: Vec<(u8, bool)>,
+
+    #[serde(skip)]
+    attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    #[serde(skip)]
+    current_target: Option<usize>,
+
+    /// Bus-published cycle clock, attached by `SystemBus::add_peripheral`.
+    /// `Some` selects scheduler mode; `None` keeps the legacy per-cycle walk.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// In-flight singleton guard (cancellation contract layer 2): true while a
+    /// held-level re-assert event is queued.
+    #[serde(skip)]
+    chain_live: bool,
+}
+
+impl Default for Efr32s2I2c {
+    fn default() -> Self {
+        Self {
+            route_gate: None,
+            en: 0,
+            ctrl: 0,
+            clkdiv: 0,
+            saddr: 0,
+            saddrmask: 0,
+            // ⚠️ `_I2C_IF_RESETVALUE` is 0, and a BRD2709A reads 0 over SWD at
+            // reset-halt. This used to seed TXBL|TXC on the theory that the
+            // buffer is empty and the last transfer completed — but IF is a
+            // FLAG register, and a flag that was never raised is not pending.
+            // STATUS is where "the buffer is free" lives, and that still reads
+            // TXBL out of reset.
+            iflag: Cell::new(0),
+            txc: false,
+            bus_idle_known: false,
+            // ⚠️ EAGER, unlike the STM32 models' lazy `pad_lines_arc()`. Those
+            // create the cell when GPIO routing asks for it, which is fine for
+            // a PAD probe — there is nothing to see until a pad is muxed. The
+            // WIRE probe is the channel that exists precisely so a bus can be
+            // measured with no routing at all, and it can only resolve a cell
+            // that is already there. Lazy here means `resolve_wire_source`
+            // succeeds and `logic_watch` hands back `None`.
+            lines: Some(std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true]))),
+            wire_frames: Vec::new(),
+            clock: None,
+            chain_live: false,
+            ien: 0,
+            expect_address: false,
+            is_reading: false,
+            rx_byte: Cell::new(None),
+            busy: false,
+            nacked: false,
+            attached_devices: Vec::new(),
+            current_target: None,
+        }
+    }
+}
+
+// Register offsets, walked from `I2C_TypeDef`.
+const EFR_I2C_IPVERSION: u64 = 0x00;
+const EFR_I2C_EN: u64 = 0x04;
+const EFR_I2C_CTRL: u64 = 0x08;
+const EFR_I2C_CMD: u64 = 0x0C;
+const EFR_I2C_STATE: u64 = 0x10;
+const EFR_I2C_STATUS: u64 = 0x14;
+const EFR_I2C_CLKDIV: u64 = 0x18;
+const EFR_I2C_SADDR: u64 = 0x1C;
+const EFR_I2C_SADDRMASK: u64 = 0x20;
+const EFR_I2C_RXDATA: u64 = 0x24;
+const EFR_I2C_RXDOUBLE: u64 = 0x28;
+const EFR_I2C_RXDATAP: u64 = 0x2C;
+const EFR_I2C_RXDOUBLEP: u64 = 0x30;
+const EFR_I2C_TXDATA: u64 = 0x34;
+const EFR_I2C_TXDOUBLE: u64 = 0x38;
+const EFR_I2C_IF: u64 = 0x3C;
+const EFR_I2C_IEN: u64 = 0x40;
+
+/// `_I2C_IPVERSION_RESETVALUE` in `efr32mg26_i2c.h`.
+///
+/// ⚠️ This was modelled as 3 — a guess carried over from the IADC, whose
+/// IPVERSION really is 3. The header says 0 and the die reads 0. The test
+/// below was named after the header while asserting a value the header does
+/// not contain, which is exactly how a guess survives review.
+const EFR_I2C_IPVERSION_RESET: u32 = 0;
+
+// CMD bits.
+const EFR_CMD_START: u32 = 1 << 0;
+const EFR_CMD_STOP: u32 = 1 << 1;
+const EFR_CMD_ACK: u32 = 1 << 2;
+const EFR_CMD_NACK: u32 = 1 << 3;
+const EFR_CMD_ABORT: u32 = 1 << 5;
+const EFR_CMD_CLEARTX: u32 = 1 << 6;
+
+// STATE bits.
+const EFR_STATE_BUSY: u32 = 1 << 0;
+const EFR_STATE_MASTER: u32 = 1 << 1;
+const EFR_STATE_TRANSMITTER: u32 = 1 << 2;
+const EFR_STATE_NACKED: u32 = 1 << 3;
+
+// STATUS bits.
+const EFR_STATUS_TXC: u32 = 1 << 6;
+const EFR_STATUS_TXBL: u32 = 1 << 7;
+const EFR_STATUS_RXDATAV: u32 = 1 << 8;
+
+// IF bits.
+const EFR_IF_START: u32 = 1 << 0;
+const EFR_IF_RSTART: u32 = 1 << 1;
+const EFR_IF_TXC: u32 = 1 << 3;
+const EFR_IF_TXBL: u32 = 1 << 4;
+const EFR_IF_RXDATAV: u32 = 1 << 5;
+const EFR_IF_ACK: u32 = 1 << 6;
+const EFR_IF_NACK: u32 = 1 << 7;
+const EFR_IF_MSTOP: u32 = 1 << 8;
+
+const EFR_EN_EN: u32 = 1 << 0;
+
+impl Efr32s2I2c {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn enabled(&self) -> bool {
+        self.en & EFR_EN_EN != 0
+    }
+
+    fn set_if(&self, bits: u32) {
+        self.iflag.set(self.iflag.get() | bits);
+    }
+
+    /// Resolve `addr` to an attached device index, through `claims_address`.
+    /// The narration cell for this controller's SCL/SDA, created on first use.
+    /// An I²C bus with pull-ups idles high on both lines. Mirrors
+    /// [`L4I2c::pad_lines_arc`].
+    pub(crate) fn pad_lines_arc(&mut self) -> std::sync::Arc<PadLines> {
+        self.lines
+            .get_or_insert_with(|| std::sync::Arc::new(PadLines::new(I2C_LINES, &[true, true])))
+            .clone()
+    }
+
+    pub(crate) fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
+    }
+
+    /// Record a byte this transaction put on the wire. Buffered, not published.
+    fn wire_push(&mut self, byte: u8, acked: bool) {
+        if self.lines.is_some() {
+            self.wire_frames.push((byte, acked));
+        }
+    }
+
+    /// Core cycles one SCL bit occupies, from `CLKDIV`.
+    ///
+    /// emlib's `I2C_BusFreqSet` inverts
+    /// `f_SCL = f_PCLK / ((N_low + N_high) * (DIV + 1) + 4)`, so one bit is
+    /// `(N_low + N_high) * (DIV + 1) + 4` peripheral clocks. `N_low`/`N_high`
+    /// come from `CTRL.CLHR`: 4:4 standard, 6:3 asymmetric, 11:6 fast.
+    ///
+    /// ⚠️ The core:PCLK ratio is a CONSTANT, exactly as the STM32L4 model does
+    /// it (`CORE_PER_KCLK`). On BRD2709A the descriptor declares `cpu_hz`
+    /// 78 MHz against a 19 MHz peripheral band, so 4. It governs how WIDE the
+    /// published waveform is, never what it decodes to.
+    fn bit_time_cycles(&self) -> u64 {
+        const CORE_PER_PCLK: u64 = 4;
+        // `CTRL.CLHR` is a 2-bit field at bit 4 (`_I2C_CTRL_CLHR_SHIFT`).
+        let (n_low, n_high) = match (self.ctrl >> 4) & 0x3 {
+            1 => (6u64, 3u64),  // ASYMMETRIC
+            2 => (11u64, 6u64), // FAST
+            _ => (4u64, 4u64),  // STANDARD, and the reset value
+        };
+        let div = u64::from(self.clkdiv & 0x1FF);
+        (((n_low + n_high) * (div + 1) + 4) * CORE_PER_PCLK).max(2)
+    }
+
+    /// Publish the completed transaction's waveform onto the routed pads.
+    ///
+    /// The phase model has already exchanged the bytes; this narrates the wire
+    /// activity they imply, so the bus can be MEASURED and not only decoded.
+    ///
+    /// Emitted as one contiguous run ending at the present cycle, for the same
+    /// reason [`L4I2c::wire_flush`] does it: this controller charges no wire
+    /// time at all — every byte crosses inside its register write — so there is
+    /// no room on the timeline to place each frame where it happened. One run
+    /// ending at completion has the right shape, bit rate and contents.
+    /// Narrating byte by byte would stamp later frames in the future, where the
+    /// capture layer collapses them onto a single cycle.
+    fn wire_flush(&mut self) {
+        let Some(lines) = self.lines.clone() else {
+            self.wire_frames.clear();
+            return;
+        };
+        if self.wire_frames.is_empty() {
+            return;
+        }
+        let mut wave = I2cNarrator::new(LINE_SCL, LINE_SDA, self.bit_time_cycles());
+        wave.start();
+        for &(byte, acked) in &self.wire_frames {
+            wave.frame(byte, acked);
+        }
+        wave.stop();
+        self.wire_frames.clear();
+        let now = lines.tap_clock().unwrap_or(0);
+        // A transfer this early in a run has less history behind it than the
+        // waveform needs; the narrator compresses to fit rather than emitting a
+        // spike. The bytes still decode; only the timebase gives.
+        let _fit = wave.emit_ending_at(&lines, now);
+    }
+
+    /// Resolve `addr` to an attached device index, through `claims_address`.
+    ///
+    /// ⚠️ NO WIRES, NO DEVICE. On Series 2 an I2C reaches SCL and SDA only
+    /// through `GPIO_I2Cn_ROUTEEN`; unrouted, a real bus is silent and every
+    /// address NACKs. Resolving regardless is how firmware that never routed
+    /// its pins passed in the twin and stalled on the bench — and on this chip
+    /// it could not even have routed them, because that register window was
+    /// not mapped at all.
+    fn resolve(&self, addr: u8) -> Option<usize> {
+        if !self
+            .route_gate
+            .as_ref()
+            .is_none_or(|g| g.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return None;
+        }
+        self.attached_devices
+            .iter()
+            .position(|d| d.borrow().claims_address(addr))
+    }
+
+    /// Install the `GPIO_I2Cn_ROUTEEN` gate for this instance.
+    pub fn set_route_gate(&mut self, gate: crate::peripherals::efr32::usart_route::RouteGate) {
+        self.route_gate = Some(gate);
+    }
+
+    /// A `TXDATA` write: the address byte after a START, or a data byte.
+    fn tx(&mut self, byte: u8) {
+        if !self.enabled() {
+            return;
+        }
+        // A read transaction's first data byte is fetched inside the address
+        // phase, so it is captured here and narrated after the address frame —
+        // the order it goes onto the wire.
+        let mut read_back: Option<u8> = None;
+        if self.expect_address {
+            self.expect_address = false;
+            let addr = byte >> 1;
+            self.is_reading = byte & 1 != 0;
+            self.current_target = self.resolve(addr);
+            match self.current_target {
+                Some(idx) => {
+                    self.nacked = false;
+                    self.attached_devices[idx].borrow_mut().start();
+                    self.set_if(EFR_IF_ACK);
+                    // A read transaction's first byte is fetched now, so
+                    // RXDATAV is set by the time firmware polls it.
+                    if self.is_reading {
+                        let b = self.attached_devices[idx].borrow_mut().read();
+                        self.rx_byte.set(Some(b));
+                        self.set_if(EFR_IF_RXDATAV);
+                        read_back = Some(b);
+                    }
+                }
+                None => {
+                    // Nobody on the bus answers to this address. NACK, exactly
+                    // as the silicon does, so a sketch talking to a sensor that
+                    // was never wired finds out.
+                    self.nacked = true;
+                    self.set_if(EFR_IF_NACK);
+                }
+            }
+            self.txc = true;
+            self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
+            self.wire_push(byte, !self.nacked);
+            if let Some(b) = read_back {
+                // The CONTROLLER acks a byte it takes from the slave; the
+                // narrator draws SDA either way, and the ack bit is what a
+                // decoder reports.
+                self.wire_push(b, true);
+            }
+            return;
+        }
+        let acked = self.current_target.is_some();
+        match self.current_target {
+            Some(idx) => {
+                self.attached_devices[idx].borrow_mut().write(byte);
+                self.set_if(EFR_IF_ACK);
+            }
+            None => self.set_if(EFR_IF_NACK),
+        }
+        self.txc = true;
+        self.set_if(EFR_IF_TXC | EFR_IF_TXBL);
+        self.wire_push(byte, acked);
+    }
+
+    /// A `RXDATA` read: hand over the pending byte. Reading consumes it, so
+    /// `RXDATAV` drops until the next `CMD.ACK` fetches another.
+    fn rx(&self) -> u8 {
+        let byte = self.rx_byte.take().unwrap_or(0);
+        let f = self.iflag.get() & !EFR_IF_RXDATAV;
+        self.iflag.set(f);
+        byte
+    }
+
+    fn apply_cmd(&mut self, value: u32) {
+        if !self.enabled() {
+            return;
+        }
+        if value & EFR_CMD_START != 0 {
+            // A START while the bus is already held is a REPEATED start, which
+            // firmware uses between a register write and the read of it.
+            self.set_if(if self.busy {
+                EFR_IF_RSTART
+            } else {
+                EFR_IF_START
+            });
+            self.busy = true;
+            self.expect_address = true;
+        }
+        if value & EFR_CMD_ACK != 0 {
+            // Master ACK: take another byte from the slave.
+            if let Some(idx) = self.current_target {
+                if self.is_reading {
+                    let b = self.attached_devices[idx].borrow_mut().read();
+                    self.rx_byte.set(Some(b));
+                    self.set_if(EFR_IF_RXDATAV);
+                    self.wire_push(b, true);
+                }
+            }
+        }
+        if value & EFR_CMD_NACK != 0 {
+            // Master NACK ends a read; no further byte is fetched.
+            self.rx_byte.set(None);
+        }
+        if value & EFR_CMD_CLEARTX != 0 {
+            self.txc = true;
+            self.set_if(EFR_IF_TXBL | EFR_IF_TXC);
+        }
+        if value & (EFR_CMD_STOP | EFR_CMD_ABORT) != 0 {
+            // Either one tells the controller where the bus is, which is what
+            // clears the power-on BUSY. emlib issues ABORT for exactly this.
+            self.bus_idle_known = true;
+            if let Some(idx) = self.current_target {
+                self.attached_devices[idx].borrow_mut().stop();
+            }
+            self.busy = false;
+            self.expect_address = false;
+            self.is_reading = false;
+            self.current_target = None;
+            self.rx_byte.set(None);
+            if value & EFR_CMD_STOP != 0 {
+                self.set_if(EFR_IF_MSTOP);
+            }
+            // STOP or ABORT ends the transaction, which is when the whole
+            // waveform can be placed on the timeline at once.
+            self.wire_flush();
+        }
+    }
+
+    fn state_word(&self) -> u32 {
+        // ⚠️ BUSY is set OUT OF RESET, and stays set until firmware issues the
+        // ABORT that emlib's `I2C_Init` always sends. `_I2C_STATE_RESETVALUE`
+        // is 0x00000001 (BUSY alone) and a BRD2709A reads exactly that over SWD
+        // at reset-halt. It reads as a quirk and is not one: the controller
+        // cannot know the bus is idle until something drives it, so it comes up
+        // claiming the bus.
+        //
+        // This model previously returned 0 at reset and set TRANSMITTER
+        // unconditionally whenever it was not reading, which made a freshly
+        // reset controller read 0x4 — neither the header's value nor the die's.
+        let mut s = 0;
+        if self.busy || !self.bus_idle_known {
+            s |= EFR_STATE_BUSY;
+        }
+        if self.busy {
+            s |= EFR_STATE_MASTER;
+            if !self.is_reading {
+                s |= EFR_STATE_TRANSMITTER;
+            }
+        }
+        if self.nacked {
+            s |= EFR_STATE_NACKED;
+        }
+        s
+    }
+
+    fn status_word(&self) -> u32 {
+        // TXBL is always set: a byte completes synchronously here, so the
+        // transmit buffer is never occupied.
+        //
+        // ⚠️ TXC is NOT. This used to set both and call it "the idealisation the
+        // header lists" — the header lists `_I2C_STATUS_RESETVALUE 0x00000080`,
+        // which is TXBL (bit 7) ALONE, and a BRD2709A reads 0x80 over SWD at
+        // reset-halt. TXC means a transfer has completed; out of reset none has.
+        let mut s = EFR_STATUS_TXBL;
+        if self.txc {
+            s |= EFR_STATUS_TXC;
+        }
+        if self.rx_byte.get().is_some() {
+            s |= EFR_STATUS_RXDATAV;
+        }
+        s
+    }
+
+    fn read_word(&self, offset: u64) -> u32 {
+        match offset {
+            EFR_I2C_IPVERSION => EFR_I2C_IPVERSION_RESET,
+            EFR_I2C_EN => self.en,
+            EFR_I2C_CTRL => self.ctrl,
+            EFR_I2C_CMD => 0, // write-only
+            EFR_I2C_STATE => self.state_word(),
+            EFR_I2C_STATUS => self.status_word(),
+            EFR_I2C_CLKDIV => self.clkdiv,
+            EFR_I2C_SADDR => self.saddr,
+            EFR_I2C_SADDRMASK => self.saddrmask,
+            EFR_I2C_RXDATA | EFR_I2C_RXDOUBLE => self.rx() as u32,
+            // The PEEK registers read the buffer WITHOUT consuming it. A model
+            // that aliased them onto RXDATA would drop a byte every time a
+            // driver looked.
+            EFR_I2C_RXDATAP | EFR_I2C_RXDOUBLEP => self.rx_byte.get().unwrap_or(0) as u32,
+            EFR_I2C_IF => self.iflag.get(),
+            EFR_I2C_IEN => self.ien,
+            _ => 0,
+        }
+    }
+
+    fn write_word(&mut self, offset: u64, value: u32) {
+        match offset {
+            EFR_I2C_EN => {
+                self.en = value & EFR_EN_EN;
+                if !self.enabled() {
+                    self.busy = false;
+                    self.expect_address = false;
+                    self.current_target = None;
+                    self.rx_byte.set(None);
+                }
+            }
+            EFR_I2C_CTRL => self.ctrl = value,
+            EFR_I2C_CMD => self.apply_cmd(value),
+            EFR_I2C_CLKDIV => self.clkdiv = value,
+            EFR_I2C_SADDR => self.saddr = value,
+            EFR_I2C_SADDRMASK => self.saddrmask = value,
+            EFR_I2C_TXDATA | EFR_I2C_TXDOUBLE => self.tx((value & 0xFF) as u8),
+            EFR_I2C_IF => self.iflag.set(self.iflag.get() & !value),
+            EFR_I2C_IEN => self.ien = value,
+            _ => {}
+        }
+    }
+
+    fn irq_pending(&self) -> bool {
+        self.iflag.get() & self.ien != 0
+    }
+
+    // True when the event scheduler owns this controller's IRQ level (the
+    // `event-scheduler` feature AND a bus clock attached at registration).
+    //
+    // ⚠️ This model has NO cycle-paced transaction engine — a byte completes
+    // inside the register write — so there is nothing to *pace*. What it does
+    // owe the walk is the level re-assertion in `tick()`, and that is exactly
+    // what the event chain re-emits. Leaving it on the walk for want of an
+    // engine is what kept every EFR32 bus off the walk-free path: four I²C
+    // instances that do nothing per cycle still pinned the whole chip to one
+    // instruction per batch.
+    crate::cycle_clock::scheduler_mode!();
+}
+
 /// I2C peripheral — one variant per chip family. Register sets fully isolated.
 #[derive(serde::Serialize)]
 pub enum I2c {
     Stm32F1(F1I2c),
     Stm32L4(L4I2c),
     Kinetis(KinetisI2c),
+    Efr32s2(Efr32s2I2c),
 }
 
 impl core::fmt::Debug for I2c {
@@ -1769,6 +2214,11 @@ impl core::fmt::Debug for I2c {
                 .field("c1", &i.c1)
                 .field("s", &i.s.get())
                 .finish(),
+            I2c::Efr32s2(i) => f
+                .debug_struct("I2c::Efr32s2")
+                .field("busy", &i.busy)
+                .field("if", &i.iflag.get())
+                .finish(),
         }
     }
 }
@@ -1780,6 +2230,19 @@ impl Default for I2c {
 }
 
 impl I2c {
+    /// Install the EFR32 `GPIO_I2Cn_ROUTEEN` gate, when this is that family.
+    ///
+    /// A no-op on every other layout, which is what keeps the enforcement
+    /// scoped to the chip whose silicon actually behaves this way.
+    pub(crate) fn set_route_gate(
+        &mut self,
+        gate: crate::peripherals::efr32::usart_route::RouteGate,
+    ) {
+        if let Self::Efr32s2(i2c) = self {
+            i2c.set_route_gate(gate);
+        }
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -1803,6 +2266,7 @@ impl I2c {
         match self {
             Self::Stm32F1(i) => Some(i.pad_lines_arc()),
             Self::Stm32L4(i) => Some(i.pad_lines_arc()),
+            Self::Efr32s2(i) => Some(i.pad_lines_arc()),
             Self::Kinetis(_) => None,
         }
     }
@@ -1822,6 +2286,7 @@ impl I2c {
             Self::Stm32F1(_) => I2cRegisterLayout::Stm32F1,
             Self::Stm32L4(_) => I2cRegisterLayout::Stm32L4,
             Self::Kinetis(_) => I2cRegisterLayout::Kinetis,
+            Self::Efr32s2(_) => I2cRegisterLayout::Efr32s2,
         }
     }
 
@@ -1830,6 +2295,7 @@ impl I2c {
             I2cRegisterLayout::Stm32F1 => Self::Stm32F1(F1I2c::default()),
             I2cRegisterLayout::Stm32L4 => Self::Stm32L4(L4I2c::default()),
             I2cRegisterLayout::Kinetis => Self::Kinetis(KinetisI2c::default()),
+            I2cRegisterLayout::Efr32s2 => Self::Efr32s2(Efr32s2I2c::default()),
         }
     }
 
@@ -1857,7 +2323,20 @@ impl I2c {
             Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
             Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
             Self::Kinetis(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Efr32s2(i) => i.attached_devices.push(RefCell::new(device)),
         }
+    }
+
+    /// Drain every attached slave (AVR parks kits on a bus `i2c` controller,
+    /// then moves them onto the CPU TWI model after `from_config`).
+    pub fn take_slaves(&mut self) -> Vec<Box<dyn I2cDevice>> {
+        let cells = match self {
+            Self::Stm32F1(i) => std::mem::take(&mut i.attached_devices),
+            Self::Stm32L4(i) => std::mem::take(&mut i.attached_devices),
+            Self::Kinetis(i) => std::mem::take(&mut i.attached_devices),
+            Self::Efr32s2(i) => std::mem::take(&mut i.attached_devices),
+        };
+        cells.into_iter().map(RefCell::into_inner).collect()
     }
 
     /// Attached I2C devices (used by config/bus validation + tests).
@@ -1866,6 +2345,7 @@ impl I2c {
             Self::Stm32F1(i) => &i.attached_devices,
             Self::Stm32L4(i) => &i.attached_devices,
             Self::Kinetis(i) => &i.attached_devices,
+            Self::Efr32s2(i) => &i.attached_devices,
         }
     }
 
@@ -1887,6 +2367,11 @@ impl I2c {
             Self::Stm32F1(i) => i.scheduler_mode(),
             Self::Stm32L4(i) => i.scheduler_mode(),
             Self::Kinetis(i) => i.scheduler_mode(),
+            // The EFR32 model has no cycle-paced transaction engine, but it
+            // does hold a level-triggered IRQ the walk re-asserts every tick —
+            // and THAT is what the event chain takes over. See
+            // `Efr32s2I2c::scheduler_mode`.
+            Self::Efr32s2(i) => i.scheduler_mode(),
         }
     }
 
@@ -1898,6 +2383,10 @@ impl I2c {
             Self::Stm32F1(i) => i.clock = None,
             Self::Stm32L4(i) => i.clock = None,
             Self::Kinetis(i) => i.clock = None,
+            Self::Efr32s2(i) => {
+                i.clock = None;
+                i.chain_live = false;
+            }
         }
     }
 }
@@ -1905,9 +2394,9 @@ impl I2c {
 impl crate::Peripheral for I2c {
     fn line_names(&self) -> &'static [&'static str] {
         match self {
+            Self::Stm32F1(_) | Self::Stm32L4(_) | Self::Efr32s2(_) => I2C_LINES,
             // The Kinetis I2C model owns no narration cell, so it publishes no
             // wire — an honest empty answer, not a guess at SCL/SDA.
-            Self::Stm32F1(_) | Self::Stm32L4(_) => I2C_LINES,
             Self::Kinetis(_) => &[],
         }
     }
@@ -1916,6 +2405,7 @@ impl crate::Peripheral for I2c {
         match self {
             Self::Stm32F1(i) => i.wire_lines(),
             Self::Stm32L4(i) => i.wire_lines(),
+            Self::Efr32s2(i) => i.wire_lines(),
             Self::Kinetis(_) => None,
         }
     }
@@ -1925,6 +2415,10 @@ impl crate::Peripheral for I2c {
             Self::Stm32F1(i) => i.read(offset),
             Self::Stm32L4(i) => i.read(offset),
             Self::Kinetis(i) => i.read_reg(offset),
+            Self::Efr32s2(i) => {
+                let word = i.read_word(offset & !3);
+                ((word >> ((offset % 4) * 8)) & 0xFF) as u8
+            }
         })
     }
 
@@ -1933,6 +2427,12 @@ impl crate::Peripheral for I2c {
             Self::Stm32F1(i) => i.write(offset, value),
             Self::Stm32L4(i) => i.write(offset, value),
             Self::Kinetis(i) => i.write_reg(offset, value),
+            Self::Efr32s2(i) => {
+                let reg = offset & !3;
+                let shift = (offset % 4) * 8;
+                let merged = (i.read_word(reg) & !(0xFFu32 << shift)) | ((value as u32) << shift);
+                i.write_word(reg, merged);
+            }
         }
         Ok(())
     }
@@ -1974,6 +2474,10 @@ impl crate::Peripheral for I2c {
                 i.write_reg(offset.wrapping_add(2), ((value >> 16) & 0xFF) as u8);
                 i.write_reg(offset.wrapping_add(3), ((value >> 24) & 0xFF) as u8);
             }
+            // Every EFR32 register is a 32-bit word and firmware writes it as
+            // one. Byte-slicing CMD would apply START and STOP as separate
+            // commands.
+            Self::Efr32s2(i) => i.write_word(offset & !3, value),
         }
         Ok(())
     }
@@ -1988,6 +2492,9 @@ impl crate::Peripheral for I2c {
             Self::Stm32F1(i) => i.tick(),
             Self::Stm32L4(i) => i.tick(),
             Self::Kinetis(i) => i.tick(),
+            // A transaction completes inside the register write, so there is
+            // nothing to advance here — only the level IRQ to re-assert.
+            Self::Efr32s2(i) => i.irq_pending(),
         };
         // Errors ride the ER vector, not the EV vector the `irq` flag pends.
         let explicit_irqs = match self {
@@ -2026,6 +2533,20 @@ impl crate::Peripheral for I2c {
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         match self {
+            // EFR32: arm the held-level re-assert the moment a write leaves an
+            // unmasked flag pending. Every path that raises a flag on this
+            // model is an MMIO write (the transfer completes inside it), so the
+            // per-write drain always catches the activation. delay-0 → deadline
+            // `current_cycle + 1` = the cycle the walk's next tick would have
+            // pended on.
+            Self::Efr32s2(i) => {
+                if i.scheduler_mode() && i.irq_pending() && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
             Self::Kinetis(i) => {
                 if !i.scheduler_mode() {
                     return Vec::new();
@@ -2079,6 +2600,23 @@ impl crate::Peripheral for I2c {
     ) -> crate::sched::EventResult {
         let _ = sched;
         match self {
+            // EFR32: re-assert the held level every cycle while an unmasked
+            // flag stays latched — the event-path equivalent of the walk's
+            // per-tick `irq_pending()`. Stops when firmware clears IF
+            // (write-1-to-clear) or masks IEN, which is what lets the batcher
+            // widen again.
+            Self::Efr32s2(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                let pending = i.irq_pending();
+                i.chain_live = pending;
+                crate::sched::EventResult {
+                    raise_own_irq: pending,
+                    reschedule_delay: pending.then_some(1),
+                    ..Default::default()
+                }
+            }
             Self::Kinetis(i) => {
                 if !i.scheduler_mode() {
                     return crate::sched::EventResult::default();
@@ -2142,6 +2680,7 @@ impl crate::Peripheral for I2c {
             Self::Stm32F1(i) => i.clock = Some(clock),
             Self::Stm32L4(i) => i.clock = Some(clock),
             Self::Kinetis(i) => i.clock = Some(clock),
+            Self::Efr32s2(i) => i.clock = Some(clock),
         }
     }
 
@@ -2157,6 +2696,19 @@ impl crate::Peripheral for I2c {
                 } else {
                     i.read_reg(offset)
                 }
+            }
+            // ⚠️ `peek` is a side-effect-free probe. Going through the ordinary
+            // read would CONSUME the RX byte, and an observer attached to the
+            // bus would silently eat the firmware's data — the same trap the
+            // IADC hit.
+            Self::Efr32s2(i) => {
+                let reg = offset & !3;
+                let word = if reg == EFR_I2C_RXDATA || reg == EFR_I2C_RXDOUBLE {
+                    i.rx_byte.get().unwrap_or(0) as u32
+                } else {
+                    i.read_word(reg)
+                };
+                ((word >> ((offset % 4) * 8)) & 0xFF) as u8
             }
         })
     }
@@ -2228,6 +2780,7 @@ impl crate::Peripheral for I2c {
             Self::Stm32F1(i) => serde_json::to_value(i),
             Self::Stm32L4(i) => serde_json::to_value(i),
             Self::Kinetis(i) => serde_json::to_value(i),
+            Self::Efr32s2(i) => serde_json::to_value(i),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -3232,6 +3785,7 @@ mod kinetis_scheduler {
             I2c::Stm32F1(i) => i.clock.clone(),
             I2c::Stm32L4(i) => i.clock.clone(),
             I2c::Kinetis(i) => i.clock.clone(),
+            I2c::Efr32s2(i) => i.clock.clone(),
         }
         .expect("scheduler-mode instance has a clock")
     }
@@ -3651,5 +4205,365 @@ mod l4_disable_tests {
         i2c.write_reg(CR1, 0);
         assert_eq!(i2c.read_reg(ISR), 0x0000_0001);
         assert!(!i2c.active());
+    }
+}
+
+#[cfg(test)]
+mod efr32s2_tests {
+    use super::*;
+    use crate::Peripheral;
+
+    /// A minimal register-file slave: the shape almost every I²C sensor has.
+    /// Write one byte to select a register, then read to stream from it.
+    #[derive(Debug)]
+    struct FakeSensor {
+        addr: u8,
+        regs: [u8; 4],
+        pointer: usize,
+        starts: usize,
+        stops: usize,
+    }
+
+    impl FakeSensor {
+        fn new(addr: u8) -> Self {
+            Self {
+                addr,
+                regs: [0xA1, 0xB2, 0xC3, 0xD4],
+                pointer: 0,
+                starts: 0,
+                stops: 0,
+            }
+        }
+    }
+
+    impl I2cDevice for FakeSensor {
+        fn address(&self) -> u8 {
+            self.addr
+        }
+        fn read(&mut self) -> u8 {
+            let b = self.regs[self.pointer % self.regs.len()];
+            self.pointer += 1;
+            b
+        }
+        fn write(&mut self, data: u8) {
+            self.pointer = data as usize;
+        }
+        fn start(&mut self) {
+            self.starts += 1;
+        }
+        fn stop(&mut self) {
+            self.stops += 1;
+        }
+    }
+
+    fn enabled() -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Efr32s2);
+        i2c.write_u32(EFR_I2C_EN, EFR_EN_EN).unwrap();
+        i2c
+    }
+
+    fn inner(i2c: &I2c) -> &Efr32s2I2c {
+        match i2c {
+            I2c::Efr32s2(i) => i,
+            _ => panic!("wrong layout"),
+        }
+    }
+
+    fn clear_flags(i2c: &mut I2c) {
+        i2c.write_u32(EFR_I2C_IF, 0xFFFF_FFFF).unwrap();
+    }
+
+    fn flags(i2c: &I2c) -> u32 {
+        i2c.read_u32(EFR_I2C_IF).unwrap()
+    }
+
+    /// `(addr << 1) | rw`, the byte firmware writes to TXDATA after a START.
+    fn addr_byte(addr: u8, reading: bool) -> u32 {
+        ((addr as u32) << 1) | u32::from(reading)
+    }
+
+    #[test]
+    fn the_layout_resolves_by_name_and_reports_itself() {
+        let i2c = I2c::new_with_layout(I2cRegisterLayout::Efr32s2);
+        assert_eq!(i2c.register_layout(), I2cRegisterLayout::Efr32s2);
+        assert_eq!(
+            "efr32s2".parse::<I2cRegisterLayout>().unwrap(),
+            I2cRegisterLayout::Efr32s2
+        );
+    }
+
+    #[test]
+    fn ipversion_reads_the_header_reset_value() {
+        let i2c = I2c::new_with_layout(I2cRegisterLayout::Efr32s2);
+        // `_I2C_IPVERSION_RESETVALUE` = 0, and BRD2709A reads 0 over SWD.
+        assert_eq!(i2c.read_u32(EFR_I2C_IPVERSION).unwrap(), 0);
+    }
+
+    /// The whole `Wire.beginTransmission / write / endTransmission` path.
+    #[test]
+    fn a_write_transaction_reaches_the_slave() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        assert_eq!(flags(&i2c) & EFR_IF_START, EFR_IF_START);
+
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, false))
+            .unwrap();
+        assert_eq!(flags(&i2c) & EFR_IF_ACK, EFR_IF_ACK, "the slave answered");
+        assert_eq!(flags(&i2c) & EFR_IF_NACK, 0);
+
+        i2c.write_u32(EFR_I2C_TXDATA, 2).unwrap(); // select register 2
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_STOP).unwrap();
+        assert_eq!(flags(&i2c) & EFR_IF_MSTOP, EFR_IF_MSTOP);
+
+        let dev = &inner(&i2c).attached_devices[0];
+        assert_eq!(dev.borrow().address(), 0x48);
+    }
+
+    /// An address nobody claims must NACK. This is the difference between a
+    /// sketch finding out its sensor is not wired and one that appears to work.
+    #[test]
+    fn an_unclaimed_address_nacks() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x77, false))
+            .unwrap();
+
+        assert_eq!(flags(&i2c) & EFR_IF_NACK, EFR_IF_NACK);
+        assert_eq!(flags(&i2c) & EFR_IF_ACK, 0);
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_NACKED,
+            EFR_STATE_NACKED
+        );
+    }
+
+    /// `Wire.requestFrom`: START, address with R, then a byte per ACK.
+    #[test]
+    fn a_read_transaction_streams_bytes_from_the_slave() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, true))
+            .unwrap();
+
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_STATUS).unwrap() & EFR_STATUS_RXDATAV,
+            EFR_STATUS_RXDATAV,
+            "the first byte is ready once the address is acked"
+        );
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATA).unwrap(), 0xA1);
+
+        // ACK asks for another byte.
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_ACK).unwrap();
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATA).unwrap(), 0xB2);
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_ACK).unwrap();
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATA).unwrap(), 0xC3);
+
+        // NACK ends it: no further byte is fetched.
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_NACK | EFR_CMD_STOP)
+            .unwrap();
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_STATUS).unwrap() & EFR_STATUS_RXDATAV,
+            0
+        );
+    }
+
+    /// Reading RXDATA CONSUMES; reading RXDATAP does not. A driver that peeks
+    /// must not lose a byte.
+    #[test]
+    fn rxdatap_peeks_where_rxdata_consumes() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, true))
+            .unwrap();
+
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATAP).unwrap(), 0xA1);
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATAP).unwrap(), 0xA1, "still there");
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATA).unwrap(), 0xA1, "now taken");
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_STATUS).unwrap() & EFR_STATUS_RXDATAV,
+            0
+        );
+    }
+
+    /// ⚠️ `peek` is a side-effect-free probe for observers. It must not consume
+    /// the RX byte — the IADC hit exactly this and read back zeroes.
+    #[test]
+    fn peeking_the_data_register_does_not_consume_the_byte() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, true))
+            .unwrap();
+
+        assert_eq!(i2c.peek(EFR_I2C_RXDATA), Some(0xA1));
+        assert_eq!(i2c.peek(EFR_I2C_RXDATA), Some(0xA1));
+        assert_eq!(i2c.read_u32(EFR_I2C_RXDATA).unwrap(), 0xA1);
+    }
+
+    /// The register-then-read idiom: write a pointer, repeated START, read.
+    #[test]
+    fn a_repeated_start_switches_direction_without_releasing_the_bus() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, false))
+            .unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, 3).unwrap(); // pointer := 3
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        assert_eq!(
+            flags(&i2c) & EFR_IF_RSTART,
+            EFR_IF_RSTART,
+            "a START while the bus is held is a REPEATED start"
+        );
+        assert_eq!(flags(&i2c) & EFR_IF_START, 0);
+
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, true))
+            .unwrap();
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_RXDATA).unwrap(),
+            0xD4,
+            "reads from the register the pointer selected"
+        );
+    }
+
+    #[test]
+    fn a_disabled_controller_does_nothing_at_all() {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Efr32s2);
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, false))
+            .unwrap();
+        assert_eq!(flags(&i2c), 0, "no START, no ACK, no NACK");
+        // BUSY is still the power-on 1 here: a DISABLED controller cannot have
+        // driven the bus, so it has not learned the bus is idle either. What
+        // this case is about is that nothing else moved — see `flags` above and
+        // MASTER below, which a real START would have set.
+        let state = i2c.read_u32(EFR_I2C_STATE).unwrap();
+        assert_eq!(
+            state & EFR_STATE_MASTER,
+            0,
+            "a disabled controller never masters"
+        );
+    }
+
+    #[test]
+    fn state_reports_busy_and_master_between_start_and_stop() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        // ⚠️ BUSY is SET on a controller nothing has driven yet — measured on a
+        // BRD2709A over SWD, `_I2C_STATE_RESETVALUE` 0x00000001. It clears once
+        // the controller learns where the bus is, which is what emlib's opening
+        // ABORT is for.
+        assert_eq!(
+            i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY,
+            EFR_STATE_BUSY,
+            "power-on BUSY, before any ABORT"
+        );
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_ABORT).unwrap();
+        assert_eq!(i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY, 0);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        let state = i2c.read_u32(EFR_I2C_STATE).unwrap();
+        assert_eq!(state & EFR_STATE_BUSY, EFR_STATE_BUSY);
+        assert_eq!(state & EFR_STATE_MASTER, EFR_STATE_MASTER);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_STOP).unwrap();
+        assert_eq!(i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY, 0);
+    }
+
+    /// A slave must see the framing, not just the bytes: a sensor that latches
+    /// on STOP (most of them) never commits if the controller does not deliver
+    /// one.
+    #[test]
+    fn start_and_stop_reach_the_slave() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        #[derive(Debug)]
+        struct Counting {
+            starts: Arc<AtomicUsize>,
+            stops: Arc<AtomicUsize>,
+        }
+        impl I2cDevice for Counting {
+            fn address(&self) -> u8 {
+                0x48
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _data: u8) {}
+            fn start(&mut self) {
+                self.starts.fetch_add(1, Ordering::Relaxed);
+            }
+            fn stop(&mut self) {
+                self.stops.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        let starts = Arc::new(AtomicUsize::new(0));
+        let stops = Arc::new(AtomicUsize::new(0));
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(Counting {
+            starts: starts.clone(),
+            stops: stops.clone(),
+        }));
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, false))
+            .unwrap();
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_STOP).unwrap();
+
+        assert_eq!(starts.load(Ordering::Relaxed), 1);
+        assert_eq!(stops.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn the_flag_register_is_write_one_to_clear_and_ien_gates_the_irq() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        assert_eq!(flags(&i2c) & EFR_IF_START, EFR_IF_START);
+        assert!(!i2c.tick().irq, "IEN clear: no interrupt");
+
+        i2c.write_u32(EFR_I2C_IEN, EFR_IF_START).unwrap();
+        assert!(i2c.tick().irq);
+
+        i2c.write_u32(EFR_I2C_IF, EFR_IF_START).unwrap();
+        assert_eq!(flags(&i2c) & EFR_IF_START, 0);
+        assert!(!i2c.tick().irq);
+    }
+
+    /// A word write of CMD must apply the whole word at once. Byte-slicing it
+    /// would apply START and STOP as two separate commands.
+    #[test]
+    fn a_word_write_of_cmd_is_one_command_not_four_bytes() {
+        let mut i2c = enabled();
+        i2c.push_slave(Box::new(FakeSensor::new(0x48)));
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_START).unwrap();
+        i2c.write_u32(EFR_I2C_TXDATA, addr_byte(0x48, true))
+            .unwrap();
+        clear_flags(&mut i2c);
+
+        i2c.write_u32(EFR_I2C_CMD, EFR_CMD_NACK | EFR_CMD_STOP)
+            .unwrap();
+        assert_eq!(flags(&i2c) & EFR_IF_MSTOP, EFR_IF_MSTOP);
+        assert_eq!(i2c.read_u32(EFR_I2C_STATE).unwrap() & EFR_STATE_BUSY, 0);
     }
 }

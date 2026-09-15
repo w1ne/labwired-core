@@ -13,6 +13,10 @@ pub(crate) enum ExecutionMode {
 pub(crate) struct CoreProgress {
     pub primary_steps: u32,
     pub secondary_steps: u32,
+    /// Clock cycles the primary core charged for this window, on a core whose
+    /// `Cpu::instruction_cycles_are_time`; `None` everywhere else, where the
+    /// window is worth one machine cycle per instruction.
+    pub timed_cycles: Option<u64>,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -56,6 +60,48 @@ impl<C: Cpu> Machine<C> {
                     .cpu_secondary
                     .as_ref()
                     .is_some_and(|s| s.is_parked_idle());
+                // A tick interval of one is an interrupt-visibility contract,
+                // not a reason to throw away the CPU batch. Keep one planned
+                // window for accounting/dispatch, but retire it instruction by
+                // instruction so every peripheral tick can re-derive and
+                // deliver IRQ levels before the next instruction.
+                // A core whose step cycles are clock time (AVR) is read before
+                // and after the window, not per instruction. Constant `false`
+                // for every other concrete core, so this compiles away there.
+                let clock_before = self
+                    .cpu
+                    .instruction_cycles_are_time()
+                    .then(|| self.cpu.clock_cycles());
+                if parked_secondary && self.config.peripheral_tick_interval.max(1) == 1 {
+                    let mut primary_steps = 0u32;
+                    let mut secondary_steps = 0u32;
+                    for _ in 0..count {
+                        self.total_cycles += 1;
+                        self.bus.set_current_cycle(self.total_cycles);
+                        self.bus.bus_trace.set_cycle(self.total_cycles);
+                        if self.logic_capture.push_active() {
+                            self.bus.logic_tap.set_clock(self.total_cycles);
+                        }
+                        self.cpu
+                            .step(&mut self.bus, &self.observers, &self.config)?;
+                        primary_steps += 1;
+                        if let Some(sec) = self.cpu_secondary.as_mut() {
+                            if sec.is_parked_idle() {
+                                sec.step(&mut self.bus, &self.observers, &self.config)?;
+                                secondary_steps += 1;
+                            }
+                        }
+                        self.tick_peripherals_at_boundary();
+                        if self.rtc_cntl_reset_pending() {
+                            break;
+                        }
+                    }
+                    return Ok(CoreProgress {
+                        primary_steps,
+                        secondary_steps,
+                        timed_cycles: None,
+                    });
+                }
                 let executed = if parked_secondary && self.rtc_cntl_index.is_some() {
                     let mut n = 0u32;
                     for _ in 0..count {
@@ -99,16 +145,30 @@ impl<C: Cpu> Machine<C> {
                 return Ok(CoreProgress {
                     primary_steps: executed,
                     secondary_steps,
+                    timed_cycles: clock_before
+                        .map(|before| self.cpu.clock_cycles().saturating_sub(before)),
                 });
             }
         }
 
         if self.cpu_secondary.is_none() {
+            let clock_before = self
+                .cpu
+                .instruction_cycles_are_time()
+                .then(|| self.cpu.clock_cycles());
             self.cpu
                 .step(&mut self.bus, &self.observers, &self.config)?;
+            let timed_cycles =
+                clock_before.map(|before| self.cpu.clock_cycles().saturating_sub(before));
+            if let Some(taken) = timed_cycles {
+                // One cycle was published before the step; the rest of what
+                // the instruction took lands now.
+                self.total_cycles += taken.saturating_sub(1);
+            }
             return Ok(CoreProgress {
                 primary_steps: 1,
                 secondary_steps: 0,
+                timed_cycles,
             });
         }
 
@@ -127,6 +187,7 @@ impl<C: Cpu> Machine<C> {
         Ok(CoreProgress {
             primary_steps: 1,
             secondary_steps: 1,
+            timed_cycles: None,
         })
     }
 
@@ -165,8 +226,14 @@ impl<C: Cpu> Machine<C> {
         _batch_start: u64,
         progress: CoreProgress,
     ) -> SimResult<()> {
-        if mode == ExecutionMode::RunBatch {
-            self.total_cycles += u64::from(progress.primary_steps);
+        let internally_committed_per_cycle_batch = mode == ExecutionMode::RunBatch
+            && self.config.peripheral_tick_interval.max(1) == 1
+            && progress.primary_steps > 0
+            && progress.secondary_steps == progress.primary_steps;
+        if mode == ExecutionMode::RunBatch && !internally_committed_per_cycle_batch {
+            self.total_cycles += progress
+                .timed_cycles
+                .unwrap_or(u64::from(progress.primary_steps));
         }
         self.record_cpu_progress(progress.primary_steps);
 
@@ -191,8 +258,15 @@ impl<C: Cpu> Machine<C> {
         let coalesced_dual_idle = mode == ExecutionMode::RunBatch
             && progress.secondary_steps > 0
             && progress.primary_steps > 1;
-        let should_tick = if coalesced_dual_idle {
+        let should_tick = if internally_committed_per_cycle_batch {
+            false
+        } else if coalesced_dual_idle {
             true
+        } else if progress.timed_cycles.is_some() {
+            // A timed core's window can end past a tick boundary (its last
+            // instruction took several cycles), so tick on crossing one rather
+            // than on landing exactly on it.
+            self.total_cycles / tick_interval != _batch_start / tick_interval
         } else {
             self.total_cycles % tick_interval == 0
         };
@@ -205,29 +279,7 @@ impl<C: Cpu> Machine<C> {
                 self.config.peripheral_tick_interval = n;
                 self.bus.config.peripheral_tick_interval = n;
             }
-            // Propagate peripherals. Reuse retained scratch buffers (swapped
-            // out via `mem::take` so the borrow checker sees them as owned
-            // locals) instead of letting the bus allocate a fresh Vec per tick.
-            let mut interrupts = std::mem::take(&mut self.tick_irq_scratch);
-            let mut costs = std::mem::take(&mut self.tick_cost_scratch);
-            self.bus
-                .tick_peripherals_fully_into(&mut interrupts, &mut costs);
-            self.record_peripheral_tick_profile(costs.len());
-            for c in costs.iter() {
-                self.total_cycles += c.cycles as u64;
-                if let Some(p) = self.bus.peripherals.get(c.index) {
-                    for observer in &self.observers {
-                        observer.on_peripheral_tick(&p.name, c.cycles);
-                    }
-                }
-            }
-            for &irq in interrupts.iter() {
-                self.cpu.set_exception_pending(irq);
-                tracing::debug!("Exception {} Pend", irq);
-            }
-            // Return the buffers (with their grown capacity) for reuse next tick.
-            self.tick_irq_scratch = interrupts;
-            self.tick_cost_scratch = costs;
+            self.tick_peripherals_at_boundary();
             if coalesced_dual_idle {
                 self.config.peripheral_tick_interval = saved_m;
                 self.bus.config.peripheral_tick_interval = saved_b;
@@ -350,5 +402,28 @@ impl<C: Cpu> Machine<C> {
         self.logic_observe(logic_boundary);
 
         Ok(())
+    }
+
+    fn tick_peripherals_at_boundary(&mut self) {
+        // Reuse retained scratch buffers instead of allocating per tick.
+        let mut interrupts = std::mem::take(&mut self.tick_irq_scratch);
+        let mut costs = std::mem::take(&mut self.tick_cost_scratch);
+        self.bus
+            .tick_peripherals_fully_into(&mut interrupts, &mut costs);
+        self.record_peripheral_tick_profile(costs.len());
+        for c in costs.iter() {
+            self.total_cycles += c.cycles as u64;
+            if let Some(p) = self.bus.peripherals.get(c.index) {
+                for observer in &self.observers {
+                    observer.on_peripheral_tick(&p.name, c.cycles);
+                }
+            }
+        }
+        for &irq in interrupts.iter() {
+            self.cpu.set_exception_pending(irq);
+            tracing::debug!("Exception {} Pend", irq);
+        }
+        self.tick_irq_scratch = interrupts;
+        self.tick_cost_scratch = costs;
     }
 }

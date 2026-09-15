@@ -1,0 +1,6 @@
+* GPIO drives an RC low-pass; the firmware ADC samples node `out`.
+* Any ngspice-compatible model library can be pulled in with .include/.lib.
+Vgpio in 0 dc 0
+R1 in out 10k
+C1 out 0 100n
+.end

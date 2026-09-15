@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+  # Dry-run the build legs on a branch. A release build that first executes at
+  # tag time is a release build nobody has ever seen fail safely: publishing is
+  # gated on the tag below, so a dispatch run builds, asserts and smokes the
+  # artifacts without creating anything.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,6 +18,16 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    # Linux legs build inside a Debian 11 image on purpose. A glibc binary runs
+    # on the glibc it was built against OR NEWER, never older, so the build
+    # host's C library is the floor every user must clear. Building on
+    # `ubuntu-latest` made that floor whatever GitHub last upgraded to: the
+    # v0.21.0 Linux archives came out needing GLIBC_2.39, which excluded
+    # Ubuntu 22.04 LTS, Debian 12 (so every Raspberry Pi OS), RHEL 9 and
+    # Amazon Linux 2023 — and no CI job could see it, because CI is 24.04 too.
+    # bullseye's 2.31 covers Debian 11+, Ubuntu 20.04+, RHEL 9, AL2023.
+    # The floor is asserted below, not assumed.
+    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
@@ -20,21 +35,33 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             platform: linux-x86_64
+            container: rust:1.95-bullseye
+            glibc_max: GLIBC_2.31
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-24.04-arm
             platform: linux-aarch64
-            cross: true
+            container: rust:1.95-bullseye
+            glibc_max: GLIBC_2.31
           - target: x86_64-apple-darwin
             runner: macos-latest
             platform: darwin-x86_64
           - target: aarch64-apple-darwin
             runner: macos-latest
             platform: darwin-aarch64
+          # Windows was never built — not because anything blocked it, but
+          # because no leg ever asked for it, and "Windows via WSL2" in the
+          # README made that read like a decision. The CLI and the DAP have no
+          # unix-only code outside test modules, so the target is just a target.
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            platform: windows-x86_64
+            exe: .exe
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
+        if: matrix.container == ''
         uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: ${{ matrix.target }}
@@ -45,23 +72,20 @@ jobs:
           shared-key: release-${{ matrix.target }}
           workspaces: . -> target
 
-      - name: Install cross (for aarch64 Linux)
-        if: matrix.cross == true
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build (cross)
-        if: matrix.cross == true
-        run: cross build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }}
-
-      - name: Build (native)
-        if: matrix.cross != true
+      # Both Linux targets are now built natively — x86_64 on the standard
+      # runner, aarch64 on an arm64 runner — so there is no `cross` and no
+      # unpinned toolchain image deciding our glibc floor for us.
+      - name: Build
         run: cargo build -p labwired-cli -p labwired-dap --release --target ${{ matrix.target }}
 
       - name: Package binary
         shell: bash
         run: |
-          VERSION="${{ github.ref_name }}"
+          set -euo pipefail
+          # On a dispatch dry-run there is no tag to name the archive after.
+          VERSION="${{ github.ref_type == 'tag' && github.ref_name || 'v0.0.0-dryrun' }}"
           PLATFORM="${{ matrix.platform }}"
+          EXE="${{ matrix.exe }}"
           ARCHIVE="labwired-${VERSION}-${PLATFORM}.tar.gz"
 
           mkdir -p dist
@@ -70,13 +94,36 @@ jobs:
           # and labwired-dap is the Debug Adapter the VS Code extension spawns for
           # F5. Shipping only the CLI is what made editor debugging source-build-only.
           # These lines are pinned by scripts/ci/verify-release-runner-contract.sh.
-          cp "target/${{ matrix.target }}/release/labwired" dist/labwired
-          chmod +x dist/labwired
-          cp "target/${{ matrix.target }}/release/labwired-dap" dist/labwired-dap
-          chmod +x dist/labwired-dap
+          cp "target/${{ matrix.target }}/release/labwired${EXE}" "dist/labwired${EXE}"
+          chmod +x "dist/labwired${EXE}"
+          cp "target/${{ matrix.target }}/release/labwired-dap${EXE}" "dist/labwired-dap${EXE}"
+          chmod +x "dist/labwired-dap${EXE}"
 
-          tar -czf "${ARCHIVE}" -C dist labwired labwired-dap
+          # Debug symbols made the Linux archives 174 MB unpacked against 9 MB
+          # on macOS. Strip the shipped copies; the build tree keeps its own.
+          if [ -z "$EXE" ]; then strip dist/labwired dist/labwired-dap || true; fi
+
+          tar -czf "${ARCHIVE}" -C dist "labwired${EXE}" "labwired-dap${EXE}"
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      # The floor is a claim, so it gets checked. Without this the next runner
+      # image bump silently raises it again.
+      - name: Assert glibc floor
+        if: matrix.glibc_max != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+          for b in dist/labwired dist/labwired-dap; do
+            max="$(readelf -V "$b" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V -u | tail -1)"
+            echo "$b requires $max (floor ${{ matrix.glibc_max }})"
+            newest="$(printf '%s\n%s\n' "$max" "${{ matrix.glibc_max }}" | sort -V | tail -1)"
+            if [ "$newest" != "${{ matrix.glibc_max }}" ]; then
+              echo "::error::$b requires $max, above the ${{ matrix.glibc_max }} floor — it will not start on Debian 12 or Ubuntu 22.04."
+              fail=1
+            fi
+          done
+          exit "$fail"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -84,9 +131,43 @@ jobs:
           name: labwired-${{ matrix.platform }}
           path: ${{ env.ARCHIVE }}
 
+  # Run the artifact somewhere old before anyone can download it. The symbol
+  # assert above proves what the binary asks for; this proves the binary starts.
+  linux-smoke:
+    name: Start on ${{ matrix.image }} (${{ matrix.platform }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x86_64,  runner: ubuntu-latest,    image: 'debian:12-slim' }
+          - { platform: linux-x86_64,  runner: ubuntu-latest,    image: 'ubuntu:22.04' }
+          - { platform: linux-x86_64,  runner: ubuntu-latest,    image: 'almalinux:9' }
+          - { platform: linux-aarch64, runner: ubuntu-24.04-arm, image: 'debian:12-slim' }
+          - { platform: linux-aarch64, runner: ubuntu-24.04-arm, image: 'ubuntu:22.04' }
+    steps:
+      - name: Download the release archive
+        uses: actions/download-artifact@v4
+        with:
+          name: labwired-${{ matrix.platform }}
+          path: archive
+
+      - name: Extract and run it
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          tar -xzf archive/*.tar.gz -C dist
+          docker run --rm -v "$PWD/dist:/d" "${{ matrix.image }}" /d/labwired --version
+          docker run --rm -v "$PWD/dist:/d" "${{ matrix.image }}" /d/labwired-dap --version
+
   release:
     name: Create GitHub Release
-    needs: build
+    # A tarball nobody could start must never become a published release.
+    needs: [build, linux-smoke]
+    # Publishing only ever happens for a tag; a dispatch run stops after
+    # the artifacts have been built, asserted and smoked.
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,9 +202,31 @@ jobs:
   publish:
     name: Publish CI runner image
     needs: release
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The two Linux archives this tag just published, unpacked into the
+      # per-architecture layout Dockerfile.ci copies from.
+      - name: Download the released Linux archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: labwired-linux-*
+          path: archives
+          merge-multiple: true
+
+      - name: Lay the binaries out by architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/amd64 dist/arm64
+          tar -xzf archives/labwired-${{ github.ref_name }}-linux-x86_64.tar.gz -C dist/amd64
+          tar -xzf archives/labwired-${{ github.ref_name }}-linux-aarch64.tar.gz -C dist/arm64
+          test -x dist/amd64/labwired && test -x dist/arm64/labwired
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -141,7 +244,7 @@ jobs:
           context: .
           file: ./Dockerfile.ci
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/w1ne/labwired:${{ github.ref_name }}
             ghcr.io/w1ne/labwired:latest
@@ -152,6 +255,7 @@ jobs:
   release-smoke:
     name: Smoke released archives and runner image
     needs: [release, publish]
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

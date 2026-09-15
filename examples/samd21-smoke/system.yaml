@@ -1,0 +1,17 @@
+# LabWired - SAM D21 smoke system
+#
+# Local mirror of configs/systems/arduino-zero.yaml so the strict-onboarding
+# gate (crates/core/tests/strict_onboarding.rs) can associate this example
+# directory with the atsamd21g18a chip via its `system.yaml`, exactly like
+# every other onboarded board.
+name: "samd21-smoke"
+chip: "../../configs/chips/atsamd21g18a.yaml"
+external_devices: []
+board_io:
+  # LED_BUILTIN / D13 = PA17 on the Arduino Zero and the Feather M0 line.
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio_a"
+    pin: 17
+    signal: "output"
+    active_high: true

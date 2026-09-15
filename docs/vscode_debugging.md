@@ -52,5 +52,5 @@ Uses the standard `cortex-debug` extension connected to LabWired's GDB server. B
 
 **Note**: You must start the LabWired GDB server manually before launching this configuration:
 ```bash
-labwired --gdb --port 3333 --firmware ...
+labwired --gdb 3333 --firmware firmware.elf --system system.yaml
 ```

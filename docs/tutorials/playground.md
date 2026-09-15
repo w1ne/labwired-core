@@ -1,47 +1,48 @@
 # Playground first run
 
-No Rust install. Open a lab, run firmware on a virtual board, share a link.
+Open a lab in the browser. Run firmware on a virtual board. Share a link. No local install.
 
 ---
 
 ## 1. Open Studio
 
-Go to **[app.labwired.com](https://app.labwired.com)** and sign in (or use the guest path if offered).
+Go to **[app.labwired.com](https://app.labwired.com)** and sign in (or use guest access if offered).
+
+**Try a ready lab:** [SSD1306 hello](https://app.labwired.com/?lab=ssd1306-hello-lab)
 
 ---
 
-## 2. Pick a board / starter lab
+## 2. Pick a board or starter
 
-Start from a starter (LED, OLED, …) or an empty lab and add an MCU from the catalog.
+- Open a **starter lab** (LED, OLED, sensor), or  
+- Create a lab and add an MCU from the catalog  
 
-Examples:
+Popular chips: [ESP32-C3](../boards/esp32c3.md) · [nRF52840](../boards/nrf52840.md) · [RP2040](../boards/rp2040.md)
 
-- **ESP32-C3 Super Mini** — see [ESP32-C3 board docs](../boards/esp32c3.md)  
-- **nRF52840** — see [nRF52840](../boards/nrf52840.md)  
-
-Check the board page for **flash artifact** (ELF vs merged `.bin`) and the support matrix before expecting a peripheral to work.
+Check the board page for **artifact type** (ELF vs merged flash image) and the ✅ / ⚠️ / ❌ support matrix.
 
 ---
 
 ## 3. Build or upload firmware
 
-- Use the in-lab build when the board’s compile profile is available, **or**  
-- Upload the artifact you would flash to silicon  
+- Use **in-lab build** when the board has a compile profile, or  
+- **Upload** the same binary you would flash to hardware  
 
-If serial/oracle checks fail, confirm you are not asserting on a **❌ / ⚠️ stub** feature.
+If checks fail, confirm you are not asserting on a feature marked ❌ or ⚠️ stub.
 
 ---
 
-## 4. Run and observe
+## 4. Run and watch
 
-Hit run. Watch serial, pins, and any display widgets.  
-Deterministic twin: re-run with the same inputs should match.
+Click **Run**. Watch serial, pins, and display widgets.
+
+The twin is deterministic: same inputs → same result on re-run.
 
 ---
 
 ## 5. Share
 
-Use the lab share URL for humans or hand the same board id to an agent via [MCP](../agent/mcp.md).
+Copy the lab share URL for a person, or hand the board / diagram to an agent ([MCP](../agent/mcp.md)).
 
 ---
 
@@ -50,5 +51,6 @@ Use the lab share URL for humans or hand the same board id to an agent via [MCP]
 | Path | Doc |
 |------|-----|
 | Agent does the loop | [First agent run](../agent/first-run.md) |
-| CLI / CI | [Running firmware](../getting_started_firmware.md), [CI](../ci_integration.md) |
+| CLI / CI | [Run firmware](../getting_started_firmware.md) · [CI](../ci_integration.md) |
+| Add a sensor or actuator | [Onboard a part](../howto/onboard-part.md) |
 | What “pass” means | [Fidelity](../fidelity.md) |

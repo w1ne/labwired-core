@@ -121,9 +121,7 @@ impl Rp2040Timer {
         (self.intr | self.intf) & self.inte
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Lazy advance of the free-running counter only (no alarm latch — that
     /// needs `&mut` and rides write/`on_event`). Idempotent on `now`.

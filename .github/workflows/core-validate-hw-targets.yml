@@ -1,5 +1,11 @@
 name: Core Validate HW Targets
 
+# Scheduled runs are gated to this repository: every job below carries
+# `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
+# GitHub attributes a cron run to whoever last edited the schedule, so a fork
+# with Actions enabled mails this workflow's failures to a maintainer here,
+# about a run they can neither see nor stop. Pushes and manual dispatch are
+# untouched — a fork still gets this workflow on its own changes.
 on:
   schedule:
     - cron: '0 0 * * 0'
@@ -20,6 +26,7 @@ concurrency:
 
 jobs:
   validate-targets:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
 
     steps:

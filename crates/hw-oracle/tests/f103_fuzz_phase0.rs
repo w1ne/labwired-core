@@ -168,7 +168,8 @@ fn run_hw(elf: &PathBuf, input: &[u8]) -> u32 {
 
 #[cfg(feature = "hw-oracle-stm32")]
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: requires an SWD-attached STM32F103 driven by OpenOCD, plus a built \
+            firmware-f103-fuzztarget ELF; needs `--features hw-oracle-stm32` and `-- --ignored`"]
 fn fuzz_oracle_hw() {
     let elf = firmware_elf().expect("build firmware-f103-fuzztarget first");
     assert_eq!(run_hw(&elf, CLEAN), DONE, "clean input → DONE on silicon");

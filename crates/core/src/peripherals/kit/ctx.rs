@@ -110,6 +110,28 @@ impl<'a> AttachCtx<'a> {
         if let Some(si) = device.as_sim_input_mut() {
             si.set_component_id(self.ext.id.clone());
         }
+        // ⚠️ SUPPLY GATE — the ONE home for "this I²C part has no power".
+        //
+        // A diagram can wire a sensor's or a panel's SDA/SCL and nothing else,
+        // and the twin used to run it and report readings and painted pixels
+        // for a chip that on a bench is dead. The compiler now says so
+        // (`powered: false`, emitted only when the part's declared `power_in`
+        // pins are on no net); this is where the engine acts on it.
+        //
+        // It sits HERE, not in each of the 34 I²C models, because the honest
+        // behaviour is identical for all of them and is a bus fact: an
+        // unpowered slave does not pull SDA low, so its address NACKs and a
+        // scan finds nothing. Every I²C kit — including the declarative ones
+        // built from `configs/devices/*.yaml`, which have no per-device Rust to
+        // patch — reaches the bus through this method, so no kit can be
+        // forgotten and no future kit has to remember.
+        //
+        // ⚠️ ABSENT MEANS POWERED. See `components::supply` for why that
+        // asymmetry is load-bearing: the curated labs declare no rails at all.
+        if !crate::peripherals::components::supply::powered_from_config(self) {
+            device =
+                Box::new(crate::peripherals::components::supply::UnpoweredI2cDevice::new(device));
+        }
         // Funnel through the single bus choke point, which wraps the device in
         // the shared bus trace before handing it to whichever I²C controller the
         // `connection:` resolves to. There is no untraced attach path.
@@ -133,6 +155,34 @@ impl<'a> AttachCtx<'a> {
         self.bus
             .attach_spi_device(&connection, device)
             .map_err(|_| wrong_transport_err(self.ext, "SPI"))
+    }
+
+    /// Attach a serial-audio device to the USART/I2S block the `connection:`
+    /// field names.
+    ///
+    /// Separate from `attach_spi_device` because the unit differs: an I2S
+    /// device answers in 32-bit channel slots, not bytes. On EFR32 the same
+    /// physical block does both, which is exactly why the two doors must stay
+    /// distinct -- a mic attached through the SPI door would be asked for
+    /// bytes and would have no way to say which channel they came from.
+    pub fn attach_i2s_device(
+        &mut self,
+        device: Box<dyn crate::peripherals::device::I2sDevice>,
+    ) -> Result<()> {
+        let ext = self.ext;
+        let idx = self
+            .bus
+            .find_peripheral_index_by_name(&ext.connection)
+            .ok_or_else(|| missing_connection_err(ext))?;
+        let any = self.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| downcast_err(ext))?;
+        let spi = any
+            .downcast_mut::<crate::peripherals::spi::Spi>()
+            .ok_or_else(|| wrong_transport_err(ext, "I2S"))?;
+        spi.i2s_device = Some(device);
+        Ok(())
     }
 
     /// Acquire the ADC peripheral declared in the system.yaml `connection:`
@@ -225,9 +275,7 @@ impl<'a> AttachCtx<'a> {
     /// in `from_config` so bit-bang devices share one attach path.
     pub fn install_gpio_observer<T>(&mut self, observer: std::sync::Arc<T>)
     where
-        T: crate::peripherals::esp32s3::gpio::GpioObserver
-            + crate::peripherals::esp32::gpio::GpioObserver
-            + 'static,
+        T: crate::peripherals::device::GpioObserver + 'static,
     {
         SystemBus::install_gpio_observer(self.bus, observer);
     }

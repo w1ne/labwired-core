@@ -27,6 +27,12 @@
 
 name: "esp32"
 arch: "xtensa-lx6"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Matches the engine's own ESP32 constants: peripherals/esp32/uart.rs and
+# esp32/spi.rs both derive their dividers from CPU_CLOCK_HZ = 240 MHz.
+cpu_hz: 240_000_000
+
 flash:
   base: 0x400D0000
   size: "4MiB"

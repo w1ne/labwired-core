@@ -19,6 +19,7 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
 use labwired_core::peripherals::i2c::I2cDevice;
+use labwired_core::system::xtensa::{attach_esp32_external_devices, configure_xtensa_esp32};
 use std::path::PathBuf;
 
 /// A private I²C temperature sensor that exists nowhere in this repository.
@@ -230,6 +231,231 @@ fn an_unresolved_path_entry_reaching_the_engine_is_refused() {
     );
 }
 
+/// The classic ESP32/S3 browser path constructs its bank in Rust and calls the
+/// exported attacher directly, so its contract cannot depend on `from_config`
+/// having run first. A browser-style parsed manifest missing the pack schema
+/// must fail before that direct path records or attaches anything.
+#[test]
+fn direct_xtensa_attach_validates_manifest_part_contracts() {
+    let manifest = SystemManifest::from_yaml(
+        r#"
+schema_version: "1.0"
+name: "direct-xtensa-part-pack-contract"
+chip: "esp32"
+external_devices: []
+parts:
+  - type: "acme:missing-schema"
+    behavior:
+      primitive: analog_source
+"#,
+    )
+    .expect("raw browser-style manifest must deserialize before the engine validates it");
+    let mut bus = SystemBus::new();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    let err = attach_esp32_external_devices(&mut bus, &manifest)
+        .expect_err("direct Xtensa attachment must enforce the part-pack contract");
+    assert!(
+        format!("{err:#}").contains("missing `schema: labwired.part/v1`"),
+        "the direct attach error must name the missing contract declaration: {err:#}"
+    );
+}
+
+#[test]
+fn direct_xtensa_attach_preflights_unused_pack_semantics() {
+    let manifest = SystemManifest::from_yaml(
+        r#"
+schema_version: "1.0"
+name: "direct-xtensa-invalid-pack"
+chip: "esp32"
+external_devices: []
+parts:
+  - schema: labwired.part/v1
+    type: "acme:invalid-analog"
+    source: acme-private
+    behavior:
+      primitive: analog_source
+"#,
+    )
+    .expect("raw browser-style manifest must deserialize before the engine validates it");
+    let mut bus = SystemBus::new();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    let err = attach_esp32_external_devices(&mut bus, &manifest)
+        .expect_err("direct Xtensa attachment must preflight every carried part pack");
+    assert!(
+        format!("{err:#}").contains("behavior.analog"),
+        "the direct attach error must identify the invalid runtime descriptor: {err:#}"
+    );
+}
+
+/// A manifest is a complete portable catalog, not just a bag of descriptors
+/// that happen to be referenced today. Otherwise a bad private leaf is saved
+/// successfully and fails only when a future canvas happens to use it.
+#[test]
+fn every_manifest_pack_is_runtime_validated_even_when_unused() {
+    let src = r#"
+schema_version: "1.0"
+name: "unused-invalid-pack"
+chip: "esp32c3"
+external_devices: []
+parts:
+  - schema: labwired.part/v1
+    type: "acme:invalid-analog"
+    source: acme-private
+    behavior:
+      primitive: analog_source
+"#;
+
+    let msg = build_error(
+        src,
+        "an unused malformed part pack must not silently enter a runnable manifest",
+    );
+    assert!(
+        msg.contains("behavior.analog"),
+        "the runtime error must identify the missing analog model, got: {msg}"
+    );
+}
+
+#[test]
+fn unused_analog_part_packs_require_exactly_one_input_channel() {
+    let src = r#"
+schema_version: "1.0"
+name: "unused-invalid-analog-inputs"
+chip: "esp32c3"
+external_devices: []
+parts:
+  - schema: labwired.part/v1
+    type: "acme:two-input-analog"
+    source: acme-private
+    behavior:
+      primitive: analog_source
+      analog:
+        curve: [[0, 0], [100, 3300]]
+    metadata:
+      inputs:
+        - { key: first, label: First, unit: "%", min: 0, max: 100 }
+        - { key: second, label: Second, unit: "%", min: 0, max: 100 }
+"#;
+
+    let msg = build_error(
+        src,
+        "an analog source with multiple drive channels is ambiguous and must be rejected",
+    );
+    assert!(
+        msg.contains("exactly one input channel") && msg.contains("2"),
+        "the runtime error must identify the invalid analog input count, got: {msg}"
+    );
+}
+
+#[test]
+fn unused_spi_part_packs_run_the_same_semantic_validation_as_attached_ones() {
+    let src = r#"
+schema_version: "1.0"
+name: "unused-invalid-spi-pack"
+chip: "esp32c3"
+external_devices: []
+parts:
+  - schema: labwired.part/v1
+    type: "acme:bad-spi"
+    source: acme-private
+    behavior:
+      primitive: spi_device
+      spi:
+        framing: { command_bytes: 2 }
+        registers: []
+"#;
+
+    let msg = build_error(
+        src,
+        "an unused SPI pack must receive the device-level semantic checks",
+    );
+    assert!(
+        msg.contains("behavior.spi declares no registers"),
+        "the runtime error must come from the SPI primitive validator, got: {msg}"
+    );
+}
+
+#[test]
+fn unsupported_part_pack_primitives_are_rejected_even_when_unused() {
+    let src = r#"
+schema_version: "1.0"
+name: "unused-unknown-primitive"
+chip: "esp32c3"
+external_devices: []
+parts:
+  - schema: labwired.part/v1
+    type: "acme:novel-sensor"
+    source: acme-private
+    behavior:
+      primitive: quantum_bus
+"#;
+
+    let msg = build_error(
+        src,
+        "a pack may use an engine primitive, but not invent a silent runtime protocol",
+    );
+    assert!(
+        msg.contains("quantum_bus") && msg.contains("acme:novel-sensor"),
+        "the runtime error must identify the unsupported pack primitive, got: {msg}"
+    );
+}
+
+#[test]
+fn unused_gpio_part_packs_validate_their_required_pin_roles() {
+    let src = r#"
+schema_version: "1.0"
+name: "unused-invalid-gpio-pack"
+chip: "esp32c3"
+external_devices: []
+parts:
+  - schema: labwired.part/v1
+    type: "acme:incomplete-encoder"
+    source: acme-private
+    behavior:
+      primitive: quadrature
+      pins:
+        a: clk_pin
+"#;
+
+    let msg = build_error(
+        src,
+        "a GPIO primitive missing a required role must fail before a future canvas uses it",
+    );
+    assert!(
+        msg.contains("quadrature") && msg.contains("b"),
+        "the runtime error must name the missing quadrature role, got: {msg}"
+    );
+}
+
+#[test]
+fn unused_part_packs_cannot_implicitly_shadow_a_builtin() {
+    let pack = ACME_PACK.replace("\"acme:tmp999\"", "tmp102");
+    let mut root: serde_yaml::Mapping = serde_yaml::from_str(
+        r#"
+schema_version: "1.0"
+name: "unused-builtin-shadow"
+chip: "esp32c3"
+external_devices: []
+"#,
+    )
+    .expect("harness manifest is valid YAML");
+    root.insert(
+        "parts".into(),
+        serde_yaml::Value::Sequence(vec![serde_yaml::from_str(&pack).unwrap()]),
+    );
+    let src = serde_yaml::to_string(&root).unwrap();
+
+    let msg = build_error(
+        &src,
+        "a private pack cannot defer its built-in collision until a later canvas uses it",
+    );
+    assert!(
+        msg.contains("shadows a built-in") && msg.contains("overrides: tmp102"),
+        "the preflight error must name the explicit override requirement, got: {msg}"
+    );
+}
+
 // ─── the two halves actually meet ──────────────────────────────────────────
 
 /// The manifest the APP emits, parsed by the ENGINE.
@@ -322,5 +548,67 @@ external_devices:
     assert_eq!(
         devid, 0xE5,
         "the pack's declared reset value must clock out"
+    );
+}
+
+/// Analog packs take the same runtime-owned-kit route as SPI packs.  They are
+/// not GPIO timing primitives: their kit owns both the ADC source and the
+/// `SimInput` channel the browser drives.  A manifest that carries an unknown
+/// analogue leaf therefore has to expose that channel after the bus builds.
+#[test]
+fn an_analog_source_pack_attaches_through_the_kit_door() {
+    const ANALOG_PACK: &str = r#"
+schema: labwired.part/v1
+type: "acme:soil-proxy"
+source: acme-private
+behavior:
+  primitive: analog_source
+  analog:
+    curve:
+      - [0, 3300]
+      - [100, 0]
+metadata:
+  inputs:
+    - { key: moisture, label: Moisture, unit: "%", min: 0, max: 100, default: 50 }
+"#;
+    let mut root: serde_yaml::Mapping = serde_yaml::from_str(
+        r#"
+schema_version: "1.0"
+name: "part-pack-analog"
+chip: "esp32c3"
+external_devices:
+  - id: soil
+    type: "acme:soil-proxy"
+    connection: apb_saradc
+    config: { channel: 3 }
+"#,
+    )
+    .unwrap();
+    root.insert(
+        "parts".into(),
+        serde_yaml::Value::Sequence(vec![serde_yaml::from_str(ANALOG_PACK).unwrap()]),
+    );
+    let src = serde_yaml::to_string(&root).unwrap();
+
+    let mut bus = build_bus(&src).expect("an analog-source pack must build");
+    assert!(
+        bus.list_inputs()
+            .iter()
+            .any(|(owner, channel)| owner == "soil" && channel.key == "moisture"),
+        "the pack must expose its declared simulator input"
+    );
+    let idx = bus
+        .find_peripheral_index_by_name("apb_saradc")
+        .expect("the C3 declares its SAR ADC");
+    let adc = bus.peripherals[idx]
+        .dev
+        .as_any_mut()
+        .expect("the SAR ADC is downcastable")
+        .downcast_mut::<labwired_core::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc>()
+        .expect("the C3 SAR ADC has its production model");
+    assert_eq!(
+        adc.channel_input_count(3),
+        ((1650u32 * 4095) / 3300) as u16,
+        "the descriptor default must seed the midpoint of its analog curve, not 0%"
     );
 }

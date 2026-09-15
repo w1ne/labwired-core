@@ -4,10 +4,21 @@ build-backend = "maturin"
 
 [project]
 name = "labwired"
-version = "0.12.2"
-requires-python = ">=3.7"
+dynamic = ["version"]
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.entry-points.pytest11]
+labwired = "labwired.pytest_plugin"
+
+[tool.maturin]
+python-source = "python"
+module-name = "labwired._native"
+include = [{path = "python/labwired/configs/**/*", format = ["sdist", "wheel"]}, {path = "configs/**/*", format = "sdist"}]

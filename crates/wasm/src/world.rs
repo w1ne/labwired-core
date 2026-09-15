@@ -30,35 +30,7 @@ impl WasmWorld {
             .map_err(|error| JsValue::from_str(&format!("Environment YAML error: {error}")))?;
         let inputs: Vec<ResolvedNodeInput> = serde_wasm_bindgen::from_value(nodes)
             .map_err(|error| JsValue::from_str(&format!("Resolved nodes error: {error}")))?;
-        let resolved = inputs
-            .into_iter()
-            .map(|input| {
-                let system: SystemManifest = serde_yaml::from_str(&input.system_yaml)
-                    .map_err(|error| format!("node '{}': system YAML: {error}", input.id))?;
-                let chip: ChipDescriptor = serde_yaml::from_str(&input.chip_yaml)
-                    .map_err(|error| format!("node '{}': chip YAML: {error}", input.id))?;
-                Ok(ResolvedWorldNode {
-                    id: input.id,
-                    system,
-                    chip,
-                    firmware: NodeFirmware::from_bytes(input.firmware),
-                })
-            })
-            .collect::<Result<Vec<_>, String>>()
-            .map_err(|error| JsValue::from_str(&error))?;
-        let mut world = World::from_resolved(manifest, resolved)
-            .map_err(|error| JsValue::from_str(&format!("World construction error: {error:#}")))?;
-        let mut uart_sinks = HashMap::new();
-        for (id, machine) in &mut world.machines {
-            let sink = Arc::new(Mutex::new(Vec::new()));
-            machine
-                .attach_uart_tx_sink(sink.clone(), false)
-                .map_err(|error| {
-                    JsValue::from_str(&format!("node '{id}': UART sink: {error:#}"))
-                })?;
-            uart_sinks.insert(id.clone(), sink);
-        }
-        Ok(Self { world, uart_sinks })
+        Self::from_node_inputs(manifest, inputs).map_err(|error| JsValue::from_str(&error))
     }
 
     pub fn node_ids(&self) -> JsValue {
@@ -204,5 +176,99 @@ impl WasmWorld {
             .get(node_id)
             .map(|machine| machine.as_ref())
             .ok_or_else(|| JsValue::from_str(&format!("unknown world node '{node_id}'")))
+    }
+}
+
+impl WasmWorld {
+    /// [`Self::new_from_resolved`] past the JS boundary, so a native test can
+    /// reach it: `serde_wasm_bindgen` and `JsValue` only work in a wasm host.
+    fn from_node_inputs(
+        manifest: EnvironmentManifest,
+        inputs: Vec<ResolvedNodeInput>,
+    ) -> Result<WasmWorld, String> {
+        let resolved = inputs
+            .into_iter()
+            .map(|input| {
+                let system: SystemManifest = serde_yaml::from_str(&input.system_yaml)
+                    .map_err(|error| format!("node '{}': system YAML: {error}", input.id))?;
+                let chip: ChipDescriptor = serde_yaml::from_str(&input.chip_yaml)
+                    .map_err(|error| format!("node '{}': chip YAML: {error}", input.id))?;
+                Ok(ResolvedWorldNode {
+                    id: input.id,
+                    system,
+                    chip,
+                    firmware: NodeFirmware::from_bytes(input.firmware),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let mut world = World::from_resolved(manifest, resolved)
+            .map_err(|error| format!("World construction error: {error:#}"))?;
+        let mut uart_sinks = HashMap::new();
+        for (id, machine) in &mut world.machines {
+            let sink = Arc::new(Mutex::new(Vec::new()));
+            machine
+                .attach_uart_tx_sink(sink.clone(), false)
+                .map_err(|error| format!("node '{id}': UART sink: {error:#}"))?;
+            uart_sinks.insert(id.clone(), sink);
+        }
+        Ok(Self { world, uart_sinks })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A world steps its nodes without a co-simulation session, so a node that
+    /// declares `cosim_models` must refuse to build rather than run with its
+    /// models silently absent.
+    #[test]
+    fn a_node_with_cosim_models_refuses_to_build() {
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+name: browser-world
+nodes:
+  - id: scope
+    system: scope.yaml
+    firmware: scope.elf
+"#,
+        )
+        .expect("environment manifest");
+        let node = ResolvedNodeInput {
+            id: "scope".to_string(),
+            system_yaml: r#"
+name: "scope"
+chip: "stm32f401"
+external_devices: []
+cosim_models:
+  - id: rc
+    adapter: analog
+    step_ns: 100000
+    inputs: { gpio: board.gpio.pa5 }
+    outputs: { v_out: board.analog.pa0_volts }
+    config:
+      netlist_text: |
+        Vgpio in 0 dc 0
+        R1 in out 10k
+        C1 out 0 100n
+      probes: { v_out: "v(out)" }
+      sources: { gpio: Vgpio }
+"#
+            .to_string(),
+            chip_yaml: include_str!("../../../configs/chips/stm32f401.yaml").to_string(),
+            firmware: include_bytes!("../../../tests/fixtures/stm32f401-blinky.elf").to_vec(),
+        };
+
+        let error = match WasmWorld::from_node_inputs(environment, vec![node]) {
+            Ok(_) => panic!("a world whose node declares cosim_models must not build"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains(
+                "co-simulation models are not supported in multi-node worlds yet; node 'scope' declares 1"
+            ),
+            "{error}"
+        );
     }
 }

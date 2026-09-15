@@ -117,7 +117,7 @@ fn bus_esp32c3() -> SystemBus {
     manifest.walk_deleted = None;
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 bus");
     let _ = labwired_core::system::riscv::configure_riscv(&mut bus);
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
     bus.recompute_walk_deletable();
     bus
 }
@@ -302,7 +302,7 @@ fn store_into_write_protected_iram_is_blocked_and_reported() {
         bus.external_irq_lines() & (1 << MEMPROT_INUM),
         0,
         "UNDELIVERED: IRAM0 PMS source {IRAM0_PMS_SOURCE} never reached CPU line \
-         {MEMPROT_INUM}; riscv_irq_lines={:#x}",
+         {MEMPROT_INUM}; esp32c3.irq_lines={:#x}",
         bus.external_irq_lines()
     );
 }

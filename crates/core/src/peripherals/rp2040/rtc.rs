@@ -256,9 +256,7 @@ impl Rp2040Rtc {
         }
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     fn needs_scheduler_wake(&self) -> bool {
         self.enabled || self.ints() != 0

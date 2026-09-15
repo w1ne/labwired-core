@@ -36,6 +36,13 @@ pub struct CosimStepArgs {
     /// Print routed outputs as JSON instead of a table.
     #[arg(long)]
     pub json: bool,
+
+    /// Write the in-core analog engine's waveform trace here. `.csv` writes
+    /// `time_ns,<channel>...`; any other extension writes a VCD with one
+    /// `real` variable per channel. Only `adapter: analog` models produce
+    /// samples.
+    #[arg(long = "analog-trace", value_name = "PATH")]
+    pub analog_trace: Option<PathBuf>,
 }
 
 fn parse_signal_value(raw: &str) -> CosimSignalValue {
@@ -104,6 +111,18 @@ pub fn run_cosim_step(args: CosimStepArgs) -> ExitCode {
         .parent()
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
+
+    // The netlist of an `adapter: analog` model is parsed by the core crate,
+    // so an unsupported element is a manifest error reported here rather than
+    // a surprise mid-run.
+    let analog_issues =
+        labwired_core::cosim::validate_analog_models(&manifest.cosim_models, &base_dir);
+    if !analog_issues.is_empty() {
+        for issue in analog_issues {
+            eprintln!("error: {issue}");
+        }
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
     let mut runner = match CosimRunner::from_configs_with_base(&manifest.cosim_models, &base_dir) {
         Ok(runner) => runner,
         Err(err) => {
@@ -136,6 +155,27 @@ pub fn run_cosim_step(args: CosimStepArgs) -> ExitCode {
             return ExitCode::from(EXIT_RUNTIME_ERROR);
         }
     };
+
+    if let Some(path) = &args.analog_trace {
+        let batch = runner.analog_trace_snapshot(0);
+        if batch.channels.is_empty() {
+            eprintln!(
+                "warning: --analog-trace {path:?}: no `adapter: analog` model in this manifest, \
+                 so the trace has no channels"
+            );
+        }
+        match crate::analog_trace::write_analog_trace(&batch, path) {
+            Ok(()) => eprintln!(
+                "analog trace ({} channels, {} samples) -> {path:?}",
+                batch.channels.len(),
+                batch.samples.len()
+            ),
+            Err(err) => {
+                eprintln!("error: cannot write --analog-trace {path:?}: {err}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+    }
 
     if args.json {
         let steps: Vec<serde_json::Value> = routed

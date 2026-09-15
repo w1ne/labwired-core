@@ -1,52 +1,59 @@
-# Board Onboarding Playbook
+# Board onboarding playbook
 
-This guide documents the procedure for adding new board targets to LabWired. It is designed for contributors and agents to ensure consistent, high-quality board support.
+Add a **new MCU or board** to LabWired: chip YAML, system YAML, smoke firmware, and proof.
 
-## Reference implementation
+For **sensors, SPI chips, and actuators**, start with [Onboard a part](howto/onboard-part.md) instead.
 
-**NUCLEO-L476RG** is the canonical end-to-end onboarded board. Read these
-together with this playbook:
+---
 
-- [`examples/nucleo-l476rg/README.md`](../examples/nucleo-l476rg/README.md) — build / run / debug / pin map
-- [`examples/nucleo-l476rg/VALIDATION.md`](../examples/nucleo-l476rg/VALIDATION.md) — bug-discovery audit trail
-- [`docs/boards/nucleo-l476rg.md`](boards/nucleo-l476rg.md) — fidelity table
-- [`crates/firmware-l476-demo/src/main.rs`](../crates/firmware-l476-demo/src/main.rs) — comprehensive Rust firmware
-- [`configs/chips/stm32l476.yaml`](../configs/chips/stm32l476.yaml) — chip yaml with all profile selectors
-- [`configs/systems/nucleo-l476rg.yaml`](../configs/systems/nucleo-l476rg.yaml) — system manifest with board_io bindings
-- [`crates/core/tests/firmware_survival.rs`](../crates/core/tests/firmware_survival.rs) — six survival tests asserting byte-for-byte UART parity with real silicon
+## Gold reference
 
-The L476 path went through five hardware-validated rounds (UART, SPI,
-I²C, ADC, DMA) — each surfaced and fixed real divergences between sim
-and silicon. The same loop should produce a comparable level of
-confidence for any new board.
+**NUCLEO-L476RG** is the end-to-end example. Read these with this playbook:
+
+| Asset | Path |
+|-------|------|
+| Example README | [`examples/nucleo-l476rg/README.md`](../examples/nucleo-l476rg/README.md) |
+| Validation trail | [`examples/nucleo-l476rg/VALIDATION.md`](../examples/nucleo-l476rg/VALIDATION.md) |
+| Board docs | [`docs/boards/nucleo-l476rg.md`](boards/nucleo-l476rg.md) |
+| Chip YAML | [`configs/chips/stm32l476.yaml`](../configs/chips/stm32l476.yaml) |
+| System YAML | [`configs/systems/nucleo-l476rg.yaml`](../configs/systems/nucleo-l476rg.yaml) |
+
+Copy structure from a nearby family member when the silicon is similar (STM32 F4/L4/H5, nRF, ESP, RP).
+
+---
 
 ## 1. Prerequisites
 
-Before starting, acquire the following primary sources:
-1.  **MCU Reference Manual** (e.g., STM32H5 Reference Manual).
-2.  **Datasheet** (for memory map boundaries).
-3.  **Board User Manual** (for LED/Button GPIO mapping).
-4.  **CMSIS Device Headers** (optional but helpful for IRQ numbers).
+1. MCU reference manual (memory map, peripherals)
+2. Datasheet (flash/RAM sizes)
+3. Board user manual (LED, button, VCP UART pins)
+4. Optional: CMSIS headers / SVD for IRQs and bases
 
-## 2. Fit Assessment
+---
 
-Verify that LabWired supports the critical peripherals required for a minimal "smoke test" (boot + UART output).
+## 2. Fit check
 
-**Supported Peripherals:**
-- `rcc` (Reset and Clock Control) - Essential for boot.
-- `gpio` (General Purpose I/O) - Essential for pin muxing.
-- `uart` (Universal Asynchronous Receiver-Transmitter) - Essential for debug output.
-- `systick` (System Tick Timer) - Essential for RTOS/HAL timekeeping.
+You need a minimal path: **boot + something observable** (usually UART print or GPIO toggle).
 
-**If the board requires complex peripherals (USB, Ethernet) for basic operation, it may not be a good candidate for initial onboarding.**
+Typical first peripherals:
 
-## 3. Implementation Steps
+- Clock / reset (`rcc` or vendor equivalent)
+- GPIO
+- UART (or USB-serial on chips that use it)
+- SysTick or a timer if the firmware needs time
 
-### Step 1: Chip Descriptor (`configs/chips/`)
+If the board **cannot** boot without USB, Ethernet, or complex power sequencing, plan that work first or pick a simpler board.
 
-Create a YAML file defining the MCU's memory map and internal peripherals.
+Support levels: [Target support rubric](target_support_rubric.md). Public “supported” starts at **smoke (L1)**.
 
-**Example: `stm32h563.yaml`**
+---
+
+## 3. Implementation steps
+
+### Step 1 — Chip descriptor (`configs/chips/`)
+
+Define flash, RAM, and peripherals with real base addresses.
+
 ```yaml
 name: "STM32H563"
 flash:
@@ -55,147 +62,81 @@ flash:
 ram:
   base: 0x20000000
   size: "640KB"
-
 peripherals:
   - id: "rcc"
     type: "rcc"
     base_address: 0x44020C00
-    
   - id: "usart3"
     type: "uart"
     base_address: 0x40004800
     irq: 55
 ```
-*Source of Truth: MCU Reference Manual (Memory Map section).*
 
-### Step 2: System Manifest (`configs/systems/`)
+Prefer existing peripheral **types** already in the engine. New on-chip blocks: [Peripheral modeling](peripherals.md).
 
-Create a YAML file instantiating the chip and defining board-level connections.
+### Step 2 — System manifest (`configs/systems/`)
 
-**Example: `nucleo-h563zi.yaml`**
+Instantiate the chip and board-level wiring (VCP UART, LEDs, external parts).
+
 ```yaml
 name: "NUCLEO-H563ZI"
 chip: "../chips/stm32h563.yaml"
-
-# Define board-level connections (e.g., Virtual COM Port)
-connectors:
-  - type: "uart"
-    peripheral: "usart3"
-    endpoint: "host_console"
+# connectors / board_io / external_devices — follow a sibling system YAML
 ```
-*Source of Truth: Board User Manual (Schematics/Connector definition).*
 
-### Step 3: Smoke Firmware
+Source of truth: board schematic / user manual.
 
-Create a minimal Rust/C firmware to verify execution.
-- **Goal**: Initialize UART and print "OK".
-- **Constraints**: No external dependencies if possible (minimize HAL complexity).
+### Step 3 — Smoke firmware
 
-## 4. Validation
+- Goal: init clocks + UART, print `OK\n` (or toggle LED in a way a test can see)
+- Prefer vendor HAL/SDK you will ship with
+- Keep the first binary small
 
-Run the standardized onboarding test suite.
+### Step 4 — Prove with the CLI
 
 ```bash
-# 1. Build Smoke Firmware
-cargo build --release --target thumbv7m-none-eabi -p smoke-firmware
+# Build your smoke firmware with the normal toolchain for that ISA, then:
 
-# 2. Run Simulation with Audit
-labwired --firmware target/thumbv7m-none-eabi/release/smoke-firmware \
-         --system configs/systems/nucleo-h563zi.yaml \
-         --audit-unsupported
+labwired run \
+  --firmware path/to/smoke.elf \
+  --system configs/systems/your-board.yaml
+
+labwired test --script examples/your-board/io-smoke.yaml
 ```
 
-**Success Criteria:**
-1.  **Boot**: PC initializes to Reset Vector.
-2.  **UART**: "OK" printed to stdout.
-3.  **Audit**: No critical "Unmapped Peripheral" errors (warnings are acceptable for unused blocks).
+**Success criteria (minimum):**
 
-## 5. Bus visibility (required)
+1. Boots (reset vector / PC sane)
+2. Observable output (UART `OK` or GPIO assertion)
+3. No critical unmapped accesses on the smoke path
 
-A chip can boot, run firmware, and pass every conformance gate while its I²C,
-SPI and UART traffic is **invisible to the logic analyzer**. The analyzer samples
-*pads*. A bus only reaches a pad if the engine explicitly binds that controller's
-wire to it. Without a binding the transfers still happen, the firmware still
-works — and every probe on the bus pins reads the GPIO output latch, a flat line,
-authoritatively wrong.
+Add `--trace` only when debugging.
 
-Onboarding a chip therefore includes answering, per bus: **is it bound, or why
-not?**
+### Step 5 — Document
 
-### The scoreboard
+1. `docs/boards/<id>.md` from [boards/_TEMPLATE.md](boards/_TEMPLATE.md)
+2. `examples/<board>/` with README, system, and how to build
+3. List known limitations honestly (✅ / ⚠️ / ❌)
 
-[`docs/coverage/bus-visibility.md`](coverage/bus-visibility.md) is the derived
-board — chip × I2C/SPI/UART, ✓ or —. It is generated by
-[`crates/core/tests/bus_visibility.rs`](../crates/core/tests/bus_visibility.rs),
-which builds every `configs/chips/*.yaml` through `SystemBus::from_config` and
-reads back the signal names actually bound to pads. Nothing about it is
-hand-maintained; you cannot add a ✓ by editing the markdown.
+---
 
-### What the gate will say
+## 4. Promote support level
 
-A new chip lands on the board automatically, as a row of dashes. That alone does
-not fail — a fleet gap is allowed to be visible. What fails:
+| Level | Bar |
+|-------|-----|
+| L0 declared | Chip + system validate |
+| L1 smoke | Deterministic script + artifacts |
+| L2+ | CI history, audits, tier-1 peripherals |
 
-- **Losing a bus.** `rp2040: LOST UART visibility (bound pad functions now: [...])`
-  — a binding that used to exist stopped happening.
-- **A name the classifier does not recognise.**
-  `rp2040: 1 bound pad function name(s) the bus classifier does not recognise:
-  ["SERIAL0_TX"]` — rename a binding and the gate stops you rather than quietly
-  emptying the matrix.
-- **A stale board.** The committed markdown must match the measured matrix; the
-  test prints the regeneration command.
+Details: [Target support rubric](target_support_rubric.md).
 
-Re-record after a deliberate change:
+---
 
-```bash
-UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus_visibility
-```
+## Next
 
-### Binding a bus
-
-Edit [`crates/core/src/bus/attach.rs`](../crates/core/src/bus/attach.rs): add a
-`wire_<family>_<bus>_pads` function and call it from `SystemBus::from_config`
-alongside the existing nine.
-
-**Reference implementation: `wire_rp2040_uart_pads`.** Read it before writing
-your own — it is short, and its doc comment carries the three rules that matter:
-
-1. **The pad map comes from the datasheet / SVD, transcribed, not derived.** Any
-   "every fourth pad" parity rule silently mis-assigns instances.
-2. **Bind only lines something actually drives.** RP2040 `uart*_rx` pads are
-   deliberately *not* bound: nothing in the engine drives RX, so a bound RX pad
-   would report a confident idle-high straight through incoming traffic — worse
-   than the GPIO-latch fallback, because it looks authoritative.
-3. **Resolve the GPIO side BEFORE touching the controller.** `pad_lines_arc()`
-   *creates* the wire cell, and a controller that owns a cell no pad route
-   reaches still buffers and narrates every byte into something nothing reads.
-
-Name each binding `<STEM><instance>_<SIGNAL>` — `I2C1_SCL`, `SPI0_SCK`,
-`USART3_TX`, `I2CEXT0_SDA`. A new stem must be added to `STEMS` in
-`bus_visibility.rs` in the same commit; the gate fails until it is.
-
-### If you cannot bind it yet
-
-That is an acceptable outcome — but it must be **recorded, not silent**. Leave
-the dash on the board and write down why, in the doc comment of the wiring
-function you could not extend (or in `docs/boards/<board>.md` if there is no such
-function yet). Real examples already in the tree:
-
-- STM32 F4 I²C is unbound because the F4 configs select the legacy I²C register
-  model, whose `pad_lines_arc()` returns `None` — the controller publishes no
-  wire to bind (see `I2c::pad_lines_arc`).
-- STM32 H5/H7/WBA SPI is unbound because `profile: "stm32h5"` selects the SPI v3
-  IP, which is a separate model from the classic/FIFO bit engine the pad tables
-  drive (see `Spi::is_stm32_wire_layout`).
-- STM32 F1 MISO pads are unbound on purpose: they are input-mode on real silicon,
-  so a plain GPIO input on that pin must never read the SPI wire.
-
-"The family's pad mux is not modelled yet" is a legitimate reason. "Nobody
-looked" is what this section exists to prevent.
-
-## 6. Documentation
-
-Create a folder in `examples/<board>/` containing:
-1.  `README.md`: Board specific instructions.
-2.  `system.yaml`: A local copy of the system manifest for easy reproduction.
-3.  `smoke.rs` (or reference): The source code used for validation.
+| | |
+|--|--|
+| [Onboard hardware hub](howto/onboard-hardware.md) | All tracks |
+| [Onboard a part](howto/onboard-part.md) | Sensors / actuators |
+| [Run firmware](getting_started_firmware.md) | CLI usage |
+| [CI](ci_integration.md) | Pipeline gate |

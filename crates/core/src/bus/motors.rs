@@ -296,9 +296,26 @@ impl SystemBus {
             .set_gpio_input(pin.bit, level);
     }
 
+    /// Per-tick motor-plant service. Split so the "no motors on this bus" case
+    /// — every bus that is not a motor lab — is an inlinable empty-vector check
+    /// instead of a call into the body below.
+    ///
+    /// This is called on EVERY guest instruction. Profiling the ESP32-S3 Doom
+    /// twin put ~2-3% of the whole process in `service_motor_models` while it
+    /// did nothing at all: the body is far too large to inline, so a bus with no
+    /// motors still paid a call, a prologue and two loads per instruction. Read
+    /// that as a cadence signal, not a motor bug.
+    #[inline]
     pub(crate) fn service_motor_models(&mut self) {
+        if self.motors.is_empty() {
+            return;
+        }
+        self.service_motor_models_impl();
+    }
+
+    fn service_motor_models_impl(&mut self) {
         let elapsed = self.current_cycle.saturating_sub(self.motor_cycle_anchor);
-        if elapsed == 0 || self.motors.is_empty() {
+        if elapsed == 0 {
             return;
         }
         self.motor_cycle_anchor = self.current_cycle;

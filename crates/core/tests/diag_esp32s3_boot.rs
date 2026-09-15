@@ -20,7 +20,9 @@ fn nearest(syms: &HashMap<u32, String>, pc: u32) -> String {
 }
 
 #[test]
-#[ignore]
+#[ignore = "diagnostic probe, not a gate: it eprintln!s S3 Arduino L0 boot progress and asserts \
+            nothing. Needs validation/arduino-matrix/out/esp32s3/L0_serial_boot/firmware.elf, a \
+            PlatformIO matrix build output that is not in the tree"]
 fn diag_s3_boot() {
     std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
     let core = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");

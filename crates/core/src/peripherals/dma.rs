@@ -126,13 +126,7 @@ impl Dma1 {
         Self::default()
     }
 
-    /// True when the event scheduler owns this controller's pacing (feature on
-    /// AND bus clock attached). Everything drive-mode-related branches on this
-    /// ONE predicate so the two modes can never mix.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     fn tick_channels_once(&mut self) -> PeripheralTickResult {
         let mut dma_requests: Option<Vec<DmaRequest>> = None;

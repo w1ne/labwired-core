@@ -1,0 +1,67 @@
+name: "atmega328p"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# 16 MHz crystal on the Arduino Nano/Uno boards this part is modelled for
+# (the ATmega328P itself is rated to 20 MHz at 5 V; no in-tree board uses it).
+cpu_hz: 16_000_000
+# GPIO supply and digital input thresholds (ratios of io_voltage_v), used when
+# co-simulation turns a circuit node voltage into the level digitalRead sees.
+# 5.0 V is the Arduino Nano/Uno rail. Microchip DS40002061B
+# (ATmega48A/PA/88A/PA/168A/PA/328/P), section 30.2, Table 30-1 "Common DC
+# characteristics", VCC = 2.4 V to 5.5 V, except XTAL1 and RESET:
+# VIL max 0.3·VCC, VIH min 0.6·VCC.
+io_voltage_v: 5.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.6
+
+flash:
+  base: 0x00000000
+  size: "32KB"
+ram:
+  base: 0x00000100
+  size: "2KB"
+peripherals:
+  # Parking SPI controller for kit attach only. Hardware SPI (SPCR/SPSR/SPDR)
+  # is modelled on the AVR CPU; build_avr_node / CLI drain attached slaves onto
+  # the interpreter after from_config. Base is outside the 16-bit data space so
+  # MMIO never collides with CPU-handled registers.
+  - id: "spi"
+    type: "spi"
+    base_address: 0x00010000
+    size: "16"
+  # Parking I2C controller for kit attach; TWI lives on the CPU (TWCR/TWDR).
+  - id: "i2c"
+    type: "i2c"
+    base_address: 0x00010010
+    size: "16"
+  # Port mirrors (base + 0/1/2 = PIN/DDR/PORT). The real PINx/DDRx/PORTx live
+  # at 0x23..0x2B in the CPU IO map; bus flash@0 would swallow low MMIO writes,
+  # so the Avr interpreter mirrors every port write to its high window, and
+  # reads each PINx input half back from here. Without portc/portd a canvas LED
+  # on D0-D7 never lit and a button on A0-A5 was never read.
+  # PORTB = D8-D13 (LED_BUILTIN = PB5).
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010023
+    size: "3"
+  # PORTC (PINC/DDRC/PORTC 0x26..0x28) and PORTD (PIND/DDRD/PORTD 0x29..0x2B),
+  # mirrored the same way: Arduino A0..A5 are PC0..PC5, D0..D7 are PD0..PD7.
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010026
+    size: "3"
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010029
+    size: "3"
+  # ADC input side: millivolts on ADC0..ADC7, two bytes per channel. The
+  # converter registers (ADMUX/ADCSRA/ADCL/ADCH) stay on the CPU; this is where
+  # a potentiometer or NTC on A0-A5 drives its level.
+  - id: "adc"
+    type: "avr_adc"
+    base_address: 0x00010030
+    size: "16"

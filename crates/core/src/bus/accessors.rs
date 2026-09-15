@@ -10,6 +10,18 @@ use crate::{SimResult, SimulationError};
 use std::sync::atomic::Ordering;
 
 impl SystemBus {
+    /// Register a [`crate::SimulationObserver`] for the bus's own events
+    /// (`on_memory_write`).
+    ///
+    /// Most callers want [`crate::Machine::add_observer`] instead, which
+    /// registers for the CPU- and tick-shaped events as well; this entry
+    /// point is for an observer that only wants bus traffic, or that is
+    /// attached to a bus before a `Machine` owns it (the DAP memory
+    /// tracker).
+    pub fn add_observer(&mut self, observer: std::sync::Arc<dyn crate::SimulationObserver>) {
+        self.observers.push(observer);
+    }
+
     /// Side-effect-free byte read used by the universal inspect `peek`.
     ///
     /// Mirrors `read_u8`'s routing (RAM, flash, extra windows, flash boot
@@ -42,6 +54,35 @@ impl SystemBus {
         }
         None
     }
+
+    /// Publish a completed **multi-byte peripheral store** to the bus
+    /// observers as byte events, little-endian.
+    ///
+    /// `write_u8` already notifies on every successful store (RAM and MMIO
+    /// alike), so a trace consumer expects one uniform byte stream and does
+    /// not care which access width the firmware used. The wide accessors
+    /// short-circuit into the peripheral before reaching their `write_u8`
+    /// fallback, so without this their MMIO stores — GPIO BSRR, USART TDR,
+    /// exactly the traffic a firmware trace exists for — are invisible.
+    ///
+    /// Callers pass `value.to_le_bytes()`: the event count is derived from
+    /// the stored type rather than written out at the call site, so a
+    /// half-word store can never emit word-shaped events.
+    ///
+    /// `old` is reported as 0 rather than read back: sampling a peripheral
+    /// register to report its previous value can have side effects
+    /// (read-to-clear status, USART RDR), and a trace must not perturb the
+    /// run it observes.
+    fn notify_peripheral_store(&self, addr: u64, bytes: &[u8]) {
+        if self.observers.is_empty() {
+            return;
+        }
+        for (i, &byte) in bytes.iter().enumerate() {
+            for observer in &self.observers {
+                observer.on_memory_write(addr + i as u64, 0, byte);
+            }
+        }
+    }
 }
 
 impl crate::Bus for SystemBus {
@@ -49,9 +90,14 @@ impl crate::Bus for SystemBus {
         Some(self.logic_tap.clone())
     }
 
+    fn requires_cycle_accurate(&self) -> bool {
+        SystemBus::requires_cycle_accurate(self)
+    }
+
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {
+            self.note_memory_read();
             return Ok(val);
         }
         // Cortex-M boot alias: 0x0000_0000 mirrors flash start on many STM32
@@ -68,14 +114,17 @@ impl crate::Bus for SystemBus {
         if self.config.optimized_bus_access {
             // Fast path: flash/extra_mem before peripherals.
             if let Some(val) = self.flash.read_u8(addr) {
+                self.note_memory_read();
                 return Ok(val);
             }
             for mem in &self.extra_mem {
                 if let Some(val) = mem.read_u8(addr) {
+                    self.note_memory_read();
                     return Ok(val);
                 }
             }
             if let Some(val) = flash_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -101,14 +150,17 @@ impl crate::Bus for SystemBus {
                 return p.dev.read(off);
             }
             if let Some(val) = self.flash.read_u8(addr) {
+                self.note_memory_read();
                 return Ok(val);
             }
             for mem in &self.extra_mem {
                 if let Some(val) = mem.read_u8(addr) {
+                    self.note_memory_read();
                     return Ok(val);
                 }
             }
             if let Some(val) = flash_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
         }
@@ -191,6 +243,7 @@ impl crate::Bus for SystemBus {
                             self.flash
                                 .write_u8(self.flash.base_addr + qoff, existing & nb);
                         }
+                        self.note_memory_write();
                         for observer in &self.observers {
                             observer.on_memory_write(addr, old_value, value);
                         }
@@ -234,6 +287,7 @@ impl crate::Bus for SystemBus {
                     .unwrap_or(0xFF);
                 self.flash
                     .write_u8(self.flash.base_addr + off, existing & value);
+                self.note_memory_write();
                 for observer in &self.observers {
                     observer.on_memory_write(addr, old_value, value);
                 }
@@ -250,6 +304,7 @@ impl crate::Bus for SystemBus {
             || flash_alias_write
             || self.extra_mem.iter_mut().any(|m| m.write_u8(addr, value))
         {
+            self.note_memory_write();
             Ok(())
         } else {
             // Dynamic Peripherals
@@ -300,6 +355,11 @@ impl crate::Bus for SystemBus {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
@@ -320,6 +380,7 @@ impl crate::Bus for SystemBus {
 
     fn read_u16(&self, addr: u64) -> SimResult<u16> {
         if let Some(val) = self.ram.read_u16(addr) {
+            self.note_memory_read();
             return Ok(val);
         }
         // See read_u32: with optimized_bus_access off, peripherals (FlashXip)
@@ -348,9 +409,11 @@ impl crate::Bus for SystemBus {
             // flash.base+addr, which would shadow RP2040/ESP mask ROM at 0x0
             // with XIP contents at flash.base+addr (e.g. 0xa10 → 0x10000a10).
             if let Some(val) = extra_mem_half(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -371,12 +434,15 @@ impl crate::Bus for SystemBus {
                 return self.peripherals[idx].dev.read_u16(off);
             }
             if let Some(val) = extra_mem_half(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
         }
+        // Fall-through counts via per-byte note_memory_read in read_u8.
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
         Ok(b0 | (b1 << 8))
@@ -406,15 +472,18 @@ impl crate::Bus for SystemBus {
                 return Ok(((byte_val >> bit) & 1) as u32);
             }
         }
-        // RP2040 atomic register aliases: every alias of a register reads back
-        // the aligned base register (the op only affects writes).
-        if self.atomic_register_aliases {
+        // Atomic register aliases: every alias of a register reads back the
+        // aligned base register (the op only affects writes). True for both
+        // families — pico-sdk documents it, and the Series-2 RM says a read of
+        // a SET/CLR/TGL alias returns the register's value.
+        if self.atomic_register_aliases.is_enabled() {
             if let Some((base, _)) = self.atomic_alias_redirect(addr) {
                 return self.read_u32(base);
             }
         }
 
         if let Some(val) = self.ram.read_u32(addr) {
+            self.note_memory_read();
             return Ok(val);
         }
         // Flash region + boot alias, and peripherals. With optimized_bus_access
@@ -446,9 +515,11 @@ impl crate::Bus for SystemBus {
             // Same ordering as read_u16: bootrom/IRAM in extra_mem must win
             // over the low-address flash alias (RP2040 mask ROM @ 0x0).
             if let Some(val) = extra_mem_word(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -471,12 +542,15 @@ impl crate::Bus for SystemBus {
             // IRAM / ROM / RTC after peripherals so XIP FlashXip still wins on
             // 0x4200_0000 / 0x3C00_0000 over zero-filled extra_mem twins.
             if let Some(val) = extra_mem_word(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
+                self.note_memory_read();
                 return Ok(val);
             }
         }
+        // Fall-through counts via per-byte note_memory_read in read_u8.
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
         let b2 = self.read_u8(addr + 2)? as u32;
@@ -497,6 +571,7 @@ impl crate::Bus for SystemBus {
             wrote = self.flash.write_u16(self.flash.base_addr + addr, value);
         }
         if wrote {
+            self.note_memory_write();
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
@@ -529,12 +604,18 @@ impl crate::Bus for SystemBus {
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
+                self.notify_peripheral_store(addr, &value.to_le_bytes());
             }
             return r;
         }
@@ -551,11 +632,11 @@ impl crate::Bus for SystemBus {
         if let Some(r) = self.esp32c3_pms_gate_store(addr) {
             return r;
         }
-        // RP2040 atomic register aliases: a write to a +0x1000/0x2000/0x3000
-        // alias of a peripheral register is a read-modify-write (XOR/SET/CLR)
-        // on the aligned base register. The base access recurses into the
-        // normal path (its alias bits are clear), so there is no further alias.
-        if self.atomic_register_aliases {
+        // Atomic register aliases: a write to a +0x1000/0x2000/0x3000 alias of
+        // a peripheral register is a read-modify-write on the aligned base
+        // register. The base access recurses into the normal path (its alias
+        // bits are clear), so there is no further alias.
+        if self.atomic_register_aliases.is_enabled() {
             if let Some((base, op)) = self.atomic_alias_redirect(addr) {
                 let cur = self.read_u32(base)?;
                 let new = match op {
@@ -565,10 +646,17 @@ impl crate::Bus for SystemBus {
                 };
                 // Flag CLR so write-clear peripherals can accept an absolute
                 // post-clear image (pico-sdk) without treating it as a W1C mask.
-                if matches!(op, crate::bus::AtomicAliasOp::Clr) {
-                    return crate::bus::with_clr_alias_write(|| self.write_u32(base, new));
-                }
-                return self.write_u32(base, new);
+                // Every alias op hands the peripheral a computed FINAL image.
+                // A register that is not plain read-write has to know that, or
+                // it re-interprets the image as a mask — which is how an
+                // EFR32 `IF_CLR` write turned into a no-op.
+                return crate::bus::with_alias_absolute_write(|| {
+                    if matches!(op, crate::bus::AtomicAliasOp::Clr) {
+                        crate::bus::with_clr_alias_write(|| self.write_u32(base, new))
+                    } else {
+                        self.write_u32(base, new)
+                    }
+                });
             }
         }
         // Debug: trace WiFi MAC-window writes (env-gated) to RE the TX path.
@@ -600,6 +688,7 @@ impl crate::Bus for SystemBus {
             wrote = self.flash.write_u32(self.flash.base_addr + addr, value);
         }
         if wrote {
+            self.note_memory_write();
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
@@ -632,12 +721,18 @@ impl crate::Bus for SystemBus {
             if r.is_ok() {
                 let base = self.peripherals[idx].base;
                 self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                // Same write choke, ESP32-S3 interrupt matrix: a level moved by
+                // this write (above all the FROM_CPU self-IPI that implements
+                // `portYIELD_WITHIN_API`) must reach the core on the NEXT
+                // instruction, not at the next peripheral tick.
+                self.sync_esp32s3_irq_write(idx);
                 // Same write choke, for the C3 permission-control unit: a
                 // write into the SENSITIVE PMS span re-derives the permission
                 // map (and honours a VIOLATE_CLR pulse).
                 self.sync_esp32c3_pms_write(idx, addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
+                self.notify_peripheral_store(addr, &value.to_le_bytes());
             }
             return r;
         }
@@ -721,7 +816,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn external_irq_lines(&self) -> u32 {
-        self.riscv_irq_lines
+        self.irq_fabric.esp32c3.irq_lines
     }
 
     #[cfg(feature = "event-scheduler")]
@@ -829,5 +924,24 @@ impl crate::Bus for SystemBus {
 
     fn clear_cpu_irq_pending(&mut self, core_id: u8, slot: u8) {
         self.pending_cpu_irqs[(core_id & 1) as usize] &= !(1u32 << slot);
+    }
+
+    fn resettle_cpu_irq_levels(&mut self) {
+        // Walk-free ESP32-S3 only. Everywhere else the per-cycle aggregation
+        // still rebuilds `pending_cpu_irqs` from the live source levels on the
+        // next tick, so re-deriving here would be duplicated work — and on a
+        // walk-ON bus it would recompute from `walk_sources` that the next
+        // walk has not rebuilt yet, i.e. from stale input.
+        //
+        // Deliberately NOT `refresh_esp32s3_sched_sources()` first: a dispatch
+        // changes the ROUTED bitmap, never the source levels behind it. The
+        // recompute folds the sched-source bitmap the choke/event path already
+        // maintains, so this costs an array walk over the asserting sources and
+        // no peripheral poll at all. (The C3's per-tick aggregation does re-poll
+        // each time; it can, because it only runs on buses that still tick.)
+        #[cfg(feature = "event-scheduler")]
+        if self.legacy_walk_disabled && self.irq_fabric.esp32s3.routing {
+            self.recompute_esp32s3_irq_lines();
+        }
     }
 }

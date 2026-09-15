@@ -243,7 +243,9 @@ mod tests {
     ///
     /// Run with: `cargo test -p labwired-hw-oracle -- --ignored`
     #[test]
-    #[ignore]
+    #[ignore = "hw-oracle: requires a physically connected ESP32-S3 enumerating as USB \
+                303a:1001. The module is behind `--features hw-oracle`; run with \
+                `cargo test -p labwired-hw-oracle --features hw-oracle -- --ignored`"]
     fn test_target_board_detect() {
         let _guard = HW_LOCK.lock().unwrap();
         let board = TargetBoard::detect().unwrap();
@@ -262,7 +264,10 @@ mod tests {
     /// To run once the fixture is present:
     ///   `cargo test -p labwired-hw-oracle -- --ignored flash_and_halt_minimal_elf`
     #[test]
-    #[ignore]
+    #[ignore = "hw-oracle: requires a connected ESP32-S3 AND the fixture \
+                fixtures/xtensa-asm/nop-at-entry.elf, which does not exist yet — the test is \
+                declared ahead of the fixture on purpose (see the NOTE above). The module is \
+                behind `--features hw-oracle`"]
     fn flash_and_halt_minimal_elf() {
         let _guard = HW_LOCK.lock().unwrap();
         let elf = std::fs::read("fixtures/xtensa-asm/nop-at-entry.elf").unwrap();

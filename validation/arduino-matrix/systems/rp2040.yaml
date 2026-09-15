@@ -9,4 +9,11 @@ external_devices:
     connection: "i2c0"
     config:
       i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on default Arduino SPI (spi0).
+  # Single-device bus: CS soft-ignored by SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "GP17"
 board_io: []

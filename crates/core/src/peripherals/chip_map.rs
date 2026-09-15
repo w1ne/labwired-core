@@ -90,6 +90,7 @@ mod tests {
             base_address: base,
             size: None,
             irq: None,
+            irq_controller: None,
             clock: None,
             config: Default::default(),
         }

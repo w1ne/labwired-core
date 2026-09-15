@@ -588,13 +588,22 @@ impl Fdcan {
     /// and for an external CAN network layer. Returns false when the
     /// FIFO was full and the frame was lost (RF0L).
     pub fn receive_frame(&mut self, frame: CanFrame) -> bool {
+        self.try_receive_frame(frame).is_ok()
+    }
+
+    /// [`Self::receive_frame`], saying why a frame was not stored.
+    pub fn try_receive_frame(
+        &mut self,
+        frame: CanFrame,
+    ) -> Result<(), crate::network::CanRxRejection> {
+        use crate::network::CanRxRejection;
         if !self.running() {
-            return false;
+            return Err(CanRxRejection::NotRunning);
         }
         if self.rxf0_fill >= FIFO_DEPTH {
             self.rxf0_lost = true;
             self.ir |= IR_RF0L;
-            return false;
+            return Err(CanRxRejection::FifoFull);
         }
         self.push_trace("rx", &frame);
         let base = RAM_RF0_WORDS + self.rxf0_put as usize * ELEMENT_WORDS;
@@ -602,7 +611,7 @@ impl Fdcan {
         self.rxf0_put = (self.rxf0_put + 1) % FIFO_DEPTH;
         self.rxf0_fill += 1;
         self.ir |= IR_RF0N;
-        true
+        Ok(())
     }
 
     fn encode_rx_element(&mut self, base: usize, frame: &CanFrame) {

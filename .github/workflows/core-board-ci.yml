@@ -1,5 +1,11 @@
 name: Core Board CI
 
+# Scheduled runs are gated to this repository: every job below carries
+# `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
+# GitHub attributes a cron run to whoever last edited the schedule, so a fork
+# with Actions enabled mails this workflow's failures to a maintainer here,
+# about a run they can neither see nor stop. Pushes, PRs and manual dispatch
+# are untouched — a fork still gets full CI on its own changes.
 on:
   push:
     branches: [main]
@@ -33,6 +39,7 @@ concurrency:
 
 jobs:
   setup:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -51,6 +58,7 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   board:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -122,6 +130,7 @@ jobs:
   # auto-committing to protected main: regenerate here and fail if it drifted, so
   # whoever changed the matrix must commit the regenerated scoreboard.
   coverage-staleness:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -137,3 +146,14 @@ jobs:
             git --no-pager diff -- docs/coverage/tier1-scoreboard.md
             exit 1
           fi
+
+      # The ignored-test inventory check is deliberately NOT here. #966 put it
+      # in this job, where it was worse than useless: this workflow's PR trigger
+      # is filtered to configs/**, examples/**, hil/**, platformio/** and three
+      # named files — `crates/**` is not among them. A pull request that adds a
+      # bare `#[ignore]` to a Rust test therefore does not start this workflow
+      # at all, so the gate could never see the only change it exists to catch.
+      # It ran exactly once, on #966 itself, because #966 edited this file. A
+      # gate that validates its own introduction and nothing afterwards is the
+      # shape this repo keeps getting caught by. It now lives in `pr-gate` in
+      # core-ci.yml, which is a REQUIRED context and runs on every PR.

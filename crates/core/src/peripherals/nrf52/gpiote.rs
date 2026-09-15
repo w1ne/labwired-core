@@ -377,6 +377,13 @@ impl Peripheral for Nrf52Gpiote {
         }
     }
 
+    /// This model consumes GPIO edges, so the bus must keep its per-cycle
+    /// edge-detection pass alive even on a walk-free fast path. See
+    /// [`crate::Peripheral::observes_gpio_edges`].
+    fn observes_gpio_edges(&self) -> bool {
+        true
+    }
+
     fn observe_gpio_change(&mut self, changes: &[(u8, u8, u8)]) -> bool {
         let latched_before = self.pending_in_events.len();
         for &(port, pin, new_level) in changes {
@@ -436,6 +443,7 @@ mod tests {
             base_address: base,
             size: Some("4KB".to_string()),
             irq: None,
+            irq_controller: None,
             clock: None,
             config: Default::default(),
         }

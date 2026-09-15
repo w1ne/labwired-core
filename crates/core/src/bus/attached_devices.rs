@@ -145,35 +145,17 @@ impl SystemBus {
         for dev in &self.gpio_devices {
             self.emit_resident(f, Resident::gpio(dev.id(), None));
         }
-        for dev in &self.ws2812 {
-            let id = dev.component_id().unwrap_or("ws2812");
-            self.emit_resident(f, Resident::gpio(id, Some(&**dev)));
-        }
-        for dev in &self.servos {
-            self.emit_resident(f, Resident::gpio(dev.id(), None));
-        }
-        for dev in &self.step_dir_motors {
-            self.emit_resident(f, Resident::gpio(dev.id(), None));
-        }
-        for dev in &self.h_bridge_motors {
-            // An H-bridge board carries two independent motor channels, so ONE
-            // declaration builds TWO models (`<id>-a`, `<id>-b`). Each reports
-            // its own channel identity and is joined to the declaration both
-            // came from — neither is anonymous, and neither claims to be the
-            // whole board.
-            let r = match dev.declared_id() {
-                Some(declared) => Resident::gpio(declared, None).instance(dev.id()),
-                None => Resident::gpio(dev.id(), None),
-            };
+        for dev in &self.observed {
+            // ONE arm for every model the bus holds and does nothing with —
+            // strip, servo, both stepper kinds, H-bridge channel, parallel
+            // panel. Each states its own manifest id, its own channel identity
+            // when one declaration built several models, and its own evidence
+            // when it is a display. See `crate::bus::ObservedDevice`.
+            let mut r = Resident::gpio(dev.manifest_id(), dev.evidence());
+            if let Some(model) = dev.model_id() {
+                r = r.instance(model);
+            }
             self.emit_resident(f, r);
-        }
-        for dev in &self.ili9341_parallel {
-            // Parallel ILI9341 is a bus-resident display: evidence is the RGB565
-            // framebuffer, same shape as the SPI kit's artifacts.
-            self.emit_resident(f, Resident::gpio(dev.id(), Some(&**dev)));
-        }
-        for dev in &self.unipolar_steppers {
-            self.emit_resident(f, Resident::gpio(dev.id(), None));
         }
         for dev in &self.tm1637 {
             // A bus-resident DISPLAY: it reports evidence directly, because it

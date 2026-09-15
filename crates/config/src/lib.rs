@@ -37,6 +37,24 @@ where
     }
 }
 
+/// [`deserialize_u64_lax`] for an optional field: absent ⇒ `None`, present ⇒
+/// the same int-or-underscored-string parse. YAML 1.2 does not accept `_` in a
+/// number, so `cpu_hz: 160_000_000` arrives as a *string* — the corpus is
+/// written that way throughout and this is what makes it a clock.
+fn deserialize_opt_u64_lax<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let raw = Option::<serde_yaml::Value>::deserialize(deserializer)?;
+    match raw {
+        None | Some(serde_yaml::Value::Null) => Ok(None),
+        Some(v) => deserialize_u64_lax(v).map(Some).map_err(|e| {
+            serde::de::Error::custom(format!("cpu_hz is not a whole number of hertz: {e}"))
+        }),
+    }
+}
+
 /// Default schema version for YAML configs
 fn default_schema_version() -> String {
     "1.0".to_string()
@@ -51,14 +69,81 @@ pub enum Arch {
     RiscV,
     #[serde(alias = "xtensa-lx7", alias = "xtensa-lx6")]
     Xtensa,
+    /// AVR8 (ATmega328P / classic Arduino Nano).
+    #[serde(alias = "avr8", alias = "atmega328p")]
+    Avr,
     Unknown,
+}
+
+/// Deserialize a memory size, in bytes, from the human form the chip YAMLs use.
+///
+/// The wire format is unchanged — `128KB`, `1.5 MiB`, `0x20000` and a bare
+/// `131072` all still load. What changed is that the parse happens HERE, once,
+/// at the boundary, instead of at each of the 39 places that used to call
+/// `parse_size(&chip.ram.size)` on a `String` field.
+///
+/// That mattered: 18 of those call sites ended `.unwrap_or(0)`. A size that
+/// failed to parse did not fail the run — it silently became **zero bytes of
+/// RAM**, and the eleven ESP32-C3 suites computing `sp_top = ram.base + size`
+/// got a stack pointer at the very bottom of RAM. Wrong, and green. Making the
+/// field a `u64` deletes the fallible read, so that state cannot be
+/// constructed: a bad size is now a load error naming the field.
+fn deserialize_size<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IntOrString {
+        Int(u64),
+        String(String),
+    }
+
+    match IntOrString::deserialize(deserializer)? {
+        IntOrString::Int(v) => Ok(v),
+        IntOrString::String(s) => parse_size(&s).map_err(serde::de::Error::custom),
+    }
+}
+
+/// Serialize a size back as a bare byte count.
+///
+/// Deliberately NOT re-rendered in a unit, because the units here do not mean
+/// what they look like. Measured against the real parser:
+///
+/// ```text
+///   1KB  -> 1024          1KiB -> 1024
+///   1MB  -> 1_000_000     1MiB -> 1_048_576
+/// ```
+///
+/// `KB` is BINARY and `MB` is DECIMAL — inconsistent with each other, inside
+/// one parser. So re-rendering `1048576` as `1MB` would read back as
+/// `1_000_000` and quietly shrink a chip's flash by 4.9% on every round trip.
+/// A bare byte count says exactly one thing and `parse_size` reads it back
+/// unchanged.
+///
+/// (That asymmetry was also a live fidelity bug: nine committed chips spelled
+/// flash in `MB`, so e.g. esp32s3 modelled 16_000_000 bytes where the part has
+/// 16 MiB = 16_777_216. All nine have since been rewritten in `KB`, and
+/// `labwired_core::tests::chip_memory_sizes` fails the build if a new chip
+/// reintroduces the spelling.)
+fn serialize_size<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u64(*value)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MemoryRange {
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
-    pub size: String, // e.g. "128KB"
+    /// Size in BYTES. Parsed from the YAML's human form at load time.
+    #[serde(
+        deserialize_with = "deserialize_size",
+        serialize_with = "serialize_size"
+    )]
+    pub size: u64,
 }
 
 /// An additional named RAM/ROM-backed memory window beyond the primary
@@ -70,12 +155,28 @@ pub struct NamedMemoryRange {
     pub name: String,
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
-    pub size: String,
+    /// Size in BYTES — same boundary parse as [`MemoryRange::size`].
+    #[serde(
+        deserialize_with = "deserialize_size",
+        serialize_with = "serialize_size"
+    )]
+    pub size: u64,
     /// Optional env var naming a path to a raw binary loaded into this region at
     /// `base` (e.g. a chip's mask ROM dump). Used for copyrighted vendor blobs
     /// that can't be committed — the region stays zero-filled if unset/missing.
     #[serde(default)]
     pub image_env: Option<String>,
+    /// Fill the region with 0xFF instead of 0x00.
+    ///
+    /// ⚠️ A FLASH REGION IS NOT A RAM HOLE. Regions install as zeros, which is
+    /// right for a RAM window and WRONG for flash: an erased flash byte is
+    /// 0xFF, and a blank user-data page on a real EFR32MG26 reads
+    /// `ffffffff ffffffff …` (measured over SWD on BRD2709A, 2026-09-03).
+    /// Without this, firmware that reads its settings page before writing one
+    /// sees zeros in the twin and ones on the bench — and "is this page blank?"
+    /// is the first question any persistence routine asks.
+    #[serde(default)]
+    pub erased: bool,
 }
 
 /// One RCC bit a peripheral's clock depends on.
@@ -134,7 +235,113 @@ impl ClockGates {
     }
 }
 
+/// Parsed `irq` YAML: a line number plus optional `controller@line` prefix.
+#[derive(Default)]
+struct IrqTarget {
+    line: Option<u32>,
+    controller: Option<String>,
+}
+
+fn irq_line_from_number(n: &serde_yaml::Number) -> Result<u32, String> {
+    if let Some(u) = n.as_u64() {
+        u32::try_from(u).map_err(|_| format!("irq: line {u} is out of range"))
+    } else if let Some(i) = n.as_i64() {
+        u32::try_from(i).map_err(|_| format!("irq: {i} is not a valid line number"))
+    } else {
+        Err(format!("irq: expected an integer line number, got {n}"))
+    }
+}
+
+fn parse_irq_string(s: &str) -> Result<IrqTarget, String> {
+    let s = s.trim();
+    if let Some((controller, line)) = s.split_once('@') {
+        if controller.is_empty() || line.is_empty() || !line.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(format!("irq: expected controller@<line>, got `{s}`"));
+        }
+        let line: u32 = line
+            .parse()
+            .map_err(|_| format!("irq: line `{line}` is out of range"))?;
+        Ok(IrqTarget {
+            line: Some(line),
+            controller: Some(controller.to_string()),
+        })
+    } else if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
+        let line: u32 = s
+            .parse()
+            .map_err(|_| format!("irq: line `{s}` is out of range"))?;
+        Ok(IrqTarget {
+            line: Some(line),
+            controller: None,
+        })
+    } else {
+        Err(format!(
+            "irq: expected a line number or controller@line, got `{s}`"
+        ))
+    }
+}
+
+fn parse_irq_value(value: serde_yaml::Value) -> Result<IrqTarget, String> {
+    match value {
+        serde_yaml::Value::Null => Ok(IrqTarget::default()),
+        serde_yaml::Value::Number(n) => Ok(IrqTarget {
+            line: Some(irq_line_from_number(&n)?),
+            controller: None,
+        }),
+        serde_yaml::Value::String(s) => parse_irq_string(&s),
+        other => Err(format!(
+            "irq: expected a line number or controller@line, got {other:?}"
+        )),
+    }
+}
+
+fn deserialize_irq_target<'de, D>(deserializer: D) -> Result<IrqTarget, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_yaml::Value::deserialize(deserializer)?;
+    parse_irq_value(value).map_err(serde::de::Error::custom)
+}
+
+#[derive(Deserialize)]
+struct PeripheralConfigWire {
+    id: String,
+    r#type: String,
+    #[serde(deserialize_with = "deserialize_u64_lax")]
+    base_address: u64,
+    #[serde(default)]
+    size: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_irq_target")]
+    irq: IrqTarget,
+    #[serde(default)]
+    irq_controller: Option<String>,
+    #[serde(default)]
+    clock: Option<ClockGates>,
+    #[serde(default)]
+    config: HashMap<String, serde_yaml::Value>,
+    #[serde(flatten)]
+    extra: HashMap<String, serde_yaml::Value>,
+}
+
+/// One MMIO peripheral instance in a chip descriptor.
+///
+/// `irq` is a line number. `controller@line` also sets [`Self::irq_controller`]:
+///
+/// ```yaml
+/// irq: 2
+/// irq: nvic@2
+/// ```
+///
+/// Unknown instance keys flatten into [`Self::config`]. Nested `config:` wins
+/// on a colliding key:
+///
+/// ```yaml
+/// - id: uart0
+///   type: nrf52840_uart
+///   base_address: 0x40002000
+///   easyDMA: true
+/// ```
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(from = "PeripheralConfigWire")]
 pub struct PeripheralConfig {
     pub id: String,
     pub r#type: String, // "uart", "timer", "gpio", etc.
@@ -142,16 +349,41 @@ pub struct PeripheralConfig {
     pub base_address: u64,
     #[serde(default)]
     pub size: Option<String>,
+    /// IRQ line. YAML `irq: 2` or `irq: nvic@2`.
     #[serde(default)]
     pub irq: Option<u32>,
+    /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_controller: Option<String>,
     /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
     /// peripheral to answer the CPU. `None` → the peripheral is never gated
     /// (the safe default — existing configs and firmware that never enable a
     /// clock keep working unchanged).
     #[serde(default)]
     pub clock: Option<ClockGates>,
+    /// Instance knobs. Unknown top-level keys flatten here (`easyDMA: true`).
+    /// Nested `config:` wins on a colliding key.
     #[serde(default)]
     pub config: HashMap<String, serde_yaml::Value>,
+}
+
+impl From<PeripheralConfigWire> for PeripheralConfig {
+    fn from(wire: PeripheralConfigWire) -> Self {
+        let mut config = wire.config;
+        for (key, value) in wire.extra {
+            config.entry(key).or_insert(value);
+        }
+        Self {
+            id: wire.id,
+            r#type: wire.r#type,
+            base_address: wire.base_address,
+            size: wire.size,
+            irq: wire.irq.line,
+            irq_controller: wire.irq.controller.or(wire.irq_controller),
+            clock: wire.clock,
+            config,
+        }
+    }
 }
 
 /// One entry in a chip's authoritative pin map: which GPIO peripheral this pin's
@@ -166,6 +398,207 @@ pub struct PinLoc {
     pub bit: u8,
 }
 
+/// The analog input function of one pad: the ADC peripheral (by descriptor
+/// `id`) that samples it, and the input channel number within that ADC.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AdcPinFn {
+    pub peripheral: String,
+    pub channel: u8,
+}
+
+/// A chip's digital input thresholds, as ratios of its I/O supply
+/// ([`ChipDescriptor::io_voltage_v`]): a pad reads low at or below `vil` and
+/// high at or above `vih`, and the band between is where a Schmitt input keeps
+/// its previous level.
+///
+/// Transcribed from the datasheet's DC characteristics (the guaranteed VIL
+/// maximum and VIH minimum), never guessed: co-simulation turns a model's node
+/// voltage into the level the firmware reads through these two numbers, so a
+/// wrong ratio moves every edge a circuit produces.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[serde(try_from = "GpioInputThresholdsYaml", into = "GpioInputThresholdsYaml")]
+pub struct GpioInputThresholds {
+    /// Highest input voltage guaranteed to read low, as a fraction of VDD.
+    pub vil: f64,
+    /// Lowest input voltage guaranteed to read high, as a fraction of VDD.
+    pub vih: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GpioInputThresholdsYaml {
+    vil: f64,
+    vih: f64,
+}
+
+impl TryFrom<GpioInputThresholdsYaml> for GpioInputThresholds {
+    type Error = String;
+
+    fn try_from(raw: GpioInputThresholdsYaml) -> Result<Self, Self::Error> {
+        let GpioInputThresholdsYaml { vil, vih } = raw;
+        if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
+            return Err(format!(
+                "gpio_input_thresholds must satisfy 0 < vil < vih < 1 (ratios of io_voltage_v); \
+                 got vil {vil}, vih {vih}"
+            ));
+        }
+        Ok(Self { vil, vih })
+    }
+}
+
+impl From<GpioInputThresholds> for GpioInputThresholdsYaml {
+    fn from(thresholds: GpioInputThresholds) -> Self {
+        Self {
+            vil: thresholds.vil,
+            vih: thresholds.vih,
+        }
+    }
+}
+
+/// `io_voltage_v`: a positive, finite supply voltage.
+fn deserialize_io_voltage<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    let volts = Option::<f64>::deserialize(deserializer)?;
+    match volts {
+        Some(v) if !(v.is_finite() && v > 0.0) => Err(D::Error::custom(format!(
+            "io_voltage_v must be a positive number of volts; got {v}"
+        ))),
+        other => Ok(other),
+    }
+}
+
+/// Which family's atomic register aliases a chip implements.
+///
+/// Both families alias every peripheral register three more times at a 0x1000
+/// stride inside the peripheral's window, and both let firmware do a bit-level
+/// read-modify-write with one store. They do NOT agree on which alias means
+/// what, and the two orders overlap enough that using the wrong one is silent:
+/// an RP2040 SET (`+0x2000`) is an EFR32 CLR, so a driver "enabling" a clock
+/// would disable it and every later access to that block would read zero.
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AtomicAliasFlavour {
+    /// No aliases. An alias address is ordinary (usually unmapped) MMIO.
+    #[default]
+    None,
+    /// RP2040 / RP2350: `+0x1000` XOR, `+0x2000` SET, `+0x3000` CLR
+    /// (`hw_xor_bits` / `hw_set_bits` / `hw_clear_bits`, pico-sdk
+    /// `hardware/address_mapped.h`). The HAL drives nearly all register setup
+    /// through them, so without this an unmodified image faults on the first
+    /// `hw_set_bits`.
+    Rp2040,
+    /// Silicon Labs EFR32/EFM32 Series 2: `+0x1000` SET, `+0x2000` CLR,
+    /// `+0x3000` TGL (EFR32xG26 Reference Manual rev 1.0, "Peripheral Bit Set
+    /// and Clear"; `emlib` writes `PERIPH->REG_SET = mask`). Series-2 emlib and
+    /// the Gecko SDK use the aliases for essentially every enable bit — CMU
+    /// clock gating, GPIO ROUTEEN, USART/EUSART enables — so a Series-2 image
+    /// cannot configure a single peripheral without them.
+    Efr32s2,
+}
+
+impl AtomicAliasFlavour {
+    /// The op an alias index (`(addr >> 12) & 0x3`) means for this family, or
+    /// `None` for index 0 (the register itself) and for a chip with no aliases.
+    #[inline]
+    pub fn op_for_index(self, index: u64) -> Option<AtomicAliasOp> {
+        match (self, index) {
+            (Self::None, _) | (_, 0) => None,
+            (Self::Rp2040, 1) => Some(AtomicAliasOp::Xor),
+            (Self::Rp2040, 2) => Some(AtomicAliasOp::Set),
+            (Self::Rp2040, _) => Some(AtomicAliasOp::Clr),
+            (Self::Efr32s2, 1) => Some(AtomicAliasOp::Set),
+            (Self::Efr32s2, 2) => Some(AtomicAliasOp::Clr),
+            (Self::Efr32s2, _) => Some(AtomicAliasOp::Xor),
+        }
+    }
+
+    /// Whether this chip decodes atomic aliases at all.
+    #[inline]
+    pub fn is_enabled(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
+/// The read-modify-write an atomic alias performs. `Xor` doubles as Series-2
+/// TGL: toggling IS an XOR of the written mask, and keeping one op spares the
+/// bus a second identical arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicAliasOp {
+    /// Write XORs the bits (RP2040 `+0x1000`, EFR32 Series-2 TGL `+0x3000`).
+    Xor,
+    /// Write sets (ORs) the bits.
+    Set,
+    /// Write clears (AND-NOTs) the bits.
+    Clr,
+}
+
+/// `false` / `true` / `"none"` / `"rp2040"` / `"efr32s2"`. The bool spelling is
+/// what every RP2040 descriptor in the tree already carries; `true` keeps
+/// meaning RP2040 rather than becoming ambiguous the day a second family
+/// arrived.
+fn deserialize_atomic_alias_flavour<'de, D>(d: D) -> Result<AtomicAliasFlavour, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrName {
+        Bool(bool),
+        Name(String),
+    }
+    match BoolOrName::deserialize(d)? {
+        BoolOrName::Bool(false) => Ok(AtomicAliasFlavour::None),
+        BoolOrName::Bool(true) => Ok(AtomicAliasFlavour::Rp2040),
+        BoolOrName::Name(name) => match name.trim().to_ascii_lowercase().as_str() {
+            "none" | "false" => Ok(AtomicAliasFlavour::None),
+            "rp2040" | "rp2350" | "true" => Ok(AtomicAliasFlavour::Rp2040),
+            "efr32s2" | "efm32s2" | "efr32_series2" | "efr32xg2" => Ok(AtomicAliasFlavour::Efr32s2),
+            other => Err(D::Error::custom(format!(
+                "unknown atomic_register_aliases '{other}'; expected false, true, rp2040 or efr32s2"
+            ))),
+        },
+    }
+}
+
+/// `include: nrf52-common.yaml` or `include: [a.yaml, b.yaml]`.
+///
+/// [`ChipDescriptor::from_file`] (and path [`ChipDescriptor::resolve`]) expand
+/// this relative to the including file. `serde_yaml::from_str` stores it and
+/// does not load files.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ChipInclude {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl ChipInclude {
+    fn paths(&self) -> &[String] {
+        match self {
+            Self::One(path) => std::slice::from_ref(path),
+            Self::Many(paths) => paths.as_slice(),
+        }
+    }
+}
+
+/// Chip silicon descriptor (`chips/<name>.yaml`).
+///
+/// Path-loaded YAML may `include:` another file (or a list). Paths are relative
+/// to the including file. Built-in `from_str` and bundled chips do **not**
+/// expand includes — there is no filesystem.
+///
+/// ```yaml
+/// include: nrf52-common.yaml
+/// name: nrf52840
+/// ```
+///
+/// or `include: [a.yaml, b.yaml]`. Includes load first; local keys win.
+/// `peripherals` union by `id`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -179,6 +612,26 @@ pub struct ChipDescriptor {
     /// that predate this field.
     #[serde(default)]
     pub core: Option<String>,
+    /// The clock this chip's core runs at in the simulator, in Hz — the single
+    /// source of truth for every "how many cycles is a microsecond" question.
+    ///
+    /// Self-timing devices (DHT22, the rotary encoder, WS2812) convert their
+    /// datasheet µs/ns windows to simulated cycles with this number, so it has
+    /// to agree with the clock the firmware was built against or the firmware
+    /// decodes noise. It used to be four inline literals and two board-name
+    /// string comparisons spread over two languages; it is now declared once,
+    /// here, per chip.
+    ///
+    /// This is the chip's *default* rate. A board that runs the part slower —
+    /// the NUCLEO-L476RG never leaves the 4 MHz MSI reset clock — overrides it
+    /// with [`SystemManifest::cpu_hz`].
+    ///
+    /// `0` means "undeclared". Every in-tree chip declares it and
+    /// `every_chip_descriptor_declares_a_cpu_hz` fails the build if a new one does
+    /// not, but the field stays defaulted so an out-of-tree chip YAML written before
+    /// this existed still loads.
+    #[serde(default, deserialize_with = "deserialize_u64_lax")]
+    pub cpu_hz: u64,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
     /// Offset in bytes from the flash base to the application vector table
@@ -191,15 +644,15 @@ pub struct ChipDescriptor {
     /// the real reset vector when the flash-base vectors are not valid.
     #[serde(default, deserialize_with = "deserialize_u64_lax")]
     pub reset_vector_offset: u64,
-    /// RP2040-style atomic register aliases. When true, every 0x1000-strided
-    /// alias of a peripheral register in the APB window decodes as an atomic
-    /// op on the base register: `+0x0000` normal, `+0x1000` XOR, `+0x2000`
-    /// SET (bitwise OR), `+0x3000` CLR (bitwise AND-NOT). The RP2040 HAL drives
-    /// nearly all of its register setup through these aliases (`hw_set_bits`,
-    /// `hw_clear_bits`), so without them an unmodified image faults on the
-    /// first `hw_set_bits`. Default `false` (other Cortex-M parts).
-    #[serde(default)]
-    pub atomic_register_aliases: bool,
+    /// Atomic register aliases: the 0x1000-strided aliases of every peripheral
+    /// register that a family's HAL uses for read-modify-write without a
+    /// critical section. Two families do this with the SAME stride and
+    /// DIFFERENT ops, so the key names which — see [`AtomicAliasFlavour`].
+    /// Accepts `false`/`true` (historical spelling: `true` == `rp2040`) or the
+    /// flavour name. Default: none, i.e. an alias address is unmapped MMIO and
+    /// faults, which is correct for STM32/nRF/etc.
+    #[serde(default, deserialize_with = "deserialize_atomic_alias_flavour")]
+    pub atomic_register_aliases: AtomicAliasFlavour,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -210,6 +663,45 @@ pub struct ChipDescriptor {
     /// (no silent standard-layout fallback). Absent → standard STM32/Nordic parse.
     #[serde(default)]
     pub pins: std::collections::BTreeMap<String, PinLoc>,
+    /// Pad label → the ADC input that samples it, transcribed from the
+    /// datasheet pinout (e.g. `PA0: { peripheral: adc1, channel: 0 }`).
+    ///
+    /// Kept apart from [`Self::pins`] on purpose. `pins:` is the AUTHORITATIVE
+    /// GPIO map: once a chip declares it, every pad not listed stops resolving
+    /// (see `chip_pins_ratchet`). Recording analog functions there would force
+    /// a full GPIO transcription on every chip that only wants its ADC inputs
+    /// named, or silently break every pad left out.
+    ///
+    /// Absent on a chip means "no analog pad is modelled", not "channel 0":
+    /// the co-simulation `board.analog.<pad>_volts` path refuses such a pad
+    /// rather than guessing, because the pad → channel assignment differs
+    /// between families (PA0 is ADC1_IN0 on an F401 and ADC1_IN5 on an L476).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub analog_pins: std::collections::BTreeMap<String, AdcPinFn>,
+    /// The supply the chip's GPIO pads run from, in volts (5.0 on an ATmega328P
+    /// Nano, 3.3 on the STM32 boards). The reference [`Self::gpio_input_thresholds`]
+    /// are ratios of.
+    ///
+    /// Absent means "not transcribed", and nothing defaults it: a board that
+    /// runs the part at another supply would get thresholds for the wrong rail.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_io_voltage",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub io_voltage_v: Option<f64>,
+    /// Datasheet digital input thresholds, as ratios of [`Self::io_voltage_v`].
+    ///
+    /// Co-simulation needs them to turn a voltage routed to
+    /// `board.gpio_in.<pad>` into the level the firmware reads. A chip without
+    /// them refuses such a route when the session is built, naming this key,
+    /// rather than comparing against a made-up midpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpio_input_thresholds: Option<GpioInputThresholds>,
+    /// Path-loaded YAML only (`include: common.yaml` or a list). Built-in
+    /// `from_str` does not expand includes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include: Option<ChipInclude>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -614,6 +1106,10 @@ pub enum CosimAdapter {
     ExternalProcess,
     Fmi,
     Mock,
+    /// `labwired_core::analog` — the in-core MNA engine. No `model` path: the
+    /// circuit is a SPICE netlist under `config.netlist` / `config.netlist_text`.
+    /// The only adapter the browser can run, since it spawns no process.
+    Analog,
 }
 
 fn default_cosim_step_ns() -> u64 {
@@ -728,6 +1224,17 @@ pub struct SystemManifest {
     pub schema_version: String,
     pub name: String,
     pub chip: String, // Reference to chip name or file path
+    /// Override for [`ChipDescriptor::cpu_hz`] — the clock THIS board runs the
+    /// part at, in Hz. Absent ⇒ the chip's declared default.
+    ///
+    /// The key has been in the corpus for a long time; until now nothing in the
+    /// engine read it. Ten system YAMLs declared a `cpu_hz:` that serde threw
+    /// away, and `nucleo-l476rg.yaml` documented the discard in a comment —
+    /// the firmware there never configures the PLL, so the core really runs at
+    /// the 4 MHz MSI reset rate and every self-timed device on that board was
+    /// nevertheless being told 80 MHz. Reading the key is the fix.
+    #[serde(default, deserialize_with = "deserialize_opt_u64_lax")]
+    pub cpu_hz: Option<u64>,
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
@@ -1135,7 +1642,185 @@ fn optional_nonempty_interconnect_string<'a>(
     Ok(Some(value))
 }
 
+fn yaml_str_key(key: &str) -> serde_yaml::Value {
+    serde_yaml::Value::String(key.to_string())
+}
+
+/// `from_str` accepts `size: 1024` as a string field; `from_value` does not.
+/// Walk mappings and stringify numeric `size` so include-merge can deserialize
+/// without a YAML text round-trip.
+fn coerce_yaml_size_numbers(value: &mut serde_yaml::Value) {
+    match value {
+        serde_yaml::Value::Mapping(map) => {
+            let size_key = yaml_str_key("size");
+            if let Some(serde_yaml::Value::Number(n)) = map.get(&size_key) {
+                let s = n.to_string();
+                map.insert(size_key, serde_yaml::Value::String(s));
+            }
+            for (_, v) in map.iter_mut() {
+                coerce_yaml_size_numbers(v);
+            }
+        }
+        serde_yaml::Value::Sequence(seq) => {
+            for v in seq {
+                coerce_yaml_size_numbers(v);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn mapping_field<'a>(value: &'a serde_yaml::Value, key: &str) -> Option<&'a str> {
+    value.as_mapping()?.get(yaml_str_key(key))?.as_str()
+}
+
+fn take_includes(doc: &mut serde_yaml::Value) -> Result<Vec<String>> {
+    let Some(map) = doc.as_mapping_mut() else {
+        return Ok(Vec::new());
+    };
+    let Some(value) = map.remove(yaml_str_key("include")) else {
+        return Ok(Vec::new());
+    };
+    if matches!(value, serde_yaml::Value::Null) {
+        return Ok(Vec::new());
+    }
+    let include: ChipInclude =
+        serde_yaml::from_value(value).context("include must be a string or a list of strings")?;
+    Ok(include.paths().to_vec())
+}
+
+fn merge_seq_by(
+    base: serde_yaml::Value,
+    overlay: serde_yaml::Value,
+    field: &str,
+) -> Result<serde_yaml::Value> {
+    let mut items = match base {
+        serde_yaml::Value::Null => Vec::new(),
+        serde_yaml::Value::Sequence(seq) => seq,
+        other => anyhow::bail!("expected a sequence while merging {field}, got {other:?}"),
+    };
+    let overlay = match overlay {
+        serde_yaml::Value::Null => return Ok(serde_yaml::Value::Sequence(items)),
+        serde_yaml::Value::Sequence(seq) => seq,
+        other => anyhow::bail!("expected a sequence while merging {field}, got {other:?}"),
+    };
+    for item in overlay {
+        if let Some(id) = mapping_field(&item, field).map(str::to_string) {
+            if let Some(existing) = items
+                .iter_mut()
+                .find(|entry| mapping_field(entry, field) == Some(id.as_str()))
+            {
+                *existing = item;
+                continue;
+            }
+        }
+        items.push(item);
+    }
+    Ok(serde_yaml::Value::Sequence(items))
+}
+
+fn merge_yaml_maps(base: serde_yaml::Value, overlay: serde_yaml::Value) -> serde_yaml::Value {
+    let mut map = match base {
+        serde_yaml::Value::Mapping(map) => map,
+        _ => serde_yaml::Mapping::new(),
+    };
+    if let serde_yaml::Value::Mapping(overlay) = overlay {
+        for (key, value) in overlay {
+            map.insert(key, value);
+        }
+    }
+    serde_yaml::Value::Mapping(map)
+}
+
+fn merge_chip_yaml(
+    base: serde_yaml::Value,
+    overlay: serde_yaml::Value,
+) -> Result<serde_yaml::Value> {
+    let mut base_map = match base {
+        serde_yaml::Value::Mapping(map) => map,
+        serde_yaml::Value::Null => serde_yaml::Mapping::new(),
+        other => anyhow::bail!("chip YAML must be a mapping, got {other:?}"),
+    };
+    let overlay_map = match overlay {
+        serde_yaml::Value::Mapping(map) => map,
+        serde_yaml::Value::Null => return Ok(serde_yaml::Value::Mapping(base_map)),
+        other => anyhow::bail!("chip YAML must be a mapping, got {other:?}"),
+    };
+    for (key, value) in overlay_map {
+        let key_name = key.as_str().unwrap_or("");
+        let merged = match key_name {
+            "include" => continue,
+            "peripherals" => merge_seq_by(
+                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
+                value,
+                "id",
+            )?,
+            "memory_regions" => merge_seq_by(
+                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
+                value,
+                "name",
+            )?,
+            "pins" | "analog_pins" => merge_yaml_maps(
+                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
+                value,
+            ),
+            _ => value,
+        };
+        base_map.insert(key, merged);
+    }
+    Ok(serde_yaml::Value::Mapping(base_map))
+}
+
+fn expand_chip_includes(
+    path: &Path,
+    content: &str,
+    stack: &mut Vec<PathBuf>,
+) -> Result<serde_yaml::Value> {
+    let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if stack.contains(&canon) {
+        anyhow::bail!("cycle detected in chip YAML include of {}", path.display());
+    }
+    stack.push(canon);
+    let result = (|| {
+        let mut doc: serde_yaml::Value =
+            serde_yaml::from_str(content).context("Failed to parse Chip Descriptor YAML")?;
+        let includes = take_includes(&mut doc)?;
+        let dir = path.parent().unwrap_or_else(|| Path::new("."));
+        let mut merged = serde_yaml::Value::Mapping(serde_yaml::Mapping::new());
+        for rel in includes {
+            let inc_path = dir.join(&rel);
+            if !inc_path.is_file() {
+                anyhow::bail!("chip YAML include not found: {}", inc_path.display());
+            }
+            let inc_content = std::fs::read_to_string(&inc_path).with_context(|| {
+                format!("Failed to read chip YAML include {}", inc_path.display())
+            })?;
+            let included = expand_chip_includes(&inc_path, &inc_content, stack)?;
+            merged = merge_chip_yaml(merged, included)?;
+        }
+        merge_chip_yaml(merged, doc)
+    })();
+    stack.pop();
+    result
+}
+
 impl ChipDescriptor {
+    /// Is this an ESP32-S3 (Xtensa LX7) part?
+    ///
+    /// The S3 needs its own memory map — DROM 0x3C00_xxxx, DRAM 0x3FC8_xxxx,
+    /// IROM 0x4200_xxxx, IRAM 0x4037_xxxx — and the classic ESP32 (LX6) setup
+    /// loads none of an S3 image's segments. Every caller that has to choose
+    /// between those two setups asks this question, and the answer lives here
+    /// because it was previously answered twice, differently:
+    /// `crates/wasm` matched `name.starts_with("esp32s3")` and the CLI's `test`
+    /// command matched `name == "esp32s3"` exactly. So `esp32s3-zero` — a
+    /// shipped board variant — booted in the browser and died with a memory
+    /// violation under `labwired test`, and no S3 board variant could be
+    /// covered by a CLI gate at all.
+    pub fn is_esp32s3(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)?;
@@ -1145,7 +1830,22 @@ impl ChipDescriptor {
                 .with_context(|| format!("Failed to parse Strict IR from {:?}", path))?;
             Ok(Self::from(ir))
         } else {
-            serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor YAML")
+            let parsed: serde_yaml::Value =
+                serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor YAML")?;
+            if !parsed
+                .as_mapping()
+                .is_some_and(|m| m.contains_key(yaml_str_key("include")))
+            {
+                return serde_yaml::from_str(&content)
+                    .context("Failed to parse Chip Descriptor YAML");
+            }
+            let mut stack = Vec::new();
+            let mut value = expand_chip_includes(path, &content, &mut stack)?;
+            // YAML `size: 1024` is a number; `PeripheralConfig.size` is a
+            // string (`"1024"` / `"1KB"`). `from_str` coerces; `from_value`
+            // does not. Coerce in-place so we never round-trip through text.
+            coerce_yaml_size_numbers(&mut value);
+            serde_yaml::from_value(value).context("Failed to parse Chip Descriptor YAML")
         }
     }
 
@@ -1205,73 +1905,16 @@ pub fn is_builtin_chip_spec(spec: &str) -> bool {
         && !spec.ends_with(".json")
 }
 
-/// The chips bundled with the CLI, in the spelling a `chip:` field accepts.
-pub const BUILTIN_CHIP_NAMES: &[&str] = &[
-    "esp32",
-    "esp32c3",
-    "esp32s3",
-    "esp32s3-zero",
-    "mkw41z4",
-    "nrf52832",
-    "nrf52840",
-    "nrf5340",
-    "nrf54l15",
-    "rp2040",
-    "rp2350",
-    "stm32f103",
-    "stm32f401",
-    "stm32f401cdu6",
-    "stm32f405",
-    "stm32f407",
-    "stm32f767",
-    "stm32f411ceu6",
-    "stm32g474re",
-    "stm32h563",
-    "stm32h735",
-    "stm32l073",
-    "stm32l476",
-    "stm32wb55",
-    "stm32wba52",
-];
+// BUILTIN_CHIP_NAMES + embedded_chip_yaml(), generated from configs/chips/ by
+// build.rs. They used to be two hand-written lists that had to agree with each
+// other and with the directory; the directory is now the registry, so there is
+// nothing left to keep in step. See build.rs for why ci-fixture-* is excluded.
+include!(concat!(env!("OUT_DIR"), "/builtin_chips.rs"));
 
 /// Chips that moved to the private `labwired-ip` repo. Kept so users get a
 /// pointed error instead of "unknown chip". Empty until the first chip
 /// migrates; `resolve`/`resolve_with` check it before the unknown-chip error.
 pub const MOVED_CHIP_NAMES: &[&str] = &[];
-
-/// The embedded `configs/chips/*.yaml` descriptors, keyed by built-in name.
-/// `include_str!` bundles them so a released binary carries them and wasm
-/// builds (no `std::fs`) resolve them too.
-pub fn embedded_chip_yaml(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "esp32" => include_str!("../../../configs/chips/esp32.yaml"),
-        "esp32c3" => include_str!("../../../configs/chips/esp32c3.yaml"),
-        "esp32s3" => include_str!("../../../configs/chips/esp32s3.yaml"),
-        "esp32s3-zero" => include_str!("../../../configs/chips/esp32s3-zero.yaml"),
-        "mkw41z4" => include_str!("../../../configs/chips/mkw41z4.yaml"),
-        "nrf52832" => include_str!("../../../configs/chips/nrf52832.yaml"),
-        "nrf52840" => include_str!("../../../configs/chips/nrf52840.yaml"),
-        "nrf5340" => include_str!("../../../configs/chips/nrf5340.yaml"),
-        "nrf54l15" => include_str!("../../../configs/chips/nrf54l15.yaml"),
-        "rp2040" => include_str!("../../../configs/chips/rp2040.yaml"),
-        "rp2350" => include_str!("../../../configs/chips/rp2350.yaml"),
-        "stm32f103" => include_str!("../../../configs/chips/stm32f103.yaml"),
-        "stm32f401" => include_str!("../../../configs/chips/stm32f401.yaml"),
-        "stm32f401cdu6" => include_str!("../../../configs/chips/stm32f401cdu6.yaml"),
-        "stm32f405" => include_str!("../../../configs/chips/stm32f405.yaml"),
-        "stm32f767" => include_str!("../../../configs/chips/stm32f767.yaml"),
-        "stm32f407" => include_str!("../../../configs/chips/stm32f407.yaml"),
-        "stm32f411ceu6" => include_str!("../../../configs/chips/stm32f411ceu6.yaml"),
-        "stm32g474re" => include_str!("../../../configs/chips/stm32g474re.yaml"),
-        "stm32h563" => include_str!("../../../configs/chips/stm32h563.yaml"),
-        "stm32h735" => include_str!("../../../configs/chips/stm32h735.yaml"),
-        "stm32l073" => include_str!("../../../configs/chips/stm32l073.yaml"),
-        "stm32l476" => include_str!("../../../configs/chips/stm32l476.yaml"),
-        "stm32wb55" => include_str!("../../../configs/chips/stm32wb55.yaml"),
-        "stm32wba52" => include_str!("../../../configs/chips/stm32wba52.yaml"),
-        _ => return None,
-    })
-}
 
 impl SystemManifest {
     /// Parse a System Manifest from a YAML string. Unlike [`Self::from_file`]
@@ -1406,6 +2049,30 @@ impl SystemManifest {
                     "{location}.model is required for {:?} adapters",
                     model.adapter
                 ));
+            }
+            if model.adapter == CosimAdapter::Analog {
+                // The netlist itself is parsed by the core crate, which knows
+                // the element subset; see
+                // `labwired_core::cosim::validate_analog_models`. What is
+                // checkable here is that the manifest declares a circuit and
+                // says what to read out of it.
+                let has_netlist = model
+                    .config
+                    .get("netlist")
+                    .or_else(|| model.config.get("netlist_text"))
+                    .is_some();
+                if !has_netlist {
+                    issues.push(format!(
+                        "{location}.config requires `netlist` (a path) or `netlist_text` \
+                         (inline) for the analog adapter"
+                    ));
+                }
+                if !model.config.contains_key("probes") {
+                    issues.push(format!(
+                        "{location}.config.probes is required for the analog adapter: a \
+                         model with no probe produces no outputs"
+                    ));
+                }
             }
         }
 
@@ -2875,34 +3542,39 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             .get("FLASH")
             .map(|r| MemoryRange {
                 base: r.base,
-                size: format!("{}B", r.size),
+                // r.size is already a byte count; it used to be formatted to
+                // "<n>B" purely so this field could hold a String, then parsed
+                // straight back at every read. That round-trip is gone.
+                size: r.size,
             })
-            .unwrap_or(MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            });
+            .unwrap_or(MemoryRange { base: 0, size: 0 });
 
         let ram = ir
             .memory_regions
             .get("RAM")
             .map(|r| MemoryRange {
                 base: r.base,
-                size: format!("{}B", r.size),
+                // r.size is already a byte count; it used to be formatted to
+                // "<n>B" purely so this field could hold a String, then parsed
+                // straight back at every read. That round-trip is gone.
+                size: r.size,
             })
-            .unwrap_or(MemoryRange {
-                base: 0,
-                size: "0".to_string(),
-            });
+            .unwrap_or(MemoryRange { base: 0, size: 0 });
 
         Self {
             schema_version: default_schema_version(),
             name: ir.name,
             arch,
             core,
+            // An SVD/IR document describes a register map, not a clock tree —
+            // it has no core frequency to carry over. `0` is the honest answer
+            // ("undeclared"); attach sites keep their historical default for it
+            // rather than inventing a number here.
+            cpu_hz: 0,
             flash,
             ram,
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals
@@ -2916,6 +3588,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                         base_address: ir_p_base,
                         size: None,
                         irq: None,
+                        irq_controller: None,
                         clock: None,
                         config: std::collections::HashMap::from([(
                             "internal_ir_peripheral".to_string(),
@@ -2925,6 +3598,10 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                 })
                 .collect(),
             pins: std::collections::BTreeMap::new(),
+            analog_pins: Default::default(),
+            io_voltage_v: None,
+            gpio_input_thresholds: None,
+            include: None,
         }
     }
 }
@@ -3007,6 +3684,7 @@ impl ResolvedSystem {
                 schema_version: default_schema_version(),
                 name: chip.to_string(),
                 chip: chip.to_string(),
+                cpu_hz: None,
                 ..SystemManifest::default()
             },
             base_dir: PathBuf::from("."),
@@ -3394,6 +4072,24 @@ pub struct DisplayRegionDetails {
     /// which is only allowed when `min_ink` is itself above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_ink: Option<f64>,
+    /// Require the panel to be EMITTING, not merely painted.
+    ///
+    /// Ink measures frame memory, and frame memory fills whether or not the
+    /// panel can show it. On an emissive display those are different
+    /// questions: an AMOLED has no backlight and its brightness lives in the
+    /// controller (DCS `WRDISBV`, reset 0x00), so firmware ported from a
+    /// backlit TFT driver paints a perfect frame and displays black.
+    ///
+    /// This is not hypothetical and it is why the field exists: deleting the
+    /// one `WRDISBV` write from the nRF54LM20A snake firmware left its lab
+    /// passing 7/7, because every assertion measured pixels that had genuinely
+    /// been written to a panel nobody could see.
+    ///
+    /// Only meaningful for a panel that publishes `meta.lit`; asking it of one
+    /// that does not is an error rather than a pass, on the same principle as
+    /// every other way of not-measuring here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lit: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -3402,9 +4098,43 @@ pub struct DisplayRegionAssertion {
     pub display_region: DisplayRegionDetails,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceBudgetAssertion {
+    pub resource_budget: ResourceBudgetDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceBudgetDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_flash_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_ram_static_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_main_stack_bytes: Option<u64>,
+}
+
+impl ResourceBudgetDetails {
+    pub fn validate(&self, index: usize) -> anyhow::Result<()> {
+        let n = self.max_flash_bytes.is_some() as u8
+            + self.max_ram_static_bytes.is_some() as u8
+            + self.max_main_stack_bytes.is_some() as u8;
+        if n != 1 {
+            anyhow::bail!(
+                "assertions[{index}]: resource_budget must set exactly one of \
+                 max_flash_bytes, max_ram_static_bytes, max_main_stack_bytes"
+            );
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
+    /// Early for untagged serde: unique `resource_budget` key disambiguates.
+    ResourceBudget(ResourceBudgetAssertion),
     UartContains(UartContainsAssertion),
     UartRegex(UartRegexAssertion),
     UartOrdered(UartOrderedAssertion),
@@ -3561,20 +4291,133 @@ pub struct StimulusTarget {
     pub channel: String,
 }
 
-/// A declarative input stimulus (schema_version 1.2+): drive `target` to
-/// `value` (in the channel's engineering unit) when `trigger` fires. Reuses the
-/// [`FaultTrigger`] vocabulary; the first cut supports `at_start` and
-/// `after_cycles` (the time-based triggers). The runner applies each stimulus
-/// via the generic `Machine::set_input` path, so it works for any input device
-/// without per-type wiring.
+/// A declarative stimulus (schema_version 1.2+), applied when `trigger` fires.
+/// Reuses the [`FaultTrigger`] vocabulary; the first cut supports `at_start`
+/// and `after_cycles` (the time-based triggers).
+///
+/// Two shapes, one per [`StimulusAction`]:
+///
+/// ```yaml
+/// stimuli:
+///   # drive a `sim_input` channel of an attached device
+///   - target: { component: "ina219", channel: "current" }
+///     trigger: !after_cycles { cycles: 50000 }
+///     value: 1.5
+///   # set a co-simulation signal a `cosim_models` input reads
+///   - cosim_signal: { path: ui.touch.pressed, value: 1 }
+///     trigger: !after_cycles { cycles: 8000000 }
+/// ```
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(try_from = "StimulusSpecYaml", into = "StimulusSpecYaml")]
+pub struct StimulusSpec {
+    /// What the stimulus drives, and to what.
+    pub action: StimulusAction,
+    pub trigger: FaultTrigger,
+}
+
+/// What one [`StimulusSpec`] drives.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StimulusAction {
+    /// `target:` + `value:` — a `sim_input` channel, applied through the
+    /// generic `Machine::set_input` path, so it works for any input device
+    /// without per-type wiring. `value` is in the channel's engineering unit.
+    Input { target: StimulusTarget, value: f64 },
+    /// `cosim_signal: { path, value }` — a co-simulation signal store path
+    /// (`ui.<part>.<field>`) that a `cosim_models` input reads.
+    CosimSignal(CosimSignalStimulus),
+}
+
+/// `cosim_signal: { path, value }`: set the co-simulation signal `path` to
+/// `value`. The run's co-simulation session applies it, so `path` must be one a
+/// declared model input reads. For a boolean input 0 is false and anything else
+/// true; a numeric input takes the number as given.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct StimulusSpec {
-    pub target: StimulusTarget,
-    #[serde(default)]
-    pub trigger: FaultTrigger,
-    /// The value to set the channel to, in its engineering unit.
+pub struct CosimSignalStimulus {
+    pub path: String,
     pub value: f64,
+}
+
+impl StimulusSpec {
+    /// The `sim_input` target, for an [`StimulusAction::Input`] stimulus.
+    pub fn input_target(&self) -> Option<&StimulusTarget> {
+        match &self.action {
+            StimulusAction::Input { target, .. } => Some(target),
+            StimulusAction::CosimSignal(_) => None,
+        }
+    }
+
+    /// The value the stimulus sets, whichever shape it has.
+    pub fn value(&self) -> f64 {
+        match &self.action {
+            StimulusAction::Input { value, .. } => *value,
+            StimulusAction::CosimSignal(signal) => signal.value,
+        }
+    }
+}
+
+/// The YAML shape of a [`StimulusSpec`]: both forms' keys, exactly one form set.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StimulusSpecYaml {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target: Option<StimulusTarget>,
+    #[serde(default)]
+    trigger: FaultTrigger,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    value: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cosim_signal: Option<CosimSignalStimulus>,
+}
+
+impl TryFrom<StimulusSpecYaml> for StimulusSpec {
+    type Error = String;
+
+    fn try_from(raw: StimulusSpecYaml) -> Result<Self, Self::Error> {
+        let action = match (raw.target, raw.value, raw.cosim_signal) {
+            (Some(target), Some(value), None) => StimulusAction::Input { target, value },
+            (None, None, Some(signal)) => StimulusAction::CosimSignal(signal),
+            (Some(_), None, None) => return Err("missing field `value`".to_string()),
+            (None, Some(_), None) => return Err("missing field `target`".to_string()),
+            (None, None, None) => {
+                return Err(
+                    "a stimulus needs `target` + `value` (a device input channel) or \
+                     `cosim_signal: { path, value }` (a co-simulation signal)"
+                        .to_string(),
+                )
+            }
+            (_, _, Some(_)) => {
+                return Err(
+                    "a `cosim_signal` stimulus carries its own `path` and `value`; it cannot \
+                     also set `target` or `value`"
+                        .to_string(),
+                )
+            }
+        };
+        Ok(Self {
+            action,
+            trigger: raw.trigger,
+        })
+    }
+}
+
+impl From<StimulusSpec> for StimulusSpecYaml {
+    fn from(spec: StimulusSpec) -> Self {
+        match spec.action {
+            StimulusAction::Input { target, value } => Self {
+                target: Some(target),
+                trigger: spec.trigger,
+                value: Some(value),
+                cosim_signal: None,
+            },
+            StimulusAction::CosimSignal(signal) => Self {
+                target: None,
+                trigger: spec.trigger,
+                value: None,
+                cosim_signal: Some(signal),
+            },
+        }
+    }
 }
 
 /// The bytes an [`UartInjectionSpec`] delivers: either a UTF-8 string (the
@@ -3621,6 +4464,10 @@ pub struct UartInjectionSpec {
     pub trigger: FaultTrigger,
 }
 
+fn default_stack_paint() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TestScript {
@@ -3629,6 +4476,9 @@ pub struct TestScript {
     pub limits: TestLimits,
     #[serde(default)]
     pub assertions: Vec<TestAssertion>,
+    /// When true (default), paint the main stack before run for high-water tracking.
+    #[serde(default = "default_stack_paint")]
+    pub stack_paint: bool,
     /// Faults to inject into the simulated silicon (schema_version 1.1+).
     #[serde(default)]
     pub faults: Vec<FaultSpec>,
@@ -3763,8 +4613,17 @@ impl TestScript {
             );
         }
         for (i, s) in self.stimuli.iter().enumerate() {
-            if s.target.channel.trim().is_empty() {
-                anyhow::bail!("stimuli[{}]: target.channel cannot be empty", i);
+            match &s.action {
+                StimulusAction::Input { target, .. } => {
+                    if target.channel.trim().is_empty() {
+                        anyhow::bail!("stimuli[{}]: target.channel cannot be empty", i);
+                    }
+                }
+                StimulusAction::CosimSignal(signal) => {
+                    if signal.path.trim().is_empty() {
+                        anyhow::bail!("stimuli[{}]: cosim_signal.path cannot be empty", i);
+                    }
+                }
             }
             // Only the time-based triggers are wired for stimuli today; the
             // register-access triggers need a write/read hook we haven't added
@@ -3778,7 +4637,7 @@ impl TestScript {
                     other
                 ),
             }
-            if !s.value.is_finite() {
+            if !s.value().is_finite() {
                 anyhow::bail!("stimuli[{}]: value must be a finite number", i);
             }
         }
@@ -3796,7 +4655,7 @@ impl TestScript {
                 let available = self
                     .stimuli
                     .iter()
-                    .filter(|stimulus| stimulus.target == details.from_stimulus)
+                    .filter(|stimulus| stimulus.input_target() == Some(&details.from_stimulus))
                     .count();
                 if available < details.stimulus_occurrence as usize {
                     anyhow::bail!(
@@ -3808,6 +4667,9 @@ impl TestScript {
             }
             if let TestAssertion::DisplayRegion(assertion) = assertion {
                 validate_display_region(index, &assertion.display_region)?;
+            }
+            if let TestAssertion::ResourceBudget(assertion) = assertion {
+                assertion.resource_budget.validate(index)?;
             }
         }
 
@@ -4291,9 +5153,22 @@ impl EnvTestScript {
         // it checks, or it visibly checks nothing.
 
         for (index, assertion) in self.assertions.iter().enumerate() {
+            // UART assertions carry no node id, so there is no node rule to
+            // enforce here. The world runner evaluates them against every
+            // node's captured stream.
+            if matches!(
+                assertion,
+                TestAssertion::UartContains(_)
+                    | TestAssertion::UartRegex(_)
+                    | TestAssertion::UartOrdered(_)
+            ) {
+                continue;
+            }
             let TestAssertion::MemoryValue(memory) = assertion else {
                 anyhow::bail!(
-                    "Environment test scripts support only memory_value assertions (assertions[{index}])"
+                    "Environment test scripts support only uart_contains / uart_regex / \
+                     uart_ordered and node-qualified memory_value assertions (assertions[{index}]); \
+                     the world runner cannot observe the others"
                 );
             };
             let has_node =
@@ -4317,6 +5192,20 @@ impl EnvTestScript {
 /// the peripheral exist, is the bit within the register) run against the built
 /// bus at run time.
 fn validate_fault(f: &FaultSpec) -> Result<()> {
+    // Every implemented fault is lowered onto the bus before the firmware runs
+    // (see `labwired_cli::faults`), and nothing evaluates a fault's trigger
+    // after that. A later trigger would therefore fire at start while the
+    // script said otherwise, so refuse it the way stimuli refuse the triggers
+    // they do not wire.
+    if f.trigger != FaultTrigger::AtStart {
+        anyhow::bail!(
+            "Fault '{}' ({:?}): trigger {:?} is not yet supported for faults; every fault is \
+             applied when the bus is built (use at_start, or omit trigger)",
+            f.id,
+            f.kind,
+            f.trigger
+        );
+    }
     let needs_peripheral = || -> Result<()> {
         if f.target.peripheral.is_none() {
             anyhow::bail!("Fault '{}' ({:?}) needs target.peripheral", f.id, f.kind);
@@ -4599,9 +5488,10 @@ limits:
         let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
         s.validate().unwrap();
         assert_eq!(s.stimuli.len(), 2);
-        assert_eq!(s.stimuli[0].target.channel, "x");
-        assert_eq!(s.stimuli[0].target.component.as_deref(), Some("fxos8700"));
-        assert_eq!(s.stimuli[0].value, 2.0);
+        let target = s.stimuli[0].input_target().expect("an input stimulus");
+        assert_eq!(target.channel, "x");
+        assert_eq!(target.component.as_deref(), Some("fxos8700"));
+        assert_eq!(s.stimuli[0].value(), 2.0);
         // Default trigger is at_start.
         assert!(matches!(s.stimuli[1].trigger, FaultTrigger::AtStart));
     }
@@ -4631,6 +5521,95 @@ limits:
             .unwrap_err()
             .to_string()
             .contains("channel cannot be empty"));
+    }
+
+    /// `cosim_signal: { path, value }` is a stimulus like any other: same list,
+    /// same trigger forms, same schema gate.
+    #[test]
+    fn cosim_signal_stimuli_parse_with_the_existing_trigger_forms() {
+        let yaml = script(
+            "1.2",
+            r#"stimuli:
+  - cosim_signal: { path: ui.touch.pressed, value: 1 }
+    trigger: !after_cycles { cycles: 8000000 }
+  - cosim_signal: { path: ui.knob.volts, value: 2.5 }
+  - target: { channel: x }
+    value: 1.0
+"#,
+        );
+        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
+        s.validate().unwrap();
+        assert_eq!(
+            s.stimuli[0].action,
+            StimulusAction::CosimSignal(CosimSignalStimulus {
+                path: "ui.touch.pressed".to_string(),
+                value: 1.0,
+            })
+        );
+        assert_eq!(
+            s.stimuli[0].trigger,
+            FaultTrigger::AfterCycles { cycles: 8_000_000 }
+        );
+        assert_eq!(s.stimuli[1].trigger, FaultTrigger::AtStart);
+        assert_eq!(s.stimuli[1].value(), 2.5);
+        assert!(s.stimuli[1].input_target().is_none());
+        assert!(s.stimuli[2].input_target().is_some());
+
+        // Both shapes serialize back to the keys they were written with.
+        let round_trip: Vec<StimulusSpec> =
+            serde_yaml::from_str(&serde_yaml::to_string(&s.stimuli).unwrap()).unwrap();
+        assert_eq!(round_trip, s.stimuli);
+        let text = serde_yaml::to_string(&s.stimuli[2]).unwrap();
+        assert!(!text.contains("cosim_signal"), "{text}");
+    }
+
+    #[test]
+    fn a_stimulus_is_exactly_one_shape() {
+        for (block, expected) in [
+            (
+                "stimuli:\n  - cosim_signal: { path: ui.a.b, value: 1 }\n    value: 1.0\n",
+                "cannot also set",
+            ),
+            (
+                "stimuli:\n  - cosim_signal: { path: ui.a.b, value: 1 }\n    target: { channel: x }\n",
+                "cannot also set",
+            ),
+            ("stimuli:\n  - trigger: at_start\n", "a stimulus needs"),
+            ("stimuli:\n  - target: { channel: x }\n", "missing field `value`"),
+            ("stimuli:\n  - cosim_signal: { path: ui.a.b }\n", "value"),
+        ] {
+            let err = serde_yaml::from_str::<TestScript>(&script("1.2", block))
+                .expect_err(block)
+                .to_string();
+            assert!(err.contains(expected), "{block}: {err}");
+        }
+    }
+
+    #[test]
+    fn cosim_signal_needs_a_path_and_a_finite_value() {
+        let empty = script(
+            "1.2",
+            "stimuli:\n  - cosim_signal: { path: \"\", value: 1 }\n",
+        );
+        let s: TestScript = serde_yaml::from_str(&empty).unwrap();
+        let err = s.validate().unwrap_err().to_string();
+        assert!(err.contains("cosim_signal.path cannot be empty"), "{err}");
+
+        let infinite = script(
+            "1.2",
+            "stimuli:\n  - cosim_signal: { path: ui.a.b, value: .inf }\n",
+        );
+        let s: TestScript = serde_yaml::from_str(&infinite).unwrap();
+        let err = s.validate().unwrap_err().to_string();
+        assert!(err.contains("finite"), "{err}");
+
+        let on_write = script(
+            "1.2",
+            "stimuli:\n  - cosim_signal: { path: ui.a.b, value: 1 }\n    trigger: !on_write { register: \"FOO\" }\n",
+        );
+        let s: TestScript = serde_yaml::from_str(&on_write).unwrap();
+        let err = s.validate().unwrap_err().to_string();
+        assert!(err.contains("not yet supported for stimuli"), "{err}");
     }
 
     #[test]
@@ -4887,6 +5866,37 @@ assertions:
         assert_eq!(script.inputs.firmware, "path/to/fw.elf");
         assert_eq!(script.limits.max_steps, 1000);
         assert_eq!(script.assertions.len(), 2);
+        // stack_paint defaults to true when omitted
+        assert!(script.stack_paint);
+    }
+
+    #[test]
+    fn parses_resource_budget_and_stack_paint() {
+        let yaml = r#"
+schema_version: "1.0"
+inputs:
+  firmware: "path/to/fw.elf"
+  system: "path/to/sys.yaml"
+limits:
+  max_steps: 1000
+stack_paint: false
+assertions:
+  - resource_budget:
+      max_main_stack_bytes: 512
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        script.validate().unwrap();
+        assert!(!script.stack_paint);
+        assert_eq!(script.assertions.len(), 1);
+        let TestAssertion::ResourceBudget(a) = &script.assertions[0] else {
+            panic!(
+                "expected resource_budget assertion, got {:?}",
+                script.assertions[0]
+            );
+        };
+        assert_eq!(a.resource_budget.max_main_stack_bytes, Some(512));
+        assert!(a.resource_budget.max_flash_bytes.is_none());
+        assert!(a.resource_budget.max_ram_static_bytes.is_none());
     }
 
     #[test]
@@ -4960,6 +5970,39 @@ verdict:
         assert_eq!(script.faults.len(), 2);
         assert_eq!(script.faults[0].kind, FaultKind::MissingClock);
         assert!(script.verdict.as_ref().unwrap().require_fault_fired);
+    }
+
+    /// A fault trigger the runner does not evaluate is refused, not silently
+    /// applied at start.
+    #[test]
+    fn test_fault_triggers_other_than_at_start_are_refused() {
+        for trigger in [
+            "!after_cycles { cycles: 1000 }",
+            "!on_write { register: \"CR1\" }",
+            "!on_read { register: \"SR\" }",
+        ] {
+            let yaml = format!(
+                r#"
+schema_version: "1.1"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 100
+faults:
+  - id: late_clock
+    kind: missing_clock
+    target: {{ peripheral: usart1 }}
+    trigger: {trigger}
+"#
+            );
+            let script: TestScript = serde_yaml::from_str(&yaml).unwrap();
+            let err = script.validate().unwrap_err().to_string();
+            assert!(err.contains("late_clock"), "{trigger}: {err}");
+            assert!(
+                err.contains("not yet supported for faults"),
+                "{trigger}: {err}"
+            );
+        }
     }
 
     #[test]
@@ -5801,18 +6844,6 @@ assertions:
     fn env_script_requires_memory_assertions_with_nodes() {
         for (name, yaml, diagnostic) in [
             (
-                "no-assertions",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-  - uart_contains: "PASS"
-"#,
-                "memory_value",
-            ),
-            (
                 "missing-node",
                 r#"
 schema_version: "1.0"
@@ -5835,20 +6866,64 @@ assertions:
                 "node",
             ),
             (
+                // Still unsupported, and still refused: the world runner has no
+                // per-node stop reason to compare against. The refusal must
+                // survive UART assertions becoming legal, or admitting those
+                // would have quietly admitted everything.
                 "unsupported-assertion",
                 r#"
 schema_version: "1.0"
 inputs: { env: "twonode-env.yaml" }
 limits: { max_steps: 10 }
 assertions:
-  - uart_contains: "PASS"
+  - expected_stop_reason: max_steps
 "#,
-                "memory_value",
+                "cannot observe",
             ),
         ] {
             let script_path = write_temp_file(name, yaml);
             let err = load_test_script(&script_path).unwrap_err().to_string();
             assert!(err.contains(diagnostic), "unexpected error: {err}");
+        }
+    }
+
+    /// UART assertions carry no node id, so the node rules above do not apply
+    /// to them; they are satisfied by any node printing the text. They load
+    /// alone and alongside a node-qualified `memory_value`.
+    #[test]
+    fn env_script_accepts_uart_assertions() {
+        for (name, yaml) in [
+            (
+                "uart-only",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - uart_contains: "PASS"
+  - uart_regex: "PA+SS"
+  - uart_ordered: ["boot", "PASS"]
+"#,
+            ),
+            (
+                "uart-and-memory",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+  - uart_contains: "PASS"
+"#,
+            ),
+        ] {
+            let script_path = write_temp_file(name, yaml);
+            let script = load_test_script(&script_path)
+                .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            assert!(
+                matches!(script, LoadedTestScript::Env(_)),
+                "{name} must load as an environment script"
+            );
         }
     }
 
@@ -6011,6 +7086,77 @@ registers:
 }
 
 #[cfg(test)]
+mod memory_size_tests {
+    use super::*;
+
+    fn chip(flash: &str, ram: &str) -> Result<ChipDescriptor, serde_yaml::Error> {
+        serde_yaml::from_str(&format!(
+            "name: t\narch: arm\nflash: {{ base: 0, size: \"{flash}\" }}\n\
+             ram: {{ base: 0x20000000, size: \"{ram}\" }}\nperipherals: []\n"
+        ))
+    }
+
+    /// The wire format is unchanged: every spelling the chip yamls use still loads.
+    #[test]
+    fn the_human_forms_still_load() {
+        assert_eq!(chip("64KB", "16KiB").unwrap().flash.size, 64 * 1024);
+        assert_eq!(chip("64KB", "16KiB").unwrap().ram.size, 16 * 1024);
+        assert_eq!(chip("1MiB", "131072").unwrap().flash.size, 1024 * 1024);
+        assert_eq!(chip("1MiB", "131072").unwrap().ram.size, 131_072);
+    }
+
+    /// KB is BINARY and MB is DECIMAL, in the same parser. Pinned here because
+    /// it is the opposite of what the spelling suggests and nothing else states
+    /// it.
+    ///
+    /// No committed chip relies on the `MB` arm any more. Nine of them used to,
+    /// and every one modelled less flash than its part has; esp32s3 was
+    /// rewritten to `"16384KB"` first, and the remaining eight (esp32c3,
+    /// rp2040, rp2350, stm32f103/f405/f407/f767/l476, plus the C3's DROM
+    /// window) followed. The multipliers still cannot move — they are the wire
+    /// format every out-of-tree descriptor and every hosted manifest was
+    /// written against — so the spelling is policed instead, over the shipped
+    /// corpus, by `labwired_core::tests::chip_memory_sizes`.
+    #[test]
+    fn kb_is_1024_and_mb_is_1000000() {
+        assert_eq!(chip("1KB", "1KB").unwrap().flash.size, 1024);
+        assert_eq!(chip("1MB", "1KB").unwrap().flash.size, 1_000_000);
+        assert_eq!(chip("1MiB", "1KB").unwrap().flash.size, 1_048_576);
+    }
+
+    /// The point of moving the parse to the boundary: a size that does not
+    /// parse is now a load error. It used to be stored verbatim and then hit
+    /// `parse_size(..).unwrap_or(0)` at the point of use — so a typo'd unit
+    /// gave the machine ZERO bytes of RAM and ran anyway.
+    #[test]
+    fn an_unparseable_size_fails_the_load_instead_of_becoming_zero() {
+        let err = chip("64K", "16KB").expect_err("a bare `K` is not a unit human_size accepts");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("flash"),
+            "the error must name the field: {msg}"
+        );
+        assert!(
+            msg.contains("Invalid size format"),
+            "the error must say what was wrong: {msg}"
+        );
+    }
+
+    /// Sizes round-trip through serde without changing value. They serialise as
+    /// a bare byte count precisely so this holds — re-rendering `1048576` as
+    /// `1MB` would read back as 1_000_000.
+    #[test]
+    fn a_size_round_trips_without_shrinking() {
+        let c = chip("1MiB", "192KB").unwrap();
+        let back: ChipDescriptor =
+            serde_yaml::from_str(&serde_yaml::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back.flash.size, c.flash.size);
+        assert_eq!(back.ram.size, c.ram.size);
+        assert_eq!(back.flash.size, 1_048_576);
+    }
+}
+
+#[cfg(test)]
 mod pin_map_tests {
     use super::*;
 
@@ -6019,8 +7165,8 @@ mod pin_map_tests {
         let yaml = r#"
 name: "test-chip"
 arch: "arm"
-flash: { base: 0, size: "64K" }
-ram: { base: 0x20000000, size: "16K" }
+flash: { base: 0, size: "64KB" }
+ram: { base: 0x20000000, size: "16KB" }
 peripherals: []
 pins:
   PC0: { gpio: gpioc, bit: 0, functions: [{ type: gpio, peripheral: gpioc }] }
@@ -6040,8 +7186,8 @@ pins:
         let yaml = r#"
 name: "no-pins"
 arch: "arm"
-flash: { base: 0, size: "64K" }
-ram: { base: 0x20000000, size: "16K" }
+flash: { base: 0, size: "64KB" }
+ram: { base: 0x20000000, size: "16KB" }
 peripherals: []
 "#;
         let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse");

@@ -337,7 +337,9 @@ fn run_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &Case) -> Outcome {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: sweeps the full nRF52840 TIMER0/RTC0 register set against real silicon \
+            over SWD (OpenOcd::spawn_nrf52), so it requires an attached board. The whole file is \
+            behind `--features hw-oracle-nrf52`; set NRF52_STRICT=1 to make divergence fail"]
 fn nrf52840_timer_rtc_conformance() {
     let _guard = HW_LOCK.lock().unwrap();
     let mut sim = build_sim_bus();

@@ -1,0 +1,374 @@
+peripheral: PM
+version: 0.1.0
+registers:
+- id: CTRL
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: SLEEP
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IDLE
+    bit_range:
+    - 1
+    - 0
+    description: Idle Mode Configuration
+  side_effects: null
+- id: CPUSEL
+  address_offset: 8
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CPUDIV
+    bit_range:
+    - 2
+    - 0
+    description: CPU Prescaler Selection
+  side_effects: null
+- id: APBASEL
+  address_offset: 9
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APBADIV
+    bit_range:
+    - 2
+    - 0
+    description: APBA Prescaler Selection
+  side_effects: null
+- id: APBBSEL
+  address_offset: 10
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APBBDIV
+    bit_range:
+    - 2
+    - 0
+    description: APBB Prescaler Selection
+  side_effects: null
+- id: APBCSEL
+  address_offset: 11
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: APBCDIV
+    bit_range:
+    - 2
+    - 0
+    description: APBC Prescaler Selection
+  side_effects: null
+- id: AHBMASK
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 127
+  fields:
+  - name: HPB0_
+    bit_range:
+    - 0
+    - 0
+    description: HPB0 AHB Clock Mask
+  - name: HPB1_
+    bit_range:
+    - 1
+    - 1
+    description: HPB1 AHB Clock Mask
+  - name: HPB2_
+    bit_range:
+    - 2
+    - 2
+    description: HPB2 AHB Clock Mask
+  - name: DSU_
+    bit_range:
+    - 3
+    - 3
+    description: DSU AHB Clock Mask
+  - name: NVMCTRL_
+    bit_range:
+    - 4
+    - 4
+    description: NVMCTRL AHB Clock Mask
+  - name: DMAC_
+    bit_range:
+    - 5
+    - 5
+    description: DMAC AHB Clock Mask
+  - name: USB_
+    bit_range:
+    - 6
+    - 6
+    description: USB AHB Clock Mask
+  side_effects: null
+- id: APBAMASK
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 127
+  fields:
+  - name: PAC0_
+    bit_range:
+    - 0
+    - 0
+    description: PAC0 APB Clock Enable
+  - name: PM_
+    bit_range:
+    - 1
+    - 1
+    description: PM APB Clock Enable
+  - name: SYSCTRL_
+    bit_range:
+    - 2
+    - 2
+    description: SYSCTRL APB Clock Enable
+  - name: GCLK_
+    bit_range:
+    - 3
+    - 3
+    description: GCLK APB Clock Enable
+  - name: WDT_
+    bit_range:
+    - 4
+    - 4
+    description: WDT APB Clock Enable
+  - name: RTC_
+    bit_range:
+    - 5
+    - 5
+    description: RTC APB Clock Enable
+  - name: EIC_
+    bit_range:
+    - 6
+    - 6
+    description: EIC APB Clock Enable
+  side_effects: null
+- id: APBBMASK
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 127
+  fields:
+  - name: PAC1_
+    bit_range:
+    - 0
+    - 0
+    description: PAC1 APB Clock Enable
+  - name: DSU_
+    bit_range:
+    - 1
+    - 1
+    description: DSU APB Clock Enable
+  - name: NVMCTRL_
+    bit_range:
+    - 2
+    - 2
+    description: NVMCTRL APB Clock Enable
+  - name: PORT_
+    bit_range:
+    - 3
+    - 3
+    description: PORT APB Clock Enable
+  - name: DMAC_
+    bit_range:
+    - 4
+    - 4
+    description: DMAC APB Clock Enable
+  - name: USB_
+    bit_range:
+    - 5
+    - 5
+    description: USB APB Clock Enable
+  - name: HMATRIX_
+    bit_range:
+    - 6
+    - 6
+    description: HMATRIX APB Clock Enable
+  side_effects: null
+- id: APBCMASK
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: PAC2_
+    bit_range:
+    - 0
+    - 0
+    description: PAC2 APB Clock Enable
+  - name: EVSYS_
+    bit_range:
+    - 1
+    - 1
+    description: EVSYS APB Clock Enable
+  - name: SERCOM0_
+    bit_range:
+    - 2
+    - 2
+    description: SERCOM0 APB Clock Enable
+  - name: SERCOM1_
+    bit_range:
+    - 3
+    - 3
+    description: SERCOM1 APB Clock Enable
+  - name: SERCOM2_
+    bit_range:
+    - 4
+    - 4
+    description: SERCOM2 APB Clock Enable
+  - name: SERCOM3_
+    bit_range:
+    - 5
+    - 5
+    description: SERCOM3 APB Clock Enable
+  - name: SERCOM4_
+    bit_range:
+    - 6
+    - 6
+    description: SERCOM4 APB Clock Enable
+  - name: SERCOM5_
+    bit_range:
+    - 7
+    - 7
+    description: SERCOM5 APB Clock Enable
+  - name: TCC0_
+    bit_range:
+    - 8
+    - 8
+    description: TCC0 APB Clock Enable
+  - name: TCC1_
+    bit_range:
+    - 9
+    - 9
+    description: TCC1 APB Clock Enable
+  - name: TCC2_
+    bit_range:
+    - 10
+    - 10
+    description: TCC2 APB Clock Enable
+  - name: TC3_
+    bit_range:
+    - 11
+    - 11
+    description: TC3 APB Clock Enable
+  - name: TC4_
+    bit_range:
+    - 12
+    - 12
+    description: TC4 APB Clock Enable
+  - name: TC5_
+    bit_range:
+    - 13
+    - 13
+    description: TC5 APB Clock Enable
+  - name: ADC_
+    bit_range:
+    - 16
+    - 16
+    description: ADC APB Clock Enable
+  - name: AC_
+    bit_range:
+    - 17
+    - 17
+    description: AC APB Clock Enable
+  - name: DAC_
+    bit_range:
+    - 18
+    - 18
+    description: DAC APB Clock Enable
+  - name: PTC_
+    bit_range:
+    - 19
+    - 19
+    description: PTC APB Clock Enable
+  - name: I2S_
+    bit_range:
+    - 20
+    - 20
+    description: I2S APB Clock Enable
+  side_effects: null
+- id: INTENCLR
+  address_offset: 52
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CKRDY
+    bit_range:
+    - 0
+    - 0
+    description: Clock Ready Interrupt Enable
+  side_effects: null
+- id: INTENSET
+  address_offset: 53
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CKRDY
+    bit_range:
+    - 0
+    - 0
+    description: Clock Ready Interrupt Enable
+  side_effects: null
+- id: INTFLAG
+  address_offset: 54
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CKRDY
+    bit_range:
+    - 0
+    - 0
+    description: Clock Ready
+  side_effects: null
+- id: RCAUSE
+  address_offset: 56
+  size: 8
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: POR
+    bit_range:
+    - 0
+    - 0
+    description: Power On Reset
+  - name: BOD12
+    bit_range:
+    - 1
+    - 1
+    description: Brown Out 12 Detector Reset
+  - name: BOD33
+    bit_range:
+    - 2
+    - 2
+    description: Brown Out 33 Detector Reset
+  - name: EXT
+    bit_range:
+    - 4
+    - 4
+    description: External Reset
+  - name: WDT
+    bit_range:
+    - 5
+    - 5
+    description: Watchdog Reset
+  - name: SYST
+    bit_range:
+    - 6
+    - 6
+    description: System Reset Request
+  side_effects: null
+interrupts:
+  PM: 0
+timing: null

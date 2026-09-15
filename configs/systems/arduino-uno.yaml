@@ -1,0 +1,12 @@
+name: arduino-uno
+chip: ../chips/atmega328p.yaml
+# Arduino Uno R3: same ATmega328P as the Nano, 16 MHz crystal, LED on D13.
+# Top-level `cpu_hz` is the key the engine reads (see arduino-nano.yaml).
+cpu_hz: 16000000
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portb"
+    pin: 5          # PB5 / Arduino D13 LED_BUILTIN
+    signal: "output"
+    active_high: true

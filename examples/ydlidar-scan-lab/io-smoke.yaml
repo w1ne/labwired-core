@@ -1,0 +1,12 @@
+# LabWired - 360 deg Scanning Lidar Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ydlidar-scan-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "Scanning Lidar Lab"
+  - uart_contains: "[SCAN] rev="
+  - uart_contains: " near=1000mm@"
+  - expected_stop_reason: max_steps

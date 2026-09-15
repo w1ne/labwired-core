@@ -8,9 +8,26 @@ name: "stm32f103c8"
 arch: "arm"
 core: "cortex-m3"
 registers_count: 125
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F103C8 maximum core clock, 72 MHz.
+cpu_hz: 72_000_000
+# GPIO supply and digital input thresholds (ratios of io_voltage_v), used when
+# co-simulation turns a circuit node voltage into the level the firmware reads.
+# DS5319 Rev 20 (STM32F103x8/xB), section 5.3.15, Table 36 "I/O static
+# characteristics", rows "All I/Os except BOOT0" (tested in production):
+# VIL max 0.35·VDD, VIH min 0.65·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.35
+  vih: 0.65
+
 flash:
   base: 0x08000000
-  size: "1MB"
+  # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
+  # 1_000_000, 48_576 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "1024KB"
 ram:
   base: 0x20000000
   # STM32F103C8 has 20KB of SRAM (0x2000_0000..0x2000_5000). Modelling the
@@ -265,3 +282,19 @@ peripherals:
     irq: 39
     config:
       debug_schema: "../peripherals/stm32f103/usart3.yaml"
+
+# Regular ADC inputs by pad, from the STM32F103x8/xB datasheet (DS5319), LQFP48 pinout: ADC12_IN0..IN9.
+# ADC12_INx inputs are shared by ADC1 and ADC2; routed to `adc1` here.
+# LQFP48 (C8) bonds out no PC0..PC5, so ADC inputs 10..15 have no pad on this part.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }

@@ -26,7 +26,9 @@ fn cpu_runtime_snapshot_roundtrips_full_state() {
         cpu.set_register(i, 0xDEAD_0000 | (i as u32));
     }
 
-    let (kind, blob) = cpu.runtime_snapshot();
+    let (kind, blob) = cpu
+        .runtime_snapshot()
+        .expect("Xtensa LX7 models a runtime snapshot");
     assert_eq!(kind, CpuKind::XtensaLx7);
     assert!(blob.len() > 64, "snapshot blob should be substantial");
 
@@ -145,7 +147,9 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
         .write_u32(0x3FFB_0200, 0xDEAD_BEEF)
         .expect("dram write");
 
-    let snap = machine.take_runtime_snapshot();
+    let snap = machine
+        .take_runtime_snapshot()
+        .expect("Xtensa machine models a runtime snapshot");
     let bytes = snap.to_bytes();
     assert!(
         bytes.len() > 1000,

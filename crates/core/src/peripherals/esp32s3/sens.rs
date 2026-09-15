@@ -305,6 +305,11 @@ impl Esp32s3Sens {
 }
 
 impl Peripheral for Esp32s3Sens {
+    /// SAR ADC1 CH0..CH9 (GPIO1..GPIO10), the slots `channel_inputs` holds.
+    fn adc_channel_count(&self) -> Option<u8> {
+        Some(10)
+    }
+
     // Inert walk: SENS register bank; no free-running state. tick() is the trait-default no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

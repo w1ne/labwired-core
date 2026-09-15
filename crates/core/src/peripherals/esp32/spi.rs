@@ -412,45 +412,80 @@ impl Esp32Spi {
 
     /// Run one user-defined transaction synchronously.
     ///
-    /// MOSI path: drain FIFO bytes to every attached `SpiDevice` (display /
-    /// external SPI). CS is **not** pulsed per CMD.USR — real firmware holds
-    /// CS via GPIO across many transfers.
+    /// With attached kit devices (VSPI/SPI3 sensors, panels): full-duplex
+    /// exchange — each FIFO MOSI byte is clocked through every `SpiDevice`
+    /// and the first non-zero MISO response is written back into the same
+    /// FIFO lane when `USR_MISO` is set. CS is **not** pulsed per CMD.USR —
+    /// real firmware holds CS via GPIO across many transfers (soft-CS on the
+    /// declarative kit restarts a frame after a completed word).
     ///
-    /// MISO path: fill FIFO from the modeled SPI-NOR response for the opcode
-    /// in USER2 (RDID/RDSR/READ/…). Used by SPI0/SPI1 flash init.
+    /// Without attached devices: MISO still fills from the modeled SPI-NOR
+    /// response for the opcode in USER2 (RDID/RDSR/READ/…). That path is what
+    /// SPI0/SPI1 flash init uses.
     fn kick_user_transaction(&mut self) {
         self.transactions += 1;
 
-        // USR MOSI → attached devices only. Flash array program/erase is handled
-        // by dedicated FLASH_PP/SE/BE bits in `launch_command` (not USR opcodes).
-        if self.user & USER_USR_MOSI_BIT != 0 {
-            let bits = (self.mosi_dlen & 0x7FF) + 1;
-            let byte_count = bits.div_ceil(8) as usize;
-            // Read the framing ONCE, before the loop, from the registers as they
-            // stand at the launch — that is the state the whole transaction goes
-            // out under, and `read_word` needs `&self` while the loop below
-            // holds `&mut self.attached_devices`.
+        let mosi_en = self.user & USER_USR_MOSI_BIT != 0;
+        let miso_en = self.user & USER_USR_MISO_BIT != 0;
+        let has_slaves = !self.attached_devices.is_empty();
+
+        if has_slaves && (mosi_en || miso_en) {
+            // Prefer the MOSI length when both are programmed (Arduino SPI.transfer
+            // sets them equal); pure-MISO kits still work via miso_dlen alone.
+            let bits = if mosi_en {
+                (self.mosi_dlen & 0x7FF) + 1
+            } else {
+                (self.miso_dlen & 0x7FF) + 1
+            };
+            let byte_count = (bits.div_ceil(8) as usize).min(self.fifo.len() * 4);
             let framing = framing(self.read_word(REG_PIN), self.user);
             let bit_time = bit_time_cycles(self.read_word(REG_CLOCK));
             let now = self.clock.as_ref().map_or(0, |c| c.now());
             for i in 0..byte_count {
-                let word = self.fifo[i / 4];
-                let byte = ((word >> ((i % 4) * 8)) & 0xFF) as u8;
+                let wi = i / 4;
+                let shift = (i % 4) * 8;
+                let mosi = if mosi_en {
+                    ((self.fifo[wi] >> shift) & 0xFF) as u8
+                } else {
+                    0
+                };
                 if self.record_enabled {
-                    self.captured_bytes.push(byte);
+                    self.captured_bytes.push(mosi);
                 }
-                // The wire sees the byte at the SAME choke point the attached
-                // devices do: it leaves the W buffer exactly once, and this is
-                // that once. One branch when no pad routes this controller.
-                self.wire.push(byte, framing, bit_time, now);
+                self.wire.push(mosi, framing, bit_time, now);
+                let mut miso = 0u8;
                 for dev in &mut self.attached_devices {
-                    dev.transfer(byte);
+                    let resp = dev.transfer(mosi);
+                    if miso == 0 {
+                        miso = resp;
+                    }
+                }
+                if miso_en {
+                    self.fifo[wi] =
+                        (self.fifo[wi] & !(0xFFu32 << shift)) | ((miso as u32) << shift);
                 }
             }
-        }
-
-        if self.user & USER_USR_MISO_BIT != 0 {
-            self.execute_flash_user_miso();
+        } else {
+            // No kit slaves: MOSI still narrates the wire for pad capture;
+            // MISO comes from the flash-array user opcode path (SPI0/SPI1).
+            if mosi_en {
+                let bits = (self.mosi_dlen & 0x7FF) + 1;
+                let byte_count = bits.div_ceil(8) as usize;
+                let framing = framing(self.read_word(REG_PIN), self.user);
+                let bit_time = bit_time_cycles(self.read_word(REG_CLOCK));
+                let now = self.clock.as_ref().map_or(0, |c| c.now());
+                for i in 0..byte_count {
+                    let word = self.fifo[i / 4];
+                    let byte = ((word >> ((i % 4) * 8)) & 0xFF) as u8;
+                    if self.record_enabled {
+                        self.captured_bytes.push(byte);
+                    }
+                    self.wire.push(byte, framing, bit_time, now);
+                }
+            }
+            if miso_en {
+                self.execute_flash_user_miso();
+            }
         }
 
         // Clear every command-launch bit so poll-until-CMD==0 exits.

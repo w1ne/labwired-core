@@ -1,13 +1,18 @@
-# Arduino matrix system — INA219 on Wire for L3; L0–L2 ignore it.
+# Arduino matrix system — INA219 on Wire + MAX31855 on SPI2/FSPI.
 name: "arduino-matrix-esp32s3"
 chip: "../../../configs/chips/esp32s3.yaml"
 external_devices:
-  # Matrix L3_i2c_sensor: INA219 at 0x40 on default Arduino Wire bus (i2c0).
-  # Harmless for L0–L2 (unused). Proves kit attach + I2C end-to-end.
   - id: "ina219"
     type: "ina219"
     connection: "i2c0"
     route: { sda: "GPIO8", scl: "GPIO9" }
     config:
       i2c_address: 0x40
+  # GP-SPI2: programmatic bank id is spi2_s3; attach accepts either name via
+  # alias in attach_spi_device (prefer spi2_s3).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO10"
 board_io: []

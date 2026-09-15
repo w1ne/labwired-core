@@ -167,7 +167,8 @@ fn run_hw(elf: &PathBuf) -> Vec<u32> {
 
 #[cfg(feature = "hw-oracle-stm32")]
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: requires an SWD-attached STM32F103 driven by OpenOCD, plus a built \
+            firmware-f103-conformance ELF; needs `--features hw-oracle-stm32` and `-- --ignored`"]
 fn conformance_diff() {
     let elf = firmware_elf().expect("build firmware-f103-conformance first");
     let sim = run_sim(&elf);

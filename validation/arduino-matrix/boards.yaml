@@ -18,7 +18,8 @@ boards:
     led_watch: "gpio:2"
     led_min_edges: 2
     family: esp32
-    notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks)"
+    notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks); L8 TWAI self-RX"
+    # L8_can: classic TWAI @ 0x3FF6B000 self-reception (esp32_twai model)
 
   - id: esp32c3
     chip: esp32c3
@@ -32,6 +33,9 @@ boards:
     led_min_edges: 2
     family: esp32
     notes: "Arduino-ESP32-C3 RISC-V"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "TWAI0 declarative-only (no self-RX model for matrix L8)"
 
   - id: esp32s3
     chip: esp32s3
@@ -39,9 +43,12 @@ boards:
     pio: { platform: espressif32, board: esp32-s3-devkitc-1, framework: arduino }
     max_steps: 50000000
     budget_reason: "Dual-core S3 boot ~1.1M; L3 Wire headroom"
+    # RGB LED_BUILTIN → RMT TX (min_rmt_tx). Programmatic bank id is rmt_s3,
+    # not rmt — use the TX_START count oracle, not --watch-gpio.
     min_rmt_tx: 1
     family: esp32
-    notes: "Arduino-ESP32-S3"
+    notes: "Arduino-ESP32-S3 — SPI L4, SAR ADC L5, TWAI L8 via programmatic bank"
+    # L5: sar_adc_s3 @ 0x60040000 (esp32s3_sar_adc); L8: twai @ 0x6002B000
 
   - id: nrf52832
     chip: nrf52832
@@ -53,6 +60,9 @@ boards:
     led_watch: "gpio0:17"
     led_min_edges: 2
     family: nrf
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No on-chip CAN model"
 
   - id: nrf52840
     chip: nrf52840
@@ -63,6 +73,9 @@ boards:
     led_watch: "gpio0:17"
     led_min_edges: 2
     family: nrf
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No on-chip CAN model"
 
   - id: rp2040
     chip: rp2040
@@ -74,7 +87,10 @@ boards:
     led_watch: "sio:25"
     led_min_edges: 2
     family: rp2040
-    notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
+    notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing); SPI slave attach for L4"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No on-chip CAN model"
 
   - id: stm32f103
     chip: stm32f103
@@ -95,6 +111,9 @@ boards:
     led_watch: "gpioa:5"
     led_min_edges: 2
     family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No bxCAN/FDCAN in chip yaml"
 
   - id: stm32f407
     chip: stm32f407
@@ -105,6 +124,7 @@ boards:
     led_watch: "gpiod:12"
     led_min_edges: 2
     family: stm32
+    # L8_can: bxCAN1 loopback (chip yaml + RM0090 APB1ENR bit 25)
 
   - id: stm32g474re
     chip: stm32g474re
@@ -114,7 +134,12 @@ boards:
     budget_reason: "L0–L2 light; L3 Wire.begin runs i2c_computeTiming (~7M+ steps)"
     led_watch: "gpioa:5"
     led_min_edges: 2
+    # L6 uses PA0 (TIM2) — not PA5 LED (DAC1_OUT2) — see L6 sketch.
+    # pwm_watch deferred: TIM OC→pad edge routing not yet reliable for L6 oracle.
     family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No FDCAN in chip yaml for matrix L8"
 
   - id: stm32h563
     chip: stm32h563
@@ -125,7 +150,7 @@ boards:
     led_watch: "gpiob:0"
     led_min_edges: 2
     family: stm32
-
+    # L5: adc profile stm32h7; L8: FDCAN enter_loopback sequence
   - id: stm32l073
     chip: stm32l073
     system: systems/stm32l073.yaml
@@ -135,6 +160,9 @@ boards:
     led_watch: "gpioa:5"
     led_min_edges: 2
     family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No CAN peripheral on L0 series"
 
   - id: stm32l476
     chip: stm32l476
@@ -145,6 +173,7 @@ boards:
     led_watch: "gpioa:5"
     led_min_edges: 2
     family: stm32
+    # L8_can: bxCAN1 loopback
 
   - id: stm32wb55
     chip: stm32wb55
@@ -155,6 +184,9 @@ boards:
     led_watch: "gpiob:5"
     led_min_edges: 2
     family: stm32
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "No CAN model in matrix path"
 
   - id: stm32wba52
     chip: stm32wba52
@@ -166,6 +198,60 @@ boards:
     led_watch: "gpiob:4"
     led_min_edges: 2
     family: stm32
+    sketches_skip: [L5_adc, L8_can]
+    sketches_skip_reason:
+      L5_adc: "No ADC model in stm32wba52 chip yaml yet"
+      L8_can: "No CAN model in matrix path"
+
+  - id: atmega328p
+    chip: atmega328p
+    system: systems/atmega328p.yaml
+    pio: { platform: atmelavr, board: nanoatmega328, framework: arduino }
+    max_steps: 500000
+    budget_reason: "AVR: L0~14k L2~40k L3/L4 TWI/SPI headroom for millis + Wire/SPI"
+    led_watch: "portb:5"
+    led_min_edges: 2
+    family: avr
+    notes: "Classic Arduino Nano — L0–L7 twin; L8 no CAN"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "ATmega328P has no CAN controller"
+
+  # ── Silicon Labs BRD2709A (xG26 Explorer Kit, EFR32MG26) ────────────────
+  #
+  # ⚠️ The ONLY board here that does not compile through PlatformIO. Silicon
+  # Labs never published an xG26 Arduino core, so LabWired's is hand-written
+  # and lives in the labwired monorepo at
+  # `services/labwired-builder/silabs-arduino`. Its compile flags were derived
+  # on real silicon (hard/soft float split, the 0x08008000 app slot, -nostdlib)
+  # and they have exactly one home — copying them into this repo would give
+  # them two, and the two would drift.
+  #
+  # So this board declares `external_compile:` instead of `pio:`, and the lane
+  # that owns the core supplies the driver through $LW_EXTERNAL_COMPILE (see
+  # run_matrix.py). ⚠️ With no driver the rows come back `toolchain_missing`,
+  # which is a FAILURE the gate counts — not a skip. `scripts/ci/chip_coverage.py`
+  # is what stops this board from sitting in boards.yaml with nothing anywhere
+  # running it: a board with `external_compile:` must NOT be in this repo's job
+  # matrix (that job could only report toolchain_missing) and MUST name a
+  # `lane:`, or the gate refuses the tree.
+  - id: brd2709a
+    chip: efr32mg26
+    system: systems/brd2709a.yaml
+    external_compile:
+      target: "silabs-arduino:xg26explorerkit"
+    lane: "labwired/.github/workflows/brd2709a-arduino-matrix.yml"
+    max_steps: 3000000
+    budget_reason: "Cortex-M33 at the 19 MHz HFRCODPLL startup band; L0 boots in ~30k, L3/L4 need Wire/SPI headroom"
+    # LED0 = PC08, active-high (variants/xg26explorerkit/pins_arduino.h).
+    led_watch: "gpioc:8"
+    led_min_edges: 2
+    family: efr32
+    notes: "Hand-written silabs-arduino core; Wire=I2C0 @0x4B000000, SPI=USART0 sync"
+    sketches_skip: [L8_can]
+    sketches_skip_reason:
+      L8_can: "EFR32MG26 has no CAN controller"
+
 
 sketches:
   - id: L0_serial_boot
@@ -186,4 +272,30 @@ sketches:
   - id: L3_i2c_sensor
     dir: sketches/L3_i2c_sensor
     marker: "LW_L3_OK"
-    description: "Wire + INA219@0x40 (system external_devices) — peripheral kit path"
+    description: "Wire + INA219@0x40 — exact config 0x399F + bus 0x19CA when master-RX works; else ACK + PARTIAL marker"
+
+  - id: L4_spi_sensor
+    dir: sketches/L4_spi_sensor
+    marker: "LW_L4_OK"
+    description: "SPI + MAX31855@CS — exact frame 0x01901600"
+
+  - id: L5_adc
+    dir: sketches/L5_adc
+    marker: "LW_L5_OK"
+    description: "analogRead() — family-faithful deterministic codes (not bare 0..4095)"
+
+  - id: L6_pwm
+    dir: sketches/L6_pwm
+    marker: "LW_L6_OK"
+    description: "analogWrite mid duty left running + optional GPIO edge oracle"
+
+  - id: L7_timer
+    dir: sketches/L7_timer
+    marker: "LW_L7_OK"
+    description: "micros() advances ≥1 ms and stays monotonic"
+
+  - id: L8_can
+    dir: sketches/L8_can
+    marker: "LW_L8_OK"
+    description: "CAN loopback ID+data (bxCAN/FDCAN) or TWAI self-RX decode 0x123/0xA5"
+

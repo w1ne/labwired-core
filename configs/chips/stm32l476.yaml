@@ -13,9 +13,19 @@ name: "stm32l476rg"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 200
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32L476RG maximum core clock, 80 MHz. The NUCLEO-L476RG lab never
+# configures the PLL and so runs at the 4 MHz MSI reset rate — that board
+# says so with its own `cpu_hz:` override, which is what that key is for.
+cpu_hz: 80_000_000
+
 flash:
   base: 0x08000000
-  size: "1MB"
+  # 1 MiB, spelled in KB because `parse_size` reads MB as 10^6 — "1MB" would be
+  # 1_000_000, 48_576 bytes short of the part. Gated by
+  # crates/core/src/tests/chip_memory_sizes.rs.
+  size: "1024KB"
 ram:
   base: 0x20000000
   size: "96KB"

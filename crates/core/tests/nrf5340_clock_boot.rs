@@ -47,6 +47,7 @@ fn nrf5340_bus() -> SystemBus {
         schema_version: "1.0".to_string(),
         name: "nrf5340-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

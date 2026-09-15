@@ -123,7 +123,7 @@ fn build_oled_lab() -> OledLab {
                 .expect("load bootloader segment");
         }
     }
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    let sp_top = (chip.ram.base + chip.ram.size) as u32;
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(bootloader.entry_point as u32);
 
@@ -410,7 +410,7 @@ fn esp32c3_oled_guest_pc_attribution() {
     let budget = budget();
     let mut lab = build_oled_lab();
     let hist = Arc::new(PcHistogram::default());
-    lab.machine.observers.push(hist.clone());
+    lab.machine.add_observer(hist.clone());
 
     lab.machine.reset_step_profile();
     let mut fuel: u64 = 0;

@@ -577,7 +577,9 @@ fn run_case(spis: &mut Nrf52Spis, twis: &mut Nrf52Twis, oc: &mut OpenOcd, case: 
 }
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: sweeps the nRF52840 SPIS0/TWIS1 register surface against real silicon \
+            over SWD (OpenOcd::spawn_nrf52), so it requires an attached board. The whole file is \
+            behind `--features hw-oracle-nrf52`; set NRF52_STRICT=1 to make divergence fail"]
 fn nrf52840_spis_twis_conformance() {
     let _guard = HW_LOCK.lock().unwrap();
     let mut spis = Nrf52Spis::new();

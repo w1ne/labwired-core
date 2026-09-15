@@ -25,6 +25,17 @@ const BANKS: usize = 6; // 48 rows / 8 rows per bank
 pub struct Pcd8544 {
     cs_pin: String,
     dc_pin: String,
+    /// Whether the module's supply pins (VCC, GND) are connected in the design.
+    ///
+    /// ⚠️ NOT the PCD8544's own `power_down` (PD) bit below. PD is a chip mode
+    /// the firmware selects over a bus that is working; this is whether the
+    /// module has a rail at all. A diagram wiring only CLK/DIN/CE/DC/RST used
+    /// to run the whole init and report the panel `display_on: true` with ink
+    /// in DDRAM; on a bench it is blank.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens it — see [`crate::peripherals::components::supply`].
+    powered: bool,
     /// Latched level of the D/C line at transfer time (false = command).
     dc_level: bool,
     /// Resolved `(ODR address, bit)` of the D/C line, set by the bus at
@@ -64,6 +75,8 @@ impl Pcd8544 {
         Self {
             cs_pin,
             dc_pin,
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             dc_level: false,
             dc_source: None,
             x: 0,
@@ -87,7 +100,20 @@ impl Pcd8544 {
     /// True when the panel is showing RAM (powered up, display mode = normal
     /// or inverse). The renderer can use this to blank the screen.
     pub fn display_on(&self) -> bool {
-        !self.power_down && (self.display_mode & 0x04) != 0
+        self.powered && !self.power_down && (self.display_mode & 0x04) != 0
+    }
+
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
     }
 
     /// True when the display is in inverse-video mode (DE = 0b01).
@@ -187,6 +213,10 @@ impl SpiDevice for Pcd8544 {
                 "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
                 "lit_pixels": fb.iter().map(|b| b.count_ones() as usize).sum::<usize>(),
                 "display_on": self.display_on(),
+                // Reported so a blank panel explains itself: without it, "no
+                // supply" is indistinguishable from "firmware never sent the
+                // display-control command".
+                "powered": self.powered,
                 "inverse": self.inverse(),
             }),
             bytes: crate::inspect::artifact_bytes(fb, opts),
@@ -194,6 +224,15 @@ impl SpiDevice for Pcd8544 {
     }
 
     fn transfer(&mut self, mosi_byte: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED PANEL BEHAVE LIKE ONE. Every
+        // state change this model has — the function set, display control, the
+        // X/Y cursor and every DDRAM byte — arrives through `transfer`.
+        // Refusing the bus here leaves DDRAM and the addressing at their
+        // power-on values by construction rather than masking them at report
+        // time. See the `powered` field.
+        if !self.powered {
+            return 0;
+        }
         if self.dc_level {
             self.handle_data(mosi_byte);
         } else {
@@ -272,6 +311,7 @@ static PCD8544_METADATA: KitMetadata = KitMetadata {
             doc: "Data/command GPIO pin (e.g. \"PC7\"). Defaults to PC7. \
                   Resolved to the driving GPIO's ODR address at attach time.",
         },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
     ],
     labs: &[LabRef {
         board_id: "nokia5110-invaders-lab",
@@ -311,7 +351,11 @@ impl PeripheralKit for Pcd8544Kit {
                 dc_pin,
             )
         })?;
-        let mut dev = Pcd8544::new(cs_pin, dc_pin);
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
+        let mut dev = Pcd8544::new(cs_pin, dc_pin).with_powered(
+            crate::peripherals::components::supply::powered_from_config(ctx),
+        );
         let (odr_addr, bit) = dc_src;
         crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
         ctx.attach_spi_device(Box::new(dev))?;
@@ -511,5 +555,104 @@ mod tests {
         lcd.transfer(0x11);
         assert_eq!(lcd.framebuffer()[83], 0x11);
         assert_eq!((lcd.x, lcd.y), (0, 1), "wrapped to col 0, bank 1");
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
+    // only a panel's signal pins — no VCC, no GND — ran and reported the panel
+    // on with a painted framebuffer. On a bench it is blank.
+
+    /// A realistic init that turns the display on and writes 8 lit columns.
+    fn drive_a_frame(lcd: &mut Pcd8544) {
+        lcd.set_dc_level(false);
+        lcd.transfer(0x21); // function set: extended
+        lcd.transfer(0xBF); // Vop
+        lcd.transfer(0x20); // function set: basic
+        lcd.transfer(0x0C); // display control: normal (D=1)
+        lcd.transfer(0x40); // Y = bank 0
+        lcd.transfer(0x80); // X = col 0
+        lcd.set_dc_level(true);
+        for _ in 0..8 {
+            lcd.transfer(0xFF);
+        }
+    }
+
+    fn supply_meta(lcd: &Pcd8544) -> serde_json::Value {
+        SpiDevice::artifacts(lcd, "lcd", &crate::inspect::InspectOpts::default())
+            .into_iter()
+            .next()
+            .expect("one framebuffer artifact")
+            .meta
+    }
+
+    /// The POSITIVE control. Without it, "unpowered is blank" would also pass
+    /// on a model that never paints at all.
+    #[test]
+    fn a_powered_panel_driven_this_way_lights_and_paints() {
+        let mut lcd = Pcd8544::new("PB6".into(), "PC7".into());
+        drive_a_frame(&mut lcd);
+
+        assert!(lcd.powered(), "no supply config at all must mean powered");
+        assert!(lcd.display_on(), "the display-control command reached it");
+        let m = supply_meta(&lcd);
+        assert_eq!(m["ink_bytes"], 8);
+        assert_eq!(m["lit_pixels"], 64);
+        assert_eq!(m["display_on"], true);
+        assert_eq!(m["powered"], true);
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_panel_reports_dark_on_every_field_the_bug_reported() {
+        let mut lcd = Pcd8544::new("PB6".into(), "PC7".into()).with_powered(false);
+        drive_a_frame(&mut lcd);
+
+        assert!(!lcd.display_on(), "an unpowered controller cannot hold D=1");
+        let m = supply_meta(&lcd);
+        assert_eq!(m["ink_bytes"], 0, "no supply, no ink");
+        assert_eq!(m["lit_pixels"], 0);
+        assert_eq!(m["display_on"], false);
+        assert_eq!(m["powered"], false, "the artifact must say WHY it is blank");
+    }
+
+    /// Ink must not ACCUMULATE, and the addressing must not move either —
+    /// the X/Y cursor is set by commands, which are transfers too.
+    #[test]
+    fn an_unpowered_panel_never_accumulates_paint() {
+        let mut lcd = Pcd8544::new("PB6".into(), "PC7".into()).with_powered(false);
+        for _ in 0..5 {
+            drive_a_frame(&mut lcd);
+        }
+        assert_eq!(
+            lcd.framebuffer().iter().filter(|&&b| b != 0).count(),
+            0,
+            "DDRAM must be untouched, not just reported as zero",
+        );
+        assert_eq!((lcd.x, lcd.y), (0, 0));
+        assert!(
+            !lcd.extended,
+            "the function set must not have latched either"
+        );
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest —
+    /// `nokia5110-invaders-lab` included — declares no supply at all.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(
+            Pcd8544::new("PB6".into(), "PC7".into()).powered(),
+            "the default must be powered",
+        );
+        assert!(
+            Pcd8544::default().powered(),
+            "and so must the Default impl the factories use",
+        );
+        assert!(
+            Pcd8544::new("PB6".into(), "PC7".into())
+                .with_powered(true)
+                .powered(),
+            "an explicit true is powered too — only `false` darkens",
+        );
     }
 }

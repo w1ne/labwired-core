@@ -1,86 +1,86 @@
-# Example: I2C Sensor Simulation
+# Example: I²C temperature sensor (TMP102)
 
-This example demonstrates how to simulate an I2C peripheral (e.g., TMP102) and verify its behavior using standard Rust firmware.
+Run firmware that talks to a **TMP102** over I²C on the twin. No special LabWired HAL in the firmware — normal bus reads.
 
-## 1. System Configuration
+---
 
-The simulation environment requires defining the sensor in the system manifest and connecting it to the appropriate I2C controller.
+## What you get
 
-### Configuration (`system.yaml`)
+| Piece | Location |
+|-------|----------|
+| Device model | [`configs/devices/tmp102.yaml`](../../configs/devices/tmp102.yaml) |
+| Type id | `tmp102` |
+| Default I²C address | `0x48` |
+| Demo + e2e | [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/) |
+
+The model’s temperature register can **self-drift** (+0.5 °C per full read, wrap 35 °C → 20 °C) so demos exercise thresholds without external stimulus. For a sensor driven by a **temperature** input channel (noise + lag), see [`mcp9808.yaml`](../../configs/devices/mcp9808.yaml).
+
+---
+
+## 1. Attach the device
+
+Use a real system from the repo and add (or keep) the TMP102 on the I²C bus your firmware uses. Pattern:
+
 ```yaml
-chip: "../chips/stm32f103.yaml"
-peripherals:
-  - id: "i2c1"
-    type: "i2c_master"
-    base_address: 0x40005400
-
+external_devices:
   - id: "tmp102"
-    type: "i2c_temp_sensor"  # Instantiates the TMP102 model
-    address: 0x48            # 7-bit I2C address
-    bus: "i2c1"              # Connects to the I2C1 controller
+    type: "tmp102"
+    connection: "i2c0"    # match the bus id in that system / chip
+    config:
+      i2c_address: 0x48
 ```
 
-## 2. Firmware Integration
+Copy field names from a working system under `configs/systems/` or `examples/*/system.yaml` — schemas differ slightly by board family.
 
-The firmware uses standard HAL calls to interact with the simulated device. No simulation-specific code is required in the firmware itself.
+---
 
-### Rust Implementation (`stm32f1xx-hal`)
-```rust
-use stm32f1xx_hal::{i2c::{BlockingI2c, Mode}, pac};
+## 2. Firmware
 
-fn main() -> ! {
-    let dp = pac::Peripherals::take().unwrap();
-    // ... Clock Configuration ...
+Firmware should:
 
-    // Initialize I2C1 (Standard Mode, 100kHz)
-    let mut i2c = BlockingI2c::i2c1(
-        dp.I2C1,
-        (scl, sda), // Pins PB6, PB7
-        &mut afio.mapr,
-        Mode::Standard { frequency: 100.kHz() },
-        clocks,
-        &mut rcc.apb1,
-        1000, 10, 1000, 1000,
-    );
+1. Init I²C on the pins wired in the system  
+2. Write pointer `0x00`, read 2 bytes (12-bit left-justified temp, big-endian)  
+3. Print `T = …` on UART (or USB-serial)  
 
-    let sensor_addr = 0x48;
-    let mut buffer = [0u8; 2];
+The ESP32-S3 demo does this once per second and toggles a GPIO above 30 °C. See [`examples/esp32s3-i2c-tmp102/`](../../examples/esp32s3-i2c-tmp102/).
 
-    loop {
-        // Read Temperature Register (0x00)
-        i2c.write_read(sensor_addr, &[0x00], &mut buffer).unwrap();
-        
-        // Convert to Celsius (12-bit, 0.0625°C resolution)
-        let raw_temp = u16::from_be_bytes(buffer) >> 4;
-        let celsius = raw_temp as f32 * 0.0625;
-    }
-}
-```
+---
 
-## 3. Automated Verification
+## 3. Run / test
 
-LabWired supports scripted fault injection to verify error handling logic.
-
-### Fault Injection Script (`tests/fault_test.yaml`)
-Simulates a sensor failure or extreme environmental condition.
-
-```yaml
-steps:
-  - run: 100ms
-  - write_peripheral:
-      id: "tmp102"
-      reg: "TEMP"
-      value: 0x7FF0 # Force sensor reading to 128°C
-  - run: 10ms
-  - assert_log: "CRITICAL: OVERTEMP DETECTED"
-```
-
-## 4. Execution
-
-Run the simulation with the test script:
+From the core repo (with ESP32-S3 fixtures when using the e2e test):
 
 ```bash
-labwired test --script tests/fault_test.yaml
+# End-to-end test (builds + asserts UART and GPIO)
+cargo test -p labwired-core --features esp32s3-fixtures \
+  --release --test e2e_i2c_tmp102
 ```
 
-The simulator will execute the firmware, inject the fault at the specified time, and verify that the firmware correctly detects and logs the error condition.
+Or run your own ELF:
+
+```bash
+labwired run --firmware path/to/firmware.elf --system path/to/system.yaml
+labwired test --script path/to/smoke.yaml
+```
+
+**Expected (demo):** UART lines like `T = 25.00 C`, then rising temperatures as the model drifts.
+
+---
+
+## 4. Agent path
+
+```text
+labwired_describe id=tmp102
+# wire diagram on a board that has I2C
+labwired_run → labwired_verify (serial contains "T =" or register checks)
+```
+
+---
+
+## Next
+
+| | |
+|--|--|
+| Add your own sensor | [Onboard a part](../howto/onboard-part.md) |
+| MCP9808 (SimInput temperature) | [`configs/devices/mcp9808.yaml`](../../configs/devices/mcp9808.yaml) |
+| SPI example direction | [ADXL345 SPI device](../../configs/devices/adxl345_spi.yaml) · [Onboard a part](../howto/onboard-part.md) |

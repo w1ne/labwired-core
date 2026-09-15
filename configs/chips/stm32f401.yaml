@@ -8,6 +8,20 @@ name: "stm32f401re"
 arch: "arm"
 core: "cortex-m4"
 registers_count: 150
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# STM32F401RE maximum core clock, 84 MHz.
+cpu_hz: 84_000_000
+# GPIO supply and digital input thresholds (ratios of io_voltage_v), used when
+# co-simulation turns a circuit node voltage into the level the firmware reads.
+# DS10086 Rev 5 (STM32F401xD/xE), section 6.3.16, Table 54 "I/O static
+# characteristics", FT and NRST I/O, 1.7 V <= VDD <= 3.6 V:
+# VIL max 0.3·VDD, VIH min 0.7·VDD.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x08000000
   size: "512KB"
@@ -219,3 +233,23 @@ peripherals:
       # DMA2_Stream0..7 NVIC positions, verified against
       # tests/fixtures/real_world/stm32f401.svd: 56..60, then 68..70.
       stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+
+# Regular ADC inputs by pad, from the STM32F401xD/xE datasheet (DS10086), LQFP64 pinout: ADC1_IN0..IN15.
+# Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PC0: { peripheral: "adc1", channel: 10 }
+  PC1: { peripheral: "adc1", channel: 11 }
+  PC2: { peripheral: "adc1", channel: 12 }
+  PC3: { peripheral: "adc1", channel: 13 }
+  PC4: { peripheral: "adc1", channel: 14 }
+  PC5: { peripheral: "adc1", channel: 15 }

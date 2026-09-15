@@ -116,13 +116,7 @@ impl StepDirMotor {
     }
 }
 
-impl crate::peripherals::esp32s3::gpio::GpioObserver for StepDirMotor {
-    fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
-        self.on_gpio_edge(pin, to, sim_cycle);
-    }
-}
-
-impl crate::peripherals::esp32::gpio::GpioObserver for StepDirMotor {
+impl crate::peripherals::device::GpioObserver for StepDirMotor {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_gpio_edge(pin, to, sim_cycle);
     }
@@ -189,8 +183,24 @@ impl PeripheralKit for StepDirMotorKit {
         }
         let motor = Arc::new(motor);
         ctx.install_gpio_observer(motor.clone());
-        ctx.bus.step_dir_motors.push(motor);
+        ctx.bus.observe_device(motor);
         Ok(())
+    }
+}
+
+/// Readback only: the bus never drives a STEP/DIR motor, the GPIO observer
+/// does. No display surface, so no evidence.
+impl crate::bus::ObservedDevice for StepDirMotor {
+    fn manifest_id(&self) -> &str {
+        self.id()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
+        self
     }
 }
 

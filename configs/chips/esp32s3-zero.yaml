@@ -11,6 +11,11 @@
 
 name: "esp32s3-zero"
 arch: "xtensa-lx7"
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# Same die as esp32.yaml's S3 sibling — see esp32s3.yaml.
+cpu_hz: 240_000_000
+
 flash:
   base: 0x42000000
   size: "4MiB"

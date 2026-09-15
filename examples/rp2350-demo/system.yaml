@@ -1,0 +1,9 @@
+# LabWired — RP2350 bare-metal demo board.
+#
+# A bare MCU: the RP2350 descriptor and nothing else. The chip had no system
+# manifest at all, which is why nothing could point a gate at it — the chip
+# model, the reset-path test and a demo firmware all existed, and no script
+# could name them together.
+name: "rp2350-demo"
+chip: "../../configs/chips/rp2350.yaml"
+external_devices: []

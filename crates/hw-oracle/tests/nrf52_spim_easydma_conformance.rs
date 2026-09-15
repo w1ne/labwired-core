@@ -166,7 +166,9 @@ fn probe_spim_easydma(oc: &mut OpenOcd) -> anyhow::Result<bool> {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hw-oracle: triggers a real SPIM0 EasyDMA transfer on an attached nRF52840 over SWD \
+            with the CPU halted (OpenOcd::spawn_nrf52) — silicon only, there is no sim side. The \
+            whole file is behind `--features hw-oracle-nrf52`"]
 fn nrf52_spim0_easydma_swd_triggered() {
     println!();
     println!("nRF52840 SPIM0 EasyDMA silicon sweep (SWD-triggered, CPU halted)");

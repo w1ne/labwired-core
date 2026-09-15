@@ -1,0 +1,9 @@
+# Build intermediates. The ELF and .map in build/ ARE committed -- the lab and
+# the io-smoke reference the ELF by path -- but object and dependency files are
+# not.
+#
+# These rules live at the example root, NOT inside build/, because `make clean`
+# removes that whole directory: a .gitignore in there is deleted by the first
+# clean and the intermediates then show up untracked.
+build/*.o
+build/*.d

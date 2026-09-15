@@ -23,6 +23,7 @@ pub mod lcd_cam;
 pub mod ledc;
 pub mod mcpwm;
 pub mod pcnt;
+pub mod psram_opi;
 pub mod rmt;
 pub mod rng;
 pub mod rsa;
@@ -39,6 +40,7 @@ pub mod twai;
 pub mod uart;
 pub mod usb_otg;
 pub mod usb_serial_jtag;
+pub mod wifi_mac;
 // Fake WiFi/lwIP functional-outcome thunks — behind an off-by-default feature
 // so this canned state can never compile into a production/run build. Only the
 // `e2e_labwired_wifi` bring-up harness enables it.

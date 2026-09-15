@@ -1,0 +1,56 @@
+# LabWired - ATSAMD21G18A IO/UART smoke test
+#
+# The first Microchip Cortex-M part in the engine. Build first:
+#   cargo build -p firmware-samd21-demo --release --target thumbv6m-none-eabi
+#
+# ⚠️ The UART lines below are NOT the gate. A banner proves the console works
+# and nothing else; the `memory_value` assertions after them read the PORT
+# registers the firmware configured, which printed text cannot fake.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-samd21-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  # ── Console ──────────────────────────────────────────────────────────────
+  # Reaching "OK" at all means the SYSCTRL.PCLKSR ready-flag poll, three GCLK
+  # SYNCBUSY spins and a SERCOM SYNCBUSY spin ALL fell through. A model whose
+  # PCLKSR reads the SVD's own reset value (0) hangs before this line.
+  - uart_contains: "OK"
+  # A second line proves the DRE flag re-arms. A model that sets DRE once and
+  # forgets emits exactly one byte and then spins in `putc` forever.
+  - uart_contains: "samd21 sercom0 up"
+  - uart_contains: "led on"
+
+  # ── PORT register truth ──────────────────────────────────────────────────
+  # PA17 (LED_BUILTIN / D13) is an OUTPUT. Reads PORT GROUP0 DIR @ 0x41004400.
+  # The firmware set it through DIRSET (0x08), so this also proves the four
+  # DIR aliases resolve to one register — a model that stored DIRSET
+  # separately reads 0 here while printing every line above.
+  - memory_value:
+      address: 0x41004400
+      mask: 0x00020000
+      expected_value: 0x00020000
+
+  # PA10 is muxed to a peripheral. Reads PINCFG[10] @ 0x41004400 + 0x40 + 10.
+  # PMUXEN[0] | INEN[1] = 0x03, written by ONE WRCONFIG store covering pins 10
+  # and 11 — so this is the bulk-configure path ASF and the Arduino SAMD core
+  # take, not a per-byte PINCFG write no real driver performs.
+  - memory_value:
+      address: 0x4100444A
+      size: 1
+      mask: 0x03
+      expected_value: 0x03
+
+  # ...and it is muxed to function C, which is where SERCOM0 PAD[2] lives.
+  # Reads PMUX[5] @ 0x41004400 + 0x30 + 5; PA10 is even, so its selection is
+  # PMUXE, the LOW nibble. A model that wrote the high nibble instead would
+  # have muxed PA11 and left PA10 a plain GPIO.
+  - memory_value:
+      address: 0x41004435
+      size: 1
+      mask: 0x0F
+      expected_value: 0x02
+
+  - expected_stop_reason: max_steps

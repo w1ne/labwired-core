@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rebuild the committed STM32 Tier-1 fixture blobs from source.
-# Mirrors scripts/build_tier1_fixtures.sh, but for the ten STM32 silicon
+# Mirrors scripts/build_tier1_fixtures.sh, but for the thirteen STM32 silicon
 # targets listed below. Needs the rustup targets:
 #   rustup target add thumbv6m-none-eabi thumbv7m-none-eabi thumbv7em-none-eabi
 #
@@ -16,8 +16,12 @@ mkdir -p "$OUT"
 declare -A TARGETS=(
   [stm32f103]=thumbv7m-none-eabi
   [stm32f401]=thumbv7em-none-eabi
+  [stm32f405]=thumbv7em-none-eabi
   [stm32f407]=thumbv7em-none-eabi
   [stm32f411]=thumbv7em-none-eabi
+  # F767 is Cortex-M7; the simulator does not enforce the ISA sub-profile,
+  # and thumbv7em matches the M4F parts' convention in this script.
+  [stm32f767]=thumbv7em-none-eabi
   [stm32g474re]=thumbv7em-none-eabi
   [stm32h563]=thumbv7m-none-eabi
   [stm32h735]=thumbv7em-none-eabi
@@ -36,8 +40,9 @@ build_chip() {
   cp "$src/target/$target/release/tier1-fixture-$chip" "$OUT/$chip.elf"
 }
 
-for chip in stm32f103 stm32f401 stm32f407 stm32f411 stm32g474re stm32h563 \
-            stm32h735 stm32l073 stm32l476 stm32wb55 stm32wba52; do
+for chip in stm32f103 stm32f401 stm32f405 stm32f407 stm32f411 stm32f767 \
+            stm32g474re stm32h563 stm32h735 stm32l073 stm32l476 stm32wb55 \
+            stm32wba52; do
   build_chip "$chip"
 done
 

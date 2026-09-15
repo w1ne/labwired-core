@@ -194,6 +194,16 @@ Every cheat in the code carries a grep-able marker on the line or block:
 
 ```
 // CHEAT(<CATEGORY>): <what is faked> — real: <what silicon/real execution does>
+
+A `//!` marker may declare that it covers the WHOLE file:
+
+//! CHEAT(<CATEGORY>, module): <what every fn here fakes> — real: <what silicon does>
+
+The `, module` is not decoration. Without it a blanket marker is
+indistinguishable from a single-site one, and `scripts/ci/cheat_ratchet.py`
+cannot tell a file that discloses 88 thunks in one line from a file with one
+cheat in it. Every marker needs a `real:` clause, blanket ones included —
+that clause is the only place the cost of the cheat is written down.
 ```
 
 Find them all:
@@ -206,6 +216,7 @@ grep -rn "CHEAT(" crates/ --include="*.rs"
 
 | Category | Meaning | How to tighten |
 |----------|---------|----------------|
+| `CHEAT(THUNK)` | An umbrella for a whole module of thunks whose members are of BOTH kinds below, used only with `, module` scope. Individual fns inside still carry their own marker. | Reduce it to the specific kinds, then to none. |
 | `CHEAT(THUNK-ROM)` | A **boot-ROM** function is emulated in Rust because we have no ROM binary to execute (math helpers, memcpy, cache ops, ets_printf). | Map a real ESP32 ROM image and execute it. |
 | `CHEAT(THUNK-LIB)` | A **firmware library** function (compiled into the ELF — FreeRTOS, heap_caps, Arduino SPI) is intercepted and faked instead of letting the real code run. The real code IS in the binary; we skip it. | Complete the peripheral models the real code needs, then drop the thunk. |
 | `CHEAT(BYPASS)` | Device/peripheral state is mutated **directly**, bypassing the register/FIFO/bus decode path. | Route through the real register write → peripheral → device path. |
@@ -223,7 +234,7 @@ RAM/flash regions correctly modeled as backing store. Real register models
 
 ## Inventory (audit 2026-06-11)
 
-### A. ESP32 ROM/library thunks — `crates/core/src/peripherals/esp32s3/rom_thunks.rs`
+### A. ESP32 ROM/library thunks — `crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs`
 60 thunk fns total. Split:
 
 - **THUNK-ROM (legit-but-gap, ~30):** `rom_memcpy/memset/memmove/memcmp`,
@@ -294,7 +305,7 @@ pre-seed paints ANY symbol-bearing Arduino-ESP32 build byte-exact — this is th
 generic path proto.cat should use (NOT `agentdeck`, whose hardcoded addresses
 fit one firmware).
 
-### D. Peripheral-as-RAM stubs — `crates/core/src/system/xtensa.rs`
+### D. Peripheral-as-RAM stubs — `crates/core/src/system/xtensa/esp32.rs`
 Of 16 `RamPeripheral` installs, the **cheats** are the ones standing in for a
 real peripheral: `slc` (SDIO host), `sdmmc_host`. The rest (`iram`, `dram`,
 `flash_icache`, `flash_dcache`, `psram`, `rtc_slow`, `rtc_fast`,

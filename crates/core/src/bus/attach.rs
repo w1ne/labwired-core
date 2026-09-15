@@ -841,6 +841,41 @@ impl SystemBus {
         }
     }
 
+    /// Wire S3 IO_MUX per-pad controls into S3 GPIO after both models have
+    /// been constructed — the S3 counterpart of
+    /// [`Self::wire_esp32c3_pad_controls`]. The IO_MUX owns the shared
+    /// `IO_MUX_GPIOn_REG` bank; GPIO reads `FUN_WPU` from it to model Arduino
+    /// `INPUT_PULLUP`. Without this the S3's per-pad words were write-only
+    /// storage and a released `INPUT_PULLUP` pin read 0. No-op on any bus
+    /// without both S3 peripherals.
+    pub(crate) fn wire_esp32s3_pad_controls(&mut self) {
+        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+        use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
+
+        // Two type-scans rather than index-then-downcast: the concrete type
+        // decides identity either way, and this adds no new immutable-any call
+        // site (see `tests::downcast_ratchet` — remediation row 6.5). Scanning
+        // by type rather than by peripheral id keeps the wiring alive if the
+        // S3 tables ever rename `io_mux`/`gpio`; a silent no-op there would be
+        // invisible exactly the way the missing `wire_esp32s3_i2c_pads` call
+        // was.
+        let Some(controls) = self
+            .peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.as_any_mut()?.downcast_mut::<Esp32s3IoMux>())
+            .map(|io_mux| io_mux.pad_controls())
+        else {
+            return;
+        };
+        if let Some(gpio) = self
+            .peripherals
+            .iter_mut()
+            .find_map(|p| p.dev.as_any_mut()?.downcast_mut::<Esp32s3Gpio>())
+        {
+            gpio.set_pad_controls(controls);
+        }
+    }
+
     /// Wire C3 IO_MUX per-pad controls into C3 GPIO after both models have
     /// been constructed. The IO_MUX owns the shared register bank; GPIO reads
     /// `FUN_WPU` from it to model Arduino `INPUT_PULLUP`. No-op on any bus
@@ -1656,7 +1691,6 @@ impl SystemBus {
     /// [`Self::wire_rp2040_uart_pads`].
     pub(crate) fn wire_nrf52_pads(&mut self) {
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
-        use crate::peripherals::nrf52::pin_select::NrfPinClaims;
         use crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance;
         use crate::peripherals::nrf52::twim::{LINE_SCL, LINE_SDA};
         use crate::peripherals::nrf52::uarte::{Nrf52Uarte, LINE_TXD};
@@ -1701,14 +1735,14 @@ impl SystemBus {
             return;
         }
 
-        let claims = Arc::new(NrfPinClaims::new());
+        let claims = Arc::new(crate::peripherals::nrf52::pin_select::nrf_pin_claims());
         for &(idx, port) in &ports {
             if let Some(gpio) = self.peripherals[idx]
                 .dev
                 .as_any_mut()
                 .and_then(|a| a.downcast_mut::<GpioPort>())
             {
-                gpio.set_nrf_pin_claims(claims.clone(), port);
+                gpio.set_pad_claims(claims.clone(), port);
             }
         }
 
@@ -1837,6 +1871,311 @@ impl SystemBus {
         }
     }
 
+    /// Route EFR32 Series-2 TIMER compare outputs to the pads
+    /// `GPIO_TIMERROUTE` names.
+    ///
+    /// # Why a wiring pass at all
+    ///
+    /// `analogWrite` on BRD2709A programmed the right duty into real `CC_OC`
+    /// registers and lit nothing: on Series 2 an output reaches a pin only
+    /// through the GPIO block's ROUTE registers, and nothing modelled them. The
+    /// duty was never the problem.
+    ///
+    /// # Shape
+    ///
+    /// The same shape as [`Self::wire_nrf52_pads`], because the silicon has the
+    /// same shape: the PERIPHERAL names the pad, so a claim token minted here
+    /// is installed in the route block and bound into every port's routing
+    /// table, and that identity IS the routing.
+    ///
+    /// ⚠️ The token comes from
+    /// [`gpio_route::cc_token`](crate::peripherals::efr32::gpio_route::cc_token),
+    /// NOT from a counter of its own. The route block mints the same value when
+    /// firmware writes a route; deriving it twice is how the two halves would
+    /// disagree about which signal a pad carries.
+    pub(crate) fn wire_efr32_timer_pads(&mut self) {
+        use crate::peripherals::efr32::gpio_route::{cc_token, Efr32s2TimerRoute, CC_PER_TIMER};
+        use crate::peripherals::efr32::timer::Efr32s2Timer;
+        use crate::peripherals::efr32::usart_route::{
+            usart_token, Efr32s2I2cRoute, Efr32s2UsartRoute, I2CROUTE_COUNT, SIGNALS_PER_USART,
+            USARTROUTE_COUNT,
+        };
+        use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+        use crate::peripherals::pad_claims::PadClaims;
+        use crate::peripherals::spi::Spi;
+        use std::sync::Arc;
+
+        /// TIMER instances by base address — `TIMER0_S_BASE` + n * 0x4000
+        /// (efr32mg26b510f3200im48.h). The index is what `GPIO_TIMERROUTE[n]`
+        /// is indexed by, so it has to match the silicon's numbering and not
+        /// the order a chip yaml happens to declare them in.
+        const TIMER_BASE: u64 = 0x4004_8000;
+        const TIMER_STRIDE: u64 = 0x4000;
+        const TIMER_COUNT: u64 = 10;
+
+        /// ⚠️ FOUR ports of SIXTEEN pads (`GPIO_PORT_x_WIDTH` = 0x10 on the
+        /// IM48), which is not the Nordic 2 x 32. The claim index is computed
+        /// from these, so a wrong pair puts claims on real pads that are not
+        /// the ones firmware named.
+        const PORTS: usize = 4;
+        const PINS_PER_PORT: usize = 16;
+
+        // Port index in `CCnROUTE.PORT` order: A=0, B=1, C=2, D=3.
+        //
+        // Found and handed the table in ONE mutable pass rather than an
+        // immutable filter followed by a mutable loop. Not style:
+        // `downcast_ratchet` counts type-erasure call sites and refuses a rise,
+        // and the two-pass shape spends one for nothing.
+        //
+        // ⚠️ That ratchet counts literal SUBSTRINGS across every source file,
+        // so prose naming either method counts too and a comment alone can red
+        // it. It excludes only its own file, which is why this note talks
+        // around the names rather than quoting them.
+        let claims = Arc::new(PadClaims::new(PORTS, PINS_PER_PORT));
+        let mut ports: Vec<usize> = Vec::new();
+        for idx in 0..self.peripherals.len() {
+            let port = match self.peripherals[idx].name.as_str() {
+                "gpioa" => 0u8,
+                "gpiob" => 1,
+                "gpioc" => 2,
+                "gpiod" => 3,
+                _ => continue,
+            };
+            let Some(gpio) = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<GpioPort>())
+            else {
+                continue;
+            };
+            if gpio.register_layout() != GpioRegisterLayout::Efr32s2 {
+                continue;
+            }
+            gpio.set_pad_claims(claims.clone(), port);
+            ports.push(idx);
+        }
+        if ports.is_empty() {
+            return;
+        }
+
+        // The route block publishes claims; without it a route write stores and
+        // moves nothing, which is what this whole pass exists to change.
+        let mut route_installed = false;
+        for entry_idx in 0..self.peripherals.len() {
+            if let Some(route) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Efr32s2TimerRoute>())
+            {
+                route.install_claims(claims.clone());
+                route_installed = true;
+            }
+            // ⚠️ THE SAME TABLE, DELIBERATELY. USART routes and TIMER routes
+            // claim pads on one bus, and a GPIO port holds exactly one claims
+            // table — a second one here would make every USART claim invisible
+            // to the ports that were given the timer's.
+            if let Some(route) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Efr32s2UsartRoute>())
+            {
+                route.install_claims(claims.clone());
+                route_installed = true;
+            }
+        }
+        if !route_installed {
+            return;
+        }
+
+        type Bindings = (
+            std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+            Vec<(u32, usize, &'static str)>,
+        );
+        let mut wired: Vec<Bindings> = Vec::new();
+        // Signal names, one per (timer, channel), so a pad table reads
+        // "TIMER1_CC0" rather than a token.
+        const FUNCS: [[&str; CC_PER_TIMER]; 10] = [
+            ["TIMER0_CC0", "TIMER0_CC1", "TIMER0_CC2"],
+            ["TIMER1_CC0", "TIMER1_CC1", "TIMER1_CC2"],
+            ["TIMER2_CC0", "TIMER2_CC1", "TIMER2_CC2"],
+            ["TIMER3_CC0", "TIMER3_CC1", "TIMER3_CC2"],
+            ["TIMER4_CC0", "TIMER4_CC1", "TIMER4_CC2"],
+            ["TIMER5_CC0", "TIMER5_CC1", "TIMER5_CC2"],
+            ["TIMER6_CC0", "TIMER6_CC1", "TIMER6_CC2"],
+            ["TIMER7_CC0", "TIMER7_CC1", "TIMER7_CC2"],
+            ["TIMER8_CC0", "TIMER8_CC1", "TIMER8_CC2"],
+            ["TIMER9_CC0", "TIMER9_CC1", "TIMER9_CC2"],
+        ];
+
+        for entry_idx in 0..self.peripherals.len() {
+            let base = self.peripherals[entry_idx].base;
+            let in_block = (TIMER_BASE..TIMER_BASE + TIMER_STRIDE * TIMER_COUNT).contains(&base);
+            let Some(index) = (in_block && (base - TIMER_BASE) % TIMER_STRIDE == 0)
+                .then(|| ((base - TIMER_BASE) / TIMER_STRIDE) as usize)
+            else {
+                continue;
+            };
+            let Some(timer) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Efr32s2Timer>())
+            else {
+                continue;
+            };
+            let lines = timer.pad_lines_arc();
+            let signals = (0..CC_PER_TIMER)
+                .map(|ch| (cc_token(index, ch), ch, FUNCS[index][ch]))
+                .collect();
+            wired.push((lines, signals));
+        }
+        // ── USART clock and data ─────────────────────────────────────────
+        // The same identity trick as the timer above, for the block that made
+        // the twin lie: a USART's CLK/TX/RX reach a pad only through
+        // GPIO_USARTROUTE, so the SPI model's pad lines are bound under the
+        // token the route block mints. An unrouted USART claims nothing, so no
+        // route matches, so the pad keeps its GPIO level — which is exactly
+        // what a real board does and exactly what the twin used to hide.
+        //
+        // USART0_S_BASE 0x400A0000, +0x4000 per instance. The index is what
+        // GPIO_USARTROUTE[n] is indexed by, so it has to match the silicon's
+        // numbering rather than the order peripherals happen to appear.
+        let mut usart_gates: Vec<(usize, crate::peripherals::efr32::usart_route::RouteGate)> =
+            Vec::new();
+        const USART_BASE: u64 = 0x400A_0000;
+        const USART_STRIDE: u64 = 0x4000;
+        /// Line order is `SpiLineLevels`: SCK, MOSI, MISO.
+        const USART_FUNCS: [[&str; SIGNALS_PER_USART]; USARTROUTE_COUNT] = [
+            ["USART0_CLK", "USART0_TX", "USART0_RX"],
+            ["USART1_CLK", "USART1_TX", "USART1_RX"],
+            ["USART2_CLK", "USART2_TX", "USART2_RX"],
+        ];
+        for entry_idx in 0..self.peripherals.len() {
+            let base = self.peripherals[entry_idx].base;
+            let in_block =
+                (USART_BASE..USART_BASE + USART_STRIDE * USARTROUTE_COUNT as u64).contains(&base);
+            let Some(index) = (in_block && (base - USART_BASE) % USART_STRIDE == 0)
+                .then(|| ((base - USART_BASE) / USART_STRIDE) as usize)
+            else {
+                continue;
+            };
+            // ⚠️ A USART IS ONE BLOCK WITH THREE PERSONALITIES, so the same
+            // route gates whichever model was built at that base: SPI/I2S here,
+            // the async UART just below. Gating only one of them would leave
+            // the other free to print into a sink from a pin that does not
+            // exist.
+            if let Some(uart) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::uart::Uart>())
+            {
+                let gate: crate::peripherals::efr32::usart_route::RouteGate =
+                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                uart.set_route_gate(gate.clone());
+                usart_gates.push((index, gate));
+                continue;
+            }
+            let Some(spi) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Spi>())
+            else {
+                continue;
+            };
+            let lines = spi.line_levels_arc().pad_lines().clone();
+            // The gate the route block flips and this USART reads before it
+            // drives anything. Both halves must hold the SAME Arc or the
+            // enforcement is a flag nobody sets.
+            let gate: crate::peripherals::efr32::usart_route::RouteGate =
+                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            spi.set_route_gate(gate.clone());
+            usart_gates.push((index, gate));
+            let signals = (0..SIGNALS_PER_USART)
+                .map(|sig| (usart_token(index, sig), sig, USART_FUNCS[index][sig]))
+                .collect();
+            wired.push((lines, signals));
+        }
+        // ── I2C ──────────────────────────────────────────────────────────
+        // Same rule, same block, second window: I2C0_S_BASE 0x4B000000 for
+        // instance 0 and 0x400B0000 + n*0x4000 for the rest, per the chip
+        // descriptor. The route block is GPIO_I2Cn_ROUTEEN.
+        let mut i2c_gates: Vec<(usize, crate::peripherals::efr32::usart_route::RouteGate)> =
+            Vec::new();
+        for entry_idx in 0..self.peripherals.len() {
+            let base = self.peripherals[entry_idx].base;
+            let index = match base {
+                0x4B00_0000 => 0usize,
+                b if (0x400B_0000..0x400B_C000).contains(&b) && (b - 0x400B_0000) % 0x4000 == 0 => {
+                    1 + ((b - 0x400B_0000) / 0x4000) as usize
+                }
+                _ => continue,
+            };
+            if index >= I2CROUTE_COUNT {
+                continue;
+            }
+            let Some(i2c) = self.peripherals[entry_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::i2c::I2c>())
+            else {
+                continue;
+            };
+            let gate: crate::peripherals::efr32::usart_route::RouteGate =
+                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            i2c.set_route_gate(gate.clone());
+            i2c_gates.push((index, gate));
+        }
+        if !i2c_gates.is_empty() {
+            for entry_idx in 0..self.peripherals.len() {
+                if let Some(route) = self.peripherals[entry_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<Efr32s2I2cRoute>())
+                {
+                    for (index, gate) in &i2c_gates {
+                        route.install_claims(claims.clone());
+                        route.install_gate(*index, gate.clone());
+                    }
+                }
+            }
+        }
+
+        // Hand every gate to the route block now that they all exist.
+        if !usart_gates.is_empty() {
+            for entry_idx in 0..self.peripherals.len() {
+                if let Some(route) = self.peripherals[entry_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<Efr32s2UsartRoute>())
+                {
+                    for (index, gate) in &usart_gates {
+                        route.install_gate(*index, gate.clone());
+                    }
+                }
+            }
+        }
+
+        if wired.is_empty() {
+            return;
+        }
+
+        for &idx in &ports {
+            let Some(gpio) = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<GpioPort>())
+            else {
+                continue;
+            };
+            for (lines, signals) in &wired {
+                for &(token, line, func) in signals {
+                    for pin in 0..PINS_PER_PORT as u8 {
+                        gpio.add_pad_route_selector(lines, pin, Some(token), line, func);
+                    }
+                }
+            }
+        }
+    }
+
     /// Every peripheral signal name that any pad on this bus is BOUND to carry,
     /// deduplicated and sorted — `["I2C1_SCL", "I2C1_SDA", "USART2_TX", …]`.
     ///
@@ -1907,12 +2246,40 @@ impl SystemBus {
         // mode-mismatch lesson fail to reproduce with nothing to read.
         let edge_sampled = !matches!(dev.sampling(), crate::peripherals::spi::SpiSampling::Byte);
         let wrapped = bus_trace::wrap_spi(controller, &self.bus_trace, dev);
-        let idx = self
-            .find_peripheral_index_by_name(controller)
-            .ok_or_else(|| anyhow::anyhow!("attach_spi_device: no peripheral '{controller}'"))?;
-        let any = self.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-            anyhow::anyhow!("attach_spi_device: '{controller}' is not downcastable")
-        })?;
+        // S3 programmatic bank uses spi2_s3/spi3_s3; chip yaml / matrix may say spi2/spi3.
+        let candidates: &[&str] = match controller {
+            "spi2" => &["spi2", "spi2_s3"],
+            "spi3" => &["spi3", "spi3_s3"],
+            "spi2_s3" => &["spi2_s3", "spi2"],
+            "spi3_s3" => &["spi3_s3", "spi3"],
+            other => {
+                // Single name — resolve below.
+                let idx = self
+                    .find_peripheral_index_by_name(other)
+                    .ok_or_else(|| anyhow::anyhow!("attach_spi_device: no peripheral '{other}'"))?;
+                return self.attach_spi_device_at(idx, wrapped, other, edge_sampled);
+            }
+        };
+        for name in candidates {
+            if let Some(idx) = self.find_peripheral_index_by_name(name) {
+                return self.attach_spi_device_at(idx, wrapped, controller, edge_sampled);
+            }
+        }
+        anyhow::bail!("attach_spi_device: no peripheral '{controller}' (tried {candidates:?})")
+    }
+
+    fn attach_spi_device_at(
+        &mut self,
+        idx: usize,
+        wrapped: Box<dyn crate::peripherals::spi::SpiDevice>,
+        controller: &str,
+        edge_sampled: bool,
+    ) -> anyhow::Result<()> {
+        let name = self.peripherals[idx].name.clone();
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| anyhow::anyhow!("attach_spi_device: '{name}' is not downcastable"))?;
         if let Some(c) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
             // The classic/FIFO STM32 register file is the one with the bit
             // engine; the H5 "SPI v3" and Kinetis DSPI layouts share this Rust
@@ -1950,10 +2317,66 @@ impl SystemBus {
             }
             // The SPIM half of the shared SPIM0/TWIM0 window.
             c.attach_spi(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::rp2040::spi::Rp2040Spi>() {
+            c.push_device(wrapped);
         } else {
-            anyhow::bail!("attach_spi_device: '{controller}' is not a SPI controller");
+            anyhow::bail!("attach_spi_device: '{name}' is not a SPI controller");
         }
         Ok(())
+    }
+
+    /// Take every slave off a SPI controller (by peripheral id).
+    ///
+    /// Used by the AVR path: kits attach onto a bus parking `spi` peripheral
+    /// during `from_config`, then the interpreter owns the devices because
+    /// hardware SPI lives in the CPU data-space model (SPCR/SPSR/SPDR), not
+    /// as bus MMIO.
+    pub fn take_spi_devices(
+        &mut self,
+        controller: &str,
+    ) -> Vec<Box<dyn crate::peripherals::spi::SpiDevice>> {
+        let Some(idx) = self.find_peripheral_index_by_name(controller) else {
+            return Vec::new();
+        };
+        let Some(any) = self.peripherals[idx].dev.as_any_mut() else {
+            return Vec::new();
+        };
+        if let Some(c) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+            return std::mem::take(&mut c.attached_devices);
+        }
+        if let Some(c) = any.downcast_mut::<crate::peripherals::esp32c3::spi::Esp32c3Spi>() {
+            return std::mem::take(&mut c.attached_devices);
+        }
+        if let Some(c) = any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>() {
+            return std::mem::take(&mut c.attached_devices);
+        }
+        if let Some(c) = any.downcast_mut::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>() {
+            return std::mem::take(&mut c.attached_devices);
+        }
+        if let Some(c) = any.downcast_mut::<crate::peripherals::rp2040::spi::Rp2040Spi>() {
+            return std::mem::take(&mut c.attached_devices);
+        }
+        Vec::new()
+    }
+
+    /// Take every I²C slave off a controller (by peripheral id).
+    ///
+    /// AVR parks kits on bus `i2c` during `from_config`, then moves them onto
+    /// the CPU TWI model (TWCR/TWDR) — same pattern as [`Self::take_spi_devices`].
+    pub fn take_i2c_slaves(
+        &mut self,
+        controller: &str,
+    ) -> Vec<Box<dyn crate::peripherals::i2c::I2cDevice>> {
+        let Some(idx) = self.find_peripheral_index_by_name(controller) else {
+            return Vec::new();
+        };
+        let Some(any) = self.peripherals[idx].dev.as_any_mut() else {
+            return Vec::new();
+        };
+        if let Some(c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
+            return c.take_slaves();
+        }
+        Vec::new()
     }
 }
 

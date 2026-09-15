@@ -162,10 +162,7 @@ impl RtcV3 {
         }
     }
 
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock (legacy walk path).
     pub fn force_legacy_walk(&mut self) {

@@ -1,0 +1,13 @@
+# LabWired — Arduino Uno R3 (ATmega328P) smoke test
+#
+# AVR runs through its board manifest, not `labwired run`. The sketch prints
+# "uno-ok" over USART0 in setup() and then blinks D13, so the pass condition is
+# real serial output from real Arduino-core firmware, not silence.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/arduino-uno-blinky.elf"
+  system: "../../configs/systems/arduino-uno.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "uno-ok"

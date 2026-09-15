@@ -136,13 +136,34 @@ impl PeripheralGenerator {
             }
         };
 
-        // Generate setter only if access allows write
-        let setter = if matches!(
-            field.access,
-            None | Some(labwired_ir::IrAccess::ReadWrite)
-                | Some(labwired_ir::IrAccess::WriteOnly)
-                | Some(labwired_ir::IrAccess::Write1ToClear)
-        ) {
+        // Generate setter only if access allows write.
+        //
+        // EXHAUSTIVE ON PURPOSE — no `_` arm. This was a `matches!` whitelist,
+        // which is a wildcard wearing a list: every variant it did not name was
+        // silently denied a setter, so ADDING a variant to IrAccess produced a
+        // register type quietly missing a write path instead of a build error.
+        // For generated code that is the worst shape of failure — nothing to
+        // read, nothing to grep, and the omission only shows up as firmware
+        // that cannot drive a peripheral.
+        //
+        // The arms below preserve exactly what the whitelist did. WriteOnce and
+        // ReadWriteOnce are deliberately still `false`: they are OTP and lock
+        // bits, a plain `set_*` would invite the second write that silicon
+        // refuses, and giving them one is a modelling decision rather than a
+        // mechanical fix. Recorded here so the next reader sees a choice and not
+        // an oversight.
+        let writable = match field.access {
+            None
+            | Some(labwired_ir::IrAccess::ReadWrite)
+            | Some(labwired_ir::IrAccess::WriteOnly)
+            | Some(labwired_ir::IrAccess::Write1ToClear) => true,
+            Some(labwired_ir::IrAccess::ReadOnly)
+            | Some(labwired_ir::IrAccess::ReadToClear)
+            | Some(labwired_ir::IrAccess::WriteOnce)
+            | Some(labwired_ir::IrAccess::ReadWriteOnce)
+            | Some(labwired_ir::IrAccess::Unknown) => false,
+        };
+        let setter = if writable {
             quote! {
                 #[doc = #description]
                 pub fn #set_name(&mut self, value: u32) {

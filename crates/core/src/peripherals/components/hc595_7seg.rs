@@ -31,6 +31,15 @@ const DIGITS: usize = 4;
 pub struct Hc5957Seg {
     /// Latch line (`RCLK`), wired to the GPIO used as SPI chip-select.
     cs_pin: String,
+    /// Whether the module's supply pins (VCC, GND) are connected in the design.
+    ///
+    /// The LED segments draw their current from the rail, so a diagram wiring
+    /// only SER/SRCLK/RCLK produces a module that on a bench shows nothing
+    /// while the twin reported decoded digits.
+    ///
+    /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
+    /// manifest darkens it — see [`crate::peripherals::components::supply`].
+    powered: bool,
     /// Two-byte shift accumulator for the frame currently being clocked in.
     shift: [u8; 2],
     /// Number of bytes clocked into `shift` since the last latch.
@@ -43,10 +52,25 @@ impl Hc5957Seg {
     pub fn new(cs_pin: impl Into<String>) -> Self {
         Self {
             cs_pin: cs_pin.into(),
+            // Absent supply information means "powered" — see the field's note.
+            powered: true,
             shift: [0; 2],
             shift_len: 0,
             segments: [0; DIGITS],
         }
+    }
+
+    /// Declare whether the module's supply is connected. See the `powered`
+    /// field. Only ever called with `false`, from `attach`, when the compiled
+    /// manifest explicitly says the supply pins are on no net.
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// True when the module has a supply. See the `powered` field.
+    pub fn powered(&self) -> bool {
+        self.powered
     }
 
     /// Latched raw segment byte for `digit` (0..4), `0b0gfedcba` (dp = bit 7).
@@ -143,6 +167,13 @@ impl SpiDevice for Hc5957Seg {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // THE ONE GATE THAT MAKES AN UNPOWERED MODULE BEHAVE LIKE ONE. Both
+        // 74HC595s latch only what was shifted through `transfer`, so refusing
+        // the bus here leaves every segment byte at zero — a blank display —
+        // by construction rather than by blanking the readback.
+        if !self.powered {
+            return 0;
+        }
         self.push_byte(mosi);
         0 // shift registers have no meaningful MISO on this module.
     }
@@ -178,11 +209,14 @@ static HC595_7SEG_METADATA: KitMetadata = KitMetadata {
              surfaces the four displayed characters.",
     transport: Transport::Spi,
     category: Category::Spi,
-    config_keys: &[ConfigKey {
-        name: "cs_pin",
-        ty: ConfigType::Str,
-        doc: "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4.",
-    }],
+    config_keys: &[
+        ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4.",
+        },
+        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
+    ],
     // No lab yet: examples/hc595-7seg-lab has only a README + system.yaml — no demo
     // firmware/ELF is built or published. Declaring a LabRef would promise a
     // one-click demo that 404s (the playground gate rightly rejects it).
@@ -196,7 +230,11 @@ impl PeripheralKit for Hc5957SegKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        ctx.attach_spi_device(Box::new(Hc5957Seg::new(cs_pin)))?;
+        // Supply state. `Some(false)` is the only value that changes anything;
+        // an absent key means powered. See `components::supply`.
+        ctx.attach_spi_device(Box::new(Hc5957Seg::new(cs_pin).with_powered(
+            crate::peripherals::components::supply::powered_from_config(ctx),
+        )))?;
         Ok(())
     }
 }
@@ -251,5 +289,59 @@ mod tests {
         let mut dev = Hc5957Seg::new("PA4");
         write_digit(&mut dev, 0x2A, 0); // not a valid glyph
         assert_eq!(dev.chars()[0], '?');
+    }
+
+    // ─── Supply ───────────────────────────────────────────────────────────
+    //
+    // THE MEASURED BUG (st7789.rs carries the full account): a diagram wiring
+    // only a part's signal pins — no VCC, no GND — ran and reported the part
+    // working. The LED segments here draw from the rail, so a signals-only
+    // module shows nothing on a bench.
+
+    /// The POSITIVE control. Without it, "unpowered is blank" would also pass
+    /// on a model that never decodes anything.
+    #[test]
+    fn a_powered_module_driven_this_way_shows_digits() {
+        let mut dev = Hc5957Seg::new("PA4");
+        assert!(dev.powered(), "no supply config at all must mean powered");
+        write_digit(&mut dev, 0x3F, 0); // '0'
+        write_digit(&mut dev, 0x06, 1); // '1'
+        assert_eq!(dev.text(), "01  ");
+    }
+
+    /// The FIX. Identical drive, supply declared absent: nothing latches.
+    #[test]
+    fn an_unpowered_module_shows_nothing() {
+        let mut dev = Hc5957Seg::new("PA4").with_powered(false);
+        write_digit(&mut dev, 0x3F, 0);
+        write_digit(&mut dev, 0x06, 1);
+        assert_eq!(dev.text(), "    ", "no supply, no light");
+        assert_eq!(dev.segment_byte(0), 0, "and no latched segments either");
+    }
+
+    /// Segments must not ACCUMULATE: the shift registers never clock at all.
+    #[test]
+    fn an_unpowered_module_never_accumulates_segments() {
+        let mut dev = Hc5957Seg::new("PA4").with_powered(false);
+        for _ in 0..5 {
+            for d in 0..4 {
+                write_digit(&mut dev, 0xFF, d);
+            }
+        }
+        assert_eq!(dev.segments, [0; DIGITS]);
+    }
+
+    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest —
+    /// `examples/hc595-7seg-lab` included — declares no supply at all.
+    #[test]
+    fn absent_supply_information_means_powered() {
+        assert!(
+            Hc5957Seg::new("PA4").powered(),
+            "the default must be powered"
+        );
+        assert!(
+            Hc5957Seg::new("PA4").with_powered(true).powered(),
+            "an explicit true is powered too — only `false` darkens",
+        );
     }
 }

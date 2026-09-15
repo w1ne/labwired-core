@@ -185,6 +185,13 @@ impl Esp32SarAdc {
 }
 
 impl Peripheral for Esp32SarAdc {
+    /// CH0..CH9. SAR1 has CH0..CH7 and SAR2 CH0..CH9, and this model keeps one
+    /// input table for both units, so the wider unit's range is what a
+    /// conversion can read.
+    fn adc_channel_count(&self) -> Option<u8> {
+        Some(10)
+    }
+
     // Inert walk: conversions complete at the MEAS_START write (result latched there); tick() is an explicit no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

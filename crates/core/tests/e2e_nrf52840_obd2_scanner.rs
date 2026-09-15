@@ -1,9 +1,56 @@
 use labwired_config::EnvironmentManifest;
 use labwired_core::{network::CanBus, world::World};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn core_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Build the two firmwares this gate measures.
+///
+/// Both are real builds, not fixtures: the scanner is a cargo crate and the ECU
+/// is C built with arm-none-eabi-gcc, and the whole point of the test is that
+/// the two REAL binaries talk to each other over a modelled CAN bus.
+///
+/// This used to be a documented prerequisite in the example's README, with the
+/// test simply reading the paths. That made `cargo test -p labwired-core` red
+/// in any clean checkout -- and red with `Os { code: 2, kind: NotFound }` from
+/// a bare `fs::read`, which names neither the missing artifact nor the command
+/// that produces it. No workflow ran the prerequisite either, so the gate was
+/// red wherever it ran rather than measuring anything. A gate that cannot build
+/// its own inputs is not a gate.
+///
+/// `strict_onboarding` already builds its firmware the same way; this follows
+/// that precedent rather than inventing one.
+fn build_firmwares(root: &Path) {
+    let cargo = Command::new("cargo")
+        .current_dir(root)
+        .args([
+            "build",
+            "-q",
+            "-p",
+            "firmware-nrf52840-obd2-scanner",
+            "--release",
+            "--target",
+            "thumbv7em-none-eabi",
+        ])
+        .status()
+        .expect("run cargo to build the OBD2 scanner firmware");
+    assert!(
+        cargo.success(),
+        "building firmware-nrf52840-obd2-scanner failed; the thumbv7em-none-eabi \
+         target must be installed (rustup target add thumbv7em-none-eabi)"
+    );
+
+    let make = Command::new("make")
+        .current_dir(root.join("examples/nrf52840-obd2-scanner/ecu/firmware"))
+        .status()
+        .expect("run make to build the OBD2 ECU firmware");
+    assert!(
+        make.success(),
+        "building the OBD2 ECU firmware failed; it needs arm-none-eabi-gcc on PATH"
+    );
 }
 
 fn symbol(elf: &[u8], name: &str) -> u64 {
@@ -29,6 +76,7 @@ fn read_u32(world: &World, node: &str, address: u64) -> u32 {
 #[test]
 fn real_scanner_and_ecu_firmware_complete_the_obd2_workflow() {
     let root = core_root();
+    build_firmwares(&root);
     let env_path = root.join("examples/nrf52840-obd2-scanner/env.yaml");
     let env: EnvironmentManifest = serde_yaml::from_slice(
         &std::fs::read(&env_path).expect("build the example before running its e2e gate"),

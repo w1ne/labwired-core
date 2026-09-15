@@ -127,14 +127,28 @@ fn package_name(path: &Path) -> Option<String> {
     None
 }
 
-/// The body of the `pr-gate` job, so a `-p <crate>` in a nightly-only lane
-/// cannot be mistaken for pre-merge coverage.
-fn pr_gate_body() -> String {
+/// Jobs that gate a MERGE, and therefore the only places a `-p <crate>` counts
+/// as pre-merge coverage.
+///
+/// ⚠️ THIS LIST MUST MATCH main's REQUIRED STATUS CHECKS. A job that runs on
+/// `pull_request` but is not required is advisory: it goes red and the merge
+/// button stays green. Listing one here without adding it to branch protection
+/// turns this whole file into a claim nobody enforces.
+///
+/// `browser-layer` was split out of `pr-gate` on 2026-08-21 because pr-gate had
+/// outgrown its 12-minute timeout and was being killed inside its last step.
+/// The split is only safe BECAUSE the new job was added to the required
+/// contexts in the same change; see the note above `browser-layer` in
+/// core-ci.yml.
+const MERGE_BLOCKING_JOBS: &[&str] = &["pr-gate", "browser-layer"];
+
+/// The body of one job in core-ci.yml.
+fn job_body(job: &str) -> String {
     let ci = std::fs::read_to_string(workspace_root().join(".github/workflows/core-ci.yml"))
         .expect("read core-ci.yml");
     let start = ci
-        .find("\n  pr-gate:")
-        .expect("core-ci.yml defines a pr-gate job");
+        .find(&format!("\n  {job}:"))
+        .unwrap_or_else(|| panic!("core-ci.yml defines a {job} job"));
     let rest = &ci[start + 1..];
     // Job keys sit at exactly two spaces of indent; the next one ends this job.
     let end = rest
@@ -155,6 +169,23 @@ fn pr_gate_body() -> String {
     rest[..end].to_string()
 }
 
+/// Every merge-blocking job's body, concatenated. A crate compiled by any of
+/// them is compiled before a merge; one compiled only by a nightly or
+/// push-to-main lane is not, and must not read as covered here.
+fn pre_merge_body() -> String {
+    let bodies: Vec<String> = MERGE_BLOCKING_JOBS.iter().map(|j| job_body(j)).collect();
+    // Each job must actually run on pull_request. A job that lost that trigger
+    // would still contribute its `-p` lines and silently keep this file green.
+    for (job, body) in MERGE_BLOCKING_JOBS.iter().zip(&bodies) {
+        assert!(
+            body.contains("pull_request"),
+            "{job} is in MERGE_BLOCKING_JOBS but does not run on pull_request, so \
+             nothing it names is covered before a merge"
+        );
+    }
+    bodies.join("\n")
+}
+
 #[test]
 fn every_host_buildable_member_is_compiled_before_merge() {
     let (members, default_members) = workspace_member_lists();
@@ -169,10 +200,10 @@ fn every_host_buildable_member_is_compiled_before_merge() {
         "parsed default-members does not contain crates/core: {default_members:?}"
     );
 
-    let gate = pr_gate_body();
+    let gate = pre_merge_body();
     assert!(
         gate.contains("cargo clippy"),
-        "pr-gate body did not parse — found no clippy step in it"
+        "merge-blocking job bodies did not parse — found no clippy step in them"
     );
 
     let mut uncovered: Vec<String> = Vec::new();
@@ -231,11 +262,14 @@ fn the_browser_layer_specifically_is_in_the_pre_merge_lane() {
     // default-members, into the exemption list, or out of the workspace. This
     // names it directly, because it is the member whose absence actually cost
     // something and the one most likely to be dropped again for build time.
-    let gate = pr_gate_body();
+    let gate = pre_merge_body();
     assert!(
         gate.contains("-p labwired-wasm"),
-        "pr-gate no longer compiles crates/wasm. The browser layer is the only \
+        "no merge-blocking job compiles crates/wasm. The browser layer is the only \
          consumer that reaches the engine through the wasm bindings, so a fork \
-         that exists only there is invisible to every other pre-merge gate."
+         that exists only there is invisible to every other pre-merge gate. It \
+         lives in the `browser-layer` job; if you moved it again, move it into \
+         another job in MERGE_BLOCKING_JOBS and add that job to main's required \
+         status checks in the SAME change."
     );
 }

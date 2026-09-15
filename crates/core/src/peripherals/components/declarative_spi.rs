@@ -38,6 +38,10 @@ pub struct GenericSpiDevice {
     read_buf: Vec<u8>,
     read_idx: usize,
     latched: bool,
+    /// Explicit `cs_select()` is active. Soft-CS auto-restart must not fire
+    /// while CS is held, or past-end bytes re-latch the same word (0x00) instead
+    /// of returning 0xFF as an open bus.
+    cs_held: bool,
     /// Bytes accumulated toward the current write register's width.
     write_acc: Vec<u8>,
 
@@ -49,47 +53,67 @@ pub struct GenericSpiDevice {
     sampling: SpiSampling,
 }
 
+/// Validate the static descriptor contract for the `spi_device` primitive.
+///
+/// This stays separate from construction so manifest preflight can reject
+/// malformed unused packs without allocating runtime input tables.
+pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
+    if descriptor.behavior.primitive != "spi_device" {
+        bail!(
+            "declarative spi kit requires behavior.primitive: spi_device, got '{}'",
+            descriptor.behavior.primitive
+        );
+    }
+    let spec = descriptor
+        .behavior
+        .spi
+        .as_ref()
+        .context("declarative spi device is missing behavior.spi")?;
+    if spec.registers.is_empty() {
+        bail!("behavior.spi declares no registers");
+    }
+    if spec.framing.command_bytes > 1 {
+        bail!(
+            "behavior.spi command_bytes {} unsupported (0 or 1)",
+            spec.framing.command_bytes
+        );
+    }
+    // `zero_when` power-gates work here too (the read math is shared with
+    // the I²C engine), so a dangling reference must not silently no-op into
+    // "gate never fires". No shipping SPI descriptor uses one yet; this is
+    // the guard that keeps the first one from being wrong in silence.
+    for reg in &spec.registers {
+        if let Some(z) = &reg.zero_when {
+            if !spec.registers.iter().any(|r| r.name == z.register) {
+                bail!(
+                    "register '{}' zero_when register '{}' is not a declared register",
+                    reg.name,
+                    z.register
+                );
+            }
+            if z.mask == 0 {
+                bail!(
+                    "register '{}' zero_when mask is 0 — the gate could never fire",
+                    reg.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 impl GenericSpiDevice {
     pub fn from_descriptor(
         descriptor: &DeviceDescriptor,
         cs_pin: String,
         channels: &'static [InputChannel],
     ) -> Result<Self> {
+        validate_descriptor(descriptor)?;
         let spec = descriptor
             .behavior
             .spi
             .as_ref()
             .context("declarative spi device is missing behavior.spi")?;
-        if spec.registers.is_empty() {
-            bail!("behavior.spi declares no registers");
-        }
-        if spec.framing.command_bytes > 1 {
-            bail!(
-                "behavior.spi command_bytes {} unsupported (0 or 1)",
-                spec.framing.command_bytes
-            );
-        }
-        // `zero_when` power-gates work here too (the read math is shared with
-        // the I²C engine), so a dangling reference must not silently no-op into
-        // "gate never fires". No shipping SPI descriptor uses one yet; this is
-        // the guard that keeps the first one from being wrong in silence.
-        for reg in &spec.registers {
-            if let Some(z) = &reg.zero_when {
-                if !spec.registers.iter().any(|r| r.name == z.register) {
-                    bail!(
-                        "register '{}' zero_when register '{}' is not a declared register",
-                        reg.name,
-                        z.register
-                    );
-                }
-                if z.mask == 0 {
-                    bail!(
-                        "register '{}' zero_when mask is 0 — the gate could never fire",
-                        reg.name
-                    );
-                }
-            }
-        }
         let mut slots = HashMap::new();
         if let Some(meta) = &descriptor.metadata {
             for input in &meta.inputs {
@@ -113,6 +137,7 @@ impl GenericSpiDevice {
             read_buf: Vec::new(),
             read_idx: 0,
             latched: false,
+            cs_held: false,
             write_acc: Vec::with_capacity(4),
             channels,
             component_id: None,
@@ -228,6 +253,7 @@ impl SpiDevice for GenericSpiDevice {
         self.read_buf.clear();
         self.read_idx = 0;
         self.latched = false;
+        self.cs_held = true;
         self.write_acc.clear();
         if self.framing.command_bytes == 0 {
             self.is_read = Some(true);
@@ -236,10 +262,29 @@ impl SpiDevice for GenericSpiDevice {
     }
 
     fn cs_release(&mut self) {
+        self.cs_held = false;
         self.write_acc.clear();
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // Soft-CS / matrix path: when CS was never held (or has been released),
+        // enter the read-only data phase and re-frame after a full word so a
+        // CS-high dummy flush does not permanently desync multi-byte reads.
+        // While CS is held, past-end bytes stay 0xFF (open bus) — do not re-latch.
+        if self.framing.command_bytes == 0 && !self.cs_held {
+            let need_start =
+                self.is_read.is_none() || (self.latched && self.read_idx >= self.read_buf.len());
+            if need_start {
+                // Soft-CS synthetic select: frame start without claiming hard CS.
+                self.cmd_consumed = 0;
+                self.is_read = Some(true);
+                self.cur_addr = Some(0);
+                self.read_buf.clear();
+                self.read_idx = 0;
+                self.latched = false;
+                self.write_acc.clear();
+            }
+        }
         // Command phase.
         if self.framing.command_bytes > 0 && self.cmd_consumed < self.framing.command_bytes {
             self.cmd_consumed += 1;
@@ -337,17 +382,7 @@ pub struct DeclarativeSpiKit {
 impl DeclarativeSpiKit {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
-        if descriptor.behavior.primitive != "spi_device" {
-            bail!(
-                "declarative spi kit requires behavior.primitive: spi_device, got '{}'",
-                descriptor.behavior.primitive
-            );
-        }
-        descriptor
-            .behavior
-            .spi
-            .as_ref()
-            .context("declarative spi kit is missing behavior.spi")?;
+        validate_descriptor(&descriptor)?;
         let channels = super::declarative_i2c::leak_channels(&descriptor);
         let metadata = leak_metadata(&descriptor, channels);
         Ok(Self {

@@ -1,9 +1,15 @@
 name: Core Arduino Matrix Smoke
 
-# Stock Arduino on every boards.yaml MCU: L0 + L2 + L3_i2c_sensor (INA219 kit).
+# Stock Arduino on every boards.yaml MCU: L0 + L2 + L3_i2c + L4_spi kits.
 # Required status: `arduino-matrix-gate` (branch protection).
 # See validation/FRAMEWORK_FLEET.md.
 
+# Scheduled runs are gated to this repository: every job below carries
+# `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
+# GitHub attributes a cron run to whoever last edited the schedule, so a fork
+# with Actions enabled mails this workflow's failures to a maintainer here,
+# about a run they can neither see nor stop. Pushes and manual dispatch are
+# untouched — a fork still gets this workflow on its own changes.
 on:
   # Slow fleet: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
   schedule:
@@ -28,6 +34,7 @@ concurrency:
 jobs:
   arduino-matrix:
     name: arduino-${{ matrix.board }}
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -49,6 +56,7 @@ jobs:
           - stm32l476
           - stm32wb55
           - stm32wba52
+          - atmega328p
 
     steps:
       - uses: actions/checkout@v4
@@ -74,25 +82,58 @@ jobs:
       # No distro gcc-arm-none-eabi apt: PlatformIO installs its own toolchains,
       # and parallel apt-get across matrix jobs has hung runners for 20+ minutes.
 
+      # WHY THE KEY IS THE PLATFORM AND NOT THE BOARD.
+      #
+      # `~/.platformio` holds a PLATFORM's toolchain, and sixteen boards in this
+      # matrix pull only FIVE platforms — nine of them are `ststm32`. Keying per
+      # board stored the same ~0.7 GB toolchain nine times over.
+      #
+      # Measured 2026-08-20: fifteen `pio-<board>-` entries held ~8.5 GB of the
+      # repository's 10 GB Actions cache budget. That is not merely wasteful, it
+      # is what EVICTS the one cache every pull request depends on — the 0.96 GB
+      # `v0-rust-core-ci` target dir that `pr-workspace-tests` restores in all
+      # three shards. A nightly fleet lane was starving every PR of its warm
+      # build, which is how "No cache found" and a cold 8-minute build per shard
+      # became normal (see the timing block in core-ci.yml).
+      #
+      # Five keys instead of sixteen: ~8.5 GB -> ~2.3 GB, freeing ~6 GB.
+      #
+      # Matrix jobs sharing one key race to save it. That is fine and is not an
+      # error: the loser logs "Cache already exists", and a board whose extra
+      # sub-packages are missing from the winner's copy simply downloads them.
+      # This is a warm start, never a correctness input.
+      - name: Which PlatformIO platform this board needs
+        id: pio
+        run: |
+          case "${{ matrix.board }}" in
+            stm32*)      platform=ststm32 ;;
+            nrf*)        platform=nordicnrf52 ;;
+            rp2040)      platform=raspberrypi ;;
+            esp32*)      platform=espressif32 ;;
+            atmega328p)  platform=atmelavr ;;
+            *)
+              echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
+              exit 1
+              ;;
+          esac
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "board ${{ matrix.board }} -> platform $platform"
+
       - name: Cache PlatformIO packages
         uses: actions/cache@v4
         with:
           path: |
             ~/.platformio
-          key: pio-${{ matrix.board }}-${{ hashFiles('validation/arduino-matrix/boards.yaml') }}
+          key: pio-${{ steps.pio.outputs.platform }}-${{ hashFiles('validation/arduino-matrix/boards.yaml') }}
           restore-keys: |
-            pio-${{ matrix.board }}-
+            pio-${{ steps.pio.outputs.platform }}-
 
       - name: Install PyYAML + PlatformIO
         run: |
           python -m pip install --quiet 'platformio>=6.1' pyyaml
-          # Warm platforms used by the thin matrix (platforms pull frameworks).
-          case "${{ matrix.board }}" in
-            stm32*)   pio pkg install -g -p ststm32 ;;
-            nrf*)     pio pkg install -g -p nordicnrf52 ;;
-            rp2040)   pio pkg install -g -p raspberrypi ;;
-            esp32*)   pio pkg install -g -p espressif32 ;;
-          esac
+          # Warm the platform resolved above — one source for the mapping, so
+          # the cache key and the thing being cached can never disagree.
+          pio pkg install -g -p "${{ steps.pio.outputs.platform }}"
 
       - name: Arduino matrix (L0 + L2 + L3 I2C kit)
         env:
@@ -103,7 +144,7 @@ jobs:
           OUT="${{ github.workspace }}/validation/arduino-matrix/out-ci/${{ matrix.board }}"
           python3 validation/arduino-matrix/run_matrix.py \
             --boards "${{ matrix.board }}" \
-            --sketches L0_serial_boot,L2_blink_serial,L3_i2c_sensor \
+            --sketches L0_serial_boot,L1_serial_loop,L2_blink_serial,L3_i2c_sensor,L4_spi_sensor,L5_adc,L6_pwm,L7_timer,L8_can \
             --out "$OUT"
 
       - name: Upload board artifacts
@@ -120,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: arduino-matrix
-    if: always()
+    if: ${{ always() && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -131,38 +172,27 @@ jobs:
           pattern: arduino-matrix-*
           merge-multiple: false
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fleet verdict inputs
+        run: python -m pip install --quiet pyyaml
+
+      # The verdict lives in scripts/ci/matrix_verdict.py with a pytest suite
+      # (scripts/ci/test_matrix_verdict.py, run by core-ci.yml) because the
+      # inline version it replaces reported success while proving nothing:
+      # `skipped` counted as a pass with no check that the skip was WAIVED, and
+      # there was no minimum-pass floor, so a run whose 144 cells were all
+      # skipped printed "full fleet pass". Measured on this fixture before the
+      # change: old block exit 0, new gate exit 1.
+      #
+      # `EXPECTED` was also the literal `16 * 9`. It is now derived from
+      # boards.yaml (boards without `external_compile:` x sketches), so a fleet
+      # that shrinks cannot quietly lower its own floor.
       - name: Require full fleet cells pass
         run: |
-          python3 - <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          # 15 boards × 3 sketches (L0, L2, L3)
-          EXPECTED = 15 * 3
-          root = Path("validation/arduino-matrix/out-ci")
-          results = list(root.rglob("results.json"))
-          if not results:
-              print("::error::no results.json from arduino matrix jobs", file=sys.stderr)
-              sys.exit(1)
-
-          bad = []
-          total = 0
-          for path in results:
-              data = json.loads(path.read_text())
-              for row in data.get("rows") or []:
-                  total += 1
-                  st = row.get("status")
-                  # skipped = explicit boards.yaml sketches_skip (e.g. STM32 L3 Wire)
-                  if st not in ("pass", "skipped"):
-                      bad.append(f"{row.get('board')}/{row.get('sketch')}: {st}")
-          print(f"cells={total} expected>={EXPECTED} fails={len(bad)}")
-          for b in bad:
-              print("FAIL", b)
-          if total < EXPECTED:
-              print(f"::error::expected ≥{EXPECTED} cells, got {total}", file=sys.stderr)
-              sys.exit(1)
-          if bad:
-              sys.exit(1)
-          print("arduino matrix gate: full fleet pass (pass|skipped ok)")
-          PY
+          python3 scripts/ci/matrix_verdict.py \
+            --results-dir validation/arduino-matrix/out-ci \
+            --fleet validation/arduino-matrix/boards.yaml

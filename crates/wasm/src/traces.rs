@@ -224,4 +224,61 @@ impl WasmSimulator {
             }
         }
     }
+
+    /// Channel table of the in-core analog engine's waveform trace: one entry
+    /// per probed model output plus any extra `trace:` expressions, each with
+    /// its unit (`"V"` or `"A"`).
+    ///
+    /// Empty until a co-simulation runner carrying an `adapter: analog` model
+    /// is attached to the machine. Empty is the honest answer for a lab with no
+    /// circuit in it: the oscilloscope shows no channels rather than a flat
+    /// line at zero that nothing measured.
+    #[wasm_bindgen]
+    pub fn analog_channels(&self) -> Result<JsValue, JsValue> {
+        let channels = self
+            .machine
+            .as_ref()
+            .map(|machine| machine.analog_channels())
+            .unwrap_or_default();
+        serde_wasm_bindgen::to_value(&channels)
+            .map_err(|err| JsValue::from_str(&format!("analog_channels: {err}")))
+    }
+
+    /// Analog samples newer than `cursor`, plus the cursor to pass next time.
+    ///
+    /// Cursors are sample sequence numbers, the same contract as
+    /// `read_logic_edges`, and are JS numbers for the same reason: sample
+    /// counts stay far under 2^53, and a `BigInt` at this boundary would make
+    /// the scope panel the only caller in the playground that cannot pass a
+    /// plain `0`.
+    ///
+    /// `dropped` counts samples the ring overwrote before they were read, so
+    /// the panel can mark a gap instead of drawing a straight line across one.
+    #[wasm_bindgen]
+    pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
+        let cursor = if cursor.is_finite() && cursor >= 0.0 {
+            cursor as u64
+        } else {
+            return Err(JsValue::from_str(
+                "analog_trace_snapshot: cursor must be a non-negative number",
+            ));
+        };
+        serde_wasm_bindgen::to_value(&self.analog_trace_batch(cursor))
+            .map_err(|err| JsValue::from_str(&format!("analog_trace_snapshot: {err}")))
+    }
+}
+
+impl WasmSimulator {
+    /// The live analog ring behind [`Self::analog_trace_snapshot`]: the samples
+    /// newer than `cursor` that the co-simulation session's analog models wrote,
+    /// and an empty batch when no session is attached.
+    pub(crate) fn analog_trace_batch(
+        &self,
+        cursor: u64,
+    ) -> labwired_core::analog::AnalogTraceBatch {
+        self.machine
+            .as_ref()
+            .map(|machine| machine.analog_trace_snapshot(cursor))
+            .unwrap_or_default()
+    }
 }

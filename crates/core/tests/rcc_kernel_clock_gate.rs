@@ -115,6 +115,7 @@ fn manifest_for(chip_rel: &str) -> labwired_config::SystemManifest {
         schema_version: "1.0".to_string(),
         name: "rcc-kernel-clock-gate".to_string(),
         chip: chip_rel.to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

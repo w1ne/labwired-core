@@ -10,8 +10,16 @@ what fails compile, and what hits unmodeled paths.
 |----|--------|--------|
 | `L0_serial_boot` | `LW_L0_OK` | `setup()` + Serial after core boot |
 | `L1_serial_loop` | `LW_L1_OK` | `loop()` + `delay`/`millis` scheduling |
-| `L2_blink_serial` | `LW_L2_OK` | `digitalWrite(LED_BUILTIN)` + serial |
+| `L2_blink_serial` | `LW_L2_OK` | `digitalWrite(LED_BUILTIN)` + serial (+ optional GPIO edges) |
 | `L3_i2c_sensor` | `LW_L3_OK` | `Wire` + INA219@0x40 kit (see `systems/*.yaml`) |
+| `L4_spi_sensor` | `LW_L4_OK` | `SPI` + MAX31855 kit (exact default frame) |
+| `L5_adc` | `LW_L5_OK` | `analogRead()` — ADC conversion completes |
+| `L6_pwm` | `LW_L6_OK` | `analogWrite()` — PWM duty path |
+| `L7_timer` | `LW_L7_OK` | `micros()` advances over `delay` |
+| `L8_can` | `LW_L8_OK` | On-chip CAN loopback (bxCAN/FDCAN/TWAI; skipped where no model) |
+
+CI gate (`arduino-matrix-gate`): **all boards × L0–L8** (16×9; skips count). Live scoreboard:
+[`docs/coverage/arduino-scoreboard.md`](../../docs/coverage/arduino-scoreboard.md).
 
 Fleet goal (Arduino + Zephyr + peripherals): [`../FRAMEWORK_FLEET.md`](../FRAMEWORK_FLEET.md).
 
@@ -48,6 +56,12 @@ Harness contract: `docs/engineering/test_harness.md`.
 |-------|------|------|
 | L0 / L1 | marker string | — |
 | L2 | `LW_L2_OK` | if `boards.yaml` has `led_watch: peripheral:pin`, require ≥`led_min_edges` logic edges |
+| L3 | `LW_L3_OK` | INA219 config `0x399F` + bus voltage reg `0x19CA` (exact kit defaults) |
+| L4 | `LW_L4_OK` | MAX31855 exact frame `0x01901600` |
+| L5 | `LW_L5_OK` | family-faithful ADC codes (not bare 0..4095) |
+| L6 | `LW_L6_OK` | mid duty left running; optional `pwm_watch` / `led_watch` edges |
+| L7 | `LW_L7_OK` | `micros()` advances ≥1 ms and stays monotonic |
+| L8 | `LW_L8_OK` | CAN loopback: bxCAN/FDCAN ID+data; TWAI self-RX with ID `0x123` + `0xA5` |
 
 RGB `LED_BUILTIN` boards (C3/S3) stay UART-only until an RMT-side oracle exists.
 

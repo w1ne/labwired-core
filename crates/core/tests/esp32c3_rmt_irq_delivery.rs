@@ -13,7 +13,7 @@
 //! No test in this repo asserted RMT **interrupt delivery**, which was the one
 //! thing that depended on the walk.
 //!
-//! The observable here is therefore `SystemBus::riscv_irq_lines` — the routed
+//! The observable here is therefore `SystemBus::irq_fabric` → `esp32c3.irq_lines` — the routed
 //! CPU interrupt-line mask the RISC-V core reads at its instruction boundary.
 //! Not `legacy_walk_disabled`, not `matrix_irq_sources()`, not the model's own
 //! `INT_ST`: the bit that actually reaches the CPU.
@@ -79,7 +79,7 @@ fn bus_esp32c3_devkit() -> SystemBus {
     let _ = labwired_core::system::riscv::configure_riscv(&mut bus);
     // `build_rom_boot_machine` (the browser C3 entry) enables matrix routing and
     // then re-derives walk deletion over the final peripheral set. Mirror both.
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
     bus.recompute_walk_deletable();
     bus
 }
@@ -126,12 +126,12 @@ fn rmt_tx_end_reaches_the_cpu_on_the_shipped_c3_bus() {
     }
 
     assert_ne!(
-        bus.riscv_irq_lines & (1 << LINE),
+        bus.irq_fabric.esp32c3.irq_lines & (1 << LINE),
         0,
         "STARVED: RMT TX_END (source {RMT_SOURCE}) never reached CPU line {LINE}. \
-         riscv_irq_lines={:#x}, legacy_walk_disabled={}, INT_ST={:#x}. \
+         esp32c3.irq_lines={:#x}, legacy_walk_disabled={}, INT_ST={:#x}. \
          rgbLedWrite blocks forever on the semaphore this IRQ gives.",
-        bus.riscv_irq_lines,
+        bus.irq_fabric.esp32c3.irq_lines,
         bus.legacy_walk_disabled,
         bus.read_u32(base + RMT_INT_ST).unwrap(),
     );
@@ -154,7 +154,7 @@ fn rmt_tx_end_de_asserts_after_int_clr() {
         let _ = bus.tick_peripherals_with_costs();
     }
     assert_ne!(
-        bus.riscv_irq_lines & (1 << LINE),
+        bus.irq_fabric.esp32c3.irq_lines & (1 << LINE),
         0,
         "precondition: line must be asserted before the acknowledge"
     );
@@ -171,11 +171,11 @@ fn rmt_tx_end_de_asserts_after_int_clr() {
     }
 
     assert_eq!(
-        bus.riscv_irq_lines & (1 << LINE),
+        bus.irq_fabric.esp32c3.irq_lines & (1 << LINE),
         0,
         "LATCHED: RMT line {LINE} stayed asserted after INT_CLR \
-         (riscv_irq_lines={:#x}) — the ISR would re-enter forever",
-        bus.riscv_irq_lines,
+         (esp32c3.irq_lines={:#x}) — the ISR would re-enter forever",
+        bus.irq_fabric.esp32c3.irq_lines,
     );
 }
 

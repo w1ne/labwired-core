@@ -49,6 +49,10 @@ pub fn attach_esp32_external_devices(
     bus: &mut SystemBus,
     manifest: &labwired_config::SystemManifest,
 ) -> anyhow::Result<()> {
+    // Xtensa machines build their peripheral bank directly instead of through
+    // `SystemBus::from_config`, so this is the runtime contract boundary for
+    // browser/WASM manifests as well as native callers.
+    crate::bus::part_pack::validate_manifest(manifest)?;
     // Classic ESP32 builds its peripheral bank in Rust and never runs
     // `SystemBus::from_config`'s peripheral loop, so it must record the
     // manifest's external-device declarations itself. Without this the devices
@@ -95,6 +99,21 @@ pub fn attach_esp32_external_devices(
         //    worst failure mode is a pass that proves nothing.
         return Err(crate::bus::external_devices::unsupported_external_device_error("ESP32", ext));
     }
+
+    // Buttons/switches declared in `board_io` become bus-resident stimulus
+    // devices — the same pass `SystemBus::from_config` runs for every
+    // yaml-built chip. The Xtensa families never reach that loop, so without
+    // this call a button on the canvas was inert on ESP32 and ESP32-S3: it
+    // drove no pin and exposed no `pressed` channel, and every stimulus naming
+    // it was rejected as an unknown channel while the same diagram worked on
+    // STM32/nRF52/C3.
+    //
+    // Placed AFTER the external devices: a `board_io` button is anchored to its
+    // GPIO peripheral by base address, and an external device may still add
+    // peripherals above. `add_peripheral` rebuilds the peripheral ranges on
+    // every registration, so — unlike `from_config`, which pushes entries
+    // directly — there is nothing left to rebuild here.
+    bus.attach_board_io_buttons(manifest);
     Ok(())
 }
 
@@ -838,6 +857,7 @@ pub(crate) fn register_esp32_peripherals(bus: &mut SystemBus) {
             base_address: base,
             size: None,
             irq,
+            irq_controller: None,
             clock: None,
             config,
         };
@@ -884,3 +904,117 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("mcpwm0",   "esp32_mcpwm",    0x3FF5_E000, 0x1000, None),
     ("host_slc", "esp32_sdio",     0x3FF5_8000, 0x1000, None),
 ];
+
+#[cfg(test)]
+mod board_io_tests {
+    use super::*;
+    use labwired_config::{BoardIoBinding, BoardIoKind, BoardIoSignal, SystemManifest};
+
+    /// One active-low push button on GPIO4 — exactly what the canvas compiler
+    /// emits for a `button` part wired between an MCU pin and GND.
+    fn manifest_with_button(name: &str) -> SystemManifest {
+        SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: name.to_string(),
+            // The Xtensa families build their bank in Rust; `chip` is carried
+            // for identity only on this path.
+            chip: "esp32.yaml".to_string(),
+            board_io: vec![BoardIoBinding {
+                id: "btn".to_string(),
+                kind: BoardIoKind::Button,
+                peripheral: "gpio".to_string(),
+                pin: 4,
+                signal: BoardIoSignal::Input,
+                active_high: false,
+                i2c_address: None,
+                device_type: None,
+                channel: None,
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// Press and release the contact through the SAME resolver the stimulus API
+    /// uses (`component` + `channel`), then read the pad the firmware samples.
+    /// Asserting at that level is what proves the whole chain — discovery,
+    /// resolution, and the drive onto the pin — rather than just that a struct
+    /// landed in a vector.
+    fn assert_button_drives_pad(bus: &mut crate::bus::SystemBus, pin: u8) {
+        let gpio = bus
+            .find_peripheral_index_by_name("gpio")
+            .expect("gpio must be registered");
+        // Released: an active-low contact holds its pull-up level, settled at
+        // attach time. A sketch polling `digitalRead(pin) == LOW` must NOT see
+        // a press at boot.
+        assert_eq!(
+            bus.peripherals[gpio].dev.read_gpio_pad(pin),
+            Some(true),
+            "released active-low button must leave the pad HIGH"
+        );
+
+        bus.set_input(Some("btn"), "pressed", 1.0)
+            .expect("the canvas button must expose btn/pressed as a sim input");
+        assert_eq!(
+            bus.peripherals[gpio].dev.read_gpio_pad(pin),
+            Some(false),
+            "pressing an active-low button must pull the pad LOW"
+        );
+
+        bus.set_input(Some("btn"), "pressed", 0.0)
+            .expect("release must resolve to the same device");
+        assert_eq!(
+            bus.peripherals[gpio].dev.read_gpio_pad(pin),
+            Some(true),
+            "releasing must return the pad to its pull-up level"
+        );
+    }
+
+    /// Classic ESP32 never ran `SystemBus::from_config`, so `board_io` reached
+    /// nothing: a button on the canvas drove no pin and every stimulus naming
+    /// it failed with "no attached input device exposes channel 'btn/pressed'".
+    /// `attach_esp32_external_devices` is this family's manifest seam and now
+    /// runs the same button pass every yaml-built chip runs.
+    #[test]
+    fn board_io_button_attaches_on_classic_esp32() {
+        let mut bus = crate::bus::SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+        let manifest = manifest_with_button("test-esp32-button");
+        attach_esp32_external_devices(&mut bus, &manifest).expect("attach board_io button");
+        assert_button_drives_pad(&mut bus, 4);
+    }
+
+    /// The ESP32-S3 shares this manifest seam (its bank is built by
+    /// `configure_xtensa_esp32s3`, but external devices and `board_io` come
+    /// through the same function), so one call fixes both parts. Asserted
+    /// separately because the two GPIO models are different types with their
+    /// own `set_gpio_input` / pad-level rules.
+    #[test]
+    fn board_io_button_attaches_on_esp32s3() {
+        use super::super::{configure_xtensa_esp32s3, Esp32s3Opts};
+        let mut bus = crate::bus::SystemBus::new();
+        let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        let manifest = manifest_with_button("test-s3-button");
+        attach_esp32_external_devices(&mut bus, &manifest).expect("attach board_io button");
+        assert_button_drives_pad(&mut bus, 4);
+    }
+
+    /// The attach pass must never claim a capability it cannot demonstrate: a
+    /// binding naming a peripheral that is not on the bus is dropped, and the
+    /// stimulus that names it still fails loudly rather than reporting success
+    /// and moving nothing.
+    #[test]
+    fn board_io_button_on_an_unknown_peripheral_is_not_advertised() {
+        let mut bus = crate::bus::SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+        let mut manifest = manifest_with_button("test-esp32-bad-peripheral");
+        manifest.board_io[0].peripheral = "portz".to_string();
+        attach_esp32_external_devices(&mut bus, &manifest).expect("attach must not fail the build");
+        let err = bus
+            .set_input(Some("btn"), "pressed", 1.0)
+            .expect_err("an undrivable contact must not be advertised");
+        assert!(
+            matches!(err, crate::sim_input::SimInputError::NoDevice(_)),
+            "expected NoDevice, got {err:?}"
+        );
+    }
+}

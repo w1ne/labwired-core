@@ -20,7 +20,7 @@ These options apply to the interactive runner and most subcommands.
 Executes a firmware simulation interactively. If no subcommand is provided, this mode is used.
 
 ```bash
-labwired [OPTIONS] --firmware <ELF> --system <YAML>
+labwired --firmware <ELF> --system <YAML> [OPTIONS]
 ```
 
 **Options:**

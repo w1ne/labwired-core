@@ -251,6 +251,13 @@ impl Esp32c3ApbSarAdc {
 }
 
 impl Peripheral for Esp32c3ApbSarAdc {
+    /// ADC1 CH0..CH4 (GPIO0..GPIO4). `ONETIME_CHANNEL` is four bits wide, but
+    /// the C3 bonds out five ADC1 inputs; the rest of `channel_inputs` is
+    /// headroom, not channels.
+    fn adc_channel_count(&self) -> Option<u8> {
+        Some(5)
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.read_u32(offset & !3)?;
         Ok((w >> ((offset & 3) * 8)) as u8)

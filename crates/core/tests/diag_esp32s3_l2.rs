@@ -35,7 +35,9 @@ fn dump_maps(bus: &labwired_core::bus::SystemBus, tag: &str) {
 }
 
 #[test]
-#[ignore]
+#[ignore = "diagnostic probe, not a gate: it eprintln!s the S3 L2 RGB/RMT interrupt-map dump and \
+            asserts nothing. Needs validation/arduino-matrix/out/esp32s3/L2_blink_serial/\
+            firmware.elf, a PlatformIO matrix build output that is not in the tree"]
 fn diag_s3_l2() {
     std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
     let core = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");

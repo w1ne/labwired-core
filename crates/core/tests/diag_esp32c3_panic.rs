@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[test]
-#[ignore]
+#[ignore = "diagnostic probe, not a gate: it eprintln!s the C3 Arduino L0 panic message and \
+            asserts nothing past the fixture existing. Needs validation/arduino-matrix/out/\
+            esp32c3/L0_serial_boot/firmware.elf, a PlatformIO matrix build output not in the tree"]
 fn diag_c3_panic_message() {
     let core = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let sys = core.join("validation/arduino-matrix/systems/esp32c3.yaml");

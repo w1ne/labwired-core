@@ -1,0 +1,20 @@
+# LabWired - RC Oscilloscope Lab smoke test
+#
+# After every PA5 rising edge the firmware watches the ADC until the node
+# crosses 63.2 % of VDD and prints the interpolated time constant as
+# `tau_us=<n>` plus `rc_shape=ok` when the readings were monotonic and the
+# crossing fell in 800..1200 us (R1=10k, C1=100n -> tau=1 ms). Only a real
+# RC charge curve produces that pair: a flat ADC never crosses, and a
+# placeholder ramp crosses far too late.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/rc-oscilloscope-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "RC Oscilloscope Lab"
+  - uart_contains: "t="
+  - uart_regex: 'tau_us=(8\d\d|9\d\d|1[01]\d\d)'
+  - uart_contains: "rc_shape=ok"
+  - expected_stop_reason: max_steps

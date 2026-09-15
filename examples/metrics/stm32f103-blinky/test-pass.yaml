@@ -1,0 +1,25 @@
+# Green path: footprint + main-stack budgets within generous scenario limits.
+# Stop reason is calibrated against the blinky fixture (see README).
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "../../../tests/fixtures/stm32f103-blinky.elf"
+limits:
+  # 150000 cycles, below max_steps (200000), so the cycle budget is the limit
+  # that ends the run. The machine clock on this Cortex-M core advances one
+  # cycle per retired instruction (plus peripheral tick cost), so a cycle
+  # budget equal to the step budget would race it.
+  max_steps: 200000
+  max_cycles: 150000
+stack_paint: true
+assertions:
+  # Exactly one limit per resource_budget assertion.
+  - resource_budget:
+      max_flash_bytes: 20000
+  - resource_budget:
+      max_ram_static_bytes: 8000
+  - resource_budget:
+      max_main_stack_bytes: 4096
+  # Blinky is a forever loop, so the run ends on a limit: max_cycles, which
+  # sits below max_steps (see limits above).
+  - expected_stop_reason: max_cycles

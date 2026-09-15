@@ -315,6 +315,81 @@ assertions:
     );
 }
 
+/// Zephyr L0 hello on nRF52840 prints `LW_Z0_OK` then `k_sleep(K_FOREVER)`.
+/// That parks the CPU on WFI; the next RTC event is overflow at 512 s of
+/// 64 MHz time (~32e9 cycles). After the UART assertion latches, idle
+/// fast-forward must stay off so settle is still "N more instructions"
+/// (print-then-bkpt still works) — not a skip to RTC overflow.
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn zephyr_hello_nrf52840_does_not_fast_forward_rtc_overflow_to_settle() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
+    let firmware = workspace_root
+        .join("tests/fixtures/nrf52840-zephyr-l0-hello.elf")
+        .canonicalize()
+        .expect("pinned nRF52840 Zephyr L0 ELF must exist");
+    let system_path = workspace_root
+        .join("validation/zephyr-matrix/systems/nrf52840.yaml")
+        .canonicalize()
+        .unwrap();
+
+    let temp_dir = std::env::temp_dir().join("labwired-nrf52840-z0-settle");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let script_path = temp_dir.join("script.yaml");
+    std::fs::write(
+        &script_path,
+        format!(
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "{}"
+  system: "{}"
+limits:
+  max_steps: 2000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - uart_contains: "LW_Z0_OK"
+"#,
+            firmware.display(),
+            system_path.display()
+        ),
+    )
+    .unwrap();
+
+    let started = std::time::Instant::now();
+    let output = Command::new(get_labwired_bin())
+        .arg("test")
+        .arg("--script")
+        .arg(&script_path)
+        .arg("--output-dir")
+        .arg(&temp_dir)
+        .arg("--no-uart-stdout")
+        .output()
+        .expect("labwired test");
+    let elapsed = started.elapsed();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "labwired test failed: {stderr}");
+    let result: Value =
+        serde_json::from_str(&std::fs::read_to_string(temp_dir.join("result.json")).unwrap())
+            .unwrap();
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["stop_reason"], "assertions_passed");
+    let steps = result["steps_executed"].as_u64().unwrap();
+    assert!(
+        elapsed.as_secs_f64() < 1.0,
+        "hello+WFI settle must not skip 512s of RTC overflow; wall={elapsed:?}\n{stderr}"
+    );
+    // Settle is 1000 more instructions after first all-pass, not a parked
+    // short-circuit. Boot is ~18k steps; the window must still be walked.
+    assert!(
+        steps >= 18_000 + 1_000,
+        "settle_steps=1000 must still run after LW_Z0_OK (steps={steps})"
+    );
+}
+
 #[test]
 fn test_max_uart_bytes() {
     let script = r#"

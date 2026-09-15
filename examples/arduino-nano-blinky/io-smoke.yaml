@@ -1,0 +1,20 @@
+# LabWired — Arduino Nano (ATmega328P) smoke test
+#
+# The AVR core does not go through `labwired run`, which only drives the ARM,
+# RISC-V and Xtensa paths; an AVR part runs through its board manifest, which
+# is what this script does.
+#
+# There is no UART assertion here on purpose. This firmware is Blink: it toggles
+# PB5 and prints nothing, so asserting on serial output would mean asserting on
+# silence, which passes just as well when the chip model does nothing at all.
+# What is asserted instead is that the model executes the whole step budget and
+# stops for that reason — 2 million AVR instructions of real Arduino-core
+# firmware, with no fault, no halt and no unmapped access along the way.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/arduino-nano-blinky.elf"
+  system: "../../configs/systems/arduino-nano.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - expected_stop_reason: max_steps

@@ -6,7 +6,10 @@
 
 use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
+use crate::system::arch_policy::{machine_family, MachineFamily};
+use std::collections::{HashMap, VecDeque};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tracing::info;
 
 /// Builds a SystemBus from an already-resolved system.
@@ -134,4 +137,130 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
     info!("Loading ESP32 system manifest: {:?}", system_path);
     let manifest = labwired_config::SystemManifest::from_file(system_path)?;
     build_esp32_system_from_manifest(&manifest, system_path)
+}
+
+// ── Shared machine builder ──────────────────────────────────────────────────
+//
+// One constructor for (chip, system, firmware) → runnable machine plus the
+// UART wires a frontend needs. The per-architecture bodies used to be
+// copy-pasted into the browser crate and the CLI; they move here one family at
+// a time, each ported verbatim from the browser constructor.
+
+mod arm;
+mod avr;
+mod riscv;
+mod xtensa;
+
+/// Named binary blobs a board references (mask ROM images, merged flash, ...).
+pub type BlobMap = HashMap<String, Vec<u8>>;
+
+/// The image a machine runs.
+pub enum FirmwareSource<'a> {
+    /// ELF bytes.
+    Elf(&'a [u8]),
+    /// Raw flash image (ESP fast-boot / rom-boot); `symbols` is an optional
+    /// companion ELF used only for symbol resolution.
+    FlashImage {
+        image: &'a [u8],
+        symbols: Option<&'a [u8]>,
+    },
+}
+
+/// How the machine reaches the application.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BootMode {
+    /// Load the image and start at its entry point.
+    #[default]
+    FastBoot,
+    /// Run the chip's real mask ROM from the reset vector.
+    RomBoot,
+}
+
+/// Frontend-facing knobs that do not change what the machine is.
+#[derive(Debug, Clone, Default)]
+pub struct BuildOptions {
+    /// Also echo console bytes to the host's stdout (the CLI's default).
+    pub echo_uart_stdout: bool,
+    /// Restrict host serial input to this named UART. `None` preserves the
+    /// legacy broadcast to all UART RX queues. TX is selected independently
+    /// by the manifest's `debug_uart` declaration.
+    pub uart_rx: Option<String>,
+}
+
+type UartRxSources = Vec<Arc<Mutex<VecDeque<u8>>>>;
+
+/// Resolve serial input before constructing the CPU so an unavailable port
+/// cannot silently swallow input or redirect it to another peripheral.
+fn uart_rx_sources(bus: &SystemBus, options: &BuildOptions) -> anyhow::Result<UartRxSources> {
+    match options.uart_rx.as_deref() {
+        None => Ok(bus.attach_uart_rx_source()),
+        Some(name) => bus
+            .attach_uart_rx_source_named(name)
+            .map(|source| vec![source])
+            .ok_or_else(|| anyhow::anyhow!("UART receive source {name:?} is unavailable")),
+    }
+}
+
+/// Everything [`build_machine`] needs.
+pub struct BuildRequest<'a> {
+    pub chip: &'a labwired_config::ChipDescriptor,
+    /// The board manifest. `chip` inside it must already be the absolute
+    /// descriptor path (as [`build_system_bus`] rewrites it), because peripheral
+    /// descriptor paths resolve relative to it.
+    pub system: &'a labwired_config::SystemManifest,
+    pub firmware: FirmwareSource<'a>,
+    pub boot: BootMode,
+    /// Mask ROM images, under the names the browser passes them:
+    /// `esp32c3_irom` / `esp32c3_drom` (ESP32-C3) and `esp32s3_irom` /
+    /// `esp32s3_drom` (ESP32-S3). Required by the flash-image boots, optional
+    /// on an ESP ELF fast boot, ignored elsewhere.
+    pub blobs: &'a BlobMap,
+    pub options: BuildOptions,
+}
+
+/// The console capture and RX feeders attached at construction.
+pub struct UartWires {
+    /// Console TX bytes (the board console the host is plugged into).
+    pub sink: Arc<Mutex<Vec<u8>>>,
+    /// Selected UART RX queues; bytes pushed here reach firmware.
+    pub rx: Vec<Arc<Mutex<VecDeque<u8>>>>,
+}
+
+/// A constructed, loaded machine and its wiring.
+pub struct BuiltMachine {
+    pub machine: Box<dyn crate::session::machine::SessionMachine>,
+    pub uart: UartWires,
+    pub board_io: Vec<labwired_config::BoardIoBinding>,
+    pub arch: labwired_config::Arch,
+    /// The ELF (or the companion symbols ELF) for symbol resolution; empty when
+    /// the image carries none.
+    pub firmware_bytes: Vec<u8>,
+}
+
+/// Build a runnable machine from a chip, its board manifest, and firmware.
+///
+/// Dispatch goes through [`machine_family`], the one architecture policy: a
+/// chip declaring no architecture is refused rather than guessed as Cortex-M.
+///
+/// | family | firmware + boot | path |
+/// |---|---|---|
+/// | Cortex-M | `Elf` + `FastBoot` | ELF load, no reset |
+/// | RISC-V | `Elf` + `FastBoot` | ELF at its entry, SP at top of RAM |
+/// | RISC-V (C3) | `FlashImage` + `FastBoot` | 2nd-stage bootloader entered directly |
+/// | RISC-V (C3) | `FlashImage` + `RomBoot` | mask ROM from the reset vector |
+/// | ESP32-S3 | `Elf` + `FastBoot` | `boot::esp32s3::fast_boot` |
+/// | ESP32-S3 | `FlashImage` + `RomBoot` | mask ROM, MMU XIP, dual core |
+/// | ESP32 | `Elf` + `FastBoot` | ELF at its entry, dual core |
+/// | AVR | `Elf` + `FastBoot` | ELF into the CPU's own flash |
+///
+/// Any other combination is an error saying so ("not supported: ..." for a
+/// boot path the engine has no constructor for); nothing falls back to a
+/// different path.
+pub fn build_machine(req: BuildRequest<'_>) -> anyhow::Result<BuiltMachine> {
+    match machine_family(req.chip)? {
+        MachineFamily::CortexM => arm::build(req),
+        MachineFamily::RiscV => riscv::build(req),
+        MachineFamily::Xtensa => xtensa::build(req),
+        MachineFamily::Avr => avr::build(req),
+    }
 }

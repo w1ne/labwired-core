@@ -77,6 +77,7 @@ fn nrf54l15_bus() -> SystemBus {
         schema_version: "1.0".to_string(),
         name: "nrf54l15-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         board_io: vec![],
         debug_uart: None,
@@ -94,12 +95,13 @@ fn memory_map_is_rram_at_zero_with_256k_sram() {
     // RRAM, not flash: based at 0x0, and 1524 KB is the real (odd) size.
     assert_eq!(chip.flash.base, 0x0000_0000, "RRAM must be based at 0x0");
     assert_eq!(
-        chip.flash.size, "1524KB",
+        chip.flash.size,
+        1_524 * 1024,
         "nRF54L15 RRAM is 1524 KB (DT: cpuapp_rram), not 1.5 MB rounded"
     );
 
     assert_eq!(chip.ram.base, 0x2000_0000);
-    assert_eq!(chip.ram.size, "256KB");
+    assert_eq!(chip.ram.size, 256 * 1024);
 
     // Consequence that actually bites: the reset stack pointer. 256 KB at
     // 0x2000_0000 puts the initial SP at 0x2004_0000, which is exactly what

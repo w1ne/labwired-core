@@ -1714,6 +1714,12 @@ impl Rcc {
 }
 
 impl crate::Peripheral for Rcc {
+    /// The RCC is this chip's clock controller: resolve `clock:` register names
+    /// through the family map that already exists for them.
+    fn clock_gate_reg_offset(&self, name: &str) -> Option<u64> {
+        self.rcc_reg_offset(name)
+    }
+
     // Inert walk: clock-control register bank; tick() is the trait-default no-op.
     fn needs_legacy_walk(&self) -> bool {
         false

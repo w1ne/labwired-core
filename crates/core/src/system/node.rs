@@ -16,10 +16,11 @@
 //! That keeps it callable from the CLI, the hosted runner, and the browser
 //! without dragging any of their orchestration along.
 
+use crate::system::arch_policy::{elf_arch, machine_family, MachineFamily};
 use crate::world::MachineTrait;
 use crate::Machine;
 use anyhow::Context;
-use labwired_config::{Arch, ChipDescriptor, SystemManifest};
+use labwired_config::{ChipDescriptor, SystemManifest};
 
 /// The image a node executes.
 ///
@@ -84,15 +85,47 @@ pub fn build_node_with_plugins(
     firmware: NodeFirmware,
     plugins: &[&dyn crate::plugin::ChipPlugin],
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
-    match chip.arch {
-        Arch::Arm => build_cortex_m_node(id, chip, system, firmware, plugins),
-        Arch::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
-        Arch::Xtensa => build_xtensa_node(id, chip, system, firmware),
-        Arch::Unknown => anyhow::bail!(
-            "node '{id}': chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, or xtensa)",
-            chip.name
-        ),
+    match machine_family(chip).with_context(|| format!("node '{id}'"))? {
+        MachineFamily::CortexM => build_cortex_m_node(id, chip, system, firmware, plugins),
+        MachineFamily::RiscV => build_riscv_node(id, chip, system, firmware, plugins),
+        MachineFamily::Xtensa => build_xtensa_node(id, chip, system, firmware),
+        MachineFamily::Avr => build_avr_node(id, chip, system, firmware, plugins),
     }
+}
+
+fn build_avr_node(
+    id: &str,
+    chip: &ChipDescriptor,
+    system: &SystemManifest,
+    firmware: NodeFirmware,
+    plugins: &[&dyn crate::plugin::ChipPlugin],
+) -> anyhow::Result<Box<dyn MachineTrait>> {
+    let NodeFirmware::Elf(bytes) = firmware else {
+        anyhow::bail!(
+            "node '{id}': chip '{}' boots from an ELF, but the firmware is not an ELF file",
+            chip.name
+        );
+    };
+    let image =
+        parse_elf_image(&bytes).with_context(|| format!("node '{id}': parse firmware ELF"))?;
+    let mut bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
+        .with_context(|| format!("node '{id}': build bus"))?;
+    let mut cpu = crate::cpu::Avr::new();
+    cpu.load_program_image(&image);
+    // SPI/I2C kits park on bus controllers; the AVR interpreter owns
+    // transfers via SPDR / TWCR, so move slaves onto the CPU.
+    for name in ["spi", "spi0", "spi1"] {
+        for dev in bus.take_spi_devices(name) {
+            cpu.push_spi_device(dev);
+        }
+    }
+    for name in ["i2c", "i2c0", "twi"] {
+        for dev in bus.take_i2c_slaves(name) {
+            cpu.push_i2c_slave(dev);
+        }
+    }
+    let machine = Machine::new(cpu, bus);
+    Ok(Box::new(machine))
 }
 
 fn is_cortex_m(chip: &ChipDescriptor) -> bool {
@@ -200,7 +233,7 @@ fn build_riscv_node(
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of RAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            let ram_size = labwired_config::parse_size(&chip.ram.size).unwrap_or(0);
+            let ram_size = chip.ram.size;
             let sp_top = (chip.ram.base + ram_size) as u32;
             machine.cpu.set_sp(sp_top & !0xF);
             Ok(Box::new(machine))
@@ -258,13 +291,15 @@ fn build_xtensa_node(
 /// to `configure_xtensa_esp32s3` rather than read from `LABWIRED_ESP32S3_FLASH`,
 /// which is what lets two S3 nodes in one world run *different* firmware.
 ///
-/// Known limitation on the ELF path: the single-chip runner additionally
-/// pre-paints the ESP-IDF dual-core handshake flags (`s_cpu_inited` &c.) by
-/// looking up firmware symbols. That is a thunk over the boot sequence, it
-/// needs the `loader` crate (which depends on core, so core cannot use it), and
-/// it is superseded by the chip's SMP model — so it is deliberately not
-/// reproduced here. An ESP-IDF ELF node will therefore wait at that handshake;
-/// prefer the flash-image path, which boots the real ROM and does not need it.
+/// Both paths are dual-core, and the single-chip runner (`labwired run`) now
+/// builds the same shape. The ESP-IDF handshake flags (`s_cpu_inited`,
+/// `s_other_cpu_startup_done`, …) are written by the firmware running on core 1,
+/// not pre-painted from firmware symbols: core 1 is released by the real
+/// hardware edge (`SYSTEM_CORE_1_CONTROL_0.RESETING` 1→0 on the flash path, the
+/// `ets_set_appcpu_boot_addr` handover on the ELF path) and then executes the
+/// real bring-up. `s_other_cpu_startup_done` in particular is set by core 1's
+/// FreeRTOS idle hook, which only runs once a systimer tick wakes core 1 out of
+/// `WAITI` — see the `Waiti` arm in `cpu::xtensa_lx7`.
 fn build_esp32s3_node(
     id: &str,
     chip: &ChipDescriptor,
@@ -332,6 +367,68 @@ fn build_esp32s3_node(
     }
 }
 
+/// Parse an avr-gcc ELF into the [`crate::memory::ProgramImage`]
+/// `labwired_loader::load_elf_bytes` produces for it.
+///
+/// avr-gcc links `.text` at a low VMA and `.data` at a biased data-space VMA
+/// (`0x80_0000 + addr`) with its LMA in flash, so the CRT can copy it. The
+/// loader emits BOTH for a data-space segment — the flash LMA copy (for LPM /
+/// `__do_copy_data`) and the biased VMA copy (which
+/// [`crate::cpu::Avr::load_program_image`] uses to preload SRAM) — and this is
+/// that mapping, segment for segment. [`parse_elf_image`] places every segment
+/// at `p_paddr` only, which drops the data-space copies.
+///
+/// Unlike the loader, an ELF whose `e_machine` is not AVR is refused: loading a
+/// foreign image into the AVR interpreter would decode garbage.
+pub fn parse_avr_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramImage> {
+    use crate::cpu::avr::{classify_avr_vma, AvrLoadSpace};
+    use goblin::elf::program_header::PT_LOAD;
+    use goblin::elf::Elf;
+
+    let elf = Elf::parse(bytes).context("Failed to parse ELF binary")?;
+    let machine = elf.header.e_machine;
+    if elf_arch(machine) != Some(crate::Arch::Avr) {
+        anyhow::bail!("firmware is not an AVR ELF (e_machine {machine})");
+    }
+    let mut image = crate::memory::ProgramImage::new(elf.entry, crate::Arch::Avr);
+    for ph in &elf.program_headers {
+        if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
+            continue;
+        }
+        let (off, n) = (ph.p_offset as usize, ph.p_filesz as usize);
+        if off + n > bytes.len() {
+            anyhow::bail!("Segment out of bounds in ELF file");
+        }
+        let data = bytes[off..off + n].to_vec();
+        let vma = if ph.p_vaddr != 0 {
+            ph.p_vaddr
+        } else {
+            ph.p_paddr
+        };
+        let (space, data_addr) = classify_avr_vma(vma);
+        match space {
+            AvrLoadSpace::Flash => {
+                let flash_addr = if ph.p_paddr != 0 {
+                    ph.p_paddr
+                } else {
+                    data_addr
+                };
+                image.add_segment(flash_addr, data);
+            }
+            AvrLoadSpace::Data | AvrLoadSpace::Eeprom => {
+                // Flash LMA holds the initializer image.
+                if ph.p_paddr < 0x8000 {
+                    image.add_segment(ph.p_paddr, data.clone());
+                }
+                // Keep the biased VMA so `load_program_image` can tell data
+                // space from program space.
+                image.add_segment(vma, data);
+            }
+        }
+    }
+    Ok(image)
+}
+
 /// Parse ELF bytes into a [`crate::memory::ProgramImage`].
 ///
 /// Core cannot depend on the `loader` crate (that crate depends on core), so
@@ -343,12 +440,9 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     use goblin::elf::Elf;
 
     let elf = Elf::parse(bytes).context("parse ELF")?;
-    let arch = match elf.header.e_machine {
-        goblin::elf::header::EM_ARM => crate::Arch::Arm,
-        goblin::elf::header::EM_RISCV => crate::Arch::RiscV,
-        goblin::elf::header::EM_XTENSA => crate::Arch::XtensaLx7,
-        machine => anyhow::bail!("unsupported ELF machine type {machine}"),
-    };
+    let machine = elf.header.e_machine;
+    let arch = elf_arch(machine)
+        .ok_or_else(|| anyhow::anyhow!("unsupported ELF machine type {machine}"))?;
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {
         if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
@@ -378,18 +472,10 @@ fn validate_cortex_m_firmware(
         );
     }
 
-    let flash_size = labwired_config::parse_size(&chip.flash.size).with_context(|| {
-        format!(
-            "node '{node_id}': invalid flash size for chip '{}'",
-            chip.name
-        )
-    })?;
-    let ram_size = labwired_config::parse_size(&chip.ram.size).with_context(|| {
-        format!(
-            "node '{node_id}': invalid RAM size for chip '{}'",
-            chip.name
-        )
-    })?;
+    // No parse and no error path: the sizes were validated when the chip
+    // deserialised, so "invalid flash size" is no longer reachable here.
+    let flash_size = chip.flash.size;
+    let ram_size = chip.ram.size;
     let vector_base = chip
         .flash
         .base

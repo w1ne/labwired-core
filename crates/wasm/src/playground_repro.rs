@@ -115,7 +115,9 @@ mod playground_secure_boot_repro {
         }
 
         // RESULTS.key_words lives at 0x20000058 (see the smoke script header).
-        let key = sim.read_memory(0x2000_0058, 16);
+        let key = sim
+            .read_memory(0x2000_0058, 16)
+            .expect("RESULTS.key_words is mapped RAM on a booted machine");
         (uart, key)
     }
 

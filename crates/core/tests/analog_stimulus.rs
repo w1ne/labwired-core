@@ -97,6 +97,7 @@ fn two_potentiometers_are_individually_addressable() {
         schema_version: "1.0".to_string(),
         name: "two-pots".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![pot("knob", 0), pot("fader", 1)],
         board_io: vec![],
         debug_uart: None,
@@ -213,6 +214,7 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
         schema_version: "1.0".to_string(),
         name: "c3-gp2y".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![labwired_config::ExternalDevice {
             id: "vlA".to_string(),
             r#type: "gp2y0a21".to_string(),

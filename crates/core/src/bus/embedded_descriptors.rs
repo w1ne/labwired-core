@@ -24,6 +24,21 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         .map(|(_, k)| k)
         .unwrap_or(descriptor_path);
     match key {
+        "atsamd21g18a/gclk.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/atsamd21g18a/gclk.yaml"
+        )),
+        "atsamd21g18a/nvmctrl.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/atsamd21g18a/nvmctrl.yaml"
+        )),
+        "atsamd21g18a/pm.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/atsamd21g18a/pm.yaml"
+        )),
+        "atsamd21g18a/sysctrl.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/atsamd21g18a/sysctrl.yaml"
+        )),
+        "atsamd21g18a/wdt.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/atsamd21g18a/wdt.yaml"
+        )),
         "esp32/apb_ctrl.yaml" => Some(include_str!(
             "../../../../configs/peripherals/esp32/apb_ctrl.yaml"
         )),
@@ -1007,6 +1022,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         )),
         "stm32f407/adc1.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32f407/adc1.yaml"
+        )),
+        "stm32f407/can1.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/stm32f407/can1.yaml"
         )),
         "stm32f407/dbg.yaml" => Some(include_str!(
             "../../../../configs/peripherals/stm32f407/dbg.yaml"

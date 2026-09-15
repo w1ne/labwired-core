@@ -103,8 +103,14 @@ fn test_stm32f401cdu6_chip_loads_with_i2c1() {
     let chip = ChipDescriptor::from_file(&chip_path).expect("F401CDU6 chip yaml failed to parse");
 
     assert_eq!(chip.name, "stm32f401cdu6");
-    assert_eq!(chip.flash.size, "384KB");
-    assert_eq!(chip.ram.size, "96KB");
+    // The yaml says "384KB" / "96KB"; the field now holds the parsed byte
+    // count. Asserting the number rather than the spelling makes this a test of
+    // the DATA instead of the string, and it pins an interpretation that is not
+    // obvious: `parse_size` reads KB as 1024, so these are 384 KiB and 96 KiB —
+    // which is exactly the F401CDU6's real geometry. (MB, in the same parser,
+    // is 1000^2. That asymmetry is why the byte count is worth writing down.)
+    assert_eq!(chip.flash.size, 393_216);
+    assert_eq!(chip.ram.size, 98_304);
     assert!(
         chip.peripherals
             .iter()

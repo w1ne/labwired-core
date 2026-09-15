@@ -189,6 +189,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
         echo_stdout: bool,
     ) -> anyhow::Result<()> {
+        // AVR USART TX is modelled on the CPU, not a bus UART peripheral.
+        if let Some(avr) = self
+            .cpu
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::cpu::Avr>())
+        {
+            avr.set_serial_sink(sink.clone());
+        }
         self.bus.attach_uart_tx_sink(sink, echo_stdout);
         Ok(())
     }
@@ -413,6 +421,21 @@ impl World {
             nodes.iter().map(|node| node.id.as_str()).collect();
         if expected != actual || nodes.len() != manifest.nodes.len() {
             anyhow::bail!("resolved node ids must match environment manifest nodes exactly");
+        }
+        // A world advances its nodes through `step_all`, which runs no
+        // co-simulation session. A node's `cosim_models` would therefore never
+        // step while the run reported a result, so refuse to build instead.
+        // Both the CLI environment runner (`from_manifest`) and the browser
+        // `WasmWorld` (`from_resolved`) come through here.
+        if let Some(node) = nodes
+            .iter()
+            .find(|node| !node.system.cosim_models.is_empty())
+        {
+            anyhow::bail!(
+                "co-simulation models are not supported in multi-node worlds yet; node '{}' declares {}",
+                node.id,
+                node.system.cosim_models.len()
+            );
         }
 
         let mut world = World::new(manifest.name.clone());

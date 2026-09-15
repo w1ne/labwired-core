@@ -18,6 +18,12 @@ name: Core Perf (simulator throughput)
 # Run it on a PR by hand with workflow_dispatch when touching the CPU step
 # path, the machine-advance loop, or the peripheral tick walk.
 
+# Scheduled runs are gated to this repository: every job below carries
+# `if: github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core'`.
+# GitHub attributes a cron run to whoever last edited the schedule, so a fork
+# with Actions enabled mails this workflow's failures to a maintainer here,
+# about a run they can neither see nor stop. Pushes and manual dispatch are
+# untouched — a fork still gets this workflow on its own changes.
 on:
   push:
     branches:
@@ -54,6 +60,7 @@ permissions:
 jobs:
   board-throughput:
     name: board-throughput
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

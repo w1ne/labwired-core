@@ -587,5 +587,5 @@ pub fn try_browser_jit_step(
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = warn)]
-    fn web_sys_console_warn(s: &str);
+    pub(crate) fn web_sys_console_warn(s: &str);
 }

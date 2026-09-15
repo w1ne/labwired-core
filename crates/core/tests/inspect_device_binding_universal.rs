@@ -204,7 +204,7 @@ fn dump_devices_json() {
 /// place one. This catches it at the source instead.
 ///
 /// Field names are read out of `bus/mod.rs`; a collection counts as holding
-/// device models if its type names one of the model modules. The known-14
+/// device models if its type names one of the model modules. The known-10
 /// assertion below is not the gate — it is the anti-vacuity check, so a parser
 /// that silently matched nothing cannot pass this test by finding no work.
 #[test]
@@ -216,11 +216,11 @@ fn attached_device_walk_covers_every_bus_collection() {
     for known in [
         "hcsr04",
         "gpio_devices",
-        "ws2812",
-        "servos",
-        "step_dir_motors",
-        "h_bridge_motors",
-        "unipolar_steppers",
+        // The readback-only registry: six typed `Vec<Arc<Concrete>>` fields
+        // (ws2812 / servos / step_dir_motors / h_bridge_motors /
+        // ili9341_parallel / unipolar_steppers) collapsed into ONE list of
+        // `dyn ObservedDevice`, walked by ONE arm.
+        "observed",
         "tm1637",
         "hx711",
         "seven_segment",
@@ -256,10 +256,11 @@ fn core_src(rel: &str) -> PathBuf {
 /// Field names of every `SystemBus` collection that holds external-device
 /// models, parsed out of the struct declaration.
 fn system_bus_device_collections(path: &std::path::Path) -> Vec<String> {
-    const MODEL_MARKERS: [&str; 7] = [
+    const MODEL_MARKERS: [&str; 8] = [
         "peripherals::components::",
         "peripherals::hc_sr04::",
         "BusResidentDevice",
+        "ObservedDevice",
         "CanDiagnosticTester",
         "CanUdsTester",
         "CanLogPlayer",

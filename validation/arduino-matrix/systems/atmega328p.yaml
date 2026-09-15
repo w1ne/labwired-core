@@ -1,0 +1,18 @@
+# Arduino matrix system — ATmega328P Nano (full L0–L4).
+# UART+GPIO+TWI+SPI on the CPU model; kits park on bus i2c/spi then drain to CPU.
+name: "arduino-matrix-atmega328p"
+chip: "../../../configs/chips/atmega328p.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on Wire (CPU TWI).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on hardware SPI (CPU SPDR; CS = Arduino SS/D10).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi"
+    config:
+      cs_pin: "D10"
+board_io: []

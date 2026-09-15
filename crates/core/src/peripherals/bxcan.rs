@@ -482,25 +482,34 @@ impl BxCan {
     /// not placed in FIFO0. Returns false when dropped or when the FIFO was
     /// full (FOVR0).
     pub fn deliver_rx(&mut self, frame: CanFrame) -> bool {
+        self.try_deliver_rx(frame).is_ok()
+    }
+
+    /// [`Self::deliver_rx`], saying why a frame was not queued.
+    pub fn try_deliver_rx(
+        &mut self,
+        frame: CanFrame,
+    ) -> Result<(), crate::network::CanRxRejection> {
+        use crate::network::CanRxRejection;
         if !self.running() {
-            return false;
+            return Err(CanRxRejection::NotRunning);
         }
         // Acceptance filtering: drop the frame unless an active filter matches.
         let Some(fifo) = self.filter_accepts(&frame) else {
-            return false;
+            return Err(CanRxRejection::NoFilterMatch);
         };
         // Only FIFO0 has a modeled queue; a FIFO1-routed frame is accepted by
         // a filter but not visible through the FIFO0 window.
         if fifo != 0 {
             self.push_trace("rx", &frame);
-            return false;
+            return Err(CanRxRejection::Fifo1NotModeled);
         }
         if self.rx_fifo0.len() >= FIFO0_DEPTH {
-            return false;
+            return Err(CanRxRejection::FifoFull);
         }
         self.push_trace("rx", &frame);
         self.rx_fifo0.push_back(frame);
-        true
+        Ok(())
     }
 }
 

@@ -51,6 +51,11 @@ pub const SHCSR_BUSFAULTENA: u32 = 1 << 17;
 pub const CFSR_BFSR_PRECISERR: u32 = 1 << 9;
 /// `CFSR.BFSR.BFARVALID` — BFSR bit 7, i.e. CFSR bit 15 (B3.2.15).
 pub const CFSR_BFSR_BFARVALID: u32 = 1 << 15;
+/// `SHCSR.USGFAULTENA`, bit 18 (ARMv7-M ARM B3.2.13).
+pub const SHCSR_USGFAULTENA: u32 = 1 << 18;
+/// `CFSR.UFSR.UNDEFINSTR` — UFSR bit 0, i.e. CFSR bit 16 (B3.2.15). Set when the
+/// processor attempts to execute an undefined instruction.
+pub const CFSR_UFSR_UNDEFINSTR: u32 = 1 << 16;
 /// `HFSR.FORCED`, bit 30 (B3.2.16): set when a configurable-priority fault
 /// escalates to HardFault.
 pub const HFSR_FORCED: u32 = 1 << 30;
@@ -292,14 +297,7 @@ impl Scb {
         }
     }
 
-    /// True when the event scheduler owns the ICSR pend-drain (feature on AND
-    /// the bus attached its cycle clock at registration). The single predicate
-    /// both `uses_scheduler()` and the legacy-tick guard branch on, so the two
-    /// drive modes can never mix.
-    #[inline]
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     /// Test/differential knob: detach the cycle clock, pinning the model to
     /// the legacy walk path (`uses_scheduler() == false`). Lets the

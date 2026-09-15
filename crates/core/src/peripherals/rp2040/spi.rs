@@ -35,6 +35,7 @@
 //! read path is `&self`, but reading `SSPDR` must pop an entry.
 
 use crate::peripherals::pad_lines::PadLines;
+use crate::peripherals::spi::SpiDevice;
 use crate::peripherals::spi_waveform::{NarrationFit, SpiFraming, SpiNarrator};
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::cell::RefCell;
@@ -98,12 +99,13 @@ pub(crate) const LINE_CSN: usize = 2;
 /// the wire it programmed can carry.
 const WIRE_BURST_CAP: usize = 256;
 
-#[derive(Default)]
 pub struct Rp2040Spi {
     cr0: u32,
     cr1: u32,
     cpsr: u32,
     rx_fifo: RefCell<VecDeque<u16>>,
+    /// SPI slaves (MAX31855, displays, …) attached via system external_devices.
+    pub attached_devices: Vec<Box<dyn SpiDevice>>,
     /// Wire levels published to FUNCSEL-routed SCK/MOSI/CSn pads, so a logic
     /// analyzer clipped to this bus measures a waveform instead of the SIO
     /// output latch. `None` — the common case, no lab routed the pads — costs
@@ -146,9 +148,32 @@ impl std::fmt::Debug for Rp2040Spi {
     }
 }
 
+impl Default for Rp2040Spi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Rp2040Spi {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            cr0: 0,
+            cr1: 0,
+            cpsr: 0,
+            rx_fifo: RefCell::new(VecDeque::new()),
+            attached_devices: Vec::new(),
+            lines: None,
+            wire_words: Vec::new(),
+            wire_bit_time: 0,
+            wave_cursor: 0,
+            clock: None,
+            arm_seq: 0,
+            scheduled: false,
+        }
+    }
+
+    pub fn push_device(&mut self, device: Box<dyn SpiDevice>) {
+        self.attached_devices.push(device);
     }
 
     fn enabled(&self) -> bool {
@@ -487,7 +512,21 @@ impl Peripheral for Rp2040Spi {
             // comment for why this must still happen.
             SSPDR if self.enabled() => {
                 let word = (value & 0xffff) as u16;
-                let rx_word = if self.loopback() { word } else { 0 };
+                let mosi = (word & 0xFF) as u8;
+                let rx_word = if self.loopback() {
+                    word
+                } else if !self.attached_devices.is_empty() {
+                    let mut miso = 0u8;
+                    for dev in &mut self.attached_devices {
+                        let resp = dev.transfer(mosi);
+                        if resp != 0 {
+                            miso = resp;
+                        }
+                    }
+                    u16::from(miso)
+                } else {
+                    0
+                };
                 {
                     let mut rx = self.rx_fifo.borrow_mut();
                     if rx.len() < FIFO_DEPTH {

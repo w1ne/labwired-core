@@ -1,0 +1,24 @@
+# LabWired - Arduino Zero (and the pin-compatible Adafruit Feather M0 line)
+#
+# ATSAMD21G18A. Only what is VERIFIED is declared here:
+#
+#   LED_BUILTIN — Arduino digital pin 13 — is PA17 on every board in this
+#   family (Arduino `variant.cpp` for arduino_zero, and Adafruit's Feather M0
+#   variant, both map D13 to PORTA pin 17).
+#
+# NOT declared, because this board's other surfaces are not modelled yet:
+#   * `Serial` on a Zero is the EDBG virtual COM port and `SerialUSB` is the
+#     native USB device — the chip's USB block (0x41005000) has no model, so a
+#     sketch whose console is USB CDC prints nothing here. `Serial1`
+#     (SERCOM0, D0/D1 = PA11/PA10) is the console that works today.
+#   * No user button: the Zero has only RESET.
+name: "arduino-zero"
+chip: "../chips/atsamd21g18a.yaml"
+external_devices: []
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpio_a"
+    pin: 17
+    signal: "output"
+    active_high: true

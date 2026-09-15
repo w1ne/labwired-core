@@ -117,11 +117,12 @@ a 128-entry TX FIFO that **drops** a write when it is full — so `c3_uart.c` wa
 for a free FIFO entry before every byte (real flow control) and clocks the
 console at 2 Mbaud, because at the power-on 115200 the ~24 kB this demo prints
 would need ~2.1 s of wire time (~340M core cycles) on its own. Measured against
-the committed ELF (NORMAL): a measurement cycle costs ~250k core cycles while the
-room is quiet and ~1.0M once the longer condensation/mold lines push a cycle's
-telemetry past the FIFO (~585k on average); sample `t=4` is read at ~1.5M cycles, sample `t=60`
-at ~34.5M, and all 64 samples plus `LEO DONE` and the final OLED frame dump are
-done by ~21.5M steps / ~54.5M cycles. A rung placed past that window is dead — it
+the committed ELF (NORMAL), on the machine clock the rungs are checked against
+(one cycle per retired instruction on the C3): a measurement cycle costs ~156k
+cycles while the room is quiet and ~256k once the longer condensation/mold lines
+push a cycle's telemetry past the FIFO (~228k on average); sample `t=4` is read at
+~0.675M cycles, sample `t=60` at ~13.45M, all 64 samples are read by ~14.5M
+cycles, and `LEO DONE` and the final OLED frame dump are done by ~21.5M steps. A rung placed past that window is dead — it
 changes no reading, and the scenario it belongs to then passes or fails for
 reasons unrelated to the story it claims to tell.
 

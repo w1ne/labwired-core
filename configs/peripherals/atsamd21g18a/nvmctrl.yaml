@@ -1,0 +1,184 @@
+peripheral: NVMCTRL
+version: 0.1.0
+registers:
+- id: CTRLA
+  address_offset: 0
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CMD
+    bit_range:
+    - 6
+    - 0
+    description: Command
+  - name: CMDEX
+    bit_range:
+    - 15
+    - 8
+    description: Command Execution
+  side_effects: null
+- id: CTRLB
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RWS
+    bit_range:
+    - 4
+    - 1
+    description: NVM Read Wait States
+  - name: MANW
+    bit_range:
+    - 7
+    - 7
+    description: Manual Write
+  - name: SLEEPPRM
+    bit_range:
+    - 9
+    - 8
+    description: Power Reduction Mode during Sleep
+  - name: READMODE
+    bit_range:
+    - 17
+    - 16
+    description: NVMCTRL Read Mode
+  - name: CACHEDIS
+    bit_range:
+    - 18
+    - 18
+    description: Cache Disable
+  side_effects: null
+- id: PARAM
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NVMP
+    bit_range:
+    - 15
+    - 0
+    description: NVM Pages
+  - name: PSZ
+    bit_range:
+    - 18
+    - 16
+    description: Page Size
+  side_effects: null
+- id: INTENCLR
+  address_offset: 12
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: NVM Ready Interrupt Enable
+  - name: ERROR
+    bit_range:
+    - 1
+    - 1
+    description: Error Interrupt Enable
+  side_effects: null
+- id: INTENSET
+  address_offset: 16
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: NVM Ready Interrupt Enable
+  - name: ERROR
+    bit_range:
+    - 1
+    - 1
+    description: Error Interrupt Enable
+  side_effects: null
+- id: INTFLAG
+  address_offset: 20
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: READY
+    bit_range:
+    - 0
+    - 0
+    description: NVM Ready
+  - name: ERROR
+    bit_range:
+    - 1
+    - 1
+    description: Error
+  side_effects: null
+- id: STATUS
+  address_offset: 24
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PRM
+    bit_range:
+    - 0
+    - 0
+    description: Power Reduction Mode
+  - name: LOAD
+    bit_range:
+    - 1
+    - 1
+    description: NVM Page Buffer Active Loading
+  - name: PROGE
+    bit_range:
+    - 2
+    - 2
+    description: Programming Error Status
+  - name: LOCKE
+    bit_range:
+    - 3
+    - 3
+    description: Lock Error Status
+  - name: NVME
+    bit_range:
+    - 4
+    - 4
+    description: NVM Error
+  - name: SB
+    bit_range:
+    - 8
+    - 8
+    description: Security Bit Status
+  side_effects: null
+- id: ADDR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADDR
+    bit_range:
+    - 21
+    - 0
+    description: NVM Address
+  side_effects: null
+- id: LOCK
+  address_offset: 32
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LOCK
+    bit_range:
+    - 15
+    - 0
+    description: Region Lock Bits
+  side_effects: null
+interrupts:
+  NVMCTRL: 5
+timing: null

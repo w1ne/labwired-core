@@ -151,7 +151,8 @@ pub(crate) fn run_snapshot_capture(
     }
     // XtensaLx7::reset() leaves PC at the 0x40000400 BROM reset vector.
     // Skip BROM and jump straight to the ELF's app entry — same as WASM.
-    // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC (SP seeded below).
+    // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC (SP seeded below)
+    // — real: the boot ROM executes and hands over at its own entry.
     // See FIDELITY.md §C.
     machine.cpu.set_pc(program_image.entry_point as u32);
 
@@ -195,7 +196,7 @@ pub(crate) fn run_snapshot_capture(
     // The authoritative path owns its observers, so hand the trace ring to the
     // Machine instead of passing a list into every cpu.step call.
     if let Some(r) = &ring {
-        machine.observers.push(r.clone());
+        machine.add_observer(r.clone());
     }
     if let Some(path) = &args.trace_out {
         eprintln!(
@@ -498,22 +499,18 @@ pub(crate) fn run_snapshot_capture(
 
     dump_trace(&ring);
 
-    // Ask before taking. `Cpu::runtime_snapshot` no longer panics on the arches
-    // that do not implement it (a panic in wasm is a trap, and a trap leaks
-    // wasm-bindgen's borrow guard — see the note on the trait), so an ungated
-    // call here would no longer fail loudly: it would write a well-formed file
-    // whose CPU blob is EMPTY. A resume from that blob restores no registers at
-    // all, and nothing downstream can tell it apart from a real capture. Refuse
-    // instead — a missing snapshot is recoverable, a lying one is not.
-    if !machine.cpu.supports_runtime_snapshot() {
+    // `None` means this CPU models no runtime snapshot. There is no longer a
+    // separate capability query to ask first: the take itself is the answer,
+    // so the check cannot disagree with what a capture would contain. Refuse —
+    // a missing snapshot is recoverable, a file whose CPU blob is empty but
+    // which looks like a real capture is not.
+    let Some(snap) = machine.take_runtime_snapshot() else {
         eprintln!(
             "error: this CPU has no runtime-snapshot implementation, so no resumable \
              snapshot can be captured for it (supported: RISC-V, Xtensa LX7)."
         );
         return ExitCode::from(EXIT_RUNTIME_ERROR);
-    }
-
-    let snap = machine.take_runtime_snapshot();
+    };
     let bytes = snap.to_bytes();
 
     if let Some(parent) = args.output.parent() {

@@ -143,7 +143,7 @@ fn build_oled_lab(tick_interval: u32) -> OledLab {
                 .expect("load bootloader segment");
         }
     }
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    let sp_top = (chip.ram.base + chip.ram.size) as u32;
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(bootloader.entry_point as u32);
 
@@ -220,7 +220,7 @@ fn diag_measure_tick_costs_interval_1_and_64() {
     for interval in [1u32, 64] {
         let mut lab = build_oled_lab(interval);
         let metrics = Arc::new(PerformanceMetrics::new());
-        lab.machine.observers.push(metrics.clone());
+        lab.machine.add_observer(metrics.clone());
         const CHUNK: u32 = 1_000_000;
         let mut steps = 0u64;
         while steps < PAINT_BUDGET {

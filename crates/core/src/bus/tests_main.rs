@@ -98,6 +98,51 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     assert!(!bus.take_timer_poll_coalesce_eligible());
 }
 
+/// Resource metrics P1: successful RAM/flash/extra_mem accesses increment
+/// memory counters; peri MMIO increments `peripheral_accesses` only (no
+/// double-count as memory).
+#[test]
+fn access_counts_track_memory_and_peripheral_separately() {
+    use crate::Bus;
+
+    let mut bus = SystemBus::new();
+    // SystemBus::new places RAM at 0x2000_0000 and a gpio peripheral at
+    // 0x4001_0800. Flash is at 0x0.
+    assert_eq!(bus.access_counts(), (0, 0, 0));
+
+    let _ = bus.read_u32(0x2000_0000).expect("ram read");
+    let _ = bus.read_u8(0x0000_0010).expect("flash read");
+    bus.write_u32(0x2000_0100, 0xA5A5_A5A5).expect("ram write");
+    bus.write_u8(0x2000_0104, 0x5A).expect("ram byte write");
+
+    let (reads, writes, peri) = bus.access_counts();
+    assert_eq!(
+        reads,
+        2,
+        "one ram word + one flash byte read; counts={:?}",
+        bus.access_counts()
+    );
+    assert_eq!(
+        writes,
+        2,
+        "two ram writes; counts={:?}",
+        bus.access_counts()
+    );
+    assert_eq!(peri, 0, "no MMIO yet; counts={:?}", bus.access_counts());
+
+    // GPIO on default bus: 0x4001_0800.
+    let _ = bus.read_u32(0x4001_0800).expect("gpio read");
+    bus.write_u32(0x4001_0800, 0x1).expect("gpio write");
+    let (reads2, writes2, peri2) = bus.access_counts();
+    assert_eq!(reads2, reads, "peri must not count as memory_reads");
+    assert_eq!(writes2, writes, "peri must not count as memory_writes");
+    assert_eq!(peri2, 2, "one peri read + one peri write");
+
+    let taken = bus.take_access_counts();
+    assert_eq!(taken, (reads2, writes2, peri2));
+    assert_eq!(bus.access_counts(), (0, 0, 0));
+}
+
 /// `max_safe_tick_interval`: 1 while the legacy walk is live (the default
 /// bus), the batching recommendation once the walk is deleted, and back to
 /// 1 when a non-relaxable device (test-only HC-SR04 legacy pin) is present.
@@ -356,16 +401,16 @@ fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
 #[test]
 fn c3_and_s3_interrupt_routing_caches_are_separate() {
     let mut bus = SystemBus::empty();
-    assert!(!bus.esp32c3_irq_routing);
-    assert!(!bus.esp32s3_irq_routing);
+    assert!(!bus.irq_fabric.esp32c3.routing);
+    assert!(!bus.irq_fabric.esp32s3.routing);
 
-    bus.esp32c3_irq_routing = true;
+    bus.irq_fabric.esp32c3.routing = true;
     bus.refresh_peripheral_index();
-    assert!(bus.esp32c3_irq_routing);
-    assert_eq!(bus.esp32c3_system_idx, None);
-    assert_eq!(bus.esp32c3_interrupt_core0_idx, None);
+    assert!(bus.irq_fabric.esp32c3.routing);
+    assert_eq!(bus.irq_fabric.esp32c3.system_idx, None);
+    assert_eq!(bus.irq_fabric.esp32c3.interrupt_core0_idx, None);
     assert!(
-        !bus.esp32s3_irq_routing,
+        !bus.irq_fabric.esp32s3.routing,
         "enabling C3 RISC-V routing must not imply an S3 intmatrix model"
     );
 
@@ -387,10 +432,10 @@ fn c3_and_s3_interrupt_routing_caches_are_separate() {
             declarative_descriptor(None),
         )),
     );
-    assert_eq!(bus.esp32c3_system_idx, Some(0));
-    assert_eq!(bus.esp32c3_interrupt_core0_idx, Some(1));
+    assert_eq!(bus.irq_fabric.esp32c3.system_idx, Some(0));
+    assert_eq!(bus.irq_fabric.esp32c3.interrupt_core0_idx, Some(1));
     assert!(
-        !bus.esp32s3_irq_routing,
+        !bus.irq_fabric.esp32s3.routing,
         "adding C3 interrupt banks must not imply an S3 intmatrix model"
     );
 
@@ -402,11 +447,11 @@ fn c3_and_s3_interrupt_routing_caches_are_separate() {
         Box::new(crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix::new()),
     );
     assert!(
-        bus.esp32s3_irq_routing,
+        bus.irq_fabric.esp32s3.routing,
         "S3 routing should be cached only when the S3 intmatrix peripheral is present"
     );
     assert!(
-        bus.esp32c3_irq_routing,
+        bus.irq_fabric.esp32c3.routing,
         "adding S3 routing must not clear the independent C3 routing flag"
     );
 }
@@ -594,18 +639,19 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
     let chip = ChipDescriptor {
         schema_version: "1.0".to_string(),
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         memory_regions: Vec::new(),
         name: "stm32f103-test".to_string(),
+        cpu_hz: 0,
         arch: Arch::Arm,
         core: None,
         flash: MemoryRange {
             base: 0x0800_0000,
-            size: "64KB".to_string(),
+            size: 64000,
         },
         ram: MemoryRange {
             base: 0x2000_0000,
-            size: "20KB".to_string(),
+            size: 20000,
         },
         peripherals: vec![PeripheralConfig {
             id: "i2c1".to_string(),
@@ -613,10 +659,15 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
             base_address: 0x4000_5400,
             size: Some("1KB".to_string()),
             irq: Some(31),
+            irq_controller: None,
             clock: None,
             config: HashMap::new(),
         }],
         pins: Default::default(),
+        analog_pins: Default::default(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
+        include: None,
     };
 
     let mut config = HashMap::new();
@@ -632,6 +683,7 @@ fn test_from_config_attaches_adxl345_external_device_to_i2c() {
         schema_version: "1.0".to_string(),
         name: "adxl345-test".to_string(),
         chip: "../chips/stm32f103.yaml".to_string(),
+        cpu_hz: None,
         memory_overrides: HashMap::new(),
         external_devices: vec![ExternalDevice {
             id: "adxl345".to_string(),
@@ -707,16 +759,17 @@ board_io: []
     .expect("parse servo manifest");
 
     let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with servo");
-    assert_eq!(bus.servos.len(), 1, "one servo twin attached");
-    assert_eq!(bus.servos[0].id(), "srv1");
-    assert_eq!(bus.servos[0].pin(), 5);
+    let servos: Vec<&crate::peripherals::components::servo::Servo> = bus.observed_of().collect();
+    assert_eq!(servos.len(), 1, "one servo twin attached");
+    assert_eq!(servos[0].id(), "srv1");
+    assert_eq!(servos[0].pin(), 5);
     // Until commanded, parks at min_angle (0° for sg90).
-    assert_eq!(bus.servos[0].angle_degrees(), 0.0);
-    bus.servos[0].apply_duty_fraction(0.075);
+    assert_eq!(servos[0].angle_degrees(), 0.0);
+    servos[0].apply_duty_fraction(0.075);
     assert!(
-        (bus.servos[0].angle_degrees() - 94.7).abs() < 1.0,
+        (servos[0].angle_degrees() - 94.7).abs() < 1.0,
         "sg90 mid duty → ~94.7°, got {}",
-        bus.servos[0].angle_degrees()
+        servos[0].angle_degrees()
     );
 }
 
@@ -768,12 +821,14 @@ board_io: []
 
         let bus = SystemBus::from_config(&chip, &manifest)
             .unwrap_or_else(|e| panic!("build bus with {type_str}: {e:#}"));
+        let panels: Vec<&crate::peripherals::components::ili9341_parallel::Ili9341Parallel> =
+            bus.observed_of().collect();
         assert_eq!(
-            bus.ili9341_parallel.len(),
+            panels.len(),
             1,
             "one parallel panel attached for type '{type_str}'"
         );
-        let panel = &bus.ili9341_parallel[0];
+        let panel = panels[0];
         assert_eq!(panel.id(), "tft");
         let pins = panel.pins();
         assert_eq!(pins.cs, 15);
@@ -1149,6 +1204,7 @@ fn test_esp32c3_i2c_gpio_matrix_distinguishes_gpio45_from_gpio67() {
             schema_version: "1.0".to_string(),
             name: "c3-physical-i2c-route".to_string(),
             chip: "../chips/esp32c3.yaml".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: vec![ExternalDevice {
                 id: "oled".to_string(),
@@ -1321,18 +1377,19 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
     let chip = ChipDescriptor {
         schema_version: "1.0".to_string(),
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         memory_regions: Vec::new(),
         name: "esp32c3-i2c-test".to_string(),
+        cpu_hz: 0,
         arch: Arch::RiscV,
         core: None,
         flash: MemoryRange {
             base: 0x4200_0000,
-            size: "4MB".to_string(),
+            size: 4000000,
         },
         ram: MemoryRange {
             base: 0x3FC8_0000,
-            size: "400KB".to_string(),
+            size: 400000,
         },
         peripherals: vec![
             PeripheralConfig {
@@ -1341,6 +1398,7 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
                 base_address: 0x6001_3000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
@@ -1350,11 +1408,16 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
                 base_address: 0x6000_4000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
         ],
         pins: Default::default(),
+        analog_pins: Default::default(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
+        include: None,
     };
 
     let mut config = HashMap::new();
@@ -1370,6 +1433,7 @@ fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
         schema_version: "1.0".to_string(),
         name: "esp32c3-bmp280-test".to_string(),
         chip: "../chips/esp32c3.yaml".to_string(),
+        cpu_hz: None,
         memory_overrides: HashMap::new(),
         external_devices: vec![ExternalDevice {
             id: "bmp280".to_string(),
@@ -1470,18 +1534,19 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
     let chip = ChipDescriptor {
         schema_version: "1.0".to_string(),
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         memory_regions: Vec::new(),
         name: "esp32c3-mlx-test".to_string(),
+        cpu_hz: 0,
         arch: Arch::RiscV,
         core: None,
         flash: MemoryRange {
             base: 0x4200_0000,
-            size: "4MB".to_string(),
+            size: 4000000,
         },
         ram: MemoryRange {
             base: 0x3FC8_0000,
-            size: "400KB".to_string(),
+            size: 400000,
         },
         peripherals: vec![
             PeripheralConfig {
@@ -1490,6 +1555,7 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
                 base_address: 0x6001_3000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
@@ -1499,11 +1565,16 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
                 base_address: 0x6000_4000,
                 size: Some("4KB".to_string()),
                 irq: None,
+                irq_controller: None,
                 config: HashMap::new(),
                 clock: None,
             },
         ],
         pins: Default::default(),
+        analog_pins: Default::default(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
+        include: None,
     };
 
     let mut config = HashMap::new();
@@ -1523,6 +1594,7 @@ fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
         schema_version: "1.0".to_string(),
         name: "esp32c3-mlx90640-test".to_string(),
         chip: "../chips/esp32c3.yaml".to_string(),
+        cpu_hz: None,
         memory_overrides: HashMap::new(),
         external_devices: vec![ExternalDevice {
             id: "thermal_cam".to_string(),
@@ -2341,6 +2413,7 @@ fn empty_manifest() -> SystemManifest {
         schema_version: "1.0".to_string(),
         name: "bit-band-test".to_string(),
         chip: "unused".to_string(),
+        cpu_hz: None,
         memory_overrides: std::collections::HashMap::new(),
         external_devices: Vec::new(),
         board_io: Vec::new(),
@@ -2732,6 +2805,7 @@ motor_models:
                 crate::machine::CoreProgress {
                     primary_steps: cycles,
                     secondary_steps: 0,
+                    timed_cycles: None,
                 },
             )
             .unwrap();
@@ -2749,6 +2823,7 @@ motor_models:
                 crate::machine::CoreProgress {
                     primary_steps: 4096,
                     secondary_steps: 0,
+                    timed_cycles: None,
                 },
             )
             .unwrap();
@@ -2838,18 +2913,19 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
     labwired_config::ChipDescriptor {
         schema_version: "1.0".to_string(),
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         memory_regions: Vec::new(),
         name: "stm32f103-test".to_string(),
+        cpu_hz: 0,
         arch: Arch::Arm,
         core: None,
         flash: MemoryRange {
             base: 0x0800_0000,
-            size: "64KB".to_string(),
+            size: 64000,
         },
         ram: MemoryRange {
             base: 0x2000_0000,
-            size: "20KB".to_string(),
+            size: 20000,
         },
         peripherals: vec![
             PeripheralConfig {
@@ -2858,6 +2934,7 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
                 base_address: 0x4000_5400,
                 size: Some("1KB".to_string()),
                 irq: Some(31),
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             },
@@ -2867,11 +2944,16 @@ fn chip_with_i2c_and_uart() -> labwired_config::ChipDescriptor {
                 base_address: 0x4000_3800,
                 size: Some("1KB".to_string()),
                 irq: Some(37),
+                irq_controller: None,
                 clock: None,
                 config: HashMap::new(),
             },
         ],
         pins: Default::default(),
+        analog_pins: Default::default(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
+        include: None,
     }
 }
 
@@ -2888,6 +2970,7 @@ fn manifest_with_external_device(
         schema_version: "1.0".to_string(),
         name: "adxl345-test".to_string(),
         chip: "../chips/stm32f103.yaml".to_string(),
+        cpu_hz: None,
         memory_overrides: std::collections::HashMap::new(),
         external_devices: vec![labwired_config::ExternalDevice {
             id: "sensor1".to_string(),
@@ -3014,7 +3097,7 @@ fn test_system_bus_memory_observer() {
 
     let writes = Arc::new(Mutex::new(Vec::new()));
     let mut bus = SystemBus::new();
-    bus.observers.push(Arc::new(MockObserver {
+    bus.add_observer(Arc::new(MockObserver {
         writes: writes.clone(),
     }));
 
@@ -3047,8 +3130,10 @@ fn test_flash_boot_alias_read_and_write() {
         nvic: None,
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
+        cpu_hz: 0,
         bit_band_enabled: true,
         pending_cpu_irqs: [0; 2],
+        esp32s3_irq_audit: None,
         dport_idx: None,
         rcc_idx: None,
         clock_gating_bypass: false,
@@ -3063,24 +3148,23 @@ fn test_flash_boot_alias_read_and_write() {
         last_route: Cell::new(None),
         last_gap: Cell::new(None),
         last_gpio_in: None,
+        gpio_port_idx: None,
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3088,21 +3172,11 @@ fn test_flash_boot_alias_read_and_write() {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
-        esp32c3_irq_routing: false,
-        riscv_irq_lines: 0,
-        esp32c3_system_idx: None,
-        esp32c3_interrupt_core0_idx: None,
-        esp32c3_irq_cache: None,
-        esp32c3_asserted_sources: [0; 2],
-        esp32c3_sched_asserted_sources: [0; 2],
+        irq_fabric: InterruptFabric::default(),
         esp32c3_sensitive_idx: None,
         esp32c3_pms: None,
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
-        esp32s3_irq_routing: false,
-        esp32s3_intmatrix_idx: None,
-        esp32s3_asserted_sources: [0; 2],
-        esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
@@ -3111,6 +3185,9 @@ fn test_flash_boot_alias_read_and_write() {
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
+        analog_pin_map: std::collections::HashMap::new(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
     };
 
     bus.flash.write_u8(0x0800_0000, 0x12);
@@ -3155,8 +3232,10 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         nvic: None,
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
+        cpu_hz: 0,
         bit_band_enabled: false,
         pending_cpu_irqs: [0; 2],
+        esp32s3_irq_audit: None,
         dport_idx: None,
         rcc_idx: None,
         clock_gating_bypass: false,
@@ -3171,24 +3250,23 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         last_route: Cell::new(None),
         last_gap: Cell::new(None),
         last_gpio_in: None,
+        gpio_port_idx: None,
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3196,21 +3274,11 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
-        esp32c3_irq_routing: false,
-        riscv_irq_lines: 0,
-        esp32c3_system_idx: None,
-        esp32c3_interrupt_core0_idx: None,
-        esp32c3_irq_cache: None,
-        esp32c3_asserted_sources: [0; 2],
-        esp32c3_sched_asserted_sources: [0; 2],
+        irq_fabric: InterruptFabric::default(),
         esp32c3_sensitive_idx: None,
         esp32c3_pms: None,
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
-        esp32s3_irq_routing: false,
-        esp32s3_intmatrix_idx: None,
-        esp32s3_asserted_sources: [0; 2],
-        esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
@@ -3219,6 +3287,9 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
+        analog_pin_map: std::collections::HashMap::new(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
     };
     bus.rebuild_peripheral_ranges();
     bus
@@ -3414,8 +3485,10 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         nvic: None,
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
+        cpu_hz: 0,
         bit_band_enabled: false,
         pending_cpu_irqs: [0; 2],
+        esp32s3_irq_audit: None,
         dport_idx: None,
         rcc_idx: None,
         clock_gating_bypass: false,
@@ -3430,24 +3503,23 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         last_route: Cell::new(None),
         last_gap: Cell::new(None),
         last_gpio_in: None,
+        gpio_port_idx: None,
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3455,21 +3527,11 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
-        esp32c3_irq_routing: false,
-        riscv_irq_lines: 0,
-        esp32c3_system_idx: None,
-        esp32c3_interrupt_core0_idx: None,
-        esp32c3_irq_cache: None,
-        esp32c3_asserted_sources: [0; 2],
-        esp32c3_sched_asserted_sources: [0; 2],
+        irq_fabric: InterruptFabric::default(),
         esp32c3_sensitive_idx: None,
         esp32c3_pms: None,
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
-        esp32s3_irq_routing: false,
-        esp32s3_intmatrix_idx: None,
-        esp32s3_asserted_sources: [0; 2],
-        esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
@@ -3478,6 +3540,9 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
+        analog_pin_map: std::collections::HashMap::new(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
     };
     bus.rebuild_peripheral_ranges();
     bus
@@ -3671,8 +3736,10 @@ fn test_peripheral_range_index_lookup() {
         nvic: None,
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
+        cpu_hz: 0,
         bit_band_enabled: true,
         pending_cpu_irqs: [0; 2],
+        esp32s3_irq_audit: None,
         dport_idx: None,
         rcc_idx: None,
         clock_gating_bypass: false,
@@ -3687,24 +3754,23 @@ fn test_peripheral_range_index_lookup() {
         last_route: Cell::new(None),
         last_gap: Cell::new(None),
         last_gpio_in: None,
+        gpio_port_idx: None,
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3712,21 +3778,11 @@ fn test_peripheral_range_index_lookup() {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
-        esp32c3_irq_routing: false,
-        riscv_irq_lines: 0,
-        esp32c3_system_idx: None,
-        esp32c3_interrupt_core0_idx: None,
-        esp32c3_irq_cache: None,
-        esp32c3_asserted_sources: [0; 2],
-        esp32c3_sched_asserted_sources: [0; 2],
+        irq_fabric: InterruptFabric::default(),
         esp32c3_sensitive_idx: None,
         esp32c3_pms: None,
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
-        esp32s3_irq_routing: false,
-        esp32s3_intmatrix_idx: None,
-        esp32s3_asserted_sources: [0; 2],
-        esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
@@ -3735,6 +3791,9 @@ fn test_peripheral_range_index_lookup() {
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
+        analog_pin_map: std::collections::HashMap::new(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
     };
 
     bus.rebuild_peripheral_ranges();
@@ -3783,8 +3842,10 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         nvic: None,
         observers: Vec::new(),
         config: crate::SimulationConfig::default(),
+        cpu_hz: 0,
         bit_band_enabled: true,
         pending_cpu_irqs: [0; 2],
+        esp32s3_irq_audit: None,
         dport_idx: None,
         rcc_idx: None,
         clock_gating_bypass: false,
@@ -3799,24 +3860,23 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         last_route: Cell::new(None),
         last_gap: Cell::new(None),
         last_gpio_in: None,
+        gpio_port_idx: None,
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
+        memory_reads: std::cell::Cell::new(0),
+        memory_writes: std::cell::Cell::new(0),
+        peripheral_accesses: std::cell::Cell::new(0),
         legacy_walk_disabled: false,
         reset_vector_offset: 0,
-        atomic_register_aliases: false,
+        atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
         hcsr04: Vec::new(),
         gpio_devices: Vec::new(),
-        ws2812: Vec::new(),
-        servos: Vec::new(),
-        step_dir_motors: Vec::new(),
-        h_bridge_motors: Vec::new(),
+        observed: Vec::new(),
         motors: Vec::new(),
         motor_cycle_anchor: 0,
-        ili9341_parallel: Vec::new(),
-        unipolar_steppers: Vec::new(),
         tm1637: Vec::new(),
         hx711: Vec::new(),
         seven_segment: Vec::new(),
@@ -3824,21 +3884,11 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
-        esp32c3_irq_routing: false,
-        riscv_irq_lines: 0,
-        esp32c3_system_idx: None,
-        esp32c3_interrupt_core0_idx: None,
-        esp32c3_irq_cache: None,
-        esp32c3_asserted_sources: [0; 2],
-        esp32c3_sched_asserted_sources: [0; 2],
+        irq_fabric: InterruptFabric::default(),
         esp32c3_sensitive_idx: None,
         esp32c3_pms: None,
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
-        esp32s3_irq_routing: false,
-        esp32s3_intmatrix_idx: None,
-        esp32s3_asserted_sources: [0; 2],
-        esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
@@ -3847,6 +3897,9 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         bus_trace: bus_trace::new_log(),
         logic_tap: crate::logic_capture::LogicTap::new(),
         pin_map: std::collections::HashMap::new(),
+        analog_pin_map: std::collections::HashMap::new(),
+        io_voltage_v: None,
+        gpio_input_thresholds: None,
     };
     bus.rebuild_peripheral_ranges();
 

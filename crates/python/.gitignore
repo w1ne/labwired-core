@@ -1,0 +1,4 @@
+python/labwired/configs/
+python/labwired/*.so
+__pycache__/
+configs/

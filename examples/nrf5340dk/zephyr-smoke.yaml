@@ -1,0 +1,25 @@
+# LabWired — nRF5340-DK Zephyr boot smoke test
+#
+# Runs REAL, unmodified upstream Zephyr v3.7 `hello_world`, built for board
+# `nrf5340dk/nrf5340/cpuapp`, through the whole nRF5340 boot: clock_control
+# starts and polls HFCLK/LFCLK, nrf_rtc_timer initialises, and the banner
+# leaves over the UARTE0 EasyDMA console at the 0x50000000 non-secure alias.
+#
+# The ELF already booted in `firmware_survival.rs` — IN PROCESS. Nothing drove
+# it through the CLI, so nrf5340 was carried in configs/ci/chip-coverage.yaml as
+# a chip no gate executed. An in-process test proves the models; it does not
+# prove the command every user and every other gate runs. This closes that.
+#
+# Committed fixture, no toolchain, well under a second.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/nrf5340-zephyr-hello.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+assertions:
+  # The Zephyr banner names the board it was built for: a fixture swapped for
+  # some other Nordic image would still print "Booting Zephyr OS" and fail here.
+  - uart_contains: "*** Booting Zephyr OS build"
+  - uart_contains: "Hello World! nrf5340dk/nrf5340/cpuapp"
+  - expected_stop_reason: max_steps

@@ -22,6 +22,7 @@ use crate::peripherals::components;
 pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bg770a::BG770A_KIT,
     &components::neo6m::NEO6M_KIT,
+    &components::ydlidar::YDLIDAR_KIT,
     &components::adxl345::ADXL345_KIT,
     &components::ina219::INA219_KIT,
     &components::ads1115::ADS1115_KIT,
@@ -50,6 +51,9 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::ssd1306::SSD1306_128X32_KIT,
     &components::sh1107::SH1107_KIT,
     &components::ili9341::ILI9341_KIT,
+    &components::rm67162::RM67162_KIT,
+    &components::st7789::ST7789_KIT,
+    &components::inmp441::INMP441_KIT,
     &components::ili9341_parallel::ILI9341_PARALLEL_KIT,
     &components::ssd1680_tricolor_290::SSD1680_TRICOLOR_290_KIT,
     &components::uc8151d_tricolor_290::UC8151D_TRICOLOR_290_KIT,
@@ -150,6 +154,11 @@ const TYPE_ALIASES: &[(&str, &str)] = &[
     // H-bridge family.
     ("tb6612", "l298n"),
     ("l293d", "l298n"),
+    // A fader is a pot. Same three-terminal carbon track and the same wiper
+    // voltage the ADC reads; only the mechanism the human touches differs, and
+    // the catalog keeps them apart for the BODY (an 88mm fader is not a 9.53mm
+    // trimmer), not for the electrical model.
+    ("slide-potentiometer", "potentiometer"),
     // Unipolar stepper.
     ("stepper-28byj48", "uln2003"),
     // CAN diagnostic one-shot injector alias.

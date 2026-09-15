@@ -42,8 +42,8 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
     // Note: SystemBus::new() creates default memories. We resize them.
     // Actually, SystemBus::from_config uses chip.flash/ram directly, so we don't need to manually resize here.
     // We just need to ensure the values are valid.
-    let _flash_size = labwired_config::parse_size(&chip.flash.size)? as usize;
-    let _ram_size = labwired_config::parse_size(&chip.ram.size)? as usize;
+    let _flash_size = chip.flash.size as usize;
+    let _ram_size = chip.ram.size as usize;
 
     // Create Manual System Manifest
     let dummy_manifest = labwired_config::SystemManifest {
@@ -52,6 +52,7 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
         schema_version: "1.0".to_string(),
         name: "test-bench".to_string(),
         chip: path.to_string_lossy().to_string(),
+        cpu_hz: None,
         external_devices: vec![],
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -97,6 +98,14 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
             }
+        }
+        Arch::Avr => {
+            // P0 AVR has no SVD-backed peripheral list on the chip yaml yet
+            // (peripherals: []). Nothing to validate beyond load.
+            println!(
+                "Skipping AVR register compliance for {:?} (no SVD map)",
+                path
+            );
         }
         Arch::Unknown => {
             println!("Skipping unknown architecture for {:?}", path);

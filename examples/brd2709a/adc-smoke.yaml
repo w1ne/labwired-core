@@ -1,0 +1,16 @@
+# LabWired - BRD2709A IADC smoke: a potentiometer read through analogRead.
+#
+# The pot boots centred at 50 %, so its wiper sits at 1650 mV of the 3300 mV
+# AVDD reference and a 12-bit conversion is 2048. That number is the whole
+# point of the test: a model that ignored PINPOS, or converted against the
+# wrong reference, or handed back a constant, would not produce it.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-adc"
+  system: "./adc-system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "MG26-ADC"
+  - uart_regex: "code=2048"
+  - expected_stop_reason: max_steps

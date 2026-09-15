@@ -399,6 +399,12 @@ impl Peripheral for Rp2040I2c {
                         self.attached_devices[idx]
                             .borrow_mut()
                             .select_address(addr7);
+                        // First command of a transaction → slave START so
+                        // pointer-phase devices (INA219, etc.) reset.
+                        if self.wire_frames.len() <= 1 {
+                            // wire_frames already has the address frame.
+                            self.attached_devices[idx].borrow_mut().start();
+                        }
                         if value & DATA_CMD_READ != 0 {
                             let b = self.attached_devices[idx].borrow_mut().read();
                             self.rx_byte.set(Some(b));
@@ -414,6 +420,7 @@ impl Peripheral for Rp2040I2c {
                         self.set_raw(INTR_TX_EMPTY);
                         self.activity.set(false);
                         if stop {
+                            self.attached_devices[idx].borrow_mut().stop();
                             self.set_raw(INTR_STOP_DET);
                         }
                     }

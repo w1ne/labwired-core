@@ -112,6 +112,7 @@ mod stm32_legacy_i2c_waveform_tests {
             schema_version: "1.0".to_string(),
             name: "legacy-i2c-waveform".to_string(),
             chip: path.to_string(),
+            cpu_hz: None,
             external_devices: vec![],
             cosim_models: Vec::new(),
             motor_models: Vec::new(),

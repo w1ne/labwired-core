@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 360" width="280" height="360">
+  <title>RP2350-Zero top illustration</title>
+  <desc>Flat vector of the USB-C castellated module. No vendor logos. USB-C at top. BOOT left, RUN right, WS2812 below the die.</desc>
+  <rect width="280" height="360" fill="#FFFFFF"/>
+  <g transform="translate(32,24)">
+    <rect x="0" y="0" width="216" height="282" rx="8" fill="#1e4d8c" stroke="#0d1013" stroke-width="2"/>
+    <rect x="73" y="0" width="70" height="28" rx="6" fill="#d4a84b" stroke="#0d1013" stroke-width="1.25"/>
+    <rect x="80" y="6" width="56" height="16" rx="4" fill="#20252a"/>
+    <text x="108" y="52" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="9" fill="#e8eee9">RP2350-ZERO</text>
+    <circle cx="70" cy="88" r="11" fill="#e8eee9" stroke="#0d1013" stroke-width="1.25"/>
+    <circle cx="70" cy="88" r="5" fill="#c9c4b8"/>
+    <text x="70" y="112" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="8" fill="#e8eee9">BOOT</text>
+    <circle cx="146" cy="88" r="11" fill="#e8eee9" stroke="#0d1013" stroke-width="1.25"/>
+    <circle cx="146" cy="88" r="5" fill="#c9c4b8"/>
+    <text x="146" y="112" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="8" fill="#e8eee9">RUN</text>
+    <rect x="78" y="122" width="60" height="60" rx="3" fill="#20252a" stroke="#0d1013"/>
+    <text x="108" y="156" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="9" fill="#cbd1d4">RP2350A</text>
+    <circle cx="108" cy="204" r="8" fill="#38e88a" stroke="#0d1013"/>
+    <circle cx="108" cy="204" r="3.5" fill="#6ca8ff"/>
+    <text x="108" y="224" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="8" fill="#e8eee9">WS2812 GP16</text>
+    <!-- castellations -->
+    <g fill="#d4a84b" stroke="#0d1013" stroke-width="0.8">
+      <circle cx="216" cy="42" r="6"/><circle cx="216" cy="72" r="6"/>
+      <circle cx="216" cy="102" r="6"/><circle cx="216" cy="132" r="6"/>
+      <circle cx="216" cy="162" r="6"/><circle cx="216" cy="192" r="6"/>
+      <circle cx="216" cy="222" r="6"/><circle cx="216" cy="252" r="6"/>
+      <circle cx="0" cy="42" r="6"/><circle cx="0" cy="72" r="6"/>
+      <circle cx="0" cy="102" r="6"/><circle cx="0" cy="132" r="6"/>
+      <circle cx="0" cy="162" r="6"/><circle cx="0" cy="192" r="6"/>
+      <circle cx="0" cy="222" r="6"/><circle cx="0" cy="252" r="6"/>
+      <circle cx="0" cy="270" r="6"/>
+      <circle cx="36" cy="282" r="6"/><circle cx="68" cy="282" r="6"/>
+      <circle cx="100" cy="282" r="6"/><circle cx="132" cy="282" r="6"/>
+      <circle cx="164" cy="282" r="6"/><circle cx="196" cy="282" r="6"/>
+    </g>
+  </g>
+  <text x="140" y="330" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10" fill="#445">USB-C · 18.00 × 23.50 mm</text>
+  <text x="140" y="346" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="9" fill="#667">Illustration, not a product photo</text>
+</svg>

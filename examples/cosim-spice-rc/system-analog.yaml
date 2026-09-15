@@ -1,0 +1,27 @@
+# Same circuit, same routing, same probe — solved by the in-core analog engine
+# instead of ngspice. The only line that differs from `system.yaml` is
+# `adapter:` (and dropping `model:`, which the in-core engine has no use for).
+# This is the manifest the browser can run: it spawns no process.
+name: "cosim-spice-rc-analog"
+chip: "../../configs/chips/stm32f401.yaml"
+cosim_models:
+  - id: "rc_lowpass"
+    adapter: "analog"
+    step_ns: 100000            # 100 us; RC tau is 1 ms
+    inputs:
+      gpio: "board.gpio.pa5"
+    outputs:
+      v_out: "board.analog.pa0_volts"
+    config:
+      netlist: "./rc.cir"
+      vdd: 3.3
+      substeps: 10
+      integration: "be"        # be | trap
+      probes:
+        v_out: "v(out)"        # LabWired output <- node voltage
+      sources:
+        gpio: "Vgpio"          # LabWired input  -> SPICE voltage source
+      trace:
+        - "v(in)"              # extra oscilloscope channels beyond the routed
+        - "i(Vgpio)"           # outputs
+external_devices: []

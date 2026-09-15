@@ -335,7 +335,11 @@ registers:
     address_offset: 0x6FC
     size: 32
     access: "R/W"
-    reset_value: 0x02108190
+    # GPIO_DATE_REG, the S3's silicon version stamp. TRM v1.8 Register 6.34
+    # (p.512): GPIO_DATE (b27:0) = 0x1907040, b31:28 reserved. The previous
+    # 0x02108190 is not this part's stamp and is not any Espressif part's —
+    # the S2 reads 0x01905061, the C3 0x02006130, the C2 0x02106190.
+    reset_value: 0x01907040
 
 interrupts:
   GPIO: 16

@@ -8,6 +8,12 @@ name: "ci-fixture-cortex-m3-uart1"
 arch: "cortex-m3"
 core: "cortex-m3"
 registers_count: 50
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# CI fixture. 80 MHz is the rate the emitter used to hand every non-C3 board
+# before the clock moved here, kept so fixture timing is unchanged.
+cpu_hz: 80_000_000
+
 flash:
   base: 0x00000000
   size: "128KB"

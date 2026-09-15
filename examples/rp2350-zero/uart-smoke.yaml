@@ -1,0 +1,12 @@
+# LabWired - Waveshare RP2350-Zero UART smoke
+# Firmware: firmware-rp2350-demo (bare-metal, RP2350 UART0 DR @ 0x40070000).
+# Proves the chip descriptor + this system YAML boot. Does not prove USB CDC.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "RP2350_SMOKE_OK"
+  - expected_stop_reason: max_steps
