@@ -3188,7 +3188,6 @@ fn test_flash_boot_alias_read_and_write() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
-        include: None,
     };
 
     bus.flash.write_u8(0x0800_0000, 0x12);
@@ -3291,7 +3290,6 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
-        include: None,
     };
     bus.rebuild_peripheral_ranges();
     bus
@@ -3545,7 +3543,6 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
-        include: None,
     };
     bus.rebuild_peripheral_ranges();
     bus
@@ -3797,7 +3794,6 @@ fn test_peripheral_range_index_lookup() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
-        include: None,
     };
 
     bus.rebuild_peripheral_ranges();
@@ -3904,7 +3900,6 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         analog_pin_map: std::collections::HashMap::new(),
         io_voltage_v: None,
         gpio_input_thresholds: None,
-        include: None,
     };
     bus.rebuild_peripheral_ranges();
 
