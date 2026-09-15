@@ -1367,18 +1367,19 @@ mod tests {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
             reset_vector_offset: 0,
-            atomic_register_aliases: false,
+            atomic_register_aliases: labwired_config::AtomicAliasFlavour::None,
             memory_regions: Vec::new(),
             name: "test".to_string(),
+            cpu_hz: 0,
             arch: labwired_config::Arch::Arm,
             core: None,
             flash: labwired_config::MemoryRange {
                 base: 0x0000_0000,
-                size: "256KB".to_string(),
+                size: 256 * 1024,
             },
             ram: labwired_config::MemoryRange {
                 base: 0x2000_0000,
-                size: "32KB".to_string(),
+                size: 32 * 1024,
             },
             peripherals: vec![labwired_config::PeripheralConfig {
                 id: "porta".to_string(),
@@ -1386,20 +1387,28 @@ mod tests {
                 base_address: 0x4100_4400,
                 size: None,
                 irq: None,
+                irq_controller: None,
                 clock: None,
                 config: gpio_config,
             }],
             pins: Default::default(),
+            analog_pins: Default::default(),
+            io_voltage_v: None,
+            gpio_input_thresholds: None,
+            include: None,
         };
 
         let manifest = labwired_config::SystemManifest {
+            parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
+            cpu_hz: None,
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             cosim_models: Vec::new(),
+            motor_models: Vec::new(),
             board_io: vec![
                 labwired_config::BoardIoBinding {
                     id: "led".to_string(),
@@ -1410,6 +1419,7 @@ mod tests {
                     active_high: true,
                     device_type: None,
                     i2c_address: None,
+                    channel: None,
                 },
                 labwired_config::BoardIoBinding {
                     id: "button".to_string(),
@@ -1420,9 +1430,11 @@ mod tests {
                     active_high: true,
                     device_type: None,
                     i2c_address: None,
+                    channel: None,
                 },
             ],
             debug_uart: None,
+            wifi_ap: None,
             peripherals: Vec::new(),
         };
 

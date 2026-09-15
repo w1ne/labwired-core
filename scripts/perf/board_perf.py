@@ -514,11 +514,14 @@ def plan_coverage(chips: dict[str, dict]) -> tuple[dict[str, str], dict[str, str
     waived: dict[str, str] = {}
     unclassified: list[str] = []
     for board, chip in chips.items():
+        # Explicit waiver wins: a smoke twin can share flash/RAM bases with
+        # an nRF/STM32 perf-spin map and still must not gate that binary.
+        if board in WAIVED:
+            waived[board] = WAIVED[board]
+            continue
         fixture = fixture_for(chip)
         if fixture is not None:
             covered[board] = fixture
-        elif board in WAIVED:
-            waived[board] = WAIVED[board]
         else:
             flash = chip.get("flash", {}).get("base")
             ram = chip.get("ram", {}).get("base")
