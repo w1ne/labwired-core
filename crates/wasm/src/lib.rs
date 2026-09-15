@@ -1614,6 +1614,9 @@ impl WasmSimulator {
     /// Execute up to max_cycles steps, returning the number actually executed.
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
+        if self.jit_browser_enabled && self.arch == MachineFamily::CortexM {
+            return self.step_batch_cortex_m_jit(max_cycles);
+        }
         let before = self.machine().total_cycles;
         let result = self.advance_machine(AdvanceRequest::run(Some(u64::from(max_cycles))));
         let elapsed = self.machine().total_cycles.saturating_sub(before);
@@ -1634,6 +1637,56 @@ impl WasmSimulator {
             // as progress: the firmware would run on against nothing.
             Err(failure) => Err(failure.into_js()),
         }
+    }
+
+    /// Cortex-M browser JIT fast path. Opt-in (`set_jit_enabled`). Not the
+    /// native `run_jit_loop` tick contract: each compiled block ticks
+    /// peripherals immediately. Misses fall back to `AdvanceRequest::single`.
+    fn step_batch_cortex_m_jit(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
+        if self.jit_browser_cache.is_none() {
+            self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));
+        }
+        let mut retired = 0u32;
+        while retired < max_cycles {
+            let jit_n = {
+                let cache = self.jit_browser_cache.as_mut().unwrap();
+                let machine = self.machine.as_mut().unwrap();
+                let Some(cpu) = machine
+                    .cpu
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<labwired_core::cpu::CortexM>())
+                else {
+                    break;
+                };
+                jit_browser::try_browser_cortex_m_jit_step(
+                    cpu,
+                    &mut machine.bus,
+                    cache,
+                    max_cycles - retired,
+                )
+            };
+            if jit_n == 0 {
+                let before = self.machine().total_cycles;
+                self.advance_machine(AdvanceRequest::single())
+                    .map_err(AdvanceFailure::into_js)?;
+                let got = self.machine().total_cycles.saturating_sub(before).max(1);
+                retired = retired.saturating_add(got.min(u64::from(max_cycles - retired)) as u32);
+            } else {
+                let machine = self.machine.as_mut().unwrap();
+                machine.total_cycles += u64::from(jit_n);
+                machine.bus.set_current_cycle(machine.total_cycles);
+                let (irqs, costs) = machine.bus.tick_peripherals_fully();
+                for c in &costs {
+                    machine.total_cycles += u64::from(c.cycles);
+                }
+                machine.bus.set_current_cycle(machine.total_cycles);
+                for irq in irqs {
+                    machine.cpu.set_exception_pending(irq);
+                }
+                retired += jit_n;
+            }
+        }
+        Ok(retired)
     }
 
     /// Execute one measured batch and return both wall-clock timing and core

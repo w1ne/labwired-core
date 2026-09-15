@@ -92,7 +92,15 @@ pub fn is_alu_emittable(inst: &Instruction) -> bool {
         | Rev16 { .. }
         | RevSh { .. }
         | Adr { .. }
-        | LdrLit { .. } => true,
+        | LdrLit { .. }
+        | VaddF32 { .. }
+        | VsubF32 { .. }
+        | VmulF32 { .. }
+        | VdivF32 { .. }
+        | VmovF32Reg { .. }
+        | VmovF32Imm { .. }
+        | VmovSnRt { .. }
+        | VmovRtSn { .. } => true,
         AddRegHigh { rd, .. } | MovReg { rd, .. } if *rd != 15 => true,
         DataProcImm32 { op, .. } | DataProc32 { op, .. } if dataproc_op_emittable(*op) => true,
         _ => false,
@@ -133,6 +141,7 @@ pub fn is_mem_emittable(inst: &Instruction) -> bool {
             true
         }
         StmiaW { rn, .. } | StmdbW { rn, .. } if *rn != 15 => true,
+        Vldr { rn, .. } | Vstr { rn, .. } if *rn != 15 => true,
         _ => false,
     }
 }
@@ -150,6 +159,8 @@ pub fn is_terminator_emittable(inst: &Instruction) -> bool {
             | BlxReg { .. }
             | MovReg { rd: 15, .. }
             | Pop { p: true, .. }
+            | LdrImm32 { rt: 15, .. }
+            | LdrImm32Idx { rt: 15, .. }
     ) || matches!(
         inst,
         LdmiaW { rn, reg_list, .. } | LdmdbW { rn, reg_list, .. }
@@ -231,16 +242,16 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
     expr.push(op::I32_CONST);
     enc::sleb(&mut expr, wire as i64);
 
-    let binding = if body.has_mem {
-        let (_base, len) = window.expect("mem op emitted without a RAM window");
+    let binding = if body.has_mem || body.has_vfp {
+        let len = window.map(|(_, l)| l as usize).unwrap_or(0);
         Some(MemBinding {
-            ram_len: len as usize,
+            ram_len: len,
             has_store: body.has_store,
         })
     } else {
         None
     };
-    let code_bytes = if body.has_mem {
+    let code_bytes = if body.has_mem || body.has_vfp {
         build_module_ram_host(LOCAL_COUNT, &expr)
     } else {
         build_module(LOCAL_COUNT, 1, &expr)
@@ -272,10 +283,54 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
     })
 }
 
+fn it_body_len(mask: u8) -> u32 {
+    if mask == 0 {
+        0
+    } else {
+        4 - mask.trailing_zeros()
+    }
+}
+
 fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
     let mut ops = Vec::new();
     let mut cur = pc;
     while let Some((inst, len)) = decode_at(cur, code) {
+        if let Instruction::It { mask, .. } = inst {
+            let n = it_body_len(mask);
+            if n == 0 || n > 4 {
+                break;
+            }
+            let mut peek_pc = cur + len;
+            let mut body = Vec::new();
+            let mut ok = true;
+            for _ in 0..n {
+                let Some((pi, pl)) = decode_at(peek_pc, code) else {
+                    ok = false;
+                    break;
+                };
+                if !is_alu_emittable(&pi)
+                    || matches!(pi, Instruction::It { .. } | Instruction::LdrLit { .. })
+                {
+                    ok = false;
+                    break;
+                }
+                body.push(Op {
+                    pc: peek_pc as u32,
+                    inst: pi,
+                });
+                peek_pc += pl;
+            }
+            if !ok || ops.len() as u32 + 1 + n > super::MAX_BLOCK_INSTRS {
+                break;
+            }
+            ops.push(Op {
+                pc: cur as u32,
+                inst,
+            });
+            ops.extend(body);
+            cur = peek_pc;
+            continue;
+        }
         if !is_emittable(&inst, mem_ok) {
             break;
         }
@@ -342,8 +397,10 @@ struct Body {
     window: Option<RamWindow>,
     has_mem: bool,
     has_store: bool,
+    has_vfp: bool,
     has_unsupported: bool,
     emitted: u32,
+    it_state: u8,
 }
 
 impl Body {
@@ -408,7 +465,16 @@ impl Body {
     }
 
     /// NZ only (C and V unchanged). Result is in RESULT.
+    /// T1 encodings use `setflags = !InITBlock()`; TST/TEQ/CMP/CMN call
+    /// [`Self::update_nz_unconditional`].
     fn update_nz(&mut self) {
+        if self.it_state != 0 {
+            return;
+        }
+        self.update_nz_unconditional();
+    }
+
+    fn update_nz_unconditional(&mut self) {
         self.xpsr_touch();
         self.local_get(XPSR_LOCAL);
         self.i32_const(0x3FFF_FFFF_u32 as i32);
@@ -430,6 +496,11 @@ impl Body {
         // We emit a dedicated helper that takes carry and overflow already computed
         // into SCRATCH (overflow) with carry still on the stack.
         let _ = carry_then_overflow;
+        if self.it_state != 0 {
+            self.buf.push(op::DROP);
+            self.buf.push(op::DROP);
+            return;
+        }
         self.xpsr_touch();
         // stack: c, v  (v on top)
         self.local_set(SCRATCH_LOCAL); // v
@@ -480,6 +551,9 @@ impl Body {
         } else {
             self.buf.push(op::DROP);
         }
+        if self.it_state != 0 && rd.is_some() {
+            return;
+        }
         // carry = res <u op1
         self.push_result();
         self.local_get(SCRATCH_LOCAL);
@@ -523,6 +597,9 @@ impl Body {
             self.write(d);
         } else {
             self.buf.push(op::DROP);
+        }
+        if self.it_state != 0 && rd.is_some() {
+            return;
         }
         // ARM C = NOT borrow. borrow iff res >u op1. C = res <=u op1.
         self.push_result();
@@ -905,6 +982,7 @@ impl Body {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_dataproc_reg(
         &mut self,
         pc: u32,
@@ -1168,6 +1246,67 @@ impl Body {
         self.has_store = true;
     }
 
+    fn emit_vfp_mem(&mut self, pc: u32, sd: u8, rn: u8, imm: i32, add: bool, is_load: bool) {
+        let (ram_base, ram_len) = self.window.expect("emit_vfp_mem without window");
+        let ram_end = ram_base.wrapping_add(ram_len);
+        let hi = ram_end.wrapping_sub(4);
+        self.has_mem = true;
+        self.has_vfp = true;
+        self.read(rn, pc);
+        self.i32_const(imm);
+        self.buf.push(if add { op::I32_ADD } else { op::I32_SUB });
+        self.local_set(SCRATCH_LOCAL);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_GE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(hi as i32);
+        self.buf.push(op::I32_LE_U);
+        self.buf.push(op::I32_AND);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        let writes_before = self.writes;
+        if is_load {
+            self.i32_const(sd as i32);
+            self.emit_host_load(&MemAccess::Load {
+                rd: 0,
+                opcode: op::I32_LOAD,
+            });
+            self.buf.push(op::CALL);
+            enc::uleb(&mut self.buf, 3);
+        } else {
+            self.ram_offset_from_scratch();
+            self.i32_const(sd as i32);
+            self.buf.push(op::CALL);
+            enc::uleb(&mut self.buf, 2);
+            self.i32_const(4);
+            self.buf.push(op::CALL);
+            enc::uleb(&mut self.buf, 1);
+            self.store_const_at(RES_FLAG_SLOT, 1);
+            self.has_store = true;
+        }
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
+    }
+
+    fn emit_vfp_binop(&mut self, sd: u8, sn: u8, sm: u8, fop: u8) {
+        self.has_vfp = true;
+        self.i32_const(sd as i32);
+        self.i32_const(sn as i32);
+        self.buf.push(op::CALL);
+        enc::uleb(&mut self.buf, 2);
+        self.buf.push(op::F32_REINTERPRET_I32);
+        self.i32_const(sm as i32);
+        self.buf.push(op::CALL);
+        enc::uleb(&mut self.buf, 2);
+        self.buf.push(op::F32_REINTERPRET_I32);
+        self.buf.push(fop);
+        self.buf.push(op::I32_REINTERPRET_F32);
+        self.buf.push(op::CALL);
+        enc::uleb(&mut self.buf, 3);
+    }
+
     fn emit_mem(&mut self, pc: u32, addr_reg: u8, imm: i32, access: MemAccess) {
         let (ram_base, ram_len) = self.window.expect("emit_mem without window");
         let ram_end = ram_base.wrapping_add(ram_len);
@@ -1234,8 +1373,35 @@ impl Body {
         }
     }
 
+    fn begin_pred(&mut self) -> bool {
+        if self.it_state == 0 {
+            return false;
+        }
+        self.push_condition(self.it_state >> 4);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        true
+    }
+
+    fn end_pred(&mut self, pred: bool) {
+        if !pred {
+            return;
+        }
+        self.buf.push(op::END);
+        self.it_state = (self.it_state & 0xE0) | (((self.it_state & 0x1F) << 1) & 0x1F);
+        if self.it_state & 0x0F == 0 {
+            self.it_state = 0;
+        }
+    }
+
     fn emit_instruction(&mut self, pc: u32, inst: &Instruction, code: &CodeView<'_>) {
         use Instruction::*;
+        if let It { cond, mask } = *inst {
+            self.it_state = (cond << 4) | mask;
+            self.emitted += 1;
+            return;
+        }
+        let pred = self.begin_pred();
         match *inst {
             Nop | Barrier => {}
             MovImm { rd, imm } => {
@@ -1315,7 +1481,7 @@ impl Body {
                 self.buf.push(op::I32_AND);
                 self.set_result_from_stack();
                 self.buf.push(op::DROP);
-                self.update_nz();
+                self.update_nz_unconditional();
             }
             And { rd, rm } => self.logic_nz(rd, pc, rm, op::I32_AND, false),
             Orr { rd, rm } => self.logic_nz(rd, pc, rm, op::I32_OR, false),
@@ -1723,6 +1889,42 @@ impl Body {
                     opcode: op::I32_STORE,
                 },
             ),
+            Vldr { sd, rn, imm, add } => self.emit_vfp_mem(pc, sd, rn, imm as i32, add, true),
+            Vstr { sd, rn, imm, add } => self.emit_vfp_mem(pc, sd, rn, imm as i32, add, false),
+            VaddF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_ADD),
+            VsubF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_SUB),
+            VmulF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_MUL),
+            VdivF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_DIV),
+            VmovF32Reg { sd, sm } => {
+                self.has_vfp = true;
+                self.i32_const(sd as i32);
+                self.i32_const(sm as i32);
+                self.buf.push(op::CALL);
+                enc::uleb(&mut self.buf, 2);
+                self.buf.push(op::CALL);
+                enc::uleb(&mut self.buf, 3);
+            }
+            VmovF32Imm { sd, imm_bits } => {
+                self.has_vfp = true;
+                self.i32_const(sd as i32);
+                self.i32_const(imm_bits as i32);
+                self.buf.push(op::CALL);
+                enc::uleb(&mut self.buf, 3);
+            }
+            VmovSnRt { sn, rt } => {
+                self.has_vfp = true;
+                self.i32_const(sn as i32);
+                self.read(rt, pc);
+                self.buf.push(op::CALL);
+                enc::uleb(&mut self.buf, 3);
+            }
+            VmovRtSn { rt, sn } => {
+                self.has_vfp = true;
+                self.i32_const(sn as i32);
+                self.buf.push(op::CALL);
+                enc::uleb(&mut self.buf, 2);
+                self.write(rt);
+            }
             LdrLit { rt, imm } => {
                 let addr = (pc & !3).wrapping_add(4).wrapping_add(imm as u32);
                 if let Some(bytes) = code.from(addr as Pc) {
@@ -1777,6 +1979,7 @@ impl Body {
             } => self.emit_ldm_stm_wide(pc, rn, reg_list, writeback, false, true),
             _ => unreachable!("non-emittable instruction reached emit: {inst:?}"),
         }
+        self.end_pred(pred);
         self.emitted += 1;
     }
 
@@ -1796,6 +1999,7 @@ impl Body {
         self.local_set(SCRATCH_LOCAL);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_mem_idx(
         &mut self,
         pc: u32,
@@ -2287,6 +2491,33 @@ impl Body {
         self.write(rd);
     }
 
+    fn emit_ldr_pc_from_scratch(&mut self, pc: u32) {
+        let writes_before = self.writes;
+        let Some((ram_base, ram_len)) = self.window else {
+            self.emit_unsupported(pc, &writes_before);
+            return;
+        };
+        let hi = ram_base.wrapping_add(ram_len).wrapping_sub(4);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(ram_base as i32);
+        self.buf.push(op::I32_GE_U);
+        self.local_get(SCRATCH_LOCAL);
+        self.i32_const(hi as i32);
+        self.buf.push(op::I32_LE_U);
+        self.buf.push(op::I32_AND);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_EMPTY);
+        self.emit_host_load(&MemAccess::Load {
+            rd: 0,
+            opcode: op::I32_LOAD,
+        });
+        self.local_set(SCRATCH_LOCAL);
+        self.emit_exc_return_or_next_pc(pc, &writes_before);
+        self.buf.push(op::ELSE);
+        self.emit_fault(pc, &writes_before);
+        self.buf.push(op::END);
+    }
+
     fn emit_exc_return_or_next_pc(&mut self, pc: u32, writes_before: &[bool; 16]) {
         // EXC_RETURN: (addr & 0xFFFFFFF0) == 0xFFFFFFF0 → interpreter.
         self.local_get(SCRATCH_LOCAL);
@@ -2534,6 +2765,72 @@ impl Body {
                 self.emit_exc_return_or_next_pc(pc, &writes_before);
             }
             Pop { registers, p: true } => self.emit_pop_pc(pc, registers),
+            LdrImm32 { rt: 15, rn, imm12 } => {
+                self.has_mem = true;
+                self.read(rn, pc);
+                self.i32_const(imm12 as i32);
+                self.buf.push(op::I32_ADD);
+                self.local_set(SCRATCH_LOCAL);
+                self.emit_ldr_pc_from_scratch(pc);
+            }
+            LdrImm32Idx {
+                rt: 15,
+                rn,
+                imm8,
+                pre_index,
+                add,
+                writeback,
+            } => {
+                self.has_mem = true;
+                self.read(rn, pc);
+                self.local_set(OP2_LOCAL);
+                if pre_index {
+                    self.local_get(OP2_LOCAL);
+                    self.i32_const(imm8 as i32);
+                    if add {
+                        self.buf.push(op::I32_ADD);
+                    } else {
+                        self.buf.push(op::I32_SUB);
+                    }
+                } else {
+                    self.local_get(OP2_LOCAL);
+                }
+                self.local_set(SCRATCH_LOCAL);
+                let writes_before = self.writes;
+                let Some((ram_base, ram_len)) = self.window else {
+                    self.emit_unsupported(pc, &writes_before);
+                    return;
+                };
+                let hi = ram_base.wrapping_add(ram_len).wrapping_sub(4);
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(ram_base as i32);
+                self.buf.push(op::I32_GE_U);
+                self.local_get(SCRATCH_LOCAL);
+                self.i32_const(hi as i32);
+                self.buf.push(op::I32_LE_U);
+                self.buf.push(op::I32_AND);
+                self.buf.push(op::IF);
+                self.buf.push(op::T_EMPTY);
+                self.emit_host_load(&MemAccess::Load {
+                    rd: 0,
+                    opcode: op::I32_LOAD,
+                });
+                self.local_set(SCRATCH_LOCAL);
+                if writeback {
+                    self.local_get(OP2_LOCAL);
+                    self.i32_const(imm8 as i32);
+                    if add {
+                        self.buf.push(op::I32_ADD);
+                    } else {
+                        self.buf.push(op::I32_SUB);
+                    }
+                    self.write(rn);
+                }
+                self.emit_exc_return_or_next_pc(pc, &writes_before);
+                self.buf.push(op::ELSE);
+                self.emit_fault(pc, &writes_before);
+                self.buf.push(op::END);
+            }
             LdmiaW {
                 rn,
                 reg_list,

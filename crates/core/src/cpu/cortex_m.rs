@@ -223,8 +223,7 @@ impl CortexM {
         Self::default()
     }
 
-    #[cfg(feature = "jit")]
-    pub(crate) fn clear_exclusive_monitor(&mut self) {
+    pub fn clear_exclusive_monitor(&mut self) {
         self.exclusive_byte = None;
     }
 
@@ -668,9 +667,8 @@ impl CortexM {
         if !observers.is_empty() {
             return false;
         }
-        if self.it_state != 0 {
-            return false;
-        }
+        // IT is interpreted insn-by-insn inside `run_jit_loop`; do not
+        // disable the whole batch (that skipped compiled code after the IT).
         if bus.logic_tap().is_some_and(|t| t.push_armed()) {
             return false;
         }
@@ -783,6 +781,43 @@ impl CortexM {
                                         self.step(bus, observers, config)?;
                                         engine.note_interpreted();
                                         n = 1;
+                                    } else if actual_n > 0 && !needs_interp {
+                                        // Chain to the next compiled block without
+                                        // observe() (hot-counter) or interpreter.
+                                        while retired + n < max_count
+                                            && !self.jit_takeable_exception()
+                                            && self.it_state == 0
+                                        {
+                                            let npc = self.pc as u64;
+                                            let bn = engine.ready_instr_count(npc).unwrap_or(0);
+                                            if bn == 0 || retired + n + bn > max_count {
+                                                break;
+                                            }
+                                            let more = if let Some(sb) = bus
+                                                .as_any_mut()
+                                                .and_then(|a| a.downcast_mut::<SystemBus>())
+                                            {
+                                                let (extra, next_pc, clear_exclusive, needs_interp) =
+                                                    engine.run_ready(npc, self, &mut sb.ram.data);
+                                                if clear_exclusive {
+                                                    self.exclusive_byte = None;
+                                                }
+                                                self.pc = next_pc as u32;
+                                                engine.note_chained();
+                                                Some((extra, needs_interp))
+                                            } else {
+                                                None
+                                            };
+                                            match more {
+                                                Some((extra, needs_interp)) => {
+                                                    n += extra;
+                                                    if extra == 0 || needs_interp {
+                                                        break;
+                                                    }
+                                                }
+                                                None => break,
+                                            }
+                                        }
                                     }
                                 }
                                 None => {
@@ -831,6 +866,10 @@ impl CortexM {
 }
 
 impl Cpu for CortexM {
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
     #[cfg(feature = "jit")]
     fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
         self.jit_stats().map(|s| crate::CpuJitStats {

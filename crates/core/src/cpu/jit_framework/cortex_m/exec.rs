@@ -26,6 +26,7 @@ const REG_SYNC_BYTES: usize = NEXT_PC_SLOT as usize + 4;
 struct RamHost {
     ptr: *mut u8,
     len: usize,
+    fpu: *mut u32,
 }
 
 unsafe impl Send for RamHost {}
@@ -48,6 +49,26 @@ fn host_ram_load(caller: Caller<'_, RamHost>, off: i32, width: i32, signed: i32)
             (4, _) => i32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]),
             _ => 0,
         }
+    }
+}
+
+fn host_vfp_get(caller: Caller<'_, RamHost>, sn: i32) -> i32 {
+    let host = caller.data();
+    let i = sn as u32 as usize;
+    if host.fpu.is_null() || i >= 32 {
+        return 0;
+    }
+    unsafe { *host.fpu.add(i) as i32 }
+}
+
+fn host_vfp_set(caller: Caller<'_, RamHost>, sd: i32, bits: i32) {
+    let host = caller.data();
+    let i = sd as u32 as usize;
+    if host.fpu.is_null() || i >= 32 {
+        return;
+    }
+    unsafe {
+        *host.fpu.add(i) = bits as u32;
     }
 }
 
@@ -99,7 +120,12 @@ impl CompiledBlock {
         u32::from_le_bytes(b)
     }
 
-    pub fn run(&mut self, x: &mut [u32; 16], ram: &mut [u8]) -> (SideExit, u32, bool) {
+    pub fn run(
+        &mut self,
+        x: &mut [u32; 16],
+        ram: &mut [u8],
+        fpu: &mut [u32; 32],
+    ) -> (SideExit, u32, bool) {
         let mut bytes = [0u8; REG_SYNC_BYTES];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
@@ -108,9 +134,10 @@ impl CompiledBlock {
             .write(&mut self.store, 0, &bytes)
             .expect("register-file memory write");
 
+        self.store.data_mut().ptr = ram.as_mut_ptr();
+        self.store.data_mut().len = ram.len();
+        self.store.data_mut().fpu = fpu.as_mut_ptr();
         if self.ram_len > 0 {
-            self.store.data_mut().ptr = ram.as_mut_ptr();
-            self.store.data_mut().len = ram.len();
             self.regs
                 .write(&mut self.store, RES_FLAG_SLOT as usize, &[0u8; 4])
                 .expect("reservation-flag clear");
@@ -122,6 +149,7 @@ impl CompiledBlock {
             .expect("compiled block never traps");
         self.store.data_mut().ptr = std::ptr::null_mut();
         self.store.data_mut().len = 0;
+        self.store.data_mut().fpu = std::ptr::null_mut();
 
         self.regs
             .read(&self.store, 0, &mut bytes)
@@ -202,6 +230,7 @@ impl CortexMWasmJit {
             RamHost {
                 ptr: std::ptr::null_mut(),
                 len: 0,
+                fpu: std::ptr::null_mut(),
             },
         );
         let (ram_len, has_store) = match binding {
@@ -209,13 +238,21 @@ impl CortexMWasmJit {
             None => (0usize, false),
         };
         let regs = Memory::new(&mut store, MemoryType::new(1, None)).ok()?;
-        let instance = if ram_len > 0 {
+        let instance = if binding.is_some() {
             let load = Func::wrap(&mut store, host_ram_load);
             let store_fn = Func::wrap(&mut store, host_ram_store);
+            let vget = Func::wrap(&mut store, host_vfp_get);
+            let vset = Func::wrap(&mut store, host_vfp_set);
             Instance::new(
                 &mut store,
                 &module,
-                &[regs.into(), load.into(), store_fn.into()],
+                &[
+                    regs.into(),
+                    load.into(),
+                    store_fn.into(),
+                    vget.into(),
+                    vset.into(),
+                ],
             )
             .ok()?
         } else {
@@ -234,7 +271,7 @@ impl CortexMWasmJit {
     }
 }
 
-pub const MIN_PROFITABLE_BLOCK_INSTRS: u32 = 16;
+pub const MIN_PROFITABLE_BLOCK_INSTRS: u32 = 4;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct EngineStats {
@@ -245,6 +282,8 @@ pub struct EngineStats {
     /// Bytes memcpy'd between wasm linear memory and guest RAM. Zero-copy
     /// host load/store keeps this at 0 even for mem blocks.
     pub ram_bytes_synced: u64,
+    /// Compiled block→block transitions that skipped `observe()`.
+    pub chained: u64,
 }
 
 pub struct CortexMJitEngine {
@@ -300,7 +339,7 @@ impl CortexMJitEngine {
         let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
-        let (exit, n, clear_exclusive) = block.run(&mut x, ram);
+        let (exit, n, clear_exclusive) = block.run(&mut x, ram, &mut cpu.fpu_s);
         unpack_regs(cpu, &x);
         self.stats.block_runs += 1;
         self.stats.block_instrs += n as u64;
@@ -314,6 +353,10 @@ impl CortexMJitEngine {
 
     pub fn note_interpreted(&mut self) {
         self.stats.interpreted += 1;
+    }
+
+    pub fn note_chained(&mut self) {
+        self.stats.chained += 1;
     }
 
     pub fn try_compile_from_bus(&mut self, pc: Pc, bus: &SystemBus) {
@@ -349,7 +392,8 @@ impl CortexMJitEngine {
                 };
                 let mut x = [0u32; 16];
                 pack_regs(&machine.cpu, &mut x);
-                let (exit, n, clear_exclusive) = block.run(&mut x, &mut machine.bus.ram.data);
+                let (exit, n, clear_exclusive) =
+                    block.run(&mut x, &mut machine.bus.ram.data, &mut machine.cpu.fpu_s);
                 unpack_regs(&mut machine.cpu, &x);
                 if clear_exclusive {
                     machine.cpu.clear_exclusive_monitor();

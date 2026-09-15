@@ -40,7 +40,7 @@ js-sys = "0.3"
 # now, so classic ESP32 keeps its walk (and loses that throughput) until those
 # models are genuinely migrated. Walk deletion still applies on every bus that
 # actually earns it (C3, S3, nRF, RP2040, STM32).
-labwired-core = { path = "../core", features = ["event-scheduler"] }
+labwired-core = { path = "../core", features = ["event-scheduler", "jit-framework"] }
 labwired-config = { path = "../config" }
 labwired-loader = { path = "../loader" }
 cortex-m = "0.7"

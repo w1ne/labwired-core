@@ -60,12 +60,20 @@
 //!      counted one).
 
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
+use labwired_core::bus::SystemBus;
+use labwired_core::cpu::jit_framework::cortex_m::emit::{
+    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
+    WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+};
+use labwired_core::cpu::jit_framework::cortex_m::host::{pack_regs, unpack_regs};
+use labwired_core::cpu::jit_framework::cortex_m::CortexMFrontend;
+use labwired_core::cpu::jit_framework::CodeView;
 use labwired_core::cpu::xtensa_jit::emit_core::{self, EmitError, EmittedBlock, PsBits};
 use labwired_core::cpu::xtensa_jit_bytes::{
     EXIT_FALL_THROUGH, EXIT_HOST_BUS_ERROR, HOT_BB_L32R_ADDR, HOT_BB_PC,
 };
 use labwired_core::cpu::xtensa_sr::CCOUNT;
-use labwired_core::cpu::XtensaLx7;
+use labwired_core::cpu::{CortexM, XtensaLx7};
 use labwired_core::Bus;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -294,6 +302,10 @@ pub struct BrowserJitCache {
     /// Total hits across all compiled blocks. Tracked as a running
     /// total so `WasmSimulator::jit_hits()` is O(1).
     total_hits: u64,
+    /// Cortex-M Thumb blocks keyed by entry PC.
+    compiled_thumb: HashMap<u32, CortexMBrowserBlock>,
+    /// Thumb PCs emit refused (too short, unmodeled, instantiate error).
+    refused_thumb: HashSet<u32>,
 }
 
 impl BrowserJitCache {
@@ -365,6 +377,10 @@ impl BrowserJitCache {
     /// so the cache-wide total is O(1) to read.
     fn bump_hit(&mut self) {
         self.total_hits = self.total_hits.saturating_add(1);
+    }
+
+    fn thumb_get_mut(&mut self, pc: u32) -> Option<&mut CortexMBrowserBlock> {
+        self.compiled_thumb.get_mut(&pc)
     }
 }
 
@@ -588,4 +604,396 @@ pub fn try_browser_jit_step(
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = warn)]
     pub(crate) fn web_sys_console_warn(s: &str);
+}
+
+const THUMB_MIN_PROFITABLE: u32 = 4;
+const THUMB_CODE_WINDOW: usize = 4096;
+const THUMB_REG_BYTES: usize = 80;
+
+type ThumbLoadClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
+type ThumbStoreClosure = Closure<dyn FnMut(i32, i32, i32)>;
+type ThumbVfpGetClosure = Closure<dyn FnMut(i32) -> i32>;
+type ThumbVfpSetClosure = Closure<dyn FnMut(i32, i32)>;
+
+struct ThumbHost {
+    ram: *mut u8,
+    ram_len: usize,
+    fpu: *mut u32,
+}
+
+struct CortexMBrowserBlock {
+    run: Function,
+    memory: WebAssembly::Memory,
+    host: Rc<RefCell<ThumbHost>>,
+    end_pc: u32,
+    instr_count: u32,
+    has_store: bool,
+    _closures: Vec<ThumbLoadClosure>,
+    _void3: Vec<ThumbStoreClosure>,
+    _get: Vec<ThumbVfpGetClosure>,
+    _set: Vec<ThumbVfpSetClosure>,
+    _instance: WebAssembly::Instance,
+}
+
+impl CortexMBrowserBlock {
+    fn compile(
+        wasm_bytes: &[u8],
+        ram_host: bool,
+        end_pc: u32,
+        instr_count: u32,
+        has_store: bool,
+    ) -> Result<Self, JsValue> {
+        let buf = Uint8Array::new_with_length(wasm_bytes.len() as u32);
+        buf.copy_from(wasm_bytes);
+        let module = WebAssembly::Module::new(&buf.into())
+            .map_err(|e| JsValue::from_str(&format!("Thumb WebAssembly.Module: {e:?}")))?;
+
+        let desc = Object::new();
+        Reflect::set(&desc, &JsValue::from_str("initial"), &JsValue::from(1))?;
+        let memory = WebAssembly::Memory::new(&desc)
+            .map_err(|e| JsValue::from_str(&format!("Thumb Memory: {e:?}")))?;
+
+        let host = Rc::new(RefCell::new(ThumbHost {
+            ram: std::ptr::null_mut(),
+            ram_len: 0,
+            fpu: std::ptr::null_mut(),
+        }));
+
+        let mut closures: Vec<ThumbLoadClosure> = Vec::new();
+        let mut void3: Vec<ThumbStoreClosure> = Vec::new();
+        let mut gets: Vec<ThumbVfpGetClosure> = Vec::new();
+        let mut sets: Vec<ThumbVfpSetClosure> = Vec::new();
+
+        let imports = Object::new();
+        let regs = Object::new();
+        Reflect::set(&regs, &JsValue::from_str("mem"), &memory)?;
+        Reflect::set(&imports, &JsValue::from_str("regs"), &regs)?;
+
+        if ram_host {
+            let h_load = host.clone();
+            let load =
+                Closure::<dyn FnMut(i32, i32, i32) -> i32>::new(move |off, width, signed| {
+                    thumb_host_load(&h_load.borrow(), off, width, signed)
+                });
+            let h_store = host.clone();
+            let store = Closure::<dyn FnMut(i32, i32, i32)>::new(move |off, val, width| {
+                thumb_host_store(&h_store.borrow(), off, val, width);
+            });
+            let h_get = host.clone();
+            let vget =
+                Closure::<dyn FnMut(i32) -> i32>::new(move |sn| thumb_vfp_get(&h_get.borrow(), sn));
+            let h_set = host.clone();
+            let vset = Closure::<dyn FnMut(i32, i32)>::new(move |sd, bits| {
+                thumb_vfp_set(&h_set.borrow(), sd, bits);
+            });
+
+            let ram = Object::new();
+            Reflect::set(
+                &ram,
+                &JsValue::from_str("load"),
+                load.as_ref().unchecked_ref(),
+            )?;
+            Reflect::set(
+                &ram,
+                &JsValue::from_str("store"),
+                store.as_ref().unchecked_ref(),
+            )?;
+            let vfp = Object::new();
+            Reflect::set(
+                &vfp,
+                &JsValue::from_str("get"),
+                vget.as_ref().unchecked_ref(),
+            )?;
+            Reflect::set(
+                &vfp,
+                &JsValue::from_str("set"),
+                vset.as_ref().unchecked_ref(),
+            )?;
+            Reflect::set(&imports, &JsValue::from_str("ram"), &ram)?;
+            Reflect::set(&imports, &JsValue::from_str("vfp"), &vfp)?;
+
+            closures.push(load);
+            void3.push(store);
+            gets.push(vget);
+            sets.push(vset);
+        }
+
+        let instance = WebAssembly::Instance::new(&module, &imports)
+            .map_err(|e| JsValue::from_str(&format!("Thumb Instance: {e:?}")))?;
+        let exports = instance.exports();
+        let run_val = Reflect::get(&exports, &JsValue::from_str("run"))?;
+        let run: Function = run_val
+            .dyn_into::<Function>()
+            .map_err(|_| JsValue::from_str("thumb exports.run is not a Function"))?;
+
+        Ok(Self {
+            run,
+            memory,
+            host,
+            end_pc,
+            instr_count,
+            has_store,
+            _closures: closures,
+            _void3: void3,
+            _get: gets,
+            _set: sets,
+            _instance: instance,
+        })
+    }
+
+    fn run(
+        &mut self,
+        cpu: &mut CortexM,
+        ram: &mut [u8],
+    ) -> Result<(i32, u32, bool, u32, u32), JsValue> {
+        let mut x = [0u32; 16];
+        pack_regs(cpu, &mut x);
+        let mut bytes = [0u8; THUMB_REG_BYTES];
+        for (i, w) in x.iter().enumerate() {
+            bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
+        }
+        mem_write(&self.memory, 0, &bytes);
+        {
+            let mut h = self.host.borrow_mut();
+            h.ram = ram.as_mut_ptr();
+            h.ram_len = ram.len();
+            h.fpu = cpu.fpu_s.as_mut_ptr();
+        }
+        let result = self.run.call0(&JsValue::UNDEFINED);
+        {
+            let mut h = self.host.borrow_mut();
+            h.ram = std::ptr::null_mut();
+            h.ram_len = 0;
+            h.fpu = std::ptr::null_mut();
+        }
+        let result = result?;
+        let wire = result.as_f64().unwrap_or(0.0) as i32;
+        mem_read(&self.memory, 0, &mut bytes);
+        for (i, w) in x.iter_mut().enumerate() {
+            *w = u32::from_le_bytes([
+                bytes[i * 4],
+                bytes[i * 4 + 1],
+                bytes[i * 4 + 2],
+                bytes[i * 4 + 3],
+            ]);
+        }
+        unpack_regs(cpu, &x);
+        let next_pc = u32::from_le_bytes([
+            bytes[NEXT_PC_SLOT as usize],
+            bytes[NEXT_PC_SLOT as usize + 1],
+            bytes[NEXT_PC_SLOT as usize + 2],
+            bytes[NEXT_PC_SLOT as usize + 3],
+        ]);
+        let fault_pc = u32::from_le_bytes([
+            bytes[FAULT_PC_SLOT as usize],
+            bytes[FAULT_PC_SLOT as usize + 1],
+            bytes[FAULT_PC_SLOT as usize + 2],
+            bytes[FAULT_PC_SLOT as usize + 3],
+        ]);
+        let fault_retired = u32::from_le_bytes([
+            bytes[FAULT_RETIRED_SLOT as usize],
+            bytes[FAULT_RETIRED_SLOT as usize + 1],
+            bytes[FAULT_RETIRED_SLOT as usize + 2],
+            bytes[FAULT_RETIRED_SLOT as usize + 3],
+        ]);
+        let clear_exclusive = self.has_store
+            && u32::from_le_bytes([
+                bytes[RES_FLAG_SLOT as usize],
+                bytes[RES_FLAG_SLOT as usize + 1],
+                bytes[RES_FLAG_SLOT as usize + 2],
+                bytes[RES_FLAG_SLOT as usize + 3],
+            ]) != 0;
+        Ok((wire, next_pc, clear_exclusive, fault_pc, fault_retired))
+    }
+}
+
+fn mem_write(memory: &WebAssembly::Memory, offset: u32, bytes: &[u8]) {
+    let view = Uint8Array::new(&memory.buffer());
+    let src = Uint8Array::new_with_length(bytes.len() as u32);
+    src.copy_from(bytes);
+    view.set(&src, offset);
+}
+
+fn mem_read(memory: &WebAssembly::Memory, offset: u32, bytes: &mut [u8]) {
+    let view = Uint8Array::new(&memory.buffer());
+    for (i, b) in bytes.iter_mut().enumerate() {
+        *b = view.get_index(offset + i as u32);
+    }
+}
+
+fn thumb_host_load(host: &ThumbHost, off: i32, width: i32, signed: i32) -> i32 {
+    let off = off as u32 as usize;
+    let width = width as u32 as usize;
+    if host.ram.is_null() || width == 0 || off.saturating_add(width) > host.ram_len {
+        return 0;
+    }
+    unsafe {
+        let p = host.ram.add(off);
+        match (width, signed) {
+            (1, 0) => i32::from(*p),
+            (1, _) => i32::from(*p as i8),
+            (2, 0) => i32::from(u16::from_le_bytes([*p, *p.add(1)])),
+            (2, _) => i32::from(i16::from_le_bytes([*p, *p.add(1)])),
+            (4, _) => i32::from_le_bytes([*p, *p.add(1), *p.add(2), *p.add(3)]),
+            _ => 0,
+        }
+    }
+}
+
+fn thumb_host_store(host: &ThumbHost, off: i32, val: i32, width: i32) {
+    let off = off as u32 as usize;
+    let width = width as u32 as usize;
+    if host.ram.is_null() || width == 0 || off.saturating_add(width) > host.ram_len {
+        return;
+    }
+    let v = val as u32;
+    unsafe {
+        let p = host.ram.add(off);
+        match width {
+            1 => *p = v as u8,
+            2 => {
+                let b = (v as u16).to_le_bytes();
+                *p = b[0];
+                *p.add(1) = b[1];
+            }
+            4 => {
+                let b = v.to_le_bytes();
+                *p = b[0];
+                *p.add(1) = b[1];
+                *p.add(2) = b[2];
+                *p.add(3) = b[3];
+            }
+            _ => {}
+        }
+    }
+}
+
+fn thumb_vfp_get(host: &ThumbHost, sn: i32) -> i32 {
+    let i = sn as u32 as usize;
+    if host.fpu.is_null() || i >= 32 {
+        return 0;
+    }
+    unsafe { *host.fpu.add(i) as i32 }
+}
+
+fn thumb_vfp_set(host: &ThumbHost, sd: i32, bits: i32) {
+    let i = sd as u32 as usize;
+    if host.fpu.is_null() || i >= 32 {
+        return;
+    }
+    unsafe {
+        *host.fpu.add(i) = bits as u32;
+    }
+}
+
+/// Run one compiled Thumb block at `cpu.pc`. Returns guest insns retired
+/// (0 = fall back to the interpreter).
+pub(crate) fn try_browser_cortex_m_jit_step(
+    cpu: &mut CortexM,
+    bus: &mut SystemBus,
+    cache: &mut BrowserJitCache,
+    max_n: u32,
+) -> u32 {
+    if cpu.it_state != 0 {
+        return 0;
+    }
+    if cpu.pending_exceptions.iter().any(|&w| w != 0) {
+        return 0;
+    }
+    let pc = cpu.pc & !1;
+    if cache.refused_thumb.contains(&pc) {
+        return 0;
+    }
+    if cache.thumb_get_mut(pc).is_none() {
+        let code = bus.read_code_slice(pc as u64, THUMB_CODE_WINDOW);
+        if code.len() < 2 {
+            cache.refused_thumb.insert(pc);
+            cache.refusals = cache.refusals.saturating_add(1);
+            return 0;
+        }
+        let mut frontend = CortexMFrontend::new();
+        frontend.set_ram_window(bus.ram.base_addr as u32, bus.ram.data.len() as u32);
+        let view = CodeView::new(pc as u64, &code);
+        let Ok((plan, binding)) = frontend.translate_block_thumb(pc as u64, &view) else {
+            cache.refused_thumb.insert(pc);
+            cache.refusals = cache.refusals.saturating_add(1);
+            return 0;
+        };
+        if plan.code.is_empty() || plan.instr_count < THUMB_MIN_PROFITABLE {
+            cache.refused_thumb.insert(pc);
+            cache.refusals = cache.refusals.saturating_add(1);
+            return 0;
+        }
+        let has_store = binding.map(|b| b.has_store).unwrap_or(false);
+        match CortexMBrowserBlock::compile(
+            &plan.code,
+            binding.is_some(),
+            plan.end_pc as u32,
+            plan.instr_count,
+            has_store,
+        ) {
+            Ok(block) => {
+                cache.compiled_thumb.insert(pc, block);
+            }
+            Err(e) => {
+                web_sys_console_warn(&format!(
+                    "labwired-wasm: Cortex-M browser JIT install failed at pc=0x{pc:08x}: {e:?}"
+                ));
+                cache.refused_thumb.insert(pc);
+                cache.refusals = cache.refusals.saturating_add(1);
+                return 0;
+            }
+        }
+    }
+    let ran = {
+        let block = match cache.thumb_get_mut(pc) {
+            Some(b) => b,
+            None => return 0,
+        };
+        if block.instr_count == 0 || block.instr_count > max_n {
+            return 0;
+        }
+        let instr_count = block.instr_count;
+        let end_pc = block.end_pc;
+        block.run(cpu, &mut bus.ram.data).map(
+            |(wire, next_pc, clear_exclusive, fault_pc, fault_retired)| {
+                (
+                    wire,
+                    next_pc,
+                    clear_exclusive,
+                    fault_pc,
+                    fault_retired,
+                    instr_count,
+                    end_pc,
+                )
+            },
+        )
+    };
+    match ran {
+        Ok((wire, next_pc, clear_exclusive, fault_pc, fault_retired, instr_count, end_pc)) => {
+            if clear_exclusive {
+                cpu.clear_exclusive_monitor();
+            }
+            let (n, cont, needs_interp) = match wire {
+                WIRE_FALL_THROUGH => (instr_count, end_pc, false),
+                WIRE_CHAIN_DYNAMIC => (instr_count, next_pc, false),
+                WIRE_MEM_FAULT | WIRE_UNSUPPORTED => (fault_retired, fault_pc, true),
+                _ => (instr_count, end_pc, true),
+            };
+            cpu.pc = cont;
+            if n == 0 || needs_interp {
+                cache.refusals = cache.refusals.saturating_add(1);
+                return 0;
+            }
+            cache.bump_hit();
+            n
+        }
+        Err(e) => {
+            web_sys_console_warn(&format!(
+                "labwired-wasm: Cortex-M browser JIT run failed at pc=0x{pc:08x}: {e:?}"
+            ));
+            cache.refusals = cache.refusals.saturating_add(1);
+            0
+        }
+    }
 }
