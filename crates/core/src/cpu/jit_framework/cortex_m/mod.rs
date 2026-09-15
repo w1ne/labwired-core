@@ -5,8 +5,10 @@
 //! Thumb / Thumb-2 frontend for the universal dispatch JIT.
 //!
 //! Same contract as the RV32IMC frontend: the interpreter remains the spec.
-//! Compiled blocks exit on MMIO, WFI, IT, CPS/MRS/MSR, and any instruction
-//! this frontend does not model. Cycle accounting is 1 retired guest
+//! Compiled blocks exit on MMIO, WFI, CPS/MRS/MSR, incomplete IT, and any
+//! instruction this frontend does not model. Complete IT blocks of
+//! emittable ALU are compiled (predicated; 16-bit DP does not set flags).
+//! Cycle accounting is 1 retired guest
 //! instruction per boundary, matching `CortexM::step_batch`.
 
 use crate::decoder::arm::{decode_thumb_16, decode_thumb_32, Instruction};

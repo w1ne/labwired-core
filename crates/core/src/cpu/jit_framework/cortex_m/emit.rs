@@ -308,7 +308,9 @@ fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
                     ok = false;
                     break;
                 };
-                if !is_emittable(&pi, mem_ok) || matches!(pi, Instruction::It { .. }) {
+                if !is_alu_emittable(&pi)
+                    || matches!(pi, Instruction::It { .. } | Instruction::LdrLit { .. })
+                {
                     ok = false;
                     break;
                 }
@@ -463,7 +465,16 @@ impl Body {
     }
 
     /// NZ only (C and V unchanged). Result is in RESULT.
+    /// T1 encodings use `setflags = !InITBlock()`; TST/TEQ/CMP/CMN call
+    /// [`Self::update_nz_unconditional`].
     fn update_nz(&mut self) {
+        if self.it_state != 0 {
+            return;
+        }
+        self.update_nz_unconditional();
+    }
+
+    fn update_nz_unconditional(&mut self) {
         self.xpsr_touch();
         self.local_get(XPSR_LOCAL);
         self.i32_const(0x3FFF_FFFF_u32 as i32);
@@ -485,6 +496,11 @@ impl Body {
         // We emit a dedicated helper that takes carry and overflow already computed
         // into SCRATCH (overflow) with carry still on the stack.
         let _ = carry_then_overflow;
+        if self.it_state != 0 {
+            self.buf.push(op::DROP);
+            self.buf.push(op::DROP);
+            return;
+        }
         self.xpsr_touch();
         // stack: c, v  (v on top)
         self.local_set(SCRATCH_LOCAL); // v
@@ -1465,7 +1481,7 @@ impl Body {
                 self.buf.push(op::I32_AND);
                 self.set_result_from_stack();
                 self.buf.push(op::DROP);
-                self.update_nz();
+                self.update_nz_unconditional();
             }
             And { rd, rm } => self.logic_nz(rd, pc, rm, op::I32_AND, false),
             Orr { rd, rm } => self.logic_nz(rd, pc, rm, op::I32_OR, false),

@@ -1639,6 +1639,9 @@ impl WasmSimulator {
         }
     }
 
+    /// Cortex-M browser JIT fast path. Opt-in (`set_jit_enabled`). Not the
+    /// native `run_jit_loop` tick contract: each compiled block ticks
+    /// peripherals immediately. Misses fall back to `AdvanceRequest::single`.
     fn step_batch_cortex_m_jit(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
         if self.jit_browser_cache.is_none() {
             self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));

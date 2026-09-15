@@ -759,13 +759,14 @@ impl CortexMBrowserBlock {
             h.ram_len = ram.len();
             h.fpu = cpu.fpu_s.as_mut_ptr();
         }
-        let result = self.run.call0(&JsValue::UNDEFINED)?;
+        let result = self.run.call0(&JsValue::UNDEFINED);
         {
             let mut h = self.host.borrow_mut();
             h.ram = std::ptr::null_mut();
             h.ram_len = 0;
             h.fpu = std::ptr::null_mut();
         }
+        let result = result?;
         let wire = result.as_f64().unwrap_or(0.0) as i32;
         mem_read(&self.memory, 0, &mut bytes);
         for (i, w) in x.iter_mut().enumerate() {

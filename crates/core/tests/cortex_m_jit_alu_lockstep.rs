@@ -427,6 +427,76 @@ fn ite_eq_adds_matches_interpreter() {
     assert_eq!(interp.cpu.r1, 0, "ITE ELSE (NE) must skip when Z=1");
 }
 
+fn itt_eq() -> u16 {
+    0xBF04
+}
+
+#[test]
+fn itt_eq_ands_adds_does_not_leak_flags() {
+    // ITT EQ; ANDS r0, r1; ADDS r2, #1
+    // r0=r1=1 → ANDS result 1. If JIT writes Z=0, the ADDS is skipped.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, itt_eq());
+    h(&mut prog, ands(0, 1));
+    h(&mut prog, adds_imm8(2, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(8),
+        "ITT EQ + ANDS + ADDS must compile: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr |= 1 << 30;
+        m.cpu.r0 = 1;
+        m.cpu.r1 = 1;
+        m.cpu.r2 = 0;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r2, jit.cpu.r2);
+    assert_ne!(interp.cpu.r2, 0, "EQ-taken ADDS after ANDS must run");
+    assert_eq!(
+        interp.cpu.xpsr & (1 << 30),
+        1 << 30,
+        "ANDS inside IT must leave Z set"
+    );
+    assert_eq!(interp.cpu.xpsr & 0xF000_0000, jit.cpu.xpsr & 0xF000_0000);
+}
+
+#[test]
+fn itt_with_store_is_not_compiled() {
+    // ITT EQ; ADDS r0, #1; STR r0, [r1] — mem in the IT body must not compile
+    // the IT (side-exit would drop it_state and run STR unpredicated).
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, itt_eq());
+    h(&mut prog, adds_imm8(0, 1));
+    h(&mut prog, str_imm(0, 1, 0));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let jit = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &jit.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(4),
+        "IT whose body contains a store must not compile: {:?}",
+        engine.stats()
+    );
+}
+
 fn vldr_s0_r0() -> (u16, u16) {
     (0xED90, 0x0A00)
 }
