@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Five Playground-ready maker chips (#1124): ATSAMD21, ATSAMD51, RA4M1,
-  IMXRT1064, and a fifth part — new peripheral types `sam_pm`, `sam_mclk`,
+  IMXRT1064 and STM32F746, with new peripheral types `sam_pm`, `sam_mclk`,
   `ra_sysc`, `imx_ccm`.
 - `labwired-cli` Session API: `Session::open/run_for/expect`, `SessionMachine`
   type erasure, `from_chip_name` over the config catalog, observe/stimulus
