@@ -36,7 +36,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | efr32mg26 | **L2** | ✓ | 34 | 243/243 (100%) | 1 | efr32_deck_behavior::the_deck_firmware_drives_every_part |
 | atmega328p | **L1** | ✓ | 6 | — | — | avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks |
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
-| atsamd51 | **L0** | ✗ | 8 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
+| atsamd51 | **L1** | ✓ | 8 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | ra4m1 | **L1** | ✓ | 6 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
 | imxrt1064 | **L1** | ✓ | 6 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |

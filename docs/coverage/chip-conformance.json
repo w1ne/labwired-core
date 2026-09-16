@@ -212,7 +212,7 @@
   {
     "behavior": true,
     "excluded": 0,
-    "level": 0,
+    "level": 1,
     "name": "atsamd51",
     "reg_match": 0
   },

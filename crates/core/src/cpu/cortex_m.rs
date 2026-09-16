@@ -824,7 +824,11 @@ impl CortexM {
                                                         next_pc,
                                                         clear_exclusive,
                                                         needs_interp,
-                                                    ) = engine.run_ready(npc, self, &mut sb.ram.data);
+                                                    ) = engine.run_ready(
+                                                        npc,
+                                                        self,
+                                                        &mut sb.ram.data,
+                                                    );
                                                     if clear_exclusive {
                                                         self.exclusive_byte = None;
                                                     }

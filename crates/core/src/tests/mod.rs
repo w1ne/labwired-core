@@ -1,4 +1,6 @@
 #[cfg(test)]
+pub mod bit_band_alias_backing;
+#[cfg(test)]
 pub mod builtin_chip_self_contained;
 #[cfg(test)]
 pub mod bus_proof_matrix;

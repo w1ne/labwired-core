@@ -1183,6 +1183,10 @@ impl SystemBus {
     /// SRAM bit-band:       alias 0x22000000–0x23FFFFFF → physical 0x20000000–0x200FFFFF
     ///
     /// Each alias *word* (4 bytes, naturally aligned) represents one physical bit.
+    ///
+    /// The caller must check [`Self::bit_band_target_is_mapped`] before honouring
+    /// the translation: the alias window is architectural, but the vendor memory
+    /// map wins inside it (see that function).
     pub(crate) fn bit_band_translate(addr: u64) -> Option<(u64, u8)> {
         let (phys_base, alias_base) = if (0x42000000..0x44000000).contains(&addr) {
             (0x40000000u64, 0x42000000u64)
@@ -1196,5 +1200,28 @@ impl SystemBus {
         let phys_byte = phys_base + bit_word / 8;
         let bit = (bit_word % 8) as u8;
         Some((phys_byte, bit))
+    }
+
+    /// Whether a bit-band alias target is actually backed by memory or a
+    /// peripheral, so the alias decode is meaningful for THIS chip.
+    ///
+    /// ARMv7-M reserves 0x4200_0000–0x43FF_FFFF as the peripheral bit-band
+    /// alias of 0x4000_0000–0x400F_FFFF, but the alias is implementation
+    /// defined and a vendor is free to decode real peripherals inside it. The
+    /// ATSAMD51 does exactly that — SERCOM3 sits at 0x4200_1000 and QSPI at
+    /// 0x4200_3400 (DS60001507 §7.2). Decoding those as aliases rewrote them
+    /// into unmapped physical bytes (QSPI's base became 0x4000_01A0) and the
+    /// whole window answered `MemoryViolation`, which is how the SAMD51
+    /// register-compliance and conformance gates went red.
+    ///
+    /// So translate only when the target byte exists here: a genuine alias of
+    /// SRAM, flash, an `extra_mem` window or a peripheral register. Otherwise
+    /// the address is ordinary and normal routing answers it.
+    pub(crate) fn bit_band_target_is_mapped(&self, phys: u64) -> bool {
+        self.ram.read_u8(phys).is_some()
+            || self.flash.read_u8(phys).is_some()
+            || self.extra_mem.iter().any(|m| m.read_u8(phys).is_some())
+            || (self.flash.base_addr != 0 && phys < self.flash.data.len() as u64)
+            || self.find_peripheral_index(phys).is_some()
     }
 }
