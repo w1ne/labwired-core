@@ -497,6 +497,117 @@ fn itt_with_store_is_not_compiled() {
     );
 }
 
+#[test]
+fn itt_with_store_locksteps_with_it_intact() {
+    // Same program, but RUN: the IT body is interpreted insn-by-insn inside
+    // the compiled batch, so `it_state` must be live when the store executes
+    // and consumed (0) at the block boundary, with the store landing
+    // predicated — exactly what the interpreter does.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, itt_eq());
+    h(&mut prog, adds_imm8(0, 1));
+    h(&mut prog, str_imm(0, 1, 0));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr |= 1 << 30; // EQ taken
+        m.cpu.r0 = 0;
+        m.cpu.r1 = 0x2000_0100;
+    });
+    assert!(
+        engine.stats().block_runs > 0,
+        "IT+store must still run compiled nops"
+    );
+    assert_eq!(interp.cpu.r0, jit.cpu.r0);
+    assert_eq!(interp.cpu.it_state, 0, "IT must be consumed");
+    assert_eq!(jit.cpu.it_state, 0, "compiled batch must leave IT consumed");
+    assert_eq!(
+        interp.bus.read_u32(0x2000_0100).expect("interp store"),
+        jit.bus.read_u32(0x2000_0100).expect("jit store"),
+        "predicated store must land once, identically"
+    );
+}
+
+#[test]
+fn itt_eq_neq_orrs_adds_does_not_leak_flags() {
+    // ITT EQ; ORRS r0, r1; ADDS r2, #1 — the pattern the interpreter had to
+    // fix for `strls`: a logic op inside IT must not write APSR. r0=r1=1
+    // makes ORRS yield 1; a leaked Z=0 would clear the EQ predicate and skip
+    // the ADDS.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, itt_eq());
+    h(&mut prog, orrs(0, 1));
+    h(&mut prog, adds_imm8(2, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(8),
+        "ITT EQ + ORRS + ADDS must compile: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr |= 1 << 30;
+        m.cpu.r0 = 1;
+        m.cpu.r1 = 1;
+        m.cpu.r2 = 0;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r0, 1, "ORRS must still write its result");
+    assert_eq!(interp.cpu.r2, jit.cpu.r2);
+    assert_ne!(interp.cpu.r2, 0, "EQ-taken ADDS after ORRS must run");
+    assert_eq!(
+        interp.cpu.xpsr & (1 << 30),
+        1 << 30,
+        "ORRS inside IT must leave Z set"
+    );
+    assert_eq!(interp.cpu.xpsr & 0xF000_0000, jit.cpu.xpsr & 0xF000_0000);
+}
+
+#[test]
+fn itt_eq_movs_adds_does_not_leak_flags() {
+    // ITT EQ; MOVS r0, #7; ADDS r2, #1 — MOVS is the other T1 writer the
+    // interpreter suppresses inside IT. Leaked flags would clear EQ before
+    // the second instruction.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, itt_eq());
+    h(&mut prog, movs(0, 7));
+    h(&mut prog, adds_imm8(2, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.xpsr |= 1 << 30;
+        m.cpu.r0 = 0;
+        m.cpu.r2 = 0;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r0, 7, "MOVS must still write its result");
+    assert_eq!(interp.cpu.r2, jit.cpu.r2);
+    assert_ne!(interp.cpu.r2, 0, "EQ-taken ADDS after MOVS must run");
+    assert_eq!(
+        interp.cpu.xpsr & (1 << 30),
+        1 << 30,
+        "MOVS inside IT must leave Z set"
+    );
+    assert_eq!(interp.cpu.xpsr & 0xF000_0000, jit.cpu.xpsr & 0xF000_0000);
+}
+
 fn vldr_s0_r0() -> (u16, u16) {
     (0xED90, 0x0A00)
 }
@@ -576,6 +687,119 @@ fn vstr_f32_compiles_and_matches_interpreter() {
     let got_j = u32::from_le_bytes(jit.bus.ram.data[0..4].try_into().unwrap());
     assert_eq!(got_i, got_j);
     assert_eq!(got_i, bits);
+}
+
+// S2 <- S0 op S1: the destination is NOT a source, so the hot loop
+// re-computes the same value and the expected result is stable.
+fn vsub_s2_s0_s1() -> (u16, u16) {
+    (0xEE30, 0x1A60)
+}
+
+fn vmul_s2_s0_s1() -> (u16, u16) {
+    (0xEE20, 0x1A20)
+}
+
+fn vdiv_s2_s0_s1() -> (u16, u16) {
+    (0xEE80, 0x1A20)
+}
+
+fn vmov_s1_s0() -> (u16, u16) {
+    (0xEEF0, 0x0A40)
+}
+
+/// Shared harness for the S-ALU coverage: a hot loop whose only float work is
+/// `op`, seeded with two non-zero operands (0/0 would hand the assert a NaN
+/// payload, and wasm f32 vs Rust f32 do not promise NaN bits). `snapshot_state`
+/// carries `fpu_s`, so `lockstep_until_compiled` compares the FULL register
+/// file at every unit, not just the destination the test names.
+fn vfp_binop_lockstep(op: (u16, u16), a: f32, b: f32, expect: f32) -> (f32, f32) {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, op.0);
+    h(&mut prog, op.1);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert!(
+        engine.ready_instr_count(0) == Some(6),
+        "S-ALU op must compile into the block: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.fpu_s[0] = a.to_bits();
+        m.cpu.fpu_s[1] = b.to_bits();
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(
+        f32::from_bits(jit.cpu.fpu_s[2]),
+        expect,
+        "compiled result must be the IEEE-754 op result"
+    );
+    assert_eq!(jit.cpu.fpu_s[2], interp.cpu.fpu_s[2]);
+    (
+        f32::from_bits(interp.cpu.fpu_s[2]),
+        f32::from_bits(jit.cpu.fpu_s[2]),
+    )
+}
+
+#[test]
+fn vsub_f32_matches_interpreter() {
+    let (i, j) = vfp_binop_lockstep(vsub_s2_s0_s1(), 3.5, 1.25, 2.25);
+    assert_eq!(i, 2.25);
+    assert_eq!(j, 2.25);
+}
+
+#[test]
+fn vmul_f32_matches_interpreter() {
+    let (i, j) = vfp_binop_lockstep(vmul_s2_s0_s1(), 3.5, 1.25, 4.375);
+    assert_eq!(i, 4.375);
+    assert_eq!(j, 4.375);
+}
+
+#[test]
+fn vdiv_f32_matches_interpreter() {
+    let (i, j) = vfp_binop_lockstep(vdiv_s2_s0_s1(), 3.5, 1.25, 2.8);
+    assert_eq!(i, 2.8);
+    assert_eq!(j, 2.8);
+}
+
+#[test]
+fn vmov_f32_reg_matches_interpreter() {
+    // VMOV.F32 S1, S0 — a pure register move; the differential snapshot
+    // carries every S register, so a wrong destination is caught even when
+    // the source stays intact.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    let (a, b) = vmov_s1_s0();
+    h(&mut prog, a);
+    h(&mut prog, b);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let bits = 3.5f32.to_bits();
+    let probe = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert!(
+        engine.ready_instr_count(0) == Some(6),
+        "VMOV must compile into the block: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.fpu_s[0] = bits;
+    });
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.fpu_s[1], jit.cpu.fpu_s[1]);
+    assert_eq!(jit.cpu.fpu_s[1], bits, "S1 must receive S0's bits");
 }
 
 #[test]
