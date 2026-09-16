@@ -3800,6 +3800,12 @@ pub struct UartContainsAssertion {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
+pub struct RttContainsAssertion {
+    pub rtt_contains: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct UartRegexAssertion {
     pub uart_regex: String,
 }
@@ -4158,6 +4164,7 @@ pub enum TestAssertion {
     UdsTester(UdsTesterAssertion),
     MqttFabric(MqttFabricAssertion),
     DisplayRegion(DisplayRegionAssertion),
+    RttContains(RttContainsAssertion),
 }
 
 /// Where a fault is applied. Either a peripheral (by `id`, optionally narrowed
@@ -4681,6 +4688,11 @@ impl TestScript {
             }
             if let TestAssertion::ResourceBudget(assertion) = assertion {
                 assertion.resource_budget.validate(index)?;
+            }
+            if let TestAssertion::RttContains(assertion) = assertion {
+                if assertion.rtt_contains.is_empty() {
+                    anyhow::bail!("assertions[{index}]: rtt_contains cannot be empty");
+                }
             }
         }
 
@@ -5851,6 +5863,48 @@ limits:
         );
         assert!(serde_yaml::from_str::<TestScript>(&yaml).is_err());
     }
+
+    #[test]
+    fn rtt_contains_parses_as_its_own_variant() {
+        let script: TestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 100
+assertions:
+  - rtt_contains: "RTT hello"
+"#,
+        )
+        .expect("parse script");
+        assert!(matches!(
+            script.assertions.as_slice(),
+            [TestAssertion::RttContains(a)] if a.rtt_contains == "RTT hello"
+        ));
+    }
+
+    #[test]
+    fn rtt_contains_typo_does_not_parse_as_something_else() {
+        let err = serde_yaml::from_str::<TestScript>(
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 100
+assertions:
+  - rtt_contians: "RTT hello"
+"#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("did not match any variant"),
+            "unexpected error: {err}"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -6896,6 +6950,25 @@ assertions:
             let err = load_test_script(&script_path).unwrap_err().to_string();
             assert!(err.contains(diagnostic), "unexpected error: {err}");
         }
+    }
+
+    #[test]
+    fn env_script_rejects_rtt_contains_explicitly() {
+        let script: EnvTestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - rtt_contains: "x"
+"#,
+        )
+        .expect("parse env script");
+        let err = script.validate().unwrap_err();
+        assert!(
+            err.to_string().contains("cannot observe"),
+            "unexpected error: {err}"
+        );
     }
 
     /// UART assertions carry no node id, so the node rules above do not apply

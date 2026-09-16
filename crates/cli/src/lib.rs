@@ -1615,6 +1615,10 @@ fn assertion_currently_passes(
         // Post-run only (footprint / stack paint). Terminal like FirmwareExit:
         // does not block `stop_when_assertions_pass` early-stop of live checks.
         TestAssertion::ResourceBudget(_) => true,
+        // Compile shim only: the dedicated RTT stream is not threaded into
+        // assertion evaluation yet, so `rtt_contains` must fail closed until
+        // the `rtt.log` pipeline lands (replaced by `rtt_assertion_passes`).
+        TestAssertion::RttContains(_) => false,
     }
 }
 
@@ -3242,6 +3246,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::ResourceBudget(a) => {
                 evaluate_resource_budget(&a.resource_budget, footprint.as_ref(), Some(&memory))
             }
+            // Compile shim only: see `assertion_currently_passes`. Fail closed
+            // until the RTT capture buffer is evaluated.
+            TestAssertion::RttContains(_) => (false, None),
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -4197,6 +4204,7 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
     const MAX_LEN: usize = 120;
     let s = match assertion {
         TestAssertion::UartContains(a) => format!("uart_contains: {}", a.uart_contains),
+        TestAssertion::RttContains(a) => format!("rtt_contains: {}", a.rtt_contains),
         TestAssertion::UartRegex(a) => format!("uart_regex: {}", a.uart_regex),
         TestAssertion::UartOrdered(a) => format!("uart_ordered: {:?}", a.uart_ordered),
         TestAssertion::MotorSpeedReached(a) => format!(
