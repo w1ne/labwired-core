@@ -11,11 +11,17 @@
 //! the CPU runs; this model does the same through the emulated bus. It is a
 //! pseudo-peripheral: it owns no firmware-visible registers (the sentinel base
 //! is never addressed by firmware), it only reads/writes emulated RAM.
+//!
+//! Draining is paced in simulated CPU cycles (default 64), not bus-tick calls,
+//! so a blocking `BLOCK_IF_FIFO_FULL` write is released even when the Cortex-M
+//! JIT widens the tick interval. The no-address magic scan is separately
+//! throttled and cursor-resumable, so a no-hit 1 MiB sweep is spread across
+//! polls instead of restarting from the first range base every time.
 
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
-use crate::{Bus, Peripheral, SimResult};
+use crate::{Bus, CycleClock, Peripheral, SimResult};
 
 /// `"SEGGER RTT"` followed by six NULs, at control-block offset 0.
 const RTT_ID: [u8; 16] = *b"SEGGER RTT\0\0\0\0\0\0";
@@ -28,7 +34,8 @@ const CHAN_OFF_WR: u64 = 0x0C;
 const CHAN_OFF_RD: u64 = 0x10;
 const CHAN_OFF_FLAGS: u64 = 0x14;
 const MAX_CHANNELS: usize = 16;
-const DEFAULT_POLL_EVERY_TICKS: u64 = 64;
+const DEFAULT_POLL_EVERY_CYCLES: u64 = 64;
+const DEFAULT_SCAN_EVERY_POLLS: u64 = 64;
 /// Candidates probed per `scan` call. A 1 MiB RAM holds 262,144 candidates, so
 /// one poll cannot sweep it; the cursor resumes where the last poll stopped.
 const SCAN_CANDIDATES_PER_POLL: u32 = 4096;
@@ -47,8 +54,12 @@ pub struct SeggerRtt {
     /// Resume point for the bounded magic sweep: `(range index, byte offset)`.
     scan_cursor: (usize, u64),
     found: bool,
-    tick_calls: u64,
-    poll_every: u64,
+    /// Cycle-cadence polls run since attach; drives scan throttling.
+    polls: u64,
+    scan_every_polls: u64,
+    poll_every_cycles: u64,
+    clock: Option<CycleClock>,
+    last_poll_cycle: Option<u64>,
     sink: Option<Arc<Mutex<Vec<u8>>>>,
     echo_stdout: bool,
     bytes_drained: u64,
@@ -61,8 +72,11 @@ impl SeggerRtt {
             scan_ranges,
             scan_cursor: (0, 0),
             found: false,
-            tick_calls: 0,
-            poll_every: DEFAULT_POLL_EVERY_TICKS,
+            polls: 0,
+            scan_every_polls: DEFAULT_SCAN_EVERY_POLLS,
+            poll_every_cycles: DEFAULT_POLL_EVERY_CYCLES,
+            clock: None,
+            last_poll_cycle: None,
             sink: None,
             echo_stdout: false,
             bytes_drained: 0,
@@ -81,10 +95,37 @@ impl SeggerRtt {
         }
     }
 
-    /// Poll every `n` bus ticks. Default 64: RTT output is human-speed and the
-    /// ring buffer is far larger than 64 cycles of firmware writes.
-    pub fn set_poll_every_ticks(&mut self, n: u64) {
-        self.poll_every = n.max(1);
+    /// Poll every `n` simulated CPU cycles. Default 64: the cadence is bounded
+    /// in cycles regardless of the bus's `peripheral_tick_interval`/JIT window
+    /// length, so a blocking `BLOCK_IF_FIFO_FULL` write never spins for a whole
+    /// window — the probe catches up at the next 64-cycle boundary.
+    pub fn set_poll_every_cycles(&mut self, n: u64) {
+        self.poll_every_cycles = n.max(1);
+    }
+
+    /// Run the bounded magic scan on at most every `n`th poll. Default 64: a
+    /// full sweep already spans polls via the cursor, so probing more often
+    /// only burns RAM reads. The first poll always scans.
+    pub fn set_scan_every_polls(&mut self, n: u64) {
+        self.scan_every_polls = n.max(1);
+    }
+
+    /// True when `poll_every_cycles` have elapsed since the last poll. A
+    /// hand-built bus that never called [`Peripheral::attach_cycle_clock`] has
+    /// no clock, so every call polls (historical behaviour); with a clock, the
+    /// first call polls immediately and later calls wait out the cycle budget.
+    fn poll_due(&self) -> bool {
+        match (&self.clock, self.last_poll_cycle) {
+            (Some(clock), Some(last)) => clock.now().saturating_sub(last) >= self.poll_every_cycles,
+            _ => true,
+        }
+    }
+
+    /// True when this poll should run the bounded magic scan. `polls` is
+    /// incremented before this is called, so poll 1 scans immediately and
+    /// later scans land every `scan_every_polls` polls.
+    fn scan_due(&self) -> bool {
+        (self.polls - 1) % self.scan_every_polls == 0
     }
 
     /// True when the 16-byte RTT ID sits at `addr`. Bails on the first
@@ -243,12 +284,22 @@ impl Peripheral for SeggerRtt {
         Ok(())
     }
 
+    /// The bus hands every `add_peripheral`-attached model the shared cycle
+    /// clock; the RTT probe keys its drain cadence on it.
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        self.tick_calls = self.tick_calls.wrapping_add(1);
-        if self.tick_calls % self.poll_every != 0 {
+        if !self.poll_due() {
             return;
         }
+        self.polls = self.polls.saturating_add(1);
+        self.last_poll_cycle = self.clock.as_ref().map(|c| c.now());
         if !self.found {
+            if !self.scan_due() {
+                return;
+            }
             self.discover(bus);
             if !self.found {
                 return;
@@ -325,7 +376,7 @@ mod tests {
         }
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -350,7 +401,7 @@ mod tests {
         }
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -360,6 +411,8 @@ mod tests {
 
         // RdOff was advanced to WrOff, so the next poll sees wr == rd. Only the
         // RdOff write-back stops the same three bytes being appended again.
+        // The cadence is cycle-bounded, so the clock must advance to re-poll.
+        bus.set_current_cycle(100);
         bus.tick_peripherals_with_costs();
         assert_eq!(&*sink.lock().unwrap(), b"hi!");
         assert_eq!(bus.segger_rtt_status().unwrap().bytes_drained, 3);
@@ -377,7 +430,7 @@ mod tests {
         }
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -394,7 +447,8 @@ mod tests {
         let buf = 0x2000_1000u64;
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
+        rtt.set_scan_every_polls(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -406,6 +460,7 @@ mod tests {
         setup_cb(&mut bus, cb, buf, 8, 2, 0);
         bus.ram.write_u8(buf, b'O');
         bus.ram.write_u8(buf + 1, b'K');
+        bus.set_current_cycle(100);
         bus.tick_peripherals_with_costs();
 
         assert_eq!(&*sink.lock().unwrap(), b"OK");
@@ -421,7 +476,7 @@ mod tests {
         bus.ram.write_u8(buf, b'X');
 
         let mut rtt = SeggerRtt::new(None, vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -441,7 +496,7 @@ mod tests {
         setup_cb(&mut bus, cb, 0x4000_C000, 8, 2, 0);
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -460,7 +515,7 @@ mod tests {
         let buf = 0x2000_1000u64;
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -473,8 +528,10 @@ mod tests {
             "wr >= size must be skipped"
         );
 
-        // SizeOfBuffer must hold at least two bytes.
+        // SizeOfBuffer must hold at least two bytes. The cadence is
+        // cycle-bounded, so advance the clock to re-poll.
         setup_cb(&mut bus, cb, buf, 1, 0, 0);
+        bus.set_current_cycle(10);
         bus.tick_peripherals_with_costs();
         assert!(sink.lock().unwrap().is_empty(), "size < 2 must be skipped");
 
@@ -483,6 +540,7 @@ mod tests {
         setup_cb(&mut bus, cb, buf, 8, 2, 0);
         write_u32_at(&mut bus, cb + CB_OFF_AUP0 + CHAN_OFF_FLAGS, 1 << 24);
         bus.ram.write_u8(buf, b'N');
+        bus.set_current_cycle(20);
         bus.tick_peripherals_with_costs();
         assert!(
             sink.lock().unwrap().is_empty(),
@@ -499,14 +557,16 @@ mod tests {
         bus.ram.write_u8(buf, b'Z');
 
         let mut rtt = SeggerRtt::new(None, vec![(0x2000_0000, 0x10_0000)]);
-        rtt.set_poll_every_ticks(1);
+        rtt.set_poll_every_cycles(1);
+        rtt.set_scan_every_polls(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
 
         // 0x200F_F000 is 261,120 candidates past the scan base and the capped
         // sweep probes 4,096 per poll, so one tick cannot reach it. Repeated
-        // ticks must resume the cursor until the CB is found and drained.
+        // ticks must resume the cursor until the CB is found and drained. The
+        // cadence is cycle-bounded, so the clock must advance between polls.
         bus.tick_peripherals_with_costs();
         assert!(
             sink.lock().unwrap().is_empty(),
@@ -514,10 +574,49 @@ mod tests {
         );
         assert!(!bus.segger_rtt_status().unwrap().control_block_found);
 
-        for _ in 0..128 {
+        for cycle in 1..=256u64 {
+            bus.set_current_cycle(cycle);
             bus.tick_peripherals_with_costs();
         }
         assert_eq!(&*sink.lock().unwrap(), b"Z");
         assert!(bus.segger_rtt_status().unwrap().control_block_found);
+    }
+
+    #[test]
+    fn poll_cadence_is_cycle_bounded() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let buf = 0x2000_1000u64;
+        setup_cb(&mut bus, cb, buf, 16, 2, 0);
+        bus.ram.write_u8(buf, b'a');
+        bus.ram.write_u8(buf + 1, b'b');
+
+        let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
+        rtt.set_poll_every_cycles(64);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        rtt.set_sink(Some(sink.clone()), false);
+        bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
+
+        // Cycle 0: the first poll is immediate and drains "ab".
+        bus.tick_peripherals_with_costs();
+        assert_eq!(sink.lock().unwrap().len(), 2);
+
+        // "cd" arrives, but 10 cycles is inside the 64-cycle budget, so the
+        // new bytes must stay in the ring.
+        bus.ram.write_u8(buf + 2, b'c');
+        bus.ram.write_u8(buf + 3, b'd');
+        write_u32_at(&mut bus, cb + CB_OFF_AUP0 + CHAN_OFF_WR, 4);
+        bus.set_current_cycle(10);
+        bus.tick_peripherals_with_costs();
+        assert_eq!(
+            sink.lock().unwrap().len(),
+            2,
+            "10 cycles is inside the 64-cycle budget"
+        );
+
+        // 100 cycles have elapsed since the last poll, so the drain runs again.
+        bus.set_current_cycle(100);
+        bus.tick_peripherals_with_costs();
+        assert_eq!(&*sink.lock().unwrap(), b"abcd");
     }
 }
