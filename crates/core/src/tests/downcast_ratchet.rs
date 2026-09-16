@@ -103,8 +103,17 @@ use std::path::{Path, PathBuf};
 /// 199 → 202 / 214 → 217: SPI edge-sampling tests inspect the attached
 /// `EdgeSlave`/`EdgeDev` (latched MOSI bytes / call count). Production path
 /// does not grow a downcast; these three are test-only.
-const MAX_AS_ANY: usize = 202;
-const MAX_DOWNCAST_REF: usize = 217;
+///
+/// 202 → 203 / 217 → 218: SEGGER RTT host model wiring. `SystemBus` gains
+/// `attach_rtt_sink` / `segger_rtt_status` (`bus::construct`); the status walk
+/// is one `as_any()` + `downcast_ref` reach for the `SeggerRtt`
+/// pseudo-peripheral, which is attached through `add_peripheral` and shares no
+/// existing capability with any named console model. The mutable sink attach
+/// uses `as_any_mut` / `downcast_mut` and adds no counted site. Retiring the
+/// reach means a capability trait over both methods, which is row 6.5's work,
+/// not a rider on the RTT feature.
+const MAX_AS_ANY: usize = 203;
+const MAX_DOWNCAST_REF: usize = 218;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

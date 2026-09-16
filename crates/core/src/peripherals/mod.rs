@@ -73,6 +73,7 @@ pub mod sam;
 pub mod sam_clock;
 pub mod scb;
 pub mod sdmmc;
+pub mod segger_rtt;
 pub mod simctl;
 pub mod spi;
 pub mod spi_waveform;

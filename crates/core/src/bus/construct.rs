@@ -494,6 +494,61 @@ impl SystemBus {
         }
     }
 
+    /// Register the SEGGER RTT pseudo-peripheral. `control_block` is the
+    /// `_SEGGER_RTT` address resolved from the firmware ELF; `None` enables the
+    /// RAM magic-scan fallback. The sentinel base is never addressed by
+    /// firmware — the model only reads/writes emulated RAM.
+    pub fn attach_segger_rtt(&mut self, control_block: Option<u32>) {
+        const SENTINEL_BASE: u64 = 0xE00F_F000;
+        let mut ranges = vec![(self.ram.base_addr, self.ram.data.len() as u64)];
+        for m in &self.extra_mem {
+            ranges.push((m.base_addr, m.data.len() as u64));
+        }
+        self.add_peripheral(
+            "segger_rtt",
+            SENTINEL_BASE,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::segger_rtt::SeggerRtt::new(
+                control_block,
+                ranges,
+            )),
+        );
+    }
+
+    /// Give the RTT model an output sink and/or stdout echo.
+    /// Returns false when no RTT model is on this bus.
+    pub fn attach_rtt_sink(
+        &mut self,
+        sink: Option<Arc<Mutex<Vec<u8>>>>,
+        echo_stdout: bool,
+    ) -> bool {
+        for p in &mut self.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            if let Some(rtt) = any.downcast_mut::<crate::peripherals::segger_rtt::SeggerRtt>() {
+                rtt.set_sink(sink, echo_stdout);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Final-state RTT diagnostics for `result.json`. `None` when no RTT model
+    /// is attached.
+    pub fn segger_rtt_status(&self) -> Option<crate::peripherals::segger_rtt::RttStatus> {
+        for p in &self.peripherals {
+            let Some(any) = p.dev.as_any() else {
+                continue;
+            };
+            if let Some(rtt) = any.downcast_ref::<crate::peripherals::segger_rtt::SeggerRtt>() {
+                return Some(rtt.status());
+            }
+        }
+        None
+    }
+
     /// Wire a capture sink into any attached IO-Link master so it records what
     /// it received over IO-Link (`MASTER PD=`, `MASTER VERDICT`, `MASTER EVENT`)
     /// into the given buffer. Pass the same `Arc<Mutex<Vec<u8>>>` used for the
