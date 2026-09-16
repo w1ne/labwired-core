@@ -35,8 +35,8 @@ fn every_catalog_chip_builds_or_is_listed_in_needs() {
     );
     assert_eq!(
         names.len(),
-        32,
-        "expected 32 chips under configs/chips/*.yaml; got {names:?}. If a chip \
+        37,
+        "expected 37 chips under configs/chips/*.yaml; got {names:?}. If a chip \
          was added or removed, update this test's expectation and its NEEDS list."
     );
 

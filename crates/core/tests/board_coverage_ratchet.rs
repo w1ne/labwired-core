@@ -468,6 +468,23 @@ fn every_shipped_descriptor_is_ratcheted() {
         // silicon register oracle, CMU/TIMER0 are stubs. Promote when an
         // executing-fidelity differential exists.
         "efr32mg26",
+        // The five maker-five descriptors (#1124). All five carry a UART/LED
+        // smoke survival case and a config-build gate, and nothing else: no
+        // executing-fidelity differential (no walk-vs-scheduler, no silicon
+        // oracle — none of these parts has been benched). They are also NOT
+        // bundled-configs.ts catalog boards yet; the Playground registration
+        // is an open superproject PR. Same bar as atsamd21g18a / f411ceu6
+        // above: promote when the catalog lands AND a differential exists.
+        //
+        // `atsamd21` is the Nano 33 IoT descriptor (the Zero's own
+        // `atsamd21g18a.yaml` is already listed above; sharing the name made
+        // the Playground pin-map generator emit a duplicate const, so the
+        // Nano yaml is named for the part family it reuses).
+        "atsamd21",
+        "atsamd51",
+        "ra4m1",
+        "imxrt1064",
+        "stm32f746",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

@@ -9,31 +9,36 @@ The models column is a content digest over everything that board's `models` list
 
 | Board | Tier | Last silicon capture | Models | Status |
 |-------|------|----------------------|--------|--------|
-| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `5eb77f1451513f01` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `5eb77f1451513f01` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `ef92affc1d0f212a` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `cb106a9b567c0904` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `cb106a9b567c0904` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `505924ad1518d8f0` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `ef88c1e9189ce0dc` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `28f409fd51777b7f` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `bd73ad0020177c38` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `5c9026c380e56406` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `5978d0966122b681` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `e402e15e28fccca5` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `b49ef7ce8f2b4e63` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `bc610a2714bccedf` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `9d9c993017154a0b` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `7501e03bc97d044a` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `stm32f401` | 🟡 smoke-manual | — | `b9abcfe666799630` | no silicon capture |
-| `stm32wba52` | 🟡 smoke-manual | — | `4a16b1a943beb50a` | no silicon capture |
-| `nrf52832` | ⚪ structural | — | `3d7b20ef3ad58a36` | no silicon capture |
-| `rp2040` | ⚪ structural | — | `2e53302ffe2ae3c2` | no silicon capture |
-| `rp2350` | 🟡 smoke-manual | — | `cc61ee131f41be73` | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `938f48f32fe1720d` | no silicon capture |
-| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `b2cd70853ca8b911` | no silicon capture |
-| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `dd7adeb44d3f0feb` | no silicon capture |
+| `stm32f401` | 🟡 smoke-manual | — | `9fe8503f3e094453` | no silicon capture |
+| `stm32wba52` | 🟡 smoke-manual | — | `9ded3a7b93607de8` | no silicon capture |
+| `nrf52832` | ⚪ structural | — | `70e05870e761ed2b` | no silicon capture |
+| `rp2040` | ⚪ structural | — | `c858b977e6b20cd7` | no silicon capture |
+| `rp2350` | 🟡 smoke-manual | — | `61403a4c5a19c1b9` | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | `7d15810b939fe694` | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `d618e4371057c290` | no silicon capture |
+| `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `2d97e12fcb300a46` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `54196a8a658ab075` | no silicon capture |
 | `esp32` | ⚪ structural | — | `f2264e3d66957844` | no silicon capture |
-| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `5c18a7463742bd48` | no silicon capture |
-| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `efa19caf1b861423` | no silicon capture |
-| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `8b9daec149ff7c88` | no silicon capture |
-| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `0f6104fb5265aa3a` | no silicon capture |
-| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `b1d89174549c9fc8` | no silicon capture |
+| `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `00577adf4b651cdb` | no silicon capture |
+| `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `d445e00b90456cdf` | no silicon capture |
+| `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `a7a2fc6276ec08f6` | no silicon capture |
+| `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `5fd0240d066b6475` | no silicon capture |
+| `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `2b00e3b10ab3cac1` | no silicon capture |
 | `ci-fixture-riscv` | ⚪ structural | — | `75ba36b451a49fa7` | no silicon capture |
+| `nano-33-iot` | 🟡 smoke-manual | — | `9cefe2dc37d94539` | no silicon capture |
+| `metro-m4` | 🟡 smoke-manual | — | `1c2c3bae004cc177` | no silicon capture |
+| `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `0dee7a0b338ac6d2` | no silicon capture |
+| `teensy-41` | 🟡 smoke-manual | — | `e008971be4a99e86` | no silicon capture |
+| `stm32f7-discovery` | 🟡 smoke-manual | — | `8fef269aa0e4bf2c` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -240,4 +245,44 @@ The models column is a content digest over everything that board's `models` list
 - Doc: [`docs/boards/ci-fixture-riscv.md`](ci-fixture-riscv.md)  ·  Chip: `configs/chips/ci-fixture-riscv.yaml`
 - Note: Synthetic RV32I fixture used only to exercise the RISC-V core in firmware_survival::riscv_ci_fixture; not a real board, no silicon claim of any kind.
 - Silicon: none — not validated against real hardware.
+- Drift status: **no silicon capture**
+
+## `nano-33-iot` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/nano-33-iot.md`](nano-33-iot.md)  ·  Chip: `configs/chips/atsamd21.yaml`
+- Note: Arduino Nano 33 IoT (SAMD21G18A). Bare-metal UART/LED smoke prints OK on SERCOM5 (D0/D1 header); on-board NINA/ATECC/IMU are not attached. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_atsamd21_nano33_smoke_survival
+- Drift status: **no silicon capture**
+
+## `metro-m4` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/metro-m4.md`](metro-m4.md)  ·  Chip: `configs/chips/atsamd51.yaml`
+- Note: Adafruit Metro M4 Express (SAMD51J19A). Bare-metal UART/LED smoke prints OK on SERCOM3 after MCLK APBBMASK + GCLK PCHCTRL[24]; QSPI/USB/NeoPixel are stub windows. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_atsamd51_metro_m4_smoke_survival
+- Drift status: **no silicon capture**
+
+## `arduino-uno-r4-minima` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/arduino-uno-r4-minima.md`](arduino-uno-r4-minima.md)  ·  Chip: `configs/chips/ra4m1.yaml`
+- Note: Arduino Uno R4 Minima (Renesas R7FA4M1AB). Bare-metal UART/LED smoke prints OK on SCI2 (D0/D1) after the HOCO/OSCSF bring-up; USBFS is a stub. First Renesas RA part in the engine. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_ra4m1_uno_r4_smoke_survival
+- Drift status: **no silicon capture**
+
+## `teensy-41` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/teensy-41.md`](teensy-41.md)  ·  Chip: `configs/chips/imxrt1064.yaml`
+- Note: Teensy 4.1 (MIMXRT1062 silicon; RT1064-class chip yaml). Bare-metal UART/LED smoke prints OK on LPUART6 after CCM CCGR ungating, toggles GPIO2_IO03; images run from DTCM (XIP skipped), FlexSPI is a stub. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_imxrt1064_teensy41_smoke_survival
+- Drift status: **no silicon capture**
+
+## `stm32f7-discovery` — 🟡 smoke-manual
+
+- Doc: [`docs/boards/stm32f7-discovery.md`](stm32f7-discovery.md)  ·  Chip: `configs/chips/stm32f746.yaml`
+- Note: STM32F7 Discovery (32F746GDISCOVERY / STM32F746NG). Soft-float bare-metal UART/LED smoke prints OK on USART1 (ST-LINK VCP) after RCC AHB1/APB2 ungating and toggles PI1; LTDC/Ethernet/DMA2D/USB/QuadSPI are stub windows. SIM-DERIVED — no silicon diff; no executing-fidelity differential.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_stm32f746_discovery_smoke_survival
 - Drift status: **no silicon capture**

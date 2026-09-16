@@ -93,6 +93,22 @@ fn system_manifests_declare_no_key_the_engine_ignores() {
         "walk_deleted",
     ];
 
+    // Keys the engine ignores TODAY, each with the day it dies. This is not a
+    // free pass: the entry below is a documented, cross-repo-planned feature,
+    // and it is the only shape allowed here — a scalar typo like the
+    // `clock: {cpu_hz: …}` this test was written for still fails.
+    //
+    // `connectors` — the five maker-five system manifests (nano-33-iot,
+    // metro-m4, arduino-uno-r4-minima, teensy-41, stm32f7-discovery) carry a
+    // `connectors: [{type: uart, peripheral: …, endpoint: host_console}]`
+    // block. It is specified in `docs/configuration_reference.md`
+    // § "External Device Connections (Planned)", the superproject's board
+    // carry-over explicitly expects core to parse it ("Remove this entry the
+    // day core parses `connectors`"), and the boards' consoles work through
+    // the existing defaults meanwhile. DELETE this entry the day
+    // `SystemManifest` grows the field (and add the field to MODELLED above).
+    const PLANNED_UNMODELLED: &[&str] = &["connectors"];
+
     let mut stray: Vec<String> = Vec::new();
     for path in yaml_files("systems") {
         let text = std::fs::read_to_string(&path).expect("read manifest");
@@ -102,7 +118,7 @@ fn system_manifests_declare_no_key_the_engine_ignores() {
             continue;
         };
         for key in map.keys().filter_map(|k| k.as_str()) {
-            if !MODELLED.contains(&key) {
+            if !MODELLED.contains(&key) && !PLANNED_UNMODELLED.contains(&key) {
                 stray.push(format!(
                     "{}: {key}",
                     path.file_name().unwrap().to_string_lossy()
