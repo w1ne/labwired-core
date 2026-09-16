@@ -23,7 +23,7 @@
 // nothing. If compilation cannot happen (e.g. `WebAssembly` missing), this
 // FAILS — there is no skip path.
 //
-// Usage (after `wasm-pack build --target nodejs` from `crates/wasm/`):
+// Usage (after `wasm-pack build --target nodejs --dev` from `crates/wasm/`):
 //
 //   node scripts/test_browser_cortex_m_jit.mjs
 //
