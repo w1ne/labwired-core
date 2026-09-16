@@ -103,9 +103,11 @@ impl SeggerRtt {
         self.poll_every_cycles = n.max(1);
     }
 
-    /// Run the bounded magic scan on at most every `n`th poll. Default 64: a
-    /// full sweep already spans polls via the cursor, so probing more often
-    /// only burns RAM reads. The first poll always scans.
+    /// Run the bounded RAM magic scan on at most every `n`th poll. Default 64:
+    /// a full sweep already spans polls via the cursor, so probing more often
+    /// only burns reads. The first poll always scans, and an explicit
+    /// `control_block` (the ELF-symbol path) is checked every due poll
+    /// regardless — only the sweep is throttled.
     pub fn set_scan_every_polls(&mut self, n: u64) {
         self.scan_every_polls = n.max(1);
     }
@@ -297,7 +299,12 @@ impl Peripheral for SeggerRtt {
         self.polls = self.polls.saturating_add(1);
         self.last_poll_cycle = self.clock.as_ref().map(|c| c.now());
         if !self.found {
-            if !self.scan_due() {
+            // An explicit `control_block` check is a single 16-byte magic read,
+            // so it re-tries on every due drain poll and notices a late
+            // `_DoInit` within `poll_every_cycles`; only the RAM sweep is
+            // throttled, because a full sweep already spans polls via the
+            // cursor and probing more often only burns reads.
+            if self.control_block.is_none() && !self.scan_due() {
                 return;
             }
             self.discover(bus);
@@ -448,7 +455,6 @@ mod tests {
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
         rtt.set_poll_every_cycles(1);
-        rtt.set_scan_every_polls(1);
         let sink = Arc::new(Mutex::new(Vec::new()));
         rtt.set_sink(Some(sink.clone()), false);
         bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
@@ -618,5 +624,23 @@ mod tests {
         bus.set_current_cycle(100);
         bus.tick_peripherals_with_costs();
         assert_eq!(&*sink.lock().unwrap(), b"abcd");
+
+        // JIT-window case: the bus-tick pass runs only at window boundaries
+        // 512 cycles apart. Each boundary is past the 64-cycle budget, so each
+        // one must drain the window's bytes — one drain per boundary, not one
+        // per 64 boundaries.
+        bus.ram.write_u8(buf + 4, b'e');
+        bus.ram.write_u8(buf + 5, b'f');
+        write_u32_at(&mut bus, cb + CB_OFF_AUP0 + CHAN_OFF_WR, 6);
+        bus.set_current_cycle(612);
+        bus.tick_peripherals_with_costs();
+        assert_eq!(&*sink.lock().unwrap(), b"abcdef");
+
+        bus.ram.write_u8(buf + 6, b'g');
+        bus.ram.write_u8(buf + 7, b'h');
+        write_u32_at(&mut bus, cb + CB_OFF_AUP0 + CHAN_OFF_WR, 8);
+        bus.set_current_cycle(1124);
+        bus.tick_peripherals_with_costs();
+        assert_eq!(&*sink.lock().unwrap(), b"abcdefgh");
     }
 }
