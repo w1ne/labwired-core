@@ -1373,6 +1373,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-nrf52840-rtt"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-nrf52840-secure-boot"
 version = "0.1.0"
 dependencies = [

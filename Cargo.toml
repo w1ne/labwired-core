@@ -54,6 +54,7 @@ members = [
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-obd2-scanner",
     "crates/firmware-nrf52840-proximity",
+    "crates/firmware-nrf52840-rtt",
     "crates/firmware-nrf52840-secure-boot",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-perf-spin",
@@ -276,6 +277,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nrf52840-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nrf52840-rtt]
 codegen-units = 1
 opt-level = "s"
 
