@@ -19,7 +19,7 @@ use super::super::fallback::{HostStep, JitHost, SafetyGate};
 use super::super::{Pc, StateVec};
 
 /// Words in a Cortex-M [`StateVec`].
-pub const STATE_VEC_LEN: usize = 30;
+pub const STATE_VEC_LEN: usize = 30 + 32;
 
 /// Flatten a [`CortexM`] into the differential-harness [`StateVec`].
 ///
@@ -36,6 +36,13 @@ pub const STATE_VEC_LEN: usize = 30;
 /// | `20` | `it_state` |
 /// | `21` | `active_exception` |
 /// | `22..30` | `pending_exceptions[0..4]` as lo/hi `u32` pairs |
+/// | `30..62` | `fpu_s[0..32]` (raw IEEE-754 bits) |
+///
+/// `fpu_s` is in the vector on purpose: a VFP block writes S registers
+/// through the same host pointer the wasm side reads, so a divergence there
+/// is architectural state the harness must see at EVERY unit. Without it a
+/// lockstep test could only assert the S register it happened to name, and
+/// VSUB/VMUL/VDIV/VMOV coverage was one hand-written `assert_eq!` deep.
 pub fn snapshot_state(cpu: &CortexM) -> StateVec {
     let mut v = Vec::with_capacity(STATE_VEC_LEN);
     v.extend_from_slice(&[
@@ -51,6 +58,7 @@ pub fn snapshot_state(cpu: &CortexM) -> StateVec {
         v.push(w as u32);
         v.push((w >> 32) as u32);
     }
+    v.extend_from_slice(&cpu.fpu_s);
     debug_assert_eq!(v.len(), STATE_VEC_LEN);
     v
 }
