@@ -26,8 +26,12 @@ const CHAN_OFF_PBUFFER: u64 = 0x04;
 const CHAN_OFF_SIZE: u64 = 0x08;
 const CHAN_OFF_WR: u64 = 0x0C;
 const CHAN_OFF_RD: u64 = 0x10;
+const CHAN_OFF_FLAGS: u64 = 0x14;
 const MAX_CHANNELS: usize = 16;
 const DEFAULT_POLL_EVERY_TICKS: u64 = 64;
+/// Candidates probed per `scan` call. A 1 MiB RAM holds 262,144 candidates, so
+/// one poll cannot sweep it; the cursor resumes where the last poll stopped.
+const SCAN_CANDIDATES_PER_POLL: u32 = 4096;
 
 /// Final-state RTT diagnostics, surfaced in `result.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -40,8 +44,9 @@ pub struct RttStatus {
 pub struct SeggerRtt {
     control_block: Option<u32>,
     scan_ranges: Vec<(u64, u64)>,
+    /// Resume point for the bounded magic sweep: `(range index, byte offset)`.
+    scan_cursor: (usize, u64),
     found: bool,
-    max_up: usize,
     tick_calls: u64,
     poll_every: u64,
     sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -54,8 +59,8 @@ impl SeggerRtt {
         Self {
             control_block,
             scan_ranges,
+            scan_cursor: (0, 0),
             found: false,
-            max_up: 0,
             tick_calls: 0,
             poll_every: DEFAULT_POLL_EVERY_TICKS,
             sink: None,
@@ -82,15 +87,17 @@ impl SeggerRtt {
         self.poll_every = n.max(1);
     }
 
+    /// True when the 16-byte RTT ID sits at `addr`. Bails on the first
+    /// mismatching byte, so a full no-hit sweep costs one read per candidate
+    /// rather than sixteen.
     fn magic_at(bus: &dyn Bus, addr: u64) -> bool {
-        let mut id = [0u8; 16];
-        for (i, slot) in id.iter_mut().enumerate() {
+        for (i, expected) in RTT_ID.iter().enumerate() {
             match bus.read_u8(addr + i as u64) {
-                Ok(b) => *slot = b,
-                Err(_) => return false,
+                Ok(b) if b == *expected => {}
+                _ => return false,
             }
         }
-        id == RTT_ID
+        true
     }
 
     fn in_ranges(&self, addr: u64, len: u64) -> bool {
@@ -99,49 +106,91 @@ impl SeggerRtt {
             .any(|&(base, size)| addr >= base && addr.saturating_add(len) <= base + size)
     }
 
-    fn scan(&self, bus: &dyn Bus) -> Option<u32> {
-        for &(base, size) in &self.scan_ranges {
-            let mut addr = base;
-            while addr + 16 <= base + size {
-                if Self::magic_at(bus, addr) {
-                    return Some(addr as u32);
-                }
-                addr += 4;
-            }
+    /// Bounded magic sweep over the configured ranges. It resumes from
+    /// `scan_cursor` and probes at most `SCAN_CANDIDATES_PER_POLL` candidates
+    /// per call, so a 1 MiB RAM is swept across polls instead of restarting —
+    /// and re-reading — from the first range base every time.
+    fn scan(&mut self, bus: &dyn Bus) -> Option<u32> {
+        let n = self.scan_ranges.len();
+        if n == 0 {
+            self.scan_cursor = (0, 0);
+            return None;
         }
+        let mut budget = SCAN_CANDIDATES_PER_POLL;
+        let (mut range_idx, mut offset) = self.scan_cursor;
+        if range_idx >= n {
+            range_idx = 0;
+            offset = 0;
+        }
+        let mut skipped = 0usize;
+        while skipped < n {
+            let (base, size) = self.scan_ranges[range_idx];
+            if offset + 16 > size {
+                range_idx = (range_idx + 1) % n;
+                offset = 0;
+                skipped += 1;
+                continue;
+            }
+            skipped = 0;
+            if budget == 0 {
+                self.scan_cursor = (range_idx, offset);
+                return None;
+            }
+            if Self::magic_at(bus, base + offset) {
+                self.scan_cursor = (range_idx, offset + 4);
+                return Some((base + offset) as u32);
+            }
+            offset += 4;
+            budget -= 1;
+        }
+        // Every range is smaller than the ID: nothing can ever match.
+        self.scan_cursor = (0, 0);
         None
     }
 
     fn discover(&mut self, bus: &dyn Bus) {
         if let Some(addr) = self.control_block {
-            if Self::magic_at(bus, addr as u64) {
+            // Range-guard the ELF-supplied address: a control block can only
+            // live in RAM, and probing a stale symbol that resolved into MMIO
+            // would read registers with read-to-clear side effects.
+            if self.in_ranges(addr as u64, 16) && Self::magic_at(bus, addr as u64) {
                 self.found = true;
             }
         } else if let Some(addr) = self.scan(bus) {
             self.control_block = Some(addr);
             self.found = true;
         }
-        if self.found {
-            self.max_up = bus
-                .read_u32(self.control_block.unwrap() as u64 + CB_OFF_MAX_UP)
-                .unwrap_or(0)
-                .min(MAX_CHANNELS as u32) as usize;
-        }
     }
 
     fn drain(&mut self, bus: &mut dyn Bus) {
         let Some(cb) = self.control_block else { return };
-        for i in 0..self.max_up {
-            let desc = cb as u64 + CB_OFF_AUP0 + CHAN_SIZE * i as u64;
-            let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd)) = (
+        let cb = cb as u64;
+        // Re-read the count every poll rather than latching it at discovery:
+        // the stock `_DoInit` writes it before the ID, but a re-init or a
+        // partially-written control block must recover, not stall silently
+        // behind a stale zero.
+        let max_up = bus
+            .read_u32(cb + CB_OFF_MAX_UP)
+            .unwrap_or(0)
+            .min(MAX_CHANNELS as u32) as usize;
+        for i in 0..max_up {
+            let desc = cb + CB_OFF_AUP0 + CHAN_SIZE * i as u64;
+            let (Ok(p_buffer), Ok(size), Ok(wr), Ok(rd), Ok(flags)) = (
                 bus.read_u32(desc + CHAN_OFF_PBUFFER),
                 bus.read_u32(desc + CHAN_OFF_SIZE),
                 bus.read_u32(desc + CHAN_OFF_WR),
                 bus.read_u32(desc + CHAN_OFF_RD),
+                bus.read_u32(desc + CHAN_OFF_FLAGS),
             ) else {
                 continue;
             };
             if size < 2 || p_buffer == 0 {
+                continue;
+            }
+            // SEGGER reserves the upper Flags byte for block-skip mode;
+            // nonzero means this is not a stock channel and draining it would
+            // be wrong.
+            if flags >> 24 != 0 {
                 continue;
             }
             if !self.in_ranges(p_buffer as u64, size as u64) {
@@ -176,6 +225,9 @@ impl SeggerRtt {
                 let _ = out.write_all(&buf);
                 let _ = out.flush();
             }
+            // Counted even when no sink/echo is attached: the bytes still left
+            // the firmware's ring (all current callers attach one; a standalone
+            // `attach_segger_rtt` discards them).
             self.bytes_drained += buf.len() as u64;
             let _ = bus.write_u32(desc + CHAN_OFF_RD, wr);
         }
@@ -209,6 +261,9 @@ impl Peripheral for SeggerRtt {
         true
     }
 
+    /// Deliberate: `run --rtt` text should surface promptly even while the CPU
+    /// idle-fasts-forward, and the bounded idle-skip cap the machine pays for
+    /// it is small. Not a correctness need — the ring survives any skip.
     fn idle_poll_bus_tick(&self) -> bool {
         true
     }
@@ -285,6 +340,32 @@ mod tests {
     }
 
     #[test]
+    fn second_poll_does_not_redrain_the_same_bytes() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let buf = 0x2000_1000u64;
+        setup_cb(&mut bus, cb, buf, 16, 3, 0);
+        for (i, b) in b"hi!".iter().enumerate() {
+            bus.ram.write_u8(buf + i as u64, *b);
+        }
+
+        let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
+        rtt.set_poll_every_ticks(1);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        rtt.set_sink(Some(sink.clone()), false);
+        bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
+
+        bus.tick_peripherals_with_costs();
+        assert_eq!(&*sink.lock().unwrap(), b"hi!");
+
+        // RdOff was advanced to WrOff, so the next poll sees wr == rd. Only the
+        // RdOff write-back stops the same three bytes being appended again.
+        bus.tick_peripherals_with_costs();
+        assert_eq!(&*sink.lock().unwrap(), b"hi!");
+        assert_eq!(bus.segger_rtt_status().unwrap().bytes_drained, 3);
+    }
+
+    #[test]
     fn drains_wrapped_ring_once() {
         let mut bus = SystemBus::new();
         let cb = 0x2000_0000u64;
@@ -353,7 +434,11 @@ mod tests {
     fn garbage_channel_pointers_are_skipped() {
         let mut bus = SystemBus::new();
         let cb = 0x2000_0000u64;
-        setup_cb(&mut bus, cb, 0xDEAD_BEEF, 8, 2, 0);
+        // Mapped, but NOT RAM: `SystemBus::new()` registers a UART at
+        // 0x4000_C000. Without the `in_ranges` guard this drains UART
+        // registers into the sink (and can read-to-clear them), so removing
+        // the guard fails this test.
+        setup_cb(&mut bus, cb, 0x4000_C000, 8, 2, 0);
 
         let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
         rtt.set_poll_every_ticks(1);
@@ -364,7 +449,75 @@ mod tests {
 
         assert!(
             sink.lock().unwrap().is_empty(),
-            "out-of-RAM pointer must not drain"
+            "non-RAM pointer must not drain"
         );
+    }
+
+    #[test]
+    fn hostile_channel_geometry_and_flags_are_skipped() {
+        let mut bus = SystemBus::new();
+        let cb = 0x2000_0000u64;
+        let buf = 0x2000_1000u64;
+
+        let mut rtt = SeggerRtt::new(Some(cb as u32), vec![(0x2000_0000, 0x10_0000)]);
+        rtt.set_poll_every_ticks(1);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        rtt.set_sink(Some(sink.clone()), false);
+        bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
+
+        // WrOff must stay below SizeOfBuffer.
+        setup_cb(&mut bus, cb, buf, 8, 8, 0);
+        bus.tick_peripherals_with_costs();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "wr >= size must be skipped"
+        );
+
+        // SizeOfBuffer must hold at least two bytes.
+        setup_cb(&mut bus, cb, buf, 1, 0, 0);
+        bus.tick_peripherals_with_costs();
+        assert!(sink.lock().unwrap().is_empty(), "size < 2 must be skipped");
+
+        // SEGGER reserves the upper Flags byte; nonzero marks a non-stock
+        // channel that must not be drained.
+        setup_cb(&mut bus, cb, buf, 8, 2, 0);
+        write_u32_at(&mut bus, cb + CB_OFF_AUP0 + CHAN_OFF_FLAGS, 1 << 24);
+        bus.ram.write_u8(buf, b'N');
+        bus.tick_peripherals_with_costs();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "nonzero upper Flags byte must be skipped"
+        );
+    }
+
+    #[test]
+    fn bounded_scan_resumes_and_finds_cb_near_end_of_ram() {
+        let mut bus = SystemBus::new();
+        let cb = 0x200F_F000u64;
+        let buf = 0x200E_1000u64;
+        setup_cb(&mut bus, cb, buf, 8, 1, 0);
+        bus.ram.write_u8(buf, b'Z');
+
+        let mut rtt = SeggerRtt::new(None, vec![(0x2000_0000, 0x10_0000)]);
+        rtt.set_poll_every_ticks(1);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        rtt.set_sink(Some(sink.clone()), false);
+        bus.add_peripheral("segger_rtt", 0xE00F_F000, 0x1000, None, Box::new(rtt));
+
+        // 0x200F_F000 is 261,120 candidates past the scan base and the capped
+        // sweep probes 4,096 per poll, so one tick cannot reach it. Repeated
+        // ticks must resume the cursor until the CB is found and drained.
+        bus.tick_peripherals_with_costs();
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "one capped poll cannot sweep 1 MiB"
+        );
+        assert!(!bus.segger_rtt_status().unwrap().control_block_found);
+
+        for _ in 0..128 {
+            bus.tick_peripherals_with_costs();
+        }
+        assert_eq!(&*sink.lock().unwrap(), b"Z");
+        assert!(bus.segger_rtt_status().unwrap().control_block_found);
     }
 }
