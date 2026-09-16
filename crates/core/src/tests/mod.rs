@@ -12,6 +12,8 @@ pub mod bus_trace_one_home;
 pub mod chip_memory_sizes;
 #[cfg(test)]
 pub mod cortex_m_fault_escalation;
+#[cfg(all(test, any(feature = "jit", feature = "jit-framework")))]
+pub mod cortex_m_jit_batch_gates;
 #[cfg(test)]
 pub mod cortex_m_memory_contract;
 #[cfg(test)]

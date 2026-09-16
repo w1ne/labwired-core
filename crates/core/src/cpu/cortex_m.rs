@@ -299,8 +299,10 @@ impl CortexM {
 
     /// True once firmware has latched AIRCR.SYSRESETREQ and the machine has
     /// not yet drained it. One relaxed load; `false` when no SCB is wired.
+    /// Compiled backends read this to end a window on the AIRCR store the way
+    /// the interpreter does, instead of retiring past the reboot request.
     #[inline(always)]
-    fn sysreset_latched(&self) -> bool {
+    pub fn sysreset_latched(&self) -> bool {
         self.sysreset_signal
             .as_ref()
             .is_some_and(|f| f.load(Ordering::Relaxed))
@@ -661,24 +663,17 @@ impl CortexM {
 #[cfg(feature = "jit")]
 const CORTEX_M_JIT_HOT_THRESHOLD: u32 = 50;
 
-#[cfg(feature = "jit")]
+/// Thumb batch gates shared by the in-tree JIT (`jit`) and out-of-tree
+/// compiled backends (`jit-framework`: the browser adapter). A backend that
+/// dispatches its own blocks asks these before running one, so an exception
+/// the interpreter would take, or a SysTick edge the block would cross,
+/// always ends the compiled window first.
+#[cfg(any(feature = "jit", feature = "jit-framework"))]
 impl CortexM {
-    fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
-        if !observers.is_empty() {
-            return false;
-        }
-        // IT is interpreted insn-by-insn inside `run_jit_loop`; do not
-        // disable the whole batch (that skipped compiled code after the IT).
-        if bus.logic_tap().is_some_and(|t| t.push_armed()) {
-            return false;
-        }
-        if bus.requires_cycle_accurate() {
-            return false;
-        }
-        true
-    }
-
-    fn jit_takeable_exception(&self) -> bool {
+    /// True when a pending exception is takeable *now*: pending, not masked by
+    /// PRIMASK/BASEPRI/FAULTMASK, and higher priority than the active
+    /// exception. A backend must not run a compiled block while this holds.
+    pub fn jit_takeable_exception(&self) -> bool {
         if !self.pending_exceptions.iter().any(|&w| w != 0) {
             return false;
         }
@@ -698,7 +693,7 @@ impl CortexM {
     /// inside that span, interpret instead so exception 15 pends on the same
     /// instruction the interpreter would pend it. Already-takeable exceptions
     /// also refuse the block (the interpreter would trap within one insn).
-    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+    pub fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
         if self.jit_takeable_exception() {
             return true;
         }
@@ -706,6 +701,24 @@ impl CortexM {
             Some(h) => u64::from(n) >= h,
             None => false,
         }
+    }
+}
+
+#[cfg(feature = "jit")]
+impl CortexM {
+    fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
+        if !observers.is_empty() {
+            return false;
+        }
+        // IT is interpreted insn-by-insn inside `run_jit_loop`; do not
+        // disable the whole batch (that skipped compiled code after the IT).
+        if bus.logic_tap().is_some_and(|t| t.push_armed()) {
+            return false;
+        }
+        if bus.requires_cycle_accurate() {
+            return false;
+        }
+        true
     }
 
     fn step_batch_jit(
@@ -833,7 +846,6 @@ impl CortexM {
                                                         self.exclusive_byte = None;
                                                     }
                                                     self.pc = next_pc as u32;
-                                                    engine.note_chained();
                                                     Some((extra, needs_interp))
                                                 } else {
                                                     None
@@ -841,6 +853,7 @@ impl CortexM {
                                                 match more {
                                                     Some((extra, needs_interp)) => {
                                                         if extra > 0 {
+                                                            engine.note_chained();
                                                             bus.systick_consume_cycles(u64::from(
                                                                 extra,
                                                             ));

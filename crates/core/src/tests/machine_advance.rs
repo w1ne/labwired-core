@@ -1317,3 +1317,115 @@ fn realtime_advance_cpu_hz_zero_does_not_sleep() {
     machine.advance(AdvanceRequest::run(Some(1000))).unwrap();
     assert!(clock.sleeps().is_empty());
 }
+
+/// An out-of-tree window runner — the browser JIT shape: core plans the
+/// window, the runner retires it — must be indistinguishable from the
+/// interpreter path at the machine boundary.
+///
+/// The runner here stands in for a compiled block search that always hits:
+/// it executes exactly the planned window through `Cpu::step_batch`. What is
+/// under test is the machine contract around it — window planning (tick
+/// boundary clamp included), cycle accounting, peripheral tick cadence, and
+/// interrupt delivery. A second dispatcher that ticked per compiled block,
+/// or that forgot to clamp windows to the tick boundary, fails the counts.
+#[test]
+fn window_runner_matches_advance_tick_cadence() {
+    // interval -> expected peripheral ticks over 97 cycles: every tick
+    // boundary up to the final, unaligned cycle.
+    for (interval, expected_ticks) in [(1u32, 97u32), (3, 32), (64, 1)] {
+        let mut reference = Machine::new(CountingCpu::default(), SystemBus::new());
+        let mut jitted = Machine::new(CountingCpu::default(), SystemBus::new());
+        for machine in [&mut reference, &mut jitted] {
+            machine.bus.add_peripheral(
+                "every-tick-irq",
+                0x5100_0000,
+                0x100,
+                Some(7),
+                Box::new(EveryTickIrq),
+            );
+            machine.config.peripheral_tick_interval = interval;
+            machine.bus.config.peripheral_tick_interval = interval;
+        }
+
+        let expected = reference.advance(AdvanceRequest::run(Some(97))).unwrap();
+        let actual = jitted
+            .advance_with_window_runner(
+                AdvanceRequest::run(Some(97)),
+                |cpu, bus, observers, config, count| cpu.step_batch(bus, observers, config, count),
+            )
+            .unwrap();
+
+        assert_eq!(
+            actual, expected,
+            "interval {interval}: advance report diverged under a window runner"
+        );
+        assert_eq!(
+            jitted.total_cycles, reference.total_cycles,
+            "interval {interval}: cycle count"
+        );
+        assert_eq!(
+            jitted.bus.current_cycle, reference.bus.current_cycle,
+            "interval {interval}: published cycle"
+        );
+        assert_eq!(
+            jitted.step_profile().peripheral_ticks,
+            reference.step_profile().peripheral_ticks,
+            "interval {interval}: peripheral tick count"
+        );
+        assert_eq!(
+            jitted.step_profile().peripheral_ticks,
+            u64::from(expected_ticks),
+            "interval {interval}: tick cadence is the interpreter's"
+        );
+        assert_eq!(
+            jitted.cpu.first_pending_at_step, reference.cpu.first_pending_at_step,
+            "interval {interval}: interrupt visibility"
+        );
+    }
+}
+
+/// The runner seam is only for single-core `RunBatch` windows. Single-step
+/// (cycle-publication timing) and dual-core (CPU lockstep) windows belong to
+/// the in-tree path; consulting a runner there would either skip a core or
+/// change single-step timing.
+#[test]
+fn window_runner_is_not_consulted_for_single_or_dual_core_windows() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    let report = machine
+        .advance_with_window_runner(AdvanceRequest::single(), |_cpu, _bus, _obs, _cfg, _n| {
+            panic!("single-step windows must stay on the in-tree path")
+        })
+        .unwrap();
+    assert_eq!(report.elapsed_cycles, 1);
+    assert_eq!(machine.cpu.steps, 1);
+
+    let mut machine = counting_dual_core_machine();
+    let report = machine
+        .advance_with_window_runner(
+            AdvanceRequest::run(Some(4)),
+            |_cpu, _bus, _obs, _cfg, _n| panic!("dual-core windows must stay on the in-tree path"),
+        )
+        .unwrap();
+    assert_eq!(report.elapsed_cycles, 4);
+    assert_eq!(machine.cpu.steps, 4);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 4);
+}
+
+/// A runner that cannot retire an instruction — a compiled backend whose only
+/// block is shorter than the plan is a normal miss, but a broken one must not
+/// spin the advance loop forever.
+#[test]
+fn stuck_window_runner_reports_no_progress() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+
+    let report = machine
+        .advance_with_window_runner(
+            AdvanceRequest::run(Some(64)),
+            |_cpu, _bus, _obs, _cfg, _n| Ok(0),
+        )
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::NoProgress);
+    assert_eq!(report.elapsed_cycles, 0);
+    assert_eq!(report.primary_steps, 0);
+}

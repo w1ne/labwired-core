@@ -1,11 +1,31 @@
 //! Owns the authoritative advance loop and stop/report accounting.
 
-use super::boundary::ExecutionMode;
+use super::boundary::{CoreProgress, ExecutionMode};
 use crate::{
     AdvanceReport, AdvanceRequest, AdvanceStop, BreakpointPolicy, Cpu, HostTimeMode, IdlePolicy,
-    Machine, SimResult,
+    Machine, SimResult, SimulationConfig, SimulationObserver,
 };
+use std::sync::Arc;
 use std::time::Duration;
+
+/// Executes one planned CPU window for
+/// [`Machine::advance_with_window_runner`].
+///
+/// `count` is the width [`Machine`] planned for this window; the runner
+/// retires at most that many instructions and reports how many it did. It is
+/// handed the CPU, bus, observers and config so an out-of-tree backend (the
+/// browser JIT) can dispatch into its own compiled blocks and fall back to
+/// [`Cpu::step`]. Everything a window runner must **not** reimplement — tick
+/// boundary clamping, peripheral tick cadence, reset drains, idle fast
+/// forward, work/stop accounting — stays in the advance loop that calls it.
+pub type WindowRunner<'a, C> = dyn FnMut(
+        &mut C,
+        &mut crate::bus::SystemBus,
+        &[Arc<dyn SimulationObserver>],
+        &SimulationConfig,
+        u32,
+    ) -> SimResult<u32>
+    + 'a;
 
 #[derive(Default)]
 struct AdvanceState {
@@ -70,6 +90,47 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
+        self.advance_inner(request, None)
+    }
+
+    /// Advances the machine exactly like [`Self::advance`], but executes each
+    /// planned CPU window through `run_window` instead of the in-tree CPU
+    /// path.
+    ///
+    /// This is the seam for a CPU backend that lives outside `labwired-core`
+    /// — the browser's Thumb JIT — without opening a second dispatcher: the
+    /// window plan, the boundary commit (peripheral tick cadence, scheduler
+    /// drains, reset latches, logic capture), idle fast forward, breakpoints,
+    /// and stop/report accounting are all the authoritative ones.
+    ///
+    /// The runner is only consulted for single-core `RunBatch` windows. A
+    /// dual-core machine (which must lockstep two CPUs) and `AdvanceRequest::single`
+    /// windows fall back to the in-tree path, so a runner can never silently
+    /// skip a secondary core or a single-step contract. `run_window` must
+    /// retire at most the `count` it is given; a larger report is clamped to
+    /// the plan.
+    pub fn advance_with_window_runner<F>(
+        &mut self,
+        request: AdvanceRequest,
+        mut run_window: F,
+    ) -> SimResult<AdvanceReport>
+    where
+        F: FnMut(
+            &mut C,
+            &mut crate::bus::SystemBus,
+            &[Arc<dyn SimulationObserver>],
+            &SimulationConfig,
+            u32,
+        ) -> SimResult<u32>,
+    {
+        self.advance_inner(request, Some(&mut run_window))
+    }
+
+    fn advance_inner(
+        &mut self,
+        request: AdvanceRequest,
+        mut run_window: Option<&mut WindowRunner<'_, C>>,
+    ) -> SimResult<AdvanceReport> {
         let start_cycles = self.total_cycles;
         let start_wall = self.host_clock.now();
         let mut state = AdvanceState::default();
@@ -179,7 +240,35 @@ impl<C: Cpu> Machine<C> {
                 ExecutionMode::RunBatch
             };
             let batch_start = self.total_cycles;
-            let progress = self.execute_cpu_window(mode, count)?;
+            let progress = match run_window.as_deref_mut() {
+                Some(runner) if mode == ExecutionMode::RunBatch && self.cpu_secondary.is_none() => {
+                    // Mirror `execute_cpu_window`'s RunBatch pre-window
+                    // publication: MMIO inside the window resolves against the
+                    // same clock origin the in-tree path would use.
+                    self.bus.set_current_cycle(self.total_cycles);
+                    self.bus.bus_trace.set_cycle(self.total_cycles);
+                    if self.logic_capture.push_active() {
+                        self.bus.logic_tap.set_clock(self.total_cycles);
+                    }
+                    let retired = runner(
+                        &mut self.cpu,
+                        &mut self.bus,
+                        &self.observers,
+                        &self.config,
+                        count,
+                    )?;
+                    debug_assert!(
+                        retired <= count,
+                        "window runner retired {retired} instructions for a {count} window"
+                    );
+                    CoreProgress {
+                        primary_steps: retired.min(count),
+                        secondary_steps: 0,
+                        timed_cycles: None,
+                    }
+                }
+                _ => self.execute_cpu_window(mode, count)?,
+            };
             if progress.primary_steps == 0 {
                 return Ok(state.report(AdvanceStop::NoProgress, self.total_cycles - start_cycles));
             }

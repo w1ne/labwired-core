@@ -74,10 +74,11 @@ use labwired_core::cpu::xtensa_jit_bytes::{
 };
 use labwired_core::cpu::xtensa_sr::CCOUNT;
 use labwired_core::cpu::{CortexM, XtensaLx7};
-use labwired_core::Bus;
+use labwired_core::{Bus, Cpu, SimResult, SimulationConfig, SimulationObserver};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
@@ -868,6 +869,11 @@ fn thumb_host_store(host: &ThumbHost, off: i32, val: i32, width: i32) {
     }
 }
 
+/// The two guards below cannot fire on an instantiated block: the frontend
+/// only emits `vfp.get/set` when the block's binding carries an FPU, and
+/// `CortexMBrowserBlock::run` installs the pointer before every call. Stay
+/// total in release anyway — a host import has no side-exit channel, so
+/// reading through null or past S31 would trade a refusal for a wild read.
 fn thumb_vfp_get(host: &ThumbHost, sn: i32) -> i32 {
     let i = sn as u32 as usize;
     if host.fpu.is_null() || i >= 32 {
@@ -897,7 +903,7 @@ pub(crate) fn try_browser_cortex_m_jit_step(
     if cpu.it_state != 0 {
         return 0;
     }
-    if cpu.pending_exceptions.iter().any(|&w| w != 0) {
+    if cpu.jit_takeable_exception() {
         return 0;
     }
     let pc = cpu.pc & !1;
@@ -953,6 +959,9 @@ pub(crate) fn try_browser_cortex_m_jit_step(
         if block.instr_count == 0 || block.instr_count > max_n {
             return 0;
         }
+        if cpu.block_would_cross_irq(bus, block.instr_count) {
+            return 0;
+        }
         let instr_count = block.instr_count;
         let end_pc = block.end_pc;
         block.run(cpu, &mut bus.ram.data).map(
@@ -995,5 +1004,101 @@ pub(crate) fn try_browser_cortex_m_jit_step(
             cache.refusals = cache.refusals.saturating_add(1);
             0
         }
+    }
+}
+
+/// Runs up to `max_n` guest instructions of the current window through the
+/// browser cache, with the same gates the in-tree `run_jit_loop` applies
+/// before every compiled block: a takeable exception ends the window (or is
+/// dispatched by the interpreter at zero progress), leftover IT — and every
+/// miss — interprets one instruction, and a latching SCB reset ends the
+/// window on the instruction that latched it.
+///
+/// This only decides compiled-vs-interpreted per instruction. The machine
+/// boundary around the window (tick cadence, scheduler drains, resets, idle
+/// fast forward, work accounting) is core's
+/// `Machine::advance_with_window_runner`, so a compiled window and an
+/// interpreted window are the same machine cycles.
+pub(crate) fn run_browser_cortex_m_jit_window(
+    cpu: &mut CortexM,
+    bus: &mut SystemBus,
+    observers: &[Arc<dyn SimulationObserver>],
+    config: &SimulationConfig,
+    cache: &mut BrowserJitCache,
+    max_n: u32,
+) -> SimResult<u32> {
+    let mut retired = 0u32;
+    while retired < max_n {
+        if cpu.jit_takeable_exception() {
+            // Match interpreter `step_batch`: at zero progress the exception
+            // is dispatched by `step`; after progress the window ends so the
+            // next boundary can take it without a compiled block jumping the
+            // dispatch point.
+            if retired > 0 {
+                break;
+            }
+            cpu.step(bus, observers, config)?;
+            retired += 1;
+            continue;
+        }
+        if cpu.it_state != 0 {
+            cpu.step(bus, observers, config)?;
+            retired += 1;
+            continue;
+        }
+        let n = try_browser_cortex_m_jit_step(cpu, bus, cache, max_n - retired);
+        if n == 0 {
+            cpu.step(bus, observers, config)?;
+            retired += 1;
+        } else {
+            retired += n;
+        }
+        if cpu.sysreset_latched() {
+            break;
+        }
+    }
+    Ok(retired)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod vfp_host_tests {
+    use super::*;
+
+    fn with_fpu(fpu: *mut u32) -> ThumbHost {
+        ThumbHost {
+            ram: std::ptr::null_mut(),
+            ram_len: 0,
+            fpu,
+        }
+    }
+
+    #[test]
+    fn vfp_host_round_trips_s_register_bits() {
+        let mut fpu = [0u32; 32];
+        let host = with_fpu(fpu.as_mut_ptr());
+
+        thumb_vfp_set(&host, 5, 0x3F80_0000);
+        assert_eq!(fpu[5], 0x3F80_0000);
+        assert_eq!(thumb_vfp_get(&host, 5) as u32, 0x3F80_0000);
+    }
+
+    #[test]
+    fn vfp_host_refuses_to_touch_a_missing_or_out_of_range_file() {
+        let host = with_fpu(std::ptr::null_mut());
+        assert_eq!(thumb_vfp_get(&host, 5), 0, "no file, no bits");
+        thumb_vfp_set(&host, 5, 0x0BAD_F00D);
+
+        let mut fpu = [0u32; 32];
+        let host = with_fpu(fpu.as_mut_ptr());
+        assert_eq!(
+            thumb_vfp_get(&host, 32),
+            0,
+            "S32 is outside the 32-register file a Thumb block can name"
+        );
+        thumb_vfp_set(&host, 32, 0x0BAD_F00D);
+        assert!(
+            fpu.iter().all(|&w| w == 0),
+            "an out-of-range write must not land anywhere in the file"
+        );
     }
 }

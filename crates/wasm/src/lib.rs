@@ -1614,8 +1614,21 @@ impl WasmSimulator {
     /// Execute up to max_cycles steps, returning the number actually executed.
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
-        if self.jit_browser_enabled && self.arch == MachineFamily::CortexM {
-            return self.step_batch_cortex_m_jit(max_cycles);
+        if self.jit_browser_enabled && self.arch == MachineFamily::CortexM && self.cosim.is_none() {
+            let before = self.machine().total_cycles;
+            return match self.step_batch_cortex_m_jit(max_cycles) {
+                Ok(executed) => Ok(executed),
+                Err(AdvanceFailure::Machine(e)) => {
+                    let elapsed = self.machine().total_cycles.saturating_sub(before);
+                    let executed = elapsed.min(u64::from(u32::MAX)) as u32;
+                    if executed > 0 {
+                        Ok(executed)
+                    } else {
+                        Err(JsValue::from_str(&format!("Step Error: {}", e)))
+                    }
+                }
+                Err(failure) => Err(failure.into_js()),
+            };
         }
         let before = self.machine().total_cycles;
         let result = self.advance_machine(AdvanceRequest::run(Some(u64::from(max_cycles))));
@@ -1639,72 +1652,80 @@ impl WasmSimulator {
         }
     }
 
-    /// Cortex-M browser JIT fast path. Opt-in (`set_jit_enabled`). Not the
-    /// native `run_jit_loop` tick contract: each compiled block ticks
-    /// peripherals immediately. Misses fall back to `AdvanceRequest::single`.
-    fn step_batch_cortex_m_jit(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
-        if self.jit_browser_cache.is_none() {
-            self.jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));
-        }
-        let mut retired = 0u32;
-        while retired < max_cycles {
-            let jit_n = {
-                let cache = self.jit_browser_cache.as_mut().unwrap();
-                let machine = self.machine.as_mut().unwrap();
-                let Some(cpu) = machine
-                    .cpu
-                    .as_any_mut()
-                    .and_then(|a| a.downcast_mut::<labwired_core::cpu::CortexM>())
-                else {
-                    break;
-                };
-                jit_browser::try_browser_cortex_m_jit_step(
-                    cpu,
-                    &mut machine.bus,
-                    cache,
-                    max_cycles - retired,
-                )
-            };
-            if jit_n == 0 {
-                let before = self.machine().total_cycles;
-                self.advance_machine(AdvanceRequest::single())
-                    .map_err(AdvanceFailure::into_js)?;
-                let got = self.machine().total_cycles.saturating_sub(before).max(1);
-                retired = retired.saturating_add(got.min(u64::from(max_cycles - retired)) as u32);
-            } else {
-                let machine = self.machine.as_mut().unwrap();
-                machine.total_cycles += u64::from(jit_n);
-                machine.bus.set_current_cycle(machine.total_cycles);
-                let (irqs, costs) = machine.bus.tick_peripherals_fully();
-                for c in &costs {
-                    machine.total_cycles += u64::from(c.cycles);
-                }
-                machine.bus.set_current_cycle(machine.total_cycles);
-                for irq in irqs {
-                    machine.cpu.set_exception_pending(irq);
-                }
-                retired += jit_n;
+    /// Cortex-M browser JIT fast path, opt-in via `set_jit_enabled`.
+    ///
+    /// Runs core-planned windows through the browser cache using
+    /// `Machine::advance_with_window_runner`, so the window plan, tick
+    /// cadence, reset drains, idle fast forward, breakpoints and work
+    /// accounting are the authoritative `Machine::advance` contract. This
+    /// backend only chooses the instruction stream inside a window; it is not
+    /// a second dispatcher. Suspended while a co-simulation session is
+    /// attached: model boundaries are part of the contract and only the
+    /// interpreter path carries them.
+    fn step_batch_cortex_m_jit(&mut self, max_cycles: u32) -> Result<u32, AdvanceFailure> {
+        let before = self.machine().total_cycles;
+        {
+            let Self {
+                machine,
+                jit_browser_cache,
+                ..
+            } = self;
+            let machine = machine
+                .as_mut()
+                .expect("a constructed simulator always has a machine");
+            if jit_browser_cache.is_none() {
+                *jit_browser_cache = Some(Box::new(jit_browser::BrowserJitCache::new()));
             }
+            let cache = jit_browser_cache.as_mut().unwrap();
+            machine
+                .advance_with_window_runner(
+                    AdvanceRequest::run(Some(u64::from(max_cycles))),
+                    |cpu, bus, observers, config, count| {
+                        if let Some(cpu) = cpu
+                            .as_any_mut()
+                            .and_then(|a| a.downcast_mut::<labwired_core::cpu::CortexM>())
+                        {
+                            jit_browser::run_browser_cortex_m_jit_window(
+                                cpu, bus, observers, config, cache, count,
+                            )
+                        } else {
+                            cpu.step(bus, observers, config).map(|()| 1)
+                        }
+                    },
+                )
+                .map_err(AdvanceFailure::Machine)?;
         }
-        Ok(retired)
+        Ok((self.machine().total_cycles.saturating_sub(before)).min(u64::from(u32::MAX)) as u32)
     }
 
     /// Execute one measured batch and return both wall-clock timing and core
     /// run-loop counters. Intended for worker/Playwright profiling; normal
     /// animation still calls `step_batch`.
+    ///
+    /// Routes through the same path `step_batch` uses — including the opt-in
+    /// browser JIT — so a profile describes the run the page actually
+    /// animates.
     #[wasm_bindgen]
     pub fn step_batch_profile(&mut self, max_cycles: u32) -> Result<JsValue, JsValue> {
         let t0 = perf_now();
         let machine = self.machine();
         let before = machine.total_cycles;
         machine.reset_step_profile();
-        let advance_result = self.advance_machine(AdvanceRequest::run(Some(u64::from(max_cycles))));
+        let advance_result: Result<u32, AdvanceFailure> = if self.jit_browser_enabled
+            && self.arch == MachineFamily::CortexM
+            && self.cosim.is_none()
+        {
+            self.step_batch_cortex_m_jit(max_cycles)
+        } else {
+            self.advance_machine(AdvanceRequest::run(Some(u64::from(max_cycles))))
+                .map(|report| report.elapsed_cycles.min(u64::from(u32::MAX)) as u32)
+        };
         let machine = self.machine();
         let elapsed = machine.total_cycles.saturating_sub(before);
         let executed = match advance_result {
-            Ok(report) => {
-                debug_assert_eq!(elapsed, report.elapsed_cycles);
-                report.elapsed_cycles.min(u64::from(u32::MAX)) as u32
+            Ok(executed) => {
+                debug_assert_eq!(elapsed, u64::from(executed));
+                executed
             }
             Err(AdvanceFailure::Machine(e)) => {
                 let partial = elapsed.min(u64::from(u32::MAX)) as u32;
