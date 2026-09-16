@@ -261,6 +261,9 @@ fn run_s3_rom_boot_no_elf(
     let manifest = system.manifest.clone();
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
+    // ELF-less rom-boot: RTT is not attached here, so `rtt_contains` on this
+    // path reads an empty stream and fails closed rather than silently passing.
+    let rtt_tx = Arc::new(Mutex::new(Vec::new()));
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
     let mut bus = labwired_core::bus::SystemBus::new();
@@ -336,6 +339,7 @@ fn run_s3_rom_boot_no_elf(
         assertions,
         &[],
         &uart_tx,
+        &rtt_tx,
         &metrics,
         &placeholder,
         system_path,
@@ -470,6 +474,9 @@ fn run_c3_rom_boot_no_elf(
     // nothing else at 20M, 200M and 500M steps. The sibling ELF-bearing rom-boot
     // branch below already taps the CDC block; only this one did not.
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
+    // ELF-less rom-boot: RTT is not attached here, so `rtt_contains` on this
+    // path reads an empty stream and fails closed rather than silently passing.
+    let rtt_tx = Arc::new(Mutex::new(Vec::new()));
     match &console {
         labwired_core::console::HostConsole::UsbSerialJtag => {}
         labwired_core::console::HostConsole::Uart(name) => {
@@ -626,6 +633,7 @@ fn run_c3_rom_boot_no_elf(
         assertions,
         &[],
         &uart_tx,
+        &rtt_tx,
         &metrics,
         &placeholder,
         system_path,
@@ -646,6 +654,7 @@ fn run_c3_rom_boot_no_elf(
 pub(crate) fn run_test(
     args: TestArgs,
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+    rtt_flag: bool,
 ) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────
     // If LABWIRED_API_KEY is set and --no-key is not passed, validate before
@@ -1117,6 +1126,9 @@ pub(crate) fn run_test(
         });
         if let (Some(sys_path), Some(manifest)) = (sys_anchor.as_ref(), esp32_manifest.as_ref()) {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
+            // This arm never attaches RTT; an `rtt_contains` here fails closed
+            // on the empty stream instead of passing by silence.
+            let rtt_tx = Arc::new(Mutex::new(Vec::new()));
             // Load the ELF up front. The classic-Xtensa path fast-boots it into
             // memory and jumps to its entry; the faithful S3 ROM-boot path uses
             // it only for symbol/diagnostic context (the flash image is the
@@ -1551,6 +1563,7 @@ pub(crate) fn run_test(
                         &resolved_limits,
                         &firmware_bytes,
                         &uart_tx,
+                        &rtt_tx,
                         &machine.cpu,
                         &firmware_path,
                         system_path.as_ref(),
@@ -1627,6 +1640,7 @@ pub(crate) fn run_test(
                 &assertions,
                 &firmware_bytes,
                 &uart_tx,
+                &rtt_tx,
                 &metrics,
                 &firmware_path,
                 system_path.as_ref(),
@@ -1769,6 +1783,19 @@ pub(crate) fn run_test(
     // console. No-op when no IO-Link master is attached.
     bus.attach_iolink_master_log_sink(uart_tx.clone());
 
+    // Dedicated RTT stream. Enabled by `--rtt` or by the presence of an
+    // `rtt_contains` assertion. The capture buffer never mixes with UART.
+    let rtt_enabled = rtt_flag
+        || assertions
+            .iter()
+            .any(|a| matches!(a, TestAssertion::RttContains(_)));
+    let rtt_tx = Arc::new(Mutex::new(Vec::<u8>::new()));
+    if rtt_enabled {
+        let control_block = labwired_loader::resolve_symbol_in_elf(&firmware_bytes, "_SEGGER_RTT");
+        bus.attach_segger_rtt(control_block);
+        bus.attach_rtt_sink(Some(rtt_tx.clone()), false);
+    }
+
     let program = match labwired_loader::load_elf(&firmware_path) {
         Ok(program) => program,
         Err(e) => {
@@ -1825,6 +1852,7 @@ pub(crate) fn run_test(
                 &assertions,
                 &firmware_bytes,
                 &uart_tx,
+                &rtt_tx,
                 &metrics,
                 &firmware_path,
                 system_path.as_ref(),
@@ -1859,6 +1887,7 @@ pub(crate) fn run_test(
                     &resolved_limits,
                     &firmware_bytes,
                     &uart_tx,
+                    &rtt_tx,
                     &machine.cpu,
                     &firmware_path,
                     system_path.as_ref(),

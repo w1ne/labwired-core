@@ -872,7 +872,7 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
             }
             ExitCode::SUCCESS
         }
-        Some(Commands::Test(args)) => commands::test::run_test(args, plugins),
+        Some(Commands::Test(args)) => commands::test::run_test(args, plugins, cli.rtt),
         Some(Commands::Machine(args)) => run_machine(args, plugins),
         Some(Commands::Asset(args)) => run_asset(args, plugins),
         Some(Commands::Run(args)) => commands::run::run_firmware(args, plugins),
@@ -1474,6 +1474,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
     resolved_limits: &TestLimits,
     firmware_bytes: &[u8],
     uart_tx: &Arc<Mutex<Vec<u8>>>,
+    rtt_tx: &Arc<Mutex<Vec<u8>>>,
     cpu: &C,
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
@@ -1507,6 +1508,10 @@ fn handle_load_error<C: labwired_core::Cpu>(
         vec![],
         firmware_bytes,
         uart_tx,
+        rtt_tx,
+        // Load/reset failed before the run loop, so no RTT model was ever
+        // attached: there is no stream and no diagnostics to report.
+        None,
         cpu,
         firmware_path,
         system_path,
@@ -1553,19 +1558,39 @@ pub(crate) fn uart_assertion_passes(assertion: &TestAssertion, uart_text: &str) 
     })
 }
 
+/// The assertions decided by captured RTT text alone, and nothing else.
+///
+/// Same contract as [`uart_assertion_passes`]: `None` means "not decided by
+/// this stream" and sends the caller on to the machine. The RTT capture is a
+/// separate buffer from UART on purpose — mixing them would let an
+/// `rtt_contains` token match a UART banner and vice versa.
+pub(crate) fn rtt_assertion_passes(assertion: &TestAssertion, rtt_text: &str) -> Option<bool> {
+    Some(match assertion {
+        TestAssertion::RttContains(a) => rtt_text.contains(&a.rtt_contains),
+        _ => return None,
+    })
+}
+
 fn assertion_currently_passes(
     assertion: &TestAssertion,
     uart_text: &str,
+    rtt_text: &str,
     machine: &labwired_core::Machine<impl labwired_core::Cpu>,
 ) -> bool {
     if let Some(passed) = uart_assertion_passes(assertion, uart_text) {
         return passed;
     }
+    if let Some(passed) = rtt_assertion_passes(assertion, rtt_text) {
+        return passed;
+    }
     match assertion {
-        // Handled above by `uart_assertion_passes`.
+        // Handled above by `uart_assertion_passes` / `rtt_assertion_passes`.
         TestAssertion::UartContains(_)
         | TestAssertion::UartRegex(_)
-        | TestAssertion::UartOrdered(_) => unreachable!("decided by uart_assertion_passes"),
+        | TestAssertion::UartOrdered(_)
+        | TestAssertion::RttContains(_) => {
+            unreachable!("decided by uart_assertion_passes/rtt_assertion_passes")
+        }
         TestAssertion::MotorSpeedReached(a) => machine.bus.motor_snapshots().iter().any(|motor| {
             let speed = motor.speed_rpm.abs();
             motor.id == a.motor_speed_reached.id
@@ -1620,10 +1645,6 @@ fn assertion_currently_passes(
         // Post-run only (footprint / stack paint). Terminal like FirmwareExit:
         // does not block `stop_when_assertions_pass` early-stop of live checks.
         TestAssertion::ResourceBudget(_) => true,
-        // Compile shim only: the dedicated RTT stream is not threaded into
-        // assertion evaluation yet, so `rtt_contains` must fail closed until
-        // the `rtt.log` pipeline lands (replaced by `rtt_assertion_passes`).
-        TestAssertion::RttContains(_) => false,
     }
 }
 
@@ -2048,6 +2069,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     assertions: &[TestAssertion],
     firmware_bytes: &[u8],
     uart_tx: &Arc<Mutex<Vec<u8>>>,
+    rtt_tx: &Arc<Mutex<Vec<u8>>>,
     metrics: &Arc<labwired_core::metrics::PerformanceMetrics>,
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
@@ -2645,6 +2667,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 TestAssertion::UartContains(_) | TestAssertion::UartRegex(_)
             )
         });
+    // NOTE: `RttContains` is deliberately NOT in the UART-only list above. The
+    // cache's change detector is the UART sink length, and the RTT stream can
+    // grow while UART stays byte-identical — a stale cached verdict would then
+    // hide a passing (or failing) `rtt_contains`. Excluding it disables the
+    // cache and restores every-step evaluation, which re-reads both streams.
+    let has_rtt_assertions = assertions
+        .iter()
+        .any(|a| matches!(a, TestAssertion::RttContains(_)));
     let mut cached_uart_text = String::new();
     // `usize::MAX` (not 0) so the first iteration always counts as a change and
     // evaluates, even when the capture is still empty.
@@ -3003,10 +3033,21 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             };
             if uart_changed || !assertions_are_uart_only {
                 let uart_text = &cached_uart_text;
+                // RTT is re-read every time this block runs: its sink is not
+                // the cache's change detector, and `assertions_are_uart_only`
+                // is false whenever an `rtt_contains` is present.
+                let rtt_text = if has_rtt_assertions {
+                    rtt_tx
+                        .lock()
+                        .map(|g| String::from_utf8_lossy(&g).to_string())
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 for (index, assertion) in assertions.iter().enumerate() {
                     let milestone_observed = match assertion {
                         TestAssertion::MotorSpeedReached(_) => {
-                            assertion_currently_passes(assertion, uart_text, machine)
+                            assertion_currently_passes(assertion, uart_text, &rtt_text, machine)
                         }
                         _ => false,
                     };
@@ -3028,7 +3069,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                             &stimulus_cycles,
                             &uart_milestone_cycles,
                         ))
-                        || assertion_currently_passes(assertion, uart_text, machine)
+                        || assertion_currently_passes(assertion, uart_text, &rtt_text, machine)
                 });
             }
             let all_pass = cached_all_pass;
@@ -3104,6 +3145,15 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let bytes = uart_tx.lock().map(|g| g.clone()).unwrap_or_default();
         String::from_utf8_lossy(&bytes).to_string()
     };
+    // The dedicated RTT stream, drained from the sink the runner attached.
+    // Gated on `has_rtt_assertions` for the same reason as the in-loop read:
+    // no `rtt_contains`, no reason to copy a possibly large buffer.
+    let rtt_text = if has_rtt_assertions {
+        let bytes = rtt_tx.lock().map(|g| g.clone()).unwrap_or_default();
+        String::from_utf8_lossy(&bytes).to_string()
+    } else {
+        String::new()
+    };
 
     // Finalize main-stack report before assertion evaluation so
     // `resource_budget` can compare against high-water / footprint.
@@ -3139,14 +3189,15 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::UartContains(_)
             | TestAssertion::UartRegex(_)
             | TestAssertion::UartOrdered(_)
+            | TestAssertion::RttContains(_)
             | TestAssertion::MotorState(_)
             | TestAssertion::MqttFabric(_) => (
-                assertion_currently_passes(assertion, &uart_text, machine),
+                assertion_currently_passes(assertion, &uart_text, &rtt_text, machine),
                 None,
             ),
             TestAssertion::MotorSpeedReached(_) => (
                 assertion_latched[assertion_index]
-                    || assertion_currently_passes(assertion, &uart_text, machine),
+                    || assertion_currently_passes(assertion, &uart_text, &rtt_text, machine),
                 None,
             ),
             TestAssertion::ShutdownLatency(a) => {
@@ -3251,9 +3302,6 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::ResourceBudget(a) => {
                 evaluate_resource_budget(&a.resource_budget, footprint.as_ref(), Some(&memory))
             }
-            // Compile shim only: see `assertion_currently_passes`. Fail closed
-            // until the RTT capture buffer is evaluated.
-            TestAssertion::RttContains(_) => (false, None),
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -3468,6 +3516,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         assertion_results,
         firmware_bytes,
         uart_tx,
+        rtt_tx,
+        // `None` when no RTT model was attached (the paths that never enable
+        // it), so `result.json`'s `rtt` block stays absent rather than fake.
+        machine.bus.segger_rtt_status(),
         &machine.cpu,
         firmware_path,
         system_path,
@@ -3506,6 +3558,8 @@ fn write_outputs<C: labwired_core::Cpu>(
     assertions: Vec<AssertionResult>,
     firmware_bytes: &[u8],
     uart_tx: &Arc<Mutex<Vec<u8>>>,
+    rtt_tx: &Arc<Mutex<Vec<u8>>>,
+    rtt_status: Option<labwired_core::peripherals::segger_rtt::RttStatus>,
     cpu: &C,
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
@@ -3585,6 +3639,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         footprint,
         memory,
         metrics: metrics_block,
+        rtt: rtt_status,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -3806,6 +3861,16 @@ fn write_outputs<C: labwired_core::Cpu>(
                 error!("Failed to write uart.log: {}", e);
             }
 
+            // rtt.log — the dedicated RTT stream, never spliced with UART.
+            // Written like uart.log on every output-dir run; it stays empty
+            // when RTT was not enabled, and result.json's `rtt` block is the
+            // enable/status signal (so "enabled and silent" is readable).
+            let rtt_path = output_dir.join("rtt.log");
+            let bytes = rtt_tx.lock().map(|g| g.clone()).unwrap_or_default();
+            if let Err(e) = std::fs::write(&rtt_path, bytes) {
+                error!("Failed to write rtt.log: {}", e);
+            }
+
             // junit.xml
             let junit_path = output_dir.join("junit.xml");
             if let Err(e) = write_junit_xml(
@@ -3926,6 +3991,8 @@ pub(crate) fn write_config_error_outputs(
         footprint: None,
         memory: None,
         metrics: None,
+        // Config error: no machine, so no RTT model and no diagnostics.
+        rtt: None,
     };
 
     if let Some(output_dir) = &args.output_dir {

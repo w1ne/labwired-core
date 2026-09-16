@@ -190,6 +190,9 @@ pub(crate) struct TestResult {
     /// `steps_executed` remain for compatibility.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) metrics: Option<ExecutionMetrics>,
+    /// SEGGER RTT diagnostics, present only when RTT was enabled for this run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) rtt: Option<labwired_core::peripherals::segger_rtt::RttStatus>,
 }
 
 /// Industry-standard execution counters for `result.json` (`metrics`).
