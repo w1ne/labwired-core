@@ -17,7 +17,7 @@ The models column is a content digest over everything that board's `models` list
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `5a3b6b0d36843043` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `7bb5ccdcae524cec` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | `efb1fe8bb938fd0a` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `7501e03bc97d044a` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-08-09 | `26652b3476cd3765` | ⚠ drift acked 2026-09-15, expires 2026-10-15 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | `e4927fed1d81c265` | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | `6338d103fa1217f1` | no silicon capture |
 | `nrf52832` | ⚪ structural | — | `6a7a72971094ba8f` | no silicon capture |
@@ -27,7 +27,7 @@ The models column is a content digest over everything that board's `models` list
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | `18c88d38d424c7fa` | no silicon capture |
 | `stm32f411ceu6` | 🔵 sim-validated (deep model, no HW diff) | — | `8ebbf536f3395fde` | no silicon capture |
 | `brd2709a` | 🟡 smoke-manual | — | `54196a8a658ab075` | no silicon capture |
-| `esp32` | ⚪ structural | — | `f2264e3d66957844` | no silicon capture |
+| `esp32` | ⚪ structural | — | `830d64273e67dd8a` | no silicon capture |
 | `mkw41z4` | 🔵 sim-validated (deep model, no HW diff) | — | `35bcc0d2680c8bc5` | no silicon capture |
 | `atsamd21g18a` | 🔵 sim-validated (deep model, no HW diff) | — | `aef534f5158cfd66` | no silicon capture |
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `8ed25ad8943bf667` | no silicon capture |
