@@ -366,6 +366,11 @@ pub struct SystemBus {
     /// pre-parsed frames into a named bxCAN/FDCAN peripheral at scheduled
     /// tick offsets. Empty by default → zero per-tick cost.
     pub can_log_players: Vec<CanLogPlayer>,
+    /// Virtual J1939 BAM transport testers. Each broadcasts one or more
+    /// concurrent multi-packet BAM sessions at a named CAN peripheral so an
+    /// ECU firmware under test reassembles them. Empty by default → zero
+    /// per-tick cost.
+    pub can_j1939_testers: Vec<CanJ1939Tester>,
     /// ESP32-C3 (RISC-V) interrupt routing: when true, each tick the bus routes
     /// asserted peripheral sources and the SYSTEM FROM_CPU IPI registers
     /// (0x600C0028..0x34) through the INTERRUPT_CORE0 matrix MAP registers into

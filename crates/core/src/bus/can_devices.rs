@@ -408,6 +408,123 @@ impl CanLogPlayer {
     }
 }
 
+/// One SAE J1939 broadcast (BAM) transport session: a PGN and payload to
+/// announce/transmit from a given source address.
+pub struct J1939Session {
+    pub source_address: u8,
+    pub pgn: u32,
+    pub payload: Vec<u8>,
+}
+
+/// Virtual J1939 node: broadcasts one or more concurrent BAM transport
+/// sessions at a named CAN peripheral so an ECU firmware under test
+/// reassembles them. Frames for all sessions are precomputed at
+/// construction (TP.CM announces first, then TP.DT packets interleaved
+/// round-robin across sessions) and injected one per `interval_ticks`.
+pub struct CanJ1939Tester {
+    pub id: String,
+    pub connection: String,
+    pub interval_ticks: u64,
+    pub(crate) frames: Vec<crate::network::CanFrame>,
+    pub(crate) cursor: usize,
+    ticks: u64,
+}
+
+fn j1939_id(pf: u8, sa: u8) -> u32 {
+    (6u32 << 26) | ((pf as u32) << 16) | (0xFFu32 << 8) | (sa as u32)
+}
+
+impl CanJ1939Tester {
+    pub fn new(
+        id: String,
+        connection: String,
+        sessions: Vec<J1939Session>,
+        bad_sequence: bool,
+        interval_ticks: u64,
+    ) -> Self {
+        // Per-session (announce, [TP.DT frames]).
+        let mut per_session: Vec<(crate::network::CanFrame, Vec<crate::network::CanFrame>)> =
+            Vec::with_capacity(sessions.len());
+
+        for session in &sessions {
+            let len = session.payload.len();
+            let num_packets = len.div_ceil(7);
+            let announce = crate::network::CanFrame {
+                id: j1939_id(0xEC, session.source_address),
+                data: vec![
+                    0x20,
+                    (len & 0xFF) as u8,
+                    ((len >> 8) & 0xFF) as u8,
+                    num_packets as u8,
+                    0xFF,
+                    (session.pgn & 0xFF) as u8,
+                    ((session.pgn >> 8) & 0xFF) as u8,
+                    ((session.pgn >> 16) & 0xFF) as u8,
+                ],
+                extended: true,
+                fd: false,
+                bitrate_switch: false,
+                remote: false,
+            };
+
+            let mut dt_frames = Vec::with_capacity(num_packets);
+            for k in 1..=num_packets {
+                let mut data = vec![0xFFu8; 8];
+                data[0] = k as u8;
+                let start = (k - 1) * 7;
+                let end = (start + 7).min(len);
+                data[1..1 + (end - start)].copy_from_slice(&session.payload[start..end]);
+                dt_frames.push(crate::network::CanFrame {
+                    id: j1939_id(0xEB, session.source_address),
+                    data,
+                    extended: true,
+                    fd: false,
+                    bitrate_switch: false,
+                    remote: false,
+                });
+            }
+
+            per_session.push((announce, dt_frames));
+        }
+
+        let mut frames: Vec<crate::network::CanFrame> = Vec::new();
+        for (announce, _) in &per_session {
+            frames.push(announce.clone());
+        }
+        // Round-robin interleave the TP.DT packets across sessions.
+        let max_packets = per_session
+            .iter()
+            .map(|(_, dt)| dt.len())
+            .max()
+            .unwrap_or(0);
+        for k in 0..max_packets {
+            for (_, dt) in &per_session {
+                if let Some(frame) = dt.get(k) {
+                    frames.push(frame.clone());
+                }
+            }
+        }
+
+        if bad_sequence {
+            // First TP.DT frame overall is the first session's packet 1
+            // (it comes right after all the announces).
+            let announces_count = per_session.len();
+            if frames.len() > announces_count {
+                frames[announces_count].data[0] = 0;
+            }
+        }
+
+        Self {
+            id,
+            connection,
+            interval_ticks: if interval_ticks == 0 { 1000 } else { interval_ticks },
+            frames,
+            cursor: 0,
+            ticks: 0,
+        }
+    }
+}
+
 use super::SystemBus;
 
 impl SystemBus {
@@ -652,6 +769,56 @@ impl SystemBus {
                     self.can_log_players[i].dropped += 1;
                 }
                 self.can_log_players[i].next_idx += 1;
+            }
+        }
+    }
+
+    /// Per-tick service for the J1939 BAM testers: inject one precomputed
+    /// frame every `interval_ticks` ticks. Filter-gated like the other CAN
+    /// injectors — on a failed (filtered) injection the cursor does not
+    /// advance and the same frame is retried next due tick.
+    pub(crate) fn service_can_j1939_testers(&mut self) {
+        if self.can_j1939_testers.is_empty() {
+            return;
+        }
+
+        for i in 0..self.can_j1939_testers.len() {
+            if self.can_j1939_testers[i].cursor >= self.can_j1939_testers[i].frames.len() {
+                continue;
+            }
+
+            self.can_j1939_testers[i].ticks += 1;
+            if self.can_j1939_testers[i].ticks < self.can_j1939_testers[i].interval_ticks {
+                continue;
+            }
+
+            let connection = self.can_j1939_testers[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+
+            let frame = self.can_j1939_testers[i].frames[self.can_j1939_testers[i].cursor].clone();
+            let injected = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                            bx.deliver_rx(frame)
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.receive_frame(frame)
+                        } else {
+                            false
+                        }
+                    }
+                    None => false,
+                }
+            };
+
+            if injected {
+                self.can_j1939_testers[i].cursor += 1;
+                self.can_j1939_testers[i].ticks = 0;
             }
         }
     }

@@ -2462,6 +2462,7 @@ fn test_flash_boot_alias_read_and_write() {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
+        can_j1939_testers: Vec::new(),
         esp32c3_irq_routing: false,
         riscv_irq_lines: 0,
         esp32c3_system_idx: None,
@@ -2561,6 +2562,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
+        can_j1939_testers: Vec::new(),
         esp32c3_irq_routing: false,
         riscv_irq_lines: 0,
         esp32c3_system_idx: None,
@@ -2811,6 +2813,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
+        can_j1939_testers: Vec::new(),
         esp32c3_irq_routing: false,
         riscv_irq_lines: 0,
         esp32c3_system_idx: None,
@@ -3059,6 +3062,7 @@ fn test_peripheral_range_index_lookup() {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
+        can_j1939_testers: Vec::new(),
         esp32c3_irq_routing: false,
         riscv_irq_lines: 0,
         esp32c3_system_idx: None,
@@ -3162,6 +3166,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         can_diagnostic_testers: Vec::new(),
         can_uds_testers: Vec::new(),
         can_log_players: Vec::new(),
+        can_j1939_testers: Vec::new(),
         esp32c3_irq_routing: false,
         riscv_irq_lines: 0,
         esp32c3_system_idx: None,
@@ -3996,4 +4001,102 @@ fn iolink_master_cache_tracks_every_mutation_path() {
     bus.refresh_peripheral_index();
     assert_eq!(bus.has_iolink_master(), bus.scan_iolink_master());
     assert!(bus.has_iolink_master());
+}
+
+fn j1939_two_sessions() -> Vec<J1939Session> {
+    vec![
+        J1939Session {
+            source_address: 0x00,
+            pgn: 0xFEE3,
+            payload: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        },
+        J1939Session {
+            source_address: 0x0F,
+            pgn: 0xFEE1,
+            payload: vec![21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
+        },
+    ]
+}
+
+#[test]
+fn j1939_tester_builds_interleaved_bam_frames() {
+    let tester = CanJ1939Tester::new(
+        "j1939-1".to_string(),
+        "can1".to_string(),
+        j1939_two_sessions(),
+        false,
+        1000,
+    );
+
+    // 2 TP.CM announces + 2 sessions * 2 TP.DT packets each = 6 frames.
+    assert_eq!(tester.frames.len(), 6);
+
+    // Announces first, in session order.
+    assert_eq!(tester.frames[0].id, 0x18ECFF00);
+    assert_eq!(tester.frames[0].data[0], 0x20);
+    assert_eq!(tester.frames[1].id, 0x18ECFF0F);
+    assert_eq!(tester.frames[1].data[0], 0x20);
+
+    // Then TP.DT packets, round-robin interleaved across sessions.
+    assert_eq!(tester.frames[2].id, 0x18EBFF00);
+    assert_eq!(tester.frames[2].data[0], 1);
+    assert_eq!(tester.frames[3].id, 0x18EBFF0F);
+    assert_eq!(tester.frames[3].data[0], 1);
+    assert_eq!(tester.frames[4].id, 0x18EBFF00);
+    assert_eq!(tester.frames[4].data[0], 2);
+    assert_eq!(tester.frames[5].id, 0x18EBFF0F);
+    assert_eq!(tester.frames[5].data[0], 2);
+
+    for frame in &tester.frames {
+        assert!(frame.extended);
+        assert!(!frame.fd);
+        assert_eq!(frame.data.len(), 8);
+    }
+}
+
+#[test]
+fn j1939_tester_bad_sequence_uses_seq_zero() {
+    let tester = CanJ1939Tester::new(
+        "j1939-1".to_string(),
+        "can1".to_string(),
+        j1939_two_sessions(),
+        true,
+        1000,
+    );
+
+    // First TP.DT frame of the first session has sequence 0 instead of 1.
+    assert_eq!(tester.frames[2].id, 0x18EBFF00);
+    assert_eq!(tester.frames[2].data[0], 0);
+
+    // Everything else is unaffected.
+    assert_eq!(tester.frames[3].data[0], 1);
+    assert_eq!(tester.frames[4].data[0], 2);
+    assert_eq!(tester.frames[5].data[0], 2);
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn j1939_tester_keeps_per_cycle_tick_nontrivial() {
+    // Regression: the walk-free fast path (`per_cycle_tick_is_trivial`) skips the
+    // whole phase-1 pass — including `service_can_j1939_testers`. If a J1939
+    // tester does not flip the tick off "trivial", its frames are never injected
+    // under the event-scheduler build (the browser), even though the device is
+    // present. This mirrors the guard for can-player / uds-tester / diag-tester.
+    let mut bus = SystemBus::empty();
+    bus.legacy_walk_disabled = true;
+    assert!(
+        bus.per_cycle_tick_is_trivial(),
+        "baseline (walk disabled, no per-cycle services) should be trivial",
+    );
+    bus.can_j1939_testers.push(CanJ1939Tester::new(
+        "tester".to_string(),
+        "bxcan1".to_string(),
+        j1939_two_sessions(),
+        false,
+        2000,
+    ));
+    assert!(
+        !bus.per_cycle_tick_is_trivial(),
+        "a J1939 tester must keep the per-cycle tick non-trivial so it is serviced",
+    );
 }

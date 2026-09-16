@@ -142,6 +142,7 @@ impl SystemBus {
             && self.can_diagnostic_testers.is_empty()
             && self.can_uds_testers.is_empty()
             && self.can_log_players.is_empty()
+            && self.can_j1939_testers.is_empty()
             && (self.hcsr04.is_empty() || self.hcsr04_event_scheduled())
     }
 

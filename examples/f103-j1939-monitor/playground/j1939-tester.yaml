@@ -1,0 +1,8 @@
+schema_version: "1.0"
+inputs:
+  system: "./system-tester.yaml"
+  firmware: "../firmware/build/j1939_monitor.elf"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "J1939-MONITOR START"

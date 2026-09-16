@@ -147,6 +147,7 @@ impl SystemBus {
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
+            can_j1939_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             esp32c3_system_idx: None,
@@ -970,6 +971,58 @@ impl SystemBus {
                     )
                     .map_err(|e| anyhow::anyhow!(e))?;
                     bus.can_log_players.push(player);
+                }
+                "j1939-tester" => {
+                    if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
+                        return Err(anyhow::anyhow!(
+                            "j1939-tester '{}' connection '{}' was not found",
+                            ext.id,
+                            ext.connection
+                        ));
+                    }
+                    let interval_ticks =
+                        Self::yaml_u32(ext.config.get("interval_ticks"), 1000) as u64;
+                    let bad_sequence = ext
+                        .config
+                        .get("bad_sequence")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let sessions: Vec<J1939Session> = match ext
+                        .config
+                        .get("sessions")
+                        .and_then(|v| v.as_sequence())
+                    {
+                        Some(seq) => seq
+                            .iter()
+                            .map(|entry| J1939Session {
+                                source_address: Self::yaml_u32(
+                                    entry.get("source_address"),
+                                    0,
+                                ) as u8,
+                                pgn: Self::yaml_u32(entry.get("pgn"), 0),
+                                payload: Self::yaml_bytes(entry.get("payload"), &[]),
+                            })
+                            .collect(),
+                        None => {
+                            return Err(anyhow::anyhow!(
+                                "j1939-tester '{}': 'sessions' must be a non-empty sequence",
+                                ext.id
+                            ));
+                        }
+                    };
+                    if sessions.is_empty() {
+                        return Err(anyhow::anyhow!(
+                            "j1939-tester '{}': 'sessions' must be a non-empty sequence",
+                            ext.id
+                        ));
+                    }
+                    bus.can_j1939_testers.push(CanJ1939Tester::new(
+                        ext.id.clone(),
+                        ext.connection.clone(),
+                        sessions,
+                        bad_sequence,
+                        interval_ticks,
+                    ));
                 }
                 // ntc-thermistor dispatches through the PeripheralKit registry above.
                 _ => {

@@ -1,0 +1,22 @@
+name: "f103-j1939-monitor"
+chip: "../../../configs/chips/stm32f103.yaml"
+external_devices:
+  # ECU + tester: a virtual J1939 tester node broadcasts two multi-packet BAM
+  # sessions concurrently (engine SA 0x00 / PGN 0xFEE3 and retarder SA 0x0F /
+  # PGN 0xFEE1), interleaved on the wire, at the F103 monitor ECU. A per-SA
+  # reassembler rebuilds both correctly; a single-shared-buffer stack corrupts
+  # them. No candump file — the tester synthesizes the transport frames.
+  - type: "j1939-tester"
+    id: "tester"
+    connection: "bxcan1"
+    config:
+      interval_ticks: 400
+      bad_sequence: false
+      sessions:
+        - source_address: 0x00
+          pgn: 0xFEE3
+          payload: "E1 E2 E3 E4 E5 E6 E7 E8 E9 EA EB EC"
+        - source_address: 0x0F
+          pgn: 0xFEE1
+          payload: "51 52 53 54 55 56 57 58 59 5A 5B 5C"
+board_io: []
