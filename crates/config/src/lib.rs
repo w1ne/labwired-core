@@ -5905,6 +5905,28 @@ assertions:
             "unexpected error: {err}"
         );
     }
+
+    #[test]
+    fn empty_rtt_contains_is_rejected_by_validate() {
+        let script: TestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 100
+assertions:
+  - rtt_contains: ""
+"#,
+        )
+        .expect("parse script");
+        let err = script.validate().unwrap_err();
+        assert!(
+            err.to_string().contains("rtt_contains cannot be empty"),
+            "unexpected error: {err}"
+        );
+    }
 }
 
 #[cfg(test)]
