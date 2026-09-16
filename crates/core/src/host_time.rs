@@ -62,16 +62,36 @@ pub trait HostClock: Send {
 }
 
 /// `std::time::Instant` clock. Origin is construction of this value.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, Copy)]
 pub struct StdHostClock {
     origin: std::time::Instant,
 }
 
+/// wasm32 build of [`StdHostClock`].
+///
+/// There is no monotonic clock on wasm32-unknown-unknown: `Instant::now()`
+/// panics at runtime ("time not implemented on this platform"), and
+/// `Machine::new` constructs this clock unconditionally — so the un-cfg'd
+/// version trapped the browser package on construction. The browser worker
+/// never selects [`HostTimeMode::Realtime`] (there is no watcher to pace) and
+/// its `sleep` is a no-op below, so this answers a constant zero: `pace()`
+/// sees no elapsed wall time and cannot trap if a caller does opt in.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone, Copy)]
+pub struct StdHostClock;
+
 impl StdHostClock {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Self {
         Self {
             origin: std::time::Instant::now(),
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -83,7 +103,14 @@ impl Default for StdHostClock {
 
 impl HostClock for StdHostClock {
     fn now(&self) -> Duration {
-        self.origin.elapsed()
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.origin.elapsed()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Duration::ZERO
+        }
     }
 
     fn sleep(&self, duration: Duration) {
