@@ -1138,11 +1138,25 @@ mod vfp_host_tests {
         let mut fpu = [0u32; 32];
         let mut host = with_fpu(fpu.as_mut_ptr());
 
-        // FZ: denormal inputs flush to +0 before the add.
+        // FZ: denormal inputs flush to +0 before the add. 0x0000_0001 is
+        // 2^-149 — the smallest denormal; 0x1F80_0000 (2^-64) is NORMAL, so
+        // it must survive FZ (the control below proves the flush, not the op).
+        host.fpscr = 0;
+        assert_eq!(
+            thumb_vfp_binop(&host, 0, 0x0000_0001, 0x0000_0001) as u32,
+            0x0000_0002,
+            "without FZ a denormal sum stays denormal"
+        );
         host.fpscr = 1 << 24;
         assert_eq!(
+            thumb_vfp_binop(&host, 0, 0x0000_0001, 0x0000_0001) as u32,
+            0,
+            "FZ must flush both denormal inputs before the add"
+        );
+        assert_eq!(
             thumb_vfp_binop(&host, 0, 0x1F80_0000, 0x1F80_0000) as u32,
-            0
+            0x2000_0000,
+            "FZ must not touch a normal operand"
         );
         // DN: any NaN result becomes the ARM default NaN.
         host.fpscr = 1 << 25;
