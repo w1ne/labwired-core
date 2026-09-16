@@ -15,12 +15,18 @@ fn main() {
 
     // The vendor C is portable: the host gates (`cargo check`, clippy) compile
     // it with the host compiler, while the firmware build uses cc's
-    // thumbv7em -> arm-none-eabi mapping.
+    // thumbv7em -> arm-none-eabi mapping. The -D overrides must precede the
+    // shared SEGGER_RTT_Conf.h defaults, which are #ifndef-guarded.
     let target = env::var("TARGET").unwrap_or_default();
     let mut build = cc::Build::new();
     build
         .file("../../third_party/segger-rtt/SEGGER_RTT.c")
         .include("../../third_party/segger-rtt")
+        .define("BUFFER_SIZE_UP", "16")
+        .define(
+            "SEGGER_RTT_MODE_DEFAULT",
+            "SEGGER_RTT_MODE_BLOCK_IF_FIFO_FULL",
+        )
         .warnings(false);
     if target.starts_with("thumbv7em") {
         build.flag("-mcpu=cortex-m4");

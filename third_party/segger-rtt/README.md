@@ -7,4 +7,6 @@ module (west `modules/debug/segger`, SystemView 3.40 tree).
 - SEGGER_RTT.h sha256: b478e69d67e411b3e806c5003893df414127c6e9b08759241363fffbe47e37ab
 
 License: SEGGER's 1-clause BSD notice is retained in the file headers.
-`SEGGER_RTT_Conf.h` is LabWired-authored config for this bare-metal demo.
+`SEGGER_RTT_Conf.h` is LabWired-authored config shared by the bare-metal RTT
+fixtures; its defaults can be overridden per build with `-D` (see the
+blocking fixture).
