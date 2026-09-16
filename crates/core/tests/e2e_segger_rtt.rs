@@ -23,9 +23,6 @@ fn repo_root() -> PathBuf {
 fn ensure_firmware_built(root: &std::path::Path) -> PathBuf {
     let bin = labwired_core::test_support::target_dir()
         .join("thumbv7em-none-eabi/release/firmware-nrf52840-rtt");
-    if bin.exists() {
-        return bin;
-    }
     let status = Command::new("cargo")
         .current_dir(root)
         .args([
@@ -36,6 +33,10 @@ fn ensure_firmware_built(root: &std::path::Path) -> PathBuf {
             "--target",
             "thumbv7em-none-eabi",
         ])
+        // See e2e_epaper_tricolor: clear coverage instrumentation flags so the
+        // no_std firmware cross-build doesn't fail with E0463 under llvm-cov.
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .status()
         .expect("execute cargo build");
     assert!(
@@ -90,6 +91,8 @@ fn stock_segger_rtt_firmware_output_is_drained_from_ram() {
     assert!(status.bytes_drained >= 24);
 }
 
+// Runs in the feature-enabled lanes only — `cargo test -p labwired-core
+// --features jit,event-scheduler` (core-full/nightly). PR shards skip it.
 #[cfg(all(feature = "jit", feature = "event-scheduler"))]
 mod jit_overflow {
     use super::*;
@@ -101,9 +104,6 @@ mod jit_overflow {
     fn ensure_blocking_fixture_built(root: &std::path::Path) -> PathBuf {
         let bin = labwired_core::test_support::target_dir()
             .join("thumbv7em-none-eabi/release/firmware-nrf52840-rtt-blocking");
-        if bin.exists() {
-            return bin;
-        }
         let status = Command::new("cargo")
             .current_dir(root)
             .args([
@@ -114,6 +114,11 @@ mod jit_overflow {
                 "--target",
                 "thumbv7em-none-eabi",
             ])
+            // See e2e_epaper_tricolor: clear coverage instrumentation flags so
+            // the no_std firmware cross-build doesn't fail with E0463 under
+            // llvm-cov.
+            .env_remove("CARGO_ENCODED_RUSTFLAGS")
+            .env_remove("RUSTFLAGS")
             .status()
             .expect("execute cargo build");
         assert!(
