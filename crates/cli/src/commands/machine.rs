@@ -132,6 +132,7 @@ pub(crate) fn run_machine_load(
                 command: None,
                 json: false,
                 vcd: None,
+                rtt: false,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
@@ -172,6 +173,7 @@ pub(crate) fn run_machine_load(
                 command: None,
                 json: false,
                 vcd: None,
+                rtt: false,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)
@@ -211,6 +213,7 @@ pub(crate) fn run_machine_load(
                 command: None,
                 json: false,
                 vcd: None,
+                rtt: false,
             };
             run_simulation_loop(&cli, &mut machine, &metrics);
             ExitCode::from(EXIT_PASS)

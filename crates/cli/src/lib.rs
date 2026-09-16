@@ -135,6 +135,11 @@ struct Cli {
     #[arg(long, global = true)]
     vcd: Option<PathBuf>,
 
+    /// Emit SEGGER RTT output: interactive runs echo drained RTT bytes to
+    /// stdout; `test` writes rtt.log and enables `rtt_contains` assertions.
+    #[arg(long, global = true)]
+    rtt: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
