@@ -61,6 +61,7 @@
 
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
 use labwired_core::bus::SystemBus;
+use labwired_core::cpu::cortex_m::{vfp_binop, VfpBinOp};
 use labwired_core::cpu::jit_framework::cortex_m::emit::{
     FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
     WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
@@ -615,11 +616,14 @@ type ThumbLoadClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
 type ThumbStoreClosure = Closure<dyn FnMut(i32, i32, i32)>;
 type ThumbVfpGetClosure = Closure<dyn FnMut(i32) -> i32>;
 type ThumbVfpSetClosure = Closure<dyn FnMut(i32, i32)>;
+type ThumbVfpBinopClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
 
 struct ThumbHost {
     ram: *mut u8,
     ram_len: usize,
     fpu: *mut u32,
+    /// FPSCR snapshot for this call, installed from the CPU by `run`.
+    fpscr: u32,
 }
 
 struct CortexMBrowserBlock {
@@ -633,6 +637,7 @@ struct CortexMBrowserBlock {
     _void3: Vec<ThumbStoreClosure>,
     _get: Vec<ThumbVfpGetClosure>,
     _set: Vec<ThumbVfpSetClosure>,
+    _binop: Vec<ThumbVfpBinopClosure>,
     _instance: WebAssembly::Instance,
 }
 
@@ -658,12 +663,14 @@ impl CortexMBrowserBlock {
             ram: std::ptr::null_mut(),
             ram_len: 0,
             fpu: std::ptr::null_mut(),
+            fpscr: 0,
         }));
 
         let mut closures: Vec<ThumbLoadClosure> = Vec::new();
         let mut void3: Vec<ThumbStoreClosure> = Vec::new();
         let mut gets: Vec<ThumbVfpGetClosure> = Vec::new();
         let mut sets: Vec<ThumbVfpSetClosure> = Vec::new();
+        let mut binops: Vec<ThumbVfpBinopClosure> = Vec::new();
 
         let imports = Object::new();
         let regs = Object::new();
@@ -686,6 +693,10 @@ impl CortexMBrowserBlock {
             let h_set = host.clone();
             let vset = Closure::<dyn FnMut(i32, i32)>::new(move |sd, bits| {
                 thumb_vfp_set(&h_set.borrow(), sd, bits);
+            });
+            let h_binop = host.clone();
+            let vbinop = Closure::<dyn FnMut(i32, i32, i32) -> i32>::new(move |fop, a, b| {
+                thumb_vfp_binop(&h_binop.borrow(), fop, a, b)
             });
 
             let ram = Object::new();
@@ -710,6 +721,11 @@ impl CortexMBrowserBlock {
                 &JsValue::from_str("set"),
                 vset.as_ref().unchecked_ref(),
             )?;
+            Reflect::set(
+                &vfp,
+                &JsValue::from_str("binop"),
+                vbinop.as_ref().unchecked_ref(),
+            )?;
             Reflect::set(&imports, &JsValue::from_str("ram"), &ram)?;
             Reflect::set(&imports, &JsValue::from_str("vfp"), &vfp)?;
 
@@ -717,6 +733,7 @@ impl CortexMBrowserBlock {
             void3.push(store);
             gets.push(vget);
             sets.push(vset);
+            binops.push(vbinop);
         }
 
         let instance = WebAssembly::Instance::new(&module, &imports)
@@ -738,6 +755,7 @@ impl CortexMBrowserBlock {
             _void3: void3,
             _get: gets,
             _set: sets,
+            _binop: binops,
             _instance: instance,
         })
     }
@@ -759,6 +777,7 @@ impl CortexMBrowserBlock {
             h.ram = ram.as_mut_ptr();
             h.ram_len = ram.len();
             h.fpu = cpu.fpu_s.as_mut_ptr();
+            h.fpscr = cpu.fpscr;
         }
         let result = self.run.call0(&JsValue::UNDEFINED);
         {
@@ -889,6 +908,17 @@ fn thumb_vfp_set(host: &ThumbHost, sd: i32, bits: i32) {
     }
     unsafe {
         *host.fpu.add(i) = bits as u32;
+    }
+}
+
+/// `vfp.binop(op, a_bits, b_bits)`: the browser compiled lane's arithmetic.
+/// Delegates to the same `cortex_m::vfp_binop` the interpreter uses, so the
+/// browser and native JITs, and the interpreter, all agree bit-for-bit
+/// including FPSCR.FZ/DN and NaN payloads.
+fn thumb_vfp_binop(host: &ThumbHost, fop: i32, a: i32, b: i32) -> i32 {
+    match VfpBinOp::from_code(fop) {
+        Some(op) => vfp_binop(op, a as u32, b as u32, host.fpscr) as i32,
+        None => 0,
     }
 }
 
@@ -1069,6 +1099,7 @@ mod vfp_host_tests {
             ram: std::ptr::null_mut(),
             ram_len: 0,
             fpu,
+            fpscr: 0,
         }
     }
 
@@ -1099,6 +1130,31 @@ mod vfp_host_tests {
         assert!(
             fpu.iter().all(|&w| w == 0),
             "an out-of-range write must not land anywhere in the file"
+        );
+    }
+
+    #[test]
+    fn vfp_host_binop_honors_fpscr_modes() {
+        let mut fpu = [0u32; 32];
+        let mut host = with_fpu(fpu.as_mut_ptr());
+
+        // FZ: denormal inputs flush to +0 before the add.
+        host.fpscr = 1 << 24;
+        assert_eq!(
+            thumb_vfp_binop(&host, 0, 0x1F80_0000, 0x1F80_0000) as u32,
+            0
+        );
+        // DN: any NaN result becomes the ARM default NaN.
+        host.fpscr = 1 << 25;
+        assert_eq!(
+            thumb_vfp_binop(&host, 0, 0x7FC0_AAAA, 1) as u32,
+            0x7FC0_0000
+        );
+        // Default: first NaN operand propagates quieted.
+        host.fpscr = 0;
+        assert_eq!(
+            thumb_vfp_binop(&host, 0, 0x7F80_0001, 1) as u32,
+            0x7FC0_0001
         );
     }
 }
