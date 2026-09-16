@@ -13,9 +13,9 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tlink.x");
     println!("cargo:rerun-if-changed=memory.x");
 
-    // The vendor C is portable: the host build (workspace `cargo test
-    // --workspace` builds every member on the host) uses the host compiler,
-    // the firmware build uses cc's thumbv7em -> arm-none-eabi mapping).
+    // The vendor C is portable: the host gates (`cargo check`, clippy) compile
+    // it with the host compiler, while the firmware build uses cc's
+    // thumbv7em -> arm-none-eabi mapping.
     let target = env::var("TARGET").unwrap_or_default();
     let mut build = cc::Build::new();
     build

@@ -4,12 +4,13 @@
 #![no_std]
 #![no_main]
 
+use core::ffi::c_char;
 use cortex_m_rt::entry;
 use panic_halt as _;
 
 extern "C" {
     fn SEGGER_RTT_Init();
-    fn SEGGER_RTT_WriteString(buffer_index: u32, s: *const u8) -> u32;
+    fn SEGGER_RTT_WriteString(buffer_index: u32, s: *const c_char) -> u32;
 }
 
 #[entry]
@@ -19,7 +20,7 @@ fn main() -> ! {
     }
     loop {
         unsafe {
-            SEGGER_RTT_WriteString(0, b"RTT hello from labwired\n\0".as_ptr());
+            SEGGER_RTT_WriteString(0, c"RTT hello from labwired\n".as_ptr());
         }
         // Pace the loop so the ring buffer does not wrap every few cycles.
         for _ in 0..100_000u32 {
