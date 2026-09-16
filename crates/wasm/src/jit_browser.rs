@@ -62,8 +62,8 @@
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::jit_framework::cortex_m::emit::{
-    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
-    WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, IT_STATE_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT,
+    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
 };
 use labwired_core::cpu::jit_framework::cortex_m::host::{pack_regs, unpack_regs};
 use labwired_core::cpu::jit_framework::cortex_m::CortexMFrontend;
@@ -609,7 +609,9 @@ extern "C" {
 
 const THUMB_MIN_PROFITABLE: u32 = 4;
 const THUMB_CODE_WINDOW: usize = 4096;
-const THUMB_REG_BYTES: usize = 80;
+/// Register file + the control slots the emitted body writes (through
+/// [`IT_STATE_SLOT`]), rounded up so the IT slot is inside the read-back.
+const THUMB_REG_BYTES: usize = 96;
 
 type ThumbLoadClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
 type ThumbStoreClosure = Closure<dyn FnMut(i32, i32, i32)>;
@@ -742,11 +744,14 @@ impl CortexMBrowserBlock {
         })
     }
 
+    /// Returns `(wire, next_pc, clear_exclusive, fault_pc, fault_retired,
+    /// fault_it_state)`; the last is the pre-fault IT state the caller must
+    /// reinstall before the interpreter resumes mid-IT.
     fn run(
         &mut self,
         cpu: &mut CortexM,
         ram: &mut [u8],
-    ) -> Result<(i32, u32, bool, u32, u32), JsValue> {
+    ) -> Result<(i32, u32, bool, u32, u32, u8), JsValue> {
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
         let mut bytes = [0u8; THUMB_REG_BYTES];
@@ -804,7 +809,15 @@ impl CortexMBrowserBlock {
                 bytes[RES_FLAG_SLOT as usize + 2],
                 bytes[RES_FLAG_SLOT as usize + 3],
             ]) != 0;
-        Ok((wire, next_pc, clear_exclusive, fault_pc, fault_retired))
+        let fault_it_state = bytes[IT_STATE_SLOT as usize];
+        Ok((
+            wire,
+            next_pc,
+            clear_exclusive,
+            fault_pc,
+            fault_retired,
+            fault_it_state,
+        ))
     }
 }
 
@@ -965,13 +978,14 @@ pub(crate) fn try_browser_cortex_m_jit_step(
         let instr_count = block.instr_count;
         let end_pc = block.end_pc;
         block.run(cpu, &mut bus.ram.data).map(
-            |(wire, next_pc, clear_exclusive, fault_pc, fault_retired)| {
+            |(wire, next_pc, clear_exclusive, fault_pc, fault_retired, fault_it_state)| {
                 (
                     wire,
                     next_pc,
                     clear_exclusive,
                     fault_pc,
                     fault_retired,
+                    fault_it_state,
                     instr_count,
                     end_pc,
                 )
@@ -979,14 +993,28 @@ pub(crate) fn try_browser_cortex_m_jit_step(
         )
     };
     match ran {
-        Ok((wire, next_pc, clear_exclusive, fault_pc, fault_retired, instr_count, end_pc)) => {
+        Ok((
+            wire,
+            next_pc,
+            clear_exclusive,
+            fault_pc,
+            fault_retired,
+            fault_it_state,
+            instr_count,
+            end_pc,
+        )) => {
             if clear_exclusive {
                 cpu.clear_exclusive_monitor();
             }
             let (n, cont, needs_interp) = match wire {
                 WIRE_FALL_THROUGH => (instr_count, end_pc, false),
                 WIRE_CHAIN_DYNAMIC => (instr_count, next_pc, false),
-                WIRE_MEM_FAULT | WIRE_UNSUPPORTED => (fault_retired, fault_pc, true),
+                WIRE_MEM_FAULT | WIRE_UNSUPPORTED => {
+                    // Mid-IT resume: the interpreter must see the IT state as
+                    // of before the faulting instruction, not a cleared one.
+                    cpu.it_state = fault_it_state;
+                    (fault_retired, fault_pc, true)
+                }
                 _ => (instr_count, end_pc, true),
             };
             cpu.pc = cont;
