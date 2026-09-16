@@ -462,22 +462,18 @@ impl Timer {
         }
     }
 
-    /// The increment index of the first latch of an *enabled* flag (the walk
-    /// freezes counting from the next tick on, and pends the NVIC line), and
-    /// whether the pend lands on the SAME tick as the increment (update event
-    /// with UIE — the walk returns `irq` from the overflow tick itself) or on
-    /// the NEXT tick (compare match — latched on the match tick, first pended
-    /// by the level check one tick later).
-    fn first_enabled_event(&self) -> Option<(u64, bool)> {
+    /// The increment index of the first latch of an *enabled* flag. The walk
+    /// freezes counting from that increment on, and the bus pends the NVIC
+    /// line on the same tick (`irq_line_level` — a level tracks its flag), so
+    /// this one number serves the freeze and the event chain alike.
+    fn first_enabled_event(&self) -> Option<u64> {
         if (self.cr1 & 0x1) == 0 {
             return None;
         }
         let v = self.cnt.get();
-        let mut best: Option<(u64, bool)> = None;
+        let mut best: Option<u64> = None;
         if (self.dier & 0x1) != 0 {
-            if let Some(j) = self.increments_to_wrap(v) {
-                best = Some((j, true));
-            }
+            best = self.increments_to_wrap(v);
         }
         if !self.basic {
             let mask = self.cnt_mask();
@@ -493,9 +489,9 @@ impl Timer {
                 }
                 if let Some(j) = self.increments_to_value(v, ccr & mask) {
                     // Strict `<` keeps update-event precedence on a tie (the
-                    // walk pends the overflow tick itself when UIE is set).
-                    if best.is_none_or(|(b, _)| j < b) {
-                        best = Some((j, false));
+                    // overflow tick pends itself when UIE is set).
+                    if best.is_none_or(|b| j < b) {
+                        best = Some(j);
                     }
                 }
             }
@@ -530,7 +526,7 @@ impl Timer {
         }
         let period = self.psc as u64 + 1;
         let n = 1 + (e - k1) / period; // increments the un-frozen walk would do
-        let freeze_j = self.first_enabled_event().map(|(j, _)| j);
+        let freeze_j = self.first_enabled_event();
         // Increments actually applied: the walk stops counting after the
         // increment that latches an enabled flag.
         let m = match freeze_j {
@@ -604,18 +600,24 @@ impl Timer {
     }
 
     /// Walk ticks from the just-synced state until the tick on which the
-    /// legacy walk would FIRST pend the NVIC line, for the event chain:
-    /// `None` when nothing is armed (chain dies; the next relevant MMIO write
-    /// re-arms). The tick is `k1 + (j-1)*(PSC+1)` for the increment, plus one
-    /// for compare matches (level-pended one tick after the latch).
+    /// legacy walk FIRST pends the NVIC line, for the event chain: `None` when
+    /// nothing is armed (chain dies; the next relevant MMIO write re-arms).
+    /// The tick is `k1 + (j-1)*(PSC+1)` for the increment that latches the
+    /// enabled flag — update and compare alike.
+    ///
+    /// A LEVEL pends on the tick its flag latches (the bus reconciles the line
+    /// from `irq_line_level()` after each walk tick, so a compare match needs
+    /// no extra tick). This used to add +1 for compare matches, encoding the
+    /// pre-level-reconcile walk, where only the NEXT tick's `tick()` returned
+    /// `irq: true`; that made the scheduler fire one cycle after the walk and
+    /// the `stm32_timer_walk_differential` compare gate went red.
     fn ticks_until_first_pend(&self) -> Option<u64> {
         if self.irq_level_held() {
             // Already held: the walk pends on the very next tick.
             return Some(1);
         }
-        let (j, same_tick) = self.first_enabled_event()?;
-        let t = self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1);
-        Some(if same_tick { t } else { t + 1 })
+        let j = self.first_enabled_event()?;
+        Some(self.ticks_to_first_increment() + (j - 1) * (self.psc as u64 + 1))
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -1214,8 +1216,17 @@ mod tests {
         /// Mirror of the legacy per-tick walk semantics, kept in the test as
         /// an independent oracle: returns whether the walk pends the NVIC
         /// line on this tick.
+        ///
+        /// The bus walk pends from the peripheral's held LINE after the tick
+        /// (`irq_line_level`, so a level pend tracks its flag both ways — see
+        /// `reconcile_nvic_level`), not from `tick().irq`. The two agree on
+        /// every tick except the compare-latch tick, where `irq_level_held()`
+        /// is already true and `tick()` still returns `irq: false`; using
+        /// `tick().irq` here encoded the pre-level-reconcile walk and made
+        /// this oracle disagree with the bus.
         fn walk_tick_oracle(t: &mut Timer) -> bool {
-            t.tick().irq
+            t.tick();
+            t.irq_level_held()
         }
 
         /// Drive a scheduler-mode timer exactly the way `Machine` +
