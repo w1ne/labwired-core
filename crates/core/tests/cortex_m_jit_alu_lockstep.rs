@@ -18,6 +18,7 @@ use labwired_core::cpu::jit_framework::differential::{compare, DiffPolicy};
 use labwired_core::cpu::jit_framework::frontend::IsaFrontend;
 use labwired_core::cpu::jit_framework::CodeView;
 use labwired_core::cpu::CortexM;
+use labwired_core::memory::LinearMemory;
 use labwired_core::{Bus, DebugControl, Machine};
 
 fn h(bytes: &mut Vec<u8>, half: u16) {
@@ -472,37 +473,251 @@ fn itt_eq_ands_adds_does_not_leak_flags() {
     assert_eq!(interp.cpu.xpsr & 0xF000_0000, jit.cpu.xpsr & 0xF000_0000);
 }
 
-#[test]
-fn itt_with_store_is_not_compiled() {
-    // ITT EQ; ADDS r0, #1; STR r0, [r1] — mem in the IT body must not compile
-    // the IT (side-exit would drop it_state and run STR unpredicated).
+/// Bus-resident memory the JIT's RAM binding does not cover: every access to
+/// it side-exits to the interpreter, but the write still lands on a real
+/// `LinearMemory`, so the bus write counter and read-back both observe it.
+const OFF_WINDOW_MMIO: u32 = 0x4000_0000;
+
+fn attach_off_window_mem(m: &mut Machine<CortexM>) {
+    m.bus
+        .extra_mem
+        .push(LinearMemory::new(0x1000, u64::from(OFF_WINDOW_MMIO)));
+}
+
+fn off_window_word(m: &Machine<CortexM>) -> u32 {
+    u32::from_le_bytes(m.bus.extra_mem[0].data[0..4].try_into().unwrap())
+}
+
+fn itt_eq_adds_str_loop() -> Vec<u8> {
+    // ITT EQ; ADDS r2, #1; STR r0, [r1]. The store is the second (last)
+    // predicated instruction: a side-exit there must resume with the IT state
+    // as of BEFORE the store, or the interpreter replays it unpredicated.
     let mut prog = Vec::new();
     for _ in 0..4 {
         h(&mut prog, 0xBF00);
     }
     h(&mut prog, itt_eq());
-    h(&mut prog, adds_imm8(0, 1));
+    h(&mut prog, adds_imm8(2, 1));
     h(&mut prog, str_imm(0, 1, 0));
     let from = prog.len() as i32;
     h(&mut prog, b_to(from, 0));
+    prog
+}
 
-    let jit = build_machine(&prog);
+#[test]
+fn itt_eq_adds_str_out_of_window_compiles() {
+    let prog = itt_eq_adds_str_loop();
+    let probe = build_machine(&prog);
     let mut engine = CortexMJitEngine::new(4);
-    engine.try_compile_from_bus(0, &jit.bus);
+    engine.try_compile_from_bus(0, &probe.bus);
     assert_eq!(
         engine.ready_instr_count(0),
-        Some(4),
-        "IT whose body contains a store must not compile: {:?}",
+        Some(8),
+        "ITT EQ + ADDS + out-of-window STR must compile as one block: {:?}",
         engine.stats()
     );
 }
 
 #[test]
+fn itt_eq_adds_str_out_of_window_taken_resumes_predicated() {
+    let prog = itt_eq_adds_str_loop();
+    let seed = |m: &mut Machine<CortexM>| {
+        attach_off_window_mem(m);
+        m.cpu.xpsr |= 1 << 30; // Z=1 → EQ taken
+        m.cpu.r0 = 0xA0A0_0000;
+        m.cpu.r1 = OFF_WINDOW_MMIO;
+        m.cpu.r2 = 0;
+    };
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, seed);
+    assert!(
+        engine.stats().block_runs > 0,
+        "out-of-window IT block must run: {:?}",
+        engine.stats()
+    );
+    assert_eq!(interp.cpu.r2, jit.cpu.r2, "ADDS inside the IT body");
+    assert_ne!(
+        interp.cpu.r2, 0,
+        "EQ-taken ADDS before the faulting STR must retire"
+    );
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "full arch state after resuming the predicated STR"
+    );
+    let (_, iw, _) = interp.bus.access_counts();
+    let (_, jw, _) = jit.bus.access_counts();
+    assert_eq!(iw, jw, "each lane must land the STR exactly once per pass");
+    assert_eq!(off_window_word(&interp), 0xA0A0_0000);
+    assert_eq!(off_window_word(&jit), 0xA0A0_0000);
+}
+
+#[test]
+fn itt_eq_adds_str_out_of_window_skipped_does_not_store() {
+    let prog = itt_eq_adds_str_loop();
+    let seed = |m: &mut Machine<CortexM>| {
+        attach_off_window_mem(m);
+        m.cpu.xpsr &= !(1 << 30); // Z=0 → EQ false
+        m.cpu.r0 = 0xA0A0_0000;
+        m.cpu.r1 = OFF_WINDOW_MMIO;
+        m.cpu.r2 = 0;
+    };
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, seed);
+    assert!(
+        engine.stats().block_runs > 0,
+        "skipped-predicate IT block must still compile and run: {:?}",
+        engine.stats()
+    );
+    assert_eq!(interp.cpu.r2, 0, "EQ-false ADDS must be skipped");
+    assert_eq!(jit.cpu.r2, 0, "EQ-false ADDS must be skipped");
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "full arch state after the skipped predicated STR"
+    );
+    assert_eq!(
+        off_window_word(&jit),
+        0,
+        "EQ-false STR must not execute in either lane"
+    );
+    assert_eq!(off_window_word(&interp), 0);
+}
+
+#[test]
+fn itt_eq_adds_str_in_window_runs_to_completion() {
+    // Control: the same IT body with an in-window target stays entirely in
+    // compiled code (no side-exit) and must store once.
+    let prog = itt_eq_adds_str_loop();
+    let seed = |m: &mut Machine<CortexM>| {
+        m.cpu.xpsr |= 1 << 30;
+        m.cpu.r0 = 0xB0B0_0001;
+        m.cpu.r1 = m.bus.ram.base_addr as u32 + 0x100;
+        m.cpu.r2 = 0;
+    };
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, seed);
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(interp.cpu.r2, jit.cpu.r2);
+    assert_ne!(interp.cpu.r2, 0, "EQ-taken ADDS must retire");
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "full arch state after an in-window predicated store"
+    );
+    let word_at =
+        |m: &Machine<CortexM>| u32::from_le_bytes(m.bus.ram.data[0x100..0x104].try_into().unwrap());
+    assert_eq!(word_at(&interp), 0xB0B0_0001);
+    assert_eq!(word_at(&jit), 0xB0B0_0001);
+}
+
+#[test]
+fn ite_eq_str_then_adds_keeps_else_predicated() {
+    // ITE EQ; STR r0, [r1] (out of window → side-exit); ADDS r2, #1 (ELSE).
+    // With Z=1 the THEN store runs and the ELSE ADDS must stay skipped. A
+    // resume that resets it_state to 0 would run the ADDS unconditionally:
+    // this is the case the IT-state restore exists for.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, ite_eq());
+    h(&mut prog, str_imm(0, 1, 0));
+    h(&mut prog, adds_imm8(2, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(8),
+        "ITE EQ + STR + ADDS must compile as one block: {:?}",
+        engine_probe.stats()
+    );
+
+    let seed = |m: &mut Machine<CortexM>| {
+        attach_off_window_mem(m);
+        m.cpu.xpsr |= 1 << 30; // Z=1 → THEN (EQ) taken, ELSE (NE) skipped
+        m.cpu.r0 = 0xC0C0_0002;
+        m.cpu.r1 = OFF_WINDOW_MMIO;
+        m.cpu.r2 = 0;
+    };
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, seed);
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(
+        interp.cpu.r2, 0,
+        "ELSE after the faulting THEN must stay skipped"
+    );
+    assert_eq!(
+        jit.cpu.r2, 0,
+        "ELSE after the faulting THEN must stay skipped"
+    );
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "full arch state after the ITE side-exit"
+    );
+    let (_, iw, _) = interp.bus.access_counts();
+    let (_, jw, _) = jit.bus.access_counts();
+    assert_eq!(iw, jw, "each lane must land the STR exactly once per pass");
+    assert_eq!(off_window_word(&jit), 0xC0C0_0002);
+}
+
+#[test]
+fn itt_eq_ldr_out_of_window_resumes_predicated() {
+    // ITT EQ; LDR r2, [r1]; ADDS r3, #1 — a predicated load that side-exits.
+    // The interpreter resumption must load the value and still run the ADDS.
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, itt_eq());
+    h(&mut prog, ldr_imm(2, 1, 0));
+    h(&mut prog, adds_imm8(3, 1));
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine_probe = CortexMJitEngine::new(4);
+    engine_probe.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine_probe.ready_instr_count(0),
+        Some(8),
+        "ITT EQ + LDR + ADDS must compile as one block: {:?}",
+        engine_probe.stats()
+    );
+
+    let seed = |m: &mut Machine<CortexM>| {
+        attach_off_window_mem(m);
+        m.bus
+            .write_u32(u64::from(OFF_WINDOW_MMIO), 0xDEAD_BEEF)
+            .expect("seed off-window word");
+        m.cpu.xpsr |= 1 << 30; // Z=1 → EQ taken
+        m.cpu.r1 = OFF_WINDOW_MMIO;
+        m.cpu.r2 = 0;
+        m.cpu.r3 = 0;
+    };
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, seed);
+    assert!(engine.stats().block_runs > 0);
+    assert_eq!(
+        interp.cpu.r2, 0xDEAD_BEEF,
+        "resumed predicated LDR must load the off-window word"
+    );
+    assert_eq!(interp.cpu.r2, jit.cpu.r2);
+    assert_ne!(interp.cpu.r3, 0, "the ADDS after the LDR must still run");
+    assert_eq!(interp.cpu.r3, jit.cpu.r3);
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "full arch state after the predicated LDR side-exit"
+    );
+}
+
+#[test]
 fn itt_with_store_locksteps_with_it_intact() {
-    // Same program, but RUN: the IT body is interpreted insn-by-insn inside
-    // the compiled batch, so `it_state` must be live when the store executes
-    // and consumed (0) at the block boundary, with the store landing
-    // predicated — exactly what the interpreter does.
+    // Same program with an in-window target: the whole IT body (store
+    // included) runs inside the compiled block, so `it_state` must still be
+    // consumed (0) at the block boundary and the store must land predicated —
+    // exactly what the interpreter does.
     let mut prog = Vec::new();
     for _ in 0..4 {
         h(&mut prog, 0xBF00);
@@ -834,7 +1049,7 @@ fn every_alu_op_matches_interpreter() {
         let start_r0 = interp.cpu.r0;
         interp.step().unwrap();
         let mut fpu = [0u32; 32];
-        let (exit, n, _) = block.run(&mut x, &mut [], &mut fpu);
+        let (exit, n, _, _) = block.run(&mut x, &mut [], &mut fpu);
         assert_eq!(n, 2, "adds + branch");
         assert_eq!(x[0], interp.cpu.r0, "r0 imm={imm} start={start_r0:#x}");
         assert_eq!(x[15] & 0xF000_0000, interp.cpu.xpsr & 0xF000_0000, "NZCV");
