@@ -1,0 +1,4 @@
+name: "nrf52840-rtt-lab"
+chip: "../../configs/chips/nrf52840.yaml"
+external_devices: []
+board_io: []
