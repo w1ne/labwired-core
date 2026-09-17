@@ -123,3 +123,47 @@ esp32c3 tier1, esp32c3 demo), all at `--max-steps 5000000`:
   `tick_interval`, `peripheral_ticks`, which pins the scheduling path itself.
 
 21 sha256 hashes in total; all 21 must be unchanged.
+
+## Result
+
+Three commits, each measured on its own binary, all byte-identical to the
+pre-series baseline on every one of the 21 hashes.
+
+| board | mode | baseline | after (1) cortex-m | after (2) extra_mem | after (3) riscv fetch | total |
+|---|---|---|---|---|---|---|
+| nrf52840 | **batch** | 229.8 | 158.4 | 158.0 | 158.6 | **−31.0 %** |
+| nrf52840 | step | 1419.8 | 1353.0 | 1354.0 | 1354.0 | −4.6 % |
+| stm32f405 | **batch** | 229.0 | 157.5 | 157.5 | 157.5 | **−31.2 %** |
+| stm32f405 | step | 1030.8 | 962.0 | 963.0 | 963.0 | −6.6 % |
+| esp32c3 | **batch** | 402.0 | 402.0 | 358.0 | 262.0 | **−34.8 %** |
+
+`batch` is the loop the browser runs (`Sim::step_batch` → `Machine::advance`),
+so that column is the one that transfers to the wasm build. Its run-to-run
+noise floor is ~±0.5 %, which is why the ±0.3–0.4 % moves in the columns where
+a change does not apply are read as noise and not as findings.
+
+`step` moves much less than `batch` because it is dominated by the per-instruction
+machine boundary (`commit_advance_boundary` + a peripheral tick at interval 1),
+which none of these three changes touches.
+
+The `step` rows also sit above `scripts/perf/baselines.json` (nrf52840 1373.8,
+stm32f405 949.8): that gap is present on the unmodified worktree too — it is
+compiler/host drift against numbers recorded on CI, not something this branch
+introduced, and it is why every comparison here is against the locally measured
+baseline rather than against the checked-in file.
+
+### What is left on the table
+
+* `CortexM::step_batch` is still 22 % of the spin-fixture profile and is now,
+  by a wide margin, the largest single item on the ARM path. That is the
+  interpreter itself (decode-cache lookup, the `Instruction` match, register
+  file), not orchestration.
+* On the C3, `RiscV::step` is 16 % and the remaining `read_u32` per fetch is
+  still a full bus walk — the fetch window cannot serve a plain `flash`
+  region at all. Teaching `refill_fetch_window` about `SystemBus::flash`
+  would remove that walk outright, but it would also stop the fetch
+  incrementing `memory_reads`, which `bus.access_counts()` reports; that is a
+  visible change and therefore out of scope for a pass whose contract is zero
+  behaviour change.
+* Per-tick (so amortised 512×, not a lever here):
+  `collect_enabled_nvic_interrupts` does 16 `SeqCst` atomic loads per tick.
