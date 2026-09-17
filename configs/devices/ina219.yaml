@@ -1,0 +1,98 @@
+# Texas Instruments INA219 high-side current / bus-voltage monitor —
+# declarative I²C register-pointer device.
+#
+# Migrated from `peripherals/components/ina219.rs`, which is deleted with this
+# descriptor; `tests/ina219_migration_parity.rs` drives that model and this one
+# through the same I²C script and asserts the bytes, plus the behaviours that
+# deliberately change.
+#
+# ── Wire protocol (INA219 datasheet SBOS448G, §8.5 "Register maps") ───────
+#
+# The master writes a 1-byte pointer, then either writes a 16-bit value (MSB
+# first) into the pointed register or reads it back MSB first. The pointer does
+# NOT auto-increment (§8.5.1 gives no block-read mode), so no `auto_increment:`.
+# A pointer this map does not decode reads a zero word, which is what the hand
+# model answered.
+#
+#   0x00 CONFIGURATION  rw  range / PGA / ADC / mode; POR 0x399F
+#   0x01 SHUNT_VOLTAGE  r   int16, 10 µV / LSB
+#   0x02 BUS_VOLTAGE    r   13-bit count at bit 3 (4 mV / LSB) + CNVR + OVF
+#   0x03 POWER          r   uint16, power_LSB = 20 × current_LSB
+#   0x04 CURRENT        r   int16, current_LSB
+#   0x05 CALIBRATION    rw  POR 0 — seeded here to the value the model fixes
+#
+# ── The fixed calibration this model is written at ───────────────────────
+#
+# §8.5.1: current_LSB and power_LSB are not constants — they follow from the
+# CALIBRATION word and the shunt resistance the board carries. Both the hand
+# model and this descriptor pin ONE operating point, the Adafruit
+# `setCalibration_32V_2A()` one: a 0.1 Ω shunt with CALIBRATION = 4096, giving
+# current_LSB = 100 µA (0.1 mA) and power_LSB = 20 × that = 2 mW. CALIBRATION is
+# read/write storage and a driver may write anything to it, but the encodings
+# below do not follow it — stated here rather than left to be discovered, and
+# carried over from the model rather than introduced.
+#
+# With that calibration:
+#   CURRENT counts = I[mA] / 0.1        = I[A] × 10000
+#   SHUNT   counts = I[A] × 0.1 Ω / 10 µV = I[A] × 10000   (the same number)
+#   BUS     counts = V[V] × 1000 / 4    = V[V] × 250, placed at bit 3
+#   POWER   counts = (V[V] × |I[A]|) / 0.002 W = V × |I| × 500
+#
+# ── POWER: why this descriptor needs a derived channel ───────────────────
+#
+# §8.5.4: the part MULTIPLIES — POWER is the bus voltage times the current it
+# measured, in 2 mW units. `source:` names one channel and `scale_from` scales
+# by a *register* field, so before `behavior.derived` the only options were a
+# POWER register left at reset-0 (a power monitor handing `getPower_mW()` a
+# zero) or a third `power` stimulus channel the host would have to keep
+# consistent with the other two by hand. `power_w` is the datasheet's own
+# product, written once, evaluated on every read.
+type: ina219
+
+behavior:
+  primitive: i2c_device
+  # Bus power in watts — the quantity §8.5.4 says the POWER register reports.
+  # |I| because the register is unsigned: the part reports the MAGNITUDE of the
+  # power flowing, and the direction is the CURRENT register's sign.
+  derived:
+    - { name: power_w, expr: "bus_voltage * abs(current)" }
+  i2c:
+    default_address: 0x40
+    registers:
+      # POR 0x399F: 32 V range, PGA ÷8, 12-bit ADCs, continuous shunt+bus.
+      - { name: CONFIGURATION, addr: 0x00, width: 2, endian: be, access: rw, reset: 0x399F }
+      # 10 µV/LSB over a 0.1 Ω shunt ⇒ 10000 counts per amp, two's-complement.
+      - { name: SHUNT_VOLTAGE, addr: 0x01, width: 2, endian: be, access: r, signed: true, source: current, encode: { scale: 10000.0 } }
+      # 13-bit voltage count at bit 3; bit 1 CNVR reads set (a conversion is
+      # always available — the part powers up in continuous mode), bit 0 OVF
+      # clear. The field is placed with `shift: 3` / `width_bits: 13`, so the
+      # count is rounded and saturated to 13 bits BEFORE it is shifted: the
+      # three low bits of this register are silicon's, never the measurement's.
+      - name: BUS_VOLTAGE
+        addr: 0x02
+        width: 2
+        endian: be
+        access: r
+        reset: 0x0002
+        fields:
+          - { source: bus_voltage, shift: 3, width_bits: 13, encode: { scale: 250.0 } }
+      # power_LSB = 2 mW ⇒ 500 counts per watt.
+      - { name: POWER, addr: 0x03, width: 2, endian: be, access: r, source: power_w, encode: { scale: 500.0 } }
+      # current_LSB = 0.1 mA ⇒ 10000 counts per amp, two's-complement.
+      - { name: CURRENT, addr: 0x04, width: 2, endian: be, access: r, signed: true, source: current, encode: { scale: 10000.0 } }
+      # POR is 0x0000; seeded to the 0.1 Ω / 32 V / 2 A calibration the
+      # encodings above are written at, exactly as the hand model did.
+      - { name: CALIBRATION, addr: 0x05, width: 2, endian: be, access: rw, reset: 4096 }
+
+metadata:
+  label: "INA219 Power Monitor"
+  summary: "High-side current and bus voltage sensor over I²C."
+  detail: "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
+  inputs:
+    - { key: bus_voltage, label: "Bus voltage", unit: "V", min: 0.0, max: 32.0, default: 3.3 }
+    - { key: current, label: "Current", unit: "A", min: -3.2, max: 3.2, default: 0.0 }

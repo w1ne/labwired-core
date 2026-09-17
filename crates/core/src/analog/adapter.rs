@@ -239,8 +239,26 @@ impl AnalogCosimAdapter {
         let mut inputs = BTreeMap::new();
         for (input, element) in &cfg.sources {
             let target = if let Some(index) = solver.voltage_source_index(element) {
+                // A source that carries SIN()/PULSE() is driven by the clock.
+                // Letting a routed input write to it too would give one element
+                // two owners, and which one you saw would depend on the order
+                // the co-simulation happened to call us in.
+                if !solver.circuit().voltage_sources[index].wave.is_constant() {
+                    return Err(AnalogError::Config(format!(
+                        "config.sources.{input} routes an input to `{element}`, which the \
+                         netlist already drives with a transient function; give `{element}` a \
+                         plain `dc` value or route the input somewhere else"
+                    )));
+                }
                 InputTarget::VoltageSource(index)
             } else if let Some(index) = solver.current_source_index(element) {
+                if !solver.circuit().current_sources[index].wave.is_constant() {
+                    return Err(AnalogError::Config(format!(
+                        "config.sources.{input} routes an input to `{element}`, which the \
+                         netlist already drives with a transient function; give `{element}` a \
+                         plain `dc` value or route the input somewhere else"
+                    )));
+                }
                 InputTarget::CurrentSource(index)
             } else if let Some(index) = solver.switch_index(element) {
                 InputTarget::Switches(vec![index])

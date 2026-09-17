@@ -2074,6 +2074,7 @@ dependencies = [
  "labwired-hw-trace",
  "labwired-ir",
  "labwired-loader",
+ "libm",
  "memmap2 0.9.10",
  "p256",
  "pio",

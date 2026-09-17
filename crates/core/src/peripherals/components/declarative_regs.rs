@@ -49,6 +49,25 @@ pub(crate) fn encode_raw(
     width: u8,
     signed: bool,
 ) -> u32 {
+    encode_raw_bits(value, enc, extra_scale, 8 * u32::from(width), signed)
+}
+
+/// [`encode_raw`] with the destination width given in BITS.
+///
+/// A bit width rather than a byte width because a [`labwired_config::FieldSpec`]
+/// is not byte-sized: the MMA8451Q's 14-bit left-justified output saturates at
+/// ±8192 counts (its own width), and rounding it into the 16 bits its
+/// byte-ceiling would give lets a 3 g reading at the ±2 g full scale land as
+/// 12288 counts, which the field mask then truncates into a NEGATIVE
+/// acceleration. Saturating at the field's real width is what a converter does
+/// at the end of its range.
+pub(crate) fn encode_raw_bits(
+    value: f64,
+    enc: Option<&Encode>,
+    extra_scale: f64,
+    bits: u32,
+    signed: bool,
+) -> u32 {
     let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
     let offset = enc.map(|e| e.offset).unwrap_or(0.0);
     let mut raw = value * scale + offset;
@@ -60,7 +79,6 @@ pub(crate) fn encode_raw(
             raw = raw.min(hi);
         }
     }
-    let bits = 8 * width as u32;
     let mask = if bits >= 32 {
         u32::MAX
     } else {
@@ -82,7 +100,7 @@ pub(crate) fn encode_raw(
         let v = raw.round().clamp(lo, hi) as i64;
         (v as u32) & mask
     } else {
-        raw.round().clamp(0.0, width_max(width)) as u32
+        raw.round().clamp(0.0, f64::from(mask)) as u32
     }
 }
 
@@ -123,11 +141,40 @@ pub(crate) fn scale_from_one(
     sf.map.get(&field).copied().unwrap_or(1.0)
 }
 
+/// Product of a `scale_from` list, folded left-to-right from 1.0. Shared by a
+/// register's own list and by a [`labwired_config::FieldSpec`]'s.
+pub(crate) fn scale_from_product_of(
+    list: &[labwired_config::ScaleFrom],
+    reg_values: &HashMap<String, u32>,
+) -> f64 {
+    list.iter()
+        .fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+}
+
 /// Product of a register's `scale_from` factors, folded left-to-right from 1.0.
 pub(crate) fn scale_from_product(reg: &RegisterSpec, reg_values: &HashMap<String, u32>) -> f64 {
-    reg.scale_from
-        .iter()
-        .fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+    scale_from_product_of(&reg.scale_from, reg_values)
+}
+
+/// The measurement channel a register reports: its [`RegisterSpec::source_from`]
+/// multiplexer's current selection, or its plain `source`. `None` ⇒ the register
+/// is storage (or a `popcount` / `fields` composite).
+///
+/// The mux falls back to the declared `source` for a field value the table does
+/// not cover, so a partial table says what it does not model instead of silently
+/// reading 0.
+pub(crate) fn selected_source<'a>(
+    reg: &'a RegisterSpec,
+    reg_values: &HashMap<String, u32>,
+) -> Option<&'a str> {
+    if let Some(sf) = &reg.source_from {
+        let regval = reg_values.get(&sf.register).copied().unwrap_or(0);
+        let field = (regval >> sf.shift as u32) & sf.mask;
+        if let Some(key) = sf.table.get(&field) {
+            return Some(key.as_str());
+        }
+    }
+    reg.source.as_deref()
 }
 
 /// Divide dual of `encode_raw`: count = round(value / resolution), clamped. A
@@ -155,13 +202,32 @@ pub(crate) fn register_read_bytes(
             return pack(0, reg.width, reg.endian);
         }
     }
+    // The same gate, the other polarity (`zero_unless`): the part is asleep
+    // until firmware SETS the enable bit. One branch, one struct, the polarity
+    // in the key name — see `labwired_config::RegisterSpec::zero_unless`.
+    if let Some(z) = &reg.zero_unless {
+        if reg_values.get(&z.register).copied().unwrap_or(0) & z.mask == 0 {
+            return pack(0, reg.width, reg.endian);
+        }
+    }
     if !reg.fields.is_empty() {
         let mut word = reg.reset;
         for f in &reg.fields {
             let value = slots.get(&f.source).copied().unwrap_or(0.0);
-            // Encode into `width_bits` bits (byte-width ceil for the helper), then mask.
-            let byte_w = f.width_bits.div_ceil(8);
-            let raw = encode_raw(value, f.encode.as_ref(), 1.0, byte_w, f.signed);
+            // Encoded at the field's OWN bit width — rounded and saturated to
+            // `width_bits` BEFORE `shift` places it, which is what makes a
+            // left-justified output register's low bits always zero on the wire
+            // and what stops an over-range measurement wrapping sign. The
+            // per-field `scale_from` compounds in exactly as a register's does,
+            // so a full-scale select bit-field reaches a packed field.
+            let extra = scale_from_product_of(&f.scale_from, reg_values);
+            let raw = encode_raw_bits(
+                value,
+                f.encode.as_ref(),
+                extra,
+                u32::from(f.width_bits),
+                f.signed,
+            );
             let mask = if f.width_bits >= 32 {
                 u32::MAX
             } else {
@@ -186,7 +252,7 @@ pub(crate) fn register_read_bytes(
             .min(width_max(reg.width) as u32);
         return pack(raw, reg.width, reg.endian);
     }
-    let raw = if let Some(src) = &reg.source {
+    let raw = if let Some(src) = selected_source(reg, reg_values) {
         let value = slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
         match reg.resolution {
             Some(base) => {
@@ -563,6 +629,8 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            zero_unless: None,
+            source_from: None,
         }
     }
 
@@ -598,6 +666,8 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            zero_unless: None,
+            source_from: None,
         };
         let mut slots = HashMap::new();
         slots.insert("ax".to_string(), -1.0); // -1 g × 256 = -256 = 0xFF00 two's-complement, LE
@@ -779,6 +849,7 @@ mod tests {
                         clamp_max: None,
                         wrap: None,
                     }),
+                    scale_from: vec![],
                 },
                 FieldSpec {
                     source: "internal".into(),
@@ -792,6 +863,7 @@ mod tests {
                         clamp_max: None,
                         wrap: None,
                     }),
+                    scale_from: vec![],
                 },
             ],
             page: None,
@@ -801,6 +873,8 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            zero_unless: None,
+            source_from: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), 100.0); // 100°C → 400 = 0x190 in bits[31:18]
@@ -840,6 +914,7 @@ mod tests {
                     clamp_max: None,
                     wrap: None,
                 }),
+                scale_from: vec![],
             }],
             page: None,
             self_clearing: None,
@@ -848,6 +923,8 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            zero_unless: None,
+            source_from: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), -25.0); // -25°C → -100 → 14-bit two's-comp = 0x3F9C, <<18

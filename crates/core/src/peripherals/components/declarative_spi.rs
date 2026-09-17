@@ -21,6 +21,7 @@ use labwired_config::{
     DeviceDescriptor, Event, FrameSpec, RegisterAccess, RegisterSpec, SpiFraming,
 };
 
+use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
     apply_timing_action, apply_write, encode_raw, leak_labs, read_clears, register_read_bytes,
     unpack, validate_timers, TimerBank,
@@ -36,6 +37,11 @@ pub struct GenericSpiDevice {
 
     slots: HashMap<String, f64>,
     reg_values: HashMap<String, u32>,
+    /// `behavior.derived` compiled once at load — the SAME channels an I²C
+    /// descriptor declares, because a derived value is a property of the PART,
+    /// not of the bus it hangs off. Empty ⇒ the read path is byte-identical to
+    /// what it was before derived channels existed.
+    derived: Vec<CompiledExpr>,
 
     // Per-frame state.
     cmd_consumed: u8,
@@ -185,6 +191,14 @@ impl GenericSpiDevice {
             registers: spec.registers.clone(),
             slots,
             reg_values,
+            derived: compile_derived(
+                &descriptor.behavior.derived,
+                &descriptor
+                    .metadata
+                    .as_ref()
+                    .map(|m| m.inputs.iter().map(|i| i.key.clone()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+            )?,
             cmd_consumed: 0,
             is_read: None,
             cur_addr: None,
@@ -276,6 +290,7 @@ impl GenericSpiDevice {
                 }
             }
         };
+        let slots = self.slot_view();
         if self.framing.auto_increment {
             let mut regs: Vec<&RegisterSpec> = self
                 .registers
@@ -285,7 +300,7 @@ impl GenericSpiDevice {
             regs.sort_by_key(|r| r.addr);
             for r in regs {
                 let skip = usize::from(start.saturating_sub(r.addr));
-                let bytes: Vec<u8> = register_read_bytes(r, &self.slots, &self.reg_values)
+                let bytes: Vec<u8> = register_read_bytes(r, &slots, &self.reg_values)
                     .into_iter()
                     .skip(skip)
                     .collect();
@@ -293,13 +308,25 @@ impl GenericSpiDevice {
             }
         } else if let Some(r) = self.find_register_containing(start) {
             let skip = usize::from(start - r.addr);
-            let bytes: Vec<u8> = register_read_bytes(r, &self.slots, &self.reg_values)
+            let bytes: Vec<u8> = register_read_bytes(r, &slots, &self.reg_values)
                 .into_iter()
                 .skip(skip)
                 .collect();
             push(r, bytes, &mut out);
         }
         (out, ends)
+    }
+
+    /// The slot view a read observes: the stimulus channels, plus every
+    /// `behavior.derived` value evaluated over them. Borrowed unchanged when no
+    /// derived channel is declared, so a descriptor without one pays nothing.
+    fn slot_view(&self) -> std::borrow::Cow<'_, HashMap<String, f64>> {
+        if self.derived.is_empty() {
+            return std::borrow::Cow::Borrowed(&self.slots);
+        }
+        let mut view = self.slots.clone();
+        eval_derived(&self.derived, &mut view);
+        std::borrow::Cow::Owned(view)
     }
 
     /// Current engineering-unit value of a SimInput stimulus channel (the value

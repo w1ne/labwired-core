@@ -271,84 +271,6 @@
       ]
     },
     {
-      "device_type": "ina219",
-      "label": "INA219 Power Monitor",
-      "summary": "High-side current and bus voltage sensor over I²C.",
-      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "bus_voltage",
-          "label": "Bus voltage",
-          "unit": "V",
-          "min": 0.0,
-          "max": 32.0
-        },
-        {
-          "key": "current",
-          "label": "Current",
-          "unit": "A",
-          "min": -3.2,
-          "max": 3.2
-        }
-      ]
-    },
-    {
-      "device_type": "ads1115",
-      "label": "ADS1115 16-bit ADC",
-      "summary": "4-channel 16-bit I²C ADC (TI ADS1115).",
-      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x48 (ADDR→GND)."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "a0",
-          "label": "A0",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        },
-        {
-          "key": "a1",
-          "label": "A1",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        },
-        {
-          "key": "a2",
-          "label": "A2",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        },
-        {
-          "key": "a3",
-          "label": "A3",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        }
-      ]
-    },
-    {
       "device_type": "ds3231",
       "label": "DS3231 RTC",
       "summary": "I²C real-time clock with temperature-compensated crystal.",
@@ -587,50 +509,6 @@
           "unit": "°/s",
           "min": -2000.0,
           "max": 2000.0
-        }
-      ]
-    },
-    {
-      "device_type": "mma8451q",
-      "label": "MMA8451Q Accelerometer",
-      "summary": "3-axis 14-bit accelerometer over I2C with standby/active gating.",
-      "detail": "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale. Optional seeded noise via noise_sigma (g). Tap/FIFO/interrupts not modelled.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x1C; 0x1D selects SA0=high."
-        },
-        {
-          "name": "noise_sigma",
-          "ty": "float",
-          "doc": "Optional Gaussian noise sigma in g, seeded and replay-safe."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "x",
-          "label": "Accel X",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "y",
-          "label": "Accel Y",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "z",
-          "label": "Accel Z",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
         }
       ]
     },
@@ -1854,55 +1732,6 @@
       ]
     },
     {
-      "device_type": "mlx90614",
-      "label": "Melexis MLX90614 IR Temp",
-      "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
-      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC. Both temperatures are externally driven inputs (channels surface_temp / ambient_temp); driving the surface below the air dew point is what makes firmware flag the surface condensation an air-only humidity index misses.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to the MLX90614 fixed address 0x5A."
-        },
-        {
-          "name": "surface_temp_c",
-          "ty": "float",
-          "doc": "Initial surface (object) temperature, °C. Default 18. Drive it at runtime with the `surface_temp` input channel."
-        },
-        {
-          "name": "ambient_temp_c",
-          "ty": "float",
-          "doc": "Initial ambient (chip) temperature reported on Ta, °C. Default 22. Runtime channel: `ambient_temp`."
-        }
-      ],
-      "labs": [
-        {
-          "board_id": "esp32c3-leo-airquality",
-          "chip": "esp32c3",
-          "example_dir": "esp32c3-leo-airquality",
-          "demo_elf": "demo-esp32c3-leo-airquality.elf"
-        }
-      ],
-      "inputs": [
-        {
-          "key": "surface_temp",
-          "label": "Surface temperature",
-          "unit": "°C",
-          "min": -70.0,
-          "max": 380.0
-        },
-        {
-          "key": "ambient_temp",
-          "label": "Ambient temperature",
-          "unit": "°C",
-          "min": -40.0,
-          "max": 125.0
-        }
-      ]
-    },
-    {
       "device_type": "led-matrix",
       "label": "MAX7219 8×8 LED Matrix",
       "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
@@ -2271,6 +2100,211 @@
       ]
     },
     {
+      "device_type": "ina219",
+      "label": "INA219 Power Monitor",
+      "summary": "High-side current and bus voltage sensor over I²C.",
+      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 32.0
+        },
+        {
+          "key": "current",
+          "label": "Current",
+          "unit": "A",
+          "min": -3.2,
+          "max": 3.2
+        }
+      ]
+    },
+    {
+      "device_type": "ads1115",
+      "label": "ADS1115 16-bit ADC",
+      "summary": "4-channel 16-bit I²C ADC (TI ADS1115).",
+      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers. CONVERSION follows the live CONFIG MUX bits — including the four differential pairs — at the full scale the PGA bits select.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADDR→GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "a0",
+          "label": "A0",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a1",
+          "label": "A1",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a2",
+          "label": "A2",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a3",
+          "label": "A3",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        }
+      ]
+    },
+    {
+      "device_type": "mma8451q",
+      "label": "MMA8451Q Accelerometer",
+      "summary": "3-axis 14-bit accelerometer over I2C with standby/active gating.",
+      "detail": "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale selected by XYZ_DATA_CFG. Output is 14-bit two's-complement left-justified at bit 2. Tap/FIFO/interrupts not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x1C; 0x1D selects SA0=high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        }
+      ]
+    },
+    {
+      "device_type": "fxos8700",
+      "label": "FXOS8700 Accel/Mag",
+      "summary": "NXP FXOS8700 6-axis accelerometer + magnetometer over I2C.",
+      "detail": "Onboard sensor on FRDM-KW41Z (address 0x1F). Stimulus channels x/y/z in g, reported as a 14-bit two's-complement count left-justified at bit 2 at the full scale XYZ_DATA_CFG selects. A burst that walks past the accelerometer block continues at the magnetometer block, per the datasheet's hybrid auto-increment.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x1F."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        }
+      ]
+    },
+    {
+      "device_type": "mlx90614",
+      "label": "Melexis MLX90614 IR Temp",
+      "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
+      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC over the whole addressed transaction. Both temperatures are externally driven inputs (channels surface_temp / ambient_temp); driving the surface below the air dew point is what makes firmware flag the surface condensation an air-only humidity index misses.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the MLX90614 fixed address 0x5A."
+        },
+        {
+          "name": "surface_temp_c",
+          "ty": "float",
+          "doc": "Initial surface (object) temperature, °C. Default 18. Drive it at runtime with the `surface_temp` input channel."
+        },
+        {
+          "name": "ambient_temp_c",
+          "ty": "float",
+          "doc": "Initial ambient (chip) temperature reported on Ta, °C. Default 22. Runtime channel: `ambient_temp`."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "esp32c3-leo-airquality",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "surface_temp",
+          "label": "Surface temperature",
+          "unit": "°C",
+          "min": -70.0,
+          "max": 380.0
+        },
+        {
+          "key": "ambient_temp",
+          "label": "Ambient temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        }
+      ]
+    },
+    {
       "device_type": "adxl345_spi",
       "label": "ADXL345 accelerometer",
       "summary": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
@@ -2456,45 +2490,6 @@
           "unit": "steps",
           "min": 0.0,
           "max": 4294967295.0
-        }
-      ]
-    },
-    {
-      "device_type": "fxos8700",
-      "label": "FXOS8700 Accel/Mag",
-      "summary": "NXP FXOS8700 6-axis accelerometer + magnetometer over I2C.",
-      "detail": "Onboard sensor on FRDM-KW41Z. Stimulus channels x/y/z in g.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x1F."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "x",
-          "label": "X",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "y",
-          "label": "Y",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "z",
-          "label": "Z",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
         }
       ]
     },

@@ -160,6 +160,8 @@ fn i2c_register_alias_still_names_the_shared_struct() {
         self_clearing: None,
         popcount: None,
         zero_when: None,
+        zero_unless: None,
+        source_from: None,
         bits: vec![],
         on_read: None,
         on_write: None,

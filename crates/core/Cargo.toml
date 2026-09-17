@@ -43,6 +43,13 @@ bincode = "1.3"
 sha2 = { workspace = true, features = ["compress"] }
 # ECDSA for the ATECC608A secure-element component model.
 p256 = { workspace = true }
+# Pure-Rust `exp`/`log`/`sin` for the analog engine's nonlinear devices. NOT a
+# convenience: `f64::exp` is the host C library natively and whatever the
+# toolchain links on `wasm32`, and those disagree by an ulp or two — enough to
+# turn the browser/native differential into a flake. `libm` is the same bits
+# everywhere and pulls in nothing of its own. See `analog::device`.
+libm = "0.2"
+
 goblin = { workspace = true }
 labwired-ir = { path = "../ir" }
 labwired-hw-trace = { path = "../hw-trace" }

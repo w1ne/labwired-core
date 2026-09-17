@@ -1,0 +1,133 @@
+# Texas Instruments ADS1115 16-bit ΔΣ ADC — declarative I²C register-pointer
+# device.
+#
+# Migrated from `peripherals/components/ads1115.rs`, which is deleted with this
+# descriptor; `tests/ads1115_migration_parity.rs` drives that model and this one
+# through the same I²C script and asserts the bytes, plus the behaviours that
+# deliberately change.
+#
+# ── Wire protocol (ADS1115 datasheet SBAS444D, §9.6 "Register map") ───────
+#
+# A 1-byte address pointer, then a 16-bit big-endian word written MSB first or
+# read back MSB first. The pointer does not auto-increment (§9.5.3), so no
+# `auto_increment:`. A pointer this map does not decode reads a zero word,
+# matching the hand model.
+#
+#   0x00 CONVERSION  r   int16 result of the last conversion
+#   0x01 CONFIG      rw  OS / MUX / PGA / MODE / DR / comparator; POR 0x8583
+#   0x02 LO_THRESH   rw  POR 0x8000
+#   0x03 HI_THRESH   rw  POR 0x7FFF
+#
+# ── CONVERSION: the register that needs `source_from` ────────────────────
+#
+# §9.3.3 Table 8: CONFIG[14:12] (MUX) selects WHICH input the conversion
+# reports — four single-ended channels and four differential pairs — and
+# §9.3.3 Table 9: CONFIG[11:9] (PGA) selects the full scale that result is
+# expressed in. `scale_from` already covered the second half; `source_from` is
+# the same bit-field extraction applied to the first, so one register can be a
+# multiplexer over the part's inputs instead of being hard-wired to one of them.
+#
+#   MUX 000  AIN0 − AIN1     100  AIN0 − GND
+#       001  AIN0 − AIN3     101  AIN1 − GND
+#       010  AIN1 − AIN3     110  AIN2 − GND
+#       011  AIN2 − AIN3     111  AIN3 − GND
+#
+# The four differential pairs are `behavior.derived` subtractions of the same
+# four stimulus channels, which is what the datasheet says a differential
+# reading IS. ⚠️ DELIBERATE CHANGE: the hand model answered ALL FOUR of them
+# with AIN0 alone (its own comment said "approximate as ch0 for wave-1"), so
+# firmware configured for a differential pair — which is the ADS1115's headline
+# feature and the default MUX at power-on — read a single-ended A0 instead, and
+# a bridge / shunt sketch that measured a small difference between two large
+# voltages saw one of them. Asserted by name in the parity test.
+#
+# ── PGA: the counts-per-volt literals ────────────────────────────────────
+#
+# §9.3.3: full scale is ±FSR over ±32768 counts, so counts = V × 32768 / FSR.
+# The map holds that quotient, not the FSR, because `scale_from` compounds a
+# MULTIPLIER and the register encodes counts per volt:
+#
+#   PGA 000  ±6.144 V → 5333.333333333333   (32768 / 6.144)
+#       001  ±4.096 V → 8000
+#       010  ±2.048 V → 16000
+#       011  ±1.024 V → 32000
+#       100  ±0.512 V → 64000
+#       101/110/111  ±0.256 V → 128000
+#
+# 5333.333333333333 is the shortest decimal that round-trips to the same double
+# as `32768 / 6.144`; that the multiply and the hand model's divide agree on
+# EVERY count is measured in the parity test over all six ranges rather than
+# argued here.
+#
+# ── Stated approximations, so they are not mistaken for fidelity ─────────
+#
+#   * OS (D15) reads SET always — a conversion result is always available. The
+#     hand model did the same (`config | 0x8000`). Modelling the real single-shot
+#     cycle would need OS to CLEAR on a write of 1 and set again after the
+#     conversion time D[7:5] selects, which is a start-bit → status-bit rule
+#     whose status bit lives in the register firmware writes; §9.3.3 makes OS
+#     write-1-to-start and read-as-ready in ONE bit, and the engine's
+#     `data_ready` primitive keeps those two apart.
+#   * The comparator is not modelled: LO_THRESH / HI_THRESH are storage, and no
+#     threshold ever asserts ALERT/RDY. Same as the model replaced.
+#   * MODE (D8) is storage: continuous and single-shot read the same, because
+#     the result is always fresh.
+type: ads1115
+
+behavior:
+  primitive: i2c_device
+  # The four differential pairs of §9.3.3 Table 8, as the subtractions they are.
+  derived:
+    - { name: a0_a1_diff, expr: "a0 - a1" }
+    - { name: a0_a3_diff, expr: "a0 - a3" }
+    - { name: a1_a3_diff, expr: "a1 - a3" }
+    - { name: a2_a3_diff, expr: "a2 - a3" }
+  i2c:
+    default_address: 0x48
+    registers:
+      # The conversion result: WHICH input via MUX, at WHAT scale via PGA.
+      - name: CONVERSION
+        addr: 0x00
+        width: 2
+        endian: be
+        access: r
+        signed: true
+        source_from:
+          register: CONFIG
+          shift: 12
+          mask: 0x07
+          table:
+            0: a0_a1_diff
+            1: a0_a3_diff
+            2: a1_a3_diff
+            3: a2_a3_diff
+            4: a0
+            5: a1
+            6: a2
+            7: a3
+        scale_from:
+          register: CONFIG
+          shift: 9
+          mask: 0x07
+          map: { 0: 5333.333333333333, 1: 8000.0, 2: 16000.0, 3: 32000.0, 4: 64000.0, 5: 128000.0, 6: 128000.0, 7: 128000.0 }
+      # POR is 0x8583. `write_mask: 0x7FFF` keeps D15 (OS) silicon's: it reads
+      # set from reset and a write cannot clear it, which is the always-ready
+      # constant the hand model produced with `config | 0x8000`.
+      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: rw, write_mask: 0x7FFF, reset: 0x8583 }
+      - { name: LO_THRESH, addr: 0x02, width: 2, endian: be, access: rw, reset: 0x8000 }
+      - { name: HI_THRESH, addr: 0x03, width: 2, endian: be, access: rw, reset: 0x7FFF }
+
+metadata:
+  label: "ADS1115 16-bit ADC"
+  summary: "4-channel 16-bit I²C ADC (TI ADS1115)."
+  detail: "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers. CONVERSION follows the live CONFIG MUX bits — including the four differential pairs — at the full scale the PGA bits select."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x48 (ADDR→GND)."
+  inputs:
+    - { key: a0, label: "A0", unit: "V", min: -4.096, max: 4.096 }
+    - { key: a1, label: "A1", unit: "V", min: -4.096, max: 4.096 }
+    - { key: a2, label: "A2", unit: "V", min: -4.096, max: 4.096 }
+    - { key: a3, label: "A3", unit: "V", min: -4.096, max: 4.096 }
