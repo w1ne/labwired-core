@@ -51,6 +51,7 @@
 //! lookup at build time, no threads and no wall clock. The same netlist and the
 //! same input sequence produce bit-identical voltages on every host.
 
+use super::device;
 use super::netlist::{AnalogError, Circuit, NodeRef};
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -96,9 +97,39 @@ pub struct Solver {
     ind_i: Vec<f64>,
     ind_v: Vec<f64>,
 
+    /// Junction voltage of each diode, the point its stamp is linearised
+    /// about. Carried across steps: the previous step's answer is the best
+    /// first guess there is.
+    diode_vj: Vec<f64>,
+    /// Each BJT's base-emitter voltage in device coordinates.
+    bjt_vbe: Vec<f64>,
+    /// Each BJT's base-collector voltage in device coordinates.
+    bjt_vbc: Vec<f64>,
+    /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
+    /// names the terminals — not swapped for reverse mode.
+    mos_vgs: Vec<f64>,
+    /// Each MOSFET's drain-source voltage in device coordinates, as the
+    /// netlist names the terminals. Negative means the device is reversed.
+    mos_vds: Vec<f64>,
+    /// True when the last [`Solver::relinearise`] damped a step, so the next
+    /// solution is not a Newton step and must not be accepted as converged.
+    limiter_clamped: bool,
+    /// True when the circuit holds a device whose stamp depends on the
+    /// solution. False takes the pre-Newton code path, untouched.
+    nonlinear: bool,
+    /// True when a source carries a transient function, so its value has to be
+    /// re-evaluated against the clock each step.
+    has_waveforms: bool,
+    /// Simulated time at the end of the last completed step, seconds.
+    time: f64,
+    /// Internal steps completed since the solver was built.
+    step_index: u64,
+
     matrix: Vec<f64>,
     rhs: Vec<f64>,
     solution: Vec<f64>,
+    /// The previous Newton iterate, for the convergence test.
+    previous: Vec<f64>,
     // Elimination multipliers are kept in the order they were applied, not
     // permuted as a conventional L matrix. Replaying them preserves the old
     // solver's RHS floating-point operation order exactly.
@@ -142,6 +173,11 @@ impl Solver {
         let switch_closed = vec![false; circuit.switches.len()];
         let capacitors = circuit.capacitors.len();
         let inductors = circuit.inductors.len();
+        let nonlinear = circuit.is_nonlinear();
+        let has_waveforms = circuit.has_waveforms();
+        let diodes = circuit.diodes.len();
+        let bjts = circuit.bjts.len();
+        let mosfets = circuit.mosfets.len();
 
         let mut solver = Self {
             circuit,
@@ -157,9 +193,23 @@ impl Solver {
             cap_i: vec![0.0; capacitors],
             ind_i: vec![0.0; inductors],
             ind_v: vec![0.0; inductors],
+            // Every junction starts at zero volts, which is the state of a
+            // circuit that has not been powered: the operating-point Newton
+            // walks up from there.
+            diode_vj: vec![0.0; diodes],
+            bjt_vbe: vec![0.0; bjts],
+            bjt_vbc: vec![0.0; bjts],
+            mos_vgs: vec![0.0; mosfets],
+            mos_vds: vec![0.0; mosfets],
+            limiter_clamped: false,
+            nonlinear,
+            has_waveforms,
+            time: 0.0,
+            step_index: 0,
             matrix: vec![0.0; unknowns * unknowns],
             rhs: vec![0.0; unknowns],
             solution: vec![0.0; unknowns],
+            previous: vec![0.0; unknowns],
             factors: vec![0.0; unknowns * unknowns],
             pivots: vec![0; unknowns],
             cached_stamp: None,
@@ -284,9 +334,13 @@ impl Solver {
     pub fn solve_operating_point(&mut self) -> Result<(), AnalogError> {
         self.cached_stamp = None;
         self.settled = false;
-        self.build(Stamp::OperatingPoint);
-        self.factorize()?;
-        self.solve();
+        if self.nonlinear {
+            self.newton(Stamp::OperatingPoint, None, self.time)?;
+        } else {
+            self.build(Stamp::OperatingPoint);
+            self.factorize()?;
+            self.solve();
+        }
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
         self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
         for index in 0..self.circuit.capacitors.len() {
@@ -340,6 +394,8 @@ impl Solver {
                 "internal step must be a positive finite number of seconds, got {h}"
             )));
         }
+        let time = self.time + h;
+        self.apply_waveforms(time);
         // Backward Euler for the first step after a discontinuity; see the
         // module docs. A no-op distinction when the rule already is BE.
         let rule = if self.restart {
@@ -348,18 +404,25 @@ impl Solver {
             self.integration
         };
         let stamp = Stamp::Transient(h, rule);
-        if self.cached_stamp == Some(stamp) {
+        if self.nonlinear {
+            // Every device stamp moves with the solution, so there is nothing
+            // to cache between iterations, let alone between steps.
+            self.newton(stamp, Some(self.step_index), time)?;
+        } else if self.cached_stamp == Some(stamp) {
             if self.settled && !self.restart {
+                self.time = time;
+                self.step_index += 1;
                 return Ok(());
             }
             self.build_rhs(stamp);
+            self.solve();
         } else {
             self.cached_stamp = None;
             self.build(stamp);
             self.factorize()?;
             self.cached_stamp = Some(stamp);
+            self.solve();
         }
-        self.solve();
         self.restart = false;
         self.settled = true;
 
@@ -391,7 +454,51 @@ impl Solver {
 
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
         self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
+        self.time = time;
+        self.step_index += 1;
         Ok(())
+    }
+
+    /// Simulated time at the end of the last completed step, seconds.
+    pub fn time(&self) -> f64 {
+        self.time
+    }
+
+    /// Internal steps completed since the solver was built.
+    pub fn step_index(&self) -> u64 {
+        self.step_index
+    }
+
+    /// True when the circuit needs Newton iteration.
+    pub fn is_nonlinear(&self) -> bool {
+        self.nonlinear
+    }
+
+    /// Re-evaluate every source that carries a transient function at `time`.
+    ///
+    /// Sources are evaluated at the END of the step, which is the point the
+    /// backward-Euler and trapezoidal companion models are written about, and
+    /// is what SPICE does. A value that actually moved counts as a
+    /// discontinuity for the trapezoidal restart rule, exactly as a routed
+    /// input does.
+    fn apply_waveforms(&mut self, time: f64) {
+        if !self.has_waveforms {
+            return;
+        }
+        for index in 0..self.circuit.voltage_sources.len() {
+            let wave = self.circuit.voltage_sources[index].wave;
+            if wave.is_constant() {
+                continue;
+            }
+            self.set_voltage_source(index, wave.at(time));
+        }
+        for index in 0..self.circuit.current_sources.len() {
+            let wave = self.circuit.current_sources[index].wave;
+            if wave.is_constant() {
+                continue;
+            }
+            self.set_current_source(index, wave.at(time));
+        }
     }
 
     fn build(&mut self, stamp: Stamp) {
@@ -473,6 +580,7 @@ impl Solver {
                 inject(&mut self.rhs, capacitor.b, -ieq);
             }
         }
+        self.stamp_devices();
     }
 
     /// Refresh only history and source terms when the conductances are unchanged.
@@ -575,6 +683,361 @@ impl Solver {
             self.solution[row] = accumulator / matrix[row * dim + row];
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Newton–Raphson for the nonlinear devices
+// ---------------------------------------------------------------------------
+
+/// Iterations one step is allowed before it is reported as a failure.
+///
+/// SPICE's default is 100 for a transient step. Reaching anything near it means
+/// the circuit is hard, not that the budget is tight: with voltage limiting a
+/// diode or transistor stage converges in single digits, and a step that wants
+/// 50 iterations is usually one that wants a smaller `substeps` interval.
+pub const MAX_NEWTON_ITERATIONS: u32 = 100;
+
+/// Relative tolerance on every unknown between two Newton iterations.
+///
+/// Tighter than SPICE's `RELTOL` (1e-3) on purpose. The engine's job here is to
+/// be reproducible rather than fast: at 1e-3 the converged answer depends on
+/// the path the limiter took, which makes a golden worth nothing, and the extra
+/// iterations cost microseconds on a 64-unknown dense solve.
+pub const NEWTON_RELTOL: f64 = 1e-9;
+
+/// Absolute floor for a node voltage, volts. SPICE's `VNTOL` is 1e-6.
+pub const NEWTON_VNTOL: f64 = 1e-12;
+
+/// Absolute floor for a branch current, amps. SPICE's `ABSTOL` is 1e-12.
+pub const NEWTON_ABSTOL: f64 = 1e-15;
+
+impl Solver {
+    /// Iterate the device stamps until the solution stops moving.
+    ///
+    /// Each pass re-linearises every nonlinear device about the voltages the
+    /// last pass produced, re-stamps, re-factorises and solves. Convergence is
+    /// declared when every unknown moved less than its tolerance **and** the
+    /// voltage limiter did nothing on the previous pass — a limited step is a
+    /// damped one, not a Newton step, so accepting one would report an answer
+    /// the equations do not satisfy.
+    fn newton(&mut self, stamp: Stamp, step: Option<u64>, time: f64) -> Result<(), AnalogError> {
+        let dim = self.dim();
+        self.cached_stamp = None;
+        self.settled = false;
+        // NaN so the first pass can never compare as converged, whatever the
+        // previous step left in the buffer.
+        self.previous[..dim].fill(f64::NAN);
+        self.limiter_clamped = true;
+
+        for _ in 1..=MAX_NEWTON_ITERATIONS {
+            self.build(stamp);
+            self.factorize()?;
+            self.solve();
+            if self.newton_converged() {
+                return Ok(());
+            }
+            self.previous[..dim].copy_from_slice(&self.solution[..dim]);
+            self.relinearise();
+        }
+
+        let (unknown, delta) = self.worst_residual();
+        Err(AnalogError::NoConvergence {
+            step,
+            time,
+            iterations: MAX_NEWTON_ITERATIONS,
+            unknown,
+            delta,
+        })
+    }
+
+    /// Per-unknown tolerance: volts for a node row, amps for a branch row.
+    fn newton_tolerance(&self, index: usize, new: f64, old: f64) -> f64 {
+        let floor = if index < self.nodes {
+            NEWTON_VNTOL
+        } else {
+            NEWTON_ABSTOL
+        };
+        floor + NEWTON_RELTOL * new.abs().max(old.abs())
+    }
+
+    fn newton_converged(&self) -> bool {
+        if self.limiter_clamped {
+            return false;
+        }
+        for index in 0..self.dim() {
+            let new = self.solution[index];
+            let old = self.previous[index];
+            let delta = (new - old).abs();
+            // The NaN test is not decoration. Every comparison against a NaN is
+            // false, so a bare `delta > tol` reads a NaN solution as CONVERGED
+            // and writes it into the trace as an answer. Naming it here is what
+            // turns that into the step's coded error instead.
+            if delta.is_nan() || delta > self.newton_tolerance(index, new, old) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The unknown that was still moving most, for the failure message.
+    fn worst_residual(&self) -> (String, f64) {
+        let mut worst = 0usize;
+        let mut worst_ratio = f64::NEG_INFINITY;
+        for index in 0..self.dim() {
+            let new = self.solution[index];
+            let old = self.previous[index];
+            let delta = (new - old).abs();
+            let ratio = delta / self.newton_tolerance(index, new, old);
+            // `>` with a NaN ratio is false, so a NaN never wins the report and
+            // hides a real residual behind it; the NaN is named only when
+            // nothing else moved at all.
+            if ratio > worst_ratio || (worst_ratio.is_nan() && !ratio.is_nan()) {
+                worst_ratio = ratio;
+                worst = index;
+            }
+        }
+        let name = if worst < self.nodes {
+            format!("v({})", self.circuit.node_name(worst))
+        } else {
+            format!("i({})", self.circuit.branch_name(worst - self.nodes))
+        };
+        (name, (self.solution[worst] - self.previous[worst]).abs())
+    }
+
+    /// Move every device's linearisation point to the solution just found,
+    /// damped by the SPICE limiters.
+    fn relinearise(&mut self) {
+        self.limiter_clamped = false;
+
+        for index in 0..self.circuit.diodes.len() {
+            let diode = &self.circuit.diodes[index];
+            let raw = node_diff(
+                &self.solution[..self.nodes],
+                diode.junction_anode,
+                diode.cathode,
+            );
+            let vte = diode.model.n * device::THERMAL_VOLTAGE;
+            let critical = device::pn_critical_voltage(diode.model.is, diode.model.n);
+            let limited = device::pn_limit(raw, self.diode_vj[index], vte, critical);
+            self.limiter_clamped |= limited != raw;
+            self.diode_vj[index] = limited;
+        }
+
+        for index in 0..self.circuit.bjts.len() {
+            let bjt = &self.circuit.bjts[index];
+            let sign = bjt.model.polarity.sign();
+            let nodes = &self.solution[..self.nodes];
+            let raw_be = sign * node_diff(nodes, bjt.b, bjt.e);
+            let raw_bc = sign * node_diff(nodes, bjt.b, bjt.c);
+            let vtf = bjt.model.nf * device::THERMAL_VOLTAGE;
+            let vtr = bjt.model.nr * device::THERMAL_VOLTAGE;
+            let crit_f = device::pn_critical_voltage(bjt.model.is, bjt.model.nf);
+            let crit_r = device::pn_critical_voltage(bjt.model.is, bjt.model.nr);
+            let be = device::pn_limit(raw_be, self.bjt_vbe[index], vtf, crit_f);
+            let bc = device::pn_limit(raw_bc, self.bjt_vbc[index], vtr, crit_r);
+            self.limiter_clamped |= be != raw_be || bc != raw_bc;
+            self.bjt_vbe[index] = be;
+            self.bjt_vbc[index] = bc;
+        }
+
+        for index in 0..self.circuit.mosfets.len() {
+            let mosfet = &self.circuit.mosfets[index];
+            let sign = mosfet.model.polarity.sign();
+            let nodes = &self.solution[..self.nodes];
+            let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.s);
+            let raw_ds = sign * node_diff(nodes, mosfet.d, mosfet.s);
+
+            // The limiters are SPICE's and assume the channel's own source, so
+            // they are applied to the EFFECTIVE voltages — the ones a reversed
+            // device measures against the terminal that is actually its source.
+            // When the device crosses over between two iterations its previous
+            // effective Vds in the new orientation is zero, which is exactly
+            // where it crossed.
+            let old_gs = self.mos_vgs[index];
+            let old_ds = self.mos_vds[index];
+            let reversed_now = raw_ds < 0.0;
+            let reversed_before = old_ds < 0.0;
+            let effective = |gs: f64, ds: f64, reversed: bool| {
+                if reversed {
+                    (gs - ds, -ds)
+                } else {
+                    (gs, ds)
+                }
+            };
+            let (eff_gs_new, eff_ds_new) = effective(raw_gs, raw_ds, reversed_now);
+            let (eff_gs_old, eff_ds_old) = if reversed_before == reversed_now {
+                effective(old_gs, old_ds, reversed_before)
+            } else {
+                (effective(old_gs, old_ds, reversed_before).0, 0.0)
+            };
+
+            let eff_ds = device::vds_limit(eff_ds_new, eff_ds_old);
+            let eff_gs = device::fet_limit(eff_gs_new, eff_gs_old, sign * mosfet.model.vto);
+            let (gs, ds) = if reversed_now {
+                (eff_gs - eff_ds, -eff_ds)
+            } else {
+                (eff_gs, eff_ds)
+            };
+            self.limiter_clamped |= gs != raw_gs || ds != raw_ds;
+            self.mos_vgs[index] = gs;
+            self.mos_vds[index] = ds;
+        }
+    }
+
+    /// Stamp every nonlinear device's companion model at its current
+    /// linearisation point.
+    ///
+    /// Each terminal contributes one linearised current `I ≈ I0 + Σ gᵢ·(uᵢ −
+    /// uᵢ0)`, where `uᵢ` are the device's controlling voltages in **circuit**
+    /// coordinates. [`stamp_linearised`] turns that into the matrix and RHS
+    /// entries; the polarity of a PNP or a PMOS shows up only in the sign of
+    /// the currents, never in the conductances, because negating both the
+    /// controlling voltage and the current leaves `∂I/∂u` alone.
+    ///
+    /// Nothing here runs for a circuit with no such device: all three vectors
+    /// are empty, so a linear netlist takes the same floating-point operations
+    /// in the same order it took before this existed.
+    fn stamp_devices(&mut self) {
+        let dim = self.dim();
+        let matrix = &mut self.matrix;
+        let rhs = &mut self.rhs;
+
+        for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            if diode.model.rs > 0.0 {
+                conductance(
+                    matrix,
+                    dim,
+                    diode.anode,
+                    diode.junction_anode,
+                    1.0 / diode.model.rs,
+                );
+            }
+            let vj = self.diode_vj[index];
+            let op = device::diode_op(vj, diode.model.is, diode.model.n);
+            let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
+            stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
+            stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
+        }
+
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            let sign = bjt.model.polarity.sign();
+            let model = bjt.model;
+            let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
+            let op = device::bjt_op(vbe, vbc, model.is, model.bf, model.br, model.nf, model.nr);
+
+            // GMIN across both junctions. Without it a transistor that is fully
+            // off leaves its base and collector tied to the rest of the circuit
+            // by nothing at all, and the matrix is singular on a netlist the
+            // user can see is connected.
+            conductance(matrix, dim, bjt.b, bjt.e, device::GMIN);
+            conductance(matrix, dim, bjt.b, bjt.c, device::GMIN);
+
+            // Controlling voltages in circuit coordinates: u1 = v(b) − v(e),
+            // u2 = v(b) − v(c). The device sees sign·u1 and sign·u2.
+            let u1 = sign * vbe;
+            let u2 = sign * vbc;
+            let collector = [
+                (op.gif, bjt.b, bjt.e, u1),
+                (-op.gir - op.gmu, bjt.b, bjt.c, u2),
+            ];
+            let base = [(op.gpi, bjt.b, bjt.e, u1), (op.gmu, bjt.b, bjt.c, u2)];
+            let emitter = [
+                (-op.gif - op.gpi, bjt.b, bjt.e, u1),
+                (op.gir, bjt.b, bjt.c, u2),
+            ];
+            stamp_linearised(matrix, rhs, dim, bjt.c, sign * op.ic, &collector);
+            stamp_linearised(matrix, rhs, dim, bjt.b, sign * op.ib, &base);
+            stamp_linearised(matrix, rhs, dim, bjt.e, -sign * (op.ic + op.ib), &emitter);
+        }
+
+        for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            let sign = mosfet.model.polarity.sign();
+            let model = mosfet.model;
+            let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
+
+            // Below Vto every conductance in the device is zero, so the drain
+            // node would float; the bulk terminal is connected by nothing else
+            // at all. GMIN is what makes an off MOSFET a very large resistor
+            // instead of an open circuit the matrix cannot invert.
+            conductance(matrix, dim, mosfet.d, mosfet.s, device::GMIN);
+            conductance(matrix, dim, mosfet.bulk, mosfet.d, device::GMIN);
+            conductance(matrix, dim, mosfet.bulk, mosfet.s, device::GMIN);
+
+            // A MOSFET is symmetric: when Vds goes negative the terminal the
+            // netlist calls the drain IS the source, and the level-1 equations
+            // are written from the source out. Swapping the two nodes is the
+            // whole of "reverse mode".
+            let reversed = vds < 0.0;
+            let (drain, source) = if reversed {
+                (mosfet.s, mosfet.d)
+            } else {
+                (mosfet.d, mosfet.s)
+            };
+            let (vgs_eff, vds_eff) = if reversed {
+                (vgs - vds, -vds)
+            } else {
+                (vgs, vds)
+            };
+            let op = device::mos_op(
+                vgs_eff,
+                vds_eff,
+                sign * model.vto,
+                mosfet.beta,
+                model.lambda,
+            );
+
+            let u1 = sign * vgs_eff;
+            let u2 = sign * vds_eff;
+            let drain_terms = [(op.gm, mosfet.g, source, u1), (op.gds, drain, source, u2)];
+            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &drain_terms);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                source,
+                -sign * op.id,
+                &negate(&drain_terms),
+            );
+            // The gate and the bulk carry no DC current in this model, so they
+            // need no stamp of their own beyond the GMIN ties above.
+        }
+    }
+}
+
+/// One terminal's linearised current, as a matrix row and an RHS entry.
+///
+/// `current` is the current flowing **out of** `terminal` into the device at
+/// the linearisation point, and each entry of `control` is `(∂current/∂u, p, n,
+/// u)` for a controlling voltage `u = v(p) − v(n)`. The equivalent current
+/// source is `current − Σ g·u`, which is the part of the tangent that does not
+/// depend on the unknowns.
+fn stamp_linearised(
+    matrix: &mut [f64],
+    rhs: &mut [f64],
+    dim: usize,
+    terminal: NodeRef,
+    current: f64,
+    control: &[(f64, NodeRef, NodeRef, f64)],
+) {
+    let Some(row) = terminal else {
+        // Ground is not an unknown: its KCL row is the one the MNA drops.
+        return;
+    };
+    let mut equivalent = current;
+    for (g, p, n, u) in control {
+        add(matrix, dim, Some(row), *p, *g);
+        add(matrix, dim, Some(row), *n, -*g);
+        equivalent -= g * u;
+    }
+    rhs[row] -= equivalent;
+}
+
+/// The same controlling terms with every conductance negated — the other
+/// terminal of a two-terminal current path.
+fn negate<const N: usize>(
+    control: &[(f64, NodeRef, NodeRef, f64); N],
+) -> [(f64, NodeRef, NodeRef, f64); N] {
+    control.map(|(g, p, n, u)| (-g, p, n, u))
 }
 
 fn node_diff(node_v: &[f64], a: NodeRef, b: NodeRef) -> f64 {
