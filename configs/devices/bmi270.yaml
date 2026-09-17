@@ -1,0 +1,228 @@
+# Bosch BMI270 6-axis IMU (3-axis accel + 3-axis gyro) — declarative I²C
+# register device. Every offset and reset value is from the BMI270 datasheet
+# (rev 1.x), NOT from the BMI160/BMA, which differ.
+#
+# Migrated from `peripherals/components/bmi270.rs` (778 lines), deleted with
+# this descriptor; `tests/bmi270_migration_parity.rs` drives that model's
+# transcript against this one.
+#
+# ── The defining quirk: the config-load handshake ────────────────────────
+# Out of reset the feature engine is un-initialised (INTERNAL_STATUS.message ==
+# not_init). The host softresets, disables advanced power save, bursts the ~8 KB
+# config image into INIT_DATA and finally writes INIT_CTRL = 1, after which
+# INTERNAL_STATUS reads init_ok (0x01). A firmware that SKIPS the upload must
+# NOT see init_ok, and that anti-circular gate is `var(init_data_uploaded)`
+# below: the blob's contents are accepted and discarded, exactly as real init
+# streams them into internal memory, but the fact that it arrived is what the
+# gate reads.
+#
+# INIT_DATA carries `stream: true` for that burst — see the key's own note in
+# `crates/config/src/peripherals.rs` for why a stepping pointer would soft-reset
+# the part it is initialising.
+#
+# ── NOT modelled, and reported rather than faked ─────────────────────────
+#   * THERE IS NO FIFO. The shipped model answered CMD_FIFO_FLUSH with a comment
+#     reading `no FIFO modelled`, and there is no queue, no watermark and no
+#     FIFO_LENGTH behind it. FIFO_DATA (0x24) is not declared, so it reads 0.
+#   * The INT1/INT2 pads. Nothing drives an interrupt line; a driver polls
+#     STATUS or it waits forever.
+#   * SENSORTIME (0x18..0x1A) never advances — it reads 0, as it always did.
+#   * The output data rates, bandwidths and filter modes in ACC_CONF / GYR_CONF,
+#     and advanced power save in PWR_CONF: stored, read back, and inert.
+#   * Every feature-engine output but the step counter. The FEATURES window
+#     (0x30..0x3F) is paged by FEAT_PAGE (0x2F) and the exact page and offset of
+#     an output are fixed by the loaded config image; the 32-bit little-endian
+#     step count at the base of page 6 is the one stable readout modelled, which
+#     is what the model this replaces chose.
+#   * ERR (0x02) is always 0: no error condition is generated.
+type: bmi270
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x68
+    auto_increment: true
+    # The model answered 0 for every address it did not decode, which is what a
+    # BMI270 drives for reserved space — and what makes the un-paged FEATURES
+    # window read as zeros rather than as an open bus.
+    unmapped_byte: 0x00
+    # FEAT_PAGE selects one of eight feature-engine pages; only the step
+    # counter below declares a `page:`, so every other register decodes in all
+    # of them (the flat core map).
+    page_register: 0x2F
+    registers:
+      - { name: CHIP_ID, addr: 0x00, width: 1, endian: le, access: r, reset: 0x24 }
+      - { name: ERR,     addr: 0x02, width: 1, endian: le, access: r, reset: 0x00 }
+      # STATUS: the command interface is always ready; the two data-ready bits
+      # follow the per-sensor enables in PWR_CTRL. Maintained by the rules
+      # below, so it is storage the master may not write.
+      - name: STATUS
+        addr: 0x03
+        width: 1
+        endian: le
+        access: r
+        reset: 0x10
+        bits:
+          - { name: CMD_RDY,  shift: 4 }
+          - { name: DRDY_GYR, shift: 6 }
+          - { name: DRDY_ACC, shift: 7 }
+
+      # ── Measurement registers ────────────────────────────────────────────
+      # 16-bit signed little-endian, 32768 LSB across the positive full scale,
+      # so LSB/g = 32768 / fs_g and the range field picks fs. Saturation is the
+      # register's own signed width: at full scale the count is exactly 32768,
+      # which a 16-bit signed word holds as 32767.
+      - { name: ACC_X, addr: 0x0C, width: 2, endian: le, access: r, signed: true, source: ax,
+          scale_from: { register: ACC_RANGE, mask: 0x03, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      - { name: ACC_Y, addr: 0x0E, width: 2, endian: le, access: r, signed: true, source: ay,
+          scale_from: { register: ACC_RANGE, mask: 0x03, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      - { name: ACC_Z, addr: 0x10, width: 2, endian: le, access: r, signed: true, source: az,
+          scale_from: { register: ACC_RANGE, mask: 0x03, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      # GYR_RANGE codes 0..7 give ±2000 >> code dps. Codes 5..7 (±62, ±31, ±15)
+      # are the integer shift the datasheet's own encoding produces; the
+      # literals are the doubles `32768 / fs` rounds to, so a sweep of the
+      # channel reproduces the model's word exactly.
+      - { name: GYR_X, addr: 0x12, width: 2, endian: le, access: r, signed: true, source: gx,
+          scale_from: { register: GYR_RANGE, mask: 0x07,
+                        map: { 0: 16.384, 1: 32.768, 2: 65.536, 3: 131.072, 4: 262.144,
+                               5: 528.516129032258, 6: 1057.032258064516, 7: 2184.5333333333333 } } }
+      - { name: GYR_Y, addr: 0x14, width: 2, endian: le, access: r, signed: true, source: gy,
+          scale_from: { register: GYR_RANGE, mask: 0x07,
+                        map: { 0: 16.384, 1: 32.768, 2: 65.536, 3: 131.072, 4: 262.144,
+                               5: 528.516129032258, 6: 1057.032258064516, 7: 2184.5333333333333 } } }
+      - { name: GYR_Z, addr: 0x16, width: 2, endian: le, access: r, signed: true, source: gz,
+          scale_from: { register: GYR_RANGE, mask: 0x07,
+                        map: { 0: 16.384, 1: 32.768, 2: 65.536, 3: 131.072, 4: 262.144,
+                               5: 528.516129032258, 6: 1057.032258064516, 7: 2184.5333333333333 } } }
+      # Never advances — the part has no modelled sample clock.
+      - { name: SENSORTIME, addr: 0x18, width: 3, endian: le, access: r, reset: 0x000000 }
+      # The config-load gate's answer. 0x00 = not_init, 0x01 = init_ok.
+      - { name: INTERNAL_STATUS, addr: 0x21, width: 1, endian: le, access: r, reset: 0x00 }
+      # int16 LE, 0x0000 == 23 °C at 512 LSB/°C ⇒ offset = -23 × 512.
+      - { name: TEMPERATURE, addr: 0x22, width: 2, endian: le, access: r, signed: true,
+          source: temp, encode: { scale: 512.0, offset: -11776.0 } }
+
+      # ── Feature engine ───────────────────────────────────────────────────
+      - { name: FEAT_PAGE, addr: 0x2F, width: 1, endian: le, access: rw, reset: 0x00 }
+      # The FEATURES window's base on page 6. `page: 6` is what makes the other
+      # seven pages read 0 there, which is what the model did.
+      - { name: STEP_COUNTER, addr: 0x30, width: 4, endian: le, access: r, page: 6,
+          source: steps, encode: { round: trunc } }
+
+      # ── Configuration (storage; effects not modelled) ────────────────────
+      - { name: ACC_CONF,  addr: 0x40, width: 1, endian: le, access: rw, reset: 0xA8 }
+      - name: ACC_RANGE
+        addr: 0x41
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x02          # ±8 g, the BMI270 default
+        write_mask: 0x03
+        bits: [{ name: RANGE, shift: 0, width_bits: 2 }]
+      - { name: GYR_CONF,  addr: 0x42, width: 1, endian: le, access: rw, reset: 0xA9 }
+      - name: GYR_RANGE
+        addr: 0x43
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00          # ±2000 dps, the BMI270 default
+        write_mask: 0x07
+        bits: [{ name: RANGE, shift: 0, width_bits: 3 }]
+
+      # ── Config-load handshake ────────────────────────────────────────────
+      - { name: INIT_CTRL,   addr: 0x59, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INIT_ADDR_0, addr: 0x5B, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INIT_ADDR_1, addr: 0x5C, width: 1, endian: le, access: rw, reset: 0x00 }
+      # The streaming port. Its contents are discarded; only the FACT of the
+      # upload is kept, in `var(init_data_uploaded)`.
+      - { name: INIT_DATA,   addr: 0x5E, width: 1, endian: le, access: rw, reset: 0x00, stream: true }
+
+      # ── Power ────────────────────────────────────────────────────────────
+      - { name: PWR_CONF, addr: 0x7C, width: 1, endian: le, access: rw, reset: 0x03 }
+      - name: PWR_CTRL
+        addr: 0x7D
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: GYR_EN, shift: 1 }
+          - { name: ACC_EN, shift: 2 }
+      # CMD is write-only on silicon and read 0 on the model, so every bit
+      # self-clears the moment the part has acted: the word never survives the
+      # write that carried it, and the rules below read `written` instead.
+      - { name: CMD, addr: 0x7E, width: 1, endian: le, access: rw, reset: 0x00, self_clearing: 0xFF }
+
+  rules:
+    # The data-ready bits track the enables. Written whole rather than as two
+    # set/clear pairs so STATUS cannot hold a stale half.
+    - on: { write: PWR_CTRL }
+      do:
+        - write:
+            register: STATUS
+            value: "0x10 | (field(PWR_CTRL.ACC_EN) << 7) | (field(PWR_CTRL.GYR_EN) << 6)"
+
+    # The config blob arrived. Contents discarded; the fact is the gate.
+    - on: { write: INIT_DATA }
+      do:
+        - { var: init_data_uploaded, value: 1 }
+
+    # INIT_CTRL = 1 closes the handshake — but only if the blob was streamed.
+    # init_ok is 0x01 and not_init is 0x00, so the flag IS the message.
+    - on: { write: INIT_CTRL }
+      when: "written == 1"
+      do:
+        - { write: { register: INTERNAL_STATUS, value: "var(init_data_uploaded)" } }
+
+    # CMD = 0xB6 softreset: the power-on state, in full. Every register the
+    # model's `por_reset` touched is listed, including the six measurement
+    # channels and the step count it zeroed — a reset that left the twin
+    # reporting the last injected motion would be a reset a test cannot use.
+    - on: { write: CMD }
+      when: "written == 0xB6"
+      do:
+        - { write: { register: INTERNAL_STATUS, value: 0 } }
+        - { var: init_data_uploaded, value: 0 }
+        - { write: { register: INIT_CTRL, value: 0 } }
+        - { write: { register: INIT_ADDR_0, value: 0 } }
+        - { write: { register: INIT_ADDR_1, value: 0 } }
+        - { write: { register: FEAT_PAGE, value: 0 } }
+        - { write: { register: PWR_CONF, value: 0x03 } }
+        - { write: { register: PWR_CTRL, value: 0 } }
+        - { write: { register: ACC_CONF, value: 0xA8 } }
+        - { write: { register: ACC_RANGE, value: 0x02 } }
+        - { write: { register: GYR_CONF, value: 0xA9 } }
+        - { write: { register: GYR_RANGE, value: 0 } }
+        - { write: { register: STATUS, value: 0x10 } }
+        - { set_input: ax, value: 0 }
+        - { set_input: ay, value: 0 }
+        - { set_input: az, value: 0 }
+        - { set_input: gx, value: 0 }
+        - { set_input: gy, value: 0 }
+        - { set_input: gz, value: 0 }
+        - { set_input: temp, value: 0 }
+        - { set_input: steps, value: 0 }
+    # CMD = 0xB0 is fifo_flush. There is no FIFO, so there is nothing to flush
+    # and no rule: the model answered it the same way, with a comment.
+
+  vars:
+    init_data_uploaded: 0
+
+metadata:
+  label: "BMI270 IMU"
+  summary: "Bosch BMI270 low-power IMU with hardware step counter over I2C."
+  detail: >-
+    Wearable IMU used on the smart-ring reference system. Stimulus channels
+    drive accel/gyro samples; feature-engine step counter is modelled.
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x68." }
+  inputs:
+    - { key: ax, label: "Accel X", unit: g, min: -16, max: 16, default: 0 }
+    - { key: ay, label: "Accel Y", unit: g, min: -16, max: 16, default: 0 }
+    - { key: az, label: "Accel Z", unit: g, min: -16, max: 16, default: 0 }
+    - { key: gx, label: "Gyro X", unit: "°/s", min: -2000, max: 2000, default: 0 }
+    - { key: gy, label: "Gyro Y", unit: "°/s", min: -2000, max: 2000, default: 0 }
+    - { key: gz, label: "Gyro Z", unit: "°/s", min: -2000, max: 2000, default: 0 }
+    - { key: temp, label: "Temperature", unit: "°C", min: -41, max: 87, default: 23 }
+    - { key: steps, label: "Step count", unit: steps, min: 0, max: 4294967295, default: 0 }

@@ -658,12 +658,13 @@ at for this round and none of them is a FIFO port; each is named here with the
 reason, because "not yet ported" and "there is nothing there to port" are very
 different facts.
 
-- **BMI270** — **has no FIFO at all.** The shipped Rust model answers
+- **BMI270** — **has no FIFO at all.** The shipped Rust model answered
   `CMD_FIFO_FLUSH` with a comment that says `no FIFO modelled`, and there is no
-  queue, no watermark and no `FIFO_LENGTH` behind it. Porting it is a Tier-1 +
+  queue, no watermark and no `FIFO_LENGTH` behind it. Porting it was a Tier-1 +
   Tier-2 register job (the config-load handshake gate, the paged FEATURES
-  window, `scale_from` over `ACC_RANGE`/`GYR_RANGE`), not a stream job, and it
-  is listed as such rather than counted as FIFO coverage it would not provide.
+  window, `scale_from` over `ACC_RANGE`/`GYR_RANGE`), not a stream job — and
+  that job is now **done**: `bmi270.yaml`, byte-identical, the `stream:` key
+  below. It still provides no FIFO coverage, which is why it stays named here.
 - **MAX30102** — a real 32-deep FIFO, and still not portable as data, for two
   independent reasons. Its samples are **synthesised in Rust**: the model runs
   a seeded LCG to shape a photoplethysmogram with a systolic upstroke, a
@@ -678,15 +679,176 @@ different facts.
 - **SX1278 / RA-02** and **nRF24L01+** — SPI register **shells with no air
   link**, no FIFO, and no IRQ pin (`no RF air link`, `no air link`, in their own
   first lines). 138 and 191 lines each, nearly all of it a register array behind
-  an address/data phase machine. There is no radio behaviour to preserve, so
-  porting them would move a stub, not a model. They are the clearest case of the
-  rule that a thunk is to be reported, not ported.
+  an address/data phase machine.
+
+  ⚠️ This entry used to say porting them "would move a stub, not a model", and
+  that was the wrong call. A stub in Rust is engine code: it ships in every
+  binary, only a Rust programmer can change it, and the declarative engine has
+  to stay bug-compatible with it forever. A stub in YAML is three lines of
+  `register_file:` that a customer can fork. They are **ported** —
+  `lora_sx1278.yaml`, `nrf24l01.yaml`, `rc522.yaml` — and what is still missing
+  is stated in each descriptor's own header rather than in this list. The rule
+  that survives is the one about the FAKE: nothing invents a packet, a tag or an
+  RSSI, and `nrf24l01.yaml` says in its first paragraph that a `write()` waiting
+  on TX_DS waits forever.
 - **MCP2515** — the SPI and register half is expressible, but the part's reason
   to exist is `attach_can_bus`: a `Sender`/`Receiver` pair of `CanFrame`s the
   engine hands it, plus `poll_external_bus`. That is an engine SEAM, not a
   descriptor key. A pack could declare `bus: can` and have the engine wire it,
   which is the shape to build — and it is a primitive-level change with its own
   attach contract, so it is named here rather than half-done.
+
+## Register-shell keys
+
+A **register shell** is a part whose datasheet map is a few meaningful registers
+in a large space of storage the driver configures and reads back — and whose
+interesting behaviour (a radio, an RF field) is not modelled at all. Five
+shipped models were exactly that: the SX1278's 128 bytes, the MFRC522's 64, the
+nRF24L01+'s 24, plus the two shells' framing quirks. The keys below are what it
+took to make all of them data, and each is named with the datasheet sentence
+that forced it.
+
+### `spi.register_file` — flat RAM behind the declared map
+
+Every command-byte address that no `registers:` entry covers is one byte of this
+array: a read serves it, a write stores it. Absent ⇒ an undeclared address reads
+`0xFF` (open bus) and swallows writes, which is what every descriptor written
+before this key meant.
+
+```yaml
+spi:
+  registers:
+    - { name: RegVersion, addr: 0x42, width: 1, endian: be, access: r, reset: 0x12 }
+  register_file:
+    size: 0x80          # cells; an address at or above it is not backed
+    fill: 0x00          # optional: what every cell powers up holding
+    reset: { 0x01: 0x09 }   # sparse power-on values, stamped over `fill`
+```
+
+Declared registers still **win** at their own addresses, so a part may mix the
+two: the nRF24L01+'s `STATUS` is a `write_one_to_clear` register and the other
+twenty-three addresses are storage.
+
+Why a file rather than one `RegisterSpec` per address: an address left
+undeclared is not a blank. It reads `0xFF` and drops the driver's write, which is
+a different part — so the alternative is inventing a name for 128 addresses,
+127 of which the datasheet calls reserved.
+
+It is deliberately **not** the I²C `register_file:`. That one owns a write
+POINTER (`pointer_mask`, `first_write_after_start_sets_pointer`,
+`auto_increment`) because an I²C register-file part selects its address with a
+bus write. A SPI part's address comes out of the command byte and its walk is
+`framing.auto_increment`, so those three keys would be dead fields a descriptor
+could set and have ignored.
+
+Proved by **`lora_sx1278.yaml`**, **`rc522.yaml`** and **`nrf24l01.yaml`**.
+
+### `spi.framing.op_mask` / `op_read` / `op_write` — an OPCODE command byte
+
+`mosi & op_mask` selects the operation and is compared against `op_read` and
+`op_write`. A command byte matching NEITHER selects no register at all: its data
+phase serves `command_response` (or `0xFF`) and **drops writes**.
+
+```yaml
+framing:
+  op_mask: 0xE0
+  op_read: 0x00       # R_REGISTER is 000A AAAA
+  op_write: 0x20      # W_REGISTER is 001A AAAA
+  addr_mask: 0x1F
+```
+
+It WINS over `rw_bit`. `rw_bit` carries a non-`None` default, so there is no way
+to tell a defaulted one from a declared one and "declaring both is an error"
+would reject every descriptor that sets `op_mask`; the op field is the more
+specific statement of the same datasheet sentence, so it decides.
+
+Proved by **`nrf24l01.yaml`** (§8.3.1, Table 19). Decoded by bit 5 alone — the
+only direction vocabulary the engine had — `W_TX_PAYLOAD` (1010 0000) is a WRITE
+to address 0x00, so a 32-byte payload burst walks its payload over CONFIG,
+EN_AA, EN_RXADDR, SETUP_AW, SETUP_RETR, RF_CH and RF_SETUP. The register file is
+silently destroyed by the command that sends a packet.
+
+### `spi.framing.command_response` — the word clocked out during the command byte
+
+Names the register whose word rides out on MISO while the master clocks the
+command word in. Absent ⇒ `0x00`, the byte every descriptor returned there
+before.
+
+nRF24L01+ §8.3.1: "the STATUS register is serially shifted out on the MISO pin
+simultaneously with the command word on MOSI". Every RF24-style driver reads its
+interrupt flags that way — `write_register()` returns the byte the command phase
+produced — so a part answering `0x00` there reports that no interrupt has ever
+fired.
+
+### `registers[].stream` — a port that holds the auto-increment pointer
+
+The byte-wise auto-increment pointer does not advance past this register. The
+register IS the port; what moves is an internal address counter the master
+cannot address. It holds the pointer in **both** directions, because that is
+what a port is.
+
+```yaml
+- { name: INIT_DATA, addr: 0x5E, width: 1, endian: le, access: rw, stream: true }
+```
+
+Proved by **`bmi270.yaml`**. Bosch's initialisation sequence streams the ~8 KB
+feature-engine image into `INIT_DATA` in one burst, with `INIT_ADDR` advancing
+inside the part. ⚠️ A pointer that stepped per byte would walk that one
+transaction over the whole map thirty-two times — over `ACC_CONF`, over
+`PWR_CTRL`, and over `CMD` (0x7E), where **one byte in every 256 of a firmware
+image is `0xB6`, which is SOFTRESET**. The upload would reset the part it is
+initialising, repeatedly, and the handshake it exists to satisfy could never
+complete. A part's FIFO data register (the BMI270's own `FIFO_DATA`, 0x24) has
+the same shape.
+
+### The register and command shells that did NOT port, and why
+
+Five more were looked at this round. Each is named with the missing primitive,
+because "not yet ported" and "there is nothing there to port" are different
+facts — and so is "the model fakes it, and the fake is what you would be
+porting".
+
+- **SPS30** — a Sensirion command shell, and two things in it are not data.
+  Its measured values are **IEEE-754 `f32`** on the wire (`value.to_be_bytes()`,
+  datasheet §5.3.2), and a `response[]` word is an integer encoding. Worse, the
+  response SHAPE is chosen by a parameter word the driver sent earlier:
+  `start_measurement(0x0300)` makes each value two words plus two CRCs and
+  `0x0500` makes it one word plus one, so the same opcode answers 60 bytes or 30
+  depending on stored state. The primitives are a float response word and a
+  response set selected by a `state:`; both are real, neither exists.
+- **PN532** — an I²C command shell whose command is not at a fixed offset: the
+  model scans the whole write stream for the byte pair `D4 02` anywhere in it
+  and answers with a 19-byte literal ACK + firmware frame. `commands:` matches a
+  fixed-width opcode at the head of the transaction and answers in 16-bit words.
+  The missing primitive is the `uart_device` `responses:` table — a pattern match
+  and a literal byte string — on an I²C transport. The RF field is not modelled
+  either way: `PICC_IsNewCardPresent()` finds nothing because there is nothing
+  in the field to find.
+- **MLX90640** — 16-bit addressing (`pointer_width: 2`) is already a key, and
+  the rest is not. Its 832-word EEPROM is a **self-consistent linearised
+  calibration set computed in Rust**, chosen so the unmodified Melexis driver's
+  `ExtractParameters` + `CalculateTo` collapses to an invertible `count ↔ °C`
+  relation; its 768-word RAM is the thermal scene pushed back through that
+  inversion, per pixel. `register_file.fill` fills an array with a constant and
+  `reset:` stamps single cells — neither computes 1600 words from a scene. The
+  primitive is a 2-D stimulus **grid** with a per-cell computed source, and it is
+  a primitive, not a key.
+- **DRV2605L** — its time base is a stated **thunk**, the same disqualification
+  MAX30102 has. The model implements no `advance_time_us`: playback moves only
+  when a caller invokes `advance_us` by hand, and the header says so ("Nothing
+  advances on its own: a haptic effect started and never stepped stays
+  asserted"). A declarative port has a real timer, so it would not be a parity
+  port — it would be a different part that happens to answer the same probe. The
+  effect library is a second, smaller problem: TI does not publish the ROM
+  waveforms' durations or amplitudes, so the model's table is a stated
+  approximation rather than data anyone can check.
+- **lipo_charger** — an `analog_source` in shape, but its pin voltage is
+  computed from **two** channels rather than looked up on a curve over one:
+  `3300 + 9 × soc_pct`, plus a 150 mV charge bump **iff** `usb_present ≥ 0.5`,
+  clamped to 4200 mV, then integer-divided by the ÷2 divider. Three gaps for one
+  small part — `analog.source` naming a `derived:` channel, a threshold on a
+  boolean channel, and the model's two integer truncations — and inventing all
+  three for one part is how a vocabulary stops being a vocabulary.
 
 ## `timers[].period_from` — a field-driven timer period
 

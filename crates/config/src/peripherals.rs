@@ -1064,6 +1064,50 @@ pub struct SpiSpec {
     /// Register map addressed by the command byte.
     #[serde(default)]
     pub registers: Vec<RegisterSpec>,
+    /// **Flat RAM behind the declared map.** Present ⇒ every command-byte
+    /// address that no [`registers`](Self::registers) entry covers is one byte
+    /// of this array: a read serves it, a write stores it. Absent ⇒ an
+    /// undeclared address reads `0xFF` (open bus) and swallows writes, which is
+    /// what every descriptor written before this key existed meant.
+    ///
+    /// This is the shape of a **register shell** — a part whose datasheet map
+    /// is a few meaningful registers in a large space of storage the driver
+    /// configures and reads back. Three shipped models were exactly that and
+    /// nothing else: the SX1278's 128 bytes, the MFRC522's 64 and the
+    /// nRF24L01+'s 24, each a `[u8; N]` behind an address/data phase machine.
+    /// Declaring them one `RegisterSpec` at a time would mean inventing a name
+    /// per address, and an address left undeclared is not a blank — it reads
+    /// `0xFF` and drops the driver's write, which is a different part.
+    ///
+    /// Declared registers still WIN at their own addresses, so a part may mix
+    /// the two: the nRF24L01+'s STATUS is a `write_one_to_clear` register and
+    /// the other twenty-three addresses are storage.
+    #[serde(default)]
+    pub register_file: Option<SpiRegisterFile>,
+}
+
+/// Flat byte storage backing an SPI part's undeclared addresses
+/// (see [`SpiSpec::register_file`]).
+///
+/// Deliberately NOT [`RegisterFileSpec`], which is the I²C key: that one owns a
+/// write-POINTER (`pointer_mask`, `first_write_after_start_sets_pointer`,
+/// `auto_increment`) because an I²C register-file part selects its address with
+/// a bus write. An SPI part's address comes out of the command byte and its
+/// walk is [`SpiFraming::auto_increment`], so those three keys would be dead
+/// fields a descriptor could set and have ignored.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpiRegisterFile {
+    /// Number of one-byte cells. An address at or above it is not backed, so it
+    /// reads `0xFF` and drops writes exactly as an undeclared address does
+    /// without this key.
+    pub size: usize,
+    /// Value every cell powers up holding, before `reset` is stamped over it.
+    /// Absent ⇒ 0.
+    #[serde(default)]
+    pub fill: Option<u8>,
+    /// Sparse power-on values, keyed by address.
+    #[serde(default)]
+    pub reset: BTreeMap<u16, u8>,
 }
 
 /// SPI command-byte framing. Defaults are the ADXL345 convention: one command
@@ -1091,6 +1135,46 @@ pub struct SpiFraming {
     /// one; false ⇒ only the selected register is served.
     #[serde(default = "default_true")]
     pub auto_increment: bool,
+    /// **The command byte is an OPCODE plus an address**, not one direction
+    /// bit: `mosi & op_mask` selects the operation and is compared against
+    /// [`op_read`](Self::op_read) and [`op_write`](Self::op_write). Absent ⇒
+    /// [`rw_bit`](Self::rw_bit) decides, which is every descriptor written
+    /// before this key existed.
+    ///
+    /// It WINS over `rw_bit`. `rw_bit` carries a non-`None` default, so there
+    /// is no way to tell a defaulted one from a declared one and "declaring
+    /// both is an error" would reject every descriptor that sets `op_mask`. The
+    /// op field is the more specific statement of the same datasheet sentence,
+    /// so it is the one that decides.
+    ///
+    /// A command byte matching NEITHER value selects no register at all. Its
+    /// data phase serves [`command_response`](Self::command_response) (or
+    /// `0xFF` without one) and drops writes — which is what a part does with a
+    /// command that is not a register access. The nRF24L01+ (§8.3.1, Table 19)
+    /// is the motivating case: `R_REGISTER` is `000A AAAA` and `W_REGISTER` is
+    /// `001A AAAA`, but `W_TX_PAYLOAD` is `1010 0000` and `FLUSH_RX` is
+    /// `1110 0010`. Decoded by bit 5 alone, a 32-byte `W_TX_PAYLOAD` burst
+    /// writes its payload over CONFIG, EN_AA, EN_RXADDR and the rest — the
+    /// register file silently destroyed by the command that sends a packet.
+    #[serde(default)]
+    pub op_mask: Option<u8>,
+    /// Value of the `op_mask` field that means "read the addressed register".
+    #[serde(default)]
+    pub op_read: Option<u8>,
+    /// Value of the `op_mask` field that means "write the addressed register".
+    #[serde(default)]
+    pub op_write: Option<u8>,
+    /// **Register whose word is clocked OUT while the command byte is clocked
+    /// IN.** Absent ⇒ `0x00`, the byte every descriptor written before this key
+    /// returned during the command phase.
+    ///
+    /// nRF24L01+ §8.3.1: "the STATUS register is serially shifted out on the
+    /// MISO pin simultaneously with the command word on MOSI". Every RF24-style
+    /// driver reads its interrupt flags that way — `write_register` returns the
+    /// byte the command phase produced — so a part that answers `0x00` there
+    /// reports no interrupt has ever fired.
+    #[serde(default)]
+    pub command_response: Option<String>,
 }
 
 impl Default for SpiFraming {
@@ -1102,6 +1186,10 @@ impl Default for SpiFraming {
             addr_mask: default_addr_mask(),
             addr_shift: 0,
             auto_increment: true,
+            op_mask: None,
+            op_read: None,
+            op_write: None,
+            command_response: None,
         }
     }
 }
@@ -1343,6 +1431,28 @@ pub struct RegisterSpec {
     /// store, which is what every descriptor written before this field meant.
     #[serde(default)]
     pub on_write: Option<WriteAction>,
+    /// **Streaming port**: the byte-wise auto-increment pointer does NOT
+    /// advance past this register. The register IS the port, and what moves is
+    /// an internal address counter the master cannot address.
+    ///
+    /// Absent ⇒ the pointer steps, which is every register written before this
+    /// key existed.
+    ///
+    /// The Bosch BMI270's config upload is the motivating case: §"Initialization
+    /// sequence" has the host stream the ~8 KB feature-engine image into
+    /// `INIT_DATA` (0x5E) in one burst, with `INIT_ADDR` advancing inside the
+    /// part. A pointer that stepped per byte would walk the whole map thirty-two
+    /// times in that one transaction — over `ACC_CONF`, over `PWR_CTRL`, and
+    /// over `CMD` (0x7E), where one byte in every 256 of a firmware image is
+    /// `0xB6` and issues a SOFT RESET. The upload would reset the part it is
+    /// trying to initialise, repeatedly, and the handshake it exists to satisfy
+    /// could never complete.
+    ///
+    /// It holds the pointer in BOTH directions, because that is what a port is:
+    /// a part's FIFO data register (the BMI270's own `FIFO_DATA`, 0x24) is read
+    /// the same way it is written.
+    #[serde(default)]
+    pub stream: bool,
     /// **Civil-calendar decomposition** of the register's `source:` channel,
     /// which must carry Unix seconds (UTC). Present ⇒ a read reports THIS field
     /// of that instant rather than the instant itself, and a write to the

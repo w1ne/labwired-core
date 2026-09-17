@@ -1038,6 +1038,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         }
@@ -1081,6 +1082,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         };
@@ -1301,6 +1303,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         };
@@ -1357,6 +1360,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         };

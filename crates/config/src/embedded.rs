@@ -214,6 +214,34 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["neo6m-gps"],
         include_str!("../../../configs/devices/neo6m-gps.yaml"),
     ),
+    (
+        &["lora-sx1278"],
+        include_str!("../../../configs/devices/lora_sx1278.yaml"),
+    ),
+    (
+        &["rc522"],
+        include_str!("../../../configs/devices/rc522.yaml"),
+    ),
+    (
+        &["nrf24l01"],
+        include_str!("../../../configs/devices/nrf24l01.yaml"),
+    ),
+    (
+        &["scd41"],
+        include_str!("../../../configs/devices/scd41.yaml"),
+    ),
+    (
+        &["sgp41"],
+        include_str!("../../../configs/devices/sgp41.yaml"),
+    ),
+    (
+        &["bmi270"],
+        include_str!("../../../configs/devices/bmi270.yaml"),
+    ),
+    (
+        &["cap1188"],
+        include_str!("../../../configs/devices/cap1188.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.

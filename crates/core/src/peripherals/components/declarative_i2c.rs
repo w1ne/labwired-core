@@ -876,6 +876,12 @@ impl GenericI2cDevice {
     /// actually has: a 1-byte pointer rolls 0xFF → 0x00 exactly as it did when
     /// the pointer was a `u8`, and a 2-byte pointer rolls at 0xFFFF.
     fn next_pointer(&self, ptr: u16) -> u16 {
+        // A STREAM PORT holds the pointer (see `RegisterSpec::stream`). Checked
+        // first and in this one place, so a read and a write cannot disagree
+        // about whether the cursor moved.
+        if self.find_register(ptr).is_some_and(|r| r.stream) {
+            return ptr;
+        }
         // Hybrid auto-increment: the pointer JUMPS rather than steps. Checked
         // before the step, and only here — an explicit pointer write never
         // passes through this function, which is what "only the auto-increment
@@ -2362,7 +2368,7 @@ impl DeclarativeI2cKit {
 
 /// Map a descriptor's `config_keys[].ty` string onto a [`ConfigType`].
 /// Unknown spellings fall back to `Str` (the most permissive display type).
-fn config_type_from_str(ty: &str) -> ConfigType {
+pub(super) fn config_type_from_str(ty: &str) -> ConfigType {
     match ty {
         "int" => ConfigType::Int,
         "float" => ConfigType::Float,
@@ -2725,6 +2731,38 @@ pub static AS5600_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
 /// command device with Sensirion CRC-8 framing). Migrated from a hand-written
 /// model that answered EVERY opcode with a measurement frame; see
 /// `tests/sht30_migration_parity.rs`.
+/// Microchip CAP1188 capacitive touch controller (declarative `cap1188.yaml`).
+pub static CAP1188_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("cap1188").expect("cap1188 descriptor is embedded"),
+    )
+    .expect("cap1188.yaml is a valid declarative i2c descriptor")
+});
+
+/// Bosch BMI270 6-axis IMU (declarative `bmi270.yaml`).
+pub static BMI270_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("bmi270").expect("bmi270 descriptor is embedded"),
+    )
+    .expect("bmi270.yaml is a valid declarative i2c descriptor")
+});
+
+/// Sensirion SCD41 CO₂ sensor (declarative `scd41.yaml`).
+pub static SCD41_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("scd41").expect("scd41 descriptor is embedded"),
+    )
+    .expect("scd41.yaml is a valid declarative i2c descriptor")
+});
+
+/// Sensirion SGP41 VOC/NOx sensor (declarative `sgp41.yaml`).
+pub static SGP41_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("sgp41").expect("sgp41 descriptor is embedded"),
+    )
+    .expect("sgp41.yaml is a valid declarative i2c descriptor")
+});
+
 pub static SHT30_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
     DeclarativeI2cKit::from_yaml(
         labwired_config::embedded_device_yaml("sht30").expect("sht30 descriptor is embedded"),
@@ -3967,6 +4005,76 @@ behavior:
         let yaml = "type: t\nbehavior:\n  primitive: i2c_device\n  i2c:\n    default_address: 0x41\n    pointer_width: 3\n    registers:\n      - { name: A, addr: 0x00, width: 1, endian: be, access: r, reset: 0x01 }\n";
         let err = err_of(GenericI2cDevice::from_yaml(yaml, 0), "pointer_width 3");
         assert!(err.contains("pointer_width 3 unsupported"), "got: {err}");
+    }
+
+    /// `stream: true` — a port the auto-increment pointer does not walk past,
+    /// in BOTH directions. Proved on a minimal fixture as well as on
+    /// `bmi270.yaml`, because a load rule only one shipped file exercises is a
+    /// rule nobody has checked.
+    #[test]
+    fn a_stream_port_holds_the_auto_increment_pointer() {
+        let yaml = r#"
+type: t
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x41
+    auto_increment: true
+    registers:
+      - { name: PORT, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00, stream: true }
+      - { name: NEXT, addr: 0x01, width: 1, endian: be, access: rw, reset: 0xEE }
+"#;
+        let mut d = GenericI2cDevice::from_yaml(yaml, 0).unwrap();
+        // Four bytes into the port: NEXT must be untouched, not overwritten by
+        // the walk a stepping pointer would take.
+        d.start();
+        d.write(0x00);
+        for b in [0x11u8, 0x22, 0x33, 0x44] {
+            d.write(b);
+        }
+        d.stop();
+        d.start();
+        d.write(0x01);
+        d.start();
+        assert_eq!(d.read(), 0xEE, "the burst must not have walked into NEXT");
+        d.stop();
+        // And a READ of the port serves its own byte for as long as the master
+        // clocks: the last write landed, and the cursor never moved.
+        d.start();
+        d.write(0x00);
+        d.start();
+        assert_eq!(
+            [d.read(), d.read(), d.read()],
+            [0x44, 0x44, 0x44],
+            "a port is read the same way it is written"
+        );
+    }
+
+    /// Without the key the SAME burst walks the map — the failure mode the
+    /// BMI270's config upload hits, reduced to two registers.
+    #[test]
+    fn without_stream_the_same_burst_walks_into_the_next_register() {
+        let yaml = r#"
+type: t
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x41
+    auto_increment: true
+    registers:
+      - { name: PORT, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: NEXT, addr: 0x01, width: 1, endian: be, access: rw, reset: 0xEE }
+"#;
+        let mut d = GenericI2cDevice::from_yaml(yaml, 0).unwrap();
+        d.start();
+        d.write(0x00);
+        d.write(0x11);
+        d.write(0x22);
+        d.stop();
+        d.start();
+        d.write(0x01);
+        d.start();
+        assert_eq!(d.read(), 0x22, "the second byte landed on NEXT");
     }
 
     #[test]

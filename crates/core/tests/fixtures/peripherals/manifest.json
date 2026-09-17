@@ -2450,7 +2450,7 @@
       "device_type": "bmi270",
       "label": "BMI270 IMU",
       "summary": "Bosch BMI270 low-power IMU with hardware step counter over I2C.",
-      "detail": "Wearable IMU used on the smart-ring reference system. Stimulus channels              drive accel/gyro samples; feature-engine step counter is modelled.",
+      "detail": "Wearable IMU used on the smart-ring reference system. Stimulus channels drive accel/gyro samples; feature-engine step counter is modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -2571,7 +2571,7 @@
       "device_type": "cap1188",
       "label": "CAP1188 Touch",
       "summary": "Microchip CAP1188 8-channel capacitive touch controller over I2C.",
-      "detail": "Multi-channel touch sensor. Prefer a single GPIO touch for ring-class              products; this kit remains for boards that wire the CAP1188.",
+      "detail": "Multi-channel touch sensor. Prefer a single GPIO touch for ring-class products; this kit remains for boards that wire the CAP1188.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
