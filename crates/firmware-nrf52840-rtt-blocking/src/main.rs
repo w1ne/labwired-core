@@ -1,6 +1,6 @@
 // LabWired - Firmware Simulation Platform
 // SEGGER RTT blocking-mode fixture: same stock vendor library, but with a
-// 16-byte up-buffer and BLOCK_IF_FIFO_FULL. The 24-byte banner is longer than
+// 16-byte up-buffer and BLOCK_IF_FIFO_FULL. The 25-byte line is longer than
 // the 15 usable bytes, so the firmware blocks until the model drains.
 #![no_std]
 #![no_main]

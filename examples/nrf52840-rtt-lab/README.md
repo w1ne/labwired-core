@@ -30,6 +30,14 @@ cargo run -q -p labwired-cli -- test \
 
 Expected: exit 0, `out/nrf52840-rtt-lab/rtt-smoke/rtt.log` contains the banner.
 
+## Zephyr note
+
+Zephyr's RTT log backend (`CONFIG_LOG_BACKEND_RTT`) defaults to a 1 KiB up-buffer.
+The model's poll cadence is bounded in simulated CPU cycles (64 by default), not in
+bus ticks, so it keeps draining that buffer even when a long Cortex-M JIT window
+spans thousands of instructions; a Zephyr image that logs faster than the probe
+drains will block in `BLOCK_IF_FIFO_FULL` mode exactly as it would on hardware.
+
 ## Files
 
 1. `system.yaml` - bare nRF52840 twin.

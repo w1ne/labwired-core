@@ -230,9 +230,9 @@ impl SeggerRtt {
             if size < 2 || p_buffer == 0 {
                 continue;
             }
-            // SEGGER reserves the upper Flags byte for block-skip mode;
-            // nonzero means this is not a stock channel and draining it would
-            // be wrong.
+            // SEGGER requires the upper Flags byte (Flags[31:24]) to be zero
+            // on stock channels as a validity check; nonzero means this is not
+            // a stock channel and draining it would be wrong.
             if flags >> 24 != 0 {
                 continue;
             }
