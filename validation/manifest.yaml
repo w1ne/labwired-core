@@ -1470,7 +1470,7 @@ boards:
     # watched. The digest moves because it hashes whole files. This is an
     # ACK, NOT A CAPTURE.
     drift_ack: 2026-09-17
-    drift_ack_digest: 3efeb99a0c5473d737516b35ed09cdbdf6890db52940b35cca318b9709298622
+    drift_ack_digest: 67ea82f07016f0514b67e74835a60a178adbe214b2853dbcbe9058e77d299326
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/cpu/riscv
