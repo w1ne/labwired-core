@@ -13,6 +13,7 @@ use crate::{Bus, SimResult};
 
 impl Avr {
     /// RET, RETI.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_a(
         &mut self,
         bus: &mut dyn Bus,
@@ -35,6 +36,7 @@ impl Avr {
     }
 
     /// RJMP, RCALL.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_b(
         &mut self,
         bus: &mut dyn Bus,
@@ -75,6 +77,7 @@ impl Avr {
     }
 
     /// ICALL: 1001 0101 0000 1001 — call to Z (word address).
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_c(
         &mut self,
         bus: &mut dyn Bus,
@@ -94,6 +97,7 @@ impl Avr {
     }
 
     /// BRcc.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_d(
         &mut self,
         _bus: &mut dyn Bus,
@@ -122,6 +126,7 @@ impl Avr {
     }
 
     /// IJMP.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_e(
         &mut self,
         _bus: &mut dyn Bus,
@@ -139,6 +144,7 @@ impl Avr {
     }
 
     /// JMP, CALL.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_f(
         &mut self,
         bus: &mut dyn Bus,
@@ -171,6 +177,7 @@ impl Avr {
     }
 
     /// SBIS, SBIC, SBRS, SBRC, CPSE.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_branch_g(
         &mut self,
         bus: &mut dyn Bus,

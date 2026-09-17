@@ -13,6 +13,7 @@ use crate::{Bus, SimResult, SimulationError};
 
 impl Avr {
     /// NOP, SEI, CLI.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_system_a(
         &mut self,
         _bus: &mut dyn Bus,
@@ -41,6 +42,7 @@ impl Avr {
     }
 
     /// SLEEP, BREAK.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_system_b(
         &mut self,
         _bus: &mut dyn Bus,
@@ -60,6 +62,7 @@ impl Avr {
     }
 
     /// OUT, IN.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_system_c(
         &mut self,
         bus: &mut dyn Bus,

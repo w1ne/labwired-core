@@ -20,6 +20,7 @@ use crate::{Bus, SimResult};
 
 impl Avr {
     /// LDI.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_a(
         &mut self,
         _bus: &mut dyn Bus,
@@ -39,6 +40,7 @@ impl Avr {
     }
 
     /// LDS, STS.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_b(
         &mut self,
         bus: &mut dyn Bus,
@@ -73,6 +75,7 @@ impl Avr {
     }
 
     /// MOV.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_c(
         &mut self,
         _bus: &mut dyn Bus,
@@ -92,6 +95,7 @@ impl Avr {
     }
 
     /// PUSH, POP.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_d(
         &mut self,
         bus: &mut dyn Bus,
@@ -120,6 +124,7 @@ impl Avr {
     }
 
     /// MOVW.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_e(
         &mut self,
         _bus: &mut dyn Bus,
@@ -140,6 +145,7 @@ impl Avr {
     }
 
     /// LPM (bare, Rd,Z and Rd,Z+), LD/ST via X with pre/post inc/dec.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_f(
         &mut self,
         bus: &mut dyn Bus,
@@ -257,6 +263,7 @@ impl Avr {
     /// (mask `0xD000 == 0x8000`) already intercepts every opcode they target
     /// when q=0, since that is a strictly broader mask. Reproduced exactly,
     /// not fixed.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_load_store_g(
         &mut self,
         bus: &mut dyn Bus,

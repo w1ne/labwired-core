@@ -13,6 +13,7 @@ use crate::{Bus, SimResult};
 
 impl Avr {
     /// SBI, CBI.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_bitops_a(
         &mut self,
         bus: &mut dyn Bus,
@@ -46,6 +47,7 @@ impl Avr {
     }
 
     /// SWAP, ASR, LSR, ROR.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_bitops_b(
         &mut self,
         op: u16,

@@ -14,6 +14,7 @@ use crate::SimResult;
 impl Avr {
     /// ADD, ADC, EOR, AND, OR, CP, SUB.
     #[allow(clippy::too_many_lines)]
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_arith_a(
         &mut self,
         op: u16,
@@ -142,6 +143,7 @@ impl Avr {
     }
 
     /// NEG Rd: 1001 010d dddd 0001.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_arith_b(
         &mut self,
         op: u16,
@@ -171,6 +173,7 @@ impl Avr {
     }
 
     /// CPI.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_arith_c(
         &mut self,
         op: u16,
@@ -195,6 +198,7 @@ impl Avr {
     }
 
     /// ADIW, SBIW.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_arith_d(
         &mut self,
         op: u16,
@@ -251,6 +255,7 @@ impl Avr {
 
     /// INC, DEC, ANDI, ORI, SUBI, SBCI, CPC, SBC, COM.
     #[allow(clippy::too_many_lines)]
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_arith_e(
         &mut self,
         op: u16,

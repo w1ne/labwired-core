@@ -13,6 +13,7 @@ use crate::SimResult;
 
 impl Avr {
     /// MUL, MULS, MULSU.
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_mul_a(&mut self, op: u16, next: u32) -> SimResult<Option<()>> {
         // MUL Rd,Rr: 1001 11rd dddd rrrr → R1:R0 = Rd * Rr (unsigned)
         if (op & 0xFC00) == 0x9C00 {
@@ -61,6 +62,7 @@ impl Avr {
     }
 
     /// FMUL Rd,Rr: 0000 0011 0ddd 1rrr (Rd,Rr in 16..23).
+    #[inline(always)]
     pub(in crate::cpu::avr) fn exec_mul_b(&mut self, op: u16, next: u32) -> SimResult<Option<()>> {
         if (op & 0xFF88) == 0x0308 {
             let rd = 16 + ((op >> 4) & 0x07) as usize;

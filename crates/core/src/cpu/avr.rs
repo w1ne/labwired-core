@@ -887,6 +887,9 @@ impl Avr {
         let op = self.fetch_word(pc)?;
         let next = pc.wrapping_add(2);
 
+        // Every exec_* function is #[inline(always)] and has exactly this one
+        // call site, so this dispatch chain compiles down to the same
+        // machine code as the pre-split single-function decoder.
         if self.exec_system_a(bus, op, pc, next)?.is_some() {
             return Ok(());
         }
