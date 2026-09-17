@@ -93,6 +93,22 @@ pub const WIRE_CHAIN_DYNAMIC: i32 = 1;
 /// `match` in [`CompiledBlock::run`](super::exec::CompiledBlock).
 pub const WIRE_MEM_FAULT: i32 = 2;
 
+/// Wire code for a **trace interior side-exit** (superblock fusion, JIT
+/// superblock v2 chunk): a conditional branch fused *inside* a multi-block
+/// trace took its branch, diverging off the fused fall-through path. The
+/// block has already resolved the taken target at compile time (it is a
+/// static branch immediate) and written it to [`FAULT_PC_SLOT`], plus the
+/// EXACT number of guest instructions retired up to and including the
+/// branch itself to [`FAULT_RETIRED_SLOT`] — the same two slots the
+/// memory-fault path (chunk E) uses, reused here because only one exit
+/// fires per run. The runtime maps this to
+/// [`SideExit::Chain`](super::super::side_exit::SideExit::Chain) at that
+/// resolved PC (not a fault — the target is statically known-good code),
+/// with the retired count taken from the slot rather than the trace's full
+/// `instr_count` (which is only the worst-case bound used for the
+/// deadline/budget pre-check).
+pub const WIRE_TRACE_EXIT: i32 = 3;
+
 /// Number of `i32` locals mapped to guest registers `x0..x31` (local index ==
 /// register number).
 const REG_LOCALS: u32 = 32;
@@ -130,6 +146,22 @@ pub const RAM_WINDOW_OFF: u32 = 256;
 
 /// The guest-RAM window a load/store block binds against: `(base, len)` bytes.
 pub type RamWindow = (u32, u32);
+
+/// Superblock trace fusion budget (JIT superblock v2, RISC-V only): a trace
+/// may span at most this many fused basic blocks (entry block plus follow-on
+/// blocks reached via a direct terminator or a fused conditional
+/// fall-through).
+pub const MAX_TRACE_BLOCKS: u32 = 8;
+
+/// Superblock trace fusion budget: a trace may retire at most this many
+/// guest instructions in total (summed across every fused block plus every
+/// fused terminator), matching the design note's 64/8 budget. This is also
+/// the worst-case bound the [`EmittedBlock::instr_count`] the runtime feeds
+/// into the deadline/IRQ-crossing pre-check (see `block_would_cross_irq` in
+/// `crate::cpu::riscv`) — reporting the FULL trace total there, not just the
+/// first block's count, is the correctness invariant chunk (STEP 2) rests
+/// on.
+pub const MAX_TRACE_INSTRS: u32 = 64;
 
 /// Memory-binding metadata for a compiled block that touches RAM. Absent for
 /// pure-ALU blocks (which import a register-only single-page memory and never
@@ -291,43 +323,165 @@ pub struct EmittedBlock {
 /// nor an emittable terminator (the caller keeps that PC on the interpreter —
 /// never an error).
 pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Option<EmittedBlock> {
-    let ops = walk_ops(pc, code, window.is_some());
-    let prefix_end = pc + ops.iter().map(|o| inst_len_of(o.pc, code)).sum::<u64>();
+    emit_block_with_fusion(pc, code, window, trace_fusion_enabled())
+}
 
-    // The instruction immediately after the body prefix; the block ends at it
-    // and includes it when it is an emittable control-flow terminator.
-    let terminator = decode_at(prefix_end, code).filter(|(inst, _)| is_terminator_emittable(inst));
+/// Whether RISC-V superblock trace fusion (JIT superblock v2) is enabled.
+/// Independent of the Cortex-M frontend (out of scope for this pass; its
+/// emit path never calls this). Read once via [`std::sync::OnceLock`] so a
+/// hot loop does not re-parse the environment per block.
+///
+/// Gated behind `LABWIRED_RISCV_JIT_TRACE=1` (any of `1`/`true`/`on`, case
+/// sensitive to the literal `1` plus a small alias set — anything else,
+/// including unset, is off). Off is byte-identical to the pre-fusion
+/// single-block emit: [`emit_block_with_fusion`] with `fuse=false` never
+/// takes the continuation branches, producing exactly the same wasm every
+/// prior single-block test in this module already pins.
+pub fn trace_fusion_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        matches!(
+            std::env::var("LABWIRED_RISCV_JIT_TRACE").as_deref(),
+            Ok("1") | Ok("true") | Ok("on")
+        )
+    })
+}
 
-    if ops.is_empty() && terminator.is_none() {
-        return None;
-    }
+/// [`emit_block`] with the trace-fusion toggle threaded explicitly (tests use
+/// this directly to exercise fusion deterministically regardless of the
+/// process environment).
+pub fn emit_block_with_fusion(
+    pc: Pc,
+    code: &CodeView<'_>,
+    window: Option<RamWindow>,
+    fuse: bool,
+) -> Option<EmittedBlock> {
+    let max_trace_blocks = if fuse { MAX_TRACE_BLOCKS } else { 1 };
+    let max_trace_instrs = if fuse { MAX_TRACE_INSTRS } else { u32::MAX };
 
-    // Emit the body ops (ALU + in-window load/store) into a scratch buffer,
-    // recording read/write sets and memory-binding facts.
     let mut body = Body {
         window,
         ..Body::default()
     };
-    for aop in &ops {
-        body.emit_instruction(aop.pc, &aop.inst);
-    }
+    // Entry PCs of every block fused into this trace so far, guarding against
+    // re-fusing a cycle (a direct jump back into the trace) unboundedly —
+    // the block-count/instr-count budgets already bound it, but a cycle
+    // check keeps a self-loop from being fused pointlessly instead of
+    // chaining at the dispatcher like today.
+    let mut visited: Vec<Pc> = Vec::new();
+    let mut cur = pc;
+    let mut total_instrs: u32 = 0;
+    let mut block_count: u32 = 0;
+    // Number of open `if (result i32) … else …` blocks (superblock fusion
+    // through a conditional branch) that must each be closed with one `end`
+    // once the trace's final tail (epilogue + clean-exit wire) is emitted.
+    let mut pending_ends: u32 = 0;
 
-    // Choose the terminating shape: dynamic chain (branch/jump) or the plain
-    // fall-through wire. Both carry `PartialBlock` — telemetry only; the
-    // runtime's resolved `Chain` is the correctness contract.
-    let (end_pc, instr_count, wire) = if let Some((tinst, tlen)) = terminator {
-        body.emit_terminator(prefix_end as u32, tlen as u32, &tinst);
-        (prefix_end + tlen, ops.len() as u32 + 1, WIRE_CHAIN_DYNAMIC)
-    } else {
-        (prefix_end, ops.len() as u32, WIRE_FALL_THROUGH)
+    let (end_pc, instr_count, wire) = loop {
+        visited.push(cur);
+        block_count += 1;
+
+        let remaining_budget = max_trace_instrs.saturating_sub(total_instrs);
+        let ops = walk_ops(cur, code, window.is_some(), remaining_budget);
+        let prefix_end = cur + ops.iter().map(|o| inst_len_of(o.pc, code)).sum::<u64>();
+        for aop in &ops {
+            body.emit_instruction(aop.pc, &aop.inst);
+        }
+        total_instrs += ops.len() as u32;
+
+        // The instruction immediately after this block's body prefix; a
+        // fusable/terminating block ends at it and includes it.
+        let terminator =
+            decode_at(prefix_end, code).filter(|(inst, _)| is_terminator_emittable(inst));
+
+        if ops.is_empty() && terminator.is_none() {
+            if block_count == 1 {
+                return None;
+            }
+            // Ran off the end of translatable code mid-trace: finalize on
+            // the plain fall-through wire, exactly like a single all-bail
+            // block would.
+            break (prefix_end, total_instrs, WIRE_FALL_THROUGH);
+        }
+
+        let Some((tinst, tlen)) = terminator else {
+            break (prefix_end, total_instrs, WIRE_FALL_THROUGH);
+        };
+        let tlen = tlen as u32;
+        let tpc = prefix_end as u32;
+
+        let can_grow_trace = total_instrs < max_trace_instrs && block_count < max_trace_blocks;
+
+        // ── Direct, unconditional terminator: fuse straight through ────
+        // (unconditional jump, or a direct call whose target lands inside
+        // this same code view) — no runtime resolution needed at all, the
+        // target is a compile-time constant, so the trace simply keeps
+        // walking from it in the SAME wasm function.
+        if let Some(target) = direct_uncond_target(&tinst, tpc, tlen) {
+            let target_pc = target as Pc;
+            if can_grow_trace && code.covers(target_pc) && !visited.contains(&target_pc) {
+                body.emit_direct_jump_link(tpc, tlen, &tinst);
+                total_instrs += 1;
+                cur = target_pc;
+                continue;
+            }
+            // Budget exhausted / target outside the view / cycle: end the
+            // trace here exactly as a single unfused block would — resolve
+            // dynamically (the runtime's existing WIRE_CHAIN_DYNAMIC path).
+            body.emit_terminator(tpc, tlen, &tinst);
+            total_instrs += 1;
+            break (tpc as u64 + tlen as u64, total_instrs, WIRE_CHAIN_DYNAMIC);
+        }
+
+        // ── Conditional branch: side-exit the taken side, fuse the
+        // fall-through ─────────────────────────────────────────────────
+        if let Some(taken_target) = cond_branch_taken_target(&tinst, tpc, tlen) {
+            let fallthrough = tpc as u64 + tlen as u64;
+            if can_grow_trace && code.covers(fallthrough) && !visited.contains(&fallthrough) {
+                let writes_before = body.writes;
+                let retired_at_taken = total_instrs + 1;
+                body.emit_cond_fuse(&tinst, taken_target, retired_at_taken, &writes_before);
+                total_instrs += 1;
+                pending_ends += 1;
+                cur = fallthrough;
+                continue;
+            }
+            // Same fallback as above: resolve both arms dynamically, exactly
+            // like today's single-block behaviour.
+            body.emit_terminator(tpc, tlen, &tinst);
+            total_instrs += 1;
+            break (fallthrough, total_instrs, WIRE_CHAIN_DYNAMIC);
+        }
+
+        // ── Every other terminator (indirect jump/call, and anything else
+        // this frontend recognizes as control flow) ends the trace exactly
+        // as a single block would today — no behaviour change.
+        body.emit_terminator(tpc, tlen, &tinst);
+        total_instrs += 1;
+        break (
+            tpc as u64 + tlen as u64,
+            total_instrs,
+            WIRE_CHAIN_DYNAMIC,
+        );
     };
+
+    // The epilogue (register writeback) and the clean-exit wire value must
+    // land INSIDE every still-open conditional-fusion `if`'s `else` arm —
+    // they are the trace's true final tail, reached only along the
+    // not-taken path of every fused branch. Append them to `body.buf`
+    // itself, THEN close each open `if`, innermost first (they nest in
+    // exactly the order they were opened, since each one's "else" arm was
+    // left open and every subsequent byte was appended directly inside it).
+    body.emit_epilogue_into_buf(); // stores written regs back to mem
+    body.buf.push(op::I32_CONST); // the block's clean-exit return value
+    enc::sleb(&mut body.buf, wire as i64);
+    for _ in 0..pending_ends {
+        body.buf.push(op::END);
+    }
 
     let mut expr = Vec::with_capacity(body.buf.len() + 16 * REG_LOCALS as usize);
     body.emit_prologue(&mut expr); // loads touched regs into locals
-    expr.extend_from_slice(&body.buf); // body + terminator, on locals + inline RAM/slots
-    body.emit_epilogue(&mut expr); // stores written regs back to mem
-    expr.push(op::I32_CONST); // the block's clean-exit return value
-    enc::sleb(&mut expr, wire as i64);
+    expr.extend_from_slice(&body.buf); // body + terminator(s) + epilogue + wire
 
     let local_count = if body.scratch_used {
         REG_LOCALS + 1
@@ -370,6 +524,12 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
             reason: BailReason::MemoryFault,
         });
     }
+    if pending_ends > 0 {
+        exits.push(ExitEdge {
+            wire_code: WIRE_TRACE_EXIT,
+            reason: BailReason::PartialBlock,
+        });
+    }
 
     Some(EmittedBlock {
         code: code_bytes,
@@ -378,6 +538,43 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
         exits,
         binding,
     })
+}
+
+/// If `inst` is a **direct, unconditional** terminator (an unconditional
+/// jump, or — equally — a direct call: `Jal`/`C.J` cover both since a call
+/// is just a `Jal` with `rd != x0`), return its statically-known target
+/// address. Indirect terminators (`Jalr`, `C.JR`, `C.JALR`) return `None` —
+/// their target is data-dependent and must end the trace exactly as today.
+fn direct_uncond_target(inst: &Instruction, pc: u32, ilen: u32) -> Option<u32> {
+    use Instruction::*;
+    match *inst {
+        Jal { imm, .. } => Some(pc.wrapping_add(imm as u32)),
+        CJ { imm } => Some(pc.wrapping_add(imm as u32)),
+        _ => {
+            let _ = ilen;
+            None
+        }
+    }
+}
+
+/// If `inst` is a conditional branch this frontend fuses through, return its
+/// statically-known taken-target address (the not-taken side is always
+/// `pc + ilen`, the ordinary fall-through the caller continues fusing on).
+fn cond_branch_taken_target(inst: &Instruction, pc: u32, ilen: u32) -> Option<u32> {
+    use Instruction::*;
+    match *inst {
+        Beq { imm, .. }
+        | Bne { imm, .. }
+        | Blt { imm, .. }
+        | Bge { imm, .. }
+        | Bltu { imm, .. }
+        | Bgeu { imm, .. } => Some(pc.wrapping_add(imm as u32)),
+        CBeqz { imm, .. } | CBnez { imm, .. } => Some(pc.wrapping_add(imm as u32)),
+        _ => {
+            let _ = ilen;
+            None
+        }
+    }
 }
 
 /// Decode the instruction at `pc` in `code`, returning it with its byte
@@ -402,10 +599,13 @@ fn decode_at(pc: Pc, code: &CodeView<'_>) -> Option<(Instruction, u64)> {
 }
 
 /// Walk the maximal run of emittable body instructions (ALU + in-window
-/// load/store) from `pc`.
-fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
+/// load/store) from `pc`, capped at `max_ops` instructions (the per-block
+/// [`super::MAX_BLOCK_INSTRS`] cap, further narrowed by the caller to
+/// whatever trace-fusion budget remains — see [`MAX_TRACE_INSTRS`]).
+fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool, max_ops: u32) -> Vec<Op> {
     let mut ops = Vec::new();
     let mut cur = pc;
+    let cap = max_ops.min(super::MAX_BLOCK_INSTRS);
     while let Some(bytes) = code.from(cur) {
         if bytes.len() < 2 {
             break;
@@ -429,7 +629,7 @@ fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
             inst,
         });
         cur += len;
-        if ops.len() as u32 >= super::MAX_BLOCK_INSTRS {
+        if ops.len() as u32 >= cap {
             break;
         }
     }
@@ -1045,6 +1245,131 @@ impl Body {
         }
     }
 
+    /// Emit only the **side effect** (link-register write) of a direct
+    /// unconditional terminator that the trace walker decided to fuse
+    /// through — the target itself needs no runtime resolution (it is a
+    /// compile-time constant the walker already used to pick the next
+    /// block), so unlike [`Body::emit_terminator`] this never touches
+    /// [`NEXT_PC_SLOT`] or returns a wire code; execution simply falls into
+    /// the fused target block's own emitted code next in `self.buf`.
+    fn emit_direct_jump_link(&mut self, pc: u32, ilen: u32, inst: &Instruction) {
+        use Instruction::*;
+        match *inst {
+            // `Jal { rd: 0, .. }` (and its 2-byte `C.J` compressed form,
+            // which the decoder maps straight to `CJ`) links nothing.
+            Jal { rd, .. } => self.write_link(rd, pc.wrapping_add(ilen)),
+            CJ { .. } => {}
+            other => unreachable!("non-direct-unconditional reached emit_direct_jump_link: {other:?}"),
+        }
+    }
+
+    /// `write(rd) <- pc_after` — the link-register side effect of `JAL`.
+    fn write_link(&mut self, rd: u8, pc_after: u32) {
+        if rd != 0 {
+            self.i32_const(pc_after as i32);
+            self.write(rd);
+        }
+    }
+
+    /// Emit a conditional branch **fused into a superblock trace**: the
+    /// taken side becomes an interior side-exit ([`Body::emit_trace_exit`]);
+    /// the not-taken side is left open (`else`, unclosed) so the caller
+    /// appends the fall-through continuation directly after this call and
+    /// closes the `if` once, at the very end of the trace, with the rest of
+    /// its still-open siblings (see [`emit_block`]).
+    fn emit_cond_fuse(
+        &mut self,
+        inst: &Instruction,
+        taken_target: u32,
+        retired_at_taken: u32,
+        writes_before: &[bool; 32],
+    ) {
+        use Instruction::*;
+        match *inst {
+            Beq { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_EQ, taken_target, retired_at_taken, writes_before),
+            Bne { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_NE, taken_target, retired_at_taken, writes_before),
+            Blt { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_LT_S, taken_target, retired_at_taken, writes_before),
+            Bge { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_GE_S, taken_target, retired_at_taken, writes_before),
+            Bltu { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_LT_U, taken_target, retired_at_taken, writes_before),
+            Bgeu { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_GE_U, taken_target, retired_at_taken, writes_before),
+            CBeqz { rs1, .. } => self.cond_fuse_zero(rs1, true, taken_target, retired_at_taken, writes_before),
+            CBnez { rs1, .. } => self.cond_fuse_zero(rs1, false, taken_target, retired_at_taken, writes_before),
+            other => unreachable!("non-fusable-conditional reached emit_cond_fuse: {other:?}"),
+        }
+    }
+
+    /// `if (result i32) cmp(rs1,rs2) { <taken side-exit> } else { <left
+    /// open> }`. `T_I32` (not the memory path's `T_EMPTY`) because the
+    /// not-taken arm is NOT diverging: it flows into more fused code and
+    /// ultimately the trace's clean-exit wire value, so this `if` must
+    /// produce the function's i32 return value. The taken arm ends in
+    /// `return`, which the wasm validator treats as unreachable/polymorphic
+    /// regardless of the declared result type.
+    fn cond_fuse(
+        &mut self,
+        rs1: u8,
+        rs2: u8,
+        cmp: u8,
+        taken_target: u32,
+        retired_at_taken: u32,
+        writes_before: &[bool; 32],
+    ) {
+        self.read(rs1);
+        self.read(rs2);
+        self.buf.push(cmp);
+        self.buf.push(op::IF);
+        self.buf.push(op::T_I32);
+        self.emit_trace_exit(taken_target, retired_at_taken, writes_before);
+        self.buf.push(op::ELSE);
+        // left open — caller appends the fall-through continuation here.
+    }
+
+    /// Same as [`Body::cond_fuse`] for the compressed compare-with-zero
+    /// branches (`C.BEQZ`/`C.BNEZ`).
+    fn cond_fuse_zero(
+        &mut self,
+        rs1: u8,
+        want_zero: bool,
+        taken_target: u32,
+        retired_at_taken: u32,
+        writes_before: &[bool; 32],
+    ) {
+        self.read(rs1);
+        if want_zero {
+            self.buf.push(op::I32_EQZ);
+        }
+        self.buf.push(op::IF);
+        self.buf.push(op::T_I32);
+        self.emit_trace_exit(taken_target, retired_at_taken, writes_before);
+        self.buf.push(op::ELSE);
+        // left open — caller appends the fall-through continuation here.
+    }
+
+    /// Emit a trace-interior side-exit: flush the registers written
+    /// strictly BEFORE this point (the `writes_before` snapshot — mirrors
+    /// [`Body::emit_fault`]'s technique exactly), publish the resolved
+    /// target PC and the EXACT retired-instruction count to the shared
+    /// [`FAULT_PC_SLOT`]/[`FAULT_RETIRED_SLOT`] slots, and return
+    /// [`WIRE_TRACE_EXIT`]. This is the correctness core of STEP 2: the
+    /// retired count is the caller-computed exact value (every prior fused
+    /// instruction plus the branch itself), never an estimate.
+    fn emit_trace_exit(&mut self, target_pc: u32, retired: u32, writes_before: &[bool; 32]) {
+        for r in 1..32u8 {
+            if writes_before[r as usize] {
+                self.i32_const((r as i32) * 4);
+                self.buf.push(op::LOCAL_GET);
+                enc::uleb(&mut self.buf, r as u64);
+                self.buf.push(op::I32_STORE);
+                enc::uleb(&mut self.buf, 2);
+                enc::uleb(&mut self.buf, 0);
+            }
+        }
+        self.store_const_at(FAULT_PC_SLOT, target_pc as i32);
+        self.store_const_at(FAULT_RETIRED_SLOT, retired as i32);
+        self.i32_const(WIRE_TRACE_EXIT);
+        self.buf.push(op::RETURN);
+    }
+
     /// Emit the prologue: `local.set r (i32.load (r*4))` for each read reg.
     fn emit_prologue(&self, out: &mut Vec<u8>) {
         for r in 1..32u8 {
@@ -1073,6 +1398,16 @@ impl Body {
                 enc::uleb(out, 0);
             }
         }
+    }
+
+    /// Same as [`Body::emit_epilogue`] but appends straight into `self.buf` —
+    /// used by the trace finalizer, which must land the epilogue inside
+    /// every still-open conditional-fusion `if`'s `else` arm before closing
+    /// it (see [`emit_block`]).
+    fn emit_epilogue_into_buf(&mut self) {
+        let mut tmp = Vec::new();
+        self.emit_epilogue(&mut tmp);
+        self.buf.extend_from_slice(&tmp);
     }
 }
 
@@ -1176,5 +1511,162 @@ mod tests {
         let blk = emit_block(BASE, &cv, Some((RAM_BASE, RAM_LEN))).unwrap();
         let engine = wasmtime::Engine::default();
         wasmtime::Module::new(&engine, &blk.code).expect("emitted mem module must validate");
+    }
+
+    // ── Superblock trace fusion (JIT superblock v2, STEP 1/2) ──────────────
+
+    fn enc_jal(rd: u32, imm: i32) -> u32 {
+        let u = imm as u32;
+        let imm20 = (u >> 20) & 1;
+        let imm10_1 = (u >> 1) & 0x3FF;
+        let imm11 = (u >> 11) & 1;
+        let imm19_12 = (u >> 12) & 0xFF;
+        (imm20 << 31)
+            | (imm10_1 << 21)
+            | (imm11 << 20)
+            | (imm19_12 << 12)
+            | (rd << 7)
+            | 0x6f
+    }
+
+    fn enc_beq(rs1: u32, rs2: u32, imm: i32) -> u32 {
+        let u = imm as u32;
+        let imm12 = (u >> 12) & 1;
+        let imm10_5 = (u >> 5) & 0x3F;
+        let imm4_1 = (u >> 1) & 0xF;
+        let imm11 = (u >> 11) & 1;
+        (imm12 << 31)
+            | (imm10_5 << 25)
+            | (rs2 << 20)
+            | (rs1 << 15)
+            | (imm4_1 << 8)
+            | (imm11 << 7)
+            | 0x63
+    }
+
+    #[test]
+    fn fusion_disabled_by_default_matches_pre_fusion_single_block() {
+        // Same program a fusion-eligible direct jump would otherwise merge;
+        // with `fuse=false` (the default — `emit_block` reads the env var,
+        // unset in test runs) the trace walker must never take the
+        // continuation branch, reproducing today's single-terminator block
+        // byte for byte.
+        let prog = view(&[enc_addi(1, 0, 1), enc_jal(0, 8), enc_addi(9, 0, 99)]);
+        let cv = CodeView::new(BASE, &prog);
+        let with_env_off = emit_block(BASE, &cv, None).unwrap();
+        let with_fuse_false = emit_block_with_fusion(BASE, &cv, None, false).unwrap();
+        assert_eq!(with_env_off.instr_count, with_fuse_false.instr_count);
+        assert_eq!(with_env_off.end_pc, with_fuse_false.end_pc);
+        assert_eq!(with_env_off.code, with_fuse_false.code);
+        // The un-fused shape: addi + jal terminator, dynamic chain, done.
+        assert_eq!(with_fuse_false.instr_count, 2);
+        assert_eq!(with_fuse_false.end_pc, BASE + 8);
+        assert_eq!(with_fuse_false.exits.len(), 1);
+        assert_eq!(with_fuse_false.exits[0].wire_code, WIRE_CHAIN_DYNAMIC);
+    }
+
+    #[test]
+    fn fusion_merges_direct_jump_target_into_one_trace() {
+        // addi x1,x0,1 ; jal x0,+8 (skips the dead addi at +8) ; [dead] ;
+        // addi x2,x0,2 ; ecall. With fusion on, the jal's target is a
+        // compile-time constant inside this same code view, so the walker
+        // keeps going: one compiled trace covers both ALU ops with NO
+        // runtime PC resolution at all (pure fall-through wire).
+        let prog = view(&[
+            enc_addi(1, 0, 1),  // +0
+            enc_jal(0, 8),      // +4  -> +12
+            enc_addi(9, 0, 99), // +8  (dead, skipped)
+            enc_addi(2, 0, 2),  // +12 (fused target)
+            enc_ecall(),        // +16 (ends the trace: unmodeled)
+        ]);
+        let cv = CodeView::new(BASE, &prog);
+        let blk = emit_block_with_fusion(BASE, &cv, None, true).unwrap();
+        assert_eq!(
+            blk.instr_count, 3,
+            "addi x1 + jal(link-only, no-op since rd=x0) + addi x2"
+        );
+        assert_eq!(blk.end_pc, BASE + 16, "ends right before the ecall");
+        assert_eq!(blk.exits.len(), 1, "pure fall-through, no interior exits");
+        assert_eq!(blk.exits[0].wire_code, WIRE_FALL_THROUGH);
+        assert!(blk.binding.is_none());
+    }
+
+    #[test]
+    fn fusion_refuses_direct_jump_target_outside_the_code_view() {
+        // Same shape, but the jal's target is past the end of the supplied
+        // CodeView — the walker must fall back to today's single-block
+        // dynamic-chain behaviour rather than reading (or worse, silently
+        // fusing) out-of-view bytes.
+        let prog = view(&[enc_addi(1, 0, 1), enc_jal(0, 400)]);
+        let cv = CodeView::new(BASE, &prog);
+        let blk = emit_block_with_fusion(BASE, &cv, None, true).unwrap();
+        assert_eq!(blk.instr_count, 2, "addi + jal terminator only");
+        assert_eq!(blk.end_pc, BASE + 8);
+        assert_eq!(blk.exits[0].wire_code, WIRE_CHAIN_DYNAMIC);
+    }
+
+    #[test]
+    fn fusion_taken_branch_becomes_interior_side_exit_not_taken_fuses_through() {
+        // addi x1,x0,5 ; beq x1,x0,+16 (not taken: x1==5) ; addi x2,x0,2 ;
+        // ecall ; [+16: addi x3,x0,3 ; ecall]. Fusion must: (a) fuse the
+        // fall-through (addi x2) into the same trace, (b) still report the
+        // FULL worst-case instr_count (3) to the caller's deadline
+        // pre-check regardless of which arm actually runs, and (c) carry a
+        // WIRE_TRACE_EXIT edge for the taken side.
+        let prog = view(&[
+            enc_addi(1, 0, 5), // +0
+            enc_beq(1, 0, 16), // +4  taken -> +20
+            enc_addi(2, 0, 2), // +8  fused fall-through
+            enc_ecall(),       // +12 ends the trace
+            enc_addi(3, 0, 3), // +16 (taken target, not part of the walk)
+            enc_ecall(),       // +20
+        ]);
+        let cv = CodeView::new(BASE, &prog);
+        let blk = emit_block_with_fusion(BASE, &cv, None, true).unwrap();
+        assert_eq!(
+            blk.instr_count, 3,
+            "worst-case total: addi x1 + beq + addi x2, reported in FULL \
+             regardless of the taken exit's actual retired count (STEP 2)"
+        );
+        assert_eq!(blk.end_pc, BASE + 12);
+        assert_eq!(blk.exits.len(), 2, "fall-through wire + trace-exit wire");
+        assert!(blk.exits.iter().any(|e| e.wire_code == WIRE_FALL_THROUGH));
+        assert!(blk.exits.iter().any(|e| e.wire_code == WIRE_TRACE_EXIT));
+
+        #[cfg(feature = "jit")]
+        {
+            let engine = wasmtime::Engine::default();
+            wasmtime::Module::new(&engine, &blk.code)
+                .expect("fused conditional-branch trace must validate in wasmtime");
+        }
+    }
+
+    #[test]
+    fn fusion_respects_block_and_instruction_budget() {
+        // A long chain of direct jumps, each one instruction, well past the
+        // 8-block / 64-instruction trace budget. The trace must stop
+        // fusing once either cap is hit and end normally (dynamic chain) —
+        // never silently grow unbounded.
+        const N: usize = 40;
+        let mut words = Vec::new();
+        for i in 0..N {
+            // Each slot: addi x1,x1,1 ; jal x0,+8 (to the next slot's addi).
+            words.push(enc_addi(1, 1, 1));
+            words.push(enc_jal(0, 8));
+        }
+        words.push(enc_ecall());
+        let prog = view(&words);
+        let cv = CodeView::new(BASE, &prog);
+        let blk = emit_block_with_fusion(BASE, &cv, None, true).unwrap();
+        assert!(
+            blk.instr_count <= MAX_TRACE_INSTRS,
+            "must never exceed the trace instruction budget: {}",
+            blk.instr_count
+        );
+        assert!(
+            blk.instr_count > 2,
+            "must have fused at least a few blocks: {}",
+            blk.instr_count
+        );
     }
 }

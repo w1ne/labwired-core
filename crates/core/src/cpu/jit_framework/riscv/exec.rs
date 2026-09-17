@@ -38,6 +38,15 @@
 //! handles). Chunks D/E add non-zero wire codes for taken branches and
 //! memory faults; the `match` in [`CompiledBlock::run`] is the single place
 //! they extend.
+//!
+//! JIT superblock v2 (RISC-V trace fusion, gated behind
+//! `LABWIRED_RISCV_JIT_TRACE`) adds
+//! [`WIRE_TRACE_EXIT`](super::emit::WIRE_TRACE_EXIT): a conditional branch
+//! fused *inside* a multi-block trace took its branch. It resolves the
+//! same way as [`WIRE_MEM_FAULT`](super::emit::WIRE_MEM_FAULT) — the target
+//! PC and exact retired count in the shared control slots — but maps to
+//! `SideExit::Chain` (the target is known-good statically-resolved code,
+//! never a fault).
 
 use wasmtime::{Engine, Instance, Memory, MemoryType, Module, Store, TypedFunc};
 
@@ -50,7 +59,7 @@ use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
 use super::emit::{
     MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RAM_WINDOW_OFF, RES_FLAG_SLOT,
-    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT,
+    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_TRACE_EXIT,
 };
 use super::RiscVFrontend;
 use crate::bus::SystemBus;
@@ -165,6 +174,19 @@ impl CompiledBlock {
                 let next_pc =
                     u32::from_le_bytes([bytes[s], bytes[s + 1], bytes[s + 2], bytes[s + 3]]) as Pc;
                 (SideExit::Chain { next_pc }, self.instr_count)
+            }
+            // Superblock trace interior side-exit (JIT superblock v2): a
+            // conditional branch fused inside a multi-block trace took its
+            // branch. The target is statically resolved (it is a branch
+            // immediate, not a fault) and was published to the SAME two
+            // slots the memory-fault path uses, along with the EXACT
+            // retired count at that point (never the trace's full,
+            // worst-case `instr_count`) — this is what keeps `total_cycles`
+            // bookkeeping correct for a fused trace that exits early.
+            WIRE_TRACE_EXIT => {
+                let next_pc = self.read_slot(FAULT_PC_SLOT) as Pc;
+                let retired = self.read_slot(FAULT_RETIRED_SLOT);
+                (SideExit::Chain { next_pc }, retired)
             }
             // Memory fault mid-block: the faulting load/store published its own
             // PC and the count of instructions retired before it. The

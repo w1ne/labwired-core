@@ -347,7 +347,12 @@ impl RiscVFrontend {
         // `end_pc`), (b) resolves a terminator's next PC in wasm and side-exits
         // with the dynamic Chain, or (c) on an out-of-window access, side-exits
         // with a memory fault at the faulting instruction.
-        if let Some(blk) = emit::emit_block(pc, code, self.ram_window) {
+        if let Some(blk) = emit::emit_block_with_fusion(
+            pc,
+            code,
+            self.ram_window,
+            emit::trace_fusion_enabled(),
+        ) {
             let plan = BlockPlan {
                 entry_pc: pc,
                 end_pc: blk.end_pc,
