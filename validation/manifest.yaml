@@ -1467,10 +1467,12 @@ boards:
     # match arms out of `cpu/riscv.rs` into `cpu/riscv/exec/*` (per-class
     # `exec_*` methods; every moved line accounted for by a line-multiset
     # diff), and `cpu/riscv` added to `models` so the moved arms stay
-    # watched. The digest moves because it hashes whole files. This is an
-    # ACK, NOT A CAPTURE.
+    # watched. The `exec_*` entry points carry `#[inline(always)]` (single call
+    # site each) so `step` compiles as it did before the split: a codegen hint,
+    # no semantic change. The digest moves because it hashes whole files. This
+    # is an ACK, NOT A CAPTURE.
     drift_ack: 2026-09-17
-    drift_ack_digest: 67ea82f07016f0514b67e74835a60a178adbe214b2853dbcbe9058e77d299326
+    drift_ack_digest: 1ca1a3b8722f036d1e2965ad60602feba865e4f31f3b2f476b4f25051b4a90b3
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/cpu/riscv
