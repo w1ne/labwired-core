@@ -196,7 +196,6 @@ fn combined_hot_loop_is_byte_identical() {
     let mut jit = build_machine(&prog, &seed);
 
     let mut engine = RiscvJitEngine::new(4);
-    engine.set_min_profitable(1);
     let policy = DiffPolicy {
         ignore_indices: differential_cycle_ignore_indices(),
         block_boundary_only: false,
@@ -282,7 +281,6 @@ fn combined_mmio_fault_is_byte_identical() {
     let mut jit = build_machine(&prog, &seed);
 
     let mut engine = RiscvJitEngine::new(4);
-    engine.set_min_profitable(1);
     let policy = DiffPolicy {
         ignore_indices: differential_cycle_ignore_indices(),
         block_boundary_only: false,

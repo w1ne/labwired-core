@@ -194,7 +194,6 @@ fn branch_hot_loop_is_byte_identical_and_chains() {
     let mut jit = machine_from_bytes(&bytes);
 
     let mut engine = RiscvJitEngine::new(4);
-    engine.set_min_profitable(1);
     let policy = DiffPolicy {
         ignore_indices: differential_cycle_ignore_indices(),
         block_boundary_only: false,
