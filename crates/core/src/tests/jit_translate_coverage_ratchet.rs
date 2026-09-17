@@ -782,29 +782,24 @@ fn a_stale_allow_list_entry_is_reported() {
     );
 }
 
-/// Run `f`, returning `Some(message)` if it panicked. Captures the message via
-/// a temporary panic hook rather than downcasting the `catch_unwind` payload,
-/// so it works regardless of exactly how the payload was boxed.
+/// Run `f`, returning `Some(messages)` if it panicked. Captures through a
+/// temporary panic hook and the hook info's `Display`, which carries the
+/// message however the payload was boxed. Every message seen while the hook is
+/// installed is kept, newline-joined, so a panic from a test running
+/// concurrently on another thread cannot replace the one under test.
 fn capture_panic_message(f: impl FnOnce() + std::panic::UnwindSafe) -> Option<String> {
     use std::sync::{Arc, Mutex};
-    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let captured_hook = captured.clone();
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let msg = match info.payload().downcast_ref::<&str>() {
-            Some(s) => s.to_string(),
-            None => match info.payload().downcast_ref::<String>() {
-                Some(s) => s.clone(),
-                None => info.to_string(),
-            },
-        };
-        *captured_hook.lock().unwrap() = Some(msg);
+        captured_hook.lock().unwrap().push(info.to_string());
     }));
     let result = std::panic::catch_unwind(f);
     std::panic::set_hook(prev_hook);
     result.err()?;
-    let msg = captured.lock().unwrap().take();
-    msg
+    let msgs = captured.lock().unwrap().join("\n");
+    Some(msgs)
 }
 
 /// In-memory stand-in for [`ArchCoverage`] so the two regression tests above
