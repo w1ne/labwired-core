@@ -77,6 +77,18 @@
       "reason": "Cross-builds firmware-uart-echo-fixture at test time."
     },
     {
+      "package": "labwired-core",
+      "target": "e2e_segger_rtt",
+      "needs": "rustup target thumbv7em-none-eabi + gcc-arm-none-eabi",
+      "reason": "Cross-builds firmware-nrf52840-rtt at test time."
+    },
+    {
+      "package": "labwired-cli",
+      "target": "e2e_segger_rtt",
+      "needs": "rustup target thumbv7em-none-eabi + gcc-arm-none-eabi",
+      "reason": "Cross-builds firmware-nrf52840-rtt at test time."
+    },
+    {
       "package": "labwired-cli",
       "target": "demo_blinky",
       "needs": "rustup target thumbv7m-none-eabi (pre-built release ELF)",
