@@ -729,549 +729,104 @@ impl Cpu for RiscV {
         let mut next_pc = self.pc.wrapping_add(inst_len);
 
         match instruction {
-            Instruction::Lui { rd, imm } => {
-                self.write_reg(rd, imm);
+            Instruction::Lui { .. }
+            | Instruction::Auipc { .. }
+            | Instruction::Addi { .. }
+            | Instruction::Slti { .. }
+            | Instruction::Sltiu { .. }
+            | Instruction::Xori { .. }
+            | Instruction::Ori { .. }
+            | Instruction::Andi { .. }
+            | Instruction::Slli { .. }
+            | Instruction::Srli { .. }
+            | Instruction::Srai { .. }
+            | Instruction::Add { .. }
+            | Instruction::Sub { .. }
+            | Instruction::Sll { .. }
+            | Instruction::Slt { .. }
+            | Instruction::Sltu { .. }
+            | Instruction::Xor { .. }
+            | Instruction::Srl { .. }
+            | Instruction::Sra { .. }
+            | Instruction::Or { .. }
+            | Instruction::And { .. }
+            | Instruction::Fence
+            | Instruction::CAddi { .. }
+            | Instruction::CLi { .. }
+            | Instruction::CMv { .. }
+            | Instruction::CAddi16sp { .. }
+            | Instruction::CAddi4spn { .. }
+            | Instruction::CSli { .. } => {
+                self.exec_alu(instruction)?;
             }
-            Instruction::Auipc { rd, imm } => {
-                let val = self.pc.wrapping_add(imm);
-                self.write_reg(rd, val);
+            Instruction::Jal { .. }
+            | Instruction::Jalr { .. }
+            | Instruction::Beq { .. }
+            | Instruction::Bne { .. }
+            | Instruction::Blt { .. }
+            | Instruction::Bge { .. }
+            | Instruction::Bltu { .. }
+            | Instruction::Bgeu { .. }
+            | Instruction::CJr { .. }
+            | Instruction::CJalr { .. }
+            | Instruction::CJ { .. }
+            | Instruction::CBeqz { .. }
+            | Instruction::CBnez { .. } => {
+                self.exec_branch(instruction, inst_len, &mut next_pc)?;
             }
-            Instruction::Jal { rd, imm } => {
-                let target = self.pc.wrapping_add(imm as u32);
-                // Link address is the NEXT instruction: pc + inst_len. The
-                // decoder maps the 2-byte C.JAL to Jal, so a hardcoded +4 would
-                // set ra 2 bytes too far and corrupt every compressed call's
-                // return — use inst_len so c.jal links pc+2 and jal links pc+4.
-                self.write_reg(rd, self.pc.wrapping_add(inst_len));
-                next_pc = target;
+            Instruction::Lb { .. }
+            | Instruction::Lh { .. }
+            | Instruction::Lw { .. }
+            | Instruction::Lbu { .. }
+            | Instruction::Lhu { .. }
+            | Instruction::Sb { .. }
+            | Instruction::Sh { .. }
+            | Instruction::Sw { .. }
+            | Instruction::CLw { .. }
+            | Instruction::CSw { .. }
+            | Instruction::CLwsp { .. }
+            | Instruction::CSwsp { .. } => {
+                self.exec_load_store(bus, instruction)?;
             }
-            Instruction::Jalr { rd, rs1, imm } => {
-                let base = self.read_reg(rs1);
-                let target = base.wrapping_add(imm as u32) & !1;
-                self.write_reg(rd, self.pc.wrapping_add(inst_len));
-                next_pc = target;
+            Instruction::Mul { .. }
+            | Instruction::Mulh { .. }
+            | Instruction::Mulhsu { .. }
+            | Instruction::Mulhu { .. }
+            | Instruction::Div { .. }
+            | Instruction::Divu { .. }
+            | Instruction::Rem { .. }
+            | Instruction::Remu { .. } => {
+                self.exec_muldiv(instruction)?;
             }
-            Instruction::Beq { rs1, rs2, imm } => {
-                if self.read_reg(rs1) == self.read_reg(rs2) {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
+            Instruction::LrW { .. }
+            | Instruction::ScW { .. }
+            | Instruction::AmoSwapW { .. }
+            | Instruction::AmoAddW { .. }
+            | Instruction::AmoXorW { .. }
+            | Instruction::AmoOrW { .. }
+            | Instruction::AmoAndW { .. }
+            | Instruction::AmoMinW { .. }
+            | Instruction::AmoMaxW { .. }
+            | Instruction::AmoMinuW { .. }
+            | Instruction::AmoMaxuW { .. } => {
+                self.exec_atomic(bus, instruction)?;
             }
-            Instruction::Bne { rs1, rs2, imm } => {
-                if self.read_reg(rs1) != self.read_reg(rs2) {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::Blt { rs1, rs2, imm } => {
-                if (self.read_reg(rs1) as i32) < (self.read_reg(rs2) as i32) {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::Bge { rs1, rs2, imm } => {
-                if (self.read_reg(rs1) as i32) >= (self.read_reg(rs2) as i32) {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::Bltu { rs1, rs2, imm } => {
-                if self.read_reg(rs1) < self.read_reg(rs2) {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::Bgeu { rs1, rs2, imm } => {
-                if self.read_reg(rs1) >= self.read_reg(rs2) {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::Lb { rd, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)? as i8;
-                self.write_reg(rd, val as i32 as u32);
-            }
-            Instruction::Lh { rd, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)? as i16;
-                self.write_reg(rd, val as i32 as u32);
-            }
-            Instruction::Lw { rd, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u32(addr as u64)?;
-                self.write_reg(rd, val);
-            }
-            Instruction::Lbu { rd, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)?;
-                self.write_reg(rd, val as u32);
-            }
-            Instruction::Lhu { rd, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)?;
-                self.write_reg(rd, val as u32);
-            }
-            Instruction::Sb { rs1, rs2, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = self.read_reg(rs2) as u8;
-                bus.write_u8(addr as u64, val)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 1);
-                self.reservation = None;
-            }
-            Instruction::Sh { rs1, rs2, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = self.read_reg(rs2) as u16;
-                bus.write_u16(addr as u64, val)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 2);
-                self.reservation = None;
-            }
-            Instruction::Sw { rs1, rs2, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.reservation = None;
-            }
-            Instruction::Addi { rd, rs1, imm } => {
-                let res = self.read_reg(rs1).wrapping_add(imm as u32);
-                self.write_reg(rd, res);
-            }
-            Instruction::Slti { rd, rs1, imm } => {
-                let val = if (self.read_reg(rs1) as i32) < imm {
-                    1
-                } else {
-                    0
-                };
-                self.write_reg(rd, val);
-            }
-            Instruction::Sltiu { rd, rs1, imm } => {
-                let val = if self.read_reg(rs1) < (imm as u32) {
-                    1
-                } else {
-                    0
-                };
-                self.write_reg(rd, val);
-            }
-            Instruction::Xori { rd, rs1, imm } => {
-                let res = self.read_reg(rs1) ^ (imm as u32);
-                self.write_reg(rd, res);
-            }
-            Instruction::Ori { rd, rs1, imm } => {
-                let res = self.read_reg(rs1) | (imm as u32);
-                self.write_reg(rd, res);
-            }
-            Instruction::Andi { rd, rs1, imm } => {
-                let res = self.read_reg(rs1) & (imm as u32);
-                self.write_reg(rd, res);
-            }
-            Instruction::Slli { rd, rs1, shamt } => {
-                let res = self.read_reg(rs1).wrapping_shl(shamt as u32);
-                self.write_reg(rd, res);
-            }
-            Instruction::Srli { rd, rs1, shamt } => {
-                let res = self.read_reg(rs1).wrapping_shr(shamt as u32);
-                self.write_reg(rd, res);
-            }
-            Instruction::Srai { rd, rs1, shamt } => {
-                let res = (self.read_reg(rs1) as i32).wrapping_shr(shamt as u32);
-                self.write_reg(rd, res as u32);
-            }
-            Instruction::Add { rd, rs1, rs2 } => {
-                let res = self.read_reg(rs1).wrapping_add(self.read_reg(rs2));
-                self.write_reg(rd, res);
-            }
-            Instruction::Sub { rd, rs1, rs2 } => {
-                let res = self.read_reg(rs1).wrapping_sub(self.read_reg(rs2));
-                self.write_reg(rd, res);
-            }
-            Instruction::Sll { rd, rs1, rs2 } => {
-                let shamt = self.read_reg(rs2) & 0x1F;
-                let res = self.read_reg(rs1) << shamt;
-                self.write_reg(rd, res);
-            }
-            Instruction::Slt { rd, rs1, rs2 } => {
-                let val = if (self.read_reg(rs1) as i32) < (self.read_reg(rs2) as i32) {
-                    1
-                } else {
-                    0
-                };
-                self.write_reg(rd, val);
-            }
-            Instruction::Sltu { rd, rs1, rs2 } => {
-                let val = if self.read_reg(rs1) < self.read_reg(rs2) {
-                    1
-                } else {
-                    0
-                };
-                self.write_reg(rd, val);
-            }
-            Instruction::Xor { rd, rs1, rs2 } => {
-                let res = self.read_reg(rs1) ^ self.read_reg(rs2);
-                self.write_reg(rd, res);
-            }
-            Instruction::Srl { rd, rs1, rs2 } => {
-                let shamt = self.read_reg(rs2) & 0x1F;
-                let res = self.read_reg(rs1) >> shamt;
-                self.write_reg(rd, res);
-            }
-            Instruction::Sra { rd, rs1, rs2 } => {
-                let shamt = self.read_reg(rs2) & 0x1F;
-                let res = (self.read_reg(rs1) as i32) >> shamt;
-                self.write_reg(rd, res as u32);
-            }
-            Instruction::Or { rd, rs1, rs2 } => {
-                let res = self.read_reg(rs1) | self.read_reg(rs2);
-                self.write_reg(rd, res);
-            }
-            Instruction::And { rd, rs1, rs2 } => {
-                let res = self.read_reg(rs1) & self.read_reg(rs2);
-                self.write_reg(rd, res);
-            }
-            Instruction::Fence => {
-                // No-op in single threaded core model
-            }
-            Instruction::Wfi => {
-                // Wait-for-interrupt: implemented as a no-op busy-wait. The step
-                // loop already polls pending interrupts every instruction, so
-                // the idle task's WFI spin wakes as soon as a line asserts.
-                self.waiting_for_interrupt = true;
-            }
-            Instruction::Ecall | Instruction::Ebreak => {
-                // Should trap. For now, we can just log or halt.
-                tracing::warn!("ECALL/EBREAK encountered at {:#x}", self.pc);
-                self.handle_trap(
-                    if instruction == Instruction::Ecall {
-                        11
-                    } else {
-                        3
-                    },
-                    self.pc,
-                );
-                return Ok(());
-            }
-            Instruction::Mret => {
-                // Return from trap. Per the privileged spec:
-                //   MIE <- MPIE, MPIE <- 1 (privilege <- MPP, but we stay M-mode).
-                self.pc = self.mepc;
-                let mpie = (self.mstatus >> 7) & 1;
-                self.mstatus &= !(1 << 3); // clear MIE
-                self.mstatus |= mpie << 3; // MIE <- MPIE
-                self.mstatus |= 1 << 7; // MPIE <- 1
-                return Ok(());
-            }
-            Instruction::Csrrw { rd, rs1, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
-                    return Ok(());
-                };
-                let val = self.read_reg(rs1);
-                if !self.csr_write_or_trap(csr, val, opcode) {
+            Instruction::Wfi
+            | Instruction::Ecall
+            | Instruction::Ebreak
+            | Instruction::Mret
+            | Instruction::Csrrw { .. }
+            | Instruction::Csrrs { .. }
+            | Instruction::Csrrc { .. }
+            | Instruction::Csrrwi { .. }
+            | Instruction::Csrrsi { .. }
+            | Instruction::Csrrci { .. } => {
+                if self.exec_system(instruction, opcode)? {
                     return Ok(());
                 }
-                if rd != 0 {
-                    self.write_reg(rd, old);
-                }
             }
-            Instruction::Csrrs { rd, rs1, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
-                    return Ok(());
-                };
-                if rs1 != 0 {
-                    let val = self.read_reg(rs1);
-                    if !self.csr_write_or_trap(csr, old | val, opcode) {
-                        return Ok(());
-                    }
-                }
-                if rd != 0 {
-                    self.write_reg(rd, old);
-                }
-            }
-            Instruction::Csrrc { rd, rs1, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
-                    return Ok(());
-                };
-                if rs1 != 0 {
-                    let val = self.read_reg(rs1);
-                    if !self.csr_write_or_trap(csr, old & !val, opcode) {
-                        return Ok(());
-                    }
-                }
-                if rd != 0 {
-                    self.write_reg(rd, old);
-                }
-            }
-            Instruction::Csrrwi { rd, imm, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
-                    return Ok(());
-                };
-                if !self.csr_write_or_trap(csr, imm as u32, opcode) {
-                    return Ok(());
-                }
-                if rd != 0 {
-                    self.write_reg(rd, old);
-                }
-            }
-            Instruction::Csrrsi { rd, imm, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
-                    return Ok(());
-                };
-                if imm != 0 && !self.csr_write_or_trap(csr, old | (imm as u32), opcode) {
-                    return Ok(());
-                }
-                if rd != 0 {
-                    self.write_reg(rd, old);
-                }
-            }
-            Instruction::Csrrci { rd, imm, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
-                    return Ok(());
-                };
-                if imm != 0 && !self.csr_write_or_trap(csr, old & !(imm as u32), opcode) {
-                    return Ok(());
-                }
-                if rd != 0 {
-                    self.write_reg(rd, old);
-                }
-            }
-            // RV32M Extension
-            Instruction::Mul { rd, rs1, rs2 } => {
-                let res = self.read_reg(rs1).wrapping_mul(self.read_reg(rs2));
-                self.write_reg(rd, res);
-            }
-            Instruction::Mulh { rd, rs1, rs2 } => {
-                let res = (self.read_reg(rs1) as i32 as i64)
-                    .wrapping_mul(self.read_reg(rs2) as i32 as i64);
-                self.write_reg(rd, (res >> 32) as u32);
-            }
-            Instruction::Mulhsu { rd, rs1, rs2 } => {
-                let res = (self.read_reg(rs1) as i32 as i64)
-                    .wrapping_mul(self.read_reg(rs2) as u64 as i64);
-                self.write_reg(rd, (res >> 32) as u32);
-            }
-            Instruction::Mulhu { rd, rs1, rs2 } => {
-                let res = (self.read_reg(rs1) as u64).wrapping_mul(self.read_reg(rs2) as u64);
-                self.write_reg(rd, (res >> 32) as u32);
-            }
-            Instruction::Div { rd, rs1, rs2 } => {
-                let dividend = self.read_reg(rs1) as i32;
-                let divisor = self.read_reg(rs2) as i32;
-                let res = if divisor == 0 {
-                    -1
-                } else if dividend == i32::MIN && divisor == -1 {
-                    dividend
-                } else {
-                    dividend / divisor
-                };
-                self.write_reg(rd, res as u32);
-            }
-            Instruction::Divu { rd, rs1, rs2 } => {
-                let dividend = self.read_reg(rs1);
-                let divisor = self.read_reg(rs2);
-                let res = dividend.checked_div(divisor).unwrap_or(u32::MAX);
-                self.write_reg(rd, res);
-            }
-            Instruction::Rem { rd, rs1, rs2 } => {
-                let dividend = self.read_reg(rs1) as i32;
-                let divisor = self.read_reg(rs2) as i32;
-                let res = if divisor == 0 {
-                    dividend
-                } else if dividend == i32::MIN && divisor == -1 {
-                    0
-                } else {
-                    dividend % divisor
-                };
-                self.write_reg(rd, res as u32);
-            }
-            Instruction::Remu { rd, rs1, rs2 } => {
-                let dividend = self.read_reg(rs1);
-                let divisor = self.read_reg(rs2);
-                let res = if divisor == 0 {
-                    dividend
-                } else {
-                    dividend % divisor
-                };
-                self.write_reg(rd, res);
-            }
-            // RV32C Extension
-            Instruction::CAddi { rd, imm } => {
-                if rd != 0 {
-                    let res = self.read_reg(rd).wrapping_add(imm as u32);
-                    self.write_reg(rd, res);
-                }
-            }
-            Instruction::CLi { rd, imm } => {
-                if rd != 0 {
-                    self.write_reg(rd, imm as u32);
-                }
-            }
-            Instruction::CMv { rd, rs2 } => {
-                if rd != 0 {
-                    let val = self.read_reg(rs2);
-                    self.write_reg(rd, val);
-                }
-            }
-            Instruction::CAddi16sp { imm } => {
-                let sp = self.read_reg(2);
-                self.write_reg(2, sp.wrapping_add(imm as u32));
-            }
-            Instruction::CAddi4spn { rd, imm } => {
-                let sp = self.read_reg(2);
-                self.write_reg(rd, sp.wrapping_add(imm));
-            }
-            Instruction::CLw { rd, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
-                self.write_reg(rd, val);
-            }
-            Instruction::CSw { rs2, rs1, imm } => {
-                let addr = self.read_reg(rs1).wrapping_add(imm);
-                let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.reservation = None;
-            }
-            Instruction::CLwsp { rd, imm } => {
-                let sp = self.read_reg(2);
-                let addr = sp.wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
-                self.write_reg(rd, val);
-            }
-            Instruction::CSwsp { rs2, imm } => {
-                let sp = self.read_reg(2);
-                let addr = sp.wrapping_add(imm);
-                let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.reservation = None;
-            }
-            Instruction::CJr { rs1 } => {
-                next_pc = self.read_reg(rs1) & !1;
-            }
-            Instruction::CJalr { rs1 } => {
-                let target = self.read_reg(rs1) & !1;
-                self.write_reg(1, self.pc.wrapping_add(2));
-                next_pc = target;
-            }
-            Instruction::CJ { imm } => {
-                next_pc = self.pc.wrapping_add(imm as u32);
-            }
-            Instruction::CBeqz { rs1, imm } => {
-                if self.read_reg(rs1) == 0 {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::CBnez { rs1, imm } => {
-                if self.read_reg(rs1) != 0 {
-                    next_pc = self.pc.wrapping_add(imm as u32);
-                }
-            }
-            Instruction::CSli { rd, shamt } => {
-                if rd != 0 {
-                    let res = self.read_reg(rd).wrapping_shl(shamt as u32);
-                    self.write_reg(rd, res);
-                }
-            }
-
-            // ---- RV32A: atomic memory operations (word) ----
-            //
-            // Single-hart semantics: aq/rl are ignored. LR.W records a
-            // reservation on the effective address; SC.W succeeds iff the
-            // current reservation matches its effective address. Any store
-            // (including any AMO*) invalidates the reservation per §8.2.
-            Instruction::LrW { rd, rs1 } => {
-                let addr = self.read_reg(rs1);
-                let val = bus.read_u32(addr as u64)?;
-                self.write_reg(rd, val);
-                self.reservation = Some(addr);
-            }
-            Instruction::ScW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let store_ok = self.reservation == Some(addr);
-                if store_ok {
-                    bus.write_u32(addr as u64, self.read_reg(rs2))?;
-                    self.invalidate_fetch_if_store_overlaps(addr, 4);
-                    self.write_reg(rd, 0); // success
-                } else {
-                    self.write_reg(rd, 1); // failure
-                }
-                self.reservation = None;
-            }
-            Instruction::AmoSwapW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                bus.write_u32(addr as u64, self.read_reg(rs2))?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoAddW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                bus.write_u32(addr as u64, old.wrapping_add(self.read_reg(rs2)))?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoXorW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                bus.write_u32(addr as u64, old ^ self.read_reg(rs2))?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoOrW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                bus.write_u32(addr as u64, old | self.read_reg(rs2))?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoAndW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                bus.write_u32(addr as u64, old & self.read_reg(rs2))?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoMinW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                let rhs = self.read_reg(rs2);
-                let new = (old as i32).min(rhs as i32) as u32;
-                bus.write_u32(addr as u64, new)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoMaxW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                let rhs = self.read_reg(rs2);
-                let new = (old as i32).max(rhs as i32) as u32;
-                bus.write_u32(addr as u64, new)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoMinuW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                let new = old.min(self.read_reg(rs2));
-                bus.write_u32(addr as u64, new)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-            Instruction::AmoMaxuW { rd, rs1, rs2 } => {
-                let addr = self.read_reg(rs1);
-                let old = bus.read_u32(addr as u64)?;
-                let new = old.max(self.read_reg(rs2));
-                bus.write_u32(addr as u64, new)?;
-                self.invalidate_fetch_if_store_overlaps(addr, 4);
-                self.write_reg(rd, old);
-                self.reservation = None;
-            }
-
-            Instruction::Unknown(inst) => {
-                tracing::error!("Unknown instruction {:#x} at {:#x}", inst, self.pc);
-                return Err(crate::SimulationError::DecodeError(self.pc as u64));
+            Instruction::Unknown(_) => {
+                self.exec_misc(instruction)?;
             }
         }
 
@@ -1598,6 +1153,9 @@ impl Cpu for RiscV {
         }
     }
 }
+
+#[path = "riscv/exec/mod.rs"]
+mod exec;
 
 #[cfg(test)]
 #[path = "riscv_tests.rs"]
