@@ -1,4 +1,13 @@
-use labwired_core::peripherals::components::Mpu6050;
+use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
+
+/// The MPU6050 is a `configs/devices/mpu6050.yaml` descriptor now.
+fn mpu6050(address: u8) -> GenericI2cDevice {
+    GenericI2cDevice::from_yaml(
+        labwired_config::embedded_device_yaml("mpu6050").expect("mpu6050 is embedded"),
+        address,
+    )
+    .expect("mpu6050.yaml builds")
+}
 use labwired_core::peripherals::i2c::I2c;
 use labwired_core::peripherals::pio::Pio;
 use labwired_core::peripherals::spi::Spi;
@@ -154,7 +163,7 @@ fn test_i2c_fidelity_in_machine() {
     });
     bus.refresh_peripheral_index();
     // Attach through the single bus choke point (wraps into the shared trace).
-    bus.attach_i2c_slave("I2C1", Box::new(Mpu6050::new(0x50)))
+    bus.attach_i2c_slave("I2C1", Box::new(mpu6050(0x50)))
         .expect("I2C1 is a generic I2c controller");
 
     // 1. START

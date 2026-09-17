@@ -228,7 +228,7 @@
       "device_type": "adxl345",
       "label": "ADXL345 Tilt",
       "summary": "3-axis ±2/4/8/16 g digital accelerometer over I2C.",
-      "detail": "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. Wired through the simulated I2C bus; host stimulus seeds X/Y/Z and the firmware reads them through the DATAX/Y/Z registers.",
+      "detail": "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. The whole Table 16 register map is served at its datasheet reset values, and the three data registers follow the LIVE DATA_FORMAT: FULL_RES and the range bits set both the counts-per-g and the count at which the part saturates (±512 counts in fixed 10-bit mode at every range; ±512/1024/2048/4096 in full resolution). The DATA_READY interrupt is modelled end to end - a 100 Hz sample timer raises it, INT_ENABLE gates it, INT_MAP routes it to the INT1 or INT2 pad, and reading a data register clears it. NOT modelled: output data rates other than the 100 Hz reset value, tap/activity/free-fall detection, the FIFO, the offset trim and the JUSTIFY bit.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -236,6 +236,16 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x53; 0x1D selects the alternate-pin variant."
+        },
+        {
+          "name": "int1_pin",
+          "ty": "str",
+          "doc": "Pad the INT1 output drives (e.g. \"PA0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "int2_pin",
+          "ty": "str",
+          "doc": "Pad the INT2 output drives. Optional."
         }
       ],
       "labs": [
@@ -271,17 +281,100 @@
       ]
     },
     {
-      "device_type": "ds3231",
-      "label": "DS3231 RTC",
-      "summary": "I²C real-time clock with temperature-compensated crystal.",
-      "detail": "Maxim DS3231 (address 0x68). BCD time registers 0x00–0x06 and control/status for common Arduino RTC libraries. Host can set unix_time or temperature via SimInput.",
+      "device_type": "ina219",
+      "label": "INA219 Power Monitor",
+      "summary": "High-side current and bus voltage sensor over I²C.",
+      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
         {
           "name": "i2c_address",
           "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x68."
+          "doc": "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 32.0
+        },
+        {
+          "key": "current",
+          "label": "Current",
+          "unit": "A",
+          "min": -3.2,
+          "max": 3.2
+        }
+      ]
+    },
+    {
+      "device_type": "ads1115",
+      "label": "ADS1115 16-bit ADC",
+      "summary": "4-channel 16-bit I²C ADC (TI ADS1115).",
+      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers. CONVERSION follows the live CONFIG MUX bits — including the four differential pairs — at the full scale the PGA bits select.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADDR→GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "a0",
+          "label": "A0",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a1",
+          "label": "A1",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a2",
+          "label": "A2",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a3",
+          "label": "A3",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        }
+      ]
+    },
+    {
+      "device_type": "ds3231",
+      "label": "DS3231 RTC",
+      "summary": "I²C real-time clock with temperature-compensated crystal.",
+      "detail": "Maxim DS3231 at its fixed address 0x68. The seven timekeeping registers 0x00-0x06 are BCD windows on ONE settable instant: a read reports that civil field, and a write recomposes the clock, so RTClib::adjust() works and the registers can never disagree with each other. Alarm registers 0x07-0x0D are writable BCD storage, control/status carry the datasheet bit names, and 0x11/0x12 are the real 10-bit 0.25 °C temperature word. The INT/SQW pad emits a 1 Hz square wave while CONTROL.INTCN is 0. NOT modelled: the clock does not free-run (pose it with the unix_time channel), alarm matching, square-wave rates above 1 Hz, 12-hour mode, the century bit and the 32 kHz output.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68, which is the DS3231's only address - it has no address straps."
+        },
+        {
+          "name": "int_pin",
+          "ty": "str",
+          "doc": "Pad the INT/SQW output drives (e.g. \"PB0\"). Optional - an unbound pin drives nothing."
         }
       ],
       "labs": [],
@@ -306,14 +399,14 @@
       "device_type": "hx711",
       "label": "HX711 Load Cell",
       "summary": "24-bit load-cell amplifier (DT/SCK bit-bang).",
-      "detail": "Avia HX711. Firmware bit-bangs SCK while reading DT; host sets weight (g) or raw counts via SimInput. Gain/channel selection pulses after bit 24 are accepted.",
+      "detail": "Avia HX711. Firmware bit-bangs SCK while reading DT; DT low means a sample is ready, and twenty-four rising clock edges shift it out MSB first. A twenty-fifth pulse ends the frame. The host poses the sample in grams (100 counts per gram) or directly in raw counts. Because the clock comes from firmware rather than from the simulator, this part is serviced inside the MMIO write path, so every edge of a bit-bang loop is seen. NOT modelled: the gain/channel select encoded in the number of trailing pulses, power-down by holding SCK high, and the 10/80 SPS conversion delay.",
       "transport": "gpio_group",
       "category": "gpio",
       "config_keys": [
         {
           "name": "sck_pin",
           "ty": "str",
-          "doc": "SCK GPIO pin (e.g. \"PA8\"). Defaults to PA8."
+          "doc": "SCK (PD_SCK) GPIO pin (e.g. \"PA8\"). Defaults to PA8."
         },
         {
           "name": "dt_pin",
@@ -444,7 +537,7 @@
       "device_type": "mpu6050",
       "label": "MPU6050 IMU",
       "summary": "6-axis gyro + accelerometer over I2C.",
-      "detail": "InvenSense MPU-6050 with WHO_AM_I = 0x68. Reports static sample values today; host stimulus hooks into the WASM bridge for live updates.",
+      "detail": "InvenSense MPU-6050 with WHO_AM_I = 0x68. The fourteen-byte measurement burst at 0x3B follows the datasheet - three accelerometer axes, TEMP_OUT, then three gyro axes - so the standard Adafruit / jrowberg burst read parses correctly. Both full-scale selects are live: ACCEL_CONFIG.AFS_SEL and GYRO_CONFIG.FS_SEL set the counts per g and per degree/second at read time. The DATA_RDY interrupt is modelled end to end: a sample timer raises INT_STATUS bit 0, INT_ENABLE gates it onto the INT pad, and any read of INT_STATUS clears both. NOT modelled: the programmable sample rate (the timer runs at the 1 kHz a DLPF-enabled part produces), the FIFO, motion detection, self-test, and the SLEEP bit (stored and echoed, but measurements are reported either way).",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -457,6 +550,11 @@
           "name": "noise_sigma",
           "ty": "float",
           "doc": "Optional Gaussian noise sigma in channel units (g accel, °/s gyro), seeded and replay-safe. 0/absent = exact reads."
+        },
+        {
+          "name": "int_pin",
+          "ty": "str",
+          "doc": "Pad the INT output drives (e.g. \"PA0\"). Optional - an unbound pin drives nothing."
         }
       ],
       "labs": [
@@ -509,6 +607,52 @@
           "unit": "°/s",
           "min": -2000.0,
           "max": 2000.0
+        },
+        {
+          "key": "temp",
+          "label": "Die temperature",
+          "unit": "C",
+          "min": -40.0,
+          "max": 85.0
+        }
+      ]
+    },
+    {
+      "device_type": "mma8451q",
+      "label": "MMA8451Q Accelerometer",
+      "summary": "3-axis 14-bit accelerometer over I2C with standby/active gating.",
+      "detail": "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale selected by XYZ_DATA_CFG. Output is 14-bit two's-complement left-justified at bit 2. Tap/FIFO/interrupts not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x1C; 0x1D selects SA0=high."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
+        },
+        {
+          "key": "z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -8.0,
+          "max": 8.0
         }
       ]
     },
@@ -2096,123 +2240,6 @@
           "unit": "°C",
           "min": -55.0,
           "max": 150.0
-        }
-      ]
-    },
-    {
-      "device_type": "ina219",
-      "label": "INA219 Power Monitor",
-      "summary": "High-side current and bus voltage sensor over I²C.",
-      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "bus_voltage",
-          "label": "Bus voltage",
-          "unit": "V",
-          "min": 0.0,
-          "max": 32.0
-        },
-        {
-          "key": "current",
-          "label": "Current",
-          "unit": "A",
-          "min": -3.2,
-          "max": 3.2
-        }
-      ]
-    },
-    {
-      "device_type": "ads1115",
-      "label": "ADS1115 16-bit ADC",
-      "summary": "4-channel 16-bit I²C ADC (TI ADS1115).",
-      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers. CONVERSION follows the live CONFIG MUX bits — including the four differential pairs — at the full scale the PGA bits select.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x48 (ADDR→GND)."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "a0",
-          "label": "A0",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        },
-        {
-          "key": "a1",
-          "label": "A1",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        },
-        {
-          "key": "a2",
-          "label": "A2",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        },
-        {
-          "key": "a3",
-          "label": "A3",
-          "unit": "V",
-          "min": -4.096,
-          "max": 4.096
-        }
-      ]
-    },
-    {
-      "device_type": "mma8451q",
-      "label": "MMA8451Q Accelerometer",
-      "summary": "3-axis 14-bit accelerometer over I2C with standby/active gating.",
-      "detail": "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale selected by XYZ_DATA_CFG. Output is 14-bit two's-complement left-justified at bit 2. Tap/FIFO/interrupts not modelled.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x1C; 0x1D selects SA0=high."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "x",
-          "label": "Accel X",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "y",
-          "label": "Accel Y",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
-        },
-        {
-          "key": "z",
-          "label": "Accel Z",
-          "unit": "g",
-          "min": -8.0,
-          "max": 8.0
         }
       ]
     },

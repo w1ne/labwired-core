@@ -140,6 +140,40 @@ pub trait BusResidentDevice: std::fmt::Debug + Send {
         false
     }
 
+    /// Output-register addresses whose MMIO writes must service this device
+    /// **synchronously**, instead of waiting for the next peripheral tick.
+    ///
+    /// Empty (the default) ⇒ tick-driven, which is what every device written
+    /// before this method existed is, and what a device sampled or scanned on a
+    /// schedule should stay.
+    ///
+    /// ## Why a tick is not enough for some parts
+    ///
+    /// A bit-banged part is clocked by FIRMWARE, not by the simulator. An
+    /// HX711 read loop toggles SCK and reads DOUT between two instructions;
+    /// a TM1637 frames a byte from the order two pads move in. The peripheral
+    /// tick runs every N cycles, so a service pass that only runs there sees
+    /// the pad AFTER the firmware has already moved it back — it samples
+    /// levels and misses EDGES. A 24-bit shift-out clocked by 48 stores inside
+    /// one tick interval delivers one edge, or none.
+    ///
+    /// That is why the hand-written HX711 and TM1637 models each grew their own
+    /// `Vec` on the bus and their own write hook. This is the one hook they
+    /// were each re-implementing, available to any resident device — and, in
+    /// practice, to the `gpio_device` primitive, which is how a bit-banged part
+    /// stops being Rust.
+    ///
+    /// The addresses are OUTPUT registers (what the MCU drives), because those
+    /// are the writes that can move an observed pad. A device lists the pads it
+    /// watches; the bus decides which peripheral hosts each one.
+    ///
+    /// Returning a slice rather than a `Vec` on purpose: this is consulted on
+    /// every MMIO write to a peripheral, and an allocation per write would be a
+    /// cost the whole engine pays for one part's wiring.
+    fn edge_service_addrs(&self) -> &[u64] {
+        &[]
+    }
+
     /// Concrete-type escape hatch for typed readback / diagnostics (see
     /// [`SystemBus::gpio_devices_of`]). The service/stimulus paths never
     /// downcast — this is only for callers that want a specific model back out.

@@ -1,0 +1,246 @@
+# Maxim/Analog Devices DS3231 — extremely accurate I²C real-time clock with an
+# integrated TCXO. Declarative register-pointer device; replaces the
+# hand-written `components/ds3231.rs`, whose wire transcript is pinned in
+# `crates/core/tests/ds3231_migration_parity.rs`.
+#
+# ── The wire ───────────────────────────────────────────────────────────────
+#
+# Datasheet DS3231 rev 10, Figure 1 "Timekeeping Registers". Slave address is
+# 1101000 (0x68), fixed — there are no address straps. One byte of register
+# pointer, then data bytes; the pointer AUTO-INCREMENTS after every byte and
+# rolls over at the end of the map, which is what lets every RTC library read
+# all seven time registers in a single transaction. `auto_increment: true`.
+#
+# ── Why the time registers are `calendar:` and not seven storage bytes ──────
+#
+# 0x00..0x06 are ONE settable clock read out through seven windows. The
+# datasheet is explicit ("the contents of the time and calendar registers are
+# in the BCD format"), and the DS3231 carries a single counter chain; the seven
+# registers are taps on it.
+#
+# Modelling them as seven independent bytes — which is what the hand-written
+# model did — makes a clock where the registers can disagree with each other
+# and where nothing ever advances. Modelling them as seven READ-ONLY views of
+# the `unix_time` stimulus is the opposite failure: `RTClib::adjust()` is the
+# first call almost every sketch makes, and it would do nothing at all.
+#
+# `calendar:` is both halves of one key: a READ reports that civil field of the
+# instant `source: unix_time` holds, and a WRITE recomposes — it replaces that
+# field and leaves the other six where they were. The arithmetic is Howard
+# Hinnant's civil-from-days / days-from-civil pair in UTC, which is the same
+# conversion the hand-written model carried, so the port reproduces its
+# transcript.
+#
+# ── `encode: { bcd: true }` ─────────────────────────────────────────────────
+#
+# Every timekeeping and alarm register is packed BCD: tens in the high nibble.
+# The key is symmetric — a read encodes, a write decodes — and the value the
+# model STORES is always the decimal one, so a rule's `reg(ALARM1_SECONDS)` is
+# a number of seconds and not a pair of nibbles.
+#
+# `write_mask` on a BCD register is a plain AND on the byte the master wrote
+# (the wire domain), because the neighbouring flag bits the datasheet packs in
+# are not part of the number:
+#   * SECONDS  0x7F — bit 7 is always 0 on a DS3231.
+#   * HOURS    0x3F — bit 6 selects 12/24-hour mode and bit 5 is AM/PM or the
+#                     20-hour bit. 12-HOUR MODE IS NOT MODELLED (see below).
+#   * MONTH    0x1F — bit 7 is CENTURY, which this model does not track.
+#   * ALARM *  0x7F — bit 7 of each alarm byte is its A1Mx / A2Mx mask bit.
+#
+# ── DAY (0x03) is storage, not a derived weekday ────────────────────────────
+#
+# On silicon the day-of-week register is an INDEPENDENT 1..7 counter the master
+# sets; it rolls at midnight but it does not follow the date. A driver that
+# writes `dow = 3` and then writes a date that falls on a Monday reads 3 back.
+# Deriving it from the date would report 2, so it is a plain BCD storage
+# register with reset 4 (the power-on instant below is a Wednesday).
+#
+# The `unix_time` STIMULUS is a different thing — it poses the whole clock, not
+# one register — so a rule recomputes DAY from it, exactly as the hand-written
+# model's `set_input` did.
+#
+# ── TEMPERATURE (0x11/0x12) ────────────────────────────────────────────────
+#
+# Datasheet §"Temperature Registers (11h-12h)": a 10-bit two's-complement value,
+# the upper 8 bits in 0x11 and the fractional quarter-degrees in bits 7:6 of
+# 0x12; resolution 0.25 °C. That is one composite word, so it is one 2-byte
+# big-endian register whose single `fields:` entry sits at shift 6 and is 10
+# bits wide with `encode: { scale: 4.0 }` (counts of 0.25 °C). 25 °C ⇒ 0x1900,
+# which is byte-identical to the hand-written model's `temp_msb = 25,
+# temp_lsb = 0`; unlike that model the quarter-degrees are now real.
+#
+# ── The Tier-2 half: the INT/SQW pad ───────────────────────────────────────
+#
+# Pin 3 is open-drain and does one of two jobs, selected by CONTROL bit 2
+# (INTCN, power-on 1):
+#   * INTCN = 0 — square wave at the rate RS2:RS1 selects (1 Hz / 1.024 /
+#     4.096 / 8.192 kHz).
+#   * INTCN = 1 — alarm interrupt output, pulled low while an enabled alarm
+#     flag is set.
+# The 1 Hz square wave (RS2:RS1 = 00) is modelled: a 500 000 µs timer toggles
+# a var and drives the pad. With INTCN = 1 the pad is released high, which is
+# the no-alarm state.
+#
+# ⚠️ NOT MODELLED — each needs a primitive this engine does not have, and each
+# is named here rather than faked:
+#   * **The clock does not free-run.** A rule cannot write a stimulus channel,
+#     so nothing advances `unix_time`; a host or a test poses it. The
+#     hand-written model did not free-run either. Needs: a rule action that
+#     assigns an input channel (`input: { key, value }`).
+#   * **Alarm matching.** A1/A2 compare the clock against 0x07..0x0D under the
+#     A1Mx/A2Mx mask bits, which live in bit 7 of the SAME byte as the BCD
+#     number. One register cannot be part-number-part-flags here — `bcd:`
+#     claims the whole word. Needs: a register whose bit-fields and whose
+#     numeric encoding are declared separately. The alarm registers are
+#     therefore writable, readable BCD storage (which is what a driver checks
+#     after programming them) and the A1F/A2F flags are firmware-clearable
+#     status bits that nothing sets.
+#   * **Square-wave rates above 1 Hz.** `timers:` take a constant `period_us`;
+#     RS2:RS1 selects it at runtime. Needs: a field-driven timer period.
+#   * **The 32 kHz output (pin 1), the CONV one-shot, and the CENTURY bit.**
+#   * **12-hour mode.** Bit 6 of HOURS is masked away, so a driver that sets it
+#     reads 24-hour time back. The hand-written model was worse here — it ran
+#     the whole byte through the BCD decode and clamped, so a 12-hour "2 PM"
+#     (0x52) read back as 23.
+#   * **Aging offset (0x10)** is stored and echoed; it does not skew the clock.
+type: ds3231
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x68
+    # The pointer walks one byte per byte, and every RTC library relies on it:
+    # RTClib reads 0x00 then clocks seven bytes out of one transaction.
+    auto_increment: true
+    # The DS3231's map ends at 0x12. The hand-written model returned 0 for
+    # everything past it, and so does this one (the engine's default is 0xFF).
+    unmapped_byte: 0x00
+    registers:
+      # ── Timekeeping: seven windows on one instant (see the header) ───────
+      - { name: SECONDS, addr: 0x00, width: 1, endian: be, access: rw, source: unix_time, calendar: second, write_mask: 0x7F, encode: { bcd: true } }
+      - { name: MINUTES, addr: 0x01, width: 1, endian: be, access: rw, source: unix_time, calendar: minute, write_mask: 0x7F, encode: { bcd: true } }
+      - { name: HOURS,   addr: 0x02, width: 1, endian: be, access: rw, source: unix_time, calendar: hour,   write_mask: 0x3F, encode: { bcd: true } }
+      # DAY is an independent counter — storage, not a derived weekday.
+      - { name: DAY,     addr: 0x03, width: 1, endian: be, access: rw, reset: 4, write_mask: 0x07, encode: { bcd: true, clamp_min: 1.0, clamp_max: 7.0 } }
+      - { name: DATE,    addr: 0x04, width: 1, endian: be, access: rw, source: unix_time, calendar: day,   write_mask: 0x3F, encode: { bcd: true } }
+      - { name: MONTH,   addr: 0x05, width: 1, endian: be, access: rw, source: unix_time, calendar: month, write_mask: 0x1F, encode: { bcd: true } }
+      - { name: YEAR,    addr: 0x06, width: 1, endian: be, access: rw, source: unix_time, calendar: year,  write_mask: 0xFF, encode: { bcd: true } }
+
+      # ── Alarm 1 (0x07..0x0A) and Alarm 2 (0x0B..0x0D) ────────────────────
+      # BCD storage. The A1Mx/A2Mx mask bits (bit 7 of each) are masked away —
+      # see the header for the primitive that would be needed to keep them.
+      - { name: ALARM1_SECONDS, addr: 0x07, width: 1, endian: be, access: rw, write_mask: 0x7F, encode: { bcd: true } }
+      - { name: ALARM1_MINUTES, addr: 0x08, width: 1, endian: be, access: rw, write_mask: 0x7F, encode: { bcd: true } }
+      - { name: ALARM1_HOURS,   addr: 0x09, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
+      - { name: ALARM1_DAY,     addr: 0x0A, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
+      - { name: ALARM2_MINUTES, addr: 0x0B, width: 1, endian: be, access: rw, write_mask: 0x7F, encode: { bcd: true } }
+      - { name: ALARM2_HOURS,   addr: 0x0C, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
+      - { name: ALARM2_DAY,     addr: 0x0D, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
+
+      # ── Control (0x0E) ───────────────────────────────────────────────────
+      # Datasheet Figure 2. Power-on 0x1C = RS2 RS1 INTCN set: the pad is the
+      # alarm-interrupt output and the square-wave divider would be 8.192 kHz.
+      - name: CONTROL
+        addr: 0x0E
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x1C
+        bits:
+          - { name: A1IE,  shift: 0 }
+          - { name: A2IE,  shift: 1 }
+          - { name: INTCN, shift: 2 }
+          - { name: RS,    shift: 3, width_bits: 2 }
+          - { name: CONV,  shift: 5 }
+          - { name: BBSQW, shift: 6 }
+          - { name: EOSC,  shift: 7 }
+
+      # ── Status (0x0F) ────────────────────────────────────────────────────
+      # OSF (bit 7) is set by silicon when the oscillator has stopped and can
+      # only be CLEARED by firmware. Nothing here stops the oscillator, so it
+      # powers up 0 and `write_mask: 0x7F` keeps a write from setting it — the
+      # hand-written model spelled the same rule as `value & !0x80`.
+      - name: STATUS
+        addr: 0x0F
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        write_mask: 0x7F
+        bits:
+          - { name: A1F,      shift: 0 }
+          - { name: A2F,      shift: 1 }
+          - { name: BSY,      shift: 2 }
+          - { name: EN32KHZ,  shift: 3 }
+          - { name: OSF,      shift: 7 }
+
+      # ── Aging offset (0x10) ──────────────────────────────────────────────
+      # Signed, ±0.1 ppm per LSB. Stored and echoed; it does not skew the clock.
+      - { name: AGING, addr: 0x10, width: 1, endian: be, access: rw, reset: 0x00 }
+
+      # ── Temperature (0x11/0x12) ──────────────────────────────────────────
+      # One 10-bit two's-complement word at bit 6 of a 16-bit big-endian pair;
+      # 0.25 °C per count, so the field's encode scale is 4.
+      - name: TEMPERATURE
+        addr: 0x11
+        width: 2
+        endian: be
+        access: r
+        fields:
+          - { source: temperature, shift: 6, width_bits: 10, signed: true, encode: { scale: 4.0 } }
+
+  # The INT/SQW pad (pin 3, open drain). Optional: a board that does not wire
+  # it binds nothing and the rules below drive nothing.
+  outputs: [INTSQW]
+  output_pins:
+    INTSQW: int_pin
+
+  vars:
+    # The 1 Hz square wave's half-cycle state. Not a register the master sees.
+    sqw_level: 1
+
+  timers:
+    # Half the 1 Hz period: the pad toggles on each firing.
+    - { name: sqw, period_us: 500000, start: on_reset }
+
+  rules:
+    # INTCN = 0 ⇒ the pad is a square wave. Only the RS2:RS1 = 00 (1 Hz) rate
+    # is modelled; see the header for why the others need a field-driven timer.
+    - on: { timer: sqw }
+      when: "field(CONTROL.INTCN) == 0"
+      do:
+        - { var: { name: sqw_level, value: "!var(sqw_level)" } }
+        - { pin: INTSQW, level: "var(sqw_level)" }
+    # INTCN = 1 ⇒ the pad is the alarm output, released high while no enabled
+    # alarm flag is set. Nothing sets A1F/A2F today (alarm matching is not
+    # modelled), so this is the pad's resting state.
+    - on: { timer: sqw }
+      when: "field(CONTROL.INTCN) != 0"
+      do:
+        - { pin: INTSQW, level: "!((field(STATUS.A1F) && field(CONTROL.A1IE)) || (field(STATUS.A2F) && field(CONTROL.A2IE)))" }
+
+    # The `unix_time` stimulus poses the WHOLE clock, so it also moves the
+    # independent day-of-week counter — which is what the hand-written model's
+    # `set_input` did. 1970-01-01 was a Thursday, and Sunday = 1 makes that 5.
+    - on: { input: unix_time }
+      do:
+        - { write: { register: DAY, value: "(input(unix_time) / 86400 + 4) % 7 + 1" } }
+
+metadata:
+  label: "DS3231 RTC"
+  summary: "I²C real-time clock with temperature-compensated crystal."
+  detail: "Maxim DS3231 at its fixed address 0x68. The seven timekeeping registers 0x00-0x06 are BCD windows on ONE settable instant: a read reports that civil field, and a write recomposes the clock, so RTClib::adjust() works and the registers can never disagree with each other. Alarm registers 0x07-0x0D are writable BCD storage, control/status carry the datasheet bit names, and 0x11/0x12 are the real 10-bit 0.25 °C temperature word. The INT/SQW pad emits a 1 Hz square wave while CONTROL.INTCN is 0. NOT modelled: the clock does not free-run (pose it with the unix_time channel), alarm matching, square-wave rates above 1 Hz, 12-hour mode, the century bit and the 32 kHz output."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x68, which is the DS3231's only address - it has no address straps."
+    - name: int_pin
+      ty: str
+      doc: "Pad the INT/SQW output drives (e.g. \"PB0\"). Optional - an unbound pin drives nothing."
+  inputs:
+    # Default 1784721600 = 2026-07-22 12:00:00 UTC, a Wednesday: the power-on
+    # instant the hand-written model seeded, kept so the port's first read is
+    # byte-identical.
+    - { key: unix_time, label: "Unix time", unit: s, min: 0, max: 4102444800, default: 1784721600 }
+    - { key: temperature, label: "Temperature", unit: C, min: -40, max: 85, default: 25 }

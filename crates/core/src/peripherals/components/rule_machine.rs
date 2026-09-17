@@ -84,6 +84,12 @@ pub trait RuleCtx {
 pub struct PinOnlyCtx<'a> {
     /// Input channel values in engineering units.
     pub slots: &'a BTreeMap<String, f64>,
+    /// Per-channel `expr_scale` (see
+    /// [`labwired_config::InputSpec::expr_scale`]): the factor that turns an
+    /// engineering value into the integer count the part's own protocol shifts.
+    /// A channel absent from the map scales by 1.0, which is what every
+    /// descriptor written before the key existed means.
+    pub expr_scale: &'a BTreeMap<String, f64>,
 }
 
 impl RuleCtx for PinOnlyCtx<'_> {
@@ -95,7 +101,11 @@ impl RuleCtx for PinOnlyCtx<'_> {
         None
     }
     fn input(&self, key: &str) -> i64 {
-        self.slots.get(key).copied().unwrap_or(0.0) as i64
+        let value = self.slots.get(key).copied().unwrap_or(0.0);
+        let scale = self.expr_scale.get(key).copied().unwrap_or(1.0);
+        // Rounded, not truncated: this is a unit conversion, and truncating one
+        // biases every reading toward zero by up to a whole count.
+        (value * scale).round() as i64
     }
 }
 

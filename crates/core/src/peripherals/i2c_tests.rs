@@ -98,9 +98,15 @@ fn test_i2c_start_bit() {
 
 #[test]
 fn test_i2c_full_transfer_flow() {
-    use crate::peripherals::components::Mpu6050;
+    use crate::peripherals::components::declarative_i2c::GenericI2cDevice;
     let mut i2c = I2c::new();
-    i2c.push_slave(Box::new(Mpu6050::new(0x50)));
+    i2c.push_slave(Box::new(
+        GenericI2cDevice::from_yaml(
+            labwired_config::embedded_device_yaml("mpu6050").expect("mpu6050 is embedded"),
+            0x50,
+        )
+        .expect("mpu6050.yaml builds"),
+    ));
 
     i2c.write(0x01, 0x01).unwrap(); // START
     for _ in 0..10 {
@@ -178,11 +184,20 @@ fn f1_write_address_sets_tra_and_level_ev_stays_asserted() {
 
 #[test]
 fn test_adxl345_devid_and_axis_read() {
-    use crate::peripherals::components::Adxl345;
+    use crate::peripherals::components::declarative_i2c::GenericI2cDevice;
 
     let mut i2c = I2c::new();
-    let mut sensor = Adxl345::new(0x53);
-    sensor.set_sample(256, -128, 64);
+    let mut sensor = GenericI2cDevice::from_yaml(
+        labwired_config::embedded_device_yaml("adxl345").expect("adxl345 is embedded"),
+        0x53,
+    )
+    .expect("adxl345.yaml builds");
+    // The descriptor takes g, not counts. At the DATA_FORMAT reset value the
+    // scale is 256 counts/g, so these are the 256 / -128 / 64 counts this test
+    // has always asserted.
+    crate::sim_input::SimInput::set_input(&mut sensor, "x", 1.0).unwrap();
+    crate::sim_input::SimInput::set_input(&mut sensor, "y", -0.5).unwrap();
+    crate::sim_input::SimInput::set_input(&mut sensor, "z", 0.25).unwrap();
     i2c.push_slave(Box::new(sensor));
 
     i2c.write(0x00, 0x01).unwrap();

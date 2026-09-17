@@ -438,7 +438,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 5a97d359d7c1cbc832237ecf6b16d29780bdc7c19ac41afd3e8f3837dd9e297a
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: b9c3958daa284ef21ee8193eef9bc3af498efddd4983007e7d1f77ac0cdc9a9a
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -734,7 +736,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 5a97d359d7c1cbc832237ecf6b16d29780bdc7c19ac41afd3e8f3837dd9e297a
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: b9c3958daa284ef21ee8193eef9bc3af498efddd4983007e7d1f77ac0cdc9a9a
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -1188,7 +1192,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 8954741ebf82c07cf152ebe782b419e0ddc7cbb8d8fb1ab44ddbc8e5e4f8dccc
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 6d38a8a356bc48577f5669958864aefa89df68ff88021587ec2776b0d1dd01b4
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2505,7 +2511,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 940cf3646af29feae568e9f006610220667c32348393eaa2b3054cf0751671af
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 04d676155a66047caf37969b041238d5986ec9bb4a42710022b609998a7be004
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3003,7 +3011,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: dd97a77fc712a24ebceb322529b17b22d6c6286e9f29dc8ec1299bc2637a6345
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: b297a1f9a104ca5fc39f8ff41b10de900fa9ef23bc61127995d956248e9494e5
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3523,7 +3533,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 85a3b558de29c3b9695a4daf2ee42266d83f9698930346f3fcab34574e0f2f37
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 902a8ec35c6e9194949a287723595653fb0a6ddf8e52de6c2dc50d485abe97f7
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -4041,7 +4053,9 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 970341ad1513c7c05693912b7544299c264fa9041ce3db06ad73859d6e10d66c
+    # 2026-09-17 (merge #1138): VFP FPSCR FZ/DN interpreter semantics landed on
+    # top of the perf/bus-scheduler changes; digest re-stamped over the merged tree.
+    drift_ack_digest: 0917078401278d375b5f0c8a569a7e18918187bc0939c974411d0cd31fa0bf6a
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to

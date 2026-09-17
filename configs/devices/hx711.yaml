@@ -1,0 +1,191 @@
+# Avia Semiconductor HX711 — 24-bit load-cell ADC with a two-wire bit-banged
+# readout. Declarative `gpio_device`; replaces the hand-written
+# `components/hx711.rs`, whose behaviour is pinned in
+# `crates/core/tests/hx711_migration_parity.rs`.
+#
+# ── The protocol, from the datasheet ───────────────────────────────────────
+#
+# Two pins and no bus at all. DOUT is the part's output, PD_SCK the MCU's clock:
+#
+#   "When output data is not ready for retrieval, digital output pin DOUT is
+#    high. Serial clock input PD_SCK should be low. When DOUT goes to low, it
+#    indicates data is ready for retrieval. By applying 25~27 positive clock
+#    pulses at the PD_SCK pin, data is shifted out from the DOUT output pin.
+#    Each PD_SCK pulse shifts out one bit, starting with the MSB bit first,
+#    until all 24 bits are shifted out."
+#
+# So: DOUT low = ready, 24 rising edges shift the sample MSB first, and the
+# 25th…27th pulse selects the channel and gain for the NEXT conversion.
+#
+# ── Why this part needed a new attach path ─────────────────────────────────
+#
+# ⚠️ A `gpio_device` used to be serviced ONLY on the peripheral tick. That works
+# for a part sampled on a schedule and fails completely for a part clocked by
+# FIRMWARE: a `digitalWrite(SCK, HIGH); digitalWrite(SCK, LOW)` pair is two
+# stores, both inside one tick interval, and a pass that samples the pad after
+# both of them sees no change at all. Forty-eight stores would deliver one edge,
+# or none, and the frame would never advance.
+#
+# `BusResidentDevice::edge_service_addrs` is the fix: a part whose rules listen
+# for a pin EDGE names the output registers it watches, and the bus services it
+# synchronously inside the MMIO write path — the same hook the hand-written
+# HX711 and TM1637 models each carried privately, now available to any
+# descriptor. The pads this part DRIVES still go out through the narrowed
+# `DevicePins` port, unchanged.
+#
+# ── The state machine ──────────────────────────────────────────────────────
+#
+# Four integer vars, no registers (there is no register map on this part):
+#   raw          the live 24-bit two's-complement sample, in counts
+#   shifting     1 while a frame is being clocked out
+#   bit_index    0..24, the next bit of the frame
+#   dout_level   the level DOUT currently holds — kept as a var because the
+#                start condition tests it ("a clock while busy is ignored")
+#
+# Rules fire in declaration order and each `do:` runs to completion, so a later
+# rule sees what an earlier one assigned. That is load-bearing twice over: the
+# first rising edge of a frame both STARTS it and shifts bit 23, and the CLOSE
+# rule has to be declared BEFORE the shift rule or it would fire in the same
+# event that delivers the last bit. See the note beside the rules.
+#
+# ── `expr_scale`: why the weight channel carries one ───────────────────────
+#
+# The rule language is integers, and the channel is grams. The demo scale is
+# 100 counts per gram, so `input(weight)` without a scale would truncate 10.5 g
+# to 10 g and the part would lose exactly the digits a load cell exists to
+# measure — silently, because 10 and 10.5 would both read 1000 counts. The
+# channel states its counts-per-unit instead, which is the same thing a register
+# part's `encode:` already says.
+#
+# ⚠️ NOT MODELLED, named rather than faked:
+#   * **Gain and channel select.** The datasheet's 25th/26th/27th pulse picks
+#     A-128 / B-32 / A-64 for the NEXT conversion. Here ONE extra pulse ends the
+#     frame and the gain is not tracked, which is what the hand-written model
+#     did. Counting the pulses needs the frame to stay open across an
+#     indeterminate number of edges with a timeout — i.e. a rule that can arm a
+#     timer from an edge and have the timer's expiry close the frame. The
+#     `timer:` action exists; what is missing is that a `gpio_device`'s timers
+#     only advance on the tick, so a 60 µs gap between two clock pulses is not
+#     observable from inside a write hook.
+#   * **Power-down.** Holding PD_SCK high for more than 60 µs powers the part
+#     down; the same missing piece.
+#   * **The 10 SPS / 80 SPS conversion rate.** The sample here is whatever the
+#     host last posed, available immediately; there is no conversion delay.
+type: hx711
+
+behavior:
+  primitive: gpio_device
+
+  # PD_SCK — an MCU output this part observes. A rule listens for its rising
+  # edge, which is what makes this part edge-driven rather than tick-driven.
+  pins:
+    SCK: sck_pin
+
+  # DOUT — an MCU input this part drives.
+  outputs: [DOUT]
+  output_pins:
+    DOUT: dt_pin
+
+  vars:
+    # The live sample, 24-bit two's complement. Negative values are held as a
+    # negative integer and the bit extraction below reads their low 24 bits,
+    # which IS the two's-complement pattern the part shifts.
+    raw: 0
+    shifting: 0
+    bit_index: 0
+    # DOUT starts LOW = data ready, matching the model this replaces. (On
+    # silicon the pin is high until the first conversion completes; there is no
+    # conversion delay here, so it is ready from power-on.)
+    dout_level: 0
+
+  timers:
+    # One shot, as early as the derived clock can deliver it: the pad has no
+    # level at all until something drives it, and "ready" is a level firmware
+    # polls before it clocks anything. Without this the part would look busy
+    # forever to a driver that waits for DOUT to fall.
+    - { name: power_on, after_us: 1, start: on_reset }
+
+  rules:
+    - on: { timer: power_on }
+      do: [{ pin: DOUT, level: "var(dout_level)" }]
+
+    # ── the frame ────────────────────────────────────────────────────────
+    # A rising clock while idle starts a frame — but only if DOUT is low. The
+    # datasheet's "output data is not ready" state ignores clocks.
+    - on: { pin: SCK, edge: rising }
+      when: "!var(shifting) && !var(dout_level)"
+      do:
+        - { var: { name: shifting, value: 1 } }
+        - { var: { name: bit_index, value: 0 } }
+
+    # ⚠️ THE CLOSE RULE COMES BEFORE THE SHIFT RULE, AND THE ORDER IS THE WHOLE
+    # CORRECTNESS ARGUMENT. Rules fire in declaration order and each `do:` runs
+    # to completion, so a later rule sees what an earlier one just assigned.
+    # With the shift rule first, the 24th edge would set `bit_index` to 24 and
+    # the close rule would then fire IN THE SAME EVENT — resetting DOUT before
+    # the master ever sampled the last bit. The frame would read back one bit
+    # short, every time, in the low bit only: 0x55AA55 arrives as 0x55AA54.
+    # (That is exactly what the first version of this descriptor did, and
+    # `the_frame_is_twenty_four_bits_msb_first` is what caught it.)
+    #
+    # The 25th pulse closes the frame and DOUT returns low — ready again. See
+    # the header for why the 26th/27th gain pulses are not counted.
+    - on: { pin: SCK, edge: rising }
+      when: "var(shifting) && var(bit_index) >= 24"
+      do:
+        - { var: { name: shifting, value: 0 } }
+        - { var: { name: bit_index, value: 0 } }
+        - { var: { name: dout_level, value: 0 } }
+        - { pin: DOUT, level: 0 }
+
+    # Bits 23..0, MSB first. This rule sees the `shifting` the START rule above
+    # just set, so the FIRST rising edge both opens the frame and delivers bit
+    # 23; and it does NOT fire on the closing pulse, because the rule above has
+    # already cleared `shifting`.
+    - on: { pin: SCK, edge: rising }
+      when: "var(shifting) && var(bit_index) < 24"
+      do:
+        - { var: { name: dout_level, value: "(var(raw) >> (23 - var(bit_index))) & 1" } }
+        - { var: { name: bit_index, value: "var(bit_index) + 1" } }
+        - { pin: DOUT, level: "var(dout_level)" }
+
+    # ── stimulus ─────────────────────────────────────────────────────────
+    # Either channel poses the live sample. `weight` carries `expr_scale: 100`,
+    # so `input(weight)` is already counts; `raw` is counts by definition.
+    - on: { input: weight }
+      do: [{ var: { name: raw, value: "input(weight)" } }]
+    - on: { input: raw }
+      do: [{ var: { name: raw, value: "input(raw)" } }]
+    # A new sample means data ready — but not in the middle of a frame, which
+    # would corrupt the word the master is half way through clocking out.
+    - on: { input: weight }
+      when: "!var(shifting)"
+      do: [{ var: { name: dout_level, value: 0 } }, { pin: DOUT, level: 0 }]
+    - on: { input: raw }
+      when: "!var(shifting)"
+      do: [{ var: { name: dout_level, value: 0 } }, { pin: DOUT, level: 0 }]
+
+metadata:
+  label: "HX711 Load Cell"
+  summary: "24-bit load-cell amplifier (DT/SCK bit-bang)."
+  detail: "Avia HX711. Firmware bit-bangs SCK while reading DT; DT low means a sample is ready, and twenty-four rising clock edges shift it out MSB first. A twenty-fifth pulse ends the frame. The host poses the sample in grams (100 counts per gram) or directly in raw counts. Because the clock comes from firmware rather than from the simulator, this part is serviced inside the MMIO write path, so every edge of a bit-bang loop is seen. NOT modelled: the gain/channel select encoded in the number of trailing pulses, power-down by holding SCK high, and the 10/80 SPS conversion delay."
+  category: gpio
+  config_keys:
+    - name: sck_pin
+      ty: str
+      doc: "SCK (PD_SCK) GPIO pin (e.g. \"PA8\"). Defaults to PA8."
+    - name: dt_pin
+      ty: str
+      doc: "DT (DOUT) GPIO pin (e.g. \"PA9\"). Defaults to PA9."
+  inputs:
+    # 100 counts per gram is the demo scale the hand-written model used; it is
+    # stated here as `expr_scale` so a rule reading `input(weight)` is reading
+    # counts and keeps the sub-gram digits.
+    - { key: weight, label: "Weight", unit: g, min: -50000, max: 50000, default: 0, expr_scale: 100.0 }
+    - { key: raw, label: "Raw counts", unit: counts, min: -8388608, max: 8388607, default: 0 }
+
+emit:
+  connection: gpio
+  config:
+    - { key: sck_pin, from_part_pins: [SCK] }
+    - { key: dt_pin, from_part_pins: [DT] }

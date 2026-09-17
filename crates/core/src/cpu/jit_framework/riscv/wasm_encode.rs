@@ -245,13 +245,17 @@ pub fn build_module(local_i32_count: u32, mem_min_pages: u32, body: &[u8]) -> Ve
 /// (import "ram" "store" (func (param i32 i32 i32)))
 /// (import "vfp" "get" (func (param i32) (result i32)))
 /// (import "vfp" "set" (func (param i32 i32)))
+/// (import "vfp" "binop" (func (param i32 i32 i32) (result i32)))
 /// (func (export "run") (result i32) ...)
 /// ```
 ///
-/// `run` is function index 4 (`call 0` = load, `call 1` = store,
-/// `call 2` = vfp.get, `call 3` = vfp.set). The imported RAM helpers take
-/// `(offset, width, signed_or_value)` so the wasm body never maps guest
-/// SRAM into linear memory.
+/// `run` is function index 5 (`call 0` = load, `call 1` = store,
+/// `call 2` = vfp.get, `call 3` = vfp.set, `call 4` = vfp.binop). The
+/// imported RAM helpers take `(offset, width, signed_or_value)` so the wasm
+/// body never maps guest SRAM into linear memory. `vfp.binop` takes
+/// `(op, a_bits, b_bits)` and returns the FPSCR-canonicalized result; doing
+/// the arithmetic on the host keeps compiled VFP results bit-identical to
+/// the interpreter's `vfp_binop` (see `crate::cpu::cortex_m`).
 pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
     let mut m = Vec::with_capacity(96 + body.len());
     m.extend_from_slice(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
@@ -296,7 +300,7 @@ pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
 
     {
         let mut c = Vec::new();
-        enc::uleb(&mut c, 5);
+        enc::uleb(&mut c, 6);
         name(&mut c, REGS_IMPORT_MODULE);
         name(&mut c, REGS_IMPORT_FIELD);
         c.push(0x02);
@@ -322,6 +326,12 @@ pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
         name(&mut c, "set");
         c.push(0x00);
         enc::uleb(&mut c, 4);
+
+        // type 1 is (i32, i32, i32) -> i32, the same shape as ram.load.
+        name(&mut c, "vfp");
+        name(&mut c, "binop");
+        c.push(0x00);
+        enc::uleb(&mut c, 1);
         section(&mut m, 2, &c);
     }
 
@@ -337,7 +347,7 @@ pub fn build_module_ram_host(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
         enc::uleb(&mut c, 1);
         name(&mut c, RUN_EXPORT);
         c.push(0x00);
-        enc::uleb(&mut c, 4);
+        enc::uleb(&mut c, 5);
         section(&mut m, 7, &c);
     }
 
