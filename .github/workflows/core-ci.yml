@@ -499,6 +499,13 @@ jobs:
           shared-key: core-pr-gate
           workspaces: |
             . -> target
+          # Read-only on the PR lane. `pr-gate-warm` (push to main, below) owns
+          # this key; a PR restores it from `refs/heads/main`. With the default
+          # `save-if: true` every open PR also wrote a ~520 MB PR-ref copy that
+          # only that PR could read, and those copies were what evicted main's
+          # entry out of the 10 GB budget (measured 2026-09-17: 10.4 GB / 19
+          # caches, four PR-ref copies of this key, none on main).
+          save-if: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -795,9 +802,9 @@ jobs:
   # landed, i.e. already evicting. This entry is ~520 MB. `pr-gate` still has
   # rust-cache's default `save-if: true`, so each open PR also writes a ~520 MB
   # PR-ref copy that only that PR can read — those are the entries most likely
-  # to evict THIS one. If the main entry keeps disappearing, the remedy is
-  # already written down for the `core-ci` key in the `pr-workspace-tests` note
-  # below: give the PR lane `save-if: false` and let main own the cache.
+  # to evict THIS one — so the PR lane's `Cache dependencies` step above now
+  # carries `save-if: false`, the same remedy the `pr-workspace-tests` note
+  # below records for the `core-ci` key: main owns the cache, PRs only read it.
   pr-gate-warm:
     name: pr-gate-warm
     # push-to-main only. Not `pull_request` (a PR-ref save is the problem this
