@@ -27,6 +27,11 @@
 //! guest instruction before a compare — the harness only compares at
 //! points where the two runs are known to be at the same PC.
 
+use std::sync::atomic::Ordering;
+
+use crate::bus::SystemBus;
+use crate::memory::LinearMemory;
+
 use super::StateVec;
 
 /// How lenient a state comparison is. Some architectural words legitimately
@@ -91,6 +96,124 @@ pub fn compare(
         }
     }
     None
+}
+
+/// FNV-1a over a byte slice, chained from a running hash so multiple regions
+/// (RAM, each `extra_mem` window) can be folded into one fingerprint.
+fn fnv1a(bytes: &[u8], mut hash: u64) -> u64 {
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+/// FNV-1a 64-bit offset basis.
+const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// Cheap 64-bit fingerprint of everything a wrong JIT store could corrupt
+/// that isn't already in the [`StateVec`]: main RAM, every `extra_mem`
+/// window (e.g. ESP32 IRAM), and NVIC pending/enable state. Two buses with
+/// the same fingerprint are extremely unlikely to differ; a mismatch is a
+/// cue to fall back to [`diff_memory`] for the exact address.
+///
+/// Deliberately does NOT hash flash: firmware is read-only in every current
+/// test and flash-dirty tracking does not exist yet (see
+/// `CortexMJitHost::take_flash_dirty`), so comparing it would just cost
+/// cycles without catching anything the block-invalidation logic doesn't
+/// already assume.
+pub fn memory_fingerprint(bus: &SystemBus) -> u64 {
+    let mut hash = fnv1a(&bus.ram.data, FNV_OFFSET_BASIS);
+    for region in &bus.extra_mem {
+        hash = fnv1a(&region.data, hash);
+    }
+    if let Some(nvic) = &bus.nvic {
+        for word in nvic.iser.iter().chain(nvic.ispr.iter()) {
+            hash = fnv1a(&word.load(Ordering::Relaxed).to_le_bytes(), hash);
+        }
+    }
+    hash
+}
+
+/// A detected byte-level divergence in bus-visible memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemoryDivergence {
+    /// Instruction/unit index (or comparison point) at which they diverged.
+    pub at_step: u64,
+    /// Guest PC (interpreter side) at the comparison point, for context.
+    pub pc: u32,
+    /// Absolute bus address of the first differing byte.
+    pub address: u64,
+    /// Byte on the interpreter (reference) side.
+    pub interp: u8,
+    /// Byte on the JIT side.
+    pub jit: u8,
+}
+
+fn diff_linear_memory(a: &LinearMemory, b: &LinearMemory) -> Option<(u64, u8, u8)> {
+    let n = a.data.len().max(b.data.len());
+    for i in 0..n {
+        let av = a.data.get(i).copied().unwrap_or(0);
+        let bv = b.data.get(i).copied().unwrap_or(0);
+        if av != bv {
+            return Some((a.base_addr + i as u64, av, bv));
+        }
+    }
+    None
+}
+
+/// Byte-level diff of bus-visible memory, reporting the first differing
+/// address. Only worth calling when [`memory_fingerprint`] has already
+/// shown the two buses disagree — this is O(bytes), the fingerprint is the
+/// fast path taken on every comparison.
+pub fn diff_memory(
+    at_step: u64,
+    pc: u32,
+    interp: &SystemBus,
+    jit: &SystemBus,
+) -> Option<MemoryDivergence> {
+    if let Some((address, i, j)) = diff_linear_memory(&interp.ram, &jit.ram) {
+        return Some(MemoryDivergence {
+            at_step,
+            pc,
+            address,
+            interp: i,
+            jit: j,
+        });
+    }
+    for (a, b) in interp.extra_mem.iter().zip(jit.extra_mem.iter()) {
+        if let Some((address, i, j)) = diff_linear_memory(a, b) {
+            return Some(MemoryDivergence {
+                at_step,
+                pc,
+                address,
+                interp: i,
+                jit: j,
+            });
+        }
+    }
+    None
+}
+
+/// Fast RAM/peripheral-state check for a comparison point: hashes both
+/// buses and, only on a mismatch, does the byte-level diff to name the
+/// exact address. Returns `None` when the two buses agree.
+pub fn compare_memory(
+    at_step: u64,
+    pc: u32,
+    interp: &SystemBus,
+    jit: &SystemBus,
+) -> Option<MemoryDivergence> {
+    if memory_fingerprint(interp) == memory_fingerprint(jit) {
+        return None;
+    }
+    diff_memory(at_step, pc, interp, jit).or(Some(MemoryDivergence {
+        at_step,
+        pc,
+        address: u64::MAX,
+        interp: 0,
+        jit: 0,
+    }))
 }
 
 /// Report from a full differential run.

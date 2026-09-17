@@ -9,6 +9,7 @@
 
 use labwired_core::bus::{SystemBus, RECOMMENDED_TICK_INTERVAL};
 use labwired_core::cpu::jit_framework::cortex_m::snapshot_state;
+use labwired_core::cpu::jit_framework::differential::compare_memory;
 use labwired_core::cpu::CortexM;
 use labwired_core::{Bus, DebugControl, Machine};
 
@@ -47,6 +48,9 @@ fn wfi_idle_fast_forward_matches_with_jit_on() {
         snapshot_state(&on.cpu),
         "WFI path is interpreter-owned; JIT on/off must match"
     );
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("WFI idle-ff RAM mismatch: {d:?}");
+    }
 }
 
 fn alu_spin_machine(jit: bool, tick: u32) -> Machine<CortexM> {
@@ -97,6 +101,9 @@ fn alu_spin_matches_at_tick_512() {
         );
     } else {
         panic!("JIT engine was never created");
+    }
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("alu_spin RAM mismatch: {d:?}");
     }
 }
 
@@ -152,6 +159,9 @@ fn systick_countdown_clamp_matches_interpreter() {
             "clamp must not disable compilation; stats={stats:?}"
         );
     }
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("systick_countdown_clamp RAM mismatch: {d:?}");
+    }
 }
 
 #[test]
@@ -183,6 +193,9 @@ fn uart_mmio_store_exits_and_matches() {
     assert_eq!(off.cpu.pc, on.cpu.pc);
     assert_eq!(off.cpu.r0, on.cpu.r0);
     assert_eq!(off.total_cycles, on.total_cycles);
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("uart_mmio_store RAM mismatch: {d:?}");
+    }
 }
 
 use labwired_config::{ChipDescriptor, SystemManifest};
@@ -251,6 +264,9 @@ fn nrf52_uart_txd_matches_with_jit() {
     assert_eq!(a.last().copied(), Some(b'K'));
     assert_eq!(off.total_cycles, on.total_cycles);
     assert_eq!(snapshot_state(&off.cpu), snapshot_state(&on.cpu));
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("nrf52_uart_txd RAM mismatch: {d:?}");
+    }
 }
 
 fn nrf52840_timer_spin(jit: bool) -> Machine<CortexM> {
@@ -322,6 +338,9 @@ fn nrf52840_timer0_compare_cycle_matches_with_jit() {
         "TIMER0 COMPARE[0] fire cycle JIT vs interpreter"
     );
     assert!(fire_off.is_some(), "TIMER0 never fired");
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("nrf52840_timer0 RAM mismatch: {d:?}");
+    }
 }
 
 fn zephyr_hello(jit: bool) -> (Machine<CortexM>, Arc<Mutex<Vec<u8>>>) {
@@ -439,6 +458,9 @@ fn nrf52840_zephyr_hello_uart_and_cycles_match_at_tick_512() {
                 on.cpu.jit_stats(),
             );
         }
+        if let Some(d) = compare_memory(chunks as u64, off.cpu.pc, &off.bus, &on.bus) {
+            panic!("Zephyr hello RAM diverged after {chunks} chunks: {d:?}");
+        }
     }
     assert!(
         has_marker(&sink_off, MARKER),
@@ -534,6 +556,9 @@ fn nrf52840_zephyr_hello_matches_at_min_block_4() {
                 snapshot_diff(&snap_off, &snap_on)
             );
         }
+        if let Some(d) = compare_memory(chunks as u64, off.cpu.pc, &off.bus, &on.bus) {
+            panic!("min4 RAM diverged after {chunks} chunks: {d:?}");
+        }
     }
     assert!(has_marker(&sink_off, MARKER) && has_marker(&sink_on, MARKER));
     let stats = on.cpu.jit_stats().expect("JIT");
@@ -597,6 +622,9 @@ fn takeable_irq_at_batch_start_is_taken_before_compiled_block() {
         snapshot_state(&on.cpu),
         "pre-IRQ state must match after heat"
     );
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("takeable_irq pre-IRQ RAM mismatch: {d:?}");
+    }
     let r0_before = on.cpu.r0;
 
     on.cpu.set_exception_pending(15);
@@ -631,4 +659,7 @@ fn takeable_irq_at_batch_start_is_taken_before_compiled_block() {
         "JIT must not retire extra user ALU before taking SysTick (r0 {} -> {})",
         r0_before, on.cpu.r0
     );
+    if let Some(d) = compare_memory(off.total_cycles, off.cpu.pc, &off.bus, &on.bus) {
+        panic!("takeable_irq post-IRQ RAM mismatch: {d:?}");
+    }
 }
