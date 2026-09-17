@@ -136,7 +136,7 @@ fn set_input_rejects_unknown_channel_and_out_of_range() {
 // exercise `component` disambiguation.
 
 use labwired_core::peripherals::components::{
-    Adxl345, GenericSpiDevice, Mpu6050, Neo6mGps, QuectelBg770a, Sn74hc165, Vl53l1x,
+    GenericSpiDevice, Neo6mGps, QuectelBg770a, Sn74hc165, Vl53l1x,
 };
 use labwired_core::peripherals::spi::Spi;
 use labwired_core::peripherals::uart::{Uart, UartStreamDevice};
@@ -270,7 +270,7 @@ fn drives_each_transport_through_the_generic_api() {
 
     // I²C device (unique key): value must reach the model's register scale.
     bus.set_input(None, "ax", 1.0).expect("drive imu ax");
-    let (ax, ..) = with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| imu.sample());
+    let ax = with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", accel_x);
     assert_eq!(ax, 16384, "1 g at power-on scale = 16384 LSB");
 
     // SPI device (unique key): single 74HC165 channel goes high.
@@ -371,9 +371,9 @@ fn component_disambiguates_colliding_channel_keys() {
     }
     bus.set_input(Some("accel2"), "x", 1.0)
         .expect("drive accel2");
-    let (x2, ..) = with_i2c_device_at::<Adxl345, _>(&mut bus, 0x1D, |a| a.sample());
+    let x2 = with_i2c_device_at::<GenericI2cDevice, _>(&mut bus, 0x1D, datax);
     assert_eq!(x2, 256, "1 g full-res = 256 LSB");
-    let (x1, ..) = with_i2c_device_at::<Adxl345, _>(&mut bus, 0x53, |a| a.sample());
+    let x1 = with_i2c_device_at::<GenericI2cDevice, _>(&mut bus, 0x53, datax);
     assert_eq!(x1, 0, "accel1 must be untouched");
 
     // A component that doesn't own the channel is a NoDevice, not a fallback.
@@ -417,22 +417,22 @@ fn conversion_follows_live_fullscale_config() {
     // Power-on scale: ±2 g at 16384 LSB/g.
     bus.set_input(None, "ax", 1.0)
         .expect("drive ax at reset scale");
-    let (ax, ..) = with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| imu.sample());
+    let ax = with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", accel_x);
     assert_eq!(ax, 16384);
 
     // Firmware reconfigures ACCEL_CONFIG to ±8 g (AFS_SEL=2) over I²C; the
     // same engineering value must now land at the new scale (4096 LSB/g),
     // and values valid at ±8 g must be accepted.
-    with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| {
+    with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", |imu| {
         use labwired_core::peripherals::i2c::I2cDevice;
-        imu.stop();
+        imu.start();
         imu.write(0x1C);
         imu.write(0x10);
         imu.stop();
     });
     bus.set_input(None, "ax", 4.0)
         .expect("4 g is valid at +/-8 g FS");
-    let (ax, ..) = with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| imu.sample());
+    let ax = with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", accel_x);
     assert_eq!(
         ax,
         4 * 4096,
@@ -442,11 +442,11 @@ fn conversion_follows_live_fullscale_config() {
     // Beyond the configured full-scale the value saturates like the silicon.
     bus.set_input(None, "ax", 16.0)
         .expect("schema allows up to hardware max");
-    let (ax, ..) = with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| imu.sample());
+    let ax = with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", accel_x);
     // +8 g = 32768 saturates to i16::MAX — the same asymmetry as the silicon.
     assert_eq!(
         ax,
-        i16::MAX,
+        i64::from(i16::MAX),
         "must clamp at the configured +/-8 g full-scale"
     );
 }
@@ -460,7 +460,7 @@ fn set_inputs_is_all_or_nothing() {
         Err(SimInputError::OutOfRange { key, .. }) => assert_eq!(key, "ay"),
         other => panic!("expected OutOfRange, got {other:?}"),
     }
-    let (ax, ..) = with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| imu.sample());
+    let ax = with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", accel_x);
     assert_eq!(ax, 0x0123, "failed batch must leave ax at its default");
 
     // A valid batch applies every set.
@@ -470,7 +470,12 @@ fn set_inputs_is_all_or_nothing() {
         (Some("gps"), "lat", 50.45),
     ])
     .expect("valid batch");
-    let (ax, ay, ..) = with_device::<Mpu6050, _>(&mut bus, "i2c1", |imu| imu.sample());
+    let (ax, ay) = with_device::<GenericI2cDevice, _>(&mut bus, "i2c1", |imu| {
+        (
+            accel_x(imu),
+            imu.register_word("ACCEL_YOUT").expect("ACCEL_YOUT"),
+        )
+    });
     assert_eq!((ax, ay), (16384, -16384));
     let (lat, _) = with_device::<Neo6mGps, _>(&mut bus, "uart1", |gps| gps.position());
     assert_eq!(lat, 50.45);
@@ -545,4 +550,19 @@ fn resolve_input_accepts_both_component_aliases() {
         Err(SimInputError::NoDevice(m)) => assert_eq!(m, "uart1/temperature"),
         other => panic!("expected NoDevice, got {other:?}"),
     }
+}
+
+// ─── declarative readbacks ─────────────────────────────────────────────────
+//
+// The MPU6050 and the ADXL345 are `configs/devices/*.yaml` descriptors now, so
+// the readback that used to be a concrete model's `sample()` is the generic
+// `register_word` — the word a master would clock out of that register right
+// now, which is the same question for every declarative part.
+
+fn accel_x(imu: &mut GenericI2cDevice) -> i64 {
+    imu.register_word("ACCEL_XOUT").expect("ACCEL_XOUT")
+}
+
+fn datax(a: &mut GenericI2cDevice) -> i64 {
+    a.register_word("DATAX0").expect("DATAX0")
 }

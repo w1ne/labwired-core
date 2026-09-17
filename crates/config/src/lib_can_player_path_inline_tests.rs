@@ -165,6 +165,7 @@ fn i2c_register_alias_still_names_the_shared_struct() {
         bits: vec![],
         on_read: None,
         on_write: None,
+        calendar: None,
     };
 }
 

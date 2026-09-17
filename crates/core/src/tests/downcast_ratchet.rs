@@ -104,7 +104,7 @@ use std::path::{Path, PathBuf};
 /// `EdgeSlave`/`EdgeDev` (latched MOSI bytes / call count). Production path
 /// does not grow a downcast; these three are test-only.
 const MAX_AS_ANY: usize = 202;
-const MAX_DOWNCAST_REF: usize = 217;
+const MAX_DOWNCAST_REF: usize = 216;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

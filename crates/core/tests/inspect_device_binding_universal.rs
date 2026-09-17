@@ -204,7 +204,7 @@ fn dump_devices_json() {
 /// place one. This catches it at the source instead.
 ///
 /// Field names are read out of `bus/mod.rs`; a collection counts as holding
-/// device models if its type names one of the model modules. The known-10
+/// device models if its type names one of the model modules. The known-field
 /// assertion below is not the gate — it is the anti-vacuity check, so a parser
 /// that silently matched nothing cannot pass this test by finding no work.
 #[test]
@@ -222,7 +222,11 @@ fn attached_device_walk_covers_every_bus_collection() {
         // `dyn ObservedDevice`, walked by ONE arm.
         "observed",
         "tm1637",
-        "hx711",
+        // `hx711` was one of these until it became a `configs/devices/*.yaml`
+        // `gpio_device` — its private `Vec` AND its private MMIO write hook are
+        // both gone, replaced by `BusResidentDevice::edge_service_addrs`, so it
+        // is walked as one of `gpio_devices` now. The list shrinking is the
+        // point of that port, not a hole in this scan.
         "seven_segment",
         "analog_inputs",
         "can_diagnostic_testers",
