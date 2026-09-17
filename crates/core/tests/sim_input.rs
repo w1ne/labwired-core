@@ -5,7 +5,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Fxos8700;
+use labwired_core::peripherals::components::GenericI2cDevice;
 use labwired_core::peripherals::i2c::{I2c, I2cDevice};
 use labwired_core::sim_input::SimInputError;
 use std::path::PathBuf;
@@ -54,7 +54,7 @@ fn read_axis(bus: &mut SystemBus, msb_reg: u8) -> i16 {
         for cell in i2c.attached_devices() {
             let mut dev = cell.borrow_mut();
             if let Some(any) = dev.as_any_mut() {
-                if let Some(fxos) = any.downcast_mut::<Fxos8700>() {
+                if let Some(fxos) = any.downcast_mut::<GenericI2cDevice>() {
                     fxos.stop(); // reset the register-pointer phase (fresh transaction)
                     fxos.write(msb_reg);
                     let hi = fxos.read() as i16;
@@ -102,9 +102,13 @@ fn set_input_drives_the_device_by_channel_name() {
     assert_eq!(read_axis(&mut bus, 0x01), 4096, "x should read +1 g");
     assert_eq!(read_axis(&mut bus, 0x03), -2048, "y should read -0.5 g");
 
-    // The driven value must STICK across reads (manual latch beats the
-    // built-in animation) — the property the demo needs.
-    assert_eq!(read_axis(&mut bus, 0x01), 4096, "x must not animate away");
+    // The driven value must STICK across reads: the part reports what it is
+    // driven and invents nothing — the property the demo needs.
+    assert_eq!(
+        read_axis(&mut bus, 0x01),
+        4096,
+        "x must not drift on its own"
+    );
 }
 
 #[test]

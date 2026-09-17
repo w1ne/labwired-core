@@ -24,8 +24,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::neo6m::NEO6M_KIT,
     &components::ydlidar::YDLIDAR_KIT,
     &components::adxl345::ADXL345_KIT,
-    &components::ina219::INA219_KIT,
-    &components::ads1115::ADS1115_KIT,
     &components::ds3231::DS3231_KIT,
     &components::hx711::HX711_KIT,
     &components::bno055::BNO055_KIT,
@@ -34,7 +32,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::microsd::MICROSD_KIT,
     &components::mcp2515::MCP2515_KIT,
     &components::mpu6050::MPU6050_KIT,
-    &components::mma8451q::MMA8451Q_KIT,
     &components::bme280::BME280_KIT,
     &components::aht20::AHT20_KIT,
     &components::bmp280::BMP280_KIT,
@@ -73,7 +70,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::scd41::SCD41_KIT,
     &components::sgp41::SGP41_KIT,
     &components::sps30::SPS30_KIT,
-    &components::mlx90614::MLX90614_KIT,
     &components::max7219::MAX7219_KIT,
     &components::lcd1602::LCD1602_KIT,
     // Declarative I²C devices — model lives entirely in configs/devices/*.yaml,
@@ -108,6 +104,20 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // than by a conversion, so an oracle would be asserting that. See
     // tmp117_migration_parity.rs.
     &components::declarative_i2c::TMP117_KIT,
+    // The Tier-1 gap ports. Each names the primitive its datasheet needed:
+    // INA219 a derived source (POWER is a product of two channels), ADS1115 a
+    // `source_from` mux (CONVERSION follows CONFIG's MUX bits), MMA8451Q a
+    // per-field `scale_from` plus the inverted `zero_unless` standby gate,
+    // FXOS8700 the `auto_increment_map` hybrid jump, MLX90614 an SMBus PEC over
+    // the whole transaction and a little-endian response word. Their models are
+    // DELETED rather than kept as oracles — each had a behaviour that changed
+    // deliberately, so an oracle would be asserting it. See the
+    // `*_migration_parity.rs` tests.
+    &components::declarative_i2c::INA219_KIT,
+    &components::declarative_i2c::ADS1115_KIT,
+    &components::declarative_i2c::MMA8451Q_KIT,
+    &components::declarative_i2c::FXOS8700_KIT,
+    &components::declarative_i2c::MLX90614_KIT,
     // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,
@@ -115,7 +125,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::apa102::APA102_KIT,
     // Migrated from i2c_factory-only → universal kit attach (any MCU).
     &components::bmi270::BMI270_KIT,
-    &components::fxos8700::FXOS8700_KIT,
     &components::max30102::MAX30102_KIT,
     &components::cap1188::CAP1188_KIT,
     &components::drv2605::DRV2605_KIT,
