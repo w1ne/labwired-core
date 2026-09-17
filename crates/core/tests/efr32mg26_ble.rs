@@ -13,10 +13,11 @@
 //! ⚠️ This device is NOT silicon — see `peripherals/virtual_ble.rs`. These
 //! tests assert the twin's behaviour, and the twin's only.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
-use std::path::PathBuf;
 
 /// Where the chip yaml maps the controller.
 const BLE: u64 = 0x4F00_0000;
@@ -42,12 +43,6 @@ const LWBL_MAGIC: u32 = 0x4C42_574C;
 
 /// EFR32MG26 `cpu_hz`, from the chip descriptor.
 const MG26_HZ: u64 = 78_000_000;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// A pair of buses on a **private** air.
 ///

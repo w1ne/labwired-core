@@ -72,10 +72,11 @@
 //! read back 0 and the run proves something about a timer that was never
 //! configured. This file writes them in the order the die was given.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
-use std::path::PathBuf;
 
 const TIMER0: u64 = 0x4004_8000;
 const CFG: u64 = TIMER0 + 0x04;
@@ -100,13 +101,6 @@ const IF_CC0: u32 = 1 << 4;
 
 /// `PRESC = 1023`: 1024 timer clocks per counter tick.
 const CYCLES_PER_TICK: u64 = 1024;
-
-fn root(rel: &str) -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../..");
-    p.push(rel);
-    p
-}
 
 fn brd2709a_bus() -> SystemBus {
     let system_path = root("configs/systems/brd2709a.yaml");

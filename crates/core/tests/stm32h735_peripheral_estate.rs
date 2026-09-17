@@ -44,11 +44,12 @@
 //! some memory existed at the address. Reset values are the IP's own
 //! fingerprint and cannot be produced by an accident of wiring.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, Cpu, Machine};
-use std::path::PathBuf;
 
 /// RCC @ 0x5802_4400 (RM0468 §8.7). The H7 enable block sits at 0xD4..0xF4 --
 /// nowhere near the F4/L4 0x30..0x44 the other STM32 models use.
@@ -61,12 +62,6 @@ const RCC_APB2ENR: u64 = RCC + 0xF0;
 /// FDCAN `ENDN` -- the endianness word, fixed at 0x8765_4321 on real silicon.
 /// Probed rather than `CREL`, which this model answers even while clock-gated.
 const FDCAN_ENDN: u64 = 0x004;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Build the H735 the way every production entry point does: `from_config`
 /// followed by `configure_cortex_m`.

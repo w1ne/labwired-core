@@ -23,10 +23,11 @@
 //! `clock:` key deleted. `USART1_STATUS` (offset 0x18, reset `0x2040` =
 //! TXBL|TXIDLE — `efr32mg26_usart.h`) has neither problem.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
-use std::path::PathBuf;
 
 const CMU: u64 = 0x4000_8000;
 /// `CMU_CLKEN0`, absolute — walked from `CMU_TypeDef`.
@@ -54,12 +55,6 @@ const GPIO_MODEH: u64 = 0x0C;
 const GPIO_MODEH_PC08_PC09_PUSHPULL: u32 = 0x0000_0044;
 const GPIO_DOUT: u64 = 0x10;
 const GPIO_DIN: u64 = 0x14;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 fn bus() -> SystemBus {
     let abs = root("configs/chips/efr32mg26.yaml");
