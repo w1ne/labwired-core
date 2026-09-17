@@ -809,7 +809,16 @@ jobs:
     # already built by the time these steps ran there — so the 185s measured
     # inside pr-gate is NOT what this costs alone. 20 is sized for the cold
     # build, not for the incremental one.
-    timeout-minutes: 20
+    #
+    # 30 rather than 20 since the browser JIT gate landed: that step builds a
+    # SECOND dependency graph (crates/wasm is outside default-members, and the
+    # target is wasm32-unknown-unknown), and a cold wasm32 graph is minutes,
+    # not seconds. It is cached under this job's own `core-browser-layer` key
+    # like everything else, so the wall is only paid on a cold cache or a
+    # dependency change. A timeout kill mid-wasm-build reads as a JIT failure
+    # and is not one, which is the exact mis-read the comment above the job
+    # history is about.
+    timeout-minutes: 30
     steps:
       # Shallow checkout: this job runs no git-history-dependent gate.
       - uses: actions/checkout@v4
@@ -930,6 +939,41 @@ jobs:
         run: rustup target add thumbv7em-none-eabi
       - name: Unit tests (browser layer)
         run: cargo test -p labwired-wasm --lib
+
+      # ── THE BROWSER JIT GATE ─────────────────────────────────────────────
+      #
+      # Everything above tests crates/wasm on the HOST. The opt-in browser JIT
+      # (`set_jit_enabled` + `step_batch`) dispatches through
+      # `WebAssembly.Module`/`Instance` from `js_sys`, and those are stubs on
+      # a non-wasm target — so no host test can reach a compiled block. Until
+      # this step, no lane built the artifact the browser loads either.
+      #
+      # The test boots the same committed L476 six-step ELF
+      # `crates/wasm/tests/motor_states.rs` boots natively, runs the same
+      # batches through the interpreter and then through the JIT, and asserts
+      # they retire the same cycles, land on the same PC, emit the same UART
+      # bytes and leave the same motor-plant state — plus that the JIT
+      # actually compiled a block and ran one. A vacuous run (JIT compiled
+      # nothing, every dispatch fell back) FAILS; there is no skip.
+      #
+      # `--dev` is the right profile, not `--release`:
+      #   * debug_assertions stay ON, and the JIT's cycle-account assertions
+      #     (`step_batch_cortex_m_jit`'s `debug_assert_eq!`) live there, so a
+      #     release build would not run them;
+      #   * `profile.dev` is already opt-level 1 and wasm-opt is skipped, so
+      #     this is the cheapest profile that still gates.
+      #
+      # The installer pins wasm-pack v0.13.1 and fetches a single binary; the
+      # wasm-bindgen CLI it drives is resolved from this workspace's
+      # Cargo.lock (0.2.121), the version the crate already pins. `node` is
+      # preinstalled on ubuntu-latest (v20); the test is plain ESM + BigInt.
+      - name: Install wasm-pack (pinned by the installer, v0.13.1)
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build the browser artifact (wasm-pack, nodejs target)
+        run: wasm-pack build --target nodejs --dev --out-dir pkg
+        working-directory: crates/wasm
+      - name: Browser Cortex-M JIT end-to-end (JIT off vs on)
+        run: node scripts/test_browser_cortex_m_jit.mjs
 
   pr-scheduler-observable:
     name: pr-scheduler-observable
