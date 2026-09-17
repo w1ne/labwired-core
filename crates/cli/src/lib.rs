@@ -33,6 +33,7 @@ mod component_validation;
 mod gpio_observer;
 mod resource_report;
 mod size_limited_writer;
+mod stimuli;
 mod vcd_trace;
 mod wifi_frames;
 
@@ -347,24 +348,35 @@ pub struct SnapshotCaptureArgs {
 
 #[derive(Parser, Debug)]
 pub struct RunArgs {
-    /// Path to the chip descriptor YAML.
-    #[arg(long)]
-    pub chip: PathBuf,
+    /// Path to the chip descriptor YAML. Required unless --system is given
+    /// (the manifest then names the chip: the system-aware driver).
+    #[arg(long, required_unless_present = "system")]
+    pub chip: Option<PathBuf>,
 
     /// Path to the firmware ELF.
     #[arg(long)]
     pub firmware: PathBuf,
 
-    /// Optional system manifest (YAML) whose `external_devices:` are attached
-    /// to the chip before the run — a display, a sensor, anything the board
-    /// carries. Without it the chip runs bare and firmware talking to a panel
-    /// has nothing on the far side of the bus.
+    /// Board manifest (SystemManifest YAML). Two shapes:
     ///
-    /// ESP32-S3 only for now (the path `--rom-boot` uses); other families
-    /// build their bus through `SystemBus::from_config` and already take a
-    /// manifest via the top-level `--system`.
+    /// * With `--chip`: attach the manifest's `external_devices:` to the chip
+    ///   before the run — a display, a sensor, anything the board carries.
+    ///   ESP32-S3 only for now (the path `--rom-boot` uses); other families
+    ///   build their bus through `SystemBus::from_config` and take a manifest
+    ///   via the top-level `--system`.
+    /// * Without `--chip`: select the system-aware driver, which resolves the
+    ///   chip from the manifest, attaches its external devices, and (ARM only
+    ///   in this phase) applies `--stimulus` entries. An explicit `--max-steps`
+    ///   budget is required in this shape.
     #[arg(long)]
     pub system: Option<PathBuf>,
+
+    /// Declarative input stimulus as JSON (repeatable), agent MCP shape:
+    /// {"channel":"x","value":2.0,"after_cycles":3000000,"component":"fxos8700"}.
+    /// Requires the system-aware driver (`--system` without `--chip`);
+    /// after_cycles omitted or 0 applies at start.
+    #[arg(long = "stimulus", value_name = "JSON")]
+    pub stimulus: Vec<String>,
 
     /// Optional path for an end-of-run dump of every attached parallel panel:
     /// a binary PPM at this path plus a luma ASCII map on stderr. Proves what
@@ -379,7 +391,8 @@ pub struct RunArgs {
     #[arg(long)]
     pub stop_on: Option<String>,
 
-    /// Maximum number of simulator steps before exit (default: unlimited).
+    /// Maximum number of simulator steps before exit (default: unlimited;
+    /// required when --system is given without --chip).
     #[arg(long)]
     pub max_steps: Option<u64>,
 
@@ -469,6 +482,17 @@ pub struct RunArgs {
     /// sleeps when virtual time (`cycles/cpu_hz`) is at least 1 ms ahead of wall.
     #[arg(long = "time-mode", value_name = "MODE", default_value_t = labwired_core::HostTimeMode::MaxSpeed)]
     pub time_mode: labwired_core::HostTimeMode,
+}
+
+impl RunArgs {
+    /// The chip descriptor path. Clap guarantees `--chip` whenever the
+    /// system-only driver was not selected; the system driver resolves the
+    /// chip from the manifest instead.
+    pub(crate) fn chip_path(&self) -> &Path {
+        self.chip
+            .as_deref()
+            .expect("clap enforces --chip unless --system replaces it")
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -870,7 +894,7 @@ pub fn run_with_plugins(plugins: &[&dyn labwired_core::plugin::ChipPlugin]) -> E
         Some(Commands::Test(args)) => commands::test::run_test(args, plugins),
         Some(Commands::Machine(args)) => run_machine(args, plugins),
         Some(Commands::Asset(args)) => run_asset(args, plugins),
-        Some(Commands::Run(args)) => commands::run::run_firmware(args, plugins),
+        Some(Commands::Run(args)) => commands::run::run_firmware(args, plugins, cli.json),
         Some(Commands::Snapshot(args)) => commands::snapshot::run_snapshot(args, plugins),
         Some(Commands::Coverage(args)) => commands::coverage::run_coverage(args),
         Some(Commands::Tier1Matrix(args)) => commands::tier1::run_tier1_matrix(args),

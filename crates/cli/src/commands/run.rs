@@ -132,10 +132,10 @@ pub(crate) fn run_firmware_riscv(
 ) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
-    let chip = match labwired_config::ChipDescriptor::from_file(&args.chip) {
+    let chip = match labwired_config::ChipDescriptor::from_file(args.chip_path()) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("error: cannot parse chip YAML {:?}: {e}", args.chip);
+            eprintln!("error: cannot parse chip YAML {:?}: {e}", args.chip_path());
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
@@ -146,7 +146,7 @@ pub(crate) fn run_firmware_riscv(
         parts: Vec::new(),
         schema_version: "1.0".to_string(),
         name: chip.name.clone(),
-        chip: args.chip.to_string_lossy().into_owned(),
+        chip: args.chip_path().to_string_lossy().into_owned(),
         cpu_hz: None,
         memory_overrides: Default::default(),
         external_devices: vec![],
@@ -721,17 +721,39 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
 pub(crate) fn run_firmware(
     args: RunArgs,
     plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+    json: bool,
 ) -> ExitCode {
     use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
     use labwired_core::bus::SystemBus;
     use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
     use labwired_core::SimulationError;
 
+    // The system-aware driver is selected by omitting --chip (clap then
+    // guarantees --system). With --chip present, `--system` keeps its
+    // attach-the-manifest meaning for the chip paths (ESP32-S3).
+    if args.chip.is_none() {
+        return super::run_system::run_firmware_with_system(&args, plugins, json);
+    }
+
+    if !args.stimulus.is_empty() {
+        crate::emit_error(
+            json,
+            "ConfigError",
+            "--stimulus needs the system-aware driver: pass --system <manifest> and omit --chip"
+                .to_string(),
+            None,
+            crate::EXIT_CONFIG_ERROR,
+        );
+        return ExitCode::from(crate::EXIT_CONFIG_ERROR);
+    }
+
+    let chip_path = args.chip_path().to_path_buf();
+
     // Read the chip YAML to validate the chip family.
-    let chip_yaml = match std::fs::read_to_string(&args.chip) {
+    let chip_yaml = match std::fs::read_to_string(&chip_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: cannot read chip YAML at {:?}: {e}", args.chip);
+            eprintln!("error: cannot read chip YAML at {:?}: {e}", chip_path);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
@@ -760,7 +782,7 @@ pub(crate) fn run_firmware(
         eprintln!(
             "error: --batched is not available for chip {:?}: the Xtensa path \
              does not run through `Machine::advance`",
-            args.chip,
+            args.chip_path(),
         );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     }
@@ -774,7 +796,7 @@ pub(crate) fn run_firmware(
         eprintln!(
             "error: chip {:?} does not look like an Xtensa LX7 chip; \
              only ESP32-S3 is supported by `labwired run`",
-            args.chip,
+            args.chip_path(),
         );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     }
@@ -794,7 +816,7 @@ pub(crate) fn run_firmware(
     // Wire the bus + CPU.
     let mut bus = SystemBus::new();
     // One read of the descriptor for every property this path takes from it.
-    let chip_desc = labwired_config::ChipDescriptor::from_file(&args.chip).ok();
+    let chip_desc = labwired_config::ChipDescriptor::from_file(args.chip_path()).ok();
     // `--rom-boot` runs the real ROM from reset, which programs the flash MMU;
     // select the MMU XIP model for it. Fast-boot uses identity per-window XIP.
     let opts = Esp32s3Opts {
@@ -1496,10 +1518,10 @@ pub(crate) fn run_firmware_arm(
 
     // Synthesise a minimal system manifest (no external devices) so the bus
     // builder has something to work with.  The chip path is already absolute
-    // because `chip_yaml` was read from `args.chip`.
+    // because `chip_yaml` was read from `args.chip_path()`.
     let manifest_yaml = format!(
         "name: \"tier1-run\"\nchip: \"{}\"\nexternal_devices: []\n",
-        args.chip.display()
+        args.chip_path().display()
     );
     let mut manifest = match serde_yaml::from_str::<SystemManifest>(&manifest_yaml) {
         Ok(m) => m,
@@ -1508,9 +1530,10 @@ pub(crate) fn run_firmware_arm(
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };
-    // Chip field must be an absolute path string; already is (args.chip is absolute
-    // relative to the caller's cwd, which is the workspace root per run_target).
-    manifest.chip = args.chip.to_string_lossy().into_owned();
+    // Chip field must be an absolute path string; already is (args.chip_path() is
+    // absolute relative to the caller's cwd, which is the workspace root per
+    // run_target).
+    manifest.chip = args.chip_path().to_string_lossy().into_owned();
 
     // Build the bus.
     let mut bus = match SystemBus::from_config_with_plugins(&chip, &manifest, plugins) {
