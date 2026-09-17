@@ -1738,7 +1738,7 @@ fn test_kw41z_lcd_activity_survival() {
 /// cooperated, not just that the CPU survived.
 #[test]
 fn test_kw41z_lcd_renders_screen() {
-    use labwired_core::peripherals::components::Pcd8544;
+    use labwired_core::peripherals::components::GenericDisplay;
     use labwired_core::peripherals::spi::Spi;
 
     let (chip, manifest) = load_system("mkw41z4", "frdm-kw41z-lcd");
@@ -1760,7 +1760,7 @@ fn test_kw41z_lcd_renders_screen() {
         .iter()
         .filter_map(|p| p.dev.as_any().and_then(|a| a.downcast_ref::<Spi>()))
         .flat_map(|spi| spi.attached_devices.iter())
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("PCD8544 attached to an SPI bus");
 
     assert!(lcd.display_on(), "PCD8544 display was never turned on");
@@ -1822,7 +1822,7 @@ fn test_kw41z_lcd_renders_screen() {
 /// chunky meter, so a hard tilt must change hundreds of pixels, not a few.
 #[test]
 fn test_kw41z_lcd_cow_reacts_to_tilt() {
-    use labwired_core::peripherals::components::Pcd8544;
+    use labwired_core::peripherals::components::GenericDisplay;
     use labwired_core::peripherals::i2c::I2c;
     use labwired_core::peripherals::spi::Spi;
 
@@ -1841,7 +1841,7 @@ fn test_kw41z_lcd_cow_reacts_to_tilt() {
             .iter()
             .filter_map(|p| p.dev.as_any().and_then(|a| a.downcast_ref::<Spi>()))
             .flat_map(|spi| spi.attached_devices.iter())
-            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
             .expect("PCD8544 attached to an SPI bus")
             .framebuffer()
             .to_vec()

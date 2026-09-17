@@ -512,11 +512,240 @@ The pads such a part drives still go out through the narrowed `DevicePins` port,
 exactly as on the tick pass — this changes WHEN `service` runs, not what it may
 touch.
 
+## `uart_device` — a part whose whole interface is a byte stream
+
+Two shapes a register map cannot reach because the part has no registers: an
+**AT command shell** (HC-05, SIM800L, every cellular modem) and an
+**unsolicited stream** (a GPS emitting NMEA once a second). Both were
+hand-written Rust, and the three models this primitive replaced were the same
+file three times — the same line buffer, the same 128-byte cap, the same `poll`
+that pops one byte. Only the command LADDER differed, and a ladder is a table.
+
+```yaml
+behavior:
+  primitive: uart_device
+  uart:
+    baud: 38400                         # the datasheet's rate; diagnostic today
+    frames:
+      terminator: "\r\n"                # every byte of this ends a frame
+      max_bytes: 128                    # a longer line is truncated, not grown
+      ignore_case: true                 # the AT default
+    responses:                          # tried IN ORDER; first match wins
+      - { match: { prefix: "AT+VERSION" }, respond: "+VERSION:x\r\nOK\r\n" }
+      - { match: "AT+NAME?",              respond: "+NAME:HC-05\r\nOK\r\n" }
+      - { match: "AT",                    respond: "OK\r\n" }
+      - { match: { prefix: "AT+" },       respond: "OK\r\n", delay_us: 90000 }
+      - { match: any,                     respond: "ERROR\r\n" }
+```
+
+`match:` is `any`, a bare literal (which means EXACT), or `{ exact: … }` /
+`{ prefix: … }`. There is no regex: a datasheet's command table is literals and
+prefixes, and a regex in a part document is a second language with its own
+failure modes. A response may also carry `do: [ … ]` — the same [`Action`]
+vocabulary a rule uses — so a command that switches the part's mode answers
+from the new mode.
+
+⚠️ **A frame that is empty after trimming produces nothing.** `AT\r\n` is two
+terminator bytes, so the `\r` completes the frame and the `\n` completes an
+empty one; without that rule every command is answered twice.
+
+### Unsolicited output, and templates
+
+```yaml
+  timers:
+    - { name: sentence, period_us: 500000, start: on_reset }
+  uart:
+    unsolicited:
+      - timer: sentence
+        when: "var(idx) % 2 == 0"
+        wrap: nmea
+        template: "GPGGA,120000.00,{abs(input(lat)) / 10000000 * 1000000 + (abs(input(lat)) % 10000000 * 6 + 50) / 100:09.4},{input(lat) >= 0:char(N,S)},…"
+  rules:
+    - on: { timer: sentence }
+      do: [ { var: idx, value: "var(idx) + 1" } ]
+```
+
+⚠️ **Every `unsolicited:` guard is evaluated BEFORE the timer's rules run**, so
+two entries guarded `% 2 == 0` and `% 2 == 1` are mutually exclusive. If the
+rule that increments `idx` ran first, the second guard would see the
+incremented value and every tick would emit both sentences.
+
+A **template** is literal text with `{EXPR}` or `{EXPR:FORMAT}` placeholders
+over the ordinary integer expression language. The formats are:
+
+| spelling | meaning |
+|---|---|
+| none, or `d` | plain decimal |
+| `W.P` / `0W.P` / `.P` | fixed point: the integer is a count of `10^-P`, printed with `P` decimals, zero-padded to `W` characters total |
+| `WX` | uppercase hex, zero-padded to `W` |
+| `char(A,B)` | one character: `A` when the value is non-zero, else `B` |
+
+**No float ever crosses the boundary**, which is what makes a rendered sentence
+bit-identical on native and wasm. An NMEA position is `DDMM.mmmm`: the channel
+declares `expr_scale: 10000000` so `input(lat)` is degrees × 1e7, integer
+arithmetic converts to 1e-4 minutes, and `{…:09.4}` prints it. `abs()` takes
+the magnitude and `char(N,S)` carries the hemisphere, because that is how the
+sentence is shaped — a number and a sign in two different fields.
+
+`wrap: nmea` is the one framing the engine knows: `$`, the payload, `*`, the
+two uppercase hex digits of the XOR over the payload, CRLF. It is a key rather
+than something a template could contain because the checksum is over the
+template's own OUTPUT.
+
+## FIFO streams
+
+The shape a register map cannot fake: a queue the part fills on its own clock
+and firmware drains. The depth and the overflow policy are the whole point — a
+model that always hands back the newest sample passes firmware that never
+drains fast enough, which is precisely the CPU-starvation bug worth simulating.
+
+```yaml
+  fifos:
+    - name: samples
+      depth: 32
+      overflow: drop_newest            # "collects up to 32 values and then stops"
+      fill:
+        timer: sample                  # the SAME timer a rule may listen for
+        when: "field(FIFO_CTL.FIFO_MODE) != 0"
+        pack:                          # one entry, MSB-first, 63 bits max
+          - { expr: "reported(DATAX0)", width_bits: 16 }
+          - { expr: "reported(DATAY0)", width_bits: 16 }
+          - { expr: "reported(DATAZ0)", width_bits: 16 }
+      count: { register: FIFO_STATUS, field: ENTRIES }
+      watermark:
+        entries_from: { register: FIFO_CTL, field: SAMPLES }
+        set: INT_SOURCE.WATERMARK
+
+    # …and the registers that drain it:
+      - { name: DATAX0, addr: 0x32, …, fifo: { name: samples, slot: 0 } }
+      - { name: DATAY0, addr: 0x34, …, fifo: { name: samples, slot: 1 } }
+      - { name: DATAZ0, addr: 0x36, …, fifo: { name: samples, slot: 2, pop: true } }
+```
+
+⚠️ **Bypass mode needs no second switch.** A `fifo:` register serves the
+queue's oldest entry while the queue is NON-EMPTY and falls through to its live
+`source:` when it is empty. In bypass the fill guard is false, so nothing is
+ever queued, so the register reports the live conversion — byte for byte what
+the part did before the FIFO existed. Get the fill guard right and the read
+path is right for free.
+
+⚠️ **`pop: true` goes on the LAST register of the burst.** A driver that
+abandons the burst earlier gets the same sample again, which is what silicon
+does with a read that never completed — and the trap a pop-on-first-byte model
+would hide.
+
+⚠️ **The watermark FOLLOWS the depth** unless the part declares `latch: true`.
+That is what makes a driver's "drain until the watermark drops" loop terminate.
+
+### `reported(REG)` — the word a register would put on the wire
+
+`reg(NAME)` is the register's STORED word. For a measurement register that is
+its reset value forever: nothing writes it, because the value is computed at
+read time from the stimulus channel. `input(KEY)` is not the same thing either
+— it borrows only the register's `encode:`, so a part whose counts-per-unit
+comes from `scale_from` (the ADXL345's range bits) gets the raw engineering
+value instead of the count.
+
+`reported(NAME)` is the word the register would put on the wire right now,
+through the same function the read path uses. A FIFO that packs what the data
+registers report, and an alarm that compares against the clock the time
+registers report, both need this and nothing else will do.
+
+### The stream parts that did NOT become data, and why
+
+`adxl345.yaml` is the FIFO primitive's proof part. Four more parts were looked
+at for this round and none of them is a FIFO port; each is named here with the
+reason, because "not yet ported" and "there is nothing there to port" are very
+different facts.
+
+- **BMI270** — **has no FIFO at all.** The shipped Rust model answers
+  `CMD_FIFO_FLUSH` with a comment that says `no FIFO modelled`, and there is no
+  queue, no watermark and no `FIFO_LENGTH` behind it. Porting it is a Tier-1 +
+  Tier-2 register job (the config-load handshake gate, the paged FEATURES
+  window, `scale_from` over `ACC_RANGE`/`GYR_RANGE`), not a stream job, and it
+  is listed as such rather than counted as FIFO coverage it would not provide.
+- **MAX30102** — a real 32-deep FIFO, and still not portable as data, for two
+  independent reasons. Its samples are **synthesised in Rust**: the model runs
+  a seeded LCG to shape a photoplethysmogram with a systolic upstroke, a
+  dicrotic notch and a diastolic decay. `fills[].pack` packs EXPRESSIONS over
+  stimulus channels; it cannot generate a waveform, and a port that dropped the
+  waveform would be a different part wearing the same `device_type`. Second,
+  its sample clock is a stated **thunk** — the model's own header calls
+  advancing one sample period per completed I²C transaction "a deliberate
+  stand-in for the missing clock hook, not silicon behaviour". A declarative
+  port has a real timer and would therefore not be a parity port. A waveform
+  primitive is the honest unblock, and it is a primitive, not a key.
+- **SX1278 / RA-02** and **nRF24L01+** — SPI register **shells with no air
+  link**, no FIFO, and no IRQ pin (`no RF air link`, `no air link`, in their own
+  first lines). 138 and 191 lines each, nearly all of it a register array behind
+  an address/data phase machine. There is no radio behaviour to preserve, so
+  porting them would move a stub, not a model. They are the clearest case of the
+  rule that a thunk is to be reported, not ported.
+- **MCP2515** — the SPI and register half is expressible, but the part's reason
+  to exist is `attach_can_bus`: a `Sender`/`Receiver` pair of `CanFrame`s the
+  engine hands it, plus `poll_external_bus`. That is an engine SEAM, not a
+  descriptor key. A pack could declare `bus: can` and have the engine wire it,
+  which is the shape to build — and it is a primitive-level change with its own
+  attach contract, so it is named here rather than half-done.
+
+## `timers[].period_from` — a field-driven timer period
+
+A sample rate is a REGISTER on nearly every part that has one, and a constant
+`period_us` is right for exactly one setting of it.
+
+```yaml
+  timers:
+    - name: sample
+      period_us: 10000               # what the source register's RESET value gives
+      start: on_reset
+      period_from:
+        register: BW_RATE
+        field: RATE                  # or `mask:` + `shift:`
+        table:                       # field value → period in µs
+          0x9: 20000                 #   50 Hz
+          0xA: 10000                 #  100 Hz — the reset value
+          0xD: 1250                  #  800 Hz
+```
+
+A **table** rather than a formula because that is the shape of the datasheet:
+these are enumerations with footnotes. A part whose rate genuinely is a formula
+over a wide field (the MPU6050's 8-bit `SMPLRT_DIV`) does not fit and is named
+as still-blocked rather than approximated by a 256-row table.
+
+An **unmapped** field value is NEUTRAL — `period_us` stays in force, the same
+rule `scale_from` and `clamp_from` have — so a reserved encoding cannot
+silently stop the part's clock. A RUNNING timer whose period changed is
+re-anchored to `now + the new period`: firmware that rewrote the rate register
+restarted the divider.
+
+## `set_input:` — a rule that assigns a stimulus channel
+
+Every other action changes something firmware can see through the wire. This
+one changes what the part MEASURES, which is the only way a part can hold a
+quantity that moves on its own clock.
+
+```yaml
+  timers:
+    - { name: tick, period_us: 1000000, start: on_reset }
+  rules:
+    - on: { timer: tick }
+      when: "field(CONTROL.EOSC) == 0"
+      do: [ { set_input: unix_time, value: "input(unix_time) + 1" } ]
+```
+
+`value:` is in the same domain `input()` reads back, and `set_input` is its
+exact inverse — a rule that writes back what it read changes nothing.
+
+⚠️ **It does NOT raise `on: { input: KEY }`.** A rule that fed its own trigger
+would be a loop, and the machine's recursion guard would drop the re-entry
+silently rather than run it. A HOST driving the channel still raises the event,
+because that is an outside event.
+
 ## What a pack cannot do
 
 A pack is data interpreted by a **primitive** — `i2c_device`, `spi_device`,
-`analog_source`, `display`, `gpio_device`, `quadrature`, `matrix`, `one_wire`,
-`pulse_echo`.
+`analog_source`, `display`, `gpio_device`, `uart_device`, `quadrature`,
+`matrix`, `one_wire`, `pulse_echo`.
 Those primitives are the irreducible timing algorithms, and they live in Rust in
 this repository.
 

@@ -1179,6 +1179,11 @@ pub type I2cAccess = RegisterAccess;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RegisterSpec {
     pub name: String,
+    /// **FIFO drain port**: while the named FIFO is NON-EMPTY, a read of this
+    /// register serves one packed component of its oldest entry instead of the
+    /// live [`source`](Self::source). See [`RegisterFifo`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fifo: Option<RegisterFifo>,
     /// Pointer the master writes to select this register.
     ///
     /// One byte on almost every part; two on a device that declares
@@ -1495,6 +1500,45 @@ pub struct Encode {
     /// wrapping into a neighbouring field.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bcd: bool,
+    /// **Which bits carry the NUMBER.** Bits outside this mask are plain flags:
+    /// stored as written and served back verbatim, untouched by the numeric
+    /// encoding. Absent ⇒ the whole word is the number, which is what every
+    /// descriptor written before this key means.
+    ///
+    /// ## Why a register needs this
+    ///
+    /// The DS3231's alarm registers are the case. `A1M1` is bit 7 of the SAME
+    /// byte whose low seven bits are the BCD seconds, and the four mask bits
+    /// are what decide the alarm RATE — once a second, when the seconds match,
+    /// when the minutes and seconds match, and so on. A `bcd:` that claims the
+    /// whole word runs the flag through the nibble decode, so `0x89` ("mask
+    /// set, 9 seconds") stores as 89 and reads back `0x89` only by accident;
+    /// masking the flag away instead — which is what those registers did before
+    /// this key — makes alarm matching unexpressible, because the bit that
+    /// decides the rate is gone.
+    ///
+    /// With `value_mask`, the stored word is `number | flags` and both halves
+    /// survive a round trip:
+    ///
+    /// ```yaml
+    /// - { name: ALARM1_SECONDS, addr: 0x07, width: 1, access: rw,
+    ///     encode: { bcd: true, value_mask: 0x7F },
+    ///     bits: [{ name: A1M1, shift: 7 }] }
+    /// ```
+    ///
+    /// A rule then reads the number as `reg(ALARM1_SECONDS) & 0x7F` and the
+    /// flag as `field(ALARM1_SECONDS.A1M1)` — two independent things in one
+    /// byte, which is what the silicon has.
+    ///
+    /// ⚠️ The number must fit inside the mask in BOTH domains: decimal 59 is
+    /// `0x3B` and its BCD form is `0x59`, and both sit inside `0x7F`. A mask
+    /// too narrow for the BCD form would truncate the tens digit on the wire.
+    ///
+    /// Only meaningful with [`bcd`](Self::bcd) today, and only on a STORAGE
+    /// register — a register with a `source:` computes its whole word at read
+    /// time and has no stored flags to preserve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_mask: Option<u32>,
     /// Rounding applied to the encoded value before it becomes an integer
     /// count. Absent ⇒ [`Rounding::Nearest`], which is what every descriptor
     /// written before this field existed means (`f64::round`).
@@ -1505,6 +1549,38 @@ pub struct Encode {
     /// `clamp_max` pair. See [`ClampFrom`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clamp_from: Vec<ClampFrom>,
+}
+
+/// One register's view into a FIFO — the drain seam.
+///
+/// ## Why "non-empty", rather than a mode flag
+///
+/// A part with a FIFO has a BYPASS mode in which its data registers serve the
+/// live conversion, and a FIFO mode in which the same registers walk the queue.
+/// Both behaviours are already implied by the queue itself: in bypass the
+/// [`FifoFill`](crate::FifoFill) guard is false, nothing is ever pushed, the
+/// FIFO is always empty, and the register falls through to `source:`.
+///
+/// So there is no second mode switch to keep in step with the first. A
+/// descriptor that gets its fill guard right gets its read path right for
+/// free, and a Tier-1 register with no `fifo:` is untouched.
+///
+/// ## Popping
+///
+/// `pop: true` on the LAST slot a driver reads is what advances the queue. The
+/// ADXL345's burst is `DATAX0 .. DATAZ1`, so `DATAZ0` carries the pop; a driver
+/// that stops after X gets the same sample again, which is exactly what the
+/// silicon does with a FIFO whose read was abandoned.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct RegisterFifo {
+    /// The FIFO this register drains.
+    pub name: String,
+    /// Which packed component of the entry, indexing
+    /// [`FifoFill::pack`](crate::FifoFill::pack).
+    pub slot: u8,
+    /// Whether completing a read of this register POPS the entry.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pop: bool,
 }
 
 /// How an encoded value becomes an integer count.
@@ -1787,6 +1863,11 @@ pub struct DeviceBehavior {
     /// framing and the command table. Absent for non-display primitives.
     #[serde(default)]
     pub display: Option<DisplaySpec>,
+    /// For the `uart_device` primitive: the part's frame shape, its command
+    /// table and what it says unprompted. See [`UartSpec`]. Absent for every
+    /// other primitive.
+    #[serde(default)]
+    pub uart: Option<UartSpec>,
 
     // ── Tier 2 (`crates/config/src/rules.rs`) ──────────────────────────────
     //
@@ -1909,8 +1990,18 @@ pub struct DeviceTimer {
     /// Diagnostic name. Not addressable from the bus.
     pub name: String,
     /// Repeating period in µs. Mutually exclusive with `after_us`.
+    ///
+    /// When [`period_from`](Self::period_from) is also declared, this is the
+    /// period the source register's RESET value gives — the rate the part ticks
+    /// at before firmware writes anything — and the field takes over from the
+    /// first write onward.
     #[serde(default)]
     pub period_us: Option<u64>,
+    /// **Field-driven period**: the repeating period is looked up from another
+    /// register's bit-field instead of being the constant
+    /// [`period_us`](Self::period_us). See [`TimerPeriodFrom`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period_from: Option<TimerPeriodFrom>,
     /// One-shot delay in µs, measured from the moment the timer starts.
     /// Mutually exclusive with `period_us`.
     #[serde(default)]
@@ -1931,6 +2022,69 @@ pub struct DeviceTimer {
     /// does not restrict them.
     #[serde(default)]
     pub on_fire: Vec<TimingAction>,
+}
+
+/// A register-bit-field-keyed **timer period**, the timing twin of
+/// [`ScaleFrom`] and [`ClampFrom`].
+///
+/// ## Why a part needs this
+///
+/// A sample rate is a register on nearly every part that has one, and a
+/// constant `period_us` is right for exactly one setting of it. Four shipped
+/// descriptors said so in their own headers before this key existed:
+///
+/// * **DS3231** `CONTROL.RS2:RS1` — the INT/SQW square wave is 1 Hz, 1.024 kHz,
+///   4.096 kHz or 8.192 kHz. The power-on value is 8.192 kHz, so a model with a
+///   constant 1 Hz was not merely inflexible, it was wrong at reset.
+/// * **ADXL345** `BW_RATE[3:0]` — sixteen output data rates, 3200 Hz halving
+///   down to 0.098 Hz. A driver that asks for 800 Hz and gets 100 Hz sees one
+///   sample in eight.
+/// * **MPU6050** `SMPLRT_DIV` + `DLPF_CFG`, and **HX711**'s gain pulses.
+///
+/// ## The shape, and why it is a TABLE
+///
+/// The engine extracts `(reg(register) >> shift) & mask` — or the named
+/// `field:`, which is the same thing spelled the way the datasheet spells it —
+/// and looks the value up in `table`, whose values are periods in µs.
+///
+/// A table rather than an arithmetic rule because that is the shape of the
+/// datasheet: these are enumerations with footnotes, not formulas. Even the
+/// ADXL345's, which IS a clean halving, has a non-halving low end in the
+/// datasheet's own table. A part whose rate genuinely is a formula over a wide
+/// field (the MPU6050's 8-bit `SMPLRT_DIV`) does not fit here and is named as
+/// still-blocked rather than approximated by a 256-row table.
+///
+/// An **unmapped** field value leaves [`DeviceTimer::period_us`] in force —
+/// the same "unmapped ⇒ neutral" rule `scale_from` and `clamp_from` have — so
+/// a reserved encoding does not silently stop the part's clock.
+///
+/// ## When the period changes under a RUNNING timer
+///
+/// The deadline is re-anchored to `now + the new period`. It is not
+/// recomputed from the old deadline: firmware that rewrites the rate register
+/// has restarted the divider, and keeping the old anchor would make the first
+/// interval after the change a length that neither setting has.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct TimerPeriodFrom {
+    /// Name of the register whose bit-field selects the period.
+    pub register: String,
+    /// A named `bits:` field of that register. Exactly one of this and
+    /// [`mask`](Self::mask) is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+    /// An explicit mask, applied after [`shift`](Self::shift), for a part that
+    /// has no name for the bits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask: Option<u32>,
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub shift: u8,
+    /// Extracted field value → repeating period in µs. A zero period is a load
+    /// error: it would fire without bound.
+    pub table: std::collections::BTreeMap<u32, u64>,
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
 }
 
 /// When a [`DeviceTimer`] begins running.
@@ -2066,6 +2220,139 @@ pub struct DisplaySpec {
     /// which is what a controller does with a command it does not implement.
     #[serde(default)]
     pub commands: Vec<DisplayCommand>,
+    /// Panel flags as they stand at power-on, before firmware sends anything.
+    /// Every MIPI DCS panel powers on dark and asleep (all `false`, the
+    /// default); the PCD8544 powers on with its display-control D bit set and
+    /// its power-down bit clear, so a bench module lights up before any
+    /// `display_on` command. A model that assumed dark would report a blank
+    /// panel for firmware that legitimately never sends one.
+    #[serde(default)]
+    pub power_on: DisplayPowerOn,
+    /// What a CS assert does to a half-open stream.
+    #[serde(default)]
+    pub cs_select: DisplayCsSelect,
+    /// Which panel flags and counters the paint artifact's `meta` carries, and
+    /// under what key.
+    ///
+    /// NOT a house style with per-format defaults: every consumer that decodes
+    /// a panel — the browser overlay, the CLI's `painted bytes=` line, the
+    /// evidence tests — reads these names, so which keys a panel publishes is
+    /// part of its contract and belongs in its descriptor. `w`, `h`, `format`
+    /// and `generation` are always present because they describe the payload
+    /// itself; everything else is listed here.
+    pub artifact_meta: Vec<DisplayMetaField>,
+}
+
+/// What a CS assert does to a stream that is already open.
+///
+/// Both readings are real and the two panels here disagree. The ST7789 model
+/// treats CS as the transaction boundary: a half-sent command does not survive
+/// a deselect. The ILI9341 model deliberately lets a RAMWR pixel stream survive
+/// one, because a driver that chunks a large blit releases CS between bursts
+/// and expects the pointer to be where it left it — closing the stream there
+/// paints the first chunk and drops the rest.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayCsSelect {
+    /// CS assert closes the open stream and discards a partial command.
+    #[default]
+    ClosesStream,
+    /// CS assert changes nothing; the stream and the address counters survive.
+    KeepsStream,
+}
+
+/// Panel flags at power-on. See [`DisplaySpec::power_on`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DisplayPowerOn {
+    #[serde(default)]
+    pub display_on: bool,
+    #[serde(default)]
+    pub awake: bool,
+    #[serde(default)]
+    pub inverted: bool,
+}
+
+/// One entry of [`DisplaySpec::artifact_meta`]: a flag, optionally published
+/// under a different key than its engine name.
+///
+/// Written as either `- lit_pixels` or `- { flag: lit, as: display_on }`. The
+/// rename exists because the same panel fact has a different published name on
+/// different panels — the PCD8544 has always reported its inverse-video bit as
+/// `inverse`, and renaming it to `inverted` in a port would break the browser
+/// overlay that reads it.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum DisplayMetaField {
+    Flag(DisplayMetaFlag),
+    Renamed {
+        flag: DisplayMetaFlag,
+        #[serde(rename = "as")]
+        published_as: String,
+    },
+}
+
+impl DisplayMetaField {
+    pub fn flag(&self) -> DisplayMetaFlag {
+        match self {
+            Self::Flag(f) => *f,
+            Self::Renamed { flag, .. } => *flag,
+        }
+    }
+
+    /// The `meta` key this entry publishes under.
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Flag(f) => f.default_key(),
+            Self::Renamed { published_as, .. } => published_as,
+        }
+    }
+}
+
+/// A fact about a painted panel that the artifact's `meta` can carry.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayMetaFlag {
+    /// Frame-memory bytes carrying at least one lit pixel (1 bpp panels).
+    InkBytes,
+    /// Lit pixels across a 1 bpp frame memory.
+    LitPixels,
+    /// Artifact bytes that are not 0x00. THE definition the CLI's
+    /// `painted bytes=` line prints.
+    PaintedBytes,
+    /// Artifact payload length.
+    TotalBytes,
+    /// The most common non-black pixel, as `0xRRRR` (RGB565 panels).
+    TopColour,
+    /// How many pixels carry [`Self::TopColour`].
+    TopColourPixels,
+    /// DISPON, and a supply to hold it.
+    DisplayOn,
+    /// SLPOUT seen, and a supply.
+    Awake,
+    /// DISPON **and** awake — what a camera would see.
+    Lit,
+    /// The module's supply pins are connected in the design.
+    Powered,
+    /// Inversion flag. Recorded, never applied to the stored bytes.
+    Inverted,
+}
+
+impl DisplayMetaFlag {
+    pub fn default_key(self) -> &'static str {
+        match self {
+            Self::InkBytes => "ink_bytes",
+            Self::LitPixels => "lit_pixels",
+            Self::PaintedBytes => "painted_bytes",
+            Self::TotalBytes => "total_bytes",
+            Self::TopColour => "top_colour",
+            Self::TopColourPixels => "top_colour_pixels",
+            Self::DisplayOn => "display_on",
+            Self::Awake => "awake",
+            Self::Lit => "lit",
+            Self::Powered => "powered",
+            Self::Inverted => "inverted",
+        }
+    }
 }
 
 /// How the frame memory encodes a pixel.
@@ -2107,6 +2394,27 @@ pub struct DisplayRam {
     /// trusting it, so the two cannot drift apart.
     pub bytes: u32,
     pub layout: DisplayRamLayout,
+    /// Whether a data byte is frame memory unconditionally, or only after a
+    /// `ram_write` command has opened the stream.
+    ///
+    /// STATED RATHER THAN DERIVED FROM THE FRAMING. It is tempting to say
+    /// "I²C control byte ⇒ always, D/C pad ⇒ command", because that is what the
+    /// SSD1306 and the ST7789 do. The PCD8544 is a D/C-pad panel with NO RAMWR
+    /// opcode at all — every D/C-high byte is DDRAM — so deriving the rule from
+    /// the framing would have dropped every pixel that panel was ever sent, on
+    /// a code path with no error to read.
+    pub stream: DisplayRamStream,
+}
+
+/// See [`DisplayRam::stream`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayRamStream {
+    /// Every data byte is frame memory. There is no RAMWR opcode.
+    Always,
+    /// A `ram_write` action opens the stream; data bytes outside it are
+    /// command parameters or strays.
+    Command,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -2156,6 +2464,23 @@ pub struct DisplayAddressing {
     pub modes: Vec<DisplayAddressingMode>,
     #[serde(default)]
     pub default: DisplayAddressingMode,
+    /// What the column counter does at the last column in `page` addressing.
+    /// The two paged OLEDs here disagree and the difference is a whole row of
+    /// pixels: the SSD1306 model holds the counter at the last column, the
+    /// SH1107 wraps it back to zero.
+    #[serde(default)]
+    pub page_wrap: DisplayPageWrap,
+}
+
+/// See [`DisplayAddressing::page_wrap`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayPageWrap {
+    /// Hold at the last column of the frame memory.
+    #[default]
+    Clamp,
+    /// Return to column 0.
+    Wrap,
 }
 
 impl Default for DisplayAddressing {
@@ -2163,6 +2488,7 @@ impl Default for DisplayAddressing {
         Self {
             modes: vec![DisplayAddressingMode::Horizontal],
             default: DisplayAddressingMode::Horizontal,
+            page_wrap: DisplayPageWrap::Clamp,
         }
     }
 }
@@ -2228,6 +2554,28 @@ pub struct DisplayCommand {
     pub args: u8,
     #[serde(default, rename = "do")]
     pub actions: Vec<DisplayAction>,
+    /// Guard: this entry decodes the opcode only while a var holds a
+    /// particular value.
+    ///
+    /// An INSTRUCTION-SET BANK, which is a real thing on the older LCD
+    /// controllers: the PCD8544's function-set H bit decides whether `0x80|n`
+    /// means "set X address" or "set Vop", and nothing about the byte says
+    /// which. Without a guard the two readings share one entry in a flat
+    /// 256-way table and one of them silently wins.
+    #[serde(default)]
+    pub when: Option<DisplayWhen>,
+}
+
+/// See [`DisplayCommand::when`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DisplayWhen {
+    /// Name of the var (see [`DisplaySpec::vars`]) the guard reads.
+    pub var: String,
+    /// Applied to the var before the comparison. Absent ⇒ the whole value.
+    #[serde(default)]
+    pub mask: Option<u32>,
+    /// The masked value this entry requires.
+    pub equals: u32,
 }
 
 /// What a command does when its parameters are complete.
@@ -2280,6 +2628,13 @@ pub struct DisplayAction {
     /// "Contents of memory is not cleared" — so a painted frame survives.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub reset_control: bool,
+    /// Blank frame memory. A SEPARATE action from `reset_control` because the
+    /// two are separate facts: a MIPI SWRESET resets control state and keeps
+    /// the picture (ST7789V §9.1.22 p.202, ILI9341 §8.2.2), while a hardware
+    /// RST line clears both. A controller that does clear declares both
+    /// actions; nothing is implied.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clear_ram: bool,
 }
 
 impl DisplayAction {
@@ -2295,6 +2650,7 @@ impl DisplayAction {
             + self.awake.is_some() as usize
             + self.invert.is_some() as usize
             + self.reset_control as usize
+            + self.clear_ram as usize
     }
 }
 

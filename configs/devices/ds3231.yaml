@@ -77,26 +77,33 @@
 #     4.096 / 8.192 kHz).
 #   * INTCN = 1 — alarm interrupt output, pulled low while an enabled alarm
 #     flag is set.
-# The 1 Hz square wave (RS2:RS1 = 00) is modelled: a 500 000 µs timer toggles
-# a var and drives the pad. With INTCN = 1 the pad is released high, which is
-# the no-alarm state.
+# All four rates are modelled: the `sqw` timer's period is read from RS2:RS1
+# (`period_from`), and each firing toggles a var onto the pad. With INTCN = 1
+# the pad is released high, which is the no-alarm state.
 #
 # ⚠️ NOT MODELLED — each needs a primitive this engine does not have, and each
 # is named here rather than faked:
-#   * **The clock does not free-run.** A rule cannot write a stimulus channel,
-#     so nothing advances `unix_time`; a host or a test poses it. The
-#     hand-written model did not free-run either. Needs: a rule action that
-#     assigns an input channel (`input: { key, value }`).
-#   * **Alarm matching.** A1/A2 compare the clock against 0x07..0x0D under the
-#     A1Mx/A2Mx mask bits, which live in bit 7 of the SAME byte as the BCD
-#     number. One register cannot be part-number-part-flags here — `bcd:`
-#     claims the whole word. Needs: a register whose bit-fields and whose
-#     numeric encoding are declared separately. The alarm registers are
-#     therefore writable, readable BCD storage (which is what a driver checks
-#     after programming them) and the A1F/A2F flags are firmware-clearable
-#     status bits that nothing sets.
-#   * **Square-wave rates above 1 Hz.** `timers:` take a constant `period_us`;
-#     RS2:RS1 selects it at runtime. Needs: a field-driven timer period.
+#   * ~~**The clock does not free-run.**~~ MODELLED. `set_input:` is a rule
+#     action that assigns a stimulus channel, so a 1 Hz timer advances
+#     `unix_time` by one second per second of simulated time — which is what a
+#     32.768 kHz crystal does. The hand-written model did NOT free-run, so
+#     `ds3231_migration_parity.rs` holds that as a named difference.
+#     ⚠️ EOSC (CONTROL bit 7) gates it: setting that bit stops the oscillator
+#     on battery, and it stops this clock too.
+#   * ~~**Alarm matching.**~~ MODELLED. A1/A2 compare the clock against
+#     0x07..0x0D under the A1Mx/A2Mx mask bits, and every rate in datasheet
+#     Table 2 is expressible — once per second, seconds, minutes+seconds, the
+#     whole time of day, and either day-of-month or day-of-week. What unblocked
+#     it was `encode: { value_mask: … }`: bit 7 of each alarm byte is the mask
+#     bit and the bits below it are the BCD number, so one register is part
+#     number and part flag and both halves survive a round trip.
+#     ⚠️ The comparison is in the WIRE domain via `reported()`, which is the
+#     byte a register would put on the bus right now. `reg(DATE)` could never
+#     work: the day of month is not STORED anywhere, it is computed at read
+#     time from `unix_time`, so its stored word is its reset value forever.
+#   * ~~**Square-wave rates above 1 Hz.**~~ MODELLED. `timers[].period_from`
+#     reads CONTROL.RS and selects all four datasheet rates; see the `sqw`
+#     timer below.
 #   * **The 32 kHz output (pin 1), the CONV one-shot, and the CENTURY bit.**
 #   * **12-hour mode.** Bit 6 of HOURS is masked away, so a driver that sets it
 #     reads 24-hour time back. The hand-written model was worse here — it ran
@@ -127,15 +134,77 @@ behavior:
       - { name: YEAR,    addr: 0x06, width: 1, endian: be, access: rw, source: unix_time, calendar: year,  write_mask: 0xFF, encode: { bcd: true } }
 
       # ── Alarm 1 (0x07..0x0A) and Alarm 2 (0x0B..0x0D) ────────────────────
-      # BCD storage. The A1Mx/A2Mx mask bits (bit 7 of each) are masked away —
-      # see the header for the primitive that would be needed to keep them.
-      - { name: ALARM1_SECONDS, addr: 0x07, width: 1, endian: be, access: rw, write_mask: 0x7F, encode: { bcd: true } }
-      - { name: ALARM1_MINUTES, addr: 0x08, width: 1, endian: be, access: rw, write_mask: 0x7F, encode: { bcd: true } }
-      - { name: ALARM1_HOURS,   addr: 0x09, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
-      - { name: ALARM1_DAY,     addr: 0x0A, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
-      - { name: ALARM2_MINUTES, addr: 0x0B, width: 1, endian: be, access: rw, write_mask: 0x7F, encode: { bcd: true } }
-      - { name: ALARM2_HOURS,   addr: 0x0C, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
-      - { name: ALARM2_DAY,     addr: 0x0D, width: 1, endian: be, access: rw, write_mask: 0x3F, encode: { bcd: true } }
+      #
+      # ⚠️ Each of these bytes is PART NUMBER, PART FLAG. Bit 7 is the A1Mx /
+      # A2Mx mask bit that decides the alarm RATE (datasheet Table 2), and the
+      # bits below it are the BCD number. `encode: { value_mask: … }` is what
+      # splits them: the masked bits go through the nibble encode and the rest
+      # are stored and served verbatim, so `reg(ALARM1_SECONDS) & 0x7F` is a
+      # number of seconds and `field(ALARM1_SECONDS.A1M1)` is the mask bit.
+      #
+      # `write_mask` is 0xFF here now — the whole byte is meaningful. Before
+      # `value_mask` existed these registers masked the mask bits AWAY, which
+      # made alarm matching unexpressible: the bit that decides the rate was
+      # gone by the time anything could read it.
+      - name: ALARM1_SECONDS
+        addr: 0x07
+        width: 1
+        endian: be
+        access: rw
+        encode: { bcd: true, value_mask: 0x7F }
+        bits: [{ name: A1M1, shift: 7 }]
+      - name: ALARM1_MINUTES
+        addr: 0x08
+        width: 1
+        endian: be
+        access: rw
+        encode: { bcd: true, value_mask: 0x7F }
+        bits: [{ name: A1M2, shift: 7 }]
+      # Bit 6 is the 12/24-hour select, which is not modelled (see the header),
+      # so the number is the low six bits.
+      - name: ALARM1_HOURS
+        addr: 0x09
+        width: 1
+        endian: be
+        access: rw
+        write_mask: 0xBF
+        encode: { bcd: true, value_mask: 0x3F }
+        bits: [{ name: A1M3, shift: 7 }]
+      # Bit 6 is DY/DT: 0 ⇒ the number is a DATE (day of month), 1 ⇒ a day of
+      # week. Both are modelled — see the alarm rules below.
+      - name: ALARM1_DAY
+        addr: 0x0A
+        width: 1
+        endian: be
+        access: rw
+        encode: { bcd: true, value_mask: 0x3F }
+        bits:
+          - { name: DY_DT, shift: 6 }
+          - { name: A1M4,  shift: 7 }
+      - name: ALARM2_MINUTES
+        addr: 0x0B
+        width: 1
+        endian: be
+        access: rw
+        encode: { bcd: true, value_mask: 0x7F }
+        bits: [{ name: A2M2, shift: 7 }]
+      - name: ALARM2_HOURS
+        addr: 0x0C
+        width: 1
+        endian: be
+        access: rw
+        write_mask: 0xBF
+        encode: { bcd: true, value_mask: 0x3F }
+        bits: [{ name: A2M3, shift: 7 }]
+      - name: ALARM2_DAY
+        addr: 0x0D
+        width: 1
+        endian: be
+        access: rw
+        encode: { bcd: true, value_mask: 0x3F }
+        bits:
+          - { name: DY_DT, shift: 6 }
+          - { name: A2M4,  shift: 7 }
 
       # ── Control (0x0E) ───────────────────────────────────────────────────
       # Datasheet Figure 2. Power-on 0x1C = RS2 RS1 INTCN set: the pad is the
@@ -200,21 +269,141 @@ behavior:
     sqw_level: 1
 
   timers:
-    # Half the 1 Hz period: the pad toggles on each firing.
-    - { name: sqw, period_us: 500000, start: on_reset }
+    # ── The square-wave rate is a REGISTER, not a constant ────────────────
+    #
+    # Datasheet Table 2 "Square-Wave Output Frequency": CONTROL RS2:RS1 selects
+    # 1 Hz, 1.024 kHz, 4.096 kHz or 8.192 kHz. The timer TOGGLES the pad, so
+    # each entry is a HALF period.
+    #
+    # ⚠️ The power-on value of CONTROL is 0x1C, whose RS bits are 11 — 8.192
+    # kHz, not 1 Hz. A constant `period_us` was therefore not merely
+    # inflexible, it was wrong at reset, and `ds3231_migration_parity.rs` used
+    # to call a run with RS = 11 "one hertz" because nothing read the field.
+    #
+    # `period_us: 500000` is the RS = 00 half period, which is what the field
+    # resolves to for a driver that asks for 1 Hz.
+    #
+    # ⚠️ The three fast rates do not divide a microsecond evenly (a 1.024 kHz
+    # half period is 488.28125 µs); each is rounded to the nearest whole µs,
+    # which is 0.06 % fast at 1.024 kHz and 0.05 % slow at 8.192 kHz.
+    #
+    # ⚠️ `start: manual`. INTCN powers up SET, which on silicon DISCONNECTS the
+    # divider from the pad — so the fast clock must not be running in the state
+    # every DS3231 boots into. The rules below start it when firmware clears
+    # INTCN and stop it when firmware sets INTCN again. Without that a board
+    # that merely HAS a DS3231 on it would run 16 392 timer firings per
+    # simulated second for a pad nothing is driving.
+    - name: sqw
+      period_us: 500000
+      start: manual
+      period_from:
+        register: CONTROL
+        field: RS
+        table:
+          0: 500000   # 1 Hz      — half period 500 ms
+          1: 488      # 1.024 kHz — half period 488.28 µs
+          2: 122      # 4.096 kHz — half period 122.07 µs
+          3: 61       # 8.192 kHz — half period 61.04 µs
+    # The alarm-output half of the pad. Separate from `sqw` because it is not a
+    # divider: it is a level that follows the alarm flags, and it must keep
+    # running while the square wave is disconnected.
+    - { name: intpad, period_us: 500000, start: on_reset }
+    # The 32.768 kHz crystal, divided down to the one-second tick that carries
+    # the whole counter chain.
+    - { name: tick, period_us: 1000000, start: on_reset }
 
   rules:
-    # INTCN = 0 ⇒ the pad is a square wave. Only the RS2:RS1 = 00 (1 Hz) rate
-    # is modelled; see the header for why the others need a field-driven timer.
+    # INTCN = 0 ⇒ the pad is a square wave at the RS2:RS1 rate. The timer only
+    # runs while that is true (see `start: manual` above), so the guard is
+    # belt-and-braces rather than the thing that gates it.
     - on: { timer: sqw }
       when: "field(CONTROL.INTCN) == 0"
       do:
         - { var: { name: sqw_level, value: "!var(sqw_level)" } }
         - { pin: INTSQW, level: "var(sqw_level)" }
     # INTCN = 1 ⇒ the pad is the alarm output, released high while no enabled
-    # alarm flag is set. Nothing sets A1F/A2F today (alarm matching is not
-    # modelled), so this is the pad's resting state.
-    - on: { timer: sqw }
+    # alarm flag is set. This is the LEVEL half: it re-evaluates twice a second
+    # so a pad whose flags were cleared between ticks is released promptly. The
+    # alarm rules below re-evaluate it on the tick itself as well, so a driver
+    # that polls A1F and then reads the pin never sees the two disagree.
+    - on: { timer: intpad }
+      when: "field(CONTROL.INTCN) != 0"
+      do:
+        - { pin: INTSQW, level: "!((field(STATUS.A1F) && field(CONTROL.A1IE)) || (field(STATUS.A2F) && field(CONTROL.A2IE)))" }
+
+    # ── Connecting and disconnecting the divider ─────────────────────────
+    # A write to CONTROL is the only thing that moves INTCN, so it is the only
+    # thing that starts or stops the square wave.
+    - on: { write: CONTROL }
+      when: "field(CONTROL.INTCN) == 0"
+      do: [ { timer: sqw, start: true } ]
+    - on: { write: CONTROL }
+      when: "field(CONTROL.INTCN) != 0"
+      do: [ { timer: sqw, start: false } ]
+
+    # ── The clock free-runs ───────────────────────────────────────────────
+    # One second of simulated time is one second on the clock. EOSC (CONTROL
+    # bit 7) is the datasheet's "enable oscillator", active LOW: setting it
+    # stops the crystal on battery power, and it stops this too.
+    #
+    # ⚠️ `set_input:` does NOT raise `on: { input: unix_time }` — a rule that
+    # fed its own trigger would be a loop. The DAY recompute is therefore
+    # spelled out in BOTH places rather than chained through that event.
+    - on: { timer: tick }
+      when: "field(CONTROL.EOSC) == 0"
+      do:
+        - { set_input: unix_time, value: "input(unix_time) + 1" }
+        - { write: { register: DAY, value: "(input(unix_time) / 86400 + 4) % 7 + 1" } }
+
+    # ── Alarm matching (datasheet Table 2) ───────────────────────────────
+    #
+    # A field MATCHES when its mask bit is SET (that field is "don't care") or
+    # when the alarm's number equals the clock's. The comparison is in the WIRE
+    # domain — `reported()` is the byte a register would put on the wire right
+    # now, so the BCD alarm byte is compared against the BCD clock byte and
+    # neither side has to be decoded.
+    #
+    # `reported()` is also what makes the DATE rate expressible at all: the
+    # clock's day of month is not stored anywhere, it is computed at read time
+    # from `unix_time`, so `reg(DATE)` is its reset value forever.
+    #
+    # A1M4 A1M3 A1M2 A1M1 DY/DT   rate
+    #   1    1    1    1    x     once per second
+    #   1    1    1    0    x     when the seconds match
+    #   1    1    0    0    x     when minutes and seconds match
+    #   1    0    0    0    x     when hours, minutes and seconds match
+    #   0    0    0    0    0     when date, hours, minutes and seconds match
+    #   0    0    0    0    1     when day, hours, minutes and seconds match
+    #
+    # ⚠️ The datasheet's table is the six LEGAL combinations; other patterns
+    # are "not a valid alarm". This models each field independently, so an
+    # illegal pattern behaves as the per-field rule says rather than being
+    # rejected — which is what the silicon's comparator chain does.
+    - on: { timer: tick }
+      when: "field(CONTROL.EOSC) == 0
+             && (field(ALARM1_SECONDS.A1M1) || (reported(ALARM1_SECONDS) & 0x7F) == reported(SECONDS))
+             && (field(ALARM1_MINUTES.A1M2) || (reported(ALARM1_MINUTES) & 0x7F) == reported(MINUTES))
+             && (field(ALARM1_HOURS.A1M3)   || (reported(ALARM1_HOURS)   & 0x3F) == reported(HOURS))
+             && (field(ALARM1_DAY.A1M4)
+                 || ((field(ALARM1_DAY.DY_DT) == 0) && ((reported(ALARM1_DAY) & 0x3F) == reported(DATE)))
+                 || ((field(ALARM1_DAY.DY_DT) != 0) && ((reported(ALARM1_DAY) & 0x3F) == reported(DAY))))"
+      do: [ { set: STATUS.A1F } ]
+
+    # Alarm 2 has no seconds register: it fires at the top of a minute.
+    - on: { timer: tick }
+      when: "field(CONTROL.EOSC) == 0
+             && reported(SECONDS) == 0
+             && (field(ALARM2_MINUTES.A2M2) || (reported(ALARM2_MINUTES) & 0x7F) == reported(MINUTES))
+             && (field(ALARM2_HOURS.A2M3)   || (reported(ALARM2_HOURS)   & 0x3F) == reported(HOURS))
+             && (field(ALARM2_DAY.A2M4)
+                 || ((field(ALARM2_DAY.DY_DT) == 0) && ((reported(ALARM2_DAY) & 0x3F) == reported(DATE)))
+                 || ((field(ALARM2_DAY.DY_DT) != 0) && ((reported(ALARM2_DAY) & 0x3F) == reported(DAY))))"
+      do: [ { set: STATUS.A2F } ]
+
+    # The alarm pad follows the flags the moment they change, rather than
+    # waiting for the next `intpad` firing — a driver that polls A1F and then
+    # reads the pin must not see them disagree.
+    - on: { timer: tick }
       when: "field(CONTROL.INTCN) != 0"
       do:
         - { pin: INTSQW, level: "!((field(STATUS.A1F) && field(CONTROL.A1IE)) || (field(STATUS.A2F) && field(CONTROL.A2IE)))" }

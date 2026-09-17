@@ -44,10 +44,16 @@ pub use test_script::*;
 
 pub mod expr;
 pub mod rules;
+pub mod uart;
 
 pub use rules::{
     compile_rules, validate_rule_names, Action, BitFieldSpec, CompiledAction, CompiledRule, Event,
-    FifoOverflow, FifoSpec, FrameSpec, PinEdge, RegBits, Rule, RuleCompileError, RuleNames,
+    FifoField, FifoFill, FifoOverflow, FifoRegisterField, FifoSpec, FifoWatermark, FrameSpec,
+    PinEdge, RegBits, Rule, RuleCompileError, RuleNames,
+};
+pub use uart::{
+    validate_uart, Template, TemplateError, TemplateFormat, TemplateWrap, UartFrames, UartMatch,
+    UartResponse, UartSpec, UartUnsolicited,
 };
 
 #[cfg(test)]

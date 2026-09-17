@@ -48,6 +48,9 @@ mod common;
 mod display_oracle;
 
 use common::transcript::{dc_command, dc_data, run_i2c, run_spi, script, Step, Transcript};
+use display_oracle::ili9341::Ili9341 as OldIli9341;
+use display_oracle::pcd8544::Pcd8544 as OldPcd8544;
+use display_oracle::sh1107::Sh1107 as OldSh1107;
 use display_oracle::ssd1306::Ssd1306 as OldSsd1306;
 use display_oracle::st7789::St7789 as OldSt7789;
 use labwired_core::inspect::{Artifact, InspectOpts};
@@ -770,4 +773,825 @@ fn st7789_glass_crop_matches_for_every_orientation() {
             &format!("st7789 glass crop, MADCTL 0x{madctl:02X}"),
         );
     }
+}
+
+// ─── SH1107 ────────────────────────────────────────────────────────────────
+
+fn new_sh1107() -> GenericDisplay {
+    labwired_core::peripherals::components::sh1107(ADDR)
+}
+
+fn drive_both_sh1107(steps: &[Step<'_>]) -> (OldSh1107, GenericDisplay, Transcript, Transcript) {
+    let mut old = OldSh1107::new(ADDR);
+    let mut new = new_sh1107();
+    let t_old = run_i2c(&mut old, steps);
+    let t_new = run_i2c(&mut new, steps);
+    (old, new, t_old, t_new)
+}
+
+/// The Adafruit_SH110X-shaped init burst, split the way a TWIM splits it: one
+/// START per transfer, one STOP at the very end. Eight of these commands carry
+/// a parameter; if any parameter were decoded as an opcode the cursor would
+/// move and the first frame would land shifted.
+fn sh1107_init() -> Vec<Step<'static>> {
+    let mut steps = Vec::new();
+    for burst in [
+        [0xAEu8].as_slice(),
+        &[0xD5, 0x51],
+        &[0x81, 0x4F],
+        &[0xAD, 0x8A],
+        &[0xA8, 0x7F],
+        &[0xD3, 0x60],
+        &[0xDC, 0x00],
+        &[0xD9, 0x22],
+        &[0xDB, 0x35],
+        &[0xA4],
+        &[0xA6],
+        &[0xAF],
+    ] {
+        steps.push(Step::Start);
+        steps.push(Step::Write(0x00));
+        steps.extend(burst.iter().map(|&b| Step::Write(b)));
+    }
+    steps
+}
+
+/// Move the cursor with the three commands that do it: page, column low
+/// nibble, column high nibble.
+fn sh1107_cursor(page: u8, col: u8) -> Vec<Step<'static>> {
+    vec![
+        Step::Start,
+        Step::Write(0x00),
+        Step::Write(0xB0 | (page & 0x0F)),
+        Step::Write(col & 0x0F),
+        Step::Write(0x10 | ((col >> 4) & 0x07)),
+    ]
+}
+
+fn sh1107_data(bytes: &[u8]) -> Vec<Step<'_>> {
+    let mut steps = vec![Step::Start, Step::Write(0x40)];
+    steps.extend(bytes.iter().map(|&b| Step::Write(b)));
+    steps.push(Step::Stop);
+    steps
+}
+
+/// A whole 2048-byte GDDRAM, so both the page wrap and the column wrap of
+/// VERTICAL addressing are exercised rather than assumed.
+fn sh1107_full_frame() -> Vec<u8> {
+    (0..2048u32)
+        .map(|i| (i.wrapping_mul(29) ^ 0xA5) as u8)
+        .collect()
+}
+
+#[test]
+fn sh1107_init_and_a_full_frame_are_byte_identical() {
+    let frame = sh1107_full_frame();
+    let steps = script([
+        sh1107_init(),
+        // 0x21 — vertical addressing, a COMPLETE command on this part. On the
+        // SSD1306 the same byte is SETCOLUMNADDR and eats two parameters.
+        vec![Step::Start, Step::Write(0x00), Step::Write(0x21)],
+        sh1107_cursor(0, 0),
+        sh1107_data(&frame),
+    ]);
+    let (old, new, t_old, t_new) = drive_both_sh1107(&steps);
+
+    assert_eq!(t_old, t_new, "wire transcript");
+    assert_eq!(
+        old.framebuffer(),
+        new.framebuffer(),
+        "GDDRAM differs after a full frame"
+    );
+    // Not a tautology against an all-zero buffer: vertical addressing walks the
+    // sixteen pages of a column before moving on, so byte `i` lands at page
+    // `i % 16`, column `i / 16`, and all 2048 of them land.
+    for (i, b) in frame.iter().enumerate() {
+        let (page, col) = (i % 16, i / 16);
+        assert_eq!(
+            new.framebuffer()[page * 128 + col],
+            *b,
+            "byte {i} of a vertical-addressed full frame"
+        );
+    }
+    assert_same_artifact(
+        &I2cDevice::artifacts(&old, "oled", &opts())[0],
+        &I2cDevice::artifacts(&new, "oled", &opts())[0],
+        "sh1107 full frame",
+    );
+}
+
+/// PAGE ADDRESSING WRAPS ON THIS PART. At column 127 the counter returns to 0
+/// with the page unchanged; the SSD1306 model holds it at the last column
+/// instead. `addressing.page_wrap` is what states the difference, and this is
+/// the test that would go red if the descriptor took the other value.
+#[test]
+fn sh1107_page_addressing_wraps_the_column_where_the_ssd1306_clamps() {
+    let steps = script([
+        vec![Step::Start, Step::Write(0x00), Step::Write(0x20)],
+        sh1107_cursor(2, 125),
+        sh1107_data(&[0x11, 0x22, 0x33, 0x44, 0x55]),
+    ]);
+    let (old, new, t_old, t_new) = drive_both_sh1107(&steps);
+    assert_eq!(t_old, t_new);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+
+    let page2 = &new.framebuffer()[2 * 128..3 * 128];
+    assert_eq!(
+        [page2[125], page2[126], page2[127], page2[0], page2[1]],
+        [0x11, 0x22, 0x33, 0x44, 0x55],
+        "the column counter must wrap to 0 within page 2"
+    );
+    // And the neighbouring pages are untouched — a wrap, not a run-on.
+    assert!(new.framebuffer()[128..256].iter().all(|&b| b == 0));
+    assert!(new.framebuffer()[3 * 128..4 * 128].iter().all(|&b| b == 0));
+}
+
+/// Sixteen pages and a seven-bit column: the two geometry facts that separate
+/// this part from the SSD1306. The last addressable byte is 2047.
+#[test]
+fn sh1107_addresses_all_sixteen_pages_and_a_seven_bit_column() {
+    let steps = script([sh1107_cursor(15, 127), sh1107_data(&[0xFF])]);
+    let (old, new, _, _) = drive_both_sh1107(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    assert_eq!(new.framebuffer()[16 * 128 - 1], 0xFF);
+    assert_eq!(
+        new.framebuffer().iter().filter(|&&b| b != 0).count(),
+        1,
+        "exactly one byte was written"
+    );
+}
+
+/// 0x18..=0x1F address nothing on a seven-bit column. They must be consumed as
+/// unknown opcodes, leaving the cursor where it was — not read as a fourth
+/// column bit.
+#[test]
+fn sh1107_high_column_opcodes_stop_at_0x17() {
+    let steps = script([
+        sh1107_cursor(1, 0x35),
+        vec![
+            Step::Start,
+            Step::Write(0x00),
+            Step::Write(0x1B),
+            Step::Write(0x1F),
+        ],
+        sh1107_data(&[0x7E]),
+    ]);
+    let (old, new, _, _) = drive_both_sh1107(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    assert_eq!(new.framebuffer()[128 + 0x35], 0x7E);
+}
+
+/// The artifact is the surface the browser overlay and `inspect` read: sixteen
+/// pages of height, the `sh1107_page` format string, the ink counters, and
+/// `display_on`. The SSD1306 publishes no `display_on`; this panel always has,
+/// which is why `artifact_meta` is per-panel data rather than a format default.
+#[test]
+fn sh1107_artifact_keeps_its_published_shape() {
+    let steps = script([
+        vec![Step::Start, Step::Write(0x00), Step::Write(0xAF)],
+        sh1107_cursor(0, 0),
+        sh1107_data(&[0xFF, 0xFF, 0xFF]),
+    ]);
+    let (old, new, _, _) = drive_both_sh1107(&steps);
+    let art = &I2cDevice::artifacts(&new, "oled", &opts())[0];
+    assert_eq!(art.meta["format"], "sh1107_page");
+    assert_eq!(art.meta["w"], 128);
+    assert_eq!(art.meta["h"], 128);
+    assert_eq!(art.meta["ink_bytes"], 3);
+    assert_eq!(art.meta["lit_pixels"], 24);
+    assert_eq!(art.meta["display_on"], true);
+    assert_same_artifact(
+        &I2cDevice::artifacts(&old, "oled", &opts())[0],
+        art,
+        "sh1107 painted artifact",
+    );
+}
+
+/// A panel that never got DISPLAYON reports it, and an unpainted one reports
+/// zero rather than nothing.
+#[test]
+fn sh1107_unpainted_panel_matches() {
+    let (old, new, _, _) = drive_both_sh1107(&[]);
+    let art = &I2cDevice::artifacts(&new, "oled", &opts())[0];
+    assert_eq!(art.meta["ink_bytes"], 0);
+    assert_eq!(art.meta["display_on"], false);
+    assert_same_artifact(
+        &I2cDevice::artifacts(&old, "oled", &opts())[0],
+        art,
+        "sh1107 unpainted",
+    );
+}
+
+// ─── PCD8544 (Nokia 5110) ──────────────────────────────────────────────────
+
+const LCD_CS: &str = "PB6";
+const LCD_DC: &str = "PC7";
+
+fn new_pcd8544() -> GenericDisplay {
+    labwired_core::peripherals::components::pcd8544(LCD_CS, LCD_DC)
+}
+
+fn drive_both_pcd8544(steps: &[Step<'_>]) -> (OldPcd8544, GenericDisplay, Transcript, Transcript) {
+    let mut old = OldPcd8544::new(LCD_CS.to_string(), LCD_DC.to_string());
+    let mut new = new_pcd8544();
+    let t_old = run_spi(&mut old, steps);
+    let t_new = run_spi(&mut new, steps);
+    (old, new, t_old, t_new)
+}
+
+/// Commands: D/C low, one byte each. This panel has no parameterised command,
+/// so a command byte is complete in itself.
+fn lcd_cmds(bytes: &[u8]) -> Vec<Step<'static>> {
+    let mut steps = vec![Step::Dc(false)];
+    steps.extend(bytes.iter().map(|&b| Step::TransferByte(b)));
+    steps
+}
+
+/// The stock Nokia 5110 init every Adafruit-shaped driver sends. Two of these
+/// bytes — `0xBF` and `0x14` — are EXTENDED-set commands whose opcodes are
+/// "set X address" and nothing at all in the basic set.
+fn lcd_init() -> Vec<Step<'static>> {
+    lcd_cmds(&[0x21, 0xBF, 0x04, 0x14, 0x20, 0x0C])
+}
+
+fn lcd_cursor(x: u8, y: u8) -> Vec<Step<'static>> {
+    lcd_cmds(&[0x40 | (y & 0x07), 0x80 | (x & 0x7F)])
+}
+
+/// A whole 504-byte DDRAM, so the column wrap and the bank wrap are both
+/// exercised rather than assumed.
+fn lcd_full_frame() -> Vec<u8> {
+    (0..504u32)
+        .map(|i| (i.wrapping_mul(53) ^ 0x3C) as u8)
+        .collect()
+}
+
+#[test]
+fn pcd8544_init_and_a_full_frame_are_byte_identical() {
+    let frame = lcd_full_frame();
+    let steps = script([
+        vec![Step::CsSelect],
+        lcd_init(),
+        lcd_cursor(0, 0),
+        dc_data(&frame),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, t_old, t_new) = drive_both_pcd8544(&steps);
+
+    assert_eq!(t_old, t_new, "wire transcript");
+    assert_eq!(old.framebuffer(), new.framebuffer(), "DDRAM differs");
+    // Not a tautology against an all-zero buffer: column-first addressing lays
+    // byte `i` at bank `i / 84`, column `i % 84`, and all 504 land.
+    assert_eq!(
+        new.framebuffer(),
+        &frame[..],
+        "the frame did not land intact"
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "lcd", &opts())[0],
+        &SpiDevice::artifacts(&new, "lcd", &opts())[0],
+        "pcd8544 full frame",
+    );
+}
+
+/// ⚠️ THE INSTRUCTION-SET BANK. `0xBF` after `0x21` is SET Vop, not SET X.
+///
+/// Read as "set X address" it would leave the column pointer at 0x3F, and the
+/// first frame would land 63 columns across — a picture, in the wrong place,
+/// which is the failure nobody reports as a bug. `when: { var: h, … }` is what
+/// keeps both readings of `0x80|n` in one table.
+#[test]
+fn pcd8544_extended_set_vop_is_not_a_column_move() {
+    let steps = script([
+        vec![Step::CsSelect],
+        lcd_init(),
+        dc_data(&[0x5A]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_pcd8544(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    assert_eq!(
+        new.framebuffer()[0],
+        0x5A,
+        "the byte must land at bank 0 column 0, not at column 0x3F"
+    );
+    assert!(
+        new.framebuffer()[1..].iter().all(|&b| b == 0),
+        "exactly one byte was written"
+    );
+}
+
+/// The V bit of the function set. `0x22` is bank-first; the bytes walk DOWN the
+/// six banks of a column before moving right.
+#[test]
+fn pcd8544_vertical_addressing_walks_banks_first() {
+    let steps = script([
+        vec![Step::CsSelect],
+        lcd_cmds(&[0x22, 0x0C]),
+        lcd_cursor(3, 0),
+        dc_data(&[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_pcd8544(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let fb = new.framebuffer();
+    assert_eq!(
+        (0..6).map(|b| fb[b * 84 + 3]).collect::<Vec<_>>(),
+        vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66],
+        "six banks of column 3"
+    );
+    assert_eq!(fb[4], 0x77, "then bank 0 of column 4");
+}
+
+/// Banks 6 and 7 and columns 84..127 are out of range. The controller takes the
+/// pointer to ZERO rather than clamping it at the last cell, which is why the
+/// descriptor spends two extra table entries on them instead of a mask.
+#[test]
+fn pcd8544_out_of_range_addresses_return_to_zero() {
+    for (cmds, label) in [
+        (vec![0x40u8 | 6, 0x80 | 20], "bank 6"),
+        (vec![0x40 | 2, 0x80 | 100], "column 100"),
+    ] {
+        let steps = script([
+            vec![Step::CsSelect],
+            lcd_cmds(&cmds),
+            dc_data(&[0xC3]),
+            vec![Step::CsRelease],
+        ]);
+        let (old, new, _, _) = drive_both_pcd8544(&steps);
+        assert_eq!(old.framebuffer(), new.framebuffer(), "{label}");
+        let at = new
+            .framebuffer()
+            .iter()
+            .position(|&b| b != 0)
+            .expect("something was painted");
+        let expect = if label == "bank 6" { 20 } else { 2 * 84 };
+        assert_eq!(at, expect, "{label}: the out-of-range half reset to 0");
+    }
+}
+
+/// Every display-control encoding, both flags, through the artifact — because
+/// `display_on` and `inverse` are what the browser overlay reads, and on this
+/// panel `display_on` means DISPON *and* not powered down *and* supplied.
+#[test]
+fn pcd8544_display_control_and_power_down_flags_match() {
+    for cmd in 0x08u8..=0x0F {
+        for func in [0x20u8, 0x24] {
+            let steps = script([
+                vec![Step::CsSelect],
+                lcd_cmds(&[func, cmd]),
+                lcd_cursor(0, 0),
+                dc_data(&[0xFF]),
+                vec![Step::CsRelease],
+            ]);
+            let (old, new, _, _) = drive_both_pcd8544(&steps);
+            assert_same_artifact(
+                &SpiDevice::artifacts(&old, "lcd", &opts())[0],
+                &SpiDevice::artifacts(&new, "lcd", &opts())[0],
+                &format!("pcd8544 function 0x{func:02X} control 0x{cmd:02X}"),
+            );
+        }
+    }
+}
+
+/// POWER-ON IS NOT DARK on this part: the display-control D bit and the
+/// power-down bit both reset in favour of showing DDRAM. A panel that has been
+/// sent nothing at all reports `display_on: true`.
+#[test]
+fn pcd8544_powers_on_showing_ddram() {
+    let (old, new, _, _) = drive_both_pcd8544(&[]);
+    let art = &SpiDevice::artifacts(&new, "lcd", &opts())[0];
+    assert_eq!(art.meta["format"], "pcd8544_bank");
+    assert_eq!(art.meta["w"], 84);
+    assert_eq!(art.meta["h"], 48);
+    assert_eq!(art.meta["display_on"], true);
+    assert_eq!(art.meta["inverse"], false);
+    assert_eq!(art.meta["powered"], true);
+    assert_eq!(art.meta["ink_bytes"], 0);
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "lcd", &opts())[0],
+        art,
+        "pcd8544 power-on",
+    );
+}
+
+/// An unpowered module refuses the bus: DDRAM stays blank and the flags stay at
+/// their dark values, by construction rather than by masking at report time.
+#[test]
+fn pcd8544_unpowered_module_matches() {
+    let steps = script([
+        vec![Step::CsSelect],
+        lcd_init(),
+        lcd_cursor(0, 0),
+        dc_data(&[0xFF, 0xFF, 0xFF]),
+        vec![Step::CsRelease],
+    ]);
+    let mut old = OldPcd8544::new(LCD_CS.to_string(), LCD_DC.to_string()).with_powered(false);
+    let mut new = new_pcd8544();
+    new.set_powered(false);
+    assert_eq!(run_spi(&mut old, &steps), run_spi(&mut new, &steps));
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let art = &SpiDevice::artifacts(&new, "lcd", &opts())[0];
+    assert_eq!(art.meta["powered"], false);
+    assert_eq!(art.meta["display_on"], false);
+    assert_eq!(art.meta["ink_bytes"], 0);
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "lcd", &opts())[0],
+        art,
+        "pcd8544 unpowered",
+    );
+}
+
+/// A snapshot carries the PIXELS: the save/restore door the browser's
+/// state round-trip uses, kept across the port.
+#[test]
+fn pcd8544_runtime_snapshot_round_trips_the_pixels() {
+    let frame = lcd_full_frame();
+    let steps = script([
+        vec![Step::CsSelect],
+        lcd_init(),
+        lcd_cursor(0, 0),
+        dc_data(&frame),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_pcd8544(&steps);
+    let snap = SpiDevice::runtime_snapshot(&new);
+    assert_eq!(snap, SpiDevice::runtime_snapshot(&old), "snapshot bytes");
+
+    let mut fresh = new_pcd8544();
+    SpiDevice::restore_runtime_snapshot(&mut fresh, &snap).expect("restore");
+    assert_eq!(fresh.framebuffer(), new.framebuffer());
+}
+
+// ─── ILI9341 ───────────────────────────────────────────────────────────────
+
+fn new_ili9341() -> GenericDisplay {
+    labwired_core::peripherals::components::ili9341(CS, DC)
+}
+
+fn old_ili9341() -> OldIli9341 {
+    OldIli9341::new(CS.to_string()).with_dc_pin(DC)
+}
+
+fn drive_both_ili9341(steps: &[Step<'_>]) -> (OldIli9341, GenericDisplay, Transcript, Transcript) {
+    let mut old = old_ili9341();
+    let mut new = new_ili9341();
+    let t_old = run_spi(&mut old, steps);
+    let t_new = run_spi(&mut new, steps);
+    (old, new, t_old, t_new)
+}
+
+fn ili_window(cs: u16, ce: u16, rs: u16, re: u16) -> Vec<Step<'static>> {
+    script([
+        dc_command(
+            0x2A,
+            &[(cs >> 8) as u8, cs as u8, (ce >> 8) as u8, ce as u8],
+        ),
+        dc_command(
+            0x2B,
+            &[(rs >> 8) as u8, rs as u8, (re >> 8) as u8, re as u8],
+        ),
+    ])
+}
+
+fn ili_pixels(px: &[u16]) -> Vec<Step<'static>> {
+    let mut bytes = Vec::with_capacity(px.len() * 2);
+    for p in px {
+        bytes.extend_from_slice(&p.to_be_bytes());
+    }
+    script([dc_command(0x2C, &[]), dc_data(&bytes)])
+}
+
+/// Adafruit's stock ILI9341 init, INCLUDING the undocumented 0xCB whose second
+/// parameter is 0x2C. With D/C framing that byte is a parameter and nothing
+/// else; an inferring model decodes it as RAMWR and paints the rest of the init
+/// sequence into frame memory.
+fn ili_init() -> Vec<Step<'static>> {
+    script([
+        dc_command(0xEF, &[0x03, 0x80, 0x02]),
+        dc_command(0xCF, &[0x00, 0xC1, 0x30]),
+        dc_command(0xED, &[0x64, 0x03, 0x12, 0x81]),
+        dc_command(0xE8, &[0x85, 0x00, 0x78]),
+        dc_command(0xCB, &[0x39, 0x2C, 0x00, 0x34, 0x02]),
+        dc_command(0xF7, &[0x20]),
+        dc_command(0xEA, &[0x00, 0x00]),
+        dc_command(0xC0, &[0x23]),
+        dc_command(0xC1, &[0x10]),
+        dc_command(0xC5, &[0x3E, 0x28]),
+        dc_command(0xC7, &[0x86]),
+        dc_command(0x36, &[0x48]),
+        dc_command(0x3A, &[0x55]),
+        dc_command(0xB1, &[0x00, 0x18]),
+        dc_command(0xB6, &[0x08, 0x82, 0x27]),
+        dc_command(0x11, &[]),
+        dc_command(0x29, &[]),
+    ])
+}
+
+#[test]
+fn ili9341_stock_init_and_a_frame_are_byte_identical() {
+    // Pseudo-random pixels with ONE colour deliberately dominant. A frame of
+    // all-distinct colours would tie every count at 1, and a tie is the one
+    // place these two models deliberately disagree — see
+    // `ili9341_top_colour_resolves_a_tie_deterministically`.
+    let px: Vec<u16> = (0..1024u32)
+        .map(|i| {
+            if i % 2 == 0 {
+                0x07E0
+            } else {
+                (i.wrapping_mul(2087) ^ 0x1234) as u16 | 0x8000
+            }
+        })
+        .collect();
+    let steps = script([
+        vec![Step::CsSelect],
+        ili_init(),
+        ili_window(0, 31, 0, 31),
+        ili_pixels(&px),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, t_old, t_new) = drive_both_ili9341(&steps);
+    assert_eq!(t_old, t_new, "wire transcript");
+    assert_eq!(
+        old.framebuffer(),
+        new.framebuffer(),
+        "frame memory differs after the stock init and a 32x32 blit"
+    );
+    // Not a tautology: MADCTL 0x48 sets MX, so the 32x32 block lands mirrored
+    // into the right-hand edge of frame memory, and it is really there.
+    assert!(
+        new.framebuffer().iter().filter(|&&b| b != 0).count() > 1000,
+        "the blit landed"
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "tft", &opts())[0],
+        &SpiDevice::artifacts(&new, "tft", &opts())[0],
+        "ili9341 stock init + frame",
+    );
+}
+
+/// Seven MADCTL encodings, each with a window that only makes sense in that
+/// orientation. MV changes what a legal column IS, so it moves the clamp as
+/// well as the pixel map.
+#[test]
+fn ili9341_madctl_orientation_matches() {
+    for madctl in [0x00u8, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0] {
+        let steps = script([
+            vec![Step::CsSelect],
+            dc_command(0x29, &[]),
+            dc_command(0x36, &[madctl]),
+            ili_window(0, 3, 0, 3),
+            // Counts 7 / 5 / 3 / 1 — untied, so the dominant colour is the same
+            // fact on both models.
+            ili_pixels(&[
+                0x07E0, 0x07E0, 0x07E0, 0x07E0, 0x07E0, 0x07E0, 0x07E0, 0xF800, 0xF800, 0xF800,
+                0xF800, 0xF800, 0x001F, 0x001F, 0x001F, 0xFFFF,
+            ]),
+            vec![Step::CsRelease],
+        ]);
+        let (old, new, _, _) = drive_both_ili9341(&steps);
+        assert_eq!(
+            old.framebuffer(),
+            new.framebuffer(),
+            "frame memory differs at MADCTL 0x{madctl:02X}"
+        );
+        assert_same_artifact(
+            &SpiDevice::artifacts(&old, "tft", &opts())[0],
+            &SpiDevice::artifacts(&new, "tft", &opts())[0],
+            &format!("ili9341 MADCTL 0x{madctl:02X}"),
+        );
+    }
+}
+
+/// A landscape window: MV lets CASET legitimately run to 319. Clamping to the
+/// physical 239 folds a correct landscape image back into portrait.
+#[test]
+fn ili9341_landscape_window_is_not_folded_into_portrait() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x29, &[]),
+        dc_command(0x36, &[0x20]),
+        ili_window(300, 300, 0, 0),
+        ili_pixels(&[0x07E0]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_ili9341(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let at = new
+        .framebuffer()
+        .iter()
+        .position(|&b| b != 0)
+        .expect("something was painted");
+    assert_eq!(at, 300 * 240 * 2, "logical column 300 is physical row 300");
+    let art = &SpiDevice::artifacts(&new, "tft", &opts())[0];
+    assert_eq!(art.meta["w"], 320);
+    assert_eq!(art.meta["h"], 240);
+}
+
+/// RAMWR rewinds the counters to the window origin; RAMWRCONT (0x3C) resumes
+/// where the last write stopped. Reading 0x3C as an unknown command meant those
+/// pixel bytes were decoded as commands.
+#[test]
+fn ili9341_ramwr_rewinds_and_ramwrcont_continues() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x29, &[]),
+        ili_window(0, 3, 0, 0),
+        ili_pixels(&[0x1111, 0x2222]),
+        script([dc_command(0x3C, &[]), dc_data(&[0x33, 0x33])]),
+        ili_pixels(&[0xAAAA]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_ili9341(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let fb = new.framebuffer();
+    assert_eq!(
+        [
+            u16::from_be_bytes([fb[0], fb[1]]),
+            u16::from_be_bytes([fb[2], fb[3]]),
+            u16::from_be_bytes([fb[4], fb[5]]),
+        ],
+        [0xAAAA, 0x2222, 0x3333],
+        "RAMWRCONT continued at pixel 2; the second RAMWR rewound to pixel 0"
+    );
+}
+
+/// A CS cycle in the middle of a blit. `cs_select: keeps_stream` is what says
+/// this panel resumes rather than restarting — a driver that chunks a large
+/// blit releases CS between bursts.
+#[test]
+fn ili9341_a_cs_cycle_does_not_close_the_pixel_stream() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x29, &[]),
+        ili_window(0, 3, 0, 0),
+        ili_pixels(&[0x1111, 0x2222]),
+        vec![Step::CsRelease, Step::CsSelect],
+        dc_data(&[0x33, 0x33, 0x44, 0x44]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_ili9341(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let fb = new.framebuffer();
+    assert_eq!(
+        [
+            u16::from_be_bytes([fb[4], fb[5]]),
+            u16::from_be_bytes([fb[6], fb[7]]),
+        ],
+        [0x3333, 0x4444],
+        "the pixel stream survived the CS cycle and resumed at pixel 2"
+    );
+}
+
+/// SWRESET keeps the picture — §8.2.2, "the Frame Memory contents are
+/// unaffected by this command" — and resets the window, MADCTL and DISPON.
+#[test]
+fn ili9341_swreset_keeps_frame_memory() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x29, &[]),
+        ili_window(0, 2, 0, 0),
+        ili_pixels(&[0x07E0, 0x07E0, 0xF800]),
+        dc_command(0x01, &[]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_ili9341(&steps);
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    assert_eq!(
+        u16::from_be_bytes([new.framebuffer()[0], new.framebuffer()[1]]),
+        0x07E0,
+        "SWRESET must not clear the picture"
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "tft", &opts())[0],
+        &SpiDevice::artifacts(&new, "tft", &opts())[0],
+        "ili9341 after SWRESET",
+    );
+}
+
+/// ⚠️ DELIBERATE DIFFERENCE 1 — SWRESET took its window from the orientation it
+/// was about to throw away.
+///
+/// The old model computed the reset window from `addressable_width()` BEFORE
+/// zeroing MADCTL, so a SWRESET issued while landscape left the column window
+/// at 0..319 with the panel back in portrait — a window wider than the
+/// addressable extent, which nothing on silicon can be in. The descriptor
+/// resets the window to the power-on 0..239 / 0..319 and then the orientation,
+/// so the two agree afterwards.
+///
+/// Both halves are asserted: the oracle is pinned to the wrong window so nobody
+/// can "fix" the copy and quietly make this vacuous.
+#[test]
+fn ili9341_swreset_window_follows_the_reset_orientation_and_the_old_model_was_wrong() {
+    // Landscape, then SWRESET, then paint a row WITHOUT a new CASET.
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x36, &[0x20]),
+        dc_command(0x01, &[]),
+        dc_command(0x29, &[]),
+        ili_pixels(&[0x07E0; 260]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_ili9341(&steps);
+
+    // The descriptor: portrait after the reset, so column 239 is the last one
+    // and pixel 240 has wrapped onto row 1.
+    let fb = new.framebuffer();
+    assert_eq!(
+        u16::from_be_bytes([fb[239 * 2], fb[239 * 2 + 1]]),
+        0x07E0,
+        "the last portrait column is painted"
+    );
+    assert_eq!(
+        u16::from_be_bytes([fb[240 * 2], fb[240 * 2 + 1]]),
+        0x07E0,
+        "pixel 240 wrapped onto row 1, which is what a 0..239 window does"
+    );
+
+    // The old model: a 0..319 column window left over from the orientation it
+    // had just discarded, so pixels 240..259 fall off the end of each row and
+    // are DROPPED instead of wrapping.
+    let ofb = old.framebuffer();
+    assert_eq!(
+        u16::from_be_bytes([ofb[240 * 2], ofb[240 * 2 + 1]]),
+        0x0000,
+        "the oracle is pinned to the stale-window behaviour; if this fails the \
+         oracle was edited and this test measures nothing"
+    );
+    assert_ne!(
+        fb, ofb,
+        "the two must differ here — that is the whole point of this test"
+    );
+}
+
+/// ⚠️ DELIBERATE DIFFERENCE 2 — `top_colour` on a tie.
+///
+/// The old model counted colours in a `HashMap` and took `max_by_key`, so a tie
+/// resolved by hash iteration order: not stable between runs, between native
+/// and wasm, or between machines, in a field the browser prints as "dominant
+/// colour". A `BTreeMap` resolves a tie to the highest RGB565 value,
+/// identically everywhere. Untied frames — every real picture, which has a
+/// background — are unchanged, which is what every other test in this section
+/// compares. Same change the ST7789 port made.
+#[test]
+fn ili9341_top_colour_resolves_a_tie_deterministically() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x29, &[]),
+        ili_window(0, 3, 0, 0),
+        ili_pixels(&[0x07E0, 0x07E0, 0xF800, 0xF800]),
+        vec![Step::CsRelease],
+    ]);
+    let (_, new, _, _) = drive_both_ili9341(&steps);
+    let art = &SpiDevice::artifacts(&new, "tft", &opts())[0];
+    assert_eq!(
+        art.meta["top_colour"], "0xF800",
+        "a tie resolves to the highest RGB565 value, on every machine"
+    );
+    assert_eq!(art.meta["top_colour_pixels"], 2);
+}
+
+/// An unpowered module refuses the bus, so DISPON and the pixels stay at their
+/// power-on-dark values by construction.
+#[test]
+fn ili9341_unpowered_module_matches() {
+    let steps = script([
+        vec![Step::CsSelect],
+        ili_init(),
+        ili_window(0, 3, 0, 0),
+        ili_pixels(&[0xFFFF; 4]),
+        vec![Step::CsRelease],
+    ]);
+    let mut old = old_ili9341().with_powered(false);
+    let mut new = new_ili9341();
+    new.set_powered(false);
+    assert_eq!(run_spi(&mut old, &steps), run_spi(&mut new, &steps));
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let art = &SpiDevice::artifacts(&new, "tft", &opts())[0];
+    assert_eq!(art.meta["powered"], false);
+    assert_eq!(art.meta["display_on"], false);
+    assert_eq!(art.meta["painted_bytes"], 0);
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "tft", &opts())[0],
+        art,
+        "ili9341 unpowered",
+    );
+}
+
+/// The artifact's published shape: LOGICAL dimensions (so a landscape panel is
+/// 320x240, not 240x320), and no `lit` / `awake` — this model does not act on
+/// SLPOUT and never has.
+#[test]
+fn ili9341_artifact_keeps_its_published_shape() {
+    let (_, new, _, _) = drive_both_ili9341(&[]);
+    let art = &SpiDevice::artifacts(&new, "tft", &opts())[0];
+    assert_eq!(art.meta["format"], "rgb565_be");
+    assert_eq!(art.meta["w"], 240);
+    assert_eq!(art.meta["h"], 320);
+    assert_eq!(art.meta["total_bytes"], 240 * 320 * 2);
+    assert!(
+        art.meta.get("lit").is_none(),
+        "this panel publishes no `lit`"
+    );
+    assert!(art.meta.get("awake").is_none());
 }

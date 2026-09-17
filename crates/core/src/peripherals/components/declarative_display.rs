@@ -49,8 +49,8 @@ use std::collections::BTreeMap;
 use anyhow::{bail, Context, Result};
 use labwired_config::{
     DeviceDescriptor, DisplayAction, DisplayAddressingMode, DisplayAxis, DisplayCommand,
-    DisplayCursorPart, DisplayDcSource, DisplayPixelFormat, DisplayRamLayout, DisplaySpec,
-    DisplayValue,
+    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayMetaFlag, DisplayPageWrap,
+    DisplayPixelFormat, DisplayRamLayout, DisplayRamStream, DisplaySpec, DisplayValue,
 };
 
 use crate::peripherals::i2c::I2cDevice;
@@ -83,9 +83,13 @@ enum Framing {
 pub struct GenericDisplay {
     // ── the descriptor, compiled ────────────────────────────────────────
     spec: DisplaySpec,
-    /// `opcode → index into spec.commands`, first declaration wins. Built once
-    /// so decoding a byte is an array index rather than a table scan.
-    by_opcode: Box<[Option<u16>; 256]>,
+    /// `opcode → the command-table entries that claim it`, in declaration
+    /// order. Built once so decoding a byte is an array index rather than a
+    /// table scan. A list rather than one index because an instruction-set
+    /// bank (`when:`) lets two entries claim the same opcode under mutually
+    /// exclusive guards — the PCD8544's `0x80|n` is "set X" in the basic set
+    /// and "set Vop" in the extended one.
+    by_opcode: Box<[Vec<u16>; 256]>,
     width: usize,
     height: usize,
     pages: usize,
@@ -128,6 +132,10 @@ pub struct GenericDisplay {
     // ── protocol state ──────────────────────────────────────────────────
     framing: Framing,
     pending_cmd: u8,
+    /// The command-table entry the pending opcode resolved to. Held rather
+    /// than re-looked-up when the parameters complete, because a command may
+    /// change the very var its own guard reads.
+    pending_idx: Option<u16>,
     params: [u8; 8],
     param_have: u8,
     param_want: u8,
@@ -286,8 +294,88 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
         }
     }
 
-    let mut seen = [false; 256];
-    for cmd in &spec.commands {
+    // A data byte reaches frame memory unconditionally, or after a `ram_write`.
+    // The two must agree with the command table, or a panel silently drops
+    // every pixel it is sent.
+    let has_ram_write = spec
+        .commands
+        .iter()
+        .flat_map(|c| c.actions.iter())
+        .any(|a| a.ram_write.is_some());
+    match spec.ram.stream {
+        DisplayRamStream::Always => {
+            if has_ram_write {
+                bail!(
+                    "ram.stream `always` means every data byte is frame memory, but the command \
+                     table declares a `ram_write` — one of the two is describing a different part"
+                );
+            }
+            if spec.dc.source == DisplayDcSource::Pin && spec.commands.iter().any(|c| c.args > 0) {
+                bail!(
+                    "a D/C-pad panel whose data line is ALWAYS frame memory has nowhere to put a \
+                     command's parameters: command 0x{:02X} declares {} of them",
+                    spec.commands
+                        .iter()
+                        .find(|c| c.args > 0)
+                        .map(|c| c.opcode)
+                        .unwrap_or(0),
+                    spec.commands
+                        .iter()
+                        .find(|c| c.args > 0)
+                        .map(|c| c.args)
+                        .unwrap_or(0),
+                );
+            }
+        }
+        DisplayRamStream::Command => {
+            if !has_ram_write {
+                bail!(
+                    "ram.stream `command` means a `ram_write` action opens the pixel stream, and \
+                     the command table declares none — no data byte could ever reach frame memory"
+                );
+            }
+        }
+    }
+
+    if spec.artifact_meta.is_empty() {
+        bail!(
+            "artifact_meta is empty: the paint artifact would carry pixels and no panel state, \
+             so a dark frame could not explain itself"
+        );
+    }
+    let mut meta_keys: Vec<&str> = Vec::new();
+    for field in &spec.artifact_meta {
+        let key = field.key();
+        if matches!(key, "w" | "h" | "format" | "generation") {
+            bail!("artifact_meta publishes '{key}', which describes the payload and is always present");
+        }
+        if meta_keys.contains(&key) {
+            bail!("artifact_meta publishes '{key}' twice");
+        }
+        meta_keys.push(key);
+        match field.flag() {
+            DisplayMetaFlag::InkBytes | DisplayMetaFlag::LitPixels
+                if spec.pixel_format != DisplayPixelFormat::MonoPage =>
+            {
+                bail!(
+                    "artifact_meta '{key}' counts 1 bpp ink, but this panel is {:?}",
+                    spec.pixel_format
+                );
+            }
+            DisplayMetaFlag::TopColour | DisplayMetaFlag::TopColourPixels
+                if spec.pixel_format != DisplayPixelFormat::Rgb565 =>
+            {
+                bail!(
+                    "artifact_meta '{key}' reads a 16-bit pixel, but this panel is {:?}",
+                    spec.pixel_format
+                );
+            }
+            _ => {}
+        }
+    }
+
+    let mut claims: Vec<Vec<usize>> = vec![Vec::new(); 256];
+    for (i, cmd) in spec.commands.iter().enumerate() {
         if cmd.args as usize > 8 {
             bail!(
                 "command 0x{:02X} takes {} parameters; this engine buffers 8",
@@ -303,20 +391,43 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                 end
             );
         }
-        for op in cmd.opcode..=end {
-            if seen[op as usize] {
+        if let Some(w) = &cmd.when {
+            if !spec.vars.contains_key(&w.var) {
                 bail!(
-                    "opcode 0x{op:02X} is claimed twice in the command table; which entry runs \
-                     would depend on declaration order, which is not something a datasheet says"
+                    "command 0x{:02X}: `when` reads var '{}', which is not declared — the guard \
+                     would read a cell nothing can write and the entry would never decode",
+                    cmd.opcode,
+                    w.var
                 );
             }
-            seen[op as usize] = true;
+        }
+        for op in cmd.opcode..=end {
+            for &other in &claims[op as usize] {
+                if !guards_are_exclusive(&spec.commands[other], cmd) {
+                    bail!(
+                        "opcode 0x{op:02X} is claimed twice in the command table without \
+                         mutually exclusive `when` guards; which entry runs would depend on \
+                         declaration order, which is not something a datasheet says"
+                    );
+                }
+            }
+            claims[op as usize].push(i);
         }
         for action in &cmd.actions {
             validate_action(spec, cmd, action)?;
         }
     }
     Ok(())
+}
+
+/// Two entries may claim one opcode only when their guards cannot both hold:
+/// the same var, read through the same mask, required to equal two different
+/// values. Anything looser and the decode depends on declaration order.
+fn guards_are_exclusive(a: &DisplayCommand, b: &DisplayCommand) -> bool {
+    match (&a.when, &b.when) {
+        (Some(x), Some(y)) => x.var == y.var && x.mask == y.mask && x.equals != y.equals,
+        _ => false,
+    }
 }
 
 fn validate_action(spec: &DisplaySpec, cmd: &DisplayCommand, action: &DisplayAction) -> Result<()> {
@@ -431,10 +542,13 @@ impl GenericDisplay {
         let height = spec.height as usize;
         let pages = spec.ram.pages.unwrap_or(0) as usize;
         let unit_bytes = spec.pixel_format.write_unit_bytes();
-        let mut by_opcode = Box::new([None; 256]);
+        let mut by_opcode: Box<[Vec<u16>; 256]> = vec![Vec::new(); 256]
+            .into_boxed_slice()
+            .try_into()
+            .expect("256 entries");
         for (i, cmd) in spec.commands.iter().enumerate() {
             for op in cmd.opcode..=cmd.opcode_end.unwrap_or(cmd.opcode) {
-                by_opcode[op as usize] = Some(i as u16);
+                by_opcode[op as usize].push(i as u16);
             }
         }
         let address = spec.default_address.unwrap_or(0);
@@ -454,9 +568,9 @@ impl GenericDisplay {
             dc_level: false,
             component_id: None,
             powered: true,
-            display_on: false,
-            awake: false,
-            inverted: false,
+            display_on: spec.power_on.display_on,
+            awake: spec.power_on.awake,
+            inverted: spec.power_on.inverted,
             mode,
             vars,
             col: 0,
@@ -471,6 +585,7 @@ impl GenericDisplay {
             ram,
             framing: Framing::Idle,
             pending_cmd: 0,
+            pending_idx: None,
             params: [0; 8],
             param_have: 0,
             param_want: 0,
@@ -743,12 +858,15 @@ impl GenericDisplay {
                 self.inverted = i;
             }
             if action.reset_control {
-                self.display_on = false;
-                self.awake = false;
-                self.inverted = false;
+                self.display_on = self.spec.power_on.display_on;
+                self.awake = self.spec.power_on.awake;
+                self.inverted = self.spec.power_on.inverted;
                 self.mode = self.spec.addressing.default;
                 self.vars = self.spec.vars.clone();
                 self.reset_window();
+            }
+            if action.clear_ram {
+                self.ram.fill(0);
             }
         }
     }
@@ -766,7 +884,9 @@ impl GenericDisplay {
         self.param_have = 0;
         self.param_want = 0;
         self.params = [0; 8];
-        let Some(idx) = self.by_opcode[byte as usize] else {
+        let resolved = self.lookup(byte);
+        self.pending_idx = resolved;
+        let Some(idx) = resolved else {
             // An opcode the controller does not implement is consumed and
             // ignored. On a D/C-framed panel it also CLOSES whatever stream was
             // open, which is what silicon does and what stops an init sequence's
@@ -787,6 +907,21 @@ impl GenericDisplay {
         self.run_actions(idx);
     }
 
+    /// Which command-table entry decodes `op` right now. The first entry that
+    /// claims the opcode and whose `when` guard holds; validation has already
+    /// proved at most one can.
+    fn lookup(&self, op: u8) -> Option<u16> {
+        self.by_opcode[op as usize].iter().copied().find(|i| {
+            match &self.spec.commands[*i as usize].when {
+                None => true,
+                Some(w) => {
+                    let v = self.vars.get(&w.var).copied().unwrap_or(0);
+                    w.mask.map_or(v, |m| v & m) == w.equals
+                }
+            }
+        })
+    }
+
     fn take_param(&mut self, byte: u8) {
         let have = self.param_have as usize;
         if have < self.params.len() {
@@ -798,28 +933,27 @@ impl GenericDisplay {
         }
         self.param_want = 0;
         self.param_have = 0;
-        if let Some(idx) = self.by_opcode[self.pending_cmd as usize] {
-            self.framing = Framing::Idle;
+        self.framing = Framing::Idle;
+        if let Some(idx) = self.pending_idx {
             self.run_actions(idx as usize);
-        } else {
-            self.framing = Framing::Idle;
         }
     }
 
     /// One data byte off the wire.
     fn data_byte(&mut self, byte: u8) {
-        if self.args_on_data_stream() {
-            match self.framing {
-                Framing::Params => self.take_param(byte),
-                Framing::Ram => self.ram_byte(byte),
-                // A data byte with no command open is a stray on silicon too.
-                Framing::Idle => {}
-            }
-        } else {
-            // Control-byte framing: the data stream IS frame memory. There is no
-            // RAMWR opcode to open it, which is exactly why the SSD1306 needs no
-            // ram_write command in its table.
+        // `ram.stream: always` — the data stream IS frame memory, with no RAMWR
+        // opcode to open it. True of the SSD1306 and the SH1107 (I²C control
+        // byte) and equally of the PCD8544 (a D/C pad and no RAMWR at all),
+        // which is why this reads the descriptor rather than the framing.
+        if self.spec.ram.stream == DisplayRamStream::Always {
             self.ram_byte(byte);
+            return;
+        }
+        match self.framing {
+            Framing::Params => self.take_param(byte),
+            Framing::Ram => self.ram_byte(byte),
+            // A data byte with no command open is a stray on silicon too.
+            Framing::Idle => {}
         }
     }
 
@@ -897,11 +1031,15 @@ impl GenericDisplay {
                 }
             }
             DisplayAddressingMode::Page => {
-                // Column only, clamped at the last column of the FRAME MEMORY
-                // (not of the window): page addressing ignores the column
-                // window and nothing wraps.
+                // Column only, over the FRAME MEMORY's extent (not the
+                // window's): page addressing ignores the column window and the
+                // page never changes. What happens AT the last column is the
+                // one thing the two paged OLEDs here disagree about, so it is
+                // `addressing.page_wrap` rather than a house rule.
                 if (self.col as usize) < self.width.saturating_sub(1) {
                     self.col += 1;
+                } else if self.spec.addressing.page_wrap == DisplayPageWrap::Wrap {
+                    self.col = 0;
                 }
             }
         }
@@ -957,59 +1095,83 @@ impl GenericDisplay {
         id: &str,
         opts: &crate::inspect::InspectOpts,
     ) -> Vec<crate::inspect::Artifact> {
-        match self.spec.pixel_format {
-            DisplayPixelFormat::MonoPage => {
-                let fb = self.framebuffer();
-                vec![crate::inspect::Artifact {
-                    kind: "framebuffer".to_string(),
-                    id: id.to_string(),
-                    meta: serde_json::json!({
-                        "w": self.width,
-                        "h": self.pages * 8,
-                        "format": self.spec.artifact_format,
-                        "generation": crate::inspect::artifact_generation(fb),
-                        "ink_bytes": self.ink_bytes(),
-                        "lit_pixels": self.lit_pixels(),
-                    }),
-                    bytes: crate::inspect::artifact_bytes(fb, opts),
-                }]
-            }
-            _ => {
-                let fb = self.oriented_framebuffer();
-                let painted = fb.iter().filter(|&&b| b != 0x00).count();
-                let (w, h) = self.logical_dimensions();
-                // A BTreeMap, not a HashMap: a tie between two colours must
-                // resolve the same way on every run and in both engines, and
-                // `max_by_key` over an ordered iterator does that by construction.
-                let mut counts: BTreeMap<u16, usize> = BTreeMap::new();
-                for px in fb.chunks_exact(2) {
-                    let v = u16::from_be_bytes([px[0], px[1]]);
-                    if v != 0 {
-                        *counts.entry(v).or_default() += 1;
-                    }
+        let fb = self.oriented_framebuffer();
+        let (w, h) = self.logical_dimensions();
+        let mut meta = serde_json::Map::new();
+        // These four describe the PAYLOAD, so they are always present: a
+        // consumer cannot unpack the bytes without them.
+        meta.insert("w".into(), serde_json::json!(w));
+        meta.insert("h".into(), serde_json::json!(h));
+        meta.insert(
+            "format".into(),
+            serde_json::json!(self.spec.artifact_format),
+        );
+        meta.insert(
+            "generation".into(),
+            serde_json::json!(crate::inspect::artifact_generation(&fb)),
+        );
+
+        // The dominant colour is counted in a BTreeMap, not a HashMap: a tie
+        // between two colours must resolve the same way on every run and in
+        // both engines, and `max_by_key` over an ordered iterator does that by
+        // construction.
+        let top = |i: usize| {
+            let mut counts: BTreeMap<u16, usize> = BTreeMap::new();
+            for px in fb.chunks_exact(2) {
+                let v = u16::from_be_bytes([px[0], px[1]]);
+                if v != 0 {
+                    *counts.entry(v).or_default() += 1;
                 }
-                let top = counts.iter().max_by_key(|&(_, n)| *n);
-                vec![crate::inspect::Artifact {
-                    kind: "framebuffer".to_string(),
-                    id: id.to_string(),
-                    meta: serde_json::json!({
-                        "w": w,
-                        "h": h,
-                        "format": self.spec.artifact_format,
-                        "generation": crate::inspect::artifact_generation(&fb),
-                        "display_on": self.display_on(),
-                        "lit": self.lit(),
-                        "awake": self.awake(),
-                        "powered": self.powered,
-                        "inverted": self.inverted,
-                        "painted_bytes": painted,
-                        "total_bytes": fb.len(),
-                        "top_colour": top.map(|(v, _)| format!("0x{v:04X}")),
-                        "top_colour_pixels": top.map(|(_, n)| *n),
-                    }),
-                    bytes: crate::inspect::artifact_bytes(&fb, opts),
-                }]
             }
+            let top = counts.into_iter().max_by_key(|&(_, n)| n);
+            match i {
+                0 => top.map(|(v, _)| serde_json::json!(format!("0x{v:04X}"))),
+                _ => top.map(|(_, n)| serde_json::json!(n)),
+            }
+            .unwrap_or(serde_json::Value::Null)
+        };
+
+        for field in &self.spec.artifact_meta {
+            let value = match field.flag() {
+                DisplayMetaFlag::InkBytes => {
+                    serde_json::json!(fb.iter().filter(|b| **b != 0).count())
+                }
+                DisplayMetaFlag::LitPixels => {
+                    serde_json::json!(fb.iter().map(|b| b.count_ones() as usize).sum::<usize>())
+                }
+                DisplayMetaFlag::PaintedBytes => {
+                    serde_json::json!(fb.iter().filter(|&&b| b != 0x00).count())
+                }
+                DisplayMetaFlag::TotalBytes => serde_json::json!(fb.len()),
+                DisplayMetaFlag::TopColour => top(0),
+                DisplayMetaFlag::TopColourPixels => top(1),
+                DisplayMetaFlag::DisplayOn => serde_json::json!(self.display_on()),
+                DisplayMetaFlag::Awake => serde_json::json!(self.awake()),
+                DisplayMetaFlag::Lit => serde_json::json!(self.lit()),
+                DisplayMetaFlag::Powered => serde_json::json!(self.powered),
+                DisplayMetaFlag::Inverted => serde_json::json!(self.inverted),
+            };
+            meta.insert(field.key().to_string(), value);
+        }
+
+        vec![crate::inspect::Artifact {
+            kind: "framebuffer".to_string(),
+            id: id.to_string(),
+            meta: serde_json::Value::Object(meta),
+            bytes: crate::inspect::artifact_bytes(&fb, opts),
+        }]
+    }
+
+    /// The frame memory, for a snapshot. Only the pixels: control state is
+    /// rebuilt by replaying the bus, and a snapshot that carried a cursor
+    /// would resume a half-written frame at a position the wire never sent.
+    fn snapshot_ram(&self) -> Vec<u8> {
+        self.ram.clone()
+    }
+
+    fn restore_ram(&mut self, bytes: &[u8]) {
+        if bytes.len() == self.ram.len() {
+            self.ram.copy_from_slice(bytes);
         }
     }
 }
@@ -1095,9 +1257,14 @@ impl SpiDevice for GenericDisplay {
         self.component_id.as_deref()
     }
 
-    /// CS↓ closes whatever stream was open. A half-sent command does not
-    /// survive a deselect on silicon either.
+    /// What CS↓ does to a half-open stream is `cs_select:` in the descriptor,
+    /// not a house rule: the ST7789 treats CS as the transaction boundary,
+    /// while the ILI9341 lets a RAMWR pixel stream survive a deselect because a
+    /// driver that chunks a large blit releases CS between bursts.
     fn cs_select(&mut self) {
+        if self.spec.cs_select == DisplayCsSelect::KeepsStream {
+            return;
+        }
         self.framing = Framing::Idle;
         self.param_want = 0;
         self.param_have = 0;
@@ -1156,6 +1323,16 @@ impl SpiDevice for GenericDisplay {
 
     fn advance_time_us(&mut self, us: u64) {
         self.elapsed_us = self.elapsed_us.saturating_add(us);
+    }
+
+    /// A save/restore carries the PIXELS. See [`GenericDisplay::snapshot_ram`].
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        self.snapshot_ram()
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
+        self.restore_ram(bytes);
+        Ok(())
     }
 }
 
@@ -1418,6 +1595,21 @@ display_kit!(
     ST7789_KIT,
     "st7789-170x320"
 );
+display_kit!(
+    /// Sino Wealth SH1107, 1.5″ 128×128 (`sh1107.yaml`).
+    SH1107_KIT,
+    "oled-sh1107"
+);
+display_kit!(
+    /// Philips PCD8544 on the Nokia 5110 module, 84×48 (`pcd8544.yaml`).
+    PCD8544_KIT,
+    "pcd8544"
+);
+display_kit!(
+    /// ILI Technology ILI9341, 240×320 RGB565 TFT (`ili9341.yaml`).
+    ILI9341_KIT,
+    "ili9341"
+);
 
 /// The SSD1306 128×64 model, built from its embedded descriptor. The shape the
 /// in-crate tests used to get from `Ssd1306::new`.
@@ -1431,6 +1623,33 @@ pub fn ssd1306(address: u8) -> GenericDisplay {
 pub fn ssd1306_128x32(address: u8) -> GenericDisplay {
     let mut dev = embedded("oled-ssd1306-128x32").expect("oled-ssd1306-128x32 descriptor builds");
     dev.set_address(address);
+    dev
+}
+
+/// The SH1107 model, built from its embedded descriptor. The shape the
+/// in-crate tests used to get from `Sh1107::new`.
+pub fn sh1107(address: u8) -> GenericDisplay {
+    let mut dev = embedded("oled-sh1107").expect("oled-sh1107 descriptor builds");
+    dev.set_address(address);
+    dev
+}
+
+/// The PCD8544 model with its two pins wired, for tests that drive the wire
+/// directly rather than through a manifest. The shape the in-crate tests used
+/// to get from `Pcd8544::new`.
+pub fn pcd8544(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("pcd8544").expect("pcd8544 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev.set_dc_pin(dc_pin);
+    dev
+}
+
+/// The ILI9341 model with its two pins wired, for tests that drive the wire
+/// directly rather than through a manifest.
+pub fn ili9341(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("ili9341").expect("ili9341 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev.set_dc_pin(dc_pin);
     dev
 }
 
@@ -1450,7 +1669,14 @@ mod tests {
     /// Every display descriptor this engine ships must LOAD. A descriptor that
     /// only fails when a canvas happens to place it is a lab that breaks in the
     /// browser for the person who placed it.
-    const SHIPPED: &[&str] = &["oled-ssd1306", "oled-ssd1306-128x32", "st7789-170x320"];
+    const SHIPPED: &[&str] = &[
+        "oled-ssd1306",
+        "oled-ssd1306-128x32",
+        "st7789-170x320",
+        "oled-sh1107",
+        "pcd8544",
+        "ili9341",
+    ];
 
     #[test]
     fn every_shipped_display_descriptor_loads() {
@@ -1526,6 +1752,199 @@ mod tests {
             128,
             "page 1: the sabotaged mask must move it"
         );
+    }
+
+    /// The negative control for `addressing.page_wrap`. Flipping the SH1107's
+    /// declared `wrap` to `clamp` must pile the overflow bytes on the last
+    /// column instead of wrapping them to column 0. If this passes while the
+    /// SH1107 parity tests still pass, the key is not wired to the counter.
+    #[test]
+    fn page_wrap_clamp_and_wrap_paint_different_columns() {
+        let yaml = labwired_config::embedded_device_yaml("oled-sh1107").expect("embedded");
+        let clamped = yaml.replace("page_wrap: wrap", "page_wrap: clamp");
+        assert_ne!(clamped, yaml, "the sabotage did not apply");
+
+        let paint = |desc: &str| -> Vec<u8> {
+            let mut d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            d.start();
+            d.write(0x00);
+            d.write(0x20); // page addressing
+            d.write(0xB0); // page 0
+            d.write(0x0E); // column low nibble  → 0x7E
+            d.write(0x17); // column high nibble
+            d.start();
+            d.write(0x40);
+            for b in [0x11u8, 0x22, 0x33] {
+                d.write(b);
+            }
+            d.stop();
+            d.framebuffer()[..128].to_vec()
+        };
+        let wrapped = paint(yaml);
+        assert_eq!(
+            [wrapped[126], wrapped[127], wrapped[0]],
+            [0x11, 0x22, 0x33],
+            "wrap: the third byte returns to column 0"
+        );
+        let held = paint(&clamped);
+        assert_eq!(
+            [held[126], held[127], held[0]],
+            [0x11, 0x33, 0x00],
+            "clamp: the third byte overwrites the last column"
+        );
+    }
+
+    /// The negative control for `when:`. Moving the PCD8544's SET X entry out
+    /// of the basic instruction set — so both readings of `0x80|n` become
+    /// unguarded — must be REFUSED at load. Before the guard existed, the
+    /// stock init's `0xBF` was read as "column 63" and the first frame landed
+    /// 63 columns across.
+    #[test]
+    fn two_unguarded_entries_claiming_one_opcode_are_refused() {
+        let yaml = labwired_config::embedded_device_yaml("pcd8544").expect("embedded");
+        let broken = yaml.replace(
+            "name: SETXADDR, when: { var: h, equals: 0 }",
+            "name: SETXADDR",
+        );
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("claimed twice"), "got: {err:#}");
+    }
+
+    /// And the guard has to be WIRED, not merely declared. Move SET X into the
+    /// EXTENDED set — the reading a flat table would have had to pick — and the
+    /// stock init's `0xBF` becomes "column 63", so the first frame lands 63
+    /// columns across. Two edits, because the shipped table would otherwise
+    /// refuse the duplicate claim on `0x80..0xFF`.
+    #[test]
+    fn reading_set_x_in_the_wrong_instruction_set_moves_the_pixels() {
+        let yaml = labwired_config::embedded_device_yaml("pcd8544").expect("embedded");
+        let sabotaged = yaml
+            .replace(
+                "      - { opcode: 0x80, opcode_end: 0xFF, name: SETVOP,       when: { var: h, equals: 1 } }\n",
+                "",
+            )
+            .replace("name: SETXADDR, when: { var: h, equals: 0 }", "name: SETXADDR, when: { var: h, equals: 1 }");
+        assert_ne!(sabotaged, yaml, "the sabotage did not apply");
+
+        let paint = |desc: &str| -> usize {
+            let mut d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            for (dc, b) in [
+                (false, 0x21u8), // extended instruction set
+                (false, 0xBF),   // set Vop — NOT a column move
+                (false, 0x20),   // basic instruction set
+                (false, 0x0C),   // display normal
+                (true, 0x5A),    // one pixel byte
+            ] {
+                d.set_dc_level(dc);
+                d.transfer(b);
+            }
+            d.framebuffer()
+                .iter()
+                .position(|&b| b != 0)
+                .expect("something was painted")
+        };
+        assert_eq!(
+            paint(yaml),
+            0,
+            "the guarded table lands the byte at column 0"
+        );
+        assert_eq!(
+            paint(&sabotaged),
+            0x3F,
+            "SET X read in the extended set decodes 0xBF as column 63"
+        );
+    }
+
+    /// The negative control for `cs_select`. The ILI9341 declares
+    /// `keeps_stream`; flipping it to the ST7789's `closes_stream` must DROP
+    /// the pixels a chunked blit sends after releasing CS.
+    #[test]
+    fn cs_select_closes_stream_drops_a_resumed_blit() {
+        let yaml = labwired_config::embedded_device_yaml("ili9341").expect("embedded");
+        let closing = yaml.replace("cs_select: keeps_stream", "cs_select: closes_stream");
+        assert_ne!(closing, yaml, "the sabotage did not apply");
+
+        let paint = |desc: &str| -> usize {
+            let mut d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            let cmd = |d: &mut GenericDisplay, op: u8, args: &[u8]| {
+                SpiDevice::set_dc_level(d, false);
+                SpiDevice::transfer(d, op);
+                SpiDevice::set_dc_level(d, true);
+                for a in args {
+                    SpiDevice::transfer(d, *a);
+                }
+            };
+            SpiDevice::cs_select(&mut d);
+            cmd(&mut d, 0x2A, &[0x00, 0x00, 0x00, 0x03]);
+            cmd(&mut d, 0x2B, &[0x00, 0x00, 0x00, 0x00]);
+            cmd(&mut d, 0x2C, &[0x11, 0x11, 0x22, 0x22]);
+            SpiDevice::cs_release(&mut d);
+            SpiDevice::cs_select(&mut d);
+            SpiDevice::set_dc_level(&mut d, true);
+            for b in [0x33u8, 0x33, 0x44, 0x44] {
+                SpiDevice::transfer(&mut d, b);
+            }
+            d.framebuffer().iter().filter(|&&b| b != 0).count()
+        };
+        assert_eq!(paint(yaml), 8, "keeps_stream: all four pixels land");
+        assert_eq!(
+            paint(&closing),
+            4,
+            "closes_stream: the resumed half of the blit is dropped"
+        );
+    }
+
+    /// `ram.stream` and the command table must agree. `always` means every data
+    /// byte is frame memory; a `ram_write` in the table says otherwise, and one
+    /// of the two would silently win.
+    #[test]
+    fn a_ram_stream_that_contradicts_the_command_table_is_refused() {
+        let yaml = labwired_config::embedded_device_yaml("st7789-170x320").expect("embedded");
+        let broken = yaml.replace("stream: command", "stream: always");
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("ram_write"), "got: {err:#}");
+    }
+
+    /// The other direction: a panel whose data line only becomes frame memory
+    /// after a RAMWR, with no RAMWR anywhere in its table, could never paint.
+    #[test]
+    fn a_command_stream_with_no_ram_write_is_refused() {
+        let broken = ssd1306_yaml_with(("stream: always", "stream: command"));
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(
+            format!("{err:#}").contains("no data byte could ever reach frame memory"),
+            "got: {err:#}"
+        );
+    }
+
+    /// An artifact that carries pixels and nothing else cannot explain a dark
+    /// frame, so an empty `artifact_meta` is a load error rather than a quiet
+    /// four-key artifact.
+    #[test]
+    fn an_empty_artifact_meta_is_refused() {
+        let broken = ssd1306_yaml_with((
+            "artifact_meta: [ink_bytes, lit_pixels]",
+            "artifact_meta: []",
+        ));
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(
+            format!("{err:#}").contains("artifact_meta is empty"),
+            "got: {err:#}"
+        );
+    }
+
+    /// A flag that cannot be computed for this pixel format is refused rather
+    /// than published as a plausible number: `lit_pixels` over RGB565 counts
+    /// set bits in colour values.
+    #[test]
+    fn an_artifact_flag_the_pixel_format_cannot_carry_is_refused() {
+        let yaml = labwired_config::embedded_device_yaml("st7789-170x320").expect("embedded");
+        let broken = yaml.replace("[display_on, lit, awake", "[lit_pixels, lit, awake");
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("1 bpp ink"), "got: {err:#}");
     }
 
     fn ssd1306_yaml_with(replacement: (&str, &str)) -> String {
