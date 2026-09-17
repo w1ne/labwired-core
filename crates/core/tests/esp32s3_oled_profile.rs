@@ -9,7 +9,7 @@ use labwired_config::{Arch, ChipDescriptor, SystemManifest};
 use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::XtensaLx7;
-use labwired_core::peripherals::components::Ssd1306;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
 use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
@@ -114,7 +114,11 @@ fn oled_framebuffer(machine: &Machine<XtensaLx7>) -> Vec<u8> {
         .attached_slaves()
         .iter()
         .filter(|slave| slave.address() == 0x3c)
-        .find_map(|slave| slave.as_any().and_then(|any| any.downcast_ref::<Ssd1306>()))
+        .find_map(|slave| {
+            slave
+                .as_any()
+                .and_then(|any| any.downcast_ref::<GenericDisplay>())
+        })
         .expect("SSD1306 is attached at I2C address 0x3C")
         .framebuffer()
         .to_vec()

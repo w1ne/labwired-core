@@ -316,9 +316,10 @@ impl Nrf54lTwim {
         // Data with no AddrRead — the same boundary the ESP32-C3 controller
         // emits at OP_RSTART. This is observability-only and byte-identical: the
         // four smart-ring slaves (BMI270/MAX30102/DRV2605) use the default
-        // no-op `start()`, and TMP117's `start()` only re-zeroes its
-        // read_phase/writes-since-start framing counters (already 0 entering the
-        // read, and never the register pointer), so no returned byte changes.
+        // no-op `start()`, and the declarative TMP117's `start()` only rewinds
+        // the read cursor and drops the write accumulator whose pointer byte
+        // has already been latched — never the register pointer itself — so no
+        // returned byte changes.
         // The trace wrapper turns this into the AddrRead frame it was missing.
         self.slaves[idx].start();
         for i in 0..len {

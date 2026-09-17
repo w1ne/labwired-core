@@ -13,14 +13,10 @@
 //! discoverable in no API and drivable through none — a component unit test
 //! would still have passed. This asserts the wiring, not the arithmetic.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-
-fn root(rel: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Build a bus from an example system.yaml, resolving its relative `chip:`.
 fn bus_from_example(rel_yaml: &str) -> SystemBus {

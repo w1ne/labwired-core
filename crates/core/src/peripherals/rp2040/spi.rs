@@ -369,6 +369,31 @@ impl Rp2040Spi {
 }
 
 impl Peripheral for Rp2040Spi {
+    /// This controller hosts off-chip SPI devices, so the machine's central
+    /// device-time drive fans elapsed µs out to them — the same drive, the same
+    /// deltas and the same source the attached I²C slaves get. Phase A of the
+    /// YAML device machine: a declarative device must not be able to tell which
+    /// bus it hangs off by how much time it is told has passed.
+    fn drives_central_device_time(&self) -> bool {
+        true
+    }
+
+    fn advance_attached_device_time_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for dev in &mut self.attached_devices {
+            dev.advance_time_us(us);
+        }
+    }
+
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for dev in &mut self.attached_devices {
+            crate::peripherals::device::drain_spi_pin_drives(&mut **dev, out);
+        }
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         SPI_LINES
     }

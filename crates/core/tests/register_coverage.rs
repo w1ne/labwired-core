@@ -32,10 +32,11 @@
 //! is faithfully modeled. A fidelity fix that adds such gating therefore *lowers*
 //! this proxy by design; re-baseline (see below), it is not a coverage loss.
 
+mod common;
+use common::root;
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::bus::SystemBus;
 use labwired_core::{system, Bus, Machine};
-use std::path::PathBuf;
 
 /// All supported chips: (name, chip yaml, optional in-tree SVD).
 ///
@@ -124,13 +125,6 @@ const CHIPS: &[ChipEntry] = &[
         Some("tests/fixtures/real_world/stm32wba52.svd"),
     ),
 ];
-
-/// Repo root (core/), resolved from this crate's manifest dir (core/crates/core).
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 fn dummy_manifest(path: &str) -> labwired_config::SystemManifest {
     labwired_config::SystemManifest {

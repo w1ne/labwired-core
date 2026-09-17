@@ -40,10 +40,11 @@
 //! DELETED it must work through the scheduler matrix export. A fix that only
 //! satisfies one of the two is not a fix.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
-use std::path::PathBuf;
 
 /// ETS_RMT_INTR_SOURCE on ESP32-C3.
 const RMT_SOURCE: u32 = 28;
@@ -58,12 +59,6 @@ const RMT_INT_ST: u64 = 0x3C;
 const RMT_INT_ENA: u64 = 0x40;
 const RMT_INT_CLR: u64 = 0x44;
 const TX_START: u32 = 1 << 0;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// The shipped `esp32c3-devkit` bus with walk-deletion AUTO-DERIVED (never the
 /// hand `walk_deleted` hatch), plus the C3 interrupt-matrix routing the browser

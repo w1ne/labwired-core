@@ -366,10 +366,10 @@ fn ili9341_evidence_is_unchanged() {
     assert_eq!(art.meta["top_colour_pixels"], PIXELS);
 }
 
-/// The ST7789 on the 1.9in IPS module, through its OWN kit `attach` -- the
-/// path the 15 unit tests beside the model never touch, because they construct
-/// `St7789` directly. Everything below goes through SystemBus::from_config, so
-/// a kit that registers but fails to resolve its D/C pin fails here.
+/// The ST7789 on the 1.9in IPS module, through its OWN kit `attach` -- the path
+/// `display_migration_parity` never touches, because that file drives the model
+/// on the wire directly. Everything below goes through SystemBus::from_config,
+/// so a kit that registers but fails to resolve its D/C pin fails here.
 ///
 /// `lit` is the claim worth pinning: the model reports DISPON **and** awake,
 /// so this drives SLPOUT before DISPON. A panel given DISPON alone is dark on
@@ -565,15 +565,50 @@ fn every_panel_the_browser_renders_reports_evidence_to_inspect() {
     };
 
     let components = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/peripherals/components");
+    let devices = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/devices");
+
+    // A panel reports artifacts from ONE of two places, and the test demands
+    // evidence for whichever one it is:
+    //
+    //   * a hand-written Rust model in `components/<module>.rs` with its own
+    //     `fn artifacts(`; or
+    //   * a YAML descriptor under `configs/devices/` naming the `display`
+    //     primitive, whose artifacts come from the shared declarative engine.
+    //
+    // The second arm is not a weakening. The engine file is checked for its own
+    // `fn artifacts(` impl below, so a ported panel still has to name a real
+    // artifact producer — it is just one producer for every ported panel rather
+    // than one per panel, which is the entire point of the primitive.
+    let engine = components.join("declarative_display.rs");
+    let engine_src = std::fs::read_to_string(&engine).expect("read the declarative display engine");
+    assert!(
+        engine_src.contains("fn artifacts("),
+        "the declarative display engine reports no artifacts, so every panel \
+         ported to YAML is invisible to inspect: {engine:?}"
+    );
+
     for panel in &panels {
-        let path = components.join(format!("{}.rs", module_of(panel)));
-        let src = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("the browser renders '{panel}' but {path:?}: {e}"));
+        let rust = components.join(format!("{}.rs", module_of(panel)));
+        if let Ok(src) = std::fs::read_to_string(&rust) {
+            assert!(
+                src.contains("fn artifacts("),
+                "the browser renders '{panel}' but its model reports no artifacts to \
+                 inspect — every oracle clause about that panel is unresolvable. \
+                 Add an `artifacts` impl next to its buffers in {rust:?}."
+            );
+            continue;
+        }
+        let yaml = devices.join(format!("{}.yaml", module_of(panel)));
+        let src = std::fs::read_to_string(&yaml).unwrap_or_else(|e| {
+            panic!(
+                "the browser renders '{panel}' but it has neither a Rust model \
+                 ({rust:?}) nor a device descriptor ({yaml:?}): {e}"
+            )
+        });
         assert!(
-            src.contains("fn artifacts("),
-            "the browser renders '{panel}' but its model reports no artifacts to \
-             inspect — every oracle clause about that panel is unresolvable. \
-             Add an `artifacts` impl next to its buffers in {path:?}."
+            src.contains("primitive: display"),
+            "the browser renders '{panel}' and {yaml:?} exists, but it does not name the \
+             `display` primitive — nothing in that descriptor produces a paint artifact."
         );
     }
 }

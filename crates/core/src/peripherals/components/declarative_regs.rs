@@ -11,7 +11,10 @@
 
 use std::collections::HashMap;
 
-use labwired_config::{Encode, Endian, LabDescriptor, ObservableSpec, RegisterSpec};
+use labwired_config::{
+    DeviceTimer, Encode, Endian, LabDescriptor, ObservableSpec, ReadAction, RegisterSpec,
+    TimerStart, TimingAction, WriteAction,
+};
 
 use crate::peripherals::kit::LabRef;
 
@@ -46,6 +49,25 @@ pub(crate) fn encode_raw(
     width: u8,
     signed: bool,
 ) -> u32 {
+    encode_raw_bits(value, enc, extra_scale, 8 * u32::from(width), signed)
+}
+
+/// [`encode_raw`] with the destination width given in BITS.
+///
+/// A bit width rather than a byte width because a [`labwired_config::FieldSpec`]
+/// is not byte-sized: the MMA8451Q's 14-bit left-justified output saturates at
+/// ±8192 counts (its own width), and rounding it into the 16 bits its
+/// byte-ceiling would give lets a 3 g reading at the ±2 g full scale land as
+/// 12288 counts, which the field mask then truncates into a NEGATIVE
+/// acceleration. Saturating at the field's real width is what a converter does
+/// at the end of its range.
+pub(crate) fn encode_raw_bits(
+    value: f64,
+    enc: Option<&Encode>,
+    extra_scale: f64,
+    bits: u32,
+    signed: bool,
+) -> u32 {
     let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
     let offset = enc.map(|e| e.offset).unwrap_or(0.0);
     let mut raw = value * scale + offset;
@@ -57,19 +79,28 @@ pub(crate) fn encode_raw(
             raw = raw.min(hi);
         }
     }
-    let bits = 8 * width as u32;
     let mask = if bits >= 32 {
         u32::MAX
     } else {
         (1u32 << bits) - 1
     };
+    // `wrap`: the register is a modular counter of N raw counts, so the count
+    // rolls over instead of saturating. Rounded to an integer FIRST — wrapping
+    // 4095.99 as a float and rounding afterwards would produce 4096, a count a
+    // 12-bit counter cannot hold. `rem_euclid` so a negative measurement lands
+    // on the count the counter would really be showing rather than on the
+    // clamp. See `labwired_config::Encode::wrap` for why this is in counts.
+    if let Some(w) = enc.and_then(|e| e.wrap) {
+        let v = (raw.round() as i64).rem_euclid(i64::from(w.get()));
+        return (v as u32) & mask;
+    }
     if signed {
         let lo = -(2f64.powi((bits - 1) as i32));
         let hi = 2f64.powi((bits - 1) as i32) - 1.0;
         let v = raw.round().clamp(lo, hi) as i64;
         (v as u32) & mask
     } else {
-        raw.round().clamp(0.0, width_max(width)) as u32
+        raw.round().clamp(0.0, f64::from(mask)) as u32
     }
 }
 
@@ -110,11 +141,40 @@ pub(crate) fn scale_from_one(
     sf.map.get(&field).copied().unwrap_or(1.0)
 }
 
+/// Product of a `scale_from` list, folded left-to-right from 1.0. Shared by a
+/// register's own list and by a [`labwired_config::FieldSpec`]'s.
+pub(crate) fn scale_from_product_of(
+    list: &[labwired_config::ScaleFrom],
+    reg_values: &HashMap<String, u32>,
+) -> f64 {
+    list.iter()
+        .fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+}
+
 /// Product of a register's `scale_from` factors, folded left-to-right from 1.0.
 pub(crate) fn scale_from_product(reg: &RegisterSpec, reg_values: &HashMap<String, u32>) -> f64 {
-    reg.scale_from
-        .iter()
-        .fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+    scale_from_product_of(&reg.scale_from, reg_values)
+}
+
+/// The measurement channel a register reports: its [`RegisterSpec::source_from`]
+/// multiplexer's current selection, or its plain `source`. `None` ⇒ the register
+/// is storage (or a `popcount` / `fields` composite).
+///
+/// The mux falls back to the declared `source` for a field value the table does
+/// not cover, so a partial table says what it does not model instead of silently
+/// reading 0.
+pub(crate) fn selected_source<'a>(
+    reg: &'a RegisterSpec,
+    reg_values: &HashMap<String, u32>,
+) -> Option<&'a str> {
+    if let Some(sf) = &reg.source_from {
+        let regval = reg_values.get(&sf.register).copied().unwrap_or(0);
+        let field = (regval >> sf.shift as u32) & sf.mask;
+        if let Some(key) = sf.table.get(&field) {
+            return Some(key.as_str());
+        }
+    }
+    reg.source.as_deref()
 }
 
 /// Divide dual of `encode_raw`: count = round(value / resolution), clamped. A
@@ -142,13 +202,32 @@ pub(crate) fn register_read_bytes(
             return pack(0, reg.width, reg.endian);
         }
     }
+    // The same gate, the other polarity (`zero_unless`): the part is asleep
+    // until firmware SETS the enable bit. One branch, one struct, the polarity
+    // in the key name — see `labwired_config::RegisterSpec::zero_unless`.
+    if let Some(z) = &reg.zero_unless {
+        if reg_values.get(&z.register).copied().unwrap_or(0) & z.mask == 0 {
+            return pack(0, reg.width, reg.endian);
+        }
+    }
     if !reg.fields.is_empty() {
         let mut word = reg.reset;
         for f in &reg.fields {
             let value = slots.get(&f.source).copied().unwrap_or(0.0);
-            // Encode into `width_bits` bits (byte-width ceil for the helper), then mask.
-            let byte_w = f.width_bits.div_ceil(8);
-            let raw = encode_raw(value, f.encode.as_ref(), 1.0, byte_w, f.signed);
+            // Encoded at the field's OWN bit width — rounded and saturated to
+            // `width_bits` BEFORE `shift` places it, which is what makes a
+            // left-justified output register's low bits always zero on the wire
+            // and what stops an over-range measurement wrapping sign. The
+            // per-field `scale_from` compounds in exactly as a register's does,
+            // so a full-scale select bit-field reaches a packed field.
+            let extra = scale_from_product_of(&f.scale_from, reg_values);
+            let raw = encode_raw_bits(
+                value,
+                f.encode.as_ref(),
+                extra,
+                u32::from(f.width_bits),
+                f.signed,
+            );
             let mask = if f.width_bits >= 32 {
                 u32::MAX
             } else {
@@ -173,7 +252,7 @@ pub(crate) fn register_read_bytes(
             .min(width_max(reg.width) as u32);
         return pack(raw, reg.width, reg.endian);
     }
-    let raw = if let Some(src) = &reg.source {
+    let raw = if let Some(src) = selected_source(reg, reg_values) {
         let value = slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
         match reg.resolution {
             Some(base) => {
@@ -228,13 +307,306 @@ pub(crate) fn observe(regs: &[u8], obs: &ObservableSpec, channel: u8) -> Option<
     }
 }
 
+// ─── Tier 1: register side effects ─────────────────────────────────────────
+//
+// ONE vocabulary for what a datasheet says a read or a write DOES, shared by
+// the I²C and SPI engines so a part expresses the same silicon the same way on
+// either bus. The enums themselves are the MCU register machine's
+// (`labwired_config::ReadAction` / `WriteAction`).
+
+/// The word a register stores after the master writes `written` over `prev`.
+///
+/// [`RegisterSpec::write_mask`] decides WHICH bits the master may touch;
+/// [`RegisterSpec::on_write`] decides what touching them does. The two compose:
+/// a write-1-to-clear register with a mask clears only masked bits, and bits
+/// outside the mask are never disturbed by any action.
+pub(crate) fn apply_write(reg: &RegisterSpec, prev: u32, written: u32) -> u32 {
+    apply_write_masked(
+        reg.on_write.unwrap_or(WriteAction::None),
+        prev,
+        written,
+        reg.write_mask.unwrap_or(u32::MAX),
+    )
+}
+
+/// [`apply_write`] with the writable mask supplied by the caller.
+///
+/// The byte-wise auto-increment path needs this: a burst delivers ONE byte
+/// lane at a time, and the action has to apply to that lane alone — a
+/// write-1-to-clear byte must not clear bits in the bytes of the word the
+/// master has not written. Narrowing the mask to the lane does exactly that,
+/// and for a [`WriteAction::None`] register it reduces to the plain
+/// merge-the-masked-bits store the engine always did.
+pub(crate) fn apply_write_masked(action: WriteAction, prev: u32, written: u32, mask: u32) -> u32 {
+    let ones = written & mask;
+    match action {
+        // Plain store: the masked bits take the written value.
+        WriteAction::None => (prev & !mask) | ones,
+        // `reg &= !data` — a 1 clears.
+        WriteAction::WriteOneToClear => prev & !ones,
+        // `reg &= data` — a 0 clears. Only bits the mask exposes can drop.
+        WriteAction::WriteZeroToClear => prev & !(!written & mask),
+        // `reg |= data` — a 1 sets, a 0 is inert.
+        WriteAction::OneToSet => prev | ones,
+    }
+}
+
+/// Whether a completed READ of this register zeroes it
+/// ([`RegisterSpec::on_read`]). See that field for what "completes" means on
+/// each wire shape.
+pub(crate) fn read_clears(reg: &RegisterSpec) -> bool {
+    reg.on_read.unwrap_or(ReadAction::None) == ReadAction::Clear
+}
+
+// ─── Tier 1: device timers ─────────────────────────────────────────────────
+
+/// The declared [`DeviceTimer`]s of one device plus their running deadlines.
+///
+/// Shared by both declarative engines: a timer is a property of the PART, not
+/// of the bus it hangs off, so an I²C and an SPI descriptor get bit-identical
+/// firing sequences from the same YAML. Empty ⇒ every method returns without
+/// touching anything, so a device that declares no timer is unchanged.
+#[derive(Debug)]
+pub(crate) struct TimerBank {
+    timers: Vec<DeviceTimer>,
+    /// Absolute µs at which timer `i` next fires; `None` ⇒ not running.
+    deadlines: Vec<Option<u64>>,
+}
+
+impl TimerBank {
+    /// Arm the `on_reset` timers at power-on; leave `manual` ones idle.
+    pub(crate) fn new(timers: &[DeviceTimer]) -> Self {
+        let deadlines = timers
+            .iter()
+            .map(|t| match t.start {
+                TimerStart::OnReset => Self::interval(t),
+                TimerStart::Manual => None,
+            })
+            .collect();
+        Self {
+            timers: timers.to_vec(),
+            deadlines,
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.timers.is_empty()
+    }
+
+    /// The declared delay of a timer: its period, or its one-shot delay.
+    /// Validation guarantees exactly one is present and non-zero, so a
+    /// descriptor that slipped through with neither simply never runs.
+    fn interval(t: &DeviceTimer) -> Option<u64> {
+        t.period_us.or(t.after_us).filter(|us| *us > 0)
+    }
+
+    /// (Re)start every timer whose `start_on_write` names `register` and whose
+    /// mask the written value satisfies. `stored` is the register's value AFTER
+    /// the write — level-triggered, exactly like [`labwired_config::DataReady`].
+    pub(crate) fn start_on_write(&mut self, register: &str, stored: u32, now: u64) {
+        for (i, t) in self.timers.iter().enumerate() {
+            let Some(trigger) = &t.start_on_write else {
+                continue;
+            };
+            if trigger.register != register {
+                continue;
+            }
+            // No mask ⇒ "write anything to trigger"; a mask ⇒ the bits must be
+            // left set by the write.
+            if trigger.mask.is_some_and(|m| stored & m == 0) {
+                continue;
+            }
+            self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+        }
+    }
+
+    /// Every action due at or before `now`, in firing order: ascending
+    /// deadline, ties broken by declaration order. A periodic timer that is due
+    /// several times over one advance fires once per elapsed period, in order,
+    /// so a late service pass sees exactly the samples that accrued while the
+    /// CPU was elsewhere.
+    /// Start (or restart) a timer by NAME, from `now`. The Tier-2 `timer:`
+    /// action goes through here, so a rule and a `start_on_write` arm the same
+    /// deadline list rather than two.
+    pub(crate) fn start_named(&mut self, name: &str, now: u64) {
+        for (i, t) in self.timers.iter().enumerate() {
+            if t.name == name {
+                self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+            }
+        }
+    }
+
+    /// Stop a timer by NAME. A one-shot that has already fired is idle anyway;
+    /// this is what lets a rule silence a periodic one — a part going to sleep.
+    pub(crate) fn stop_named(&mut self, name: &str) {
+        for (i, t) in self.timers.iter().enumerate() {
+            if t.name == name {
+                self.deadlines[i] = None;
+            }
+        }
+    }
+
+    /// Every firing due at or before `now`, kept per TIMER and tagged with its
+    /// name: ascending deadline, ties broken by declaration order, one entry
+    /// per elapsed period. A periodic timer that is due several times over one
+    /// advance fires once per elapsed period, in order, so a late service pass
+    /// sees exactly the samples that accrued while the CPU was elsewhere.
+    ///
+    /// The name and the per-firing boundary are what a Tier-2 rule needs
+    /// (`on: { timer: NAME }`), and it must come from the SAME traversal that
+    /// runs `on_fire` — not a second clock the rule machine keeps alongside
+    /// this one. Two clocks is how a rule and an `on_fire` come to disagree
+    /// about when a part ticked; there is exactly one here.
+    ///
+    /// ⚠️ A periodic timer whose period is much shorter than the advance is due
+    /// many times, and a very long jump could otherwise spin here; the walk is
+    /// capped at [`MAX_TIMER_CATCHUP`] firings and then re-anchors every still-
+    /// due timer past `now`. The samples beyond the cap are lost, which is what
+    /// a real FIFO reports after the CPU was away too long — and it is a bound,
+    /// not a hang inside a bus tick.
+    pub(crate) fn due_by_timer(&mut self, now: u64) -> Vec<(String, Vec<TimingAction>)> {
+        let mut out = Vec::new();
+        if self.timers.is_empty() {
+            return out;
+        }
+        let mut fired = 0u32;
+        loop {
+            let next = self
+                .deadlines
+                .iter()
+                .enumerate()
+                .filter_map(|(i, d)| d.filter(|deadline| *deadline <= now).map(|d| (d, i)))
+                .min();
+            let Some((deadline, i)) = next else { break };
+            out.push((self.timers[i].name.clone(), self.timers[i].on_fire.clone()));
+            // Reschedule a periodic timer from its DEADLINE, not from `now`, so
+            // it does not drift with the service cadence; a one-shot goes idle
+            // until something starts it again.
+            self.deadlines[i] = self.timers[i]
+                .period_us
+                .filter(|p| *p > 0)
+                .map(|period| deadline.saturating_add(period));
+            fired += 1;
+            if fired >= MAX_TIMER_CATCHUP {
+                for d in self.deadlines.iter_mut() {
+                    if d.is_some_and(|deadline| deadline <= now) {
+                        *d = Some(now.saturating_add(1));
+                    }
+                }
+                break;
+            }
+        }
+        out
+    }
+}
+
+/// How many timer firings one time advance may replay before the bank gives up
+/// and re-anchors.
+///
+/// A device that was not serviced for a long simulated stretch genuinely owes
+/// many periods — that is the CPU-starvation case a FIFO overflow exists to
+/// show. But an unbounded walk turns a 1 µs period plus a 10 s jump into ten
+/// million iterations inside one bus tick, which is a hang, not fidelity.
+const MAX_TIMER_CATCHUP: u32 = 4096;
+
+/// Apply one timer action to a name-keyed register file. Unknown register
+/// names cannot occur — validation rejects them at load — so a miss is a
+/// no-op rather than a panic.
+pub(crate) fn apply_timing_action(
+    action: &TimingAction,
+    reg_values: &mut std::collections::HashMap<String, u32>,
+) {
+    match action {
+        TimingAction::SetBits { register, bits } => {
+            let v = reg_values.get(register).copied().unwrap_or(0);
+            reg_values.insert(register.clone(), v | bits);
+        }
+        TimingAction::ClearBits { register, bits } => {
+            let v = reg_values.get(register).copied().unwrap_or(0);
+            reg_values.insert(register.clone(), v & !bits);
+        }
+        TimingAction::WriteValue { register, value } => {
+            reg_values.insert(register.clone(), *value);
+        }
+    }
+}
+
+/// Validate the [`DeviceTimer`] list of a descriptor against its register map.
+/// Shared by both engines' `validate_descriptor`.
+pub(crate) fn validate_timers(
+    timers: &[DeviceTimer],
+    register_names: &[String],
+    rules: &[labwired_config::Rule],
+) -> anyhow::Result<()> {
+    // A timer earns its place either by writing registers (`on_fire:`) or by
+    // being something a Tier-2 rule listens for. Before Tier 2 there was only
+    // the first, so "no on_fire" meant dead weight; now a sample clock whose
+    // whole job is to raise `on: { timer: sample }` is a legitimate — and the
+    // most common — shape, and refusing it would make the MPU6050's INT line
+    // unexpressible.
+    let listened_for = |name: &str| {
+        rules
+            .iter()
+            .any(|r| matches!(&r.on, labwired_config::Event::Timer { name: n } if n == name))
+    };
+    let known = |name: &String| register_names.iter().any(|r| r == name);
+    for t in timers {
+        match (t.period_us, t.after_us) {
+            (Some(_), Some(_)) => anyhow::bail!(
+                "timer '{}' declares both period_us and after_us — a timer is one or the other",
+                t.name
+            ),
+            (None, None) => anyhow::bail!(
+                "timer '{}' declares neither period_us nor after_us, so it could never fire",
+                t.name
+            ),
+            (Some(0), _) | (_, Some(0)) => anyhow::bail!(
+                "timer '{}' has a zero interval, which would fire without bound",
+                t.name
+            ),
+            _ => {}
+        }
+        if t.on_fire.is_empty() && !listened_for(&t.name) {
+            anyhow::bail!(
+                "timer '{}' has no on_fire actions and no rule listens for \
+                 `on: {{ timer: {} }}`, so it is dead weight",
+                t.name,
+                t.name
+            );
+        }
+        for action in &t.on_fire {
+            let register = match action {
+                TimingAction::SetBits { register, .. }
+                | TimingAction::ClearBits { register, .. }
+                | TimingAction::WriteValue { register, .. } => register,
+            };
+            if !known(register) {
+                anyhow::bail!(
+                    "timer '{}' fires at '{register}', which is not a declared register",
+                    t.name
+                );
+            }
+        }
+        if let Some(trigger) = &t.start_on_write {
+            if !known(&trigger.register) {
+                anyhow::bail!(
+                    "timer '{}' starts on a write to '{}', which is not a declared register",
+                    t.name,
+                    trigger.register
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use labwired_config::{Endian, RegisterAccess, RegisterSpec};
     use std::collections::HashMap;
 
-    fn reg(name: &str, addr: u8, width: u8, endian: Endian, source: Option<&str>) -> RegisterSpec {
+    fn reg(name: &str, addr: u16, width: u8, endian: Endian, source: Option<&str>) -> RegisterSpec {
         RegisterSpec {
             name: name.into(),
             addr,
@@ -254,6 +626,11 @@ mod tests {
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
+            on_read: None,
+            on_write: None,
+            zero_unless: None,
+            source_from: None,
         }
     }
 
@@ -275,6 +652,7 @@ mod tests {
                 offset: 0.0,
                 clamp_min: None,
                 clamp_max: None,
+                wrap: None,
             }),
             scale_from: vec![],
             source_scale: None,
@@ -285,6 +663,11 @@ mod tests {
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
+            on_read: None,
+            on_write: None,
+            zero_unless: None,
+            source_from: None,
         };
         let mut slots = HashMap::new();
         slots.insert("ax".to_string(), -1.0); // -1 g × 256 = -256 = 0xFF00 two's-complement, LE
@@ -292,6 +675,120 @@ mod tests {
             register_read_bytes(&r, &slots, &HashMap::new()),
             vec![0x00, 0xFF]
         );
+    }
+
+    #[test]
+    fn write_actions_follow_the_systemrdl_definitions() {
+        use labwired_config::WriteAction::*;
+        // prev, written, mask, action → stored
+        let cases = [
+            (0xF0u32, 0x30u32, u32::MAX, None, 0x30u32),
+            (0xF0, 0x30, u32::MAX, WriteOneToClear, 0xC0),
+            (0xFF, 0x0F, u32::MAX, WriteZeroToClear, 0x0F),
+            (0x01, 0x80, u32::MAX, OneToSet, 0x81),
+            // The mask narrows every action to the bits firmware owns.
+            (0xFF, 0xFF, 0x0F, WriteOneToClear, 0xF0),
+            (0xFF, 0x00, 0x0F, WriteZeroToClear, 0xF0),
+            (0x00, 0xFF, 0x0F, OneToSet, 0x0F),
+            (0xF0, 0x0F, 0x0F, None, 0xFF),
+        ];
+        for (prev, written, mask, action, want) in cases {
+            assert_eq!(
+                apply_write_masked(action, prev, written, mask),
+                want,
+                "{action:?} prev={prev:#x} written={written:#x} mask={mask:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_write_action_with_no_key_is_a_plain_store() {
+        // The default every descriptor written before `on_write` existed means.
+        let r = reg("CTRL", 0x00, 1, Endian::Le, None);
+        assert_eq!(apply_write(&r, 0xF0, 0x0F), 0x0F);
+    }
+
+    #[test]
+    fn timers_fire_in_deadline_order_with_declaration_order_as_the_tiebreak() {
+        use labwired_config::{DeviceTimer, TimerStart, TimingAction};
+        let timer = |name: &str, period: u64, bits: u32| DeviceTimer {
+            name: name.into(),
+            period_us: Some(period),
+            after_us: Option::None,
+            start: TimerStart::OnReset,
+            start_on_write: Option::None,
+            on_fire: vec![TimingAction::SetBits {
+                register: name.into(),
+                bits,
+            }],
+        };
+        // `slow` is declared FIRST but is due later; `fast` fires twice inside
+        // the same advance. Deadline order decides, declaration order breaks
+        // the tie at 20 µs.
+        let mut bank = TimerBank::new(&[timer("slow", 20, 1), timer("fast", 10, 2)]);
+        let firings = bank.due_by_timer(25);
+        let by_name: Vec<String> = firings.iter().map(|(name, _)| name.clone()).collect();
+        assert_eq!(by_name, vec!["fast", "slow", "fast"]);
+        // The register actions come out in the same order, which is what the
+        // Tier-1 engine applies — the per-timer grouping is a view of ONE walk,
+        // not a second one that could order differently.
+        let fired: Vec<String> = firings
+            .into_iter()
+            .flat_map(|(_, actions)| actions)
+            .map(|a| match a {
+                TimingAction::SetBits { register, .. } => register,
+                _ => unreachable!(),
+            })
+            .collect();
+        assert_eq!(fired, vec!["fast", "slow", "fast"]);
+    }
+
+    #[test]
+    fn a_periodic_timer_does_not_drift_with_the_service_cadence() {
+        use labwired_config::{DeviceTimer, TimerStart, TimingAction};
+        let mut bank = TimerBank::new(&[DeviceTimer {
+            name: "s".into(),
+            period_us: Some(10),
+            after_us: Option::None,
+            start: TimerStart::OnReset,
+            start_on_write: Option::None,
+            on_fire: vec![TimingAction::SetBits {
+                register: "S".into(),
+                bits: 1,
+            }],
+        }]);
+        // Serviced late at 15 µs, then again at 21: the second period is due at
+        // 20, not at 25 (which is what rescheduling from `now` would give).
+        assert_eq!(bank.due_by_timer(15).len(), 1);
+        assert_eq!(bank.due_by_timer(21).len(), 1);
+    }
+
+    /// A very long jump past a very short period is BOUNDED. Without the cap a
+    /// 1 µs timer plus a 10 s advance is ten million iterations inside one bus
+    /// tick — a hang, not fidelity. Past the cap the still-due timers re-anchor
+    /// past `now`, so the next advance starts clean instead of owing the same
+    /// backlog again.
+    #[test]
+    fn a_long_advance_is_capped_and_re_anchors() {
+        use labwired_config::{DeviceTimer, TimerStart, TimingAction};
+        let mut bank = TimerBank::new(&[DeviceTimer {
+            name: "fast".into(),
+            period_us: Some(1),
+            after_us: Option::None,
+            start: TimerStart::OnReset,
+            start_on_write: Option::None,
+            on_fire: vec![TimingAction::SetBits {
+                register: "S".into(),
+                bits: 1,
+            }],
+        }]);
+        let firings = bank.due_by_timer(10_000_000);
+        assert_eq!(firings.len(), MAX_TIMER_CATCHUP as usize);
+        // Re-anchored: the next advance at the same instant owes nothing.
+        assert!(bank.due_by_timer(10_000_000).is_empty());
+        // And it is still running — a cap is not a stop. One more microsecond
+        // is one more period.
+        assert_eq!(bank.due_by_timer(10_000_001).len(), 1);
     }
 
     #[test]
@@ -350,7 +847,9 @@ mod tests {
                         offset: 0.0,
                         clamp_min: None,
                         clamp_max: None,
+                        wrap: None,
                     }),
+                    scale_from: vec![],
                 },
                 FieldSpec {
                     source: "internal".into(),
@@ -362,13 +861,20 @@ mod tests {
                         offset: 0.0,
                         clamp_min: None,
                         clamp_max: None,
+                        wrap: None,
                     }),
+                    scale_from: vec![],
                 },
             ],
             page: None,
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
+            on_read: None,
+            on_write: None,
+            zero_unless: None,
+            source_from: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), 100.0); // 100°C → 400 = 0x190 in bits[31:18]
@@ -406,17 +912,127 @@ mod tests {
                     offset: 0.0,
                     clamp_min: None,
                     clamp_max: None,
+                    wrap: None,
                 }),
+                scale_from: vec![],
             }],
             page: None,
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
+            on_read: None,
+            on_write: None,
+            zero_unless: None,
+            source_from: None,
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), -25.0); // -25°C → -100 → 14-bit two's-comp = 0x3F9C, <<18
         let b = register_read_bytes(&r, &slots, &HashMap::new());
         let word = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
         assert_eq!((word >> 18) & 0x3FFF, 0x3F9C);
+    }
+
+    /// `encode.wrap` — the modular-counter primitive the AS5600 port found
+    /// missing. Exercised on `encode_raw` directly so the rounding ORDER is
+    /// pinned: a count is produced, THEN reduced.
+    mod wrap {
+        use super::super::encode_raw;
+        use labwired_config::Encode;
+        use std::num::NonZeroU32;
+
+        /// The AS5600 encode: 4096 counts per 360°, wrapped at 4096 counts.
+        fn as5600() -> Encode {
+            Encode {
+                scale: 4096.0 / 360.0,
+                offset: 0.0,
+                clamp_min: None,
+                clamp_max: None,
+                wrap: NonZeroU32::new(4096),
+            }
+        }
+
+        #[test]
+        fn a_full_turn_reads_the_same_count_as_zero() {
+            // THE behaviour: 4096 counts is the same shaft position as 0, so a
+            // full turn must read 0 and not the impossible 4096 nor a clamped
+            // 4095 that is 0.088° short of where the shaft is.
+            assert_eq!(encode_raw(0.0, Some(&as5600()), 1.0, 2, false), 0);
+            assert_eq!(encode_raw(360.0, Some(&as5600()), 1.0, 2, false), 0);
+            assert_eq!(encode_raw(720.0, Some(&as5600()), 1.0, 2, false), 0);
+        }
+
+        #[test]
+        fn every_count_below_a_full_turn_is_unchanged_by_the_wrap() {
+            // The wrap must be invisible everywhere except at the roll-over,
+            // or it would be a silent re-scaling of the whole channel. Swept
+            // over every one of the 4096 counts rather than spot-checked.
+            let plain = Encode {
+                wrap: None,
+                ..as5600()
+            };
+            for count in 0..4096u32 {
+                let deg = f64::from(count) * 360.0 / 4096.0;
+                let wrapped = encode_raw(deg, Some(&as5600()), 1.0, 2, false);
+                assert_eq!(
+                    wrapped,
+                    encode_raw(deg, Some(&plain), 1.0, 2, false),
+                    "count {count} ({deg}°) moved when `wrap` was added"
+                );
+                assert_eq!(wrapped, count, "count {count} does not round-trip");
+            }
+        }
+
+        #[test]
+        fn the_count_is_rounded_before_it_is_reduced() {
+            // 359.99° is 4095.886 counts. Reducing the FLOAT and rounding
+            // afterwards yields 4096 — a count a 12-bit counter cannot hold,
+            // which would then be packed as bit 12 set. Rounding first gives
+            // 4096 → 0, the position the shaft is actually at.
+            let raw = encode_raw(359.99, Some(&as5600()), 1.0, 2, false);
+            assert_eq!(raw, 0, "359.99° rounds to a full turn, which reads 0");
+            assert!(raw <= 4095, "a 12-bit counter cannot answer {raw}");
+        }
+
+        #[test]
+        fn a_negative_angle_lands_on_the_count_the_counter_would_show() {
+            // `rem_euclid`, not `%`: one degree below zero is one degree below
+            // a full turn, which is where the magnet is. A truncating remainder
+            // would answer a negative count and pack it as ~full scale by
+            // accident rather than by meaning it.
+            let expect = 4096 - (4096f64 / 360.0).round() as u32; // -1° → 4085
+            assert_eq!(encode_raw(-1.0, Some(&as5600()), 1.0, 2, false), expect);
+            assert_eq!(encode_raw(-360.0, Some(&as5600()), 1.0, 2, false), 0);
+        }
+
+        #[test]
+        fn a_wrap_that_is_not_a_power_of_two_still_rolls_over() {
+            // The modulus is a COUNT, not a mask: a 360-count-per-turn part
+            // (1°/LSB) rolls at 360, which no bit-width could express.
+            let e = Encode {
+                scale: 1.0,
+                offset: 0.0,
+                clamp_min: None,
+                clamp_max: None,
+                wrap: NonZeroU32::new(360),
+            };
+            assert_eq!(encode_raw(359.0, Some(&e), 1.0, 2, false), 359);
+            assert_eq!(encode_raw(360.0, Some(&e), 1.0, 2, false), 0);
+            assert_eq!(encode_raw(361.0, Some(&e), 1.0, 2, false), 1);
+        }
+
+        #[test]
+        fn wrap_zero_is_refused_at_load_rather_than_ignored() {
+            // A modulus of zero has no meaning. `NonZeroU32` makes it a load
+            // error naming the field instead of a key that parses and does
+            // nothing — the silent-no-op failure this schema refuses.
+            let err = serde_yaml::from_str::<Encode>("scale: 1.0\nwrap: 0\n")
+                .expect_err("wrap: 0 must not parse");
+            assert!(
+                err.to_string().contains("nonzero"),
+                "the error must name the problem, got: {err}"
+            );
+            assert!(serde_yaml::from_str::<Encode>("scale: 1.0\nwrap: 4096\n").is_ok());
+        }
     }
 }

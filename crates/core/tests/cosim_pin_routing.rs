@@ -15,18 +15,14 @@
 //! `read_gpio_output` for an output pad, the GPIO input register for a driven
 //! pin, and the ADC's own injected-channel readback for an analog level.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, CosimAdapter, CosimModelConfig, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
 use labwired_core::Bus;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-
-fn root(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
+use std::path::Path;
 
 /// A bare bus for a shipped chip descriptor, with no external devices, so
 /// nothing but the co-simulation touches the ADC.

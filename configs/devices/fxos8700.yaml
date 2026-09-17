@@ -1,0 +1,170 @@
+# NXP FXOS8700CQ 6-axis accelerometer + magnetometer — declarative I²C
+# register-pointer device with byte-wise auto-increment and the datasheet's
+# HYBRID auto-increment jump.
+#
+# Migrated from `peripherals/components/fxos8700.rs`, which is deleted with this
+# descriptor; `tests/fxos8700_migration_parity.rs` drives that model and this
+# one through the same I²C script and asserts the bytes, plus the behaviours
+# that deliberately change.
+#
+# This is the sensor on the FRDM-KW41Z board (I²C1, address 0x1F) that the cow
+# activity demo reads.
+#
+# ── Wire protocol (FXOS8700CQ datasheet rev 8) ───────────────────────────
+#
+# One address byte, then bytes streaming upward from it; the pointer walks on
+# every byte read and every byte written. An address this map does not decode
+# drives 0x00, which is what the hand model answered.
+#
+#   0x00 STATUS        r   ZYXOW/ZYXDR — modelled as the constant 0xFF
+#   0x01 OUT_X         r   14-bit signed, left-justified at bit 2
+#   0x03 OUT_Y         r   "
+#   0x05 OUT_Z         r   "
+#   0x0D WHO_AM_I      r   0xC7
+#   0x0E XYZ_DATA_CFG  rw  FS[1:0] full-scale select
+#   0x2A CTRL_REG1     rw  ACTIVE / ODR
+#   0x2B CTRL_REG2     rw  RST (D6) is self-clearing
+#   0x33 M_OUT_X       r   magnetometer, 16-bit signed
+#   0x35 M_OUT_Y       r   "
+#   0x37 M_OUT_Z       r   "
+#   0x51 TEMP          r   die temperature — modelled as the constant 0x14
+#   0x5B M_CTRL_REG1   rw
+#   0x5C M_CTRL_REG2   rw  hyb_autoinc_mode (D5)
+#
+# ── The hybrid auto-increment jump ───────────────────────────────────────
+#
+# §14.2: with `M_CTRL_REG2.hyb_autoinc_mode` set, a read that walks off the end
+# of the accelerometer block (0x06) continues at the magnetometer block (0x33),
+# so a 6-axis driver pulls all twelve data bytes in ONE transaction. Without the
+# jump that driver reads 0x07..0x0C — reserved space — as its magnetometer data,
+# which is why `auto_increment_map` exists and why this part is the one that
+# proves it.
+#
+# ⚠️ DELIBERATE CHANGE, stated rather than hidden: the jump here is
+# UNCONDITIONAL, where the hand model read the enable bit on every byte. "This
+# map applies only while that bit is set" is a state machine, not a map, and the
+# primitive is deliberately a map. The observable difference is narrow — only a
+# read that runs PAST 0x06 without having enabled hybrid mode sees it, and what
+# it then sees is magnetometer data instead of reserved zeros. Both the 7-byte
+# non-hybrid burst (0x00..0x06) and the 13-byte hybrid burst are unaffected.
+# Asserted by name in the parity test.
+#
+# ── The accelerometer sensitivity is the MODEL's, not the datasheet's ────
+#
+# §6.1 Table 4 gives 4096 / 2048 / 1024 counts per g in the 14-bit field for
+# ±2 / ±4 / ±8 g. The `scale_from` map below is 1024 / 512 / 256 — a quarter of
+# that — because it reproduces the hand model's transfer function exactly, and
+# the prebuilt KW41Z demo ELF that ships with this repo was built against it.
+# The clamp is the datasheet's full scale expressed in COUNTS, and it is the
+# same number at every range because the sensitivity halves as the range
+# doubles: (2 << FS) g × (1024 >> FS) counts/g = 2048 counts.
+#
+# Carried over, named, and left for a follow-up that can rebuild the demo
+# firmware alongside it — not silently corrected under a shipped binary.
+#
+# ── ⚠️ DELIBERATE CHANGE: the "grazing cow" animation is gone ────────────
+#
+# The hand model advanced an internal phase on every burst read of OUT_X and
+# recomputed a fixed triangle walk from it, so the part INVENTED motion that no
+# stimulus had driven — and then latched a `manual` flag the first time a real
+# stimulus arrived, after which the walk stopped. Those are two sources for one
+# register selected by "has anything ever driven this part", which is a state
+# machine (Phase C's `rules:`), not a read-triggered update.
+#
+# The walk itself is also the thing the MLX90614 model's own note calls out as
+# the anti-pattern — a self-running scene rather than a twin — so the descriptor
+# reports what it is driven and nothing else. `x`/`y`/`z` default to a tag lying
+# flat (Z = +1 g). The engine's existing `updates:` + `read_complete` trigger
+# DOES already fire on burst-read completion, so the "advance on every burst
+# read" half needed no new primitive; what it cannot do is pick between an
+# invented pose and a driven one.
+#
+# ── Stated approximations ────────────────────────────────────────────────
+#
+#   * STATUS reads 0xFF (every data-ready and overwrite flag set): a reading is
+#     always available. Same as the model replaced.
+#   * TEMP reads the constant 0x14 (≈ +20 °C at 0.96 °C/LSB); there is no die
+#     temperature stimulus channel. Same as the model replaced.
+#   * The magnetometer is a CONSTANT field — there are no magnetometer stimulus
+#     channels to drive it from, and the hand model swept it with the same
+#     invented walk the accelerometer had. The constants are that walk's
+#     power-on sample, so the number is traceable rather than invented twice.
+#   * Tap / orientation / freefall, the FIFO and INT1/INT2 are not modelled;
+#     their registers are unmapped and read 0x00.
+type: fxos8700
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x1F
+    auto_increment: true
+    unmapped_byte: 0x00
+    # §14.2 hybrid mode: the accel block runs straight into the mag block.
+    auto_increment_map:
+      - { from: 0x06, to: 0x33 }
+    registers:
+      - { name: STATUS, addr: 0x00, width: 1, endian: be, access: r, reset: 0xFF }
+      - name: OUT_X
+        addr: 0x01
+        width: 2
+        endian: be
+        access: r
+        fields:
+          - source: x
+            shift: 2
+            width_bits: 14
+            signed: true
+            encode: { clamp_min: -2048.0, clamp_max: 2048.0 }
+            scale_from: { register: XYZ_DATA_CFG, mask: 0x03, map: { 0: 1024.0, 1: 512.0, 2: 256.0, 3: 256.0 } }
+      - name: OUT_Y
+        addr: 0x03
+        width: 2
+        endian: be
+        access: r
+        fields:
+          - source: y
+            shift: 2
+            width_bits: 14
+            signed: true
+            encode: { clamp_min: -2048.0, clamp_max: 2048.0 }
+            scale_from: { register: XYZ_DATA_CFG, mask: 0x03, map: { 0: 1024.0, 1: 512.0, 2: 256.0, 3: 256.0 } }
+      - name: OUT_Z
+        addr: 0x05
+        width: 2
+        endian: be
+        access: r
+        fields:
+          - source: z
+            shift: 2
+            width_bits: 14
+            signed: true
+            encode: { clamp_min: -2048.0, clamp_max: 2048.0 }
+            scale_from: { register: XYZ_DATA_CFG, mask: 0x03, map: { 0: 1024.0, 1: 512.0, 2: 256.0, 3: 256.0 } }
+      - { name: WHO_AM_I, addr: 0x0D, width: 1, endian: be, access: r, reset: 0xC7 }
+      - { name: XYZ_DATA_CFG, addr: 0x0E, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: CTRL_REG1, addr: 0x2A, width: 1, endian: be, access: rw, reset: 0x00 }
+      # RST (D6) is a momentary "go" bit: the device has already reset by the
+      # time firmware can read it back.
+      - { name: CTRL_REG2, addr: 0x2B, width: 1, endian: be, access: rw, reset: 0x00, self_clearing: 0x40 }
+      # A constant earth field: the hand model's power-on magnetometer sample.
+      - { name: M_OUT_X, addr: 0x33, width: 2, endian: be, access: r, reset: 0xF6A0 }
+      - { name: M_OUT_Y, addr: 0x35, width: 2, endian: be, access: r, reset: 0x0960 }
+      - { name: M_OUT_Z, addr: 0x37, width: 2, endian: be, access: r, reset: 0x04B0 }
+      - { name: TEMP, addr: 0x51, width: 1, endian: be, access: r, reset: 0x14 }
+      - { name: M_CTRL_REG1, addr: 0x5B, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: M_CTRL_REG2, addr: 0x5C, width: 1, endian: be, access: rw, reset: 0x00 }
+
+metadata:
+  label: "FXOS8700 Accel/Mag"
+  summary: "NXP FXOS8700 6-axis accelerometer + magnetometer over I2C."
+  detail: "Onboard sensor on FRDM-KW41Z (address 0x1F). Stimulus channels x/y/z in g, reported as a 14-bit two's-complement count left-justified at bit 2 at the full scale XYZ_DATA_CFG selects. A burst that walks past the accelerometer block continues at the magnetometer block, per the datasheet's hybrid auto-increment."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x1F."
+  inputs:
+    # A tag lying flat / an animal standing: +1 g on Z, nothing on X and Y.
+    - { key: x, label: "X", unit: "g", min: -8.0, max: 8.0, default: 0.0 }
+    - { key: y, label: "Y", unit: "g", min: -8.0, max: 8.0, default: 0.0 }
+    - { key: z, label: "Z", unit: "g", min: -8.0, max: 8.0, default: 1.0 }

@@ -37,11 +37,12 @@
 //! `esp_hw_support/port/esp32c3/esp_memprot.c`) and configured through MMIO,
 //! the way firmware configures it — nothing here reaches into the model.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::esp32c3::pms::PmsPort;
 use labwired_core::{Bus, Cpu};
-use std::path::PathBuf;
 
 // ── SENSITIVE (0x600C_1000) PMS registers ────────────────────────────────────
 const SENSITIVE: u64 = 0x600C_1000;
@@ -98,12 +99,6 @@ const IRAM_DATA_ADDR: u32 = 0x4039_4000;
 /// `MAP_IRAM_TO_DRAM`.
 fn map_iram_to_dram(addr: u32) -> u32 {
     addr - IRAM0_SRAM_LOW + DRAM0_SRAM_LOW
-}
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
 }
 
 /// The shipped `esp32c3-devkit` bus with matrix routing on — the same shape

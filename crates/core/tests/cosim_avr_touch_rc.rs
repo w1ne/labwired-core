@@ -22,6 +22,8 @@
 //! on this part: 1 MΩ × 20 pF gives 18.3 µs released, and with the finger's
 //! 100 pF switched in through 1 kΩ, 1 MΩ × 120 pF gives 110 µs.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::routing::{cycles_to_ns, ns_to_cycles};
@@ -32,7 +34,7 @@ use labwired_core::cosim::{
 use labwired_core::cpu::avr::Avr;
 use labwired_core::{AdvanceRequest, Cpu, Machine};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The canvas compiler's output for the touch lab, exactly as emitted.
 const CANVAS_TOUCH_MODELS: &str = r#"
@@ -87,12 +89,6 @@ const RON_DRIVER_OHMS: f64 = 25.0;
 const C_PAD_FARADS: f64 = 20.0e-12;
 const C_FINGER_FARADS: f64 = 100.0e-12;
 const VIH_RATIO: f64 = 0.6;
-
-fn root(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// A minimal ATmega328P system carrying the canvas block.
 fn touch_manifest() -> SystemManifest {

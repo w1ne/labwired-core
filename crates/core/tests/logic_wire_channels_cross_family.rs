@@ -26,13 +26,14 @@
 //! The decoders are written against the PROTOCOL and import nothing from the
 //! narrators, exactly as the per-family waveform gates do.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::logic_capture::{LogicEdge, LogicSource};
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::{Bus, Machine};
-use std::path::PathBuf;
 
 /// Where each chip's RAM actually is. The CPU below only ever runs a branch
 /// to itself out of it, but that page has to be MAPPED — the ESP32-C3 puts its
@@ -43,12 +44,6 @@ fn ram_base(chip: &str) -> u64 {
         "esp32c3" => 0x3FC8_0000,
         _ => 0x2000_0000,
     }
-}
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
 }
 
 fn dummy_manifest(path: &str) -> SystemManifest {

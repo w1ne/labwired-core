@@ -83,6 +83,23 @@ impl DevicePins for SystemBus {
     }
 }
 
+/// One `outputs:` role of a declarative I²C / SPI part, resolved to a pad.
+///
+/// The device only ever speaks role names; the bus owns the translation. That
+/// asymmetry is the point: a part descriptor is portable across boards because
+/// it never learns which pin it was wired to, and the bus never learns what a
+/// part's rules do.
+#[derive(Debug, Clone)]
+pub struct DevicePinPad {
+    /// system.yaml `external_devices` id of the device that drives it.
+    pub device_id: String,
+    /// The descriptor's `outputs:` role name (`INT`, `DRDY`).
+    pub role: String,
+    /// Resolved input-register address the MCU samples.
+    pub addr: u64,
+    pub bit: u8,
+}
+
 /// A stimulus device resident directly on the [`SystemBus`] that drives GPIO
 /// input-register pins once per peripheral tick and exposes one SimInput
 /// channel. Implemented by `Dht22`, `RotaryEncoder`, `Keypad` and `Button`.

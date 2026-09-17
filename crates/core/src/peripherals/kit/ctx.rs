@@ -103,6 +103,53 @@ impl<'a> AttachCtx<'a> {
     /// that called `ctx.i2c()?.attach(...)` directly would only work on STM32
     /// buses. Going through this method lets one kit serve a sensor on either
     /// family without caring which bus the system.yaml wired it to.
+    /// **Tier 2**: resolve a declarative part's `outputs:` roles to pads and
+    /// record them on the bus, so the per-tick drain knows where to put what
+    /// the part's rules queued.
+    ///
+    /// The binding is the same shape a `pins:` role uses — role → `config:` key
+    /// → pad label — with `behavior.output_pins` supplying the key when it is
+    /// not simply the role name. An `outputs:` role whose config key the
+    /// placement does not set is SKIPPED, not an error: a board that leaves an
+    /// interrupt line unconnected is an ordinary board, and the part must still
+    /// work over the bus. An unresolvable pad label IS an error — that is a
+    /// wiring mistake, not a choice.
+    pub fn bind_output_pins(&mut self, desc: &labwired_config::DeviceDescriptor) -> Result<()> {
+        for role in &desc.behavior.outputs {
+            let key = desc
+                .behavior
+                .output_pins
+                .get(role)
+                .cloned()
+                .unwrap_or_else(|| role.clone());
+            let Some(label) = self.ext.config.get(&key).and_then(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| v.as_i64().map(|n| n.to_string()))
+                    .or_else(|| v.as_u64().map(|n| n.to_string()))
+            }) else {
+                continue;
+            };
+            let (addr, bit) =
+                SystemBus::resolve_pin_idr_pub(self.bus, &label).ok_or_else(|| {
+                    anyhow!(
+                    "device '{}' output pin '{}' ('{}' = {}) could not be resolved to a GPIO input",
+                    self.ext.id,
+                    role,
+                    key,
+                    label
+                )
+                })?;
+            self.bus.device_pin_pads.push(crate::bus::DevicePinPad {
+                device_id: self.ext.id.clone(),
+                role: role.clone(),
+                addr,
+                bit,
+            });
+        }
+        Ok(())
+    }
+
     pub fn attach_i2c_device(&mut self, mut device: Box<dyn I2cDevice>) -> Result<()> {
         // Input devices get their system.yaml id stamped here (the ONE kit
         // attach path), so discovery and the stimulus resolver address them

@@ -18,16 +18,11 @@
 //! schema, so nobody has to re-derive it — and so a future change that DID let
 //! schema leak into bus behaviour fails here loudly.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
-use std::path::PathBuf;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Build the nRF52840 bus twice: as configured, and with every `debug_schema`
 /// key stripped out. The two must be indistinguishable to anything that probes

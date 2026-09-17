@@ -1,101 +1,101 @@
 {
   "atsamd21g18a": {
-    "batch": 2295.3,
-    "step": 2246.0
+    "batch": 2339.5,
+    "step": 2291.5
   },
   "efr32mg26": {
-    "batch": 231.9,
-    "step": 1912.8
+    "batch": 158.3,
+    "step": 1837.7
   },
   "esp32c3": {
-    "batch": 401.1
+    "batch": 262.2
   },
   "mkw41z4": {
-    "batch": 231.2,
-    "step": 913.3
+    "batch": 156.2,
+    "step": 868.8
   },
   "nrf52832": {
-    "batch": 233.5,
-    "step": 1327.7
+    "batch": 158.4,
+    "step": 1241.4
   },
   "nrf52840": {
-    "batch": 233.3,
-    "step": 1373.8
+    "batch": 158.3,
+    "step": 1295.4
   },
   "nrf5340": {
-    "batch": 232.1,
-    "step": 1338.2
+    "batch": 156.8,
+    "step": 1229.5
   },
   "nrf54l15": {
-    "batch": 1432.8,
-    "step": 1375.2
+    "batch": 1322.5,
+    "step": 1274.5
   },
   "nrf54lm20a": {
-    "batch": 1446.8,
-    "step": 1394.0
+    "batch": 1420.9,
+    "step": 1372.9
   },
   "rp2040": {
-    "batch": 231.0,
-    "step": 913.2
+    "batch": 156.1,
+    "step": 867.7
   },
   "rp2350": {
-    "batch": 231.1,
-    "step": 913.4
+    "batch": 156.2,
+    "step": 868.2
   },
   "stm32f103": {
-    "batch": 232.8,
-    "step": 949.8
+    "batch": 157.6,
+    "step": 904.6
   },
   "stm32f401": {
-    "batch": 232.8,
-    "step": 949.8
+    "batch": 157.7,
+    "step": 903.8
   },
   "stm32f401cdu6": {
-    "batch": 232.8,
-    "step": 949.8
+    "batch": 157.8,
+    "step": 905.3
   },
   "stm32f405": {
-    "batch": 232.8,
-    "step": 949.8
+    "batch": 157.7,
+    "step": 903.4
   },
   "stm32f407": {
-    "batch": 232.8,
-    "step": 949.9
+    "batch": 158.2,
+    "step": 904.0
   },
   "stm32f411ceu6": {
-    "batch": 232.8,
-    "step": 949.6
+    "batch": 158.1,
+    "step": 905.1
   },
   "stm32f767": {
-    "batch": 231.3,
-    "step": 948.2
+    "batch": 156.5,
+    "step": 902.4
   },
   "stm32g474re": {
-    "batch": 232.8,
-    "step": 949.7
+    "batch": 157.7,
+    "step": 903.4
   },
   "stm32h563": {
-    "batch": 822.9,
-    "step": 989.0
+    "batch": 787.6,
+    "step": 941.1
   },
   "stm32h735": {
-    "batch": 773.2,
-    "step": 939.3
+    "batch": 737.3,
+    "step": 890.8
   },
   "stm32l073": {
-    "batch": 231.3,
-    "step": 948.3
+    "batch": 156.4,
+    "step": 905.7
   },
   "stm32l476": {
-    "batch": 232.8,
-    "step": 949.5
+    "batch": 157.6,
+    "step": 905.1
   },
   "stm32wb55": {
-    "batch": 232.8,
-    "step": 949.9
+    "batch": 157.7,
+    "step": 904.0
   },
   "stm32wba52": {
-    "batch": 231.4,
-    "step": 948.4
+    "batch": 156.2,
+    "step": 902.3
   }
 }

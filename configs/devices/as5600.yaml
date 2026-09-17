@@ -1,0 +1,121 @@
+# ams AS5600 12-bit contactless magnetic rotary position sensor — declarative
+# I²C register-pointer device with byte-wise auto-increment.
+#
+# Migrated from `peripherals/components/as5600.rs`, which is deleted with this
+# descriptor; `tests/as5600_migration_parity.rs` drives that model and this one
+# through the same I²C script and asserts the bytes, plus the one behaviour that
+# deliberately changes.
+#
+# ── Wire protocol (AS5600 datasheet, rev 1.06, §5 "Register map") ─────────
+#
+# The master writes a one-byte register address, then reads bytes; the address
+# pointer walks one BYTE per byte transferred, which is how every Arduino
+# driver reads the 12-bit angle as a single two-byte transaction from 0x0C.
+# `auto_increment: true` is therefore load-bearing, not an optimisation.
+#
+# `unmapped_byte: 0x00` — an address this descriptor does not decode reads 0,
+# which is what the hand model answered for everything outside its map.
+#
+#   0x00      ZMCO        r   how many times ZPOS/MPOS have been burned
+#   0x01,0x02 ZPOS        rw  start position (12-bit, big-endian)
+#   0x03,0x04 MPOS        rw  stop position
+#   0x05,0x06 MANG        rw  maximum angle
+#   0x07,0x08 CONF        rw  power mode / hysteresis / output stage / PWM / …
+#   0x0B      STATUS      r   MD (bit 5) magnet detected, ML (4), MH (3)
+#   0x0C,0x0D RAW_ANGLE   r   unscaled, unmodified 12-bit angle
+#   0x0E,0x0F ANGLE       r   scaled by ZPOS/MPOS/MANG — see the note below
+#   0x1A      AGC         r   automatic gain control, 128 at 5 V mid-range
+#   0x1B,0x1C MAGNITUDE   r   magnitude of the internal CORDIC
+#
+# The angle registers are 12-bit right-aligned in a 16-bit big-endian word, so
+# the high byte carries only bits 11:8 — exactly what the hand model produced by
+# masking `(raw >> 8) & 0x0F`. A `width: 2` register whose count is reduced
+# modulo 4096 says the same thing without the mask: the reduction can never
+# reach 4096, so bit 12 is never set.
+#
+# ── What this models, and what it refuses to ─────────────────────────────
+#
+# `angle` (degrees) is the ONE stimulus channel; raw = round(angle / 360 × 4096)
+# clamped to 4095, which is the datasheet's 0.087890° per LSB.
+#
+# STATUS reports MD alone (0x20): a magnet is present and in range. ML (too
+# weak) and MH (too strong) are magnet-placement faults this twin has no way to
+# know, and inventing them would invent copper. AGC 128 is the datasheet's
+# mid-range value at 5 V, and MAGNITUDE 0x0C80 a healthy CORDIC magnitude —
+# both constants, both carried over unchanged from the model this replaces so a
+# driver that sanity-checks them behaves identically.
+#
+# ── One deliberate CHANGE from the model this replaces ───────────────────
+#
+# ZPOS / MPOS / MANG / CONF are real read/write storage here. The hand model
+# discarded every configuration write ("Config registers ignored for wave-1
+# readback fidelity") and answered 0 forever, so a driver that programmed a
+# zero position or a power mode and read it back — which the common
+# RobTillaart/AS5600 and Seeed libraries both do — saw its write vanish. They
+# still READ 0 until firmware writes them, so every transcript that does not
+# write configuration is byte-identical; the change is only that a write now
+# sticks. Pinned by name in `as5600_migration_parity.rs`.
+#
+# ANGLE remains the same value as RAW_ANGLE: applying the ZPOS/MPOS/MANG
+# scaling would need arithmetic over register values, which Tier 1 has no
+# expression language for. Declared here so it is a stated approximation
+# rather than a silent one — a driver that programs a zero position and expects
+# ANGLE to shift will see it unmoved.
+#
+# The angle registers WRAP rather than clamp: `encode.wrap: 4096` says the
+# register is a 4096-count modular counter, so a stimulus of exactly 360.0°
+# reads 0 — the same shaft position, and the count the silicon shows. This is
+# the primitive the first AS5600 descriptor found missing: it had to clamp, so
+# a full turn answered 4095 (0.088° short of where the magnet is) where the
+# hand model's `deg % 360.0` answered 0. The modulus is stated in COUNTS, not
+# in degrees, because "this register is 4096 counts wide and rolls over" is the
+# property the part has; `% 360.0` is the same fact written in whatever unit
+# the host happened to drive. See `labwired_config::Encode::wrap`.
+#
+# `wrap` and a clamp say opposite things about the end of the range, so the
+# clamp is gone: a counter does not saturate at full scale, it rolls. The
+# reduction can never produce 4096, so bit 12 is still unreachable and the word
+# is still 12-bit right-aligned.
+#
+# BURN (0xFF) is deliberately NOT declared. It permanently fuses the part on
+# silicon; answering its address with storage would model a one-way operation
+# as a scratch register. It reads the unmapped 0x00, exactly as before.
+type: as5600
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x36
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      # ── Configuration (rw storage; see the header for the change note) ──
+      - { name: ZMCO, addr: 0x00, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: ZPOS, addr: 0x01, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x0FFF }
+      - { name: MPOS, addr: 0x03, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x0FFF }
+      - { name: MANG, addr: 0x05, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x0FFF }
+      - { name: CONF, addr: 0x07, width: 2, endian: be, access: rw, reset: 0x0000, write_mask: 0x3FFF }
+      # ── Output ──────────────────────────────────────────────────────────
+      # MD = bit 5: a magnet is detected. ML / MH are not modelled (header).
+      - { name: STATUS, addr: 0x0B, width: 1, endian: be, access: r, reset: 0x20 }
+      # 12-bit angle, right-aligned big-endian. 4096 counts per revolution.
+      - { name: RAW_ANGLE, addr: 0x0C, width: 2, endian: be, access: r, source: angle, encode: { scale: 11.377777777777778, wrap: 4096 } }
+      - { name: ANGLE, addr: 0x0E, width: 2, endian: be, access: r, source: angle, encode: { scale: 11.377777777777778, wrap: 4096 } }
+      # AGC mid-range at 5 V; MAGNITUDE a healthy CORDIC magnitude.
+      - { name: AGC, addr: 0x1A, width: 1, endian: be, access: r, reset: 0x80 }
+      - { name: MAGNITUDE, addr: 0x1B, width: 2, endian: be, access: r, reset: 0x0C80 }
+
+metadata:
+  label: "AS5600 Magnetic Encoder"
+  summary: "12-bit contactless magnetic rotary position sensor over I²C."
+  detail: "ams AS5600 at default address 0x36, a register-pointer device whose pointer walks one byte per byte read. Host sets shaft angle in degrees; RAW_ANGLE and ANGLE report it as a 12-bit right-aligned big-endian count (4096 per revolution) and STATUS reports the magnet-detected bit. ZPOS / MPOS / MANG / CONF are read/write storage, but the ZPOS/MPOS/MANG output scaling is not applied — ANGLE equals RAW_ANGLE. The ML / MH magnet-placement faults and the one-way BURN command are not modelled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the AS5600 fixed address 0x36."
+    - name: angle
+      ty: float
+      doc: "Initial shaft angle in degrees. Default 0. Drive it at runtime with the `angle` input channel."
+  inputs:
+    - { key: angle, label: "Angle", unit: deg, min: 0, max: 360, default: 0 }

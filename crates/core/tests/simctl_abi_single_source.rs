@@ -16,17 +16,12 @@
 //! tests assert the generator's output is what is on disk, so the header cannot
 //! be edited into disagreement in the first place.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::simctl::{self, SimCtl};
-use std::path::{Path, PathBuf};
 use std::process::Command;
-
-fn root(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 const SELFTEST_MANIFEST: &str = "configs/systems/pico-selftest.yaml";
 

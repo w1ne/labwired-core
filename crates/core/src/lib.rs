@@ -1086,6 +1086,59 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// nRF54L TWIM).
     fn advance_attached_i2c_us(&mut self, _us: u64) {}
 
+    /// True if this controller hosts **any** off-chip device — I²C slave or SPI
+    /// device — whose free-running clock the machine's central device-time drive
+    /// should advance.
+    ///
+    /// This is the question the machine actually asks; it exists because the
+    /// drive is no longer I²C-only (Phase A of the YAML device machine fans the
+    /// same elapsed µs out to `SpiDevice`s too). The default forwards to the
+    /// historical I²C-only spelling
+    /// [`drives_central_i2c_time`](Self::drives_central_i2c_time) so every I²C
+    /// controller that already opted in stays opted in, unchanged, and the
+    /// nRF54L TWIM's deliberate *non*-opt-in keeps excluding it here as well.
+    /// SPI controllers override THIS method.
+    fn drives_central_device_time(&self) -> bool {
+        self.drives_central_i2c_time()
+    }
+
+    /// Advance every attached off-chip device's free-running clock by `us`
+    /// microseconds — the generalization of
+    /// [`advance_attached_i2c_us`](Self::advance_attached_i2c_us) over both bus
+    /// vocabularies ([`crate::peripherals::i2c::I2cDevice::advance_time_us`] and
+    /// [`crate::peripherals::spi::SpiDevice::advance_time_us`]).
+    ///
+    /// The machine calls this once per scheduler slice on each controller that
+    /// [`drives_central_device_time`](Self::drives_central_device_time). The
+    /// default forwards to the I²C-only spelling, so no I²C controller needed a
+    /// single edit; SPI controllers override THIS method.
+    fn advance_attached_device_time_us(&mut self, us: u64) {
+        self.advance_attached_i2c_us(us);
+    }
+
+    /// **Tier 2 pin drive.** Collect `(device id, pin role, level)` from every
+    /// off-chip device this controller hosts and clear their queues.
+    ///
+    /// The controller half of the same seam
+    /// [`for_each_attached_sim_input`](Self::for_each_attached_sim_input) is: an
+    /// I²C slave or SPI device is owned by its CONTROLLER, so a walk over
+    /// `SystemBus::peripherals` alone cannot see it, and a declarative part's
+    /// INT line would be unreachable from the bus that has to put it on a pad.
+    ///
+    /// Implementations forward to
+    /// [`crate::peripherals::device::drain_i2c_pin_drives`] /
+    /// [`drain_spi_pin_drives`](crate::peripherals::device::drain_spi_pin_drives)
+    /// rather than reading the device themselves, so the id resolution stays in
+    /// one place. Default: nothing, which is correct for every non-controller.
+    ///
+    /// ⚠️ A controller that hosts attachable devices and does NOT implement this
+    /// silently subtracts every Tier-2 pin those devices drive — the same
+    /// invisible-device failure the sim-input seam was introduced for. The
+    /// rule of thumb is identical: if a type appears in
+    /// [`crate::bus::SystemBus::attach_i2c_slave`] or `attach_spi_device`, it
+    /// owes an implementation here.
+    fn drain_attached_pin_drives(&mut self, _out: &mut Vec<(String, String, bool)>) {}
+
     fn dma_request(&mut self, _request_id: u32) {}
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null
@@ -1938,20 +1991,32 @@ pub struct Machine<C: Cpu> {
     /// Cached bus index of the chip's authoritative simulated-µs source (first
     /// peripheral whose [`Peripheral::sim_time_us`] answers `Some` — the ESP32
     /// SYSTIMER). `None` on families with no absolute-µs counter (Cortex-M
-    /// SysTick/TIM, nRF52), where declarative `delay_us` devices stay
-    /// effectively always-ready exactly as before this hook. Resolved once at
-    /// construction, like [`Self::rtc_cntl_index`].
+    /// SysTick/TIM, nRF52, RP2040, SAMD); those now fall back to a clock DERIVED
+    /// from `total_cycles` and [`crate::bus::SystemBus::cpu_hz`] rather than
+    /// leaving every timed device always-ready — see
+    /// [`Self::advance_central_i2c_time`]. Resolved once at construction, like
+    /// [`Self::rtc_cntl_index`].
     i2c_time_source_index: Option<usize>,
-    /// Cached bus indices of I²C controllers that opt into the central time
-    /// drive ([`Peripheral::drives_central_i2c_time`]). Excludes the nRF54L
-    /// TWIM, which drives its slaves' `advance_time_us` itself off the GRTC —
-    /// so time is advanced exactly once. Empty ⇒ the drive short-circuits.
+    /// Cached bus indices of the controllers that opt into the central device
+    /// time drive ([`Peripheral::drives_central_device_time`]) — I²C *and* SPI.
+    /// Excludes the nRF54L TWIM, which drives its slaves' `advance_time_us`
+    /// itself off the GRTC — so time is advanced exactly once. Empty ⇒ the
+    /// drive short-circuits.
     i2c_time_controller_indices: Vec<usize>,
-    /// Last authoritative µs the I²C slaves were advanced to. `u64::MAX` seeds
-    /// "not yet anchored" so the first drive sets the mark without advancing
-    /// (mirrors the nRF54L TWIM `last_us` seeding). A backward jump (SYSTIMER
-    /// LOAD) re-anchors rather than advancing by a negative delta.
+    /// Last authoritative µs the attached devices were advanced to. `u64::MAX`
+    /// seeds "not yet anchored" so the first drive sets the mark without
+    /// advancing (mirrors the nRF54L TWIM `last_us` seeding). A backward jump
+    /// (SYSTIMER LOAD) re-anchors rather than advancing by a negative delta.
     last_i2c_time_us: u64,
+    /// Has this machine already told the fidelity census that its device time
+    /// is DERIVED from `cpu_hz` rather than read off a modelled µs counter?
+    ///
+    /// The census record is an honesty note, not a per-hit counter: it is worth
+    /// saying once per run and nothing is learned by saying it a million times,
+    /// so this latch gates it. Set the first time the derived clock actually
+    /// hands a non-zero delta to a controller — a machine whose devices are
+    /// never advanced makes no approximation and files no note.
+    derived_device_time_noted: bool,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -2432,7 +2497,7 @@ impl<C: Cpu> Machine<C> {
             .peripherals
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.dev.drives_central_i2c_time())
+            .filter(|(_, p)| p.dev.drives_central_device_time())
             .map(|(i, _)| i)
             .collect();
         // Silent-path census, counter (b2) — measurement only, and an empty
@@ -2483,30 +2548,58 @@ impl<C: Cpu> Machine<C> {
             i2c_time_source_index,
             i2c_time_controller_indices,
             last_i2c_time_us: u64::MAX,
+            derived_device_time_noted: false,
         }
     }
 
-    /// Advance every centrally-driven I²C slave's data-ready clock to the chip's
-    /// authoritative simulated-µs "now" (Option A). Called once per scheduler
+    /// Advance every centrally-driven off-chip device's clock — I²C slave or
+    /// SPI device — to the chip's simulated-µs "now". Called once per scheduler
     /// slice from [`Self::commit_advance_boundary`].
     ///
-    /// This is the honest generalization of the nRF54L TWIM's per-transaction
-    /// GRTC advance: instead of a hardcoded µs register, the machine reads
-    /// whichever peripheral models an absolute-µs counter ([`Peripheral::sim_time_us`])
-    /// and hands the elapsed delta to each opted-in controller. Families with no
-    /// such source (Cortex-M, nRF52) short-circuit here, so their behavior is
-    /// unchanged. The nRF54L TWIM is never in the controller list (it does not
-    /// opt in), so its slaves are advanced exactly once — by TWIM itself.
+    /// **Two sources, in strict preference order.**
+    ///
+    /// 1. A peripheral that models a genuine absolute-µs counter
+    ///    ([`Peripheral::sim_time_us`] — the ESP32 SYSTIMER). An absolute
+    ///    counter beats anything derived: it already accounts for its own
+    ///    clock tree, so the ESP32 path is byte-identical to before.
+    /// 2. Otherwise, DERIVED from the executed cycle count and the system's
+    ///    declared core clock: `cycles * 1_000_000 / cpu_hz`, integer, monotonic
+    ///    (`total_cycles` only grows, `cpu_hz` is fixed for the life of the
+    ///    bus). This is what makes a declarative `data_ready` / `delay_us`
+    ///    device real on STM32, nRF52, RP2040 and SAMD, where it used to be a
+    ///    silent thunk: always-ready, instantly, on every chip with no SYSTIMER.
+    ///
+    /// **The derived clock is an approximation and says so.** `cpu_hz` is the
+    /// manifest/chip-declared core frequency; firmware that reconfigures the PLL
+    /// mid-run moves the real core clock and this model does not follow it. That
+    /// is recorded ONCE per run in the fidelity census
+    /// ([`crate::fidelity::record_derived_device_time`]) so the browser and the
+    /// CLI can show the reader what they are looking at, rather than the engine
+    /// quietly presenting a derived number as a measured one.
+    ///
+    /// The nRF54L TWIM is never in the controller list (it does not opt in), so
+    /// its slaves are advanced exactly once — by TWIM itself, off the GRTC.
     fn advance_central_i2c_time(&mut self) {
-        let Some(src) = self.i2c_time_source_index else {
-            return;
-        };
         if self.i2c_time_controller_indices.is_empty() {
             return;
         }
-        let now = match self.bus.peripherals[src].dev.sim_time_us() {
-            Some(now) => now,
-            None => return,
+        let (now, derived) = match self.i2c_time_source_index {
+            Some(src) => match self.bus.peripherals[src].dev.sim_time_us() {
+                Some(now) => (now, false),
+                None => return,
+            },
+            None => {
+                let hz = self.bus.cpu_hz;
+                if hz == 0 {
+                    // No declared core clock ⇒ nothing honest to derive from.
+                    return;
+                }
+                // u128 so a long run cannot wrap: `total_cycles * 1_000_000`
+                // overflows u64 at ~1.8e13 cycles, which a 160 MHz part reaches
+                // in about 32 hours of simulated time.
+                let us = (u128::from(self.total_cycles) * 1_000_000u128) / u128::from(hz);
+                (us as u64, true)
+            }
         };
         let last = self.last_i2c_time_us;
         if last == u64::MAX || now < last {
@@ -2519,11 +2612,19 @@ impl<C: Cpu> Machine<C> {
             return;
         }
         let delta = now - last;
+        if derived && !self.derived_device_time_noted {
+            // First time the DERIVED clock actually moves a device on this
+            // machine. Said once — see the field's note.
+            self.derived_device_time_noted = true;
+            crate::fidelity::record_derived_device_time(self.bus.cpu_hz);
+        }
         // Index by value so the immutable read of the cached list and the
         // mutable peripheral borrow don't overlap.
         for i in 0..self.i2c_time_controller_indices.len() {
             let idx = self.i2c_time_controller_indices[i];
-            self.bus.peripherals[idx].dev.advance_attached_i2c_us(delta);
+            self.bus.peripherals[idx]
+                .dev
+                .advance_attached_device_time_us(delta);
         }
         self.last_i2c_time_us = now;
     }

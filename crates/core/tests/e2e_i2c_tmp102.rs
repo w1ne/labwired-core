@@ -7,14 +7,13 @@
 
 #![cfg(feature = "esp32s3-fixtures")]
 
+mod common;
 use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::esp32s3::gpio::GpioObserver;
 use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
 use labwired_core::{Cpu, SimulationError};
-use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
@@ -28,35 +27,12 @@ impl GpioObserver for RecordingObserver {
     }
 }
 
-fn firmware_path() -> PathBuf {
-    PathBuf::from(
-        "../../examples/esp32s3-i2c-tmp102/target/xtensa-esp32s3-none-elf/release/esp32s3-i2c-tmp102",
-    )
-}
-
-fn ensure_firmware_built() -> PathBuf {
-    let elf = firmware_path();
-    let src = PathBuf::from("../../examples/esp32s3-i2c-tmp102/src/main.rs");
-    if elf.exists() {
-        if let (Ok(elf_meta), Ok(src_meta)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {
-            if elf_meta.modified().unwrap() >= src_meta.modified().unwrap() {
-                return elf;
-            }
-        }
-    }
-    let status = Command::new("cargo")
-        .args(["+esp", "build", "--release", "--target-dir", "target"])
-        .current_dir("../../examples/esp32s3-i2c-tmp102")
-        .status()
-        .expect("cargo +esp build (is the ESP toolchain installed and ~/export-esp.sh sourced?)");
-    assert!(status.success(), "esp32s3-i2c-tmp102 build failed");
-    assert!(elf.exists(), "ELF not found at {elf:?} after build");
-    elf
-}
-
 #[test]
 fn i2c_tmp102_firmware_runs_and_prints_temperature() {
-    let elf_path = ensure_firmware_built();
+    let elf_path = common::ensure_esp_firmware_built(
+        "esp32s3-i2c-tmp102",
+        "target/xtensa-esp32s3-none-elf/release/esp32s3-i2c-tmp102",
+    );
     let elf_bytes = std::fs::read(&elf_path).expect("read firmware ELF");
 
     let mut bus = SystemBus::new();

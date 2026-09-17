@@ -1,0 +1,134 @@
+# NXP MMA8451Q 3-axis 14-bit accelerometer — declarative I²C register-pointer
+# device with byte-wise auto-increment.
+#
+# Migrated from `peripherals/components/mma8451q.rs`, which is deleted with this
+# descriptor; `tests/mma8451q_migration_parity.rs` drives that model and this
+# one through the same I²C script and asserts the bytes, plus the behaviours
+# that deliberately change.
+#
+# ── Wire protocol (MMA8451Q datasheet rev 11, §6 "Register descriptions") ─
+#
+# One address byte, then bytes that stream from that address upward: the
+# pointer walks on every byte read AND every byte written (§6.1, "the device
+# will automatically increment the register address"). An address this map does
+# not decode drives 0x00, which is what the hand model answered.
+#
+#   0x00 STATUS         r   (not modelled — see below)
+#   0x01 OUT_X          r   14-bit signed, LEFT-JUSTIFIED at bit 2
+#   0x03 OUT_Y          r   "
+#   0x05 OUT_Z          r   "
+#   0x0D WHO_AM_I       r   0x1A
+#   0x0E XYZ_DATA_CFG   rw  FS[1:0] full-scale select
+#   0x2A CTRL_REG1      rw  ACTIVE (D0) and the output data rate
+#
+# ── Left-justified output: the two halves, and why both are needed ───────
+#
+# §6.2: OUT_X_MSB/LSB carry a 14-bit two's-complement count in the TOP 14 bits
+# of a 16-bit word, so the low two bits read 0 on silicon, always. Declaring the
+# value as a `fields:` entry at `shift: 2` with `width_bits: 14` is what makes
+# that true: the engine rounds and saturates to 14 bits BEFORE the shift places
+# them, so the low bits cannot be anything but zero and an over-range reading
+# saturates at the converter's own end of range instead of wrapping sign.
+#
+# The other half is the range switch. §6.5 Table 5 gives the sensitivity as
+# 4096 / 2048 / 1024 counts per g for ±2 / ±4 / ±8 g, selected by
+# XYZ_DATA_CFG.FS — a bit-field of another register, which is exactly what
+# `scale_from` reads. Before `scale_from` existed on a FIELD a descriptor could
+# have the justification or the range select but never both, which is why this
+# part waited for it.
+#
+# FS = 11 is reserved; it takes the ±8 g row, matching the hand model.
+#
+# ── Standby: the gate with the other polarity ────────────────────────────
+#
+# §6.1: the part is in STANDBY out of reset and converts only while
+# CTRL_REG1.ACTIVE (D0) is SET, so the output registers read zero until
+# firmware activates it. `zero_when` fires while a bit is set; this is the
+# inverse, so it is `zero_unless` — the polarity is in the key name, where the
+# line reads as the datasheet sentence.
+#
+# ── Stated approximations, so they are not mistaken for fidelity ─────────
+#
+#   * STATUS (0x00), the data-ready / overwrite flags, F_SETUP and the whole
+#     FIFO are not modelled: 0x00 is unmapped and reads 0x00. Same as the model
+#     replaced, and the same as Simulator86's MMA model.
+#   * Tap, orientation, freefall/motion detection and the INT1/INT2 pins are
+#     not modelled. Their configuration registers are unmapped rather than
+#     read/write storage, so a driver that writes one and reads it back sees 0 —
+#     which is what the hand model did.
+#   * Standby reads return 0 rather than the last pre-standby conversion, and
+#     the real part NACKs while unpowered where the bus trait has no NACK path.
+#     Both carried over from the model, not introduced here.
+#   * The per-instance `noise_sigma` config key is GONE. The hand-written kit
+#     accepted it and no shipped system.yaml ever set it; the declarative engine
+#     declares noise per CHANNEL in the descriptor (`noise_sigma:` on an input),
+#     so keeping the config key would have meant advertising a key that parses
+#     and changes nothing.
+type: mma8451q
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x1C
+    auto_increment: true
+    # An address this map does not decode drives 0x00 (the hand model's answer),
+    # not the 0xFF an undriven bus would show.
+    unmapped_byte: 0x00
+    registers:
+      # 14 bits at bit 2; the counts-per-g comes from XYZ_DATA_CFG.FS, and the
+      # whole word reads zero while the part is in standby.
+      - name: OUT_X
+        addr: 0x01
+        width: 2
+        endian: be
+        access: r
+        zero_unless: { register: CTRL_REG1, mask: 0x01 }
+        fields:
+          - source: x
+            shift: 2
+            width_bits: 14
+            signed: true
+            scale_from: { register: XYZ_DATA_CFG, mask: 0x03, map: { 0: 4096.0, 1: 2048.0, 2: 1024.0, 3: 1024.0 } }
+      - name: OUT_Y
+        addr: 0x03
+        width: 2
+        endian: be
+        access: r
+        zero_unless: { register: CTRL_REG1, mask: 0x01 }
+        fields:
+          - source: y
+            shift: 2
+            width_bits: 14
+            signed: true
+            scale_from: { register: XYZ_DATA_CFG, mask: 0x03, map: { 0: 4096.0, 1: 2048.0, 2: 1024.0, 3: 1024.0 } }
+      - name: OUT_Z
+        addr: 0x05
+        width: 2
+        endian: be
+        access: r
+        zero_unless: { register: CTRL_REG1, mask: 0x01 }
+        fields:
+          - source: z
+            shift: 2
+            width_bits: 14
+            signed: true
+            scale_from: { register: XYZ_DATA_CFG, mask: 0x03, map: { 0: 4096.0, 1: 2048.0, 2: 1024.0, 3: 1024.0 } }
+      - { name: WHO_AM_I, addr: 0x0D, width: 1, endian: be, access: r, reset: 0x1A }
+      # Only FS[1:0] is writable: the rest of §6.5's register (the high-pass
+      # filter output bit) is not modelled, and the hand model masked it away.
+      - { name: XYZ_DATA_CFG, addr: 0x0E, width: 1, endian: be, access: rw, write_mask: 0x03, reset: 0x00 }
+      - { name: CTRL_REG1, addr: 0x2A, width: 1, endian: be, access: rw, reset: 0x00 }
+
+metadata:
+  label: "MMA8451Q Accelerometer"
+  summary: "3-axis 14-bit accelerometer over I2C with standby/active gating."
+  detail: "NXP MMA8451Q, WHO_AM_I = 0x1A. XYZ held at zero in standby, converts while CTRL_REG1.ACTIVE; 2/4/8 g full scale selected by XYZ_DATA_CFG. Output is 14-bit two's-complement left-justified at bit 2. Tap/FIFO/interrupts not modelled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x1C; 0x1D selects SA0=high."
+  inputs:
+    - { key: x, label: "Accel X", unit: "g", min: -8.0, max: 8.0 }
+    - { key: y, label: "Accel Y", unit: "g", min: -8.0, max: 8.0 }
+    - { key: z, label: "Accel Z", unit: "g", min: -8.0, max: 8.0 }
