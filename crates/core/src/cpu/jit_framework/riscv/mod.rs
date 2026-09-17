@@ -332,11 +332,14 @@ impl RiscVFrontend {
     /// the RISC-V-local [`MemBinding`] the native runtime needs to size + sync
     /// the RAM-backing memory. The trait [`IsaFrontend::translate_block`] is
     /// this without the binding.
+    ///
+    /// The third tuple element is the number of basic blocks fused into the
+    /// trace (`1` outside fusion / on the all-bail fallback path).
     pub fn translate_block_riscv(
         &self,
         pc: Pc,
         code: &CodeView<'_>,
-    ) -> Result<(BlockPlan, Option<MemBinding>), FrontendRefusal> {
+    ) -> Result<(BlockPlan, Option<MemBinding>, u32), FrontendRefusal> {
         if !code.covers(pc) {
             return Err(FrontendRefusal::PcOutOfRange);
         }
@@ -347,12 +350,9 @@ impl RiscVFrontend {
         // `end_pc`), (b) resolves a terminator's next PC in wasm and side-exits
         // with the dynamic Chain, or (c) on an out-of-window access, side-exits
         // with a memory fault at the faulting instruction.
-        if let Some(blk) = emit::emit_block_with_fusion(
-            pc,
-            code,
-            self.ram_window,
-            emit::trace_fusion_enabled(),
-        ) {
+        if let Some(blk) =
+            emit::emit_block_with_fusion(pc, code, self.ram_window, emit::trace_fusion_enabled())
+        {
             let plan = BlockPlan {
                 entry_pc: pc,
                 end_pc: blk.end_pc,
@@ -360,7 +360,8 @@ impl RiscVFrontend {
                 code: blk.code,
                 exits: blk.exits,
             };
-            return Ok((plan, blk.binding));
+            let block_count = blk.block_count;
+            return Ok((plan, blk.binding, block_count));
         }
 
         // Entry is not emittable (an interpreter-owned op such as ecall/csr, or
@@ -380,7 +381,7 @@ impl RiscVFrontend {
                 reason: walk.bail_reason(),
             }],
         };
-        Ok((plan, None))
+        Ok((plan, None, 1))
     }
 }
 
@@ -390,7 +391,8 @@ impl IsaFrontend for RiscVFrontend {
     }
 
     fn translate_block(&self, pc: Pc, code: &CodeView<'_>) -> Result<BlockPlan, FrontendRefusal> {
-        self.translate_block_riscv(pc, code).map(|(plan, _)| plan)
+        self.translate_block_riscv(pc, code)
+            .map(|(plan, _, _)| plan)
     }
 }
 

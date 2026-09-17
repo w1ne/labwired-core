@@ -306,6 +306,11 @@ pub struct EngineStats {
     pub block_instrs: u64,
     /// Guest instructions retired on the interpreter fallback path.
     pub interpreted: u64,
+    /// Compiled blocks that are fused multi-block traces (superblock v2;
+    /// `compiled` includes these too — this is the fused subset).
+    pub fused_traces: u64,
+    /// Total basic blocks fused across all `fused_traces` entries.
+    pub fused_blocks: u64,
 }
 
 /// A minimal RISC-V dispatch engine: block-cache promotion + the
@@ -452,7 +457,8 @@ impl RiscvJitEngine {
             return; // `pc` is not in fetchable code memory
         }
         let view = CodeView::new(pc, &code);
-        let Ok((plan, binding)) = self.frontend.translate_block_riscv(pc, &view) else {
+        let Ok((plan, binding, block_count)) = self.frontend.translate_block_riscv(pc, &view)
+        else {
             return;
         };
         // Real firmware (FreeRTOS / libc / drivers) is full of 1–4 instruction
@@ -468,6 +474,10 @@ impl RiscvJitEngine {
         if let Some(block) = self.jit.compile(&plan, binding) {
             self.cache.install(pc, block);
             self.stats.compiled += 1;
+            if block_count > 1 {
+                self.stats.fused_traces += 1;
+                self.stats.fused_blocks += block_count as u64;
+            }
         }
     }
 

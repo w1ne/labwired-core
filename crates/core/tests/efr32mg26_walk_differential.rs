@@ -21,7 +21,7 @@
 //!
 //! Both lanes are the SAME `from_config` BRD2709A bus (chip yaml + system yaml
 //! + `configure_cortex_m`), built the way the run path builds it, with any hand
-//! `walk_deleted` hatch stripped so nothing is asserted that is not derived.
+//!   `walk_deleted` hatch stripped so nothing is asserted that is not derived.
 //!
 //! * **reference** — every migrated EFR32 model is pinned back onto the legacy
 //!   walk with `force_legacy_walk`, and `recompute_walk_deletable` is re-run so
@@ -325,7 +325,9 @@ fn probe(run: &mut LaneRun, step: u64) -> Probe {
         periph,
         ispr,
         pads,
-        sram: (step % SRAM_HASH_EVERY == 0).then(|| sram_hash(&m.bus)),
+        sram: step
+            .is_multiple_of(SRAM_HASH_EVERY)
+            .then(|| sram_hash(&m.bus)),
     }
 }
 

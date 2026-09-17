@@ -296,6 +296,11 @@ pub struct EmittedBlock {
     pub end_pc: Pc,
     /// Number of guest instructions the block retires in one clean run.
     pub instr_count: u32,
+    /// Number of basic blocks fused into this trace (`1` for an unfused
+    /// single-block emit; `>1` iff `fuse=true` walked past at least one
+    /// direct/conditional terminator). Surfaced so the caller can bump
+    /// `EngineStats::fused_traces`/`fused_blocks` at install time.
+    pub block_count: u32,
     /// Side-exit edges. The primary (clean-exit) edge is the fall-through
     /// ([`WIRE_FALL_THROUGH`]) for a body-only block or the dynamic chain
     /// ([`WIRE_CHAIN_DYNAMIC`]) when it ends at a branch/jump; a block that
@@ -458,11 +463,7 @@ pub fn emit_block_with_fusion(
         // as a single block would today — no behaviour change.
         body.emit_terminator(tpc, tlen, &tinst);
         total_instrs += 1;
-        break (
-            tpc as u64 + tlen as u64,
-            total_instrs,
-            WIRE_CHAIN_DYNAMIC,
-        );
+        break (tpc as u64 + tlen as u64, total_instrs, WIRE_CHAIN_DYNAMIC);
     };
 
     // The epilogue (register writeback) and the clean-exit wire value must
@@ -535,6 +536,7 @@ pub fn emit_block_with_fusion(
         code: code_bytes,
         end_pc,
         instr_count,
+        block_count,
         exits,
         binding,
     })
@@ -1259,7 +1261,9 @@ impl Body {
             // which the decoder maps straight to `CJ`) links nothing.
             Jal { rd, .. } => self.write_link(rd, pc.wrapping_add(ilen)),
             CJ { .. } => {}
-            other => unreachable!("non-direct-unconditional reached emit_direct_jump_link: {other:?}"),
+            other => {
+                unreachable!("non-direct-unconditional reached emit_direct_jump_link: {other:?}")
+            }
         }
     }
 
@@ -1286,14 +1290,60 @@ impl Body {
     ) {
         use Instruction::*;
         match *inst {
-            Beq { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_EQ, taken_target, retired_at_taken, writes_before),
-            Bne { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_NE, taken_target, retired_at_taken, writes_before),
-            Blt { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_LT_S, taken_target, retired_at_taken, writes_before),
-            Bge { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_GE_S, taken_target, retired_at_taken, writes_before),
-            Bltu { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_LT_U, taken_target, retired_at_taken, writes_before),
-            Bgeu { rs1, rs2, .. } => self.cond_fuse(rs1, rs2, op::I32_GE_U, taken_target, retired_at_taken, writes_before),
-            CBeqz { rs1, .. } => self.cond_fuse_zero(rs1, true, taken_target, retired_at_taken, writes_before),
-            CBnez { rs1, .. } => self.cond_fuse_zero(rs1, false, taken_target, retired_at_taken, writes_before),
+            Beq { rs1, rs2, .. } => self.cond_fuse(
+                rs1,
+                rs2,
+                op::I32_EQ,
+                taken_target,
+                retired_at_taken,
+                writes_before,
+            ),
+            Bne { rs1, rs2, .. } => self.cond_fuse(
+                rs1,
+                rs2,
+                op::I32_NE,
+                taken_target,
+                retired_at_taken,
+                writes_before,
+            ),
+            Blt { rs1, rs2, .. } => self.cond_fuse(
+                rs1,
+                rs2,
+                op::I32_LT_S,
+                taken_target,
+                retired_at_taken,
+                writes_before,
+            ),
+            Bge { rs1, rs2, .. } => self.cond_fuse(
+                rs1,
+                rs2,
+                op::I32_GE_S,
+                taken_target,
+                retired_at_taken,
+                writes_before,
+            ),
+            Bltu { rs1, rs2, .. } => self.cond_fuse(
+                rs1,
+                rs2,
+                op::I32_LT_U,
+                taken_target,
+                retired_at_taken,
+                writes_before,
+            ),
+            Bgeu { rs1, rs2, .. } => self.cond_fuse(
+                rs1,
+                rs2,
+                op::I32_GE_U,
+                taken_target,
+                retired_at_taken,
+                writes_before,
+            ),
+            CBeqz { rs1, .. } => {
+                self.cond_fuse_zero(rs1, true, taken_target, retired_at_taken, writes_before)
+            }
+            CBnez { rs1, .. } => {
+                self.cond_fuse_zero(rs1, false, taken_target, retired_at_taken, writes_before)
+            }
             other => unreachable!("non-fusable-conditional reached emit_cond_fuse: {other:?}"),
         }
     }
@@ -1521,12 +1571,7 @@ mod tests {
         let imm10_1 = (u >> 1) & 0x3FF;
         let imm11 = (u >> 11) & 1;
         let imm19_12 = (u >> 12) & 0xFF;
-        (imm20 << 31)
-            | (imm10_1 << 21)
-            | (imm11 << 20)
-            | (imm19_12 << 12)
-            | (rd << 7)
-            | 0x6f
+        (imm20 << 31) | (imm10_1 << 21) | (imm11 << 20) | (imm19_12 << 12) | (rd << 7) | 0x6f
     }
 
     fn enc_beq(rs1: u32, rs2: u32, imm: i32) -> u32 {
@@ -1649,7 +1694,7 @@ mod tests {
         // never silently grow unbounded.
         const N: usize = 40;
         let mut words = Vec::new();
-        for i in 0..N {
+        for _ in 0..N {
             // Each slot: addi x1,x1,1 ; jal x0,+8 (to the next slot's addi).
             words.push(enc_addi(1, 1, 1));
             words.push(enc_jal(0, 8));
