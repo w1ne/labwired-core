@@ -61,6 +61,8 @@ pub mod one_arch_policy;
 #[cfg(test)]
 pub mod one_arduino_boot_path;
 #[cfg(test)]
+pub mod out_of_line_test_modules;
+#[cfg(test)]
 pub mod peripheral_reachability;
 #[cfg(test)]
 pub mod pre_merge_lane_covers_browser;

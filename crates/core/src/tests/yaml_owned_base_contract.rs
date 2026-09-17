@@ -88,6 +88,8 @@
 //! offender to hide under.
 
 use std::collections::BTreeSet;
+
+use super::out_of_line_test_modules::out_of_line_cfg_test_files;
 use std::path::{Path, PathBuf};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -648,9 +650,13 @@ fn scan_hardcoded_bases() -> Vec<BaseConst> {
     let scan_root = root.join("peripherals");
     let mut files = Vec::new();
     rust_sources_under(&scan_root, &mut files);
+    let out_of_line_tests = out_of_line_cfg_test_files(&files);
 
     let mut found = Vec::new();
     for path in files {
+        if out_of_line_tests.contains(&path) {
+            continue;
+        }
         let Ok(raw) = std::fs::read_to_string(&path) else {
             continue;
         };
