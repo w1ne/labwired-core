@@ -430,6 +430,24 @@ impl Esp32c3Spi {
 }
 
 impl Peripheral for Esp32c3Spi {
+    /// This controller hosts off-chip SPI devices, so the machine's central
+    /// device-time drive fans elapsed µs out to them — the same drive, the same
+    /// deltas and the same source the attached I²C slaves get. Phase A of the
+    /// YAML device machine: a declarative device must not be able to tell which
+    /// bus it hangs off by how much time it is told has passed.
+    fn drives_central_device_time(&self) -> bool {
+        true
+    }
+
+    fn advance_attached_device_time_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for dev in &mut self.attached_devices {
+            dev.advance_time_us(us);
+        }
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         crate::peripherals::esp_gpspi_wire::SPI_LINES
     }

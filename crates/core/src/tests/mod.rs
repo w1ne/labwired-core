@@ -18,6 +18,8 @@ pub mod cortex_m_jit_batch_gates;
 pub mod cortex_m_memory_contract;
 #[cfg(test)]
 pub mod device_identity_one_home;
+#[cfg(test)]
+pub mod device_time_derived;
 
 /// Row 6.5: the runtime-downcast count may not grow.
 #[cfg(test)]

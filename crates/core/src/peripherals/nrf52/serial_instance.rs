@@ -125,6 +125,27 @@ impl Default for Nrf52SerialInstance {
 }
 
 impl Peripheral for Nrf52SerialInstance {
+    /// A SERIAL instance is ONE bus peripheral wrapping TWO controllers (SPIM +
+    /// TWIM), and the machine only sees the wrapper. If this did not forward,
+    /// the sub-controllers' own opt-ins would never be consulted and every
+    /// device on an nRF52 would be frozen in time — the exact shape of bug
+    /// `as_any_mut` defaulting to `None` produced elsewhere in this engine.
+    fn drives_central_device_time(&self) -> bool {
+        true
+    }
+
+    fn advance_attached_device_time_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for cell in self.twim.attached_devices() {
+            cell.borrow_mut().advance_time_us(us);
+        }
+        for dev in &mut self.spim.attached_devices {
+            dev.advance_time_us(us);
+        }
+    }
+
     /// ONE MMIO window, two personalities, two independent wires — so the
     /// probeable line names are the ones `ENABLE` has actually selected.
     ///

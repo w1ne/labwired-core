@@ -616,9 +616,12 @@ fn run_firmware_riscv_batched(
     // has to leave evidence. Only under the flag, so no default run's stderr
     // changes.
     if args.batched {
+        // No `jit=` suffix here: the RISC-V path prints `[jit-stats]` above and
+        // decides JIT eligibility per chip, not from an env var.
         print_batched_summary(
             machine.step_profile(),
             machine.config.peripheral_tick_interval,
+            "",
         );
     }
 
@@ -1728,7 +1731,11 @@ fn run_arm_step_loop(
 /// guess. `steps_per_batch` is the observable that separates "batched" from
 /// "batched in name only": at 1.00 the orchestration is issuing one instruction
 /// per CPU dispatch and the batch window bought nothing.
-fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32) {
+///
+/// `suffix` carries the fields only one architecture can answer (ARM's `jit=`
+/// and `tick_cap=`); it is appended verbatim, after `peripheral_ticks=`, so the
+/// leading fields keep the order `scripts/perf/board_perf.py` parses.
+fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32, suffix: &str) {
     let per_batch = if profile.cpu_batches == 0 {
         0.0
     } else {
@@ -1736,13 +1743,82 @@ fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32
     };
     eprintln!(
         "[batched] instructions={} batches={} steps_per_batch={:.2} \
-         tick_interval={} peripheral_ticks={}",
+         tick_interval={} peripheral_ticks={}{}",
         profile.cpu_instructions,
         profile.cpu_batches,
         per_batch,
         tick_interval,
         profile.peripheral_ticks,
+        suffix,
     );
+}
+
+/// What the Cortex-M JIT could actually do on this run — as opposed to what the
+/// environment asked it to do.
+///
+/// `LABWIRED_CORTEX_M_JIT=1` only sets `SimulationConfig::cortex_m_jit_enabled`
+/// (`config.rs`). Three separate things then decide whether a compiled block ever
+/// runs, and none of them are visible in a run's output:
+///
+///   * the binary must carry `jit-core`. Without it `CortexM::step_batch`
+///     (`crates/core/src/cpu/cortex_m.rs`) has no JIT arm at all — the flag is
+///     stored and ignored;
+///   * the planned window must be wider than one instruction: that arm is gated
+///     on `max_count > 1`, so at `peripheral_tick_interval == 1` every window is
+///     interpreted. `jit-core` deliberately does NOT enable `event-scheduler`
+///     (see the feature note in `crates/cli/Cargo.toml`), and without that
+///     feature `SystemBus::max_safe_tick_interval` (`crates/core/src/bus/policy.rs`)
+///     returns 1 for every board — so a plain `--features jit-core` CLI cannot
+///     dispatch a single Thumb block on ANY chip;
+///   * the bus must not require cycle accuracy (`jit_gate_allows` refuses a
+///     block when `requires_cycle_accurate()` holds — H5 FLASH, DHT-class GPIO
+///     devices, legacy HC-SR04).
+///
+/// Reporting the request instead of the capability is how a batched-INTERPRETER
+/// measurement gets filed as a JIT measurement: two `--batched` runs of the same
+/// fixture, one labelled `LABWIRED_CORTEX_M_JIT=0` and one `=1`, differ by 20x
+/// when the binary under them is swapped for one built with a different feature
+/// set, and nothing in the output contradicts the label.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ArmJitState {
+    /// Compiled in, requested, and the window/bus let it dispatch. Whether a
+    /// block was actually compiled is a separate question — `LABWIRED_JIT_STATS=1`
+    /// answers that one.
+    CanDispatch,
+    /// `LABWIRED_CORTEX_M_JIT=0`.
+    Disabled,
+    /// Requested and compiled in, but every window is one instruction.
+    IdleQuantumOne,
+    /// Requested and compiled in, but the bus pins the CPU to cycle accuracy.
+    IdleCycleAccurate,
+    /// Requested, but this binary was not built with `--features jit-core`.
+    NotCompiledIn,
+}
+
+impl ArmJitState {
+    fn resolve(requested: bool, tick_interval: u32, cycle_accurate_bus: bool) -> Self {
+        if !requested {
+            Self::Disabled
+        } else if !cfg!(feature = "jit-core") {
+            Self::NotCompiledIn
+        } else if tick_interval <= 1 {
+            Self::IdleQuantumOne
+        } else if cycle_accurate_bus {
+            Self::IdleCycleAccurate
+        } else {
+            Self::CanDispatch
+        }
+    }
+
+    fn marker(self) -> &'static str {
+        match self {
+            Self::CanDispatch => "on",
+            Self::Disabled => "off",
+            Self::IdleQuantumOne => "idle(quantum=1)",
+            Self::IdleCycleAccurate => "idle(cycle-accurate-bus)",
+            Self::NotCompiledIn => "unavailable(no-jit-core)",
+        }
+    }
 }
 
 /// The ARM (Cortex-M) batched hot path: drive the run through
@@ -1762,9 +1838,20 @@ fn print_batched_summary(profile: labwired_core::StepProfile, tick_interval: u32
 /// constant: that is the same source the browser reads through the wasm
 /// `recommended_tick_interval` getter before calling
 /// `set_peripheral_tick_interval`. A bus that reports 1 (anything non-relaxable
-/// on it) therefore batches at 1 here too, exactly as it would in the browser —
-/// which is a real property of that board, not a failure to engage, and the
-/// `[batched]` line reports it as `steps_per_batch=1.00` rather than hiding it.
+/// on it) therefore batches at 1 here too, exactly as it would in the browser,
+/// and the `[batched]` line reports it as `steps_per_batch=1.00` rather than
+/// hiding it.
+///
+/// ⚠️ An interval of 1 is only "a real property of that board" in a build that
+/// COULD report otherwise. `max_safe_tick_interval` can return
+/// `RECOMMENDED_TICK_INTERVAL` only from inside its `#[cfg(feature =
+/// "event-scheduler")]` arm (`crates/core/src/bus/policy.rs`); in a build
+/// without that feature it returns 1 for every bus, on every chip, always —
+/// which is a property of the BINARY. The two readings are 20x apart in
+/// throughput and used to be indistinguishable in the output, so the summary
+/// now names which one it is (`tick_cap=bus` vs `tick_cap=build(no-event-scheduler)`)
+/// alongside what the JIT could do with the window it got (`jit=`).
+/// `crates/cli/tests/arm_batched_path.rs` holds both down.
 #[inline(never)]
 fn run_arm_batched_loop(
     machine: &mut labwired_core::Machine<labwired_core::cpu::CortexM>,
@@ -1782,6 +1869,7 @@ fn run_arm_batched_loop(
     let jit_on = std::env::var("LABWIRED_CORTEX_M_JIT").as_deref() != Ok("0");
     machine.config.cortex_m_jit_enabled = jit_on;
     machine.bus.config.cortex_m_jit_enabled = jit_on;
+    let jit_state = ArmJitState::resolve(jit_on, interval, machine.bus.requires_cycle_accurate());
 
     // Chunk so an absent `--max-steps` (limit == u64::MAX) still bounds the fuel
     // handed to any single `advance` call, mirroring the RISC-V batched loop.
@@ -1812,7 +1900,47 @@ fn run_arm_batched_loop(
         }
     }
 
-    print_batched_summary(machine.step_profile(), interval);
+    // Same opt-in non-vacuity proof the RISC-V batched path prints: `jit=on`
+    // says a block COULD dispatch, `[jit-stats]` says one did. ARM never had
+    // this, so `LABWIRED_JIT_STATS=1` was silently a no-op on every Cortex-M
+    // run — including the ones whose numbers were being attributed to the JIT.
+    #[cfg(feature = "jit-core")]
+    if std::env::var("LABWIRED_JIT_STATS").is_ok() {
+        match machine.cpu.jit_stats() {
+            Some(s) => eprintln!(
+                "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
+                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+            ),
+            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
+        }
+    }
+
+    // `tick_cap` answers "who capped the window": the bus this board builds, or
+    // a binary that has no event scheduler to relax it with. See the ⚠️ note on
+    // this function.
+    //
+    // Asked of the BINARY rather than of `cfg!(feature = "event-scheduler")` on
+    // this crate: the core feature can also arrive through workspace feature
+    // unification, and a CLI flag that is off then says nothing about what
+    // `max_safe_tick_interval` can return. An empty walk-deleted probe bus has
+    // no board property left to report, so anything above 1 from it is the
+    // build's answer, not a chip's.
+    let tick_cap = if interval > 1 {
+        "bus"
+    } else {
+        let mut probe = labwired_core::bus::SystemBus::new();
+        probe.legacy_walk_disabled = true;
+        if probe.max_safe_tick_interval() > 1 {
+            "bus"
+        } else {
+            "build(no-event-scheduler)"
+        }
+    };
+    print_batched_summary(
+        machine.step_profile(),
+        interval,
+        &format!(" jit={} tick_cap={tick_cap}", jit_state.marker()),
+    );
     faulted
 }
 

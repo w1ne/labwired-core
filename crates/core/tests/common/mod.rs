@@ -4,10 +4,16 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! Fixture loading shared by the `session_*` integration tests.
+//! Shared test support for the `labwired-core` integration tests.
+//!
+//! Two things live here: fixture loading for the `session_*` tests (below), and
+//! the [`transcript`] device-script harness every byte-parity proof drives its
+//! device with.
 
 // Each test binary compiles this module separately and uses a subset of it.
 #![allow(dead_code)]
+
+pub mod transcript;
 
 use std::path::{Path, PathBuf};
 
