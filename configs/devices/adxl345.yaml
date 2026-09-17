@@ -64,17 +64,22 @@
 # datasheet's rule ("cleared by reading data registers 0x32 to 0x37").
 #
 # ⚠️ NOT MODELLED, each named rather than faked:
-#   * **Output data rate.** The sample timer runs at the BW_RATE reset value's
-#     100 Hz. The rate bits select it at runtime, and `timers:` take a constant
-#     `period_us`. Needs: a field-driven timer period.
+#   * ~~**Output data rate.**~~ MODELLED. `timers[].period_from` reads
+#     BW_RATE[3:0] and selects one of the sixteen datasheet rates at runtime;
+#     see the `sample` timer below.
 #   * **Tap, activity/inactivity, free-fall and the watermark/overrun flags.**
 #     Their registers store and read back; nothing sets their INT_SOURCE bits,
 #     so those interrupts never fire. Needs: threshold comparators over the
 #     measurement channels.
-#   * **The FIFO** (FIFO_CTL/FIFO_STATUS are storage), the OFSX/Y/Z offset trim,
-#     the measure/sleep bits of POWER_CTL, the INT_INVERT and SELF_TEST bits,
-#     and the DATA_FORMAT JUSTIFY bit (D2): output is always right-justified
-#     with sign extension.
+#   * ~~**The FIFO.**~~ MODELLED. A 32-entry x/y/z queue that fills at the
+#     output data rate while FIFO_MODE is not bypass, drains through a burst
+#     read of 0x32-0x37, reflects its depth into FIFO_STATUS.ENTRIES and raises
+#     INT_SOURCE.WATERMARK at FIFO_CTL.SAMPLES. Still NOT modelled inside it:
+#     stream mode's drop-OLDEST policy (both non-bypass modes stop at 32 here),
+#     trigger mode, and the OVERRUN bit.
+#   * **The OFSX/Y/Z offset trim,** the measure/sleep bits of POWER_CTL, the
+#     INT_INVERT and SELF_TEST bits, and the DATA_FORMAT JUSTIFY bit (D2):
+#     output is always right-justified with sign extension.
 type: adxl345
 
 behavior:
@@ -109,7 +114,17 @@ behavior:
       - { name: TIME_FF,        addr: 0x29, width: 1, endian: le, access: rw, reset: 0x00 }
       - { name: TAP_AXES,       addr: 0x2A, width: 1, endian: le, access: rw, reset: 0x00 }
       - { name: ACT_TAP_STATUS, addr: 0x2B, width: 1, endian: le, access: r,  reset: 0x00 }
-      - { name: BW_RATE,        addr: 0x2C, width: 1, endian: le, access: rw, reset: 0x0A }
+      # Datasheet Table 7/8: BW_RATE[3:0] is the output-data-rate code. The
+      # named field is what the `sample` timer's `period_from` reads.
+      - name: BW_RATE
+        addr: 0x2C
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x0A
+        bits:
+          - { name: RATE,     shift: 0, width_bits: 4 }
+          - { name: LOW_POWER, shift: 4 }
       - { name: POWER_CTL,      addr: 0x2D, width: 1, endian: le, access: rw, reset: 0x00 }
       - name: INT_ENABLE
         addr: 0x2E
@@ -134,7 +149,10 @@ behavior:
         endian: le
         access: r
         reset: 0x02
-        bits: [{ name: DATA_READY, shift: 7 }]
+        bits:
+          - { name: OVERRUN,   shift: 0 }
+          - { name: WATERMARK, shift: 1 }
+          - { name: DATA_READY, shift: 7 }
       - name: DATA_FORMAT
         addr: 0x31
         width: 1
@@ -160,6 +178,7 @@ behavior:
         access: r
         signed: true
         source: x
+        fifo: { name: samples, slot: 0 }
         scale_from: { register: DATA_FORMAT, mask: 0x0B, map: { 0x00: 256.0, 0x01: 128.0, 0x02: 64.0, 0x03: 32.0, 0x08: 256.0, 0x09: 256.0, 0x0A: 256.0, 0x0B: 256.0 } }
         encode:
           clamp_from:
@@ -181,6 +200,7 @@ behavior:
         access: r
         signed: true
         source: y
+        fifo: { name: samples, slot: 1 }
         scale_from: { register: DATA_FORMAT, mask: 0x0B, map: { 0x00: 256.0, 0x01: 128.0, 0x02: 64.0, 0x03: 32.0, 0x08: 256.0, 0x09: 256.0, 0x0A: 256.0, 0x0B: 256.0 } }
         encode:
           clamp_from:
@@ -202,6 +222,7 @@ behavior:
         access: r
         signed: true
         source: z
+        fifo: { name: samples, slot: 2, pop: true }
         scale_from: { register: DATA_FORMAT, mask: 0x0B, map: { 0x00: 256.0, 0x01: 128.0, 0x02: 64.0, 0x03: 32.0, 0x08: 256.0, 0x09: 256.0, 0x0A: 256.0, 0x0B: 256.0 } }
         encode:
           clamp_from:
@@ -216,8 +237,29 @@ behavior:
                 0x09: { min: -1024.0, max: 1024.0 }
                 0x0A: { min: -2048.0, max: 2048.0 }
                 0x0B: { min: -4096.0, max: 4096.0 }
-      - { name: FIFO_CTL,       addr: 0x38, width: 1, endian: le, access: rw, reset: 0x00 }
-      - { name: FIFO_STATUS,    addr: 0x39, width: 1, endian: le, access: r,  reset: 0x00 }
+      # Datasheet Table 22/23. FIFO_MODE picks bypass (00) / FIFO (01) /
+      # stream (10) / trigger (11); SAMPLES is the watermark, in ENTRIES.
+      - name: FIFO_CTL
+        addr: 0x38
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: SAMPLES,   shift: 0, width_bits: 5 }
+          - { name: TRIGGER,   shift: 5 }
+          - { name: FIFO_MODE, shift: 6, width_bits: 2 }
+      # ENTRIES is how many samples the FIFO holds, 0..32. The DEVICE writes
+      # it (the `count:` reflection below), so it is read-only to the master.
+      - name: FIFO_STATUS
+        addr: 0x39
+        width: 1
+        endian: le
+        access: r
+        reset: 0x00
+        bits:
+          - { name: ENTRIES,   shift: 0, width_bits: 6 }
+          - { name: FIFO_TRIG, shift: 7 }
 
   # The two interrupt pads. Optional: a board that wires neither binds nothing.
   outputs: [INT1, INT2]
@@ -225,10 +267,82 @@ behavior:
     INT1: int1_pin
     INT2: int2_pin
 
+  # ── The 32-entry sample FIFO ────────────────────────────────────────────
+  #
+  # Datasheet "FIFO" (Rev. 0, page 21). The part collects x/y/z samples at the
+  # output data rate into a 32-entry queue; a burst read of 0x32..0x37 walks
+  # one sample out of it, and INT_SOURCE.WATERMARK rises once the queue holds
+  # FIFO_CTL.SAMPLES entries.
+  #
+  # ⚠️ **Bypass mode needs no second switch.** In bypass (FIFO_MODE = 00) the
+  # `fill:` guard is false, so nothing is ever pushed, so the queue is always
+  # empty, so the three data registers fall through to their live `source:` —
+  # which is byte for byte what this part did before the FIFO existed, and what
+  # `adxl345_migration_parity.rs`'s golden transcript still asserts.
+  #
+  # ⚠️ **The overflow policy is `drop_newest`.** Datasheet: in FIFO mode the
+  # part "collects up to 32 values and then stops collecting data". Stream mode
+  # (10) is the drop_oldest one and is NOT distinguished here — both modes fill
+  # and both stop at 32. Needs: a field-driven overflow policy, the same shape
+  # `period_from` has for a rate.
+  fifos:
+    - name: samples
+      depth: 32
+      overflow: drop_newest
+      fill:
+        timer: sample
+        when: "field(FIFO_CTL.FIFO_MODE) != 0"
+        # ⚠️ `reported(DATAX0)`, not `input(x)`. The ADXL345's counts-per-g
+        # comes from `scale_from` reading the DATA_FORMAT range bits, which is
+        # not part of `encode:` — so `input(x)` is the raw value in g and a
+        # FIFO packed from it would hold 1 where the data register reports 256.
+        # `reported()` is the word the register would put on the wire right
+        # now, which is what a FIFO holds. 16 bits each, two's complement.
+        pack:
+          - { expr: "reported(DATAX0)", width_bits: 16 }
+          - { expr: "reported(DATAY0)", width_bits: 16 }
+          - { expr: "reported(DATAZ0)", width_bits: 16 }
+      count: { register: FIFO_STATUS, field: ENTRIES }
+      watermark:
+        entries_from: { register: FIFO_CTL, field: SAMPLES }
+        set: INT_SOURCE.WATERMARK
+
   timers:
-    # BW_RATE powers up at 0x0A = 100 Hz output data rate (datasheet Table 7).
-    # Only that rate is modelled — see the header.
-    - { name: sample, period_us: 10000, start: on_reset }
+    # ── The output data rate is a REGISTER, not a constant ────────────────
+    #
+    # BW_RATE[3:0] selects one of sixteen rates (datasheet Table 7/8). The
+    # silicon divides a 3200 Hz master rate by powers of two, so every period
+    # below is 312.5 µs × 2^(15 − code); `period_us` is the reset value's
+    # 100 Hz, which is what the field resolves to before firmware writes
+    # anything, and `period_from` takes over from the first write onward.
+    #
+    # ⚠️ Code 0xF is 3200 Hz, a period of 312.5 µs. The timer bank counts whole
+    # microseconds, so it is declared as 313 — a 0.16 % fast clock at the one
+    # rate where a µs is a visible fraction of the period. Every other rate is
+    # exact.
+    - name: sample
+      period_us: 10000
+      start: on_reset
+      period_from:
+        register: BW_RATE
+        field: RATE
+        table:
+          0x0: 10240000   #    0.098 Hz
+          0x1: 5120000    #    0.195 Hz
+          0x2: 2560000    #    0.39 Hz
+          0x3: 1280000    #    0.78 Hz
+          0x4: 640000     #    1.56 Hz
+          0x5: 320000     #    3.13 Hz
+          0x6: 160000     #    6.25 Hz
+          0x7: 80000      #   12.5 Hz
+          0x8: 40000      #   25 Hz
+          0x9: 20000      #   50 Hz
+          0xA: 10000      #  100 Hz — the reset value
+          0xB: 5000       #  200 Hz
+          0xC: 2500       #  400 Hz
+          0xD: 1250       #  800 Hz
+          0xE: 625        # 1600 Hz
+          0xF: 313        # 3200 Hz (312.5 µs, rounded up)
 
   rules:
     # A new sample is ready.

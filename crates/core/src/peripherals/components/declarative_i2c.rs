@@ -56,8 +56,8 @@ use labwired_config::{
 use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
     apply_timing_action, apply_write, apply_write_masked, calendar_set, civil_from_unix,
-    decode_write, encode_raw, observe, pack, read_clears, register_read_bytes, unix_from_civil,
-    unpack, validate_timers, write_is_translated, TimerBank,
+    decode_raw, decode_write, encode_raw, observe, pack, read_clears, register_read_bytes,
+    unix_from_civil, unpack, validate_timers, write_is_translated, TimerBank,
 };
 use super::rule_machine::{RuleCtx, RuleMachine};
 use crate::peripherals::i2c::I2cDevice;
@@ -296,7 +296,7 @@ impl GenericI2cDevice {
         let pointer_width = spec.pointer_width.max(1);
         let default_pointer_mask = if pointer_width >= 2 { 0xFFFF } else { 0x00FF };
 
-        Ok(Self {
+        let mut device = Self {
             address,
             registers: spec.registers.clone(),
             commands: spec.commands.clone(),
@@ -392,7 +392,14 @@ impl GenericI2cDevice {
             rules: RuleMachine::from_behavior(&descriptor.behavior)?,
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
-        })
+        };
+        // Resolve any field-driven timer period against the RESET register
+        // file, so a part whose rate register powers up at something other
+        // than its `period_us` ticks correctly before firmware writes anything.
+        // The DS3231 is exactly that: CONTROL powers up at 0x1C, whose RS bits
+        // select 8.192 kHz, not the 1 Hz a constant would have assumed.
+        device.refresh_field_driven_periods();
+        Ok(device)
     }
 
     /// The slot view a read observes: seeded noise applied to the channels that
@@ -743,6 +750,7 @@ impl GenericI2cDevice {
         }
         if !self.timers.is_empty() {
             self.timers.start_on_write(&name, stored, self.elapsed_us);
+            self.refresh_field_driven_periods();
         }
         // A momentary "go" bit is gone by the time firmware can read it back:
         // the device has already acted on it (see `RegisterSpec::self_clearing`).
@@ -940,7 +948,16 @@ impl GenericI2cDevice {
         let Some(reg) = self.register_covering(addr) else {
             return (self.reg_unmapped_byte, None);
         };
-        let raw = register_read_bytes(reg, slots, &self.reg_values);
+        // A `fifo:` register serves the queue's OLDEST entry while the queue is
+        // non-empty and falls through to its live `source:` when it is empty —
+        // which is exactly what bypass mode is, with no second mode flag to
+        // keep in step. Both read paths need it: this is the auto-increment
+        // one (a burst that walks addresses), and the latch path below is the
+        // pointer one.
+        let raw = match self.fifo_word(reg) {
+            Some(word) => pack(word as u32, reg.width, reg.endian),
+            None => register_read_bytes(reg, slots, &self.reg_values),
+        };
         let overlay = self.ready_overlay(&reg.name);
         let bytes = if overlay == 0 {
             raw
@@ -1062,7 +1079,8 @@ impl GenericI2cDevice {
 struct I2cRuleCtx<'a> {
     registers: &'a [I2cRegister],
     reg_values: &'a mut HashMap<String, u32>,
-    slots: &'a HashMap<String, f64>,
+    /// `&mut` because [`RuleCtx::set_input`] writes here — see that method.
+    slots: &'a mut HashMap<String, f64>,
 }
 
 impl RuleCtx for I2cRuleCtx<'_> {
@@ -1080,6 +1098,25 @@ impl RuleCtx for I2cRuleCtx<'_> {
         let reg = self.registers.iter().find(|r| r.name == register)?;
         let f = reg.bits.iter().find(|b| b.name == field)?;
         Some((f.shift, f.mask()))
+    }
+
+    fn reported(&self, name: &str) -> Option<i64> {
+        let reg = self.registers.iter().find(|r| r.name == name)?;
+        // The SAME function the read path uses, so a rule and the wire cannot
+        // disagree about what a register says.
+        //
+        // The TRUTH slots, not the noisy ones: a rule reading a register twice
+        // in one event must see one value, and a seeded sample belongs to a
+        // wire read rather than to the part's internal arithmetic.
+        let bytes = register_read_bytes(reg, self.slots, self.reg_values);
+        let word = unpack(&bytes, reg.endian);
+        if reg.signed {
+            let bits = 8 * u32::from(reg.width);
+            if bits < 32 && word & (1 << (bits - 1)) != 0 {
+                return Some(i64::from(word as i32 | !((1i32 << bits) - 1)));
+            }
+        }
+        Some(i64::from(word))
     }
 
     fn input(&self, key: &str) -> i64 {
@@ -1122,6 +1159,29 @@ impl RuleCtx for I2cRuleCtx<'_> {
             None => raw as i64,
         }
     }
+
+    fn set_input(&mut self, key: &str, value: i64) {
+        // The exact inverse of `input` above, through the SAME register lookup
+        // (a `calendar:` register skipped for the same reason), so a rule that
+        // writes back what it read changes nothing.
+        if !self.slots.contains_key(key) {
+            return;
+        }
+        let engineering = match self
+            .registers
+            .iter()
+            .find(|r| r.source.as_deref() == Some(key) && r.calendar.is_none())
+        {
+            Some(reg) => decode_raw(
+                value,
+                reg.encode.as_ref(),
+                reg.source_scale.unwrap_or(1.0),
+                reg.width,
+            ),
+            None => value as f64,
+        };
+        self.slots.insert(key.to_string(), engineering);
+    }
 }
 
 impl GenericI2cDevice {
@@ -1139,7 +1199,7 @@ impl GenericI2cDevice {
             let mut ctx = I2cRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
-                slots: &self.slots,
+                slots: &mut self.slots,
             };
             machine.fire(&event, written, &mut ctx);
         }
@@ -1166,6 +1226,92 @@ impl GenericI2cDevice {
     }
 
     /// Apply whatever `timer:` actions the rules queued to the ONE bank.
+    /// Push one entry into every FIFO whose `fill.timer` is `name`, then
+    /// reflect the new depth into the part's `count:` and `watermark:`
+    /// registers.
+    fn fill_fifos_on_timer(&mut self, name: &str) {
+        let Some(mut machine) = self.rules.take() else {
+            return;
+        };
+        {
+            let mut ctx = I2cRuleCtx {
+                registers: &self.registers,
+                reg_values: &mut self.reg_values,
+                slots: &mut self.slots,
+            };
+            if machine.fill_on_timer(name, &mut ctx) {
+                machine.refresh_fifo_registers(&mut ctx);
+            }
+        }
+        self.rules = Some(machine);
+    }
+
+    /// The FIFO component this register serves, if it has one and the queue is
+    /// non-empty. `None` ⇒ the register serves its live `source:`, which is
+    /// what bypass mode is.
+    fn fifo_word(&self, reg: &I2cRegister) -> Option<i64> {
+        let spec = reg.fifo.as_ref()?;
+        self.rules.as_ref()?.fifo_peek(&spec.name, spec.slot)
+    }
+
+    /// Pop the entry a completed read of `reg` drains, and reflect the new
+    /// depth. No-op for a register with no `fifo:`, or with `pop: false`.
+    fn fifo_pop_after_read(&mut self, register: &str) {
+        let Some(spec) = self
+            .registers
+            .iter()
+            .find(|r| r.name == register)
+            .and_then(|r| r.fifo.clone())
+            .filter(|f| f.pop)
+        else {
+            return;
+        };
+        let Some(mut machine) = self.rules.take() else {
+            return;
+        };
+        {
+            let mut ctx = I2cRuleCtx {
+                registers: &self.registers,
+                reg_values: &mut self.reg_values,
+                slots: &mut self.slots,
+            };
+            if machine.fifo_pop(&spec.name) {
+                machine.refresh_fifo_registers(&mut ctx);
+            }
+        }
+        self.rules = Some(machine);
+    }
+
+    /// Re-resolve every [`TimerPeriodFrom`](labwired_config::TimerPeriodFrom)
+    /// against the register file. Called wherever a register write lands, and
+    /// once after construction, because a rate register is exactly the thing
+    /// firmware writes.
+    ///
+    /// Short-circuits on a part that declares no field-driven period, which is
+    /// every descriptor written before the key existed — such a part pays one
+    /// `any()` over its timer list and nothing else.
+    fn refresh_field_driven_periods(&mut self) {
+        if !self.timers.has_field_driven_period() {
+            return;
+        }
+        let values = std::mem::take(&mut self.reg_values);
+        let specs = self.registers.clone();
+        let now = self.elapsed_us;
+        self.timers.apply_period_from(
+            now,
+            &|name: &str| values.get(name).copied(),
+            &|register: &str, field: &str| {
+                specs.iter().find(|r| r.name == register).and_then(|r| {
+                    r.bits
+                        .iter()
+                        .find(|b| b.name == field)
+                        .map(|b| (b.shift, b.mask()))
+                })
+            },
+        );
+        self.reg_values = values;
+    }
+
     fn drain_timer_requests(&mut self) {
         let Some(m) = self.rules.as_mut() else { return };
         let requests = m.take_timer_requests();
@@ -1179,6 +1325,17 @@ impl GenericI2cDevice {
                 self.timers.stop_named(&name);
             }
         }
+    }
+
+    /// A timer's EFFECTIVE period in µs, after any
+    /// [`TimerPeriodFrom`](labwired_config::TimerPeriodFrom) has resolved
+    /// against the register file.
+    ///
+    /// For tests and diagnostics: a field-driven rate is otherwise only
+    /// observable by counting firings, and counting firings cannot tell a
+    /// RESET value apart from a coincidence.
+    pub fn timer_period_us(&self, name: &str) -> Option<u64> {
+        self.timers.period_us_of(name)
     }
 
     /// Read-only view of the rule machine, for tests and diagnostics.
@@ -1291,6 +1448,7 @@ impl GenericI2cDevice {
         self.reg_values.insert(name.clone(), stored);
         if !self.timers.is_empty() {
             self.timers.start_on_write(&name, stored, self.elapsed_us);
+            self.refresh_field_driven_periods();
         }
         if !self.data_ready.is_empty() {
             // Acknowledge first, then start: a part whose start and clear
@@ -1427,6 +1585,11 @@ impl I2cDevice for GenericI2cDevice {
             // and are keyed on the register's START address, which is what
             // `apply_read_complete_updates` matches a trigger against.
             if let Some((name, start)) = hit {
+                // The FIFO entry pops when the LAST byte of the register
+                // carrying `pop: true` has been clocked out. A driver that
+                // abandons the burst earlier gets the same sample again, which
+                // is what the silicon does with a read that never completed.
+                self.fifo_pop_after_read(&name);
                 if !self.data_ready.is_empty() {
                     self.clear_on_read(&name);
                 }
@@ -1460,7 +1623,14 @@ impl I2cDevice for GenericI2cDevice {
             let slots = self.observed_slots();
             let (bytes, name) = match self.pointer.and_then(|p| self.find_register(p)) {
                 Some(reg) => {
-                    let raw = register_read_bytes(reg, &slots, &self.reg_values);
+                    // A `fifo:` register serves the queue's OLDEST entry while
+                    // the queue is non-empty, and falls through to its live
+                    // `source:` when it is empty — which is exactly what
+                    // bypass mode is, with no second mode flag to keep in step.
+                    let raw = match self.fifo_word(reg) {
+                        Some(word) => pack(word as u32, reg.width, reg.endian),
+                        None => register_read_bytes(reg, &slots, &self.reg_values),
+                    };
                     // Status bits are OR'd over whatever the register stores, so
                     // one register carries the firmware-written enable bits and
                     // the model-driven ready flags at once.
@@ -1522,6 +1692,21 @@ impl I2cDevice for GenericI2cDevice {
                 }
             }
         }
+        // A FIFO entry pops when the LAST byte of the register that carries
+        // `pop: true` has been clocked out. A driver that abandons the burst
+        // after an earlier axis gets the same sample again next time, which is
+        // what the silicon does with a read that never completed.
+        if let Some(ptr) = self.pointer {
+            if let Some((name, width)) = self
+                .find_register(ptr)
+                .filter(|r| r.fifo.as_ref().is_some_and(|f| f.pop))
+                .map(|r| (r.name.clone(), r.width as usize))
+            {
+                if self.read_idx == width {
+                    self.fifo_pop_after_read(&name);
+                }
+            }
+        }
         byte
     }
 
@@ -1547,6 +1732,11 @@ impl I2cDevice for GenericI2cDevice {
                 for action in &actions {
                     apply_timing_action(action, &mut self.reg_values);
                 }
+                // ⚠️ The FIFO fills BEFORE the `timer:` rules, so a rule
+                // guarded on `fifo_len(samples)` — a watermark rule, the whole
+                // reason a part has a FIFO — sees the sample this tick
+                // produced rather than the previous one.
+                self.fill_fifos_on_timer(&name);
                 self.raise(Event::Timer { name }, 0);
             }
         }
@@ -2267,6 +2457,43 @@ pub(crate) fn leak_gpio_metadata(
     descriptor: &DeviceDescriptor,
     channels: &'static [InputChannel],
 ) -> &'static KitMetadata {
+    leak_pinlike_metadata(
+        descriptor,
+        channels,
+        Transport::GpioGroup,
+        Category::Gpio,
+        "Declarative GPIO device.",
+    )
+}
+
+/// Same, for a declarative `uart_device`: a part with no register map and no
+/// pads, whose whole interface is the byte stream. It takes the SAME path as
+/// the GPIO one because the only thing that differs is the transport label the
+/// manifest shows — writing it twice is how the two would come to disagree
+/// about which `config_keys` a descriptor may declare.
+pub(crate) fn leak_uart_metadata(
+    descriptor: &DeviceDescriptor,
+    channels: &'static [InputChannel],
+) -> &'static KitMetadata {
+    leak_pinlike_metadata(
+        descriptor,
+        channels,
+        Transport::Uart,
+        Category::Uart,
+        "Declarative UART device.",
+    )
+}
+
+/// The shared body: a descriptor with no `i2c:`/`spi:` block, so there is no
+/// address to synthesise a `config_keys` entry from and the declared list is
+/// taken as the complete set.
+fn leak_pinlike_metadata(
+    descriptor: &DeviceDescriptor,
+    channels: &'static [InputChannel],
+    transport: Transport,
+    category: Category,
+    default_summary: &str,
+) -> &'static KitMetadata {
     let meta = descriptor.metadata.as_ref();
     let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
     let label = meta
@@ -2274,7 +2501,7 @@ pub(crate) fn leak_gpio_metadata(
         .unwrap_or_else(|| descriptor.r#type.clone());
     let summary = meta
         .and_then(|m| m.summary.clone())
-        .unwrap_or_else(|| "Declarative GPIO device.".to_string());
+        .unwrap_or_else(|| default_summary.to_string());
     let detail = meta
         .and_then(|m| m.detail.clone())
         .unwrap_or_else(|| summary.clone());
@@ -2308,8 +2535,8 @@ pub(crate) fn leak_gpio_metadata(
         label: leak(label),
         summary: leak(summary),
         detail: leak(detail),
-        transport: Transport::GpioGroup,
-        category: Category::Gpio,
+        transport,
+        category,
         config_keys,
         labs,
         inputs: channels,

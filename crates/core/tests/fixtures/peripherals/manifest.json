@@ -70,7 +70,7 @@
       "device_type": "neo6m-gps",
       "label": "NEO-6M GPS",
       "summary": "GPS module streaming NMEA sentences over UART RX.",
-      "detail": "GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream back to the host UART. Optional noise_sigma (° lat/lon) uses the same seeded ChannelNoise facility as the IMU kits.",
+      "detail": "Declarative NMEA stream: GGA and RMC alternating every 500 ms, position taken from the lat/lon stimulus channels and converted to DDMM.mmmm by integer arithmetic (no float crosses the boundary), XOR checksum computed by the engine's `wrap: nmea` framing. The fix channel drives the GGA quality digit and the RMC status letter. Optional noise_sigma (° on lat/lon) uses the same seeded ChannelNoise facility as the IMU kits and is sampled once per sentence. CONSTANT in every sentence: the 120000.00 UTC time, the 150526 date, 08 satellites, 1.0 HDOP, 10.0 m altitude, 0.0 speed and course. NOT modelled: UBX/PUBX commands, GSV/GSA/VTG/GLL, and any configuration interface.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
@@ -87,7 +87,7 @@
         {
           "name": "noise_sigma",
           "ty": "float",
-          "doc": "Seeded Gaussian σ on lat/lon (degrees) applied per NMEA sentence; 0 = off. ~1e-5 ° ≈ 1 m."
+          "doc": "Seeded Gaussian sigma on lat/lon (degrees) applied once per NMEA sentence; 0 = off. ~1e-5 deg is about 1 m."
         }
       ],
       "labs": [
@@ -475,7 +475,7 @@
       "device_type": "hc-05",
       "label": "HC-05 Bluetooth",
       "summary": "Bluetooth SPP module with AT command shell over UART.",
-      "detail": "Thin AT echo model (OK to AT/AT+…). No RF pairing or wireless data path.",
+      "detail": "Declarative AT shell: OK to AT/AT+…, +VERSION and +NAME? answered from constants declared in the part document, ERROR to anything that is not an AT line. NOT modelled: the radio — no pairing, no inquiry, no link state, no RSSI and no transparent data pipe. AT+NAME= is accepted and answered OK but not stored.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [],
@@ -883,7 +883,7 @@
       "device_type": "sim800l",
       "label": "SIM800L GSM",
       "summary": "SIM800L UART AT command shell (no cellular RF).",
-      "detail": "Responds OK to AT/AT+…; CGMI/CGMM/CSQ/CREG stubs for init sequences. SMS/GPRS air interface is not simulated.",
+      "detail": "Declarative AT shell. CGMI/CGMM/ATI/GMR/CSQ/CREG answer CONSTANTS declared in the part document — signal strength is a fixed +CSQ: 20,0 and registration a fixed +CREG: 0,1, neither of which moves. Every other AT line answers a bare OK and every non-AT line answers ERROR. NOT modelled: registration, PDP contexts, sockets, SMS and the air interface. Unlike the model it replaces, ATI answers the identification banner instead of ERROR.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [],

@@ -23,8 +23,8 @@ use labwired_config::{
 
 use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
-    apply_timing_action, apply_write, encode_raw, leak_labs, read_clears, register_read_bytes,
-    unpack, validate_timers, TimerBank,
+    apply_timing_action, apply_write, decode_raw, encode_raw, leak_labs, read_clears,
+    register_read_bytes, unpack, validate_timers, TimerBank,
 };
 use super::rule_machine::{RuleCtx, RuleMachine};
 use crate::peripherals::spi::{SpiDevice, SpiSampling};
@@ -353,7 +353,8 @@ impl GenericSpiDevice {
 struct SpiRuleCtx<'a> {
     registers: &'a [RegisterSpec],
     reg_values: &'a mut HashMap<String, u32>,
-    slots: &'a HashMap<String, f64>,
+    /// `&mut` because [`RuleCtx::set_input`] writes here — see that method.
+    slots: &'a mut HashMap<String, f64>,
 }
 
 impl RuleCtx for SpiRuleCtx<'_> {
@@ -368,6 +369,21 @@ impl RuleCtx for SpiRuleCtx<'_> {
         let f = reg.bits.iter().find(|b| b.name == field)?;
         Some((f.shift, f.mask()))
     }
+    fn reported(&self, name: &str) -> Option<i64> {
+        let reg = self.registers.iter().find(|r| r.name == name)?;
+        // Same function the read path uses, for the same reason as the I²C
+        // twin: a rule and the wire must not disagree about a register.
+        let bytes = register_read_bytes(reg, self.slots, self.reg_values);
+        let word = unpack(&bytes, reg.endian);
+        if reg.signed {
+            let bits = 8 * u32::from(reg.width);
+            if bits < 32 && word & (1 << (bits - 1)) != 0 {
+                return Some(i64::from(word as i32 | !((1i32 << bits) - 1)));
+            }
+        }
+        Some(i64::from(word))
+    }
+
     fn input(&self, key: &str) -> i64 {
         let raw = self.slots.get(key).copied().unwrap_or(0.0);
         match self
@@ -394,6 +410,28 @@ impl RuleCtx for SpiRuleCtx<'_> {
             None => raw as i64,
         }
     }
+
+    fn set_input(&mut self, key: &str, value: i64) {
+        // The exact inverse of `input` above, through the SAME register lookup,
+        // so a rule that writes back what it read changes nothing.
+        if !self.slots.contains_key(key) {
+            return;
+        }
+        let engineering = match self
+            .registers
+            .iter()
+            .find(|r| r.source.as_deref() == Some(key))
+        {
+            Some(reg) => decode_raw(
+                value,
+                reg.encode.as_ref(),
+                reg.source_scale.unwrap_or(1.0),
+                reg.width,
+            ),
+            None => value as f64,
+        };
+        self.slots.insert(key.to_string(), engineering);
+    }
 }
 
 impl GenericSpiDevice {
@@ -406,7 +444,7 @@ impl GenericSpiDevice {
             let mut ctx = SpiRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
-                slots: &self.slots,
+                slots: &mut self.slots,
             };
             machine.fire(&event, written, &mut ctx);
         }
