@@ -1306,6 +1306,31 @@ fn max_speed_advance_does_not_sleep() {
     assert!(clock.sleeps().is_empty());
 }
 
+/// A max-speed run must not read the host clock at all.
+///
+/// `advance` computes its wall origin before the loop. Doing that
+/// unconditionally put a clock read on the single-step loop's per-instruction
+/// path — the CLI drives `advance(AdvanceRequest::single())` once per step —
+/// worth 91 Ir/step under callgrind, +8.5% on every ARM board in the
+/// throughput gate. `pace_realtime` consumes the origin only in `Realtime`,
+/// so the read has to be gated the same way.
+#[test]
+fn max_speed_advance_never_reads_the_host_clock() {
+    let clock = crate::host_time::FakeClock::new();
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty())
+        .with_host_clock(Box::new(clock.clone()));
+    machine.config.host_time_mode = HostTimeMode::MaxSpeed;
+    machine.bus.cpu_hz = 1_000_000;
+
+    machine.step().expect("step should succeed");
+    assert_eq!(
+        clock.now_calls(),
+        0,
+        "max-speed step read the host clock; that read is a per-instruction \
+         cost on the CLI single-step loop"
+    );
+}
+
 #[test]
 fn realtime_advance_cpu_hz_zero_does_not_sleep() {
     let clock = crate::host_time::FakeClock::new();
