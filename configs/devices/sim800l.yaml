@@ -1,0 +1,79 @@
+# SIMCom SIM800L quad-band GSM/GPRS module — an AT command shell on a UART.
+#
+# Declarative `uart_device`; replaces the hand-written `components/sim800l.rs`,
+# whose wire transcript is pinned byte for byte in
+# `crates/core/tests/uart_migration_parity.rs`.
+#
+# ── ⚠️ EVERY NETWORK ANSWER BELOW IS A CONSTANT ───────────────────────────
+#
+# There is no cellular stack here: no registration state machine, no PDP
+# context, no socket, no SMS, no signal model. The hand-written model returned
+# these same four constants; the only change is that they are now visible in
+# the part document, and the parity test names each one as a constant rather
+# than asserting it as behaviour.
+#
+#   * `+CSQ: 20,0` — RSSI **20** (≈ −73 dBm, a good indoor signal) and BER 0.
+#     It does not move. A part whose CSQ answered a distance would need a path-
+#     loss model; the BG770A has one (`range_m`), and this does not.
+#   * `+CREG: 0,1` — "URCs disabled, registered on the home network". It does
+#     not move either, and `AT+CREG=2` (enable location URCs) is answered from
+#     the same entry, so the mode byte reads 0 after a driver set it to 2.
+#   * `SIMCOM_Ltd` / `SIMCOM_SIM800L` — the manufacturer and model strings.
+#   * `SIM800L R14.18 LabWired` — a firmware banner that says "LabWired" on
+#     purpose, so a log that quotes it cannot be mistaken for silicon.
+#
+# Anything else that begins `AT`, `AT+` or `AT ` is answered a bare `OK` —
+# including `AT+CIPSTART`, `AT+CGATT?` and `AT+CMGS`, which on silicon answer a
+# value line first. A driver that parses those will see an `OK` it cannot use,
+# which is the honest failure: the part says it does not implement them rather
+# than inventing a session.
+#
+# ── ⚠️ A FIXED BUG: `ATI` used to answer ERROR ────────────────────────────
+#
+# The hand-written model gated every command behind
+# `upper == "AT" || starts_with("AT+") || starts_with("AT ")` and only THEN
+# tested `upper == "ATI"`. `ATI` passes none of the three, so that arm was
+# unreachable and `ATI` — the most common identification command there is —
+# answered `ERROR`. `AT+GMR`, its alias, reached the arm and worked.
+#
+# This descriptor answers `ATI` with the banner, which is what the silicon
+# does. `uart_migration_parity.rs` holds the old model's `ERROR` as a
+# golden and asserts the new answer separately, so the difference is recorded
+# rather than absorbed.
+#
+# ── Order is the datasheet's ──────────────────────────────────────────────
+#
+# `responses:` is tried top to bottom, first match wins. `AT+CGMI` and
+# `AT+CGMM` are EXACT (so `AT+CGMI=?` falls through to `OK`, as it did before);
+# `AT+CSQ` and `AT+CREG` are PREFIXES (so `AT+CSQ=?`, `AT+CREG?` and
+# `AT+CREG=1` all answer), which reproduces the old ladder arm for arm.
+type: sim800l
+
+behavior:
+  primitive: uart_device
+  uart:
+    # The module autobauds; 9600 is what nearly every sketch sets it to.
+    baud: 9600
+    frames:
+      terminator: "\r\n"
+      max_bytes: 128
+    responses:
+      - { match: "AT+CGMI",          respond: "SIMCOM_Ltd\r\nOK\r\n" }
+      - { match: "AT+CGMM",          respond: "SIMCOM_SIM800L\r\nOK\r\n" }
+      # `ATI` is here, above the AT gate, which is the fix described in the
+      # header. `AT+GMR` is its alias and always worked.
+      - { match: "ATI",              respond: "SIM800L R14.18 LabWired\r\nOK\r\n" }
+      - { match: "AT+GMR",           respond: "SIM800L R14.18 LabWired\r\nOK\r\n" }
+      - { match: { prefix: "AT+CSQ" },  respond: "+CSQ: 20,0\r\nOK\r\n" }
+      - { match: { prefix: "AT+CREG" }, respond: "+CREG: 0,1\r\nOK\r\n" }
+      - { match: "AT",               respond: "OK\r\n" }
+      - { match: { prefix: "AT+" },  respond: "OK\r\n" }
+      - { match: { prefix: "AT " },  respond: "OK\r\n" }
+      - { match: any,                respond: "ERROR\r\n" }
+
+metadata:
+  label: "SIM800L GSM"
+  summary: "SIM800L UART AT command shell (no cellular RF)."
+  detail: "Declarative AT shell. CGMI/CGMM/ATI/GMR/CSQ/CREG answer CONSTANTS declared in the part document — signal strength is a fixed +CSQ: 20,0 and registration a fixed +CREG: 0,1, neither of which moves. Every other AT line answers a bare OK and every non-AT line answers ERROR. NOT modelled: registration, PDP contexts, sockets, SMS and the air interface. Unlike the model it replaces, ATI answers the identification banner instead of ERROR."
+  category: uart
+  config_keys: []

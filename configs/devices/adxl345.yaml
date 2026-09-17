@@ -1,0 +1,388 @@
+# Analog Devices ADXL345 3-axis ±2/4/8/16 g accelerometer — I²C.
+#
+# Replaces the hand-written `components/adxl345.rs`, whose wire transcript is
+# pinned in `crates/core/tests/adxl345_migration_parity.rs`. The SPI variant of
+# the same silicon is `adxl345_spi.yaml`; the register map below is that file's,
+# because it IS the same Table 16 map — only the framing differs (a 1-byte
+# command with R/W and MB bits there, a register pointer here).
+#
+# ── The wire ───────────────────────────────────────────────────────────────
+#
+# Datasheet Rev. 0, "I2C" section: the master writes a 1-byte register address
+# and the address auto-increments on every byte of a multi-byte read, which is
+# what lets a driver pull all six data bytes in one transaction
+# (`auto_increment: true`). ALT ADDRESS high ⇒ 0x1D, low ⇒ 0x53.
+#
+# ── The point of this port: `encode.clamp_from` ────────────────────────────
+#
+# The ADXL345's output is not one scale and one range. Two firmware-owned
+# fields of DATA_FORMAT (0x31) move it:
+#
+#   D3  FULL_RES — 0: fixed 10-bit output, the resolution HALVES per range
+#                     step so full scale is always ±512 counts.
+#                  1: full resolution, always 3.9 mg/LSB (256 counts/g), so
+#                     the count range GROWS with the g range.
+#   D1:D0 Range  — ±2 g / ±4 g / ±8 g / ±16 g.
+#
+# `scale_from` already expressed the counts-per-g half. The saturation half had
+# no key at all: `encode.clamp_min`/`clamp_max` are constants, and a constant is
+# right for exactly one of the eight settings. A model with the ±2 g window
+# baked in would clip a ±16 g driver at an eighth of its range; a model with the
+# ±16 g window baked in would let a ±2 g driver report counts the silicon
+# cannot produce. Neither is a rounding error — it is the part failing to
+# saturate, which is the behaviour a tilt or impact sketch is watching for.
+#
+# `clamp_from:` is the mirror of `scale_from:`: the window is read from a
+# register bit-field. The selector here is `mask: 0x0B` — FULL_RES and the two
+# range bits, which are not contiguous, so the mask picks all three at once and
+# the map is keyed by the eight combinations that matter.
+#
+#   field  FULL_RES  range   counts/g   full scale (counts)
+#   0x00      0      ±2 g       256          ±512
+#   0x01      0      ±4 g       128          ±512
+#   0x02      0      ±8 g        64          ±512
+#   0x03      0      ±16 g       32          ±512
+#   0x08      1      ±2 g       256          ±512
+#   0x09      1      ±4 g       256         ±1024
+#   0x0A      1      ±8 g       256         ±2048
+#   0x0B      1      ±16 g      256         ±4096
+#
+# ⚠️ DELIBERATELY DIFFERENT from the model this replaces. The old one converted
+# and clamped at `set_input` time, latching counts against whatever DATA_FORMAT
+# held at that instant; this one converts at READ time. A driver that poses 8 g
+# of acceleration, then widens the range from ±2 g to ±16 g, and then reads, now
+# sees 8 g — on the old model it saw the ±2 g clip forever, because the counts
+# had already been truncated. The silicon converts per sample, so read time is
+# the right moment. Pinned in `a_range_change_is_visible_to_the_next_read`.
+#
+# ── The Tier-2 half: the INT1/INT2 pads ────────────────────────────────────
+#
+# DATA_READY (bit 7 of INT_ENABLE / INT_MAP / INT_SOURCE) is modelled end to
+# end: a sample timer sets INT_SOURCE.DATA_READY, and if INT_ENABLE.DATA_READY
+# is set the pad INT_MAP.DATA_READY selects (0 ⇒ INT1, 1 ⇒ INT2) goes high.
+# Reading the data registers clears the flag and drops the pad, which is the
+# datasheet's rule ("cleared by reading data registers 0x32 to 0x37").
+#
+# ⚠️ NOT MODELLED, each named rather than faked:
+#   * ~~**Output data rate.**~~ MODELLED. `timers[].period_from` reads
+#     BW_RATE[3:0] and selects one of the sixteen datasheet rates at runtime;
+#     see the `sample` timer below.
+#   * **Tap, activity/inactivity, free-fall and the watermark/overrun flags.**
+#     Their registers store and read back; nothing sets their INT_SOURCE bits,
+#     so those interrupts never fire. Needs: threshold comparators over the
+#     measurement channels.
+#   * ~~**The FIFO.**~~ MODELLED. A 32-entry x/y/z queue that fills at the
+#     output data rate while FIFO_MODE is not bypass, drains through a burst
+#     read of 0x32-0x37, reflects its depth into FIFO_STATUS.ENTRIES and raises
+#     INT_SOURCE.WATERMARK at FIFO_CTL.SAMPLES. Still NOT modelled inside it:
+#     stream mode's drop-OLDEST policy (both non-bypass modes stop at 32 here),
+#     trigger mode, and the OVERRUN bit.
+#   * **The OFSX/Y/Z offset trim,** the measure/sleep bits of POWER_CTL, the
+#     INT_INVERT and SELF_TEST bits, and the DATA_FORMAT JUSTIFY bit (D2):
+#     output is always right-justified with sign extension.
+type: adxl345
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x53
+    auto_increment: true
+    registers:
+      # Table 16 (datasheet Rev. 0, page 14) in full, with the reset value that
+      # table states. The configuration registers are storage: a driver writes
+      # them and reads back what it wrote. Their EFFECTS are not simulated
+      # except where the header says otherwise.
+      #
+      # Declaring them all is not cosmetic. The hand-written model served six
+      # addresses and returned 0x00 for every other one, so BW_RATE read 0x00
+      # for a documented 0x0A, INT_SOURCE read 0x00 for 0x02, and every write to
+      # the sixteen R/W configuration registers was discarded — a
+      # configure-then-verify sequence could not pass.
+      - { name: DEVID,          addr: 0x00, width: 1, endian: le, access: r,  reset: 0xE5 }
+      - { name: THRESH_TAP,     addr: 0x1D, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: OFSX,           addr: 0x1E, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: OFSY,           addr: 0x1F, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: OFSZ,           addr: 0x20, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: DUR,            addr: 0x21, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: Latent,         addr: 0x22, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: Window,         addr: 0x23, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: THRESH_ACT,     addr: 0x24, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: THRESH_INACT,   addr: 0x25, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TIME_INACT,     addr: 0x26, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: ACT_INACT_CTL,  addr: 0x27, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: THRESH_FF,      addr: 0x28, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TIME_FF,        addr: 0x29, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: TAP_AXES,       addr: 0x2A, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: ACT_TAP_STATUS, addr: 0x2B, width: 1, endian: le, access: r,  reset: 0x00 }
+      # Datasheet Table 7/8: BW_RATE[3:0] is the output-data-rate code. The
+      # named field is what the `sample` timer's `period_from` reads.
+      - name: BW_RATE
+        addr: 0x2C
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x0A
+        bits:
+          - { name: RATE,     shift: 0, width_bits: 4 }
+          - { name: LOW_POWER, shift: 4 }
+      - { name: POWER_CTL,      addr: 0x2D, width: 1, endian: le, access: rw, reset: 0x00 }
+      - name: INT_ENABLE
+        addr: 0x2E
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00
+        bits: [{ name: DATA_READY, shift: 7 }]
+      - name: INT_MAP
+        addr: 0x2F
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00
+        bits: [{ name: DATA_READY, shift: 7 }]
+      # INT_SOURCE is read-only to the MASTER; the DEVICE sets DATA_READY in it,
+      # which a rule does through `set:` (that path bypasses `access:`, as
+      # silicon does). Reset 0x02 is the datasheet's power-on watermark bit.
+      - name: INT_SOURCE
+        addr: 0x30
+        width: 1
+        endian: le
+        access: r
+        reset: 0x02
+        bits:
+          - { name: OVERRUN,   shift: 0 }
+          - { name: WATERMARK, shift: 1 }
+          - { name: DATA_READY, shift: 7 }
+      - name: DATA_FORMAT
+        addr: 0x31
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: RANGE,    shift: 0, width_bits: 2 }
+          - { name: JUSTIFY,  shift: 2 }
+          - { name: FULL_RES, shift: 3 }
+          - { name: INT_INVERT, shift: 5 }
+          - { name: SPI,      shift: 6 }
+          - { name: SELF_TEST, shift: 7 }
+      # DATAX0/Y0/Z0 are width 2, so they span 0x32-0x37 and cover the DATAX1,
+      # DATAY1 and DATAZ1 high bytes the datasheet names separately.
+      #
+      # `scale_from` gives counts-per-g and `clamp_from` gives the count window;
+      # both read the SAME three DATA_FORMAT bits. See the table in the header.
+      - name: DATAX0
+        addr: 0x32
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: x
+        fifo: { name: samples, slot: 0 }
+        scale_from: { register: DATA_FORMAT, mask: 0x0B, map: { 0x00: 256.0, 0x01: 128.0, 0x02: 64.0, 0x03: 32.0, 0x08: 256.0, 0x09: 256.0, 0x0A: 256.0, 0x0B: 256.0 } }
+        encode:
+          clamp_from:
+            - register: DATA_FORMAT
+              mask: 0x0B
+              map:
+                0x00: { min: -512.0,  max: 512.0 }
+                0x01: { min: -512.0,  max: 512.0 }
+                0x02: { min: -512.0,  max: 512.0 }
+                0x03: { min: -512.0,  max: 512.0 }
+                0x08: { min: -512.0,  max: 512.0 }
+                0x09: { min: -1024.0, max: 1024.0 }
+                0x0A: { min: -2048.0, max: 2048.0 }
+                0x0B: { min: -4096.0, max: 4096.0 }
+      - name: DATAY0
+        addr: 0x34
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: y
+        fifo: { name: samples, slot: 1 }
+        scale_from: { register: DATA_FORMAT, mask: 0x0B, map: { 0x00: 256.0, 0x01: 128.0, 0x02: 64.0, 0x03: 32.0, 0x08: 256.0, 0x09: 256.0, 0x0A: 256.0, 0x0B: 256.0 } }
+        encode:
+          clamp_from:
+            - register: DATA_FORMAT
+              mask: 0x0B
+              map:
+                0x00: { min: -512.0,  max: 512.0 }
+                0x01: { min: -512.0,  max: 512.0 }
+                0x02: { min: -512.0,  max: 512.0 }
+                0x03: { min: -512.0,  max: 512.0 }
+                0x08: { min: -512.0,  max: 512.0 }
+                0x09: { min: -1024.0, max: 1024.0 }
+                0x0A: { min: -2048.0, max: 2048.0 }
+                0x0B: { min: -4096.0, max: 4096.0 }
+      - name: DATAZ0
+        addr: 0x36
+        width: 2
+        endian: le
+        access: r
+        signed: true
+        source: z
+        fifo: { name: samples, slot: 2, pop: true }
+        scale_from: { register: DATA_FORMAT, mask: 0x0B, map: { 0x00: 256.0, 0x01: 128.0, 0x02: 64.0, 0x03: 32.0, 0x08: 256.0, 0x09: 256.0, 0x0A: 256.0, 0x0B: 256.0 } }
+        encode:
+          clamp_from:
+            - register: DATA_FORMAT
+              mask: 0x0B
+              map:
+                0x00: { min: -512.0,  max: 512.0 }
+                0x01: { min: -512.0,  max: 512.0 }
+                0x02: { min: -512.0,  max: 512.0 }
+                0x03: { min: -512.0,  max: 512.0 }
+                0x08: { min: -512.0,  max: 512.0 }
+                0x09: { min: -1024.0, max: 1024.0 }
+                0x0A: { min: -2048.0, max: 2048.0 }
+                0x0B: { min: -4096.0, max: 4096.0 }
+      # Datasheet Table 22/23. FIFO_MODE picks bypass (00) / FIFO (01) /
+      # stream (10) / trigger (11); SAMPLES is the watermark, in ENTRIES.
+      - name: FIFO_CTL
+        addr: 0x38
+        width: 1
+        endian: le
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: SAMPLES,   shift: 0, width_bits: 5 }
+          - { name: TRIGGER,   shift: 5 }
+          - { name: FIFO_MODE, shift: 6, width_bits: 2 }
+      # ENTRIES is how many samples the FIFO holds, 0..32. The DEVICE writes
+      # it (the `count:` reflection below), so it is read-only to the master.
+      - name: FIFO_STATUS
+        addr: 0x39
+        width: 1
+        endian: le
+        access: r
+        reset: 0x00
+        bits:
+          - { name: ENTRIES,   shift: 0, width_bits: 6 }
+          - { name: FIFO_TRIG, shift: 7 }
+
+  # The two interrupt pads. Optional: a board that wires neither binds nothing.
+  outputs: [INT1, INT2]
+  output_pins:
+    INT1: int1_pin
+    INT2: int2_pin
+
+  # ── The 32-entry sample FIFO ────────────────────────────────────────────
+  #
+  # Datasheet "FIFO" (Rev. 0, page 21). The part collects x/y/z samples at the
+  # output data rate into a 32-entry queue; a burst read of 0x32..0x37 walks
+  # one sample out of it, and INT_SOURCE.WATERMARK rises once the queue holds
+  # FIFO_CTL.SAMPLES entries.
+  #
+  # ⚠️ **Bypass mode needs no second switch.** In bypass (FIFO_MODE = 00) the
+  # `fill:` guard is false, so nothing is ever pushed, so the queue is always
+  # empty, so the three data registers fall through to their live `source:` —
+  # which is byte for byte what this part did before the FIFO existed, and what
+  # `adxl345_migration_parity.rs`'s golden transcript still asserts.
+  #
+  # ⚠️ **The overflow policy is `drop_newest`.** Datasheet: in FIFO mode the
+  # part "collects up to 32 values and then stops collecting data". Stream mode
+  # (10) is the drop_oldest one and is NOT distinguished here — both modes fill
+  # and both stop at 32. Needs: a field-driven overflow policy, the same shape
+  # `period_from` has for a rate.
+  fifos:
+    - name: samples
+      depth: 32
+      overflow: drop_newest
+      fill:
+        timer: sample
+        when: "field(FIFO_CTL.FIFO_MODE) != 0"
+        # ⚠️ `reported(DATAX0)`, not `input(x)`. The ADXL345's counts-per-g
+        # comes from `scale_from` reading the DATA_FORMAT range bits, which is
+        # not part of `encode:` — so `input(x)` is the raw value in g and a
+        # FIFO packed from it would hold 1 where the data register reports 256.
+        # `reported()` is the word the register would put on the wire right
+        # now, which is what a FIFO holds. 16 bits each, two's complement.
+        pack:
+          - { expr: "reported(DATAX0)", width_bits: 16 }
+          - { expr: "reported(DATAY0)", width_bits: 16 }
+          - { expr: "reported(DATAZ0)", width_bits: 16 }
+      count: { register: FIFO_STATUS, field: ENTRIES }
+      watermark:
+        entries_from: { register: FIFO_CTL, field: SAMPLES }
+        set: INT_SOURCE.WATERMARK
+
+  timers:
+    # ── The output data rate is a REGISTER, not a constant ────────────────
+    #
+    # BW_RATE[3:0] selects one of sixteen rates (datasheet Table 7/8). The
+    # silicon divides a 3200 Hz master rate by powers of two, so every period
+    # below is 312.5 µs × 2^(15 − code); `period_us` is the reset value's
+    # 100 Hz, which is what the field resolves to before firmware writes
+    # anything, and `period_from` takes over from the first write onward.
+    #
+    # ⚠️ Code 0xF is 3200 Hz, a period of 312.5 µs. The timer bank counts whole
+    # microseconds, so it is declared as 313 — a 0.16 % fast clock at the one
+    # rate where a µs is a visible fraction of the period. Every other rate is
+    # exact.
+    - name: sample
+      period_us: 10000
+      start: on_reset
+      period_from:
+        register: BW_RATE
+        field: RATE
+        table:
+          0x0: 10240000   #    0.098 Hz
+          0x1: 5120000    #    0.195 Hz
+          0x2: 2560000    #    0.39 Hz
+          0x3: 1280000    #    0.78 Hz
+          0x4: 640000     #    1.56 Hz
+          0x5: 320000     #    3.13 Hz
+          0x6: 160000     #    6.25 Hz
+          0x7: 80000      #   12.5 Hz
+          0x8: 40000      #   25 Hz
+          0x9: 20000      #   50 Hz
+          0xA: 10000      #  100 Hz — the reset value
+          0xB: 5000       #  200 Hz
+          0xC: 2500       #  400 Hz
+          0xD: 1250       #  800 Hz
+          0xE: 625        # 1600 Hz
+          0xF: 313        # 3200 Hz (312.5 µs, rounded up)
+
+  rules:
+    # A new sample is ready.
+    - on: { timer: sample }
+      do: [ { set: INT_SOURCE.DATA_READY } ]
+    # …and it reaches a pad only if firmware enabled the interrupt. INT_MAP
+    # bit 7 picks which pad: 0 ⇒ INT1, 1 ⇒ INT2.
+    - on: { timer: sample }
+      do:
+        - { pin: INT1, level: "field(INT_ENABLE.DATA_READY) && !field(INT_MAP.DATA_READY)" }
+        - { pin: INT2, level: "field(INT_ENABLE.DATA_READY) && field(INT_MAP.DATA_READY)" }
+    # Datasheet: DATA_READY "is cleared by reading data registers 0x32 to 0x37".
+    # A driver may stop after any axis, so every one of the three clears it.
+    - on: { read: DATAX0 }
+      do: [ { clear: INT_SOURCE.DATA_READY }, { pin: INT1, level: 0 }, { pin: INT2, level: 0 } ]
+    - on: { read: DATAY0 }
+      do: [ { clear: INT_SOURCE.DATA_READY }, { pin: INT1, level: 0 }, { pin: INT2, level: 0 } ]
+    - on: { read: DATAZ0 }
+      do: [ { clear: INT_SOURCE.DATA_READY }, { pin: INT1, level: 0 }, { pin: INT2, level: 0 } ]
+
+metadata:
+  label: "ADXL345 Tilt"
+  summary: "3-axis ±2/4/8/16 g digital accelerometer over I2C."
+  detail: "Analog Devices ADXL345 with the canonical 0x53 / 0x1D 7-bit address pair. The whole Table 16 register map is served at its datasheet reset values, and the three data registers follow the LIVE DATA_FORMAT: FULL_RES and the range bits set both the counts-per-g and the count at which the part saturates (±512 counts in fixed 10-bit mode at every range; ±512/1024/2048/4096 in full resolution). The DATA_READY interrupt is modelled end to end - a 100 Hz sample timer raises it, INT_ENABLE gates it, INT_MAP routes it to the INT1 or INT2 pad, and reading a data register clears it. NOT modelled: output data rates other than the 100 Hz reset value, tap/activity/free-fall detection, the FIFO, the offset trim and the JUSTIFY bit."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x53; 0x1D selects the alternate-pin variant."
+    - name: int1_pin
+      ty: str
+      doc: "Pad the INT1 output drives (e.g. \"PA0\"). Optional - an unbound pin drives nothing."
+    - name: int2_pin
+      ty: str
+      doc: "Pad the INT2 output drives. Optional."
+  labs:
+    - { board_id: adxl345-sensor-lab, chip: stm32f103, example_dir: adxl345-sensor-lab, demo_elf: demo-adxl345-sensor-lab.elf }
+  inputs:
+    # The rest sample the hand-written model seeded: 1 g on Z, which at the
+    # DATA_FORMAT reset value is 256 counts.
+    - { key: x, label: "X", unit: g, min: -16, max: 16, default: 0 }
+    - { key: y, label: "Y", unit: g, min: -16, max: 16, default: 0 }
+    - { key: z, label: "Z", unit: g, min: -16, max: 16, default: 1 }

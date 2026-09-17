@@ -4,7 +4,6 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-pub mod adxl345;
 pub mod aht20;
 pub mod apa102;
 pub mod atecc608a;
@@ -23,16 +22,13 @@ pub mod declarative_gpio;
 pub mod declarative_i2c;
 pub mod declarative_regs;
 pub mod declarative_spi;
+pub mod declarative_uart;
 pub mod dht22;
 pub mod drv2605;
-pub mod ds3231;
 pub mod h_bridge_motor;
-pub mod hc05;
 pub mod hc595;
 pub mod hc595_7seg;
-pub mod hx711;
 pub mod i2c_factory;
-pub mod ili9341;
 pub mod ili9341_parallel;
 pub mod inmp441;
 pub mod iolink_master;
@@ -49,7 +45,6 @@ pub mod max7219;
 pub mod mcp2515;
 pub mod microsd;
 pub mod mlx90640;
-pub mod mpu6050;
 pub mod mq6;
 /// Shared fixture for the per-controller TCA9548A coverage tests. Each I²C
 /// controller family exercises the switch from its OWN test module (the
@@ -57,11 +52,9 @@ pub mod mq6;
 /// topology under test lives here rather than being copied six times.
 #[cfg(test)]
 pub(crate) mod mux_fixture;
-pub mod neo6m;
 pub mod nrf24l01;
 pub mod ntc_thermistor;
 pub mod pca9685;
-pub mod pcd8544;
 pub mod pn532;
 pub mod potentiometer;
 pub mod rc522;
@@ -74,9 +67,7 @@ pub mod servo;
 pub mod seven_seg_font;
 pub mod seven_segment;
 pub mod sgp41;
-pub mod sh1107;
 pub mod shm_i2c;
-pub mod sim800l;
 pub mod sn74hc165;
 pub mod soil_moisture;
 pub mod sps30;
@@ -100,7 +91,6 @@ pub mod vl53l1x;
 pub mod ws2812;
 pub mod ydlidar;
 
-pub use adxl345::Adxl345;
 pub use aht20::Aht20;
 pub use apa102::Apa102;
 pub use bg770a::QuectelBg770a;
@@ -109,7 +99,8 @@ pub use bmi270::{Bmi270, BMI270_ADDR, BMI270_CHIP_ID};
 pub use bmp280::Bmp280;
 pub use cap1188::{Cap1188, CAP1188_ADDR};
 pub use declarative_display::{
-    ssd1306, ssd1306_128x32, st7789, DeclarativeDisplayKit, GenericDisplay,
+    ili9341, pcd8544, sh1107, ssd1306, ssd1306_128x32, st7789, DeclarativeDisplayKit,
+    GenericDisplay,
 };
 pub use declarative_gpio::DeclarativeGpioDevice;
 pub use declarative_i2c::{DeclarativeI2cKit, GenericI2cDevice};
@@ -121,7 +112,6 @@ pub use i2c_factory::{
     build_external_i2c_device, build_i2c_device, build_i2c_tree, i2c_mux_child_ids,
     is_i2c_mux_type, validate_i2c_mux_topology,
 };
-pub use ili9341::Ili9341;
 pub use ili9341_parallel::{Ili9341Parallel, ParallelPins};
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,
@@ -131,17 +121,13 @@ pub use ldr::Ldr;
 pub use max30102::{Max30102, MAX30102_ADDR};
 pub use max7219::Max7219;
 pub use mlx90640::{Mlx90640, ThermalScene, MLX90640_ADDR};
-pub use mpu6050::Mpu6050;
-pub use neo6m::Neo6mGps;
 pub use ntc_thermistor::NtcThermistor;
 pub use pca9685::Pca9685;
-pub use pcd8544::Pcd8544;
 pub use potentiometer::Potentiometer;
 pub use rule_machine::{RuleCtx, RuleMachine};
 pub use scd41::{Scd41, SCD41_ADDR};
 pub use servo::{LedcServoDriver, McpwmServoDriver, Servo, ServoCal};
 pub use sgp41::{Sgp41, SGP41_ADDR};
-pub use sh1107::Sh1107;
 pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use sps30::{Sps30, SPS30_ADDR};

@@ -12,8 +12,8 @@
 use std::collections::HashMap;
 
 use labwired_config::{
-    DeviceTimer, Encode, Endian, LabDescriptor, ObservableSpec, ReadAction, RegisterSpec,
-    TimerStart, TimingAction, WriteAction,
+    CalendarField, DeviceTimer, Encode, Endian, LabDescriptor, ObservableSpec, ReadAction,
+    RegisterSpec, Rounding, TimerStart, TimingAction, WriteAction,
 };
 
 use crate::peripherals::kit::LabRef;
@@ -40,8 +40,65 @@ pub(crate) fn width_max(width: u8) -> f64 {
     ((1u64 << (8 * width as u64)) - 1) as f64
 }
 
+/// Pack an integer into binary-coded decimal: two decimal digits per byte,
+/// tens in the high nibble. A value with more digits than `width` bytes hold
+/// saturates at all-nines rather than spilling into a neighbouring field — a
+/// counter chain runs out of digits, it does not carry into the next register.
+/// Negative values are not representable and clamp to 0.
+pub(crate) fn to_bcd(value: i64, width: u8) -> u32 {
+    let digits = 2 * u32::from(width).min(4);
+    let max = 10i64.pow(digits) - 1;
+    let mut v = value.clamp(0, max);
+    let mut out: u32 = 0;
+    for d in 0..digits {
+        out |= ((v % 10) as u32) << (4 * d);
+        v /= 10;
+    }
+    out
+}
+
+/// Unpack binary-coded decimal into an integer. A nibble above 9 is not a
+/// decimal digit; it is decoded the way the silicon's counter chain reads it
+/// (`digit * 10^k` with the raw nibble as the digit), so `0x1A` is 20 rather
+/// than a load error — the master put it on the wire and the part has to
+/// answer.
+pub(crate) fn from_bcd(word: u32, width: u8) -> i64 {
+    let digits = 2 * u32::from(width).min(4);
+    let mut out: i64 = 0;
+    for d in (0..digits).rev() {
+        out = out * 10 + i64::from((word >> (4 * d)) & 0xF);
+    }
+    out
+}
+
+/// The saturation window in raw counts: the constant `clamp_min`/`clamp_max`
+/// pair, INTERSECTED with every `clamp_from` entry whose register field is
+/// present in its map. An unmapped field value is neutral, exactly as an
+/// unmapped `scale_from` factor is 1.0.
+pub(crate) fn resolve_clamp(
+    enc: Option<&Encode>,
+    reg_values: &HashMap<String, u32>,
+) -> (Option<f64>, Option<f64>) {
+    let Some(e) = enc else {
+        return (None, None);
+    };
+    let (mut lo, mut hi) = (e.clamp_min, e.clamp_max);
+    for cf in &e.clamp_from {
+        let regval = reg_values.get(&cf.register).copied().unwrap_or(0);
+        let field = (regval >> cf.shift as u32) & cf.mask;
+        let Some(w) = cf.map.get(&field) else {
+            continue;
+        };
+        lo = Some(lo.map_or(w.min, |c: f64| c.max(w.min)));
+        hi = Some(hi.map_or(w.max, |c: f64| c.min(w.max)));
+    }
+    (lo, hi)
+}
+
 /// Apply a linear encode (scale/offset/clamp) plus an extra scale factor,
-/// yielding the raw integer packed into a `width`-byte word.
+/// yielding the raw integer packed into a `width`-byte word. The clamp window
+/// is the register's constant one; see [`encode_raw_clamped`] for the
+/// field-driven form.
 pub(crate) fn encode_raw(
     value: f64,
     enc: Option<&Encode>,
@@ -49,10 +106,12 @@ pub(crate) fn encode_raw(
     width: u8,
     signed: bool,
 ) -> u32 {
-    encode_raw_bits(value, enc, extra_scale, 8 * u32::from(width), signed)
+    let clamp = (enc.and_then(|e| e.clamp_min), enc.and_then(|e| e.clamp_max));
+    encode_raw_bits(value, enc, extra_scale, 8 * u32::from(width), signed, clamp)
 }
 
-/// [`encode_raw`] with the destination width given in BITS.
+/// [`encode_raw`] with the destination width given in BITS and the saturation
+/// window supplied by the caller.
 ///
 /// A bit width rather than a byte width because a [`labwired_config::FieldSpec`]
 /// is not byte-sized: the MMA8451Q's 14-bit left-justified output saturates at
@@ -61,24 +120,44 @@ pub(crate) fn encode_raw(
 /// 12288 counts, which the field mask then truncates into a NEGATIVE
 /// acceleration. Saturating at the field's real width is what a converter does
 /// at the end of its range.
+///
+/// The window is a parameter rather than being read off `enc` because
+/// `encode.clamp_from` resolves it against the LIVE register file, which this
+/// function cannot see. [`resolve_clamp`] is what computes it; [`encode_raw`]
+/// passes the constant pair for a caller that has no register file to hand.
 pub(crate) fn encode_raw_bits(
     value: f64,
     enc: Option<&Encode>,
     extra_scale: f64,
     bits: u32,
     signed: bool,
+    clamp: (Option<f64>, Option<f64>),
 ) -> u32 {
     let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
     let offset = enc.map(|e| e.offset).unwrap_or(0.0);
     let mut raw = value * scale + offset;
-    if let Some(e) = enc {
-        if let Some(lo) = e.clamp_min {
-            raw = raw.max(lo);
-        }
-        if let Some(hi) = e.clamp_max {
-            raw = raw.min(hi);
-        }
+    if let Some(lo) = clamp.0 {
+        raw = raw.max(lo);
     }
+    if let Some(hi) = clamp.1 {
+        raw = raw.min(hi);
+    }
+    // `round:` picks how the value becomes a count. Nearest is the default and
+    // is what every descriptor written before the key existed means; `floor` is
+    // the one a counter-field decomposition needs.
+    let round = |v: f64| match enc.and_then(|e| e.round).unwrap_or_default() {
+        Rounding::Nearest => v.round(),
+        Rounding::Floor => v.floor(),
+        Rounding::Ceil => v.ceil(),
+        Rounding::Trunc => v.trunc(),
+    };
+    // BCD is the LAST step: the count is computed in decimal exactly as it is
+    // for any other register and only then packed into nibbles, so `wrap`,
+    // `clamp` and the signedness rules below all mean what they say. Packed in
+    // whole BYTES, because a nibble pair is what BCD IS — a sub-byte FIELD is
+    // never BCD, so the bit width rounds up here and nowhere else.
+    let bcd = enc.map(|e| e.bcd).unwrap_or(false);
+    let bcd_width = (bits / 8).max(1) as u8;
     let mask = if bits >= 32 {
         u32::MAX
     } else {
@@ -91,16 +170,177 @@ pub(crate) fn encode_raw_bits(
     // on the count the counter would really be showing rather than on the
     // clamp. See `labwired_config::Encode::wrap` for why this is in counts.
     if let Some(w) = enc.and_then(|e| e.wrap) {
-        let v = (raw.round() as i64).rem_euclid(i64::from(w.get()));
-        return (v as u32) & mask;
+        let v = (round(raw) as i64).rem_euclid(i64::from(w.get()));
+        return if bcd {
+            to_bcd(v, bcd_width) & mask
+        } else {
+            (v as u32) & mask
+        };
+    }
+    if bcd {
+        return to_bcd(round(raw) as i64, bcd_width) & mask;
     }
     if signed {
         let lo = -(2f64.powi((bits - 1) as i32));
         let hi = 2f64.powi((bits - 1) as i32) - 1.0;
-        let v = raw.round().clamp(lo, hi) as i64;
+        let v = round(raw).clamp(lo, hi) as i64;
         (v as u32) & mask
     } else {
-        raw.round().clamp(0.0, f64::from(mask)) as u32
+        round(raw).clamp(0.0, f64::from(mask)) as u32
+    }
+}
+
+/// The inverse of [`encode_raw`]'s LINEAR half: a raw count back to the
+/// engineering value that would encode to it.
+///
+/// This is what makes `set_input:` the exact inverse of `input()` on a
+/// register device — a rule that writes back what it read changes nothing.
+///
+/// ⚠️ Only the linear half inverts. `clamp`, `wrap` and `round` are one-way by
+/// construction (they throw information away on purpose), and they are applied
+/// again on the very next read, so the round trip a rule can observe is
+/// exactly the one this function provides.
+pub(crate) fn decode_raw(count: i64, enc: Option<&Encode>, extra_scale: f64, width: u8) -> f64 {
+    let decoded = if enc.map(|e| e.bcd).unwrap_or(false) {
+        from_bcd(count as u32, width)
+    } else {
+        count
+    };
+    let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
+    let offset = enc.map(|e| e.offset).unwrap_or(0.0);
+    // A zero scale is a degenerate descriptor; 0.0 keeps this total, the same
+    // rule the expression evaluator's divide-by-zero has.
+    if scale == 0.0 {
+        return 0.0;
+    }
+    (decoded as f64 - offset) / scale
+}
+
+/// The write dual of the `bcd` encode: the word the master put on the wire,
+/// decoded to the integer the model stores. A register that is not BCD stores
+/// what was written, unchanged.
+pub(crate) fn decode_write(reg: &RegisterSpec, written: u32) -> u32 {
+    match reg.encode.as_ref() {
+        Some(e) if e.bcd => {
+            // `value_mask:` — the masked bits are the number and the rest are
+            // flags the master wrote verbatim. The clamp applies to the NUMBER
+            // only; a flag is not in range of anything.
+            let mask = e.value_mask.unwrap_or(u32::MAX);
+            let mut v = from_bcd(written & mask, reg.width);
+            if let Some(lo) = e.clamp_min {
+                v = v.max(lo as i64);
+            }
+            if let Some(hi) = e.clamp_max {
+                v = v.min(hi as i64);
+            }
+            (v as u32 & mask) | (written & !mask)
+        }
+        _ => written,
+    }
+}
+
+/// True when the word this register STORES is not the word the master put on
+/// the wire: a `bcd:` register stores decimal, and a `calendar:` register's
+/// write lands on the sourced clock channel. Both need the translated write
+/// path rather than the plain mask-and-store one.
+pub(crate) fn write_is_translated(reg: &RegisterSpec) -> bool {
+    reg.calendar.is_some() || reg.encode.as_ref().is_some_and(|e| e.bcd)
+}
+
+/// A civil instant, UTC, with no leap seconds: the seven fields a DS3231-class
+/// RTC holds. `weekday` is 1..=7 with Sunday = 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Civil {
+    pub year: i64,
+    pub month: i64,
+    pub day: i64,
+    pub hour: i64,
+    pub minute: i64,
+    pub second: i64,
+    pub weekday: i64,
+}
+
+/// Unix seconds → civil fields. Howard Hinnant's `civil_from_days`, which is
+/// the algorithm the hand-written DS3231 model carried, so the port reproduces
+/// its transcript byte for byte.
+pub(crate) fn civil_from_unix(unix: i64) -> Civil {
+    let days = unix.div_euclid(86_400);
+    let mut rem = unix.rem_euclid(86_400);
+    let hour = rem / 3600;
+    rem %= 3600;
+    let minute = rem / 60;
+    let second = rem % 60;
+    // 1970-01-01 was a Thursday; Sunday = 1 makes Thursday 5.
+    let weekday = (days + 4).rem_euclid(7) + 1;
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as i64;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as i64;
+    let year = if month <= 2 { y + 1 } else { y };
+    Civil {
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        weekday,
+    }
+}
+
+/// Civil fields → Unix seconds. Hinnant's `days_from_civil`, the exact inverse
+/// of [`civil_from_unix`]; `weekday` is ignored because the date already
+/// determines it.
+pub(crate) fn unix_from_civil(c: Civil) -> i64 {
+    let y = if c.month <= 2 { c.year - 1 } else { c.year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = (y - era * 400) as u64;
+    let m = c.month as u64;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + c.day as u64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe as i64 - 719_468;
+    days * 86_400 + c.hour * 3600 + c.minute * 60 + c.second
+}
+
+/// Read one calendar field out of a civil instant.
+pub(crate) fn calendar_get(c: Civil, f: CalendarField) -> i64 {
+    match f {
+        CalendarField::Second => c.second,
+        CalendarField::Minute => c.minute,
+        CalendarField::Hour => c.hour,
+        CalendarField::Weekday => c.weekday,
+        CalendarField::Day => c.day,
+        CalendarField::Month => c.month,
+        // The two-digit year an RTC register holds.
+        CalendarField::Year => c.year.rem_euclid(100),
+    }
+}
+
+/// Replace one calendar field of a civil instant, clamped to the range the
+/// field can hold so a nonsense write cannot roll the whole clock somewhere
+/// else. `Year` sets the two-digit year within the century the instant is
+/// already in, which is what an RTC that holds two digits can express.
+pub(crate) fn calendar_set(c: &mut Civil, f: CalendarField, v: i64) {
+    match f {
+        CalendarField::Second => c.second = v.clamp(0, 59),
+        CalendarField::Minute => c.minute = v.clamp(0, 59),
+        CalendarField::Hour => c.hour = v.clamp(0, 23),
+        // The weekday counter is independent silicon on a DS3231 — it is a
+        // 1..=7 counter the master sets, not a function of the date — but the
+        // model derives it from the date, so a write to it is accepted and
+        // does not move the instant. Stated in `docs/part-packs.md`.
+        CalendarField::Weekday => c.weekday = v.clamp(1, 7),
+        CalendarField::Day => c.day = v.clamp(1, 31),
+        CalendarField::Month => c.month = v.clamp(1, 12),
+        CalendarField::Year => {
+            let century = c.year.div_euclid(100) * 100;
+            c.year = century + v.clamp(0, 99);
+        }
     }
 }
 
@@ -227,6 +467,9 @@ pub(crate) fn register_read_bytes(
                 extra,
                 u32::from(f.width_bits),
                 f.signed,
+                // A composite field resolves its own `clamp_from` against the
+                // same register file the whole word does.
+                resolve_clamp(f.encode.as_ref(), reg_values),
             );
             let mask = if f.width_bits >= 32 {
                 u32::MAX
@@ -253,7 +496,15 @@ pub(crate) fn register_read_bytes(
         return pack(raw, reg.width, reg.endian);
     }
     let raw = if let Some(src) = selected_source(reg, reg_values) {
-        let value = slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
+        let mut value = slots.get(src).copied().unwrap_or(0.0);
+        // `calendar:` — the sourced channel carries Unix seconds and this
+        // register reports ONE civil field of that instant. Decomposed before
+        // any scaling, so `encode:` on such a register (in practice `bcd:`)
+        // still means what it means everywhere else.
+        if let Some(f) = reg.calendar {
+            value = calendar_get(civil_from_unix(value as i64), f) as f64;
+        }
+        let value = value * reg.source_scale.unwrap_or(1.0);
         match reg.resolution {
             Some(base) => {
                 let resolution = reg
@@ -262,16 +513,32 @@ pub(crate) fn register_read_bytes(
                     .fold(base, |acc, sf| acc * scale_from_one(sf, reg_values));
                 divide_raw(value, resolution, reg.width)
             }
-            None => encode_raw(
+            None => encode_raw_bits(
                 value,
                 reg.encode.as_ref(),
                 scale_from_product(reg, reg_values),
-                reg.width,
+                8 * u32::from(reg.width),
                 reg.signed,
+                resolve_clamp(reg.encode.as_ref(), reg_values),
             ),
         }
     } else {
-        reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
+        let stored = reg_values.get(&reg.name).copied().unwrap_or(reg.reset);
+        // A BCD storage register holds its value in DECIMAL (so `reg()` and
+        // every guard reading it are in decimal) and puts nibbles on the wire.
+        //
+        // `value_mask:` splits the word: the masked bits are the number and
+        // everything else is a plain flag, served back exactly as written. That
+        // is the DS3231 alarm-byte shape — a BCD number and its A1Mx mask bit
+        // in one byte — and without it one of the two has to be thrown away.
+        match reg.encode.as_ref() {
+            Some(e) if e.bcd => {
+                let mask = e.value_mask.unwrap_or(u32::MAX);
+                let number = to_bcd(i64::from(stored & mask), reg.width);
+                (number & mask) | (stored & !mask)
+            }
+            _ => stored,
+        }
     };
     pack(raw, reg.width, reg.endian)
 }
@@ -360,6 +627,11 @@ pub(crate) fn read_clears(reg: &RegisterSpec) -> bool {
 
 // ─── Tier 1: device timers ─────────────────────────────────────────────────
 
+/// Resolve `(register, field)` to that field's `(shift, mask)` — the one
+/// lookup [`TimerBank::apply_period_from`] needs from the owning device, named
+/// so the signature reads as what it is.
+pub(crate) type FieldBitsFn<'a> = dyn Fn(&str, &str) -> Option<(u8, u32)> + 'a;
+
 /// The declared [`DeviceTimer`]s of one device plus their running deadlines.
 ///
 /// Shared by both declarative engines: a timer is a property of the PART, not
@@ -371,21 +643,31 @@ pub(crate) struct TimerBank {
     timers: Vec<DeviceTimer>,
     /// Absolute µs at which timer `i` next fires; `None` ⇒ not running.
     deadlines: Vec<Option<u64>>,
+    /// Timer `i`'s EFFECTIVE interval in µs — the declared `period_us` /
+    /// `after_us`, or whatever [`labwired_config::TimerPeriodFrom`] last
+    /// resolved to. Cached rather than recomputed per firing so the hot path
+    /// (`due_by_timer`, called on every time advance of every declarative
+    /// device) never touches the register file; the owning device refreshes it
+    /// through [`apply_period_from`](Self::apply_period_from) after a write.
+    periods: Vec<Option<u64>>,
 }
 
 impl TimerBank {
     /// Arm the `on_reset` timers at power-on; leave `manual` ones idle.
     pub(crate) fn new(timers: &[DeviceTimer]) -> Self {
+        let periods: Vec<Option<u64>> = timers.iter().map(Self::declared_interval).collect();
         let deadlines = timers
             .iter()
-            .map(|t| match t.start {
-                TimerStart::OnReset => Self::interval(t),
+            .zip(periods.iter())
+            .map(|(t, p)| match t.start {
+                TimerStart::OnReset => *p,
                 TimerStart::Manual => None,
             })
             .collect();
         Self {
             timers: timers.to_vec(),
             deadlines,
+            periods,
         }
     }
 
@@ -393,11 +675,95 @@ impl TimerBank {
         self.timers.is_empty()
     }
 
-    /// The declared delay of a timer: its period, or its one-shot delay.
+    /// The DECLARED delay of a timer: its period, or its one-shot delay.
     /// Validation guarantees exactly one is present and non-zero, so a
     /// descriptor that slipped through with neither simply never runs.
-    fn interval(t: &DeviceTimer) -> Option<u64> {
+    ///
+    /// This is the reset-value interval. A timer with a
+    /// [`TimerPeriodFrom`](labwired_config::TimerPeriodFrom) overrides it from
+    /// the register file; see [`apply_period_from`](Self::apply_period_from).
+    fn declared_interval(t: &DeviceTimer) -> Option<u64> {
         t.period_us.or(t.after_us).filter(|us| *us > 0)
+    }
+
+    /// Timer `i`'s effective interval — the cached one, which is the declared
+    /// one until a `period_from` resolves to something else.
+    fn interval(&self, i: usize) -> Option<u64> {
+        self.periods[i]
+    }
+
+    /// Re-resolve every `period_from` timer against the register file.
+    ///
+    /// The owning device calls this wherever a register write lands (and once
+    /// after attach), because a rate register is exactly the thing firmware
+    /// writes. `reg` reads a register's stored word by name and `field_bits`
+    /// resolves a named `bits:` field to `(shift, mask)` — the same two lookups
+    /// [`RuleCtx`](super::rule_machine::RuleCtx) offers, so the field a rule
+    /// reads and the field a timer reads cannot disagree.
+    ///
+    /// ⚠️ A RUNNING periodic timer whose period changed is re-anchored to
+    /// `now + the new period`, not rescheduled from its old deadline: firmware
+    /// that rewrote the rate register restarted the divider, and keeping the
+    /// old anchor would make the first interval after the write a length
+    /// neither setting has.
+    ///
+    /// An unmapped field value is NEUTRAL — the declared `period_us` stays in
+    /// force — the same rule `scale_from` and `clamp_from` have, so a reserved
+    /// encoding cannot silently stop the part's clock.
+    pub(crate) fn apply_period_from(
+        &mut self,
+        now: u64,
+        reg: &dyn Fn(&str) -> Option<u32>,
+        field_bits: &FieldBitsFn<'_>,
+    ) {
+        for i in 0..self.timers.len() {
+            let Some(spec) = self.timers[i].period_from.clone() else {
+                continue;
+            };
+            let Some(word) = reg(&spec.register) else {
+                continue;
+            };
+            let (shift, mask) = match (&spec.field, spec.mask) {
+                (Some(f), _) => match field_bits(&spec.register, f) {
+                    Some(sm) => sm,
+                    None => continue,
+                },
+                (None, Some(m)) => (spec.shift, m << spec.shift),
+                (None, None) => continue,
+            };
+            let value = (word & mask) >> shift;
+            let resolved = match spec.table.get(&value) {
+                Some(us) if *us > 0 => *us,
+                // Unmapped (or a zero the validator let through): neutral.
+                _ => match Self::declared_interval(&self.timers[i]) {
+                    Some(us) => us,
+                    None => continue,
+                },
+            };
+            if self.periods[i] == Some(resolved) {
+                continue;
+            }
+            self.periods[i] = Some(resolved);
+            if self.deadlines[i].is_some() {
+                self.deadlines[i] = Some(now.saturating_add(resolved));
+            }
+        }
+    }
+
+    /// Whether any timer's period is field-driven, so a device can skip the
+    /// refresh entirely — which is every descriptor written before the key.
+    pub(crate) fn has_field_driven_period(&self) -> bool {
+        self.timers.iter().any(|t| t.period_from.is_some())
+    }
+
+    /// Timer `name`'s effective period in µs — diagnostics and tests, so a
+    /// test can assert the RESOLVED rate rather than inferring it from firing
+    /// counts.
+    pub(crate) fn period_us_of(&self, name: &str) -> Option<u64> {
+        self.timers
+            .iter()
+            .position(|t| t.name == name)
+            .and_then(|i| self.periods[i])
     }
 
     /// (Re)start every timer whose `start_on_write` names `register` and whose
@@ -416,7 +782,7 @@ impl TimerBank {
             if trigger.mask.is_some_and(|m| stored & m == 0) {
                 continue;
             }
-            self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+            self.deadlines[i] = self.periods[i].map(|us| now.saturating_add(us));
         }
     }
 
@@ -429,9 +795,9 @@ impl TimerBank {
     /// action goes through here, so a rule and a `start_on_write` arm the same
     /// deadline list rather than two.
     pub(crate) fn start_named(&mut self, name: &str, now: u64) {
-        for (i, t) in self.timers.iter().enumerate() {
-            if t.name == name {
-                self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+        for i in 0..self.timers.len() {
+            if self.timers[i].name == name {
+                self.deadlines[i] = self.interval(i).map(|us| now.saturating_add(us));
             }
         }
     }
@@ -482,8 +848,12 @@ impl TimerBank {
             // Reschedule a periodic timer from its DEADLINE, not from `now`, so
             // it does not drift with the service cadence; a one-shot goes idle
             // until something starts it again.
+            // Periodic timers reschedule from their own EFFECTIVE period,
+            // which `period_from` may have changed since the last firing; a
+            // one-shot (`after_us`, no `period_us`) goes idle.
             self.deadlines[i] = self.timers[i]
                 .period_us
+                .and(self.periods[i])
                 .filter(|p| *p > 0)
                 .map(|period| deadline.saturating_add(period));
             fired += 1;
@@ -587,6 +957,43 @@ pub(crate) fn validate_timers(
                 );
             }
         }
+        if let Some(spec) = &t.period_from {
+            anyhow::ensure!(
+                known(&spec.register),
+                "timer '{}' takes its period from '{}', which is not a declared register",
+                t.name,
+                spec.register
+            );
+            anyhow::ensure!(
+                spec.field.is_some() != spec.mask.is_some(),
+                "timer '{}' period_from must name exactly one of `field:` and `mask:`",
+                t.name
+            );
+            anyhow::ensure!(
+                !spec.table.is_empty(),
+                "timer '{}' period_from has an empty `table:`, so every field value would be \
+                 unmapped and the key would change nothing",
+                t.name
+            );
+            for (value, us) in &spec.table {
+                anyhow::ensure!(
+                    *us > 0,
+                    "timer '{}' period_from maps field value {value} to a zero period, which \
+                     would fire without bound",
+                    t.name
+                );
+            }
+            // A field-driven PERIOD on a one-shot is a contradiction: `after_us`
+            // is a delay measured once, and a table of repeating rates has
+            // nothing to say about it.
+            anyhow::ensure!(
+                t.period_us.is_some(),
+                "timer '{}' declares period_from but no period_us — period_us is the period the \
+                 source register's RESET value gives, and without it the part has no rate before \
+                 firmware writes anything",
+                t.name
+            );
+        }
         if let Some(trigger) = &t.start_on_write {
             if !known(&trigger.register) {
                 anyhow::bail!(
@@ -609,6 +1016,7 @@ mod tests {
     fn reg(name: &str, addr: u16, width: u8, endian: Endian, source: Option<&str>) -> RegisterSpec {
         RegisterSpec {
             name: name.into(),
+            fifo: None,
             addr,
             width,
             endian,
@@ -629,6 +1037,7 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            calendar: None,
             zero_unless: None,
             source_from: None,
         }
@@ -640,6 +1049,7 @@ mod tests {
         use std::collections::HashMap;
         let r = RegisterSpec {
             name: "DATAX".into(),
+            fifo: None,
             addr: 0x32,
             width: 2,
             endian: Endian::Le,
@@ -653,6 +1063,10 @@ mod tests {
                 clamp_min: None,
                 clamp_max: None,
                 wrap: None,
+                bcd: false,
+                value_mask: None,
+                round: None,
+                clamp_from: vec![],
             }),
             scale_from: vec![],
             source_scale: None,
@@ -666,6 +1080,7 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            calendar: None,
             zero_unless: None,
             source_from: None,
         };
@@ -717,6 +1132,7 @@ mod tests {
             after_us: Option::None,
             start: TimerStart::OnReset,
             start_on_write: Option::None,
+            period_from: None,
             on_fire: vec![TimingAction::SetBits {
                 register: name.into(),
                 bits,
@@ -752,6 +1168,7 @@ mod tests {
             after_us: Option::None,
             start: TimerStart::OnReset,
             start_on_write: Option::None,
+            period_from: None,
             on_fire: vec![TimingAction::SetBits {
                 register: "S".into(),
                 bits: 1,
@@ -777,6 +1194,7 @@ mod tests {
             after_us: Option::None,
             start: TimerStart::OnReset,
             start_on_write: Option::None,
+            period_from: None,
             on_fire: vec![TimingAction::SetBits {
                 register: "S".into(),
                 bits: 1,
@@ -824,6 +1242,7 @@ mod tests {
         // (scale 4.0); internal °C at bits[15:4] signed 12-bit, 0.0625°C/LSB (16.0).
         let r = RegisterSpec {
             name: "OUT".into(),
+            fifo: None,
             addr: 0,
             width: 4,
             endian: Endian::Be,
@@ -848,6 +1267,10 @@ mod tests {
                         clamp_min: None,
                         clamp_max: None,
                         wrap: None,
+                        bcd: false,
+                        value_mask: None,
+                        round: None,
+                        clamp_from: vec![],
                     }),
                     scale_from: vec![],
                 },
@@ -862,6 +1285,10 @@ mod tests {
                         clamp_min: None,
                         clamp_max: None,
                         wrap: None,
+                        bcd: false,
+                        value_mask: None,
+                        round: None,
+                        clamp_from: vec![],
                     }),
                     scale_from: vec![],
                 },
@@ -873,6 +1300,7 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            calendar: None,
             zero_unless: None,
             source_from: None,
         };
@@ -890,6 +1318,7 @@ mod tests {
         use std::collections::HashMap;
         let r = RegisterSpec {
             name: "OUT".into(),
+            fifo: None,
             addr: 0,
             width: 4,
             endian: Endian::Be,
@@ -913,6 +1342,10 @@ mod tests {
                     clamp_min: None,
                     clamp_max: None,
                     wrap: None,
+                    bcd: false,
+                    value_mask: None,
+                    round: None,
+                    clamp_from: vec![],
                 }),
                 scale_from: vec![],
             }],
@@ -923,6 +1356,7 @@ mod tests {
             bits: vec![],
             on_read: None,
             on_write: None,
+            calendar: None,
             zero_unless: None,
             source_from: None,
         };
@@ -949,6 +1383,10 @@ mod tests {
                 clamp_min: None,
                 clamp_max: None,
                 wrap: NonZeroU32::new(4096),
+                bcd: false,
+                value_mask: None,
+                round: None,
+                clamp_from: vec![],
             }
         }
 
@@ -969,6 +1407,10 @@ mod tests {
             // over every one of the 4096 counts rather than spot-checked.
             let plain = Encode {
                 wrap: None,
+                bcd: false,
+                value_mask: None,
+                round: None,
+                clamp_from: vec![],
                 ..as5600()
             };
             for count in 0..4096u32 {
@@ -1015,6 +1457,10 @@ mod tests {
                 clamp_min: None,
                 clamp_max: None,
                 wrap: NonZeroU32::new(360),
+                bcd: false,
+                value_mask: None,
+                round: None,
+                clamp_from: vec![],
             };
             assert_eq!(encode_raw(359.0, Some(&e), 1.0, 2, false), 359);
             assert_eq!(encode_raw(360.0, Some(&e), 1.0, 2, false), 0);
@@ -1034,5 +1480,429 @@ mod tests {
             );
             assert!(serde_yaml::from_str::<Encode>("scale: 1.0\nwrap: 4096\n").is_ok());
         }
+    }
+
+    /// `encode.bcd`, `encode.round` and `encode.clamp_from` — the three keys
+    /// the DS3231 / ADXL345 ports added, tested where they live rather than
+    /// only through the parts that needed them. A key exercised by exactly one
+    /// descriptor is a key whose contract is whatever that descriptor happens
+    /// to do.
+    mod encode_keys {
+        use super::*;
+        use labwired_config::{ClampFrom, ClampWindow};
+
+        fn enc() -> Encode {
+            Encode {
+                scale: 1.0,
+                offset: 0.0,
+                clamp_min: None,
+                clamp_max: None,
+                wrap: None,
+                bcd: false,
+                value_mask: None,
+                round: None,
+                clamp_from: vec![],
+            }
+        }
+
+        #[test]
+        fn bcd_round_trips_every_two_digit_value() {
+            for v in 0..=99i64 {
+                let packed = to_bcd(v, 1);
+                assert_eq!(
+                    packed,
+                    u32::from(((v / 10) as u8) << 4 | (v % 10) as u8),
+                    "{v} packed wrong"
+                );
+                assert_eq!(from_bcd(packed, 1), v, "{v} did not round-trip");
+            }
+        }
+
+        #[test]
+        fn bcd_saturates_at_all_nines_rather_than_carrying_into_a_neighbour() {
+            // A counter chain runs out of digits; it does not spill into the
+            // register next door. 100 in one byte is 0x99, not 0x00 with a carry.
+            assert_eq!(to_bcd(100, 1), 0x99);
+            assert_eq!(to_bcd(12_345, 2), 0x9999);
+            assert_eq!(to_bcd(1234, 2), 0x1234);
+            // Negative is not representable in packed BCD.
+            assert_eq!(to_bcd(-5, 1), 0x00);
+        }
+
+        #[test]
+        fn a_nibble_above_nine_decodes_the_way_the_counter_reads_it() {
+            // The master put it on the wire and the part has to answer. 0x1A is
+            // 1*10 + 10 = 20, which is what the chain's adders produce.
+            assert_eq!(from_bcd(0x1A, 1), 20);
+            assert_eq!(from_bcd(0xFF, 1), 165);
+        }
+
+        #[test]
+        fn bcd_is_the_last_step_of_the_encode() {
+            // scale and offset happen in DECIMAL, then the count is packed.
+            let e = Encode {
+                scale: 2.0,
+                offset: 1.0,
+                ..enc()
+            };
+            let bcd = Encode {
+                bcd: true,
+                ..e.clone()
+            };
+            // 12 * 2 + 1 = 25 ⇒ 0x25, and the same encode without `bcd` is 25.
+            assert_eq!(encode_raw(12.0, Some(&e), 1.0, 1, false), 25);
+            assert_eq!(encode_raw(12.0, Some(&bcd), 1.0, 1, false), 0x25);
+        }
+
+        #[test]
+        fn bcd_composes_with_wrap_in_decimal_counts() {
+            // A modular counter that reads out as BCD: 62 seconds is :02.
+            let e = Encode {
+                bcd: true,
+                wrap: std::num::NonZeroU32::new(60),
+                ..enc()
+            };
+            assert_eq!(encode_raw(62.0, Some(&e), 1.0, 1, false), 0x02);
+            assert_eq!(encode_raw(59.0, Some(&e), 1.0, 1, false), 0x59);
+        }
+
+        #[test]
+        fn decode_write_is_the_inverse_and_only_for_a_bcd_register() {
+            let mut reg = reg("R", 0, 1, Endian::Le, None);
+            assert_eq!(
+                decode_write(&reg, 0x45),
+                0x45,
+                "a plain register stores what was written"
+            );
+            reg.encode = Some(Encode { bcd: true, ..enc() });
+            assert_eq!(decode_write(&reg, 0x45), 45);
+            // The clamp window applies to the DECODED value.
+            reg.encode = Some(Encode {
+                bcd: true,
+                clamp_min: Some(1.0),
+                clamp_max: Some(12.0),
+                ..enc()
+            });
+            assert_eq!(decode_write(&reg, 0x99), 12);
+            assert_eq!(decode_write(&reg, 0x00), 1);
+        }
+
+        #[test]
+        fn rounding_modes_pick_the_count() {
+            for (mode, expected) in [
+                (Rounding::Nearest, 3i64),
+                (Rounding::Floor, 2),
+                (Rounding::Ceil, 3),
+                (Rounding::Trunc, 2),
+            ] {
+                let e = Encode {
+                    round: Some(mode),
+                    ..enc()
+                };
+                assert_eq!(
+                    encode_raw(2.6, Some(&e), 1.0, 1, false),
+                    expected as u32,
+                    "{mode:?} of 2.6"
+                );
+            }
+            // Negative, where floor and trunc part company.
+            for (mode, expected) in [
+                (Rounding::Floor, -3i32),
+                (Rounding::Trunc, -2),
+                (Rounding::Ceil, -2),
+            ] {
+                let e = Encode {
+                    round: Some(mode),
+                    ..enc()
+                };
+                assert_eq!(
+                    encode_raw(-2.6, Some(&e), 1.0, 1, true) as u8 as i8,
+                    expected as i8,
+                    "{mode:?} of -2.6"
+                );
+            }
+            // Absent ⇒ nearest, which is what every descriptor written before
+            // the key existed means.
+            assert_eq!(encode_raw(2.6, Some(&enc()), 1.0, 1, false), 3);
+        }
+
+        fn clamp_from(map: &[(u32, f64, f64)]) -> ClampFrom {
+            ClampFrom {
+                register: "CFG".into(),
+                mask: 0x0B,
+                shift: 0,
+                map: map
+                    .iter()
+                    .map(|&(k, min, max)| (k, ClampWindow { min, max }))
+                    .collect(),
+            }
+        }
+
+        #[test]
+        fn clamp_from_reads_the_window_out_of_a_register_field() {
+            let e = Encode {
+                clamp_from: vec![clamp_from(&[
+                    (0x00, -512.0, 512.0),
+                    (0x0B, -4096.0, 4096.0),
+                ])],
+                ..enc()
+            };
+            let mut regs = HashMap::new();
+            regs.insert("CFG".to_string(), 0x00u32);
+            assert_eq!(resolve_clamp(Some(&e), &regs), (Some(-512.0), Some(512.0)));
+            regs.insert("CFG".to_string(), 0x0B);
+            assert_eq!(
+                resolve_clamp(Some(&e), &regs),
+                (Some(-4096.0), Some(4096.0))
+            );
+        }
+
+        #[test]
+        fn an_unmapped_field_value_leaves_the_constant_window_in_force() {
+            // Same rule `scale_from` has: unmapped is NEUTRAL, not zero.
+            let e = Encode {
+                clamp_min: Some(-10.0),
+                clamp_max: Some(10.0),
+                clamp_from: vec![clamp_from(&[(0x0B, -4096.0, 4096.0)])],
+                ..enc()
+            };
+            let mut regs = HashMap::new();
+            regs.insert("CFG".to_string(), 0x02u32); // not in the map
+            assert_eq!(resolve_clamp(Some(&e), &regs), (Some(-10.0), Some(10.0)));
+        }
+
+        #[test]
+        fn several_clamp_from_entries_intersect() {
+            // Each narrows the window, so a part whose resolution bit and range
+            // bits both bound the count states each once.
+            let a = ClampFrom {
+                register: "A".into(),
+                mask: 0x01,
+                shift: 0,
+                map: [(
+                    1u32,
+                    ClampWindow {
+                        min: -100.0,
+                        max: 100.0,
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            };
+            let b = ClampFrom {
+                register: "B".into(),
+                mask: 0x01,
+                shift: 0,
+                map: [(
+                    1u32,
+                    ClampWindow {
+                        min: -50.0,
+                        max: 400.0,
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            };
+            let e = Encode {
+                clamp_from: vec![a, b],
+                ..enc()
+            };
+            let mut regs = HashMap::new();
+            regs.insert("A".to_string(), 1u32);
+            regs.insert("B".to_string(), 1u32);
+            assert_eq!(resolve_clamp(Some(&e), &regs), (Some(-50.0), Some(100.0)));
+        }
+
+        #[test]
+        fn a_register_with_no_encode_has_no_window() {
+            assert_eq!(resolve_clamp(None, &HashMap::new()), (None, None));
+        }
+    }
+
+    /// The civil-calendar pair behind `RegisterSpec::calendar`.
+    mod calendar {
+        use super::*;
+
+        #[test]
+        fn unix_and_civil_are_inverses_across_sixty_years() {
+            // Every 9 h 13 min 7 s from 1970 to 2030 — a stride that is coprime
+            // with the day, so it walks every hour, minute and weekday rather
+            // than sampling midnight sixty times.
+            let mut t = 0i64;
+            while t < 1_900_000_000 {
+                let c = civil_from_unix(t);
+                assert_eq!(unix_from_civil(c), t, "round trip failed at {t}");
+                assert!((1..=12).contains(&c.month), "{t}: month {}", c.month);
+                assert!((1..=31).contains(&c.day), "{t}: day {}", c.day);
+                assert!((1..=7).contains(&c.weekday), "{t}: weekday {}", c.weekday);
+                t += 33_187;
+            }
+        }
+
+        #[test]
+        fn the_epoch_was_a_thursday() {
+            // Sunday = 1 makes Thursday 5 — the DS3231/DS1307 convention, and
+            // the anchor the whole weekday derivation hangs on.
+            let c = civil_from_unix(0);
+            assert_eq!((c.year, c.month, c.day), (1970, 1, 1));
+            assert_eq!(c.weekday, 5);
+        }
+
+        #[test]
+        fn a_leap_day_is_a_day() {
+            let c = civil_from_unix(1_709_164_800); // 2024-02-29 00:00:00 UTC
+            assert_eq!((c.year, c.month, c.day), (2024, 2, 29));
+        }
+
+        #[test]
+        fn setting_one_field_moves_only_that_field() {
+            let mut c = civil_from_unix(1_784_721_600); // 2026-07-22 12:00:00
+            calendar_set(&mut c, CalendarField::Hour, 7);
+            assert_eq!((c.year, c.month, c.day, c.hour), (2026, 7, 22, 7));
+            assert_eq!((c.minute, c.second), (0, 0));
+        }
+
+        #[test]
+        fn a_field_is_clamped_to_what_it_can_hold() {
+            // A nonsense write must not roll the whole clock somewhere else.
+            let mut c = civil_from_unix(0);
+            calendar_set(&mut c, CalendarField::Hour, 99);
+            assert_eq!(c.hour, 23);
+            calendar_set(&mut c, CalendarField::Month, 0);
+            assert_eq!(c.month, 1);
+            calendar_set(&mut c, CalendarField::Second, -4);
+            assert_eq!(c.second, 0);
+        }
+
+        #[test]
+        fn the_year_field_is_two_digits_within_the_current_century() {
+            let mut c = civil_from_unix(1_784_721_600); // 2026
+            assert_eq!(calendar_get(c, CalendarField::Year), 26);
+            calendar_set(&mut c, CalendarField::Year, 31);
+            assert_eq!(c.year, 2031);
+        }
+
+        #[test]
+        fn calendar_get_reads_each_field() {
+            let c = civil_from_unix(1_784_725_261); // 2026-07-22 13:01:01, Wed
+            assert_eq!(calendar_get(c, CalendarField::Second), 1);
+            assert_eq!(calendar_get(c, CalendarField::Minute), 1);
+            assert_eq!(calendar_get(c, CalendarField::Hour), 13);
+            assert_eq!(calendar_get(c, CalendarField::Day), 22);
+            assert_eq!(calendar_get(c, CalendarField::Month), 7);
+            assert_eq!(calendar_get(c, CalendarField::Weekday), 4);
+        }
+    }
+}
+
+#[cfg(test)]
+mod period_from_tests {
+    use super::*;
+    use labwired_config::{DeviceTimer, TimerPeriodFrom, TimerStart};
+    use std::collections::BTreeMap;
+
+    fn rate_timer(start: TimerStart) -> DeviceTimer {
+        DeviceTimer {
+            name: "sample".into(),
+            period_us: Some(10_000),
+            after_us: None,
+            start,
+            start_on_write: None,
+            on_fire: Vec::new(),
+            period_from: Some(TimerPeriodFrom {
+                register: "BW_RATE".into(),
+                field: Some("RATE".into()),
+                mask: None,
+                shift: 0,
+                table: BTreeMap::from([(0x9u32, 20_000u64), (0xAu32, 10_000), (0xDu32, 1_250)]),
+            }),
+        }
+    }
+
+    /// Resolve `period_from` against a register file holding exactly
+    /// `BW_RATE = word`, in the shape `apply_period_from` takes.
+    fn resolve(bank: &mut TimerBank, now: u64, word: u32) {
+        let reg = move |name: &str| (name == "BW_RATE").then_some(word);
+        let bits = |register: &str, field: &str| {
+            (register == "BW_RATE" && field == "RATE").then_some((0u8, 0x0Fu32))
+        };
+        bank.apply_period_from(now, &reg, &bits);
+    }
+
+    #[test]
+    fn the_field_value_selects_the_period() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::OnReset)]);
+        assert_eq!(
+            bank.period_us_of("sample"),
+            Some(10_000),
+            "the declared one"
+        );
+        resolve(&mut bank, 0, 0x0D);
+        assert_eq!(bank.period_us_of("sample"), Some(1_250), "800 Hz");
+        resolve(&mut bank, 0, 0x09);
+        assert_eq!(bank.period_us_of("sample"), Some(20_000), "50 Hz");
+    }
+
+    /// ⚠️ An unmapped value is NEUTRAL — the declared `period_us` stays in
+    /// force. A reserved encoding must not silently stop the part's clock.
+    #[test]
+    fn an_unmapped_field_value_leaves_the_declared_period() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::OnReset)]);
+        resolve(&mut bank, 0, 0x0D);
+        assert_eq!(bank.period_us_of("sample"), Some(1_250));
+        resolve(&mut bank, 0, 0x03); // not in the table
+        assert_eq!(bank.period_us_of("sample"), Some(10_000));
+    }
+
+    /// ⚠️ A RUNNING timer is re-anchored to `now + the new period`, not
+    /// rescheduled from its old deadline. Firmware that rewrote the rate
+    /// register restarted the divider.
+    #[test]
+    fn a_running_timer_re_anchors_on_a_rate_change() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::OnReset)]);
+        // 10 ms period, armed at 0. Walk to 6 ms, then ask for 800 Hz.
+        assert!(bank.due_by_timer(6_000).is_empty());
+        resolve(&mut bank, 6_000, 0x0D);
+        // The old deadline was 10 000; the new one is 6 000 + 1 250.
+        assert!(bank.due_by_timer(7_249).is_empty(), "not yet");
+        assert_eq!(
+            bank.due_by_timer(7_250).len(),
+            1,
+            "one period after the write"
+        );
+    }
+
+    /// A timer that is NOT running does not get armed by a rate change — the
+    /// period is resolved, the deadline stays `None`.
+    #[test]
+    fn a_stopped_timer_resolves_its_period_without_starting() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::Manual)]);
+        resolve(&mut bank, 0, 0x0D);
+        assert_eq!(bank.period_us_of("sample"), Some(1_250));
+        assert!(
+            bank.due_by_timer(1_000_000).is_empty(),
+            "resolving a period must not arm a manual timer"
+        );
+        bank.start_named("sample", 0);
+        assert_eq!(
+            bank.due_by_timer(1_250).len(),
+            1,
+            "and starting it uses the RESOLVED period, not the declared one"
+        );
+    }
+
+    #[test]
+    fn a_part_with_no_field_driven_period_says_so() {
+        let plain = DeviceTimer {
+            name: "t".into(),
+            period_us: Some(5),
+            after_us: None,
+            start: TimerStart::OnReset,
+            start_on_write: None,
+            on_fire: Vec::new(),
+            period_from: None,
+        };
+        assert!(!TimerBank::new(&[plain]).has_field_driven_period());
+        assert!(TimerBank::new(&[rate_timer(TimerStart::OnReset)]).has_field_driven_period());
     }
 }

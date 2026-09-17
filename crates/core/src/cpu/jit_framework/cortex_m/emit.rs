@@ -22,6 +22,13 @@ pub const WIRE_CHAIN_DYNAMIC: i32 = 1;
 pub const WIRE_MEM_FAULT: i32 = 2;
 pub const WIRE_UNSUPPORTED: i32 = 3;
 
+/// Wire codes for the `vfp.binop` host import. The host maps these back to
+/// [`crate::cpu::cortex_m::VfpBinOp`]; the discriminants must match.
+pub const VFP_OP_ADD: i32 = 0;
+pub const VFP_OP_SUB: i32 = 1;
+pub const VFP_OP_MUL: i32 = 2;
+pub const VFP_OP_DIV: i32 = 3;
+
 const XPSR_LOCAL: u32 = 15;
 const SCRATCH_LOCAL: u32 = 16;
 const RESULT_LOCAL: u32 = 17;
@@ -1328,19 +1335,21 @@ impl Body {
         self.buf.push(op::END);
     }
 
-    fn emit_vfp_binop(&mut self, sd: u8, sn: u8, sm: u8, fop: u8) {
+    fn emit_vfp_binop(&mut self, sd: u8, sn: u8, sm: u8, fop: i32) {
         self.has_vfp = true;
         self.i32_const(sd as i32);
+        self.i32_const(fop);
         self.i32_const(sn as i32);
         self.buf.push(op::CALL);
         enc::uleb(&mut self.buf, 2);
-        self.buf.push(op::F32_REINTERPRET_I32);
         self.i32_const(sm as i32);
         self.buf.push(op::CALL);
         enc::uleb(&mut self.buf, 2);
-        self.buf.push(op::F32_REINTERPRET_I32);
-        self.buf.push(fop);
-        self.buf.push(op::I32_REINTERPRET_F32);
+        // `vfp.binop` evaluates the op host-side through the same
+        // `cortex_m::vfp_binop` helper the interpreter uses, so FZ/DN and the
+        // NaN canonicalization cannot drift between the two lanes.
+        self.buf.push(op::CALL);
+        enc::uleb(&mut self.buf, 4);
         self.buf.push(op::CALL);
         enc::uleb(&mut self.buf, 3);
     }
@@ -1929,10 +1938,10 @@ impl Body {
             ),
             Vldr { sd, rn, imm, add } => self.emit_vfp_mem(pc, sd, rn, imm as i32, add, true),
             Vstr { sd, rn, imm, add } => self.emit_vfp_mem(pc, sd, rn, imm as i32, add, false),
-            VaddF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_ADD),
-            VsubF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_SUB),
-            VmulF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_MUL),
-            VdivF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, op::F32_DIV),
+            VaddF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, VFP_OP_ADD),
+            VsubF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, VFP_OP_SUB),
+            VmulF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, VFP_OP_MUL),
+            VdivF32 { sd, sn, sm } => self.emit_vfp_binop(sd, sn, sm, VFP_OP_DIV),
             VmovF32Reg { sd, sm } => {
                 self.has_vfp = true;
                 self.i32_const(sd as i32);

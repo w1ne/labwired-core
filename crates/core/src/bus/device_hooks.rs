@@ -218,6 +218,46 @@ impl SystemBus {
         self.gpio_devices = devices;
     }
 
+    /// Write-hook for a bus-resident device that is clocked by FIRMWARE rather
+    /// than by the tick: after an MMIO write to peripheral `idx`, service every
+    /// device that named an output-register address this peripheral hosts.
+    ///
+    /// This is the generic form of `maybe_clock_hx711` / `maybe_clock_tm1637` —
+    /// each of those was one part's private copy of this hook, with its own
+    /// `Vec` on the bus and its own state machine. See
+    /// [`BusResidentDevice::edge_service_addrs`] for why a tick-only pass loses
+    /// edges: the device sees the pad after firmware has already moved it back.
+    ///
+    /// The pads a device DRIVES still go out through the narrowed
+    /// [`DevicePins`](crate::bus::DevicePins) port, exactly as they do on the
+    /// tick pass — this changes WHEN `service` runs, not what it may touch.
+    pub(crate) fn maybe_service_edge_driven_gpio_devices(&mut self, idx: usize) {
+        if self.gpio_devices.is_empty() {
+            return;
+        }
+        // Cheap gate: almost every bus has no edge-driven device at all, and
+        // this runs on every MMIO write.
+        if !self
+            .gpio_devices
+            .iter()
+            .any(|d| !d.edge_service_addrs().is_empty())
+        {
+            return;
+        }
+        let now = self.current_cycle;
+        let mut devices = std::mem::take(&mut self.gpio_devices);
+        for device in &mut devices {
+            let hosted = device
+                .edge_service_addrs()
+                .iter()
+                .any(|a| self.find_peripheral_index(*a) == Some(idx));
+            if hosted {
+                device.service(self, now);
+            }
+        }
+        self.gpio_devices = devices;
+    }
+
     /// Set or clear a single bit of a GPIO input (IDR) register, writing back
     /// only when the bit actually changes. Shared by every
     /// [`BusResidentDevice`](crate::bus::BusResidentDevice)'s `service` impl.
@@ -389,59 +429,6 @@ impl SystemBus {
                 .unwrap_or(true);
             self.tm1637[i].observe_lines(clk, dio);
         }
-    }
-
-    /// Write-hook for HX711 SCK edges: re-read SCK ODR, advance the bit-bang
-    /// state machine, and drive DT onto the MCU IDR when the level changes.
-    pub(crate) fn maybe_clock_hx711(&mut self, idx: usize) {
-        if self.hx711.is_empty() {
-            return;
-        }
-        for i in 0..self.hx711.len() {
-            let sck_idx = match self.hx711[i].sck_peripheral_idx() {
-                Some(t) => t,
-                None => {
-                    let addr = self.hx711[i].sck_odr_addr;
-                    match self.find_peripheral_index(addr) {
-                        Some(t) => {
-                            self.hx711[i].set_sck_peripheral_idx(t);
-                            t
-                        }
-                        None => continue,
-                    }
-                }
-            };
-            if sck_idx != idx {
-                continue;
-            }
-            let sck_addr = self.hx711[i].sck_odr_addr;
-            let sck_bit = self.hx711[i].sck_bit;
-            let sck = self
-                .read_u32(sck_addr)
-                .map(|v| (v >> sck_bit) & 1 != 0)
-                .unwrap_or(false);
-            self.hx711[i].observe_sck(sck);
-            self.drive_hx711_dt(i);
-        }
-    }
-
-    fn drive_hx711_dt(&mut self, i: usize) {
-        let dt_high = self.hx711[i].dt_high();
-        if self.hx711[i].last_dt_high() == Some(dt_high) {
-            return;
-        }
-        let dt_addr = self.hx711[i].dt_idr_addr;
-        let dt_bit = self.hx711[i].dt_bit;
-        let idr = self.read_u32(dt_addr).unwrap_or(0);
-        let new_idr = if dt_high {
-            idr | (1 << dt_bit)
-        } else {
-            idr & !(1 << dt_bit)
-        };
-        if new_idr != idr {
-            let _ = self.write_u32(dt_addr, new_idr);
-        }
-        self.hx711[i].set_last_dt_high(dt_high);
     }
 
     /// Write-hook sibling of [`maybe_clock_tm1637`](Self::maybe_clock_tm1637)

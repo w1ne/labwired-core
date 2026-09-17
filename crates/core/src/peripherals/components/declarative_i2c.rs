@@ -55,8 +55,9 @@ use labwired_config::{
 
 use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
-    apply_timing_action, apply_write, apply_write_masked, encode_raw, observe, pack, read_clears,
-    register_read_bytes, unpack, validate_timers, TimerBank,
+    apply_timing_action, apply_write, apply_write_masked, calendar_set, civil_from_unix,
+    decode_raw, decode_write, encode_raw, observe, pack, read_clears, register_read_bytes,
+    unix_from_civil, unpack, validate_timers, write_is_translated, TimerBank,
 };
 use super::rule_machine::{RuleCtx, RuleMachine};
 use crate::peripherals::i2c::I2cDevice;
@@ -295,7 +296,7 @@ impl GenericI2cDevice {
         let pointer_width = spec.pointer_width.max(1);
         let default_pointer_mask = if pointer_width >= 2 { 0xFFFF } else { 0x00FF };
 
-        Ok(Self {
+        let mut device = Self {
             address,
             registers: spec.registers.clone(),
             commands: spec.commands.clone(),
@@ -391,7 +392,14 @@ impl GenericI2cDevice {
             rules: RuleMachine::from_behavior(&descriptor.behavior)?,
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
-        })
+        };
+        // Resolve any field-driven timer period against the RESET register
+        // file, so a part whose rate register powers up at something other
+        // than its `period_us` ticks correctly before firmware writes anything.
+        // The DS3231 is exactly that: CONTROL powers up at 0x1C, whose RS bits
+        // select 8.192 kHz, not the 1 Hz a constant would have assumed.
+        device.refresh_field_driven_periods();
+        Ok(device)
     }
 
     /// The slot view a read observes: seeded noise applied to the channels that
@@ -428,6 +436,34 @@ impl GenericI2cDevice {
     /// `servo_angle` for a channel). Mirrors `IrCore::observable`; only
     /// register-file devices declare observables, so this returns `None` for
     /// register-pointer / command devices.
+    /// The word a master would read out of a named register RIGHT NOW,
+    /// sign-extended when the register is `signed:`.
+    ///
+    /// This is the readback a Rust or wasm consumer used to get by downcasting
+    /// to a concrete hand-written model and calling its `sample()`. A part that
+    /// becomes a descriptor has no concrete type to downcast to, and there is
+    /// no reason each port should invent one: the thing those callers actually
+    /// wanted is the register value, which is the same question for every
+    /// declarative part.
+    ///
+    /// Register-pointer (`registers:`) mode only — a register-file part has
+    /// [`observable`](Self::observable) instead. `None` for an undeclared name.
+    pub fn register_word(&self, name: &str) -> Option<i64> {
+        let reg = self.registers.iter().find(|r| r.name == name)?;
+        let raw = unpack(
+            &register_read_bytes(reg, &self.slots, &self.reg_values),
+            reg.endian,
+        );
+        if !reg.signed {
+            return Some(i64::from(raw));
+        }
+        let bits = 8 * u32::from(reg.width);
+        if bits < 32 && raw & (1 << (bits - 1)) != 0 {
+            return Some(i64::from(raw as i32 | !((1i32 << bits) - 1)));
+        }
+        Some(i64::from(raw))
+    }
+
     pub fn observable(&self, name: &str, channel: u8) -> Option<f64> {
         let regs = self.file.as_ref()?;
         let obs = self.observables.iter().find(|o| o.name == name)?;
@@ -613,6 +649,36 @@ impl GenericI2cDevice {
     /// register's LAST byte has arrived — run the post-write side effects
     /// exactly once (bank select, acknowledge, conversion start, indexed-table
     /// arm, self-clearing "go" bits).
+    /// The translated write: the wire word a master put on the bus turned into
+    /// the word this register STORES.
+    ///
+    /// * `bcd:` — the nibbles are decoded to the integer the model keeps, so
+    ///   every expression that reads the register (`reg()`, `field()`,
+    ///   `scale_from`) is in decimal.
+    /// * `calendar:` — the register is one civil field of the clock channel
+    ///   named by `source:`, so the write RECOMPOSES that instant: this field
+    ///   is replaced and the other six are left where they were. Without it a
+    ///   `source`d register would be read-only and `RTClib::adjust()` — the
+    ///   first call an RTC sketch makes — would do nothing at all.
+    ///
+    /// `write_mask` is applied in the WIRE domain (a plain AND on the word the
+    /// master wrote) rather than as the usual keep-the-bits-outside-it merge:
+    /// "keep the previous bit" has no meaning across a domain change, and what
+    /// the datasheets mask here is a neighbouring flag (the DS3231 `CH` bit
+    /// shares the seconds byte) that is not part of the number at all.
+    fn commit_translated_write(&mut self, reg: &I2cRegister, written: u32) -> u32 {
+        let wire = written & reg.write_mask.unwrap_or(u32::MAX);
+        let decoded = decode_write(reg, wire);
+        if let (Some(field), Some(src)) = (reg.calendar, reg.source.as_ref()) {
+            let now = self.slots.get(src).copied().unwrap_or(0.0);
+            let mut civil = civil_from_unix(now as i64);
+            calendar_set(&mut civil, field, i64::from(decoded));
+            self.slots
+                .insert(src.clone(), unix_from_civil(civil) as f64);
+        }
+        decoded
+    }
+
     fn write_byte_at(&mut self, addr: u16, data: u8) {
         // The bank select is answered before any register decode: it is what
         // decides which register the NEXT pointer means.
@@ -633,6 +699,10 @@ impl GenericI2cDevice {
             reg.self_clearing,
             reg.on_write.unwrap_or(labwired_config::WriteAction::None),
         );
+        // Taken before the mutation below so the borrow of the descriptor ends
+        // here; `None` for the ordinary (untranslated) register, which is every
+        // register that does not use `bcd:` or `calendar:`.
+        let translated: Option<I2cRegister> = write_is_translated(reg).then(|| reg.clone());
         let idx = usize::from(addr - reg.addr);
         let prev = self.reg_values.get(&name).copied().unwrap_or(0);
         // Place the byte at its position in the word, honouring the declared
@@ -650,7 +720,22 @@ impl GenericI2cDevice {
         let lane = 0xFFu32 << shift;
         let raw = u32::from(data) << shift;
         let written = (prev & !lane) | raw;
-        let stored = apply_write_masked(on_write, prev, raw, write_mask.unwrap_or(u32::MAX) & lane);
+        let stored = if let Some(reg) = translated {
+            // A BCD / `calendar:` register's stored word is in a DIFFERENT
+            // domain from the wire, so lane-merging it with `prev` would mix
+            // nibbles into decimal. The wire word is assembled from the bytes
+            // written so far and translated on the LAST byte; every register
+            // that uses either key today is one byte wide, where there is no
+            // intermediate state at all.
+            let wire = (prev & !lane) | raw;
+            if idx + 1 == usize::from(width) {
+                self.commit_translated_write(&reg, wire)
+            } else {
+                wire
+            }
+        } else {
+            apply_write_masked(on_write, prev, raw, write_mask.unwrap_or(u32::MAX) & lane)
+        };
         self.reg_values.insert(name.clone(), stored);
         if idx + 1 != usize::from(width) {
             return; // mid-word: side effects fire once, on the last byte
@@ -665,6 +750,7 @@ impl GenericI2cDevice {
         }
         if !self.timers.is_empty() {
             self.timers.start_on_write(&name, stored, self.elapsed_us);
+            self.refresh_field_driven_periods();
         }
         // A momentary "go" bit is gone by the time firmware can read it back:
         // the device has already acted on it (see `RegisterSpec::self_clearing`).
@@ -722,6 +808,35 @@ impl GenericI2cDevice {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         let channels = leak_channels(&descriptor);
         Self::from_descriptor(&descriptor, address, channels)
+    }
+
+    /// Override one channel's Gaussian noise sigma from a `config:` value (see
+    /// [`labwired_config::InputSpec::noise_sigma_key`]). The channel's declared
+    /// `bias` and `thermal_tau_s` are kept; a sigma of 0 removes the noise
+    /// state entirely, so a placement that sets the key to 0 is byte-identical
+    /// to one that never mentioned it.
+    pub fn set_channel_noise_sigma(&mut self, key: &str, sigma: f64) {
+        let id = self.component_id.clone().unwrap_or_default();
+        match self.noise.get(key) {
+            Some(n) => {
+                let (bias, tau) = (n.bias(), n.tau_s());
+                if sigma <= 0.0 && bias == 0.0 && tau.is_none() {
+                    self.noise.remove(key);
+                } else {
+                    self.noise.insert(
+                        key.to_string(),
+                        ChannelNoise::new(0, &id, key, sigma, bias, tau),
+                    );
+                }
+            }
+            None if sigma > 0.0 => {
+                self.noise.insert(
+                    key.to_string(),
+                    ChannelNoise::new(0, &id, key, sigma, 0.0, None),
+                );
+            }
+            None => {}
+        }
     }
 
     /// Seed a measurement slot's initial value from a `config:` override. Only
@@ -833,7 +948,16 @@ impl GenericI2cDevice {
         let Some(reg) = self.register_covering(addr) else {
             return (self.reg_unmapped_byte, None);
         };
-        let raw = register_read_bytes(reg, slots, &self.reg_values);
+        // A `fifo:` register serves the queue's OLDEST entry while the queue is
+        // non-empty and falls through to its live `source:` when it is empty —
+        // which is exactly what bypass mode is, with no second mode flag to
+        // keep in step. Both read paths need it: this is the auto-increment
+        // one (a burst that walks addresses), and the latch path below is the
+        // pointer one.
+        let raw = match self.fifo_word(reg) {
+            Some(word) => pack(word as u32, reg.width, reg.endian),
+            None => register_read_bytes(reg, slots, &self.reg_values),
+        };
         let overlay = self.ready_overlay(&reg.name);
         let bytes = if overlay == 0 {
             raw
@@ -955,7 +1079,8 @@ impl GenericI2cDevice {
 struct I2cRuleCtx<'a> {
     registers: &'a [I2cRegister],
     reg_values: &'a mut HashMap<String, u32>,
-    slots: &'a HashMap<String, f64>,
+    /// `&mut` because [`RuleCtx::set_input`] writes here — see that method.
+    slots: &'a mut HashMap<String, f64>,
 }
 
 impl RuleCtx for I2cRuleCtx<'_> {
@@ -975,16 +1100,43 @@ impl RuleCtx for I2cRuleCtx<'_> {
         Some((f.shift, f.mask()))
     }
 
+    fn reported(&self, name: &str) -> Option<i64> {
+        let reg = self.registers.iter().find(|r| r.name == name)?;
+        // The SAME function the read path uses, so a rule and the wire cannot
+        // disagree about what a register says.
+        //
+        // The TRUTH slots, not the noisy ones: a rule reading a register twice
+        // in one event must see one value, and a seeded sample belongs to a
+        // wire read rather than to the part's internal arithmetic.
+        let bytes = register_read_bytes(reg, self.slots, self.reg_values);
+        let word = unpack(&bytes, reg.endian);
+        if reg.signed {
+            let bits = 8 * u32::from(reg.width);
+            if bits < 32 && word & (1 << (bits - 1)) != 0 {
+                return Some(i64::from(word as i32 | !((1i32 << bits) - 1)));
+            }
+        }
+        Some(i64::from(word))
+    }
+
     fn input(&self, key: &str) -> i64 {
         let raw = self.slots.get(key).copied().unwrap_or(0.0);
         // `input(KEY)` is the value as the REGISTER would report it, so a rule
         // comparing against a register word compares like with like. When no
         // register sources the key there is no declared encoding and the honest
         // answer is the truncated engineering value.
+        //
+        // A `calendar:` register is NOT such an encoding: it reports one civil
+        // FIELD of the instant, not the instant, so there is nothing to compare
+        // like with like against. Borrowing its encode here would hand a rule
+        // the BCD seconds of a clock where it asked for the Unix time — off by
+        // eight orders of magnitude, and silently, because `0x99` is a
+        // perfectly ordinary integer. Skipped, so such a channel falls to the
+        // engineering value.
         match self
             .registers
             .iter()
-            .find(|r| r.source.as_deref() == Some(key))
+            .find(|r| r.source.as_deref() == Some(key) && r.calendar.is_none())
         {
             Some(reg) => {
                 let encoded = encode_raw(
@@ -1007,6 +1159,29 @@ impl RuleCtx for I2cRuleCtx<'_> {
             None => raw as i64,
         }
     }
+
+    fn set_input(&mut self, key: &str, value: i64) {
+        // The exact inverse of `input` above, through the SAME register lookup
+        // (a `calendar:` register skipped for the same reason), so a rule that
+        // writes back what it read changes nothing.
+        if !self.slots.contains_key(key) {
+            return;
+        }
+        let engineering = match self
+            .registers
+            .iter()
+            .find(|r| r.source.as_deref() == Some(key) && r.calendar.is_none())
+        {
+            Some(reg) => decode_raw(
+                value,
+                reg.encode.as_ref(),
+                reg.source_scale.unwrap_or(1.0),
+                reg.width,
+            ),
+            None => value as f64,
+        };
+        self.slots.insert(key.to_string(), engineering);
+    }
 }
 
 impl GenericI2cDevice {
@@ -1024,7 +1199,7 @@ impl GenericI2cDevice {
             let mut ctx = I2cRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
-                slots: &self.slots,
+                slots: &mut self.slots,
             };
             machine.fire(&event, written, &mut ctx);
         }
@@ -1051,6 +1226,92 @@ impl GenericI2cDevice {
     }
 
     /// Apply whatever `timer:` actions the rules queued to the ONE bank.
+    /// Push one entry into every FIFO whose `fill.timer` is `name`, then
+    /// reflect the new depth into the part's `count:` and `watermark:`
+    /// registers.
+    fn fill_fifos_on_timer(&mut self, name: &str) {
+        let Some(mut machine) = self.rules.take() else {
+            return;
+        };
+        {
+            let mut ctx = I2cRuleCtx {
+                registers: &self.registers,
+                reg_values: &mut self.reg_values,
+                slots: &mut self.slots,
+            };
+            if machine.fill_on_timer(name, &mut ctx) {
+                machine.refresh_fifo_registers(&mut ctx);
+            }
+        }
+        self.rules = Some(machine);
+    }
+
+    /// The FIFO component this register serves, if it has one and the queue is
+    /// non-empty. `None` ⇒ the register serves its live `source:`, which is
+    /// what bypass mode is.
+    fn fifo_word(&self, reg: &I2cRegister) -> Option<i64> {
+        let spec = reg.fifo.as_ref()?;
+        self.rules.as_ref()?.fifo_peek(&spec.name, spec.slot)
+    }
+
+    /// Pop the entry a completed read of `reg` drains, and reflect the new
+    /// depth. No-op for a register with no `fifo:`, or with `pop: false`.
+    fn fifo_pop_after_read(&mut self, register: &str) {
+        let Some(spec) = self
+            .registers
+            .iter()
+            .find(|r| r.name == register)
+            .and_then(|r| r.fifo.clone())
+            .filter(|f| f.pop)
+        else {
+            return;
+        };
+        let Some(mut machine) = self.rules.take() else {
+            return;
+        };
+        {
+            let mut ctx = I2cRuleCtx {
+                registers: &self.registers,
+                reg_values: &mut self.reg_values,
+                slots: &mut self.slots,
+            };
+            if machine.fifo_pop(&spec.name) {
+                machine.refresh_fifo_registers(&mut ctx);
+            }
+        }
+        self.rules = Some(machine);
+    }
+
+    /// Re-resolve every [`TimerPeriodFrom`](labwired_config::TimerPeriodFrom)
+    /// against the register file. Called wherever a register write lands, and
+    /// once after construction, because a rate register is exactly the thing
+    /// firmware writes.
+    ///
+    /// Short-circuits on a part that declares no field-driven period, which is
+    /// every descriptor written before the key existed — such a part pays one
+    /// `any()` over its timer list and nothing else.
+    fn refresh_field_driven_periods(&mut self) {
+        if !self.timers.has_field_driven_period() {
+            return;
+        }
+        let values = std::mem::take(&mut self.reg_values);
+        let specs = self.registers.clone();
+        let now = self.elapsed_us;
+        self.timers.apply_period_from(
+            now,
+            &|name: &str| values.get(name).copied(),
+            &|register: &str, field: &str| {
+                specs.iter().find(|r| r.name == register).and_then(|r| {
+                    r.bits
+                        .iter()
+                        .find(|b| b.name == field)
+                        .map(|b| (b.shift, b.mask()))
+                })
+            },
+        );
+        self.reg_values = values;
+    }
+
     fn drain_timer_requests(&mut self) {
         let Some(m) = self.rules.as_mut() else { return };
         let requests = m.take_timer_requests();
@@ -1064,6 +1325,17 @@ impl GenericI2cDevice {
                 self.timers.stop_named(&name);
             }
         }
+    }
+
+    /// A timer's EFFECTIVE period in µs, after any
+    /// [`TimerPeriodFrom`](labwired_config::TimerPeriodFrom) has resolved
+    /// against the register file.
+    ///
+    /// For tests and diagnostics: a field-driven rate is otherwise only
+    /// observable by counting firings, and counting firings cannot tell a
+    /// RESET value apart from a coincidence.
+    pub fn timer_period_us(&self, name: &str) -> Option<u64> {
+        self.timers.period_us_of(name)
     }
 
     /// Read-only view of the rule machine, for tests and diagnostics.
@@ -1168,10 +1440,15 @@ impl GenericI2cDevice {
         // masked bits then DO is `on_write` — a plain store unless the
         // datasheet says write-1-to-clear / zero-to-clear / one-to-set.
         let prev = self.reg_values.get(&name).copied().unwrap_or(0);
-        let stored = apply_write(&reg, prev, written);
+        let stored = if write_is_translated(&reg) {
+            self.commit_translated_write(&reg, written)
+        } else {
+            apply_write(&reg, prev, written)
+        };
         self.reg_values.insert(name.clone(), stored);
         if !self.timers.is_empty() {
             self.timers.start_on_write(&name, stored, self.elapsed_us);
+            self.refresh_field_driven_periods();
         }
         if !self.data_ready.is_empty() {
             // Acknowledge first, then start: a part whose start and clear
@@ -1308,6 +1585,11 @@ impl I2cDevice for GenericI2cDevice {
             // and are keyed on the register's START address, which is what
             // `apply_read_complete_updates` matches a trigger against.
             if let Some((name, start)) = hit {
+                // The FIFO entry pops when the LAST byte of the register
+                // carrying `pop: true` has been clocked out. A driver that
+                // abandons the burst earlier gets the same sample again, which
+                // is what the silicon does with a read that never completed.
+                self.fifo_pop_after_read(&name);
                 if !self.data_ready.is_empty() {
                     self.clear_on_read(&name);
                 }
@@ -1341,7 +1623,14 @@ impl I2cDevice for GenericI2cDevice {
             let slots = self.observed_slots();
             let (bytes, name) = match self.pointer.and_then(|p| self.find_register(p)) {
                 Some(reg) => {
-                    let raw = register_read_bytes(reg, &slots, &self.reg_values);
+                    // A `fifo:` register serves the queue's OLDEST entry while
+                    // the queue is non-empty, and falls through to its live
+                    // `source:` when it is empty — which is exactly what
+                    // bypass mode is, with no second mode flag to keep in step.
+                    let raw = match self.fifo_word(reg) {
+                        Some(word) => pack(word as u32, reg.width, reg.endian),
+                        None => register_read_bytes(reg, &slots, &self.reg_values),
+                    };
                     // Status bits are OR'd over whatever the register stores, so
                     // one register carries the firmware-written enable bits and
                     // the model-driven ready flags at once.
@@ -1403,6 +1692,21 @@ impl I2cDevice for GenericI2cDevice {
                 }
             }
         }
+        // A FIFO entry pops when the LAST byte of the register that carries
+        // `pop: true` has been clocked out. A driver that abandons the burst
+        // after an earlier axis gets the same sample again next time, which is
+        // what the silicon does with a read that never completed.
+        if let Some(ptr) = self.pointer {
+            if let Some((name, width)) = self
+                .find_register(ptr)
+                .filter(|r| r.fifo.as_ref().is_some_and(|f| f.pop))
+                .map(|r| (r.name.clone(), r.width as usize))
+            {
+                if self.read_idx == width {
+                    self.fifo_pop_after_read(&name);
+                }
+            }
+        }
         byte
     }
 
@@ -1428,6 +1732,11 @@ impl I2cDevice for GenericI2cDevice {
                 for action in &actions {
                     apply_timing_action(action, &mut self.reg_values);
                 }
+                // ⚠️ The FIFO fills BEFORE the `timer:` rules, so a rule
+                // guarded on `fifo_len(samples)` — a watermark rule, the whole
+                // reason a part has a FIFO — sees the sample this tick
+                // produced rather than the previous one.
+                self.fill_fifos_on_timer(&name);
                 self.raise(Event::Timer { name }, 0);
             }
         }
@@ -2139,6 +2448,101 @@ fn leak_metadata(
     }))
 }
 
+/// [`leak_metadata`]'s GPIO twin: a pins-only descriptor has no I²C address, so
+/// there is no synthesised `i2c_address` key and the transport is the GPIO
+/// group. Everything else — label, summary, detail, `config_keys`, labs and
+/// stimulus channels — is mirrored from the descriptor exactly the same way, so
+/// a part reads identically in the manifest whichever primitive it uses.
+pub(crate) fn leak_gpio_metadata(
+    descriptor: &DeviceDescriptor,
+    channels: &'static [InputChannel],
+) -> &'static KitMetadata {
+    leak_pinlike_metadata(
+        descriptor,
+        channels,
+        Transport::GpioGroup,
+        Category::Gpio,
+        "Declarative GPIO device.",
+    )
+}
+
+/// Same, for a declarative `uart_device`: a part with no register map and no
+/// pads, whose whole interface is the byte stream. It takes the SAME path as
+/// the GPIO one because the only thing that differs is the transport label the
+/// manifest shows — writing it twice is how the two would come to disagree
+/// about which `config_keys` a descriptor may declare.
+pub(crate) fn leak_uart_metadata(
+    descriptor: &DeviceDescriptor,
+    channels: &'static [InputChannel],
+) -> &'static KitMetadata {
+    leak_pinlike_metadata(
+        descriptor,
+        channels,
+        Transport::Uart,
+        Category::Uart,
+        "Declarative UART device.",
+    )
+}
+
+/// The shared body: a descriptor with no `i2c:`/`spi:` block, so there is no
+/// address to synthesise a `config_keys` entry from and the declared list is
+/// taken as the complete set.
+fn leak_pinlike_metadata(
+    descriptor: &DeviceDescriptor,
+    channels: &'static [InputChannel],
+    transport: Transport,
+    category: Category,
+    default_summary: &str,
+) -> &'static KitMetadata {
+    let meta = descriptor.metadata.as_ref();
+    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let label = meta
+        .and_then(|m| m.label.clone())
+        .unwrap_or_else(|| descriptor.r#type.clone());
+    let summary = meta
+        .and_then(|m| m.summary.clone())
+        .unwrap_or_else(|| default_summary.to_string());
+    let detail = meta
+        .and_then(|m| m.detail.clone())
+        .unwrap_or_else(|| summary.clone());
+    let config_keys: &'static [ConfigKey] = Box::leak(
+        meta.map(|m| m.config_keys.as_slice())
+            .unwrap_or(&[])
+            .iter()
+            .map(|k| ConfigKey {
+                name: leak(k.name.clone()),
+                ty: config_type_from_str(&k.ty),
+                doc: leak(k.doc.clone()),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    );
+    let labs: &'static [LabRef] = Box::leak(
+        meta.map(|m| m.labs.as_slice())
+            .unwrap_or(&[])
+            .iter()
+            .map(|l| LabRef {
+                board_id: leak(l.board_id.clone()),
+                chip: leak(l.chip.clone()),
+                example_dir: leak(l.example_dir.clone()),
+                demo_elf: leak(l.demo_elf.clone()),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    );
+    Box::leak(Box::new(KitMetadata {
+        device_type: leak(descriptor.r#type.clone()),
+        label: leak(label),
+        summary: leak(summary),
+        detail: leak(detail),
+        transport,
+        category,
+        config_keys,
+        labs,
+        inputs: channels,
+    }))
+}
+
 impl PeripheralKit for DeclarativeI2cKit {
     fn metadata(&self) -> &'static KitMetadata {
         self.metadata
@@ -2157,6 +2561,22 @@ impl PeripheralKit for DeclarativeI2cKit {
         // Honour `config:` overrides that seed an input channel (e.g. a `lux`
         // seed), matching how a hand-written kit seeded its initial reading.
         device.seed_from_config(|key| ctx.config_f64(key));
+        // `noise_sigma_key`: a `config:` knob that sets a channel's noise sigma.
+        // Named per channel, so one key can reach a whole channel SET — an
+        // IMU's six axes quote one datasheet noise figure, and the placement
+        // says `noise_sigma: 0.02` once.
+        for input in self
+            .descriptor
+            .metadata
+            .iter()
+            .flat_map(|m| m.inputs.iter())
+            .filter(|i| i.noise_sigma_key.is_some())
+        {
+            let key = input.noise_sigma_key.as_deref().expect("filtered above");
+            if let Some(sigma) = ctx.config_f64(key) {
+                device.set_channel_noise_sigma(&input.key, sigma);
+            }
+        }
         // Tier 2: bind `outputs:` roles to pads BEFORE the device goes in, so a
         // wiring error is reported against the placement rather than leaving a
         // device attached with an interrupt line that goes nowhere.
@@ -2334,6 +2754,49 @@ pub static TMP117_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("tmp117").expect("tmp117 descriptor is embedded"),
     )
     .expect("tmp117.yaml is a valid declarative i2c descriptor")
+});
+
+/// Maxim DS3231 real-time clock (declarative `ds3231.yaml`).
+///
+/// Migrated from the hand-written [`super::ds3231::Ds3231`], which is DELETED
+/// rather than kept as an oracle; `tests/ds3231_migration_parity.rs` holds the
+/// transcript it produced and names each deliberate difference — the seven time
+/// registers are now ONE settable instant (`calendar:`), the temperature word
+/// carries its real quarter-degrees, and the alarm registers accept a write.
+pub static DS3231_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("ds3231").expect("ds3231 descriptor is embedded"),
+    )
+    .expect("ds3231.yaml is a valid declarative i2c descriptor")
+});
+
+/// Analog Devices ADXL345 accelerometer on I²C (declarative `adxl345.yaml`).
+///
+/// Migrated from the hand-written [`super::adxl345::Adxl345`], which is DELETED
+/// rather than kept as an oracle; `tests/adxl345_migration_parity.rs` holds the
+/// transcript it produced. The SPI variant of the same silicon is
+/// [`super::declarative_spi::ADXL345_KIT`] (`adxl345_spi.yaml`).
+pub static ADXL345_I2C_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("adxl345").expect("adxl345 descriptor is embedded"),
+    )
+    .expect("adxl345.yaml is a valid declarative i2c descriptor")
+});
+
+/// InvenSense MPU-6050 6-axis IMU (declarative `mpu6050.yaml`).
+///
+/// Migrated from the hand-written [`super::mpu6050::Mpu6050`], which is DELETED
+/// rather than kept as an oracle: keeping it would mean keeping an oracle that
+/// asserts its own bug. That model addressed the measurement block as
+/// `(reg - 0x3B) / 2`, so it had no TEMP_OUT and every gyro axis sat one
+/// register pair below its datasheet address — six of the fourteen bytes every
+/// driver burst-reads. `tests/mpu6050_migration_parity.rs` holds the transcript
+/// over the registers it got right and pins the fix for the rest.
+pub static MPU6050_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("mpu6050").expect("mpu6050 descriptor is embedded"),
+    )
+    .expect("mpu6050.yaml is a valid declarative i2c descriptor")
 });
 
 /// TI INA219 current / bus-voltage monitor (declarative `ina219.yaml`). The
