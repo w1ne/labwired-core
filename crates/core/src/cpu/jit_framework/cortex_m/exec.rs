@@ -14,8 +14,8 @@ use super::super::frontend::BlockPlan;
 use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
 use super::emit::{
-    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
-    WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, IT_STATE_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT,
+    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
 };
 use super::host::{pack_regs, unpack_regs};
 use super::CortexMFrontend;
@@ -120,12 +120,17 @@ impl CompiledBlock {
         u32::from_le_bytes(b)
     }
 
+    /// Run to the next side-exit. The fourth tuple element is the IT state to
+    /// reinstall in the core when control returns to the interpreter: `Some`
+    /// exactly on `WIRE_MEM_FAULT` / `WIRE_UNSUPPORTED`, where the block may
+    /// have stopped mid-IT (the emitter wrote the pre-fault state), and
+    /// `None` on chain/fall-through exits, which never carry one.
     pub fn run(
         &mut self,
         x: &mut [u32; 16],
         ram: &mut [u8],
         fpu: &mut [u32; 32],
-    ) -> (SideExit, u32, bool) {
+    ) -> (SideExit, u32, bool, Option<u8>) {
         let mut bytes = [0u8; REG_SYNC_BYTES];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
@@ -168,18 +173,19 @@ impl CompiledBlock {
             clear_exclusive = self.read_slot(RES_FLAG_SLOT) != 0;
         }
 
-        let (exit, n) = match wire {
+        let (exit, n, it_state) = match wire {
             WIRE_FALL_THROUGH => (
                 SideExit::Chain {
                     next_pc: self.end_pc,
                 },
                 self.instr_count,
+                None,
             ),
             WIRE_CHAIN_DYNAMIC => {
                 let s = NEXT_PC_SLOT as usize;
                 let next_pc =
                     u32::from_le_bytes([bytes[s], bytes[s + 1], bytes[s + 2], bytes[s + 3]]) as Pc;
-                (SideExit::Chain { next_pc }, self.instr_count)
+                (SideExit::Chain { next_pc }, self.instr_count, None)
             }
             WIRE_MEM_FAULT | WIRE_UNSUPPORTED => {
                 let resume_pc = self.read_slot(FAULT_PC_SLOT) as Pc;
@@ -189,7 +195,11 @@ impl CompiledBlock {
                 } else {
                     BailReason::UnsupportedInstruction
                 };
-                (SideExit::EnterInterpreter { resume_pc, reason }, retired)
+                (
+                    SideExit::EnterInterpreter { resume_pc, reason },
+                    retired,
+                    Some(self.read_slot(IT_STATE_SLOT) as u8),
+                )
             }
             _ => (
                 SideExit::EnterInterpreter {
@@ -197,9 +207,10 @@ impl CompiledBlock {
                     reason: BailReason::PartialBlock,
                 },
                 self.instr_count,
+                None,
             ),
         };
-        (exit, n, clear_exclusive)
+        (exit, n, clear_exclusive, it_state)
     }
 }
 
@@ -339,8 +350,11 @@ impl CortexMJitEngine {
         let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
-        let (exit, n, clear_exclusive) = block.run(&mut x, ram, &mut cpu.fpu_s);
+        let (exit, n, clear_exclusive, it_state) = block.run(&mut x, ram, &mut cpu.fpu_s);
         unpack_regs(cpu, &x);
+        if let Some(it) = it_state {
+            cpu.it_state = it;
+        }
         self.stats.block_runs += 1;
         self.stats.block_instrs += n as u64;
         (
@@ -384,6 +398,13 @@ impl CortexMJitEngine {
     }
 
     pub fn step_unit(&mut self, machine: &mut Machine<CortexM>) -> u32 {
+        // A mid-IT entry must go to the interpreter: the compiled block at
+        // that PC models its body as unconditional (its `it_state` starts at
+        // 0), so predication lives in `cpu.it_state` alone. `run_jit_loop`
+        // applies the same gate per batch.
+        if machine.cpu.it_state != 0 {
+            return self.interpret_one(machine);
+        }
         let pc = machine.cpu.pc as Pc;
         match self.cache.observe(pc) {
             Lookup::Ready => {
@@ -392,9 +413,12 @@ impl CortexMJitEngine {
                 };
                 let mut x = [0u32; 16];
                 pack_regs(&machine.cpu, &mut x);
-                let (exit, n, clear_exclusive) =
+                let (exit, n, clear_exclusive, it_state) =
                     block.run(&mut x, &mut machine.bus.ram.data, &mut machine.cpu.fpu_s);
                 unpack_regs(&mut machine.cpu, &x);
+                if let Some(it) = it_state {
+                    machine.cpu.it_state = it;
+                }
                 if clear_exclusive {
                     machine.cpu.clear_exclusive_monitor();
                 }
