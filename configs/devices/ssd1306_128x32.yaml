@@ -19,12 +19,16 @@ behavior:
     height: 32
     pixel_format: mono_page
     artifact_format: ssd1306_page
-    ram: { pages: 4, bytes: 512, layout: page_major }
+    ram: { pages: 4, bytes: 512, layout: page_major, stream: always }
     dc: { source: control_byte, command_value: 0x00 }
     default_address: 0x3C
     addressing:
       modes: [horizontal, vertical, page]
       default: horizontal
+    # What the paint artifact publishes beside the pixels. Stated per panel
+    # because these key names are the contract the browser overlay and the
+    # CLI's `painted bytes=` line read.
+    artifact_meta: [ink_bytes, lit_pixels]
     commands:
       # 0x20 SET MEMORY ADDRESSING MODE. A[1:0]: 00 horizontal, 01 vertical,
       # 10 page. 11 is "invalid" in the datasheet; the engine holds the last

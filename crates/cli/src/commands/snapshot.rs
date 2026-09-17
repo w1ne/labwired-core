@@ -399,7 +399,7 @@ pub(crate) fn run_snapshot_capture(
                                 bp.len(),
                             );
                         } else if let Some(panel) = panel_any
-                            .downcast_ref::<labwired_core::peripherals::components::Ili9341>(
+                            .downcast_ref::<labwired_core::peripherals::components::GenericDisplay>(
                         ) {
                             // An RGB565 TFT has no e-paper "refresh" — the
                             // frame memory IS the screen — so the evidence is
@@ -417,14 +417,17 @@ pub(crate) fn run_snapshot_capture(
                             let fb = panel.framebuffer();
                             let painted = fb.iter().filter(|&&b| b != 0x00).count();
                             let generation = u32::from(panel.display_on() && painted > 0);
-                            let (w, h) = panel.dimensions();
+                            let (w, h) = (panel.width(), panel.height());
                             // The most common non-black pixel, so the line says
                             // WHAT was drawn and not merely that something was.
                             // "10176 bytes changed" cannot be checked against a
                             // photo of the real panel; "top colour 0x07E0"
-                            // (RGB565 green) can.
-                            let mut counts: std::collections::HashMap<u16, usize> =
-                                std::collections::HashMap::new();
+                            // (RGB565 green) can. A BTreeMap, not a HashMap: a
+                            // tie between two colours must resolve the same way
+                            // on every run, and `max_by_key` over an ordered
+                            // iterator does that by construction.
+                            let mut counts: std::collections::BTreeMap<u16, usize> =
+                                std::collections::BTreeMap::new();
                             for px in fb.chunks_exact(2) {
                                 let v = u16::from_be_bytes([px[0], px[1]]);
                                 if v != 0 {

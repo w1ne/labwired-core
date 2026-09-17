@@ -966,17 +966,17 @@
         {
           "name": "cs_pin",
           "ty": "str",
-          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+          "doc": "Chip-select GPIO pin label (e.g. \"PA4\")."
         },
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/command GPIO pin (e.g. \"GPIO33\"). Strongly recommended: with it, command/data framing is read from the wire like real silicon. Without it the model must infer framing from byte values, which a real driver's init sequence desynchronises."
+          "doc": "Data/command GPIO pin (e.g. \"GPIO33\"). Required: this model has no infer-framing-from-byte-values fallback, because that inference decodes the second parameter of a stock init's 0xCB as RAMWR and writes the rest of the init sequence into the framebuffer as pixels."
         },
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports `display_on: false`, `painted_bytes: 0`, which is what the part does on a bench."
         }
       ],
       "labs": [
@@ -1407,12 +1407,12 @@
         {
           "name": "cs_pin",
           "ty": "str",
-          "doc": "Chip-select GPIO pin (e.g. \"PB6\"). Defaults to PB6."
+          "doc": "Chip-select GPIO pin label (e.g. \"PB6\")."
         },
         {
           "name": "dc_pin",
           "ty": "str",
-          "doc": "Data/command GPIO pin (e.g. \"PC7\"). Defaults to PC7. Resolved to the driving GPIO's ODR address at attach time."
+          "doc": "Data/command GPIO pin (e.g. \"PC7\"). Required, and it must resolve to a driveable GPIO output register: the bus latches command-vs-data from that register, so a passive (declarative) or unmapped GPIO leaves D/C stuck low, every pixel byte is decoded as a command, and the panel renders blank while the firmware streams real pixels."
         },
         {
           "name": "powered",

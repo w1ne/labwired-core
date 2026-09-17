@@ -15,17 +15,17 @@
 //!
 //! Named `*_pcd8544_differential` so the board-coverage ratchet discovers it.
 
-use labwired_core::peripherals::components::Pcd8544;
+use labwired_core::peripherals::components::{pcd8544, GenericDisplay};
 use labwired_core::peripherals::spi::SpiDevice;
 
 const WIDTH: usize = 84;
 
-fn cmd(p: &mut Pcd8544, byte: u8) {
+fn cmd(p: &mut GenericDisplay, byte: u8) {
     p.set_dc_level(false);
     p.transfer(byte);
 }
 
-fn data(p: &mut Pcd8544, byte: u8) {
+fn data(p: &mut GenericDisplay, byte: u8) {
     p.set_dc_level(true);
     p.transfer(byte);
 }
@@ -34,7 +34,7 @@ fn data(p: &mut Pcd8544, byte: u8) {
 /// DDRAM cell, and the column-first pointer auto-advances to the next column.
 #[test]
 fn pcd8544_addressed_pixel_write_renders_expected_cells() {
-    let mut p = Pcd8544::new("PB6".into(), "PC7".into());
+    let mut p = pcd8544("PB6", "PC7");
 
     assert!(
         p.framebuffer().iter().all(|&b| b == 0),
@@ -66,7 +66,7 @@ fn pcd8544_addressed_pixel_write_renders_expected_cells() {
 /// pixel writes resume — i.e. command framing is honoured, not written as data.
 #[test]
 fn pcd8544_command_bytes_do_not_leak_into_framebuffer() {
-    let mut p = Pcd8544::new("PB6".into(), "PC7".into());
+    let mut p = pcd8544("PB6", "PC7");
 
     // Enter extended set (H = 1) and program Vop/bias — none of this is pixels.
     cmd(&mut p, 0x21); // function set: H = 1

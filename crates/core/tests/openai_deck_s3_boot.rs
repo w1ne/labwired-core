@@ -16,7 +16,7 @@
 mod common;
 use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Sh1107;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
 use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
@@ -43,7 +43,7 @@ fn oled_lit_pixels(bus: &SystemBus) -> usize {
         .attached_slaves()
         .iter()
         .filter(|s| s.address() == OLED_ADDR)
-        .find_map(|s| s.as_any().and_then(|a| a.downcast_ref::<Sh1107>()))
+        .find_map(|s| s.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("SH1107 attached at OLED_ADDR")
         .lit_pixels()
 }

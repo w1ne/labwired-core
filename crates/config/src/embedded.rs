@@ -35,7 +35,7 @@ impl DeviceDescriptor {
 /// wrappers — a part that is a row here can no longer fall out of
 /// `peripherals-manifest.json` by nobody remembering to write its wrapper.
 ///
-/// A `static`, not a `const`: a const of 34 `include_str!` blobs (220 KB of
+/// A `static`, not a `const`: a const of 37 `include_str!` blobs (220 KB of
 /// YAML) is inlined at every use site, while a static has one address and is
 /// materialised once.
 ///
@@ -165,6 +165,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["st7789-170x320"],
         include_str!("../../../configs/devices/st7789.yaml"),
+    ),
+    (
+        &["oled-sh1107"],
+        include_str!("../../../configs/devices/sh1107.yaml"),
+    ),
+    (
+        &["pcd8544"],
+        include_str!("../../../configs/devices/pcd8544.yaml"),
+    ),
+    (
+        &["ili9341"],
+        include_str!("../../../configs/devices/ili9341.yaml"),
     ),
     (
         &["gp2y0a21"],

@@ -2066,6 +2066,139 @@ pub struct DisplaySpec {
     /// which is what a controller does with a command it does not implement.
     #[serde(default)]
     pub commands: Vec<DisplayCommand>,
+    /// Panel flags as they stand at power-on, before firmware sends anything.
+    /// Every MIPI DCS panel powers on dark and asleep (all `false`, the
+    /// default); the PCD8544 powers on with its display-control D bit set and
+    /// its power-down bit clear, so a bench module lights up before any
+    /// `display_on` command. A model that assumed dark would report a blank
+    /// panel for firmware that legitimately never sends one.
+    #[serde(default)]
+    pub power_on: DisplayPowerOn,
+    /// What a CS assert does to a half-open stream.
+    #[serde(default)]
+    pub cs_select: DisplayCsSelect,
+    /// Which panel flags and counters the paint artifact's `meta` carries, and
+    /// under what key.
+    ///
+    /// NOT a house style with per-format defaults: every consumer that decodes
+    /// a panel — the browser overlay, the CLI's `painted bytes=` line, the
+    /// evidence tests — reads these names, so which keys a panel publishes is
+    /// part of its contract and belongs in its descriptor. `w`, `h`, `format`
+    /// and `generation` are always present because they describe the payload
+    /// itself; everything else is listed here.
+    pub artifact_meta: Vec<DisplayMetaField>,
+}
+
+/// What a CS assert does to a stream that is already open.
+///
+/// Both readings are real and the two panels here disagree. The ST7789 model
+/// treats CS as the transaction boundary: a half-sent command does not survive
+/// a deselect. The ILI9341 model deliberately lets a RAMWR pixel stream survive
+/// one, because a driver that chunks a large blit releases CS between bursts
+/// and expects the pointer to be where it left it — closing the stream there
+/// paints the first chunk and drops the rest.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayCsSelect {
+    /// CS assert closes the open stream and discards a partial command.
+    #[default]
+    ClosesStream,
+    /// CS assert changes nothing; the stream and the address counters survive.
+    KeepsStream,
+}
+
+/// Panel flags at power-on. See [`DisplaySpec::power_on`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DisplayPowerOn {
+    #[serde(default)]
+    pub display_on: bool,
+    #[serde(default)]
+    pub awake: bool,
+    #[serde(default)]
+    pub inverted: bool,
+}
+
+/// One entry of [`DisplaySpec::artifact_meta`]: a flag, optionally published
+/// under a different key than its engine name.
+///
+/// Written as either `- lit_pixels` or `- { flag: lit, as: display_on }`. The
+/// rename exists because the same panel fact has a different published name on
+/// different panels — the PCD8544 has always reported its inverse-video bit as
+/// `inverse`, and renaming it to `inverted` in a port would break the browser
+/// overlay that reads it.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum DisplayMetaField {
+    Flag(DisplayMetaFlag),
+    Renamed {
+        flag: DisplayMetaFlag,
+        #[serde(rename = "as")]
+        published_as: String,
+    },
+}
+
+impl DisplayMetaField {
+    pub fn flag(&self) -> DisplayMetaFlag {
+        match self {
+            Self::Flag(f) => *f,
+            Self::Renamed { flag, .. } => *flag,
+        }
+    }
+
+    /// The `meta` key this entry publishes under.
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Flag(f) => f.default_key(),
+            Self::Renamed { published_as, .. } => published_as,
+        }
+    }
+}
+
+/// A fact about a painted panel that the artifact's `meta` can carry.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayMetaFlag {
+    /// Frame-memory bytes carrying at least one lit pixel (1 bpp panels).
+    InkBytes,
+    /// Lit pixels across a 1 bpp frame memory.
+    LitPixels,
+    /// Artifact bytes that are not 0x00. THE definition the CLI's
+    /// `painted bytes=` line prints.
+    PaintedBytes,
+    /// Artifact payload length.
+    TotalBytes,
+    /// The most common non-black pixel, as `0xRRRR` (RGB565 panels).
+    TopColour,
+    /// How many pixels carry [`Self::TopColour`].
+    TopColourPixels,
+    /// DISPON, and a supply to hold it.
+    DisplayOn,
+    /// SLPOUT seen, and a supply.
+    Awake,
+    /// DISPON **and** awake — what a camera would see.
+    Lit,
+    /// The module's supply pins are connected in the design.
+    Powered,
+    /// Inversion flag. Recorded, never applied to the stored bytes.
+    Inverted,
+}
+
+impl DisplayMetaFlag {
+    pub fn default_key(self) -> &'static str {
+        match self {
+            Self::InkBytes => "ink_bytes",
+            Self::LitPixels => "lit_pixels",
+            Self::PaintedBytes => "painted_bytes",
+            Self::TotalBytes => "total_bytes",
+            Self::TopColour => "top_colour",
+            Self::TopColourPixels => "top_colour_pixels",
+            Self::DisplayOn => "display_on",
+            Self::Awake => "awake",
+            Self::Lit => "lit",
+            Self::Powered => "powered",
+            Self::Inverted => "inverted",
+        }
+    }
 }
 
 /// How the frame memory encodes a pixel.
@@ -2107,6 +2240,27 @@ pub struct DisplayRam {
     /// trusting it, so the two cannot drift apart.
     pub bytes: u32,
     pub layout: DisplayRamLayout,
+    /// Whether a data byte is frame memory unconditionally, or only after a
+    /// `ram_write` command has opened the stream.
+    ///
+    /// STATED RATHER THAN DERIVED FROM THE FRAMING. It is tempting to say
+    /// "I²C control byte ⇒ always, D/C pad ⇒ command", because that is what the
+    /// SSD1306 and the ST7789 do. The PCD8544 is a D/C-pad panel with NO RAMWR
+    /// opcode at all — every D/C-high byte is DDRAM — so deriving the rule from
+    /// the framing would have dropped every pixel that panel was ever sent, on
+    /// a code path with no error to read.
+    pub stream: DisplayRamStream,
+}
+
+/// See [`DisplayRam::stream`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayRamStream {
+    /// Every data byte is frame memory. There is no RAMWR opcode.
+    Always,
+    /// A `ram_write` action opens the stream; data bytes outside it are
+    /// command parameters or strays.
+    Command,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -2156,6 +2310,23 @@ pub struct DisplayAddressing {
     pub modes: Vec<DisplayAddressingMode>,
     #[serde(default)]
     pub default: DisplayAddressingMode,
+    /// What the column counter does at the last column in `page` addressing.
+    /// The two paged OLEDs here disagree and the difference is a whole row of
+    /// pixels: the SSD1306 model holds the counter at the last column, the
+    /// SH1107 wraps it back to zero.
+    #[serde(default)]
+    pub page_wrap: DisplayPageWrap,
+}
+
+/// See [`DisplayAddressing::page_wrap`].
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayPageWrap {
+    /// Hold at the last column of the frame memory.
+    #[default]
+    Clamp,
+    /// Return to column 0.
+    Wrap,
 }
 
 impl Default for DisplayAddressing {
@@ -2163,6 +2334,7 @@ impl Default for DisplayAddressing {
         Self {
             modes: vec![DisplayAddressingMode::Horizontal],
             default: DisplayAddressingMode::Horizontal,
+            page_wrap: DisplayPageWrap::Clamp,
         }
     }
 }
@@ -2228,6 +2400,28 @@ pub struct DisplayCommand {
     pub args: u8,
     #[serde(default, rename = "do")]
     pub actions: Vec<DisplayAction>,
+    /// Guard: this entry decodes the opcode only while a var holds a
+    /// particular value.
+    ///
+    /// An INSTRUCTION-SET BANK, which is a real thing on the older LCD
+    /// controllers: the PCD8544's function-set H bit decides whether `0x80|n`
+    /// means "set X address" or "set Vop", and nothing about the byte says
+    /// which. Without a guard the two readings share one entry in a flat
+    /// 256-way table and one of them silently wins.
+    #[serde(default)]
+    pub when: Option<DisplayWhen>,
+}
+
+/// See [`DisplayCommand::when`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DisplayWhen {
+    /// Name of the var (see [`DisplaySpec::vars`]) the guard reads.
+    pub var: String,
+    /// Applied to the var before the comparison. Absent ⇒ the whole value.
+    #[serde(default)]
+    pub mask: Option<u32>,
+    /// The masked value this entry requires.
+    pub equals: u32,
 }
 
 /// What a command does when its parameters are complete.
@@ -2280,6 +2474,13 @@ pub struct DisplayAction {
     /// "Contents of memory is not cleared" — so a painted frame survives.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub reset_control: bool,
+    /// Blank frame memory. A SEPARATE action from `reset_control` because the
+    /// two are separate facts: a MIPI SWRESET resets control state and keeps
+    /// the picture (ST7789V §9.1.22 p.202, ILI9341 §8.2.2), while a hardware
+    /// RST line clears both. A controller that does clear declares both
+    /// actions; nothing is implied.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clear_ram: bool,
 }
 
 impl DisplayAction {
@@ -2295,6 +2496,7 @@ impl DisplayAction {
             + self.awake.is_some() as usize
             + self.invert.is_some() as usize
             + self.reset_control as usize
+            + self.clear_ram as usize
     }
 }
 

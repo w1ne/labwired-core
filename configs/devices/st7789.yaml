@@ -37,7 +37,7 @@ behavior:
     height: 320
     pixel_format: rgb565
     artifact_format: rgb565_be
-    ram: { bytes: 153600, layout: row_major }
+    ram: { bytes: 153600, layout: row_major, stream: command }
     dc: { source: pin, pin_role: dc, command_level: 0 }
     addressing: { modes: [horizontal], default: horizontal }
     # Section 9.1.28, p.215: MADCTL D7 = page address order (MY), D6 = column
@@ -50,6 +50,10 @@ behavior:
     # SCL/SDA/CS/DC/RES and no VCC/GND describes a panel that is dark on a bench.
     supply_gated: true
     glass_crop: true
+    # What the paint artifact publishes beside the pixels; see ssd1306.yaml.
+    artifact_meta:
+      [display_on, lit, awake, powered, inverted, painted_bytes, total_bytes,
+       top_colour, top_colour_pixels]
     commands:
       # 9.1.22 p.202, S/W Reset: "Contents of memory is not cleared." Only the
       # control state resets — clearing frame memory here would erase a painted

@@ -2680,7 +2680,7 @@ pub mod integration_tests {
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
         let (odr_addr, bit) =
             crate::bus::SystemBus::resolve_pin_odr_pub(&bus, "GPIO2").expect("GPIO2 ODR");
-        let mut lcd = crate::peripherals::components::Pcd8544::new("GPIO10".into(), "GPIO2".into());
+        let mut lcd = crate::peripherals::components::pcd8544("GPIO10", "GPIO2");
         crate::peripherals::spi::SpiDevice::set_dc_source(&mut lcd, odr_addr, bit);
 
         bus.attach_spi_device("spi2", Box::new(lcd))
@@ -2712,9 +2712,9 @@ pub mod integration_tests {
             .attached_devices()
             .iter()
             .find_map(|device| {
-                device
-                    .as_any()
-                    .and_then(|any| any.downcast_ref::<crate::peripherals::components::Pcd8544>())
+                device.as_any().and_then(|any| {
+                    any.downcast_ref::<crate::peripherals::components::GenericDisplay>()
+                })
             })
             .expect("attached pcd8544");
         assert_eq!(

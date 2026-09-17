@@ -1,10 +1,13 @@
+//! ⚠️ VERBATIM COPY of the deleted `components/ili9341.rs`. See `mod.rs`.
+//! Do not edit: its only job is to disagree with the YAML model if the port moved a byte.
+
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
 //
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::peripherals::spi::SpiDevice;
+use labwired_core::peripherals::spi::SpiDevice;
 use std::any::Any;
 
 const WIDTH: usize = 240;
@@ -22,7 +25,7 @@ const MADCTL_MV: u8 = 0x20;
 ///
 /// Framing comes from the **D/C line**, exactly as on silicon: D/C low marks a
 /// command byte, D/C high marks a data byte. The bus latches the configured
-/// GPIO's output level into [`SpiDevice::set_dc_level`] before each transfer.
+/// GPIO's output level into `SpiDevice::set_dc_level` before each transfer.
 ///
 /// This used to infer framing from the byte values instead — a table of "how
 /// many parameters does this command take", with unknown commands assumed to
@@ -80,7 +83,7 @@ pub struct Ili9341 {
     /// ⚠️ DEFAULTS TO `true`. Only an explicit `powered: false` in the compiled
     /// manifest darkens the panel; an absent key means powered, because every
     /// curated lab states signals and leaves the rails implicit. See
-    /// [`crate::peripherals::components::supply`] for the measurement behind
+    /// `peripherals::components::supply` for the measurement behind
     /// that asymmetry, and `st7789.rs` for the reference implementation this
     /// mirrors.
     powered: bool,
@@ -562,8 +565,8 @@ impl SpiDevice for Ili9341 {
     fn artifacts(
         &self,
         id: &str,
-        opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
+        opts: &labwired_core::inspect::InspectOpts,
+    ) -> Vec<labwired_core::inspect::Artifact> {
         let fb = self.oriented_framebuffer();
         let painted = fb.iter().filter(|&&b| b != 0x00).count();
         // LOGICAL, not physical: `fb` is indexed by the firmware's CASET/PASET
@@ -582,14 +585,14 @@ impl SpiDevice for Ili9341 {
             }
         }
         let top = counts.iter().max_by_key(|&(_, n)| *n);
-        vec![crate::inspect::Artifact {
+        vec![labwired_core::inspect::Artifact {
             kind: "framebuffer".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
                 "w": w,
                 "h": h,
-                "format": crate::inspect::artifact_format::RGB565_BE,
-                "generation": crate::inspect::artifact_generation(&fb),
+                "format": labwired_core::inspect::artifact_format::RGB565_BE,
+                "generation": labwired_core::inspect::artifact_generation(&fb),
                 "display_on": self.display_on(),
                 // Reported so a dark frame explains itself. Without this, a
                 // panel darkened for having no supply is indistinguishable
@@ -600,7 +603,7 @@ impl SpiDevice for Ili9341 {
                 "top_colour": top.map(|(v, _)| format!("0x{v:04X}")),
                 "top_colour_pixels": top.map(|(_, n)| *n),
             }),
-            bytes: crate::inspect::artifact_bytes(&fb, opts),
+            bytes: labwired_core::inspect::artifact_bytes(&fb, opts),
         }]
     }
 
@@ -700,517 +703,5 @@ impl SpiDevice for Ili9341 {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
-    }
-}
-
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
-};
-
-pub struct Ili9341Kit;
-pub static ILI9341_KIT: Ili9341Kit = Ili9341Kit;
-
-static ILI9341_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "ili9341",
-    label: "ILI9341 TFT",
-    summary: "240×320 RGB565 SPI TFT display.",
-    detail: "Implements the cmd / RAMWR SPI protocol against an in-memory framebuffer. \
-             The playground surfaces pixels through the simulator bridge so the host can render \
-             the display verbatim.",
-    transport: Transport::Spi,
-    category: Category::Spi,
-    config_keys: &[
-        ConfigKey {
-            name: "cs_pin",
-            ty: ConfigType::Str,
-            doc: "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4.",
-        },
-        ConfigKey {
-            name: "dc_pin",
-            ty: ConfigType::Str,
-            doc: "Data/command GPIO pin (e.g. \"GPIO33\"). Strongly recommended: \
-                  with it, command/data framing is read from the wire like real \
-                  silicon. Without it the model must infer framing from byte \
-                  values, which a real driver's init sequence desynchronises.",
-        },
-        crate::peripherals::components::supply::POWERED_CONFIG_KEY,
-    ],
-    labs: &[LabRef {
-        board_id: "ili9341-tft-lab",
-        chip: "stm32f103",
-        example_dir: "ili9341-tft-lab",
-        demo_elf: "demo-ili9341-tft-lab.elf",
-    }],
-};
-
-impl PeripheralKit for Ili9341Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &ILI9341_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        let dc_pin = ctx.config_str("dc_pin").map(|s| s.to_string());
-        let mut dev = Ili9341::new(cs_pin);
-        // Supply state. `Some(false)` is the only value that changes anything;
-        // `None` (no key at all — every hand-written lab manifest) and
-        // `Some(true)` both leave the panel powered.
-        if !crate::peripherals::components::supply::powered_from_config(ctx) {
-            dev = dev.with_powered(false);
-        }
-        if let Some(dc) = dc_pin {
-            // Resolving the pin to its GPIO output register is the half that
-            // makes D/C real: the bus samples that register before each
-            // transfer. Declaring `dc_pin` without this leaves the level stuck
-            // low, so every byte frames as a command and not one pixel lands —
-            // a blank panel with no error anywhere.
-            let dc_src = ctx.resolve_pin_odr(&dc).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "ili9341 '{}': D/C pin '{}' does not resolve to a driveable GPIO output. \
-                     The bus latches command-vs-data from this pin's output register, so an \
-                     unmapped pin leaves D/C stuck low and the display renders blank.",
-                    ctx.device_id(),
-                    dc,
-                )
-            })?;
-            dev = dev.with_dc_pin(dc);
-            let (odr_addr, bit) = dc_src;
-            crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
-        }
-        ctx.attach_spi_device(Box::new(dev))?;
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::peripherals::spi::SpiDevice;
-
-    fn send_cmd(dev: &mut Ili9341, cmd: u8) {
-        dev.cs_select();
-        dev.transfer(cmd);
-        dev.cs_release();
-    }
-
-    fn send_cmd_params(dev: &mut Ili9341, cmd: u8, params: &[u8]) {
-        dev.cs_select();
-        dev.transfer(cmd);
-        for &b in params {
-            dev.transfer(b);
-        }
-        dev.cs_release();
-    }
-
-    /// Drive a D/C-wired panel the way the bus does: latch the level, then
-    /// clock the byte.
-    fn dc_send(dev: &mut Ili9341, dc_high: bool, bytes: &[u8]) {
-        dev.set_dc_level(dc_high);
-        for &b in bytes {
-            dev.transfer(b);
-        }
-    }
-
-    fn cmd(dev: &mut Ili9341, c: u8, params: &[u8]) {
-        dc_send(dev, false, &[c]);
-        if !params.is_empty() {
-            dc_send(dev, true, params);
-        }
-    }
-
-    // Adafruit_ILI9341's stock init table, run through the model exactly as the
-    // bus delivers it. This is the sequence that used to destroy the model:
-    // 0xCB is undocumented, the old value-inference treated it as taking no
-    // parameters, and its second parameter 0x2C was decoded as RAMWR — opening
-    // the pixel stream mid-init so SLPOUT and DISPON were written into the
-    // framebuffer as pixel data and the display never came on.
-    #[test]
-    fn adafruit_init_sequence_leaves_the_display_on_and_the_framebuffer_clean() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0xEF, &[0x03, 0x80, 0x02]);
-        cmd(&mut dev, 0xCF, &[0x00, 0xC1, 0x30]);
-        cmd(&mut dev, 0xED, &[0x64, 0x03, 0x12, 0x81]);
-        cmd(&mut dev, 0xE8, &[0x85, 0x00, 0x78]);
-        cmd(&mut dev, 0xCB, &[0x39, 0x2C, 0x00, 0x34, 0x02]); // the killer
-        cmd(&mut dev, 0xF7, &[0x20]);
-        cmd(&mut dev, 0xEA, &[0x00, 0x00]);
-        cmd(&mut dev, 0xC0, &[0x23]);
-        cmd(&mut dev, 0xC1, &[0x10]);
-        cmd(&mut dev, 0xC5, &[0x3E, 0x28]);
-        cmd(&mut dev, 0xC7, &[0x86]);
-        cmd(&mut dev, 0x36, &[0x48]);
-        cmd(&mut dev, 0x3A, &[0x55]);
-        cmd(&mut dev, 0xB1, &[0x00, 0x18]);
-        cmd(&mut dev, 0xB6, &[0x08, 0x82, 0x27]);
-        cmd(&mut dev, 0x11, &[]); // SLPOUT
-        cmd(&mut dev, 0x29, &[]); // DISPON
-
-        assert!(
-            dev.display_on(),
-            "DISPON must be seen as a command, not swallowed as pixel data"
-        );
-        assert!(
-            dev.framebuffer().iter().all(|&b| b == 0),
-            "init must not write a single pixel"
-        );
-    }
-
-    // A landscape sketch (`setRotation(1)`) sets MADCTL MV and then addresses
-    // columns 0..=319. Dropping MADCTL and clamping columns to 239 folded that
-    // into portrait: a correct firmware, the wrong picture, no diagnostic.
-    #[test]
-    fn madctl_landscape_allows_the_full_320_column_window() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0x36, &[MADCTL_MV]);
-        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x01, 0x3F]); // columns 0..=319
-        assert_eq!(dev.col_end, 319, "landscape column window must not clamp");
-
-        // The pixel at logical (319, 0) is physical (x=0, y=319) once MV swaps
-        // the axes — inside the 240x320 frame memory, not discarded.
-        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]);
-        dc_send(&mut dev, false, &[0x2C]);
-        dev.cur_col = 319;
-        dev.cur_row = 0;
-        dc_send(&mut dev, true, &[0xF8, 0x00]);
-        let idx = (319 * WIDTH) * 2;
-        assert_eq!(
-            (dev.framebuffer()[idx], dev.framebuffer()[idx + 1]),
-            (0xF8, 0x00),
-            "landscape pixel must land in frame memory"
-        );
-    }
-
-    // The raw framebuffer is physical scan-out order; the canvas needs the
-    // firmware's logical order. `setRotation(0)` (Adafruit's stock MADCTL 0x48 =
-    // MX | BGR) mirrors horizontally, so the raw bytes read mirrored on a
-    // row-major canvas. The oriented view applies MADCTL back so the host sees
-    // the picture the firmware drew.
-    #[test]
-    fn oriented_framebuffer_applies_madctl_mirror() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0x36, &[MADCTL_MX]); // horizontal mirror
-        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x01]); // cols 0..1
-        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]); // row 0
-        dc_send(&mut dev, false, &[0x2C]);
-        dc_send(&mut dev, true, &[0xF8, 0x00, 0x07, 0xE0]); // red then green
-
-        // Raw framebuffer: red landed at physical x=239 (logical col 0 with MX=1),
-        // green at physical x=238 (logical col 1).
-        let raw = dev.framebuffer();
-        let red_idx = 239 * 2;
-        let green_idx = 238 * 2;
-        assert_eq!((raw[red_idx], raw[red_idx + 1]), (0xF8, 0x00));
-        assert_eq!((raw[green_idx], raw[green_idx + 1]), (0x07, 0xE0));
-
-        // Oriented framebuffer: red at logical col 0, green at logical col 1.
-        let oriented = dev.oriented_framebuffer();
-        assert_eq!((oriented[0], oriented[1]), (0xF8, 0x00));
-        assert_eq!((oriented[2], oriented[3]), (0x07, 0xE0));
-    }
-
-    /// A landscape (MADCTL_MV) frame must come out 320x240 with a 320-pixel
-    /// stride, not 240x320 with the rows sheared.
-    ///
-    /// Negative control: restore the old body (iterate `0..WIDTH` x `0..HEIGHT`
-    /// writing at `row * WIDTH + col`) and this fails twice — the pixel written
-    /// at logical (300, 0) never reaches the output at all, and (0, 1) lands 80
-    /// pixels off.
-    #[test]
-    fn oriented_framebuffer_is_not_sheared_in_landscape() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0x36, &[MADCTL_MV]);
-        assert_eq!(dev.logical_dimensions(), (320, 240));
-
-        // Logical (300, 0) — beyond the physical 240-pixel width, reachable
-        // only because MV swapped the axes.
-        cmd(&mut dev, 0x2A, &[0x01, 0x2C, 0x01, 0x2C]); // col 300..=300
-        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]); // row 0
-        dc_send(&mut dev, false, &[0x2C]);
-        dc_send(&mut dev, true, &[0xF8, 0x00]); // red
-
-        // Logical (0, 1) — the first pixel of the second logical row.
-        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x00]);
-        cmd(&mut dev, 0x2B, &[0x00, 0x01, 0x00, 0x01]);
-        dc_send(&mut dev, false, &[0x2C]);
-        dc_send(&mut dev, true, &[0x07, 0xE0]); // green
-
-        let out = dev.oriented_framebuffer();
-        assert_eq!(out.len(), 320 * 240 * 2, "landscape view is 320x240");
-
-        // Written through a helper rather than inline: `(0 * 320 + 300) * 2`
-        // says "row 0, column 300, two bytes per pixel" far better than the
-        // constant it folds to, and clippy rejects the multiply-by-zero.
-        let at = |row: usize, col: usize| (row * 320 + col) * 2;
-
-        let red = at(0, 300);
-        assert_eq!(
-            (out[red], out[red + 1]),
-            (0xF8, 0x00),
-            "logical (300,0) must appear at output index (row 0, col 300)"
-        );
-        let green = at(1, 0);
-        assert_eq!(
-            (out[green], out[green + 1]),
-            (0x07, 0xE0),
-            "logical (0,1) must start the second output row at a 320 stride"
-        );
-    }
-
-    #[test]
-    fn oriented_framebuffer_is_identity_when_madctl_is_zero() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x01]); // cols 0..1
-        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]); // row 0
-        dc_send(&mut dev, false, &[0x2C]);
-        dc_send(&mut dev, true, &[0xF8, 0x00, 0x07, 0xE0]);
-
-        assert_eq!(dev.oriented_framebuffer()[..4], dev.framebuffer()[..4]);
-    }
-
-    // Datasheet 8.2.2: "the Frame Memory contents are unaffected by this
-    // command". Clearing on SWRESET let firmware that relies on it to blank the
-    // screen pass here and show stale pixels on real hardware.
-    #[test]
-    fn swreset_does_not_clear_frame_memory() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0x2A, &[0, 0, 0, 0]);
-        cmd(&mut dev, 0x2B, &[0, 0, 0, 0]);
-        dc_send(&mut dev, false, &[0x2C]);
-        dc_send(&mut dev, true, &[0xAB, 0xCD]);
-        assert_eq!((dev.framebuffer()[0], dev.framebuffer()[1]), (0xAB, 0xCD));
-
-        cmd(&mut dev, 0x01, &[]); // SWRESET
-        assert_eq!(
-            (dev.framebuffer()[0], dev.framebuffer()[1]),
-            (0xAB, 0xCD),
-            "SWRESET must leave frame memory untouched"
-        );
-        assert!(!dev.display_on(), "but it does turn the display off");
-    }
-
-    // RAMWR-continue (0x3C) resumes the pixel stream WITHOUT resetting the
-    // pointer — how drivers chunk a large blit. Undecoded before, so those
-    // pixel bytes were interpreted as commands.
-    #[test]
-    fn ramwr_continue_resumes_without_restarting_the_window() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        cmd(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x03]);
-        cmd(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x00]);
-        dc_send(&mut dev, false, &[0x2C]);
-        dc_send(&mut dev, true, &[0x11, 0x11, 0x22, 0x22]);
-        dc_send(&mut dev, false, &[0x3C]);
-        dc_send(&mut dev, true, &[0x33, 0x33]);
-        assert_eq!(
-            &dev.framebuffer()[0..6],
-            &[0x11, 0x11, 0x22, 0x22, 0x33, 0x33],
-            "continue must append at the third pixel, not restart at the first"
-        );
-    }
-
-    #[test]
-    fn test_dispon_dispoff() {
-        let mut dev = Ili9341::new("PA4");
-        assert!(!dev.display_on());
-        send_cmd(&mut dev, 0x29);
-        assert!(dev.display_on());
-        send_cmd(&mut dev, 0x28);
-        assert!(!dev.display_on());
-    }
-
-    #[test]
-    fn test_caset_paset() {
-        let mut dev = Ili9341::new("PA4");
-        // Set column window 10..50
-        send_cmd_params(&mut dev, 0x2A, &[0x00, 0x0A, 0x00, 0x32]);
-        assert_eq!(dev.col_start, 10);
-        assert_eq!(dev.col_end, 50);
-        // Set row window 20..100
-        send_cmd_params(&mut dev, 0x2B, &[0x00, 0x14, 0x00, 0x64]);
-        assert_eq!(dev.row_start, 20);
-        assert_eq!(dev.row_end, 100);
-    }
-
-    #[test]
-    fn test_ramwr_single_pixel() {
-        let mut dev = Ili9341::new("PA4");
-        // Window: col 0..239, row 0..319 (default)
-        // Write one red pixel (RGB565: 0xF800)
-        dev.cs_select();
-        dev.transfer(0x2C); // RAMWR
-        dev.transfer(0xF8); // hi
-        dev.transfer(0x00); // lo
-        dev.cs_release();
-        let fb = dev.framebuffer();
-        assert_eq!(fb[0], 0xF8, "framebuffer[0] should be pixel hi byte");
-        assert_eq!(fb[1], 0x00, "framebuffer[1] should be pixel lo byte");
-    }
-
-    #[test]
-    fn test_ramwr_advances_column() {
-        let mut dev = Ili9341::new("PA4");
-        // Write two pixels: red (0xF800) then green (0x07E0)
-        dev.cs_select();
-        dev.transfer(0x2C);
-        // Pixel 0: red
-        dev.transfer(0xF8);
-        dev.transfer(0x00);
-        // Pixel 1: green
-        dev.transfer(0x07);
-        dev.transfer(0xE0);
-        dev.cs_release();
-        let fb = dev.framebuffer();
-        assert_eq!(fb[0], 0xF8);
-        assert_eq!(fb[1], 0x00);
-        assert_eq!(fb[2], 0x07);
-        assert_eq!(fb[3], 0xE0);
-    }
-
-    // Datasheet §8.2.2: "the Frame Memory contents are unaffected by this
-    // command". This test previously asserted the opposite, pinning a model
-    // behaviour that let firmware relying on SWRESET to blank the screen pass
-    // in the twin and show stale pixels on silicon. The no-D/C path must agree
-    // with the D/C path (see `swreset_does_not_clear_frame_memory`) — one
-    // command cannot mean two things depending on how it was framed.
-    #[test]
-    fn test_swreset_preserves_framebuffer_and_turns_display_off() {
-        let mut dev = Ili9341::new("PA4");
-        send_cmd(&mut dev, 0x29);
-        dev.cs_select();
-        dev.transfer(0x2C);
-        dev.transfer(0xFF);
-        dev.transfer(0xFF);
-        dev.cs_release();
-        assert_ne!(dev.framebuffer()[0], 0);
-
-        send_cmd(&mut dev, 0x01);
-        assert_eq!(
-            dev.framebuffer()[0],
-            0xFF,
-            "SWRESET must leave frame memory untouched"
-        );
-        assert!(!dev.display_on(), "SWRESET does turn the display off");
-    }
-
-    #[test]
-    fn test_window_wrap_on_row_overflow() {
-        let mut dev = Ili9341::new("PA4");
-        // Set a 2-column × 2-row window
-        send_cmd_params(&mut dev, 0x2A, &[0x00, 0x00, 0x00, 0x01]); // col 0..1
-        send_cmd_params(&mut dev, 0x2B, &[0x00, 0x00, 0x00, 0x01]); // row 0..1
-                                                                    // Write 4 pixels (fills the 2×2 window)
-        dev.cs_select();
-        dev.transfer(0x2C);
-        for _ in 0..4 {
-            dev.transfer(0xF8); // hi
-            dev.transfer(0x00); // lo
-        }
-        // 5th pixel wraps back to (col=0, row=0)
-        dev.transfer(0x07);
-        dev.transfer(0xE0);
-        dev.cs_release();
-        let fb = dev.framebuffer();
-        // (0,0) should now be green (0x07E0), overwritten by wrap
-        assert_eq!(fb[0], 0x07, "wrapped pixel hi");
-        assert_eq!(fb[1], 0xE0, "wrapped pixel lo");
-    }
-
-    // ─── Supply ───────────────────────────────────────────────────────────
-    //
-    // THE MEASURED BUG (st7789.rs carries the full account). A diagram wiring
-    // only a panel's signal pins — no VCC, no GND — ran and came back painted
-    // and lit. On a bench that panel is dark. The pair below makes that
-    // impossible for the ILI9341: the same bytes into a powered panel and into
-    // an unpowered one, with the POWERED one asserted to still light and paint
-    // so a model that simply never works cannot fake the fix.
-
-    /// A firmware init that unambiguously lights the panel and paints a
-    /// 4x4 window of 0xFFFF (white).
-    ///
-    /// ⚠️ White, not red: `painted_bytes` counts NON-ZERO BYTES, so a 0xF800
-    /// pixel contributes ONE byte, not two, and the count would read half.
-    fn drive_a_frame(dev: &mut Ili9341) {
-        cmd(dev, 0x11, &[]); // SLPOUT
-        cmd(dev, 0x29, &[]); // DISPON
-        cmd(dev, 0x2A, &[0x00, 0x00, 0x00, 0x03]); // CASET 0..3
-        cmd(dev, 0x2B, &[0x00, 0x00, 0x00, 0x03]); // PASET 0..3
-        dc_send(dev, false, &[0x2C]); // RAMWR
-        for _ in 0..16 {
-            dc_send(dev, true, &[0xFF, 0xFF]);
-        }
-    }
-
-    fn supply_meta(dev: &Ili9341) -> serde_json::Value {
-        SpiDevice::artifacts(dev, "tft", &crate::inspect::InspectOpts::default())
-            .into_iter()
-            .next()
-            .expect("one framebuffer artifact")
-            .meta
-    }
-
-    /// The POSITIVE control. Without it, "unpowered is dark" would also pass on
-    /// a model that never paints at all.
-    #[test]
-    fn a_powered_panel_driven_this_way_lights_and_paints() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0");
-        drive_a_frame(&mut dev);
-
-        assert!(dev.powered(), "no supply config at all must mean powered");
-        assert!(dev.display_on(), "DISPON reached a powered panel");
-
-        let m = supply_meta(&dev);
-        assert_eq!(m["painted_bytes"], 32, "16 pixels of 0xFFFF");
-        assert_eq!(m["display_on"], true);
-        assert_eq!(m["powered"], true);
-    }
-
-    /// The FIX. Identical drive, supply declared absent: nothing latches.
-    #[test]
-    fn an_unpowered_panel_reports_dark_on_every_field_the_bug_reported() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0").with_powered(false);
-        drive_a_frame(&mut dev);
-
-        assert!(
-            !dev.display_on(),
-            "an unpowered controller cannot hold DISPON"
-        );
-        let m = supply_meta(&dev);
-        assert_eq!(m["painted_bytes"], 0, "no supply, no paint");
-        assert_eq!(m["display_on"], false);
-        assert_eq!(m["powered"], false, "the artifact must say WHY it is dark");
-    }
-
-    /// Paint must not ACCUMULATE either: the bus is refused, so frame memory
-    /// and the addressing window are untouched rather than under-reported.
-    #[test]
-    fn an_unpowered_panel_never_accumulates_paint() {
-        let mut dev = Ili9341::new("PA4").with_dc_pin("PB0").with_powered(false);
-        for _ in 0..5 {
-            drive_a_frame(&mut dev);
-        }
-        assert_eq!(
-            dev.framebuffer().iter().filter(|&&b| b != 0).count(),
-            0,
-            "frame memory must be untouched, not just reported as zero",
-        );
-        assert_eq!((dev.col_start, dev.col_end), (0, (WIDTH as u16) - 1));
-        assert_eq!((dev.row_start, dev.row_end), (0, (HEIGHT as u16) - 1));
-    }
-
-    /// ⚠️ THE BACKWARDS-COMPATIBILITY GUARD. Every hand-written lab manifest
-    /// declares no supply at all. If a missing key ever came to mean
-    /// "unpowered", all of them would go black.
-    #[test]
-    fn absent_supply_information_means_powered() {
-        assert!(Ili9341::new("PA4").powered(), "the default must be powered");
-        assert!(
-            Ili9341::default().powered(),
-            "and so must the Default impl the factories use",
-        );
-        assert!(
-            Ili9341::new("PA4").with_powered(true).powered(),
-            "an explicit true is powered too — only `false` darkens",
-        );
     }
 }

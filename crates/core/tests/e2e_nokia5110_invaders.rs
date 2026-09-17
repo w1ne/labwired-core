@@ -11,7 +11,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::{SystemBus, RECOMMENDED_TICK_INTERVAL};
 use labwired_core::cpu::cortex_m::CortexM;
-use labwired_core::peripherals::components::Pcd8544;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{DebugControl, Machine};
 use std::path::{Path, PathBuf};
@@ -85,7 +85,7 @@ fn framebuffer(machine: &Cm) -> Vec<u8> {
         .unwrap();
     spi.attached_devices
         .iter()
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("PCD8544 attached to spi1")
         .framebuffer()
         .to_vec()
