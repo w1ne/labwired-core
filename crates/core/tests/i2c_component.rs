@@ -4,14 +4,24 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use labwired_core::peripherals::components::Mpu6050;
+use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
+
+/// The MPU6050 is a `configs/devices/mpu6050.yaml` descriptor; there is no
+/// hand-written struct to construct any more.
+fn mpu6050(address: u8) -> GenericI2cDevice {
+    GenericI2cDevice::from_yaml(
+        labwired_config::embedded_device_yaml("mpu6050").expect("mpu6050 is embedded"),
+        address,
+    )
+    .expect("mpu6050.yaml builds")
+}
 use labwired_core::peripherals::i2c::I2c;
 use labwired_core::Peripheral;
 
 #[test]
 fn test_mpu6050_who_am_i() {
     let mut i2c = I2c::new();
-    let mpu = Mpu6050::new(0x68);
+    let mpu = mpu6050(0x68);
     // Off-bus attach still goes through the mandatory-trace helper (no untraced
     // attach path); the throwaway trace is unused by this model-level test.
     let trace = labwired_core::bus::bus_trace::new_log();

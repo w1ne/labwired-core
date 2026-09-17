@@ -147,6 +147,13 @@ pub struct CortexM {
     /// (D0..D15 = pairs of S regs) is NOT modelled; firmware compiled for
     /// `-mfpu=fpv4-sp-d16` only emits single-precision ops anyway.
     pub fpu_s: [u32; 32],
+    /// FPSCR, the VFP status/control register. Only the two mode bits that
+    /// change arithmetic results are modeled: FZ (bit 24) and DN (bit 25).
+    /// Everything else — exception-enable bits, cumulative flags, rounding
+    /// mode — reads as zero and is not updated by VFP ops (no VMRS/VMSR
+    /// instruction is decoded yet). Reset value 0, so a core that never
+    /// touches FPSCR keeps the plain IEEE-754 results.
+    pub fpscr: u32,
     /// True while the core is suspended in WFI sleep. Set by the `Wfi`
     /// executor when no wake-up event is pending, cleared at the top of every
     /// `step_internal`. Gates idle fast-forward; transient (not snapshotted),
@@ -208,6 +215,7 @@ impl Default for CortexM {
             pending_undef_instruction: false,
             decode_cache: Box::new([None; 4096]),
             fpu_s: [0u32; 32],
+            fpscr: 0,
             sleeping: false,
             exclusive_byte: None,
             #[cfg(feature = "jit")]
@@ -215,6 +223,186 @@ impl Default for CortexM {
             #[cfg(feature = "jit")]
             jit_engine: None,
         }
+    }
+}
+
+/// FPSCR bit 24 — Flush-to-Zero. Denormal inputs are replaced by a zero of
+/// the same sign before the operation and denormal results after it, matching
+/// ARMv7-M VFPv4.
+pub const FPSCR_FZ: u32 = 1 << 24;
+/// FPSCR bit 25 — Default NaN. Every NaN result becomes [`VFP_DEFAULT_NAN`],
+/// discarding whatever payload the host FPU produced.
+pub const FPSCR_DN: u32 = 1 << 25;
+
+/// The ARM default NaN: quiet, sign clear, zero payload.
+pub const VFP_DEFAULT_NAN: u32 = 0x7FC0_0000;
+
+/// Quiet bit of a binary32 NaN.
+const F32_QUIET_BIT: u32 = 0x0040_0000;
+/// Exponent field of a binary32.
+const F32_EXP_MASK: u32 = 0x7F80_0000;
+/// Mantissa field of a binary32.
+const F32_MANT_MASK: u32 = 0x007F_FFFF;
+/// Sign bit of a binary32.
+const F32_SIGN_BIT: u32 = 0x8000_0000;
+
+/// True for a binary32 NaN (exponent all ones, non-zero mantissa).
+#[inline]
+pub fn vfp_is_nan(bits: u32) -> bool {
+    (bits & F32_EXP_MASK) == F32_EXP_MASK && (bits & F32_MANT_MASK) != 0
+}
+
+/// True for a binary32 denormal (exponent zero, non-zero mantissa).
+#[inline]
+pub fn vfp_is_denormal(bits: u32) -> bool {
+    (bits & F32_EXP_MASK) == 0 && (bits & F32_MANT_MASK) != 0
+}
+
+/// Flush-to-Zero one operand or result: a denormal becomes a zero carrying
+/// the original sign, everything else passes through untouched (NaNs included
+/// — an all-ones exponent is never denormal).
+#[inline]
+pub fn vfp_flush_to_zero(bits: u32) -> u32 {
+    if vfp_is_denormal(bits) {
+        bits & F32_SIGN_BIT
+    } else {
+        bits
+    }
+}
+
+/// Deterministic NaN rule applied to a raw arithmetic result.
+///
+/// The arithmetic itself only decides *whether* the result is NaN — which
+/// payload a native FPU invents (x86 SSE returns a quieted input, wasm f32
+/// payloads are not specified) is discarded here:
+///
+/// * FPSCR.DN set → the ARM default NaN, payload ignored.
+/// * otherwise the first NaN operand (a, then b) quieted by setting its
+///   quiet bit; sign and payload are preserved.
+/// * otherwise — an invalid operation with no NaN input, e.g. `0 * inf` or
+///   `inf - inf` — the default quiet NaN.
+///
+/// This is what makes JIT and interpreter byte-identical for NaN results:
+/// both lanes call this same integer rule.
+#[inline]
+pub fn vfp_canonical_nan(result: u32, a: u32, b: u32, fpscr: u32) -> u32 {
+    if !vfp_is_nan(result) {
+        return result;
+    }
+    if fpscr & FPSCR_DN != 0 {
+        return VFP_DEFAULT_NAN;
+    }
+    let first = if vfp_is_nan(a) {
+        a
+    } else if vfp_is_nan(b) {
+        b
+    } else {
+        return VFP_DEFAULT_NAN;
+    };
+    first | F32_QUIET_BIT
+}
+
+/// Which single-precision operation [`vfp_binop`] evaluates. The numeric
+/// discriminants are the wire codes of the `vfp.binop` host import; keep them
+/// in sync with `emit`'s `VFP_OP_*` constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VfpBinOp {
+    Add = 0,
+    Sub = 1,
+    Mul = 2,
+    Div = 3,
+}
+
+impl VfpBinOp {
+    /// Decode a host-import wire code (only the compiled lane needs this).
+    pub fn from_code(code: i32) -> Option<Self> {
+        match code {
+            0 => Some(Self::Add),
+            1 => Some(Self::Sub),
+            2 => Some(Self::Mul),
+            3 => Some(Self::Div),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn eval(self, a: f32, b: f32) -> f32 {
+        match self {
+            Self::Add => a + b,
+            Self::Sub => a - b,
+            Self::Mul => a * b,
+            Self::Div => a / b,
+        }
+    }
+}
+
+/// Evaluate one VFP single-precision binop under FPSCR.FZ/DN.
+///
+/// The arithmetic is the plain Rust `f32` op — identical bits to the wasm
+/// `f32` op for every finite result — and the FPSCR modes are applied as
+/// integer post-processing so the result no longer depends on host NaN
+/// behavior. This is the single source of truth for both the interpreter and
+/// the compiled lane's `vfp.binop` host import.
+pub fn vfp_binop(op: VfpBinOp, a_bits: u32, b_bits: u32, fpscr: u32) -> u32 {
+    let fz = fpscr & FPSCR_FZ != 0;
+    let a = if fz {
+        vfp_flush_to_zero(a_bits)
+    } else {
+        a_bits
+    };
+    let b = if fz {
+        vfp_flush_to_zero(b_bits)
+    } else {
+        b_bits
+    };
+    let result = op.eval(f32::from_bits(a), f32::from_bits(b)).to_bits();
+    let result = vfp_canonical_nan(result, a, b, fpscr);
+    if fz {
+        vfp_flush_to_zero(result)
+    } else {
+        result
+    }
+}
+
+/// Evaluate one VFP fused multiply-add form under FPSCR.FZ/DN, preserving the
+/// interpreter's existing expression shapes:
+/// `a.mul_add(b, c)`, `(-a).mul_add(b, c)`, `a.mul_add(b, -c)`,
+/// `(-a).mul_add(b, -c)` selected by `neg_a` / `neg_c`.
+///
+/// The operand scan for NaN propagation stays `(a, b, c)` in source order;
+/// the addend is never first. FMA forms are interpreter-only today (the JIT
+/// does not compile them), so this is fidelity, not a differential fix.
+pub fn vfp_fma(a_bits: u32, b_bits: u32, c_bits: u32, neg_a: bool, neg_c: bool, fpscr: u32) -> u32 {
+    let fz = fpscr & FPSCR_FZ != 0;
+    let a = if fz {
+        vfp_flush_to_zero(a_bits)
+    } else {
+        a_bits
+    };
+    let b = if fz {
+        vfp_flush_to_zero(b_bits)
+    } else {
+        b_bits
+    };
+    let c = if fz {
+        vfp_flush_to_zero(c_bits)
+    } else {
+        c_bits
+    };
+    let fa = f32::from_bits(a);
+    let fb = f32::from_bits(b);
+    let fc = f32::from_bits(c);
+    let result = if neg_a {
+        (-fa).mul_add(fb, if neg_c { -fc } else { fc })
+    } else {
+        fa.mul_add(fb, if neg_c { -fc } else { fc })
+    }
+    .to_bits();
+    let result = vfp_canonical_nan(result, a, if vfp_is_nan(b) { b } else { c }, fpscr);
+    if fz {
+        vfp_flush_to_zero(result)
+    } else {
+        result
     }
 }
 
@@ -3968,53 +4156,53 @@ impl CortexM {
                     pc_increment = 4;
                 }
                 Instruction::VmulF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    self.fpu_s[sd as usize] = (a * b).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Mul, a, b, self.fpscr);
                     pc_increment = 4;
                 }
                 Instruction::VaddF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    self.fpu_s[sd as usize] = (a + b).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Add, a, b, self.fpscr);
                     pc_increment = 4;
                 }
                 Instruction::VsubF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    self.fpu_s[sd as usize] = (a - b).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Sub, a, b, self.fpscr);
                     pc_increment = 4;
                 }
                 Instruction::VdivF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    self.fpu_s[sd as usize] = (a / b).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Div, a, b, self.fpscr);
                     pc_increment = 4;
                 }
                 Instruction::VfmaF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    let c = f32::from_bits(self.fpu_s[sd as usize]);
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    let c = self.fpu_s[sd as usize];
                     // Fused: single rounding of (a*b)+c, not a*b rounded then +c.
-                    self.fpu_s[sd as usize] = a.mul_add(b, c).to_bits();
+                    self.fpu_s[sd as usize] = vfp_fma(a, b, c, false, false, self.fpscr);
                 }
                 Instruction::VfmsF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    let c = f32::from_bits(self.fpu_s[sd as usize]);
-                    self.fpu_s[sd as usize] = (-a).mul_add(b, c).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    let c = self.fpu_s[sd as usize];
+                    self.fpu_s[sd as usize] = vfp_fma(a, b, c, true, false, self.fpscr);
                 }
                 Instruction::VfnmaF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    let c = f32::from_bits(self.fpu_s[sd as usize]);
-                    self.fpu_s[sd as usize] = a.mul_add(b, -c).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    let c = self.fpu_s[sd as usize];
+                    self.fpu_s[sd as usize] = vfp_fma(a, b, c, false, true, self.fpscr);
                 }
                 Instruction::VfnmsF32 { sd, sn, sm } => {
-                    let a = f32::from_bits(self.fpu_s[sn as usize]);
-                    let b = f32::from_bits(self.fpu_s[sm as usize]);
-                    let c = f32::from_bits(self.fpu_s[sd as usize]);
-                    self.fpu_s[sd as usize] = (-a).mul_add(b, -c).to_bits();
+                    let a = self.fpu_s[sn as usize];
+                    let b = self.fpu_s[sm as usize];
+                    let c = self.fpu_s[sd as usize];
+                    self.fpu_s[sd as usize] = vfp_fma(a, b, c, true, true, self.fpscr);
                 }
                 Instruction::VmovSnRt { sn, rt } => {
                     self.fpu_s[sn as usize] = self.read_reg(rt);

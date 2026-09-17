@@ -323,7 +323,10 @@ mod analog {
         let mut config = inline_config();
         config.insert(
             "netlist_text".to_string(),
-            serde_yaml::Value::String("* diode\nV1 a 0 dc 1\nD1 a b diode\n.end\n".to_string()),
+            // A subcircuit: still outside the subset now that `D` is inside it.
+            serde_yaml::Value::String(
+                "* subcircuit\nV1 a 0 dc 1\nX1 a b opamp\n.end\n".to_string(),
+            ),
         );
         let issues = validate_analog_models(&[manifest_model(config)], Path::new("."));
         assert_eq!(issues.len(), 1, "one model, one issue: {issues:?}");

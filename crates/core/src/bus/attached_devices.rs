@@ -60,7 +60,6 @@ use crate::inspect::{AttachedDeviceRef, DeviceEvidence};
 // `component_id` is the SimInput identity stamp — the same one the stimulus
 // walk resolves `set_input`'s `component:` against, so a device answers to the
 // same name in `inspect` as it does in the stimulus API.
-use crate::sim_input::SimInput;
 
 impl SystemBus {
     /// Walk every attached (off-chip) device on this machine, calling
@@ -161,10 +160,6 @@ impl SystemBus {
             // A bus-resident DISPLAY: it reports evidence directly, because it
             // has no controller trait to hang it on.
             self.emit_resident(f, Resident::gpio(&dev.id, Some(dev)));
-        }
-        for dev in &self.hx711 {
-            let id = dev.component_id().unwrap_or("hx711");
-            self.emit_resident(f, Resident::gpio(id, None));
         }
         for dev in &self.seven_segment {
             self.emit_resident(f, Resident::gpio(&dev.id, Some(dev)));

@@ -282,17 +282,8 @@ pub fn build_i2c_device(
         // The VCNL4010 joins them: its whole model is a register map plus two
         // input channels, so there is nothing for a hand-written struct to add.
         "tmp102" | "pca9685" | "vcnl4010" | "vl53l0x" | "tmp117" | "ina219" | "ads1115"
-        | "mma8451q" | "fxos8700" | "mlx90614" => {
+        | "mma8451q" | "fxos8700" | "mlx90614" | "ds3231" | "adxl345" | "mpu6050" => {
             build_declarative_i2c_device(&type_str.to_ascii_lowercase(), config)
-        }
-        "mpu6050" => {
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0x68) as u8;
-            Some(Box::new(crate::peripherals::components::Mpu6050::new(
-                address,
-            )))
         }
         "bmi270" => {
             use crate::peripherals::components::bmi270::{Bmi270, BMI270_ADDR};

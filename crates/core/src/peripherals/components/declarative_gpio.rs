@@ -78,6 +78,9 @@ pub struct DeclarativeGpioDevice {
     driven: Vec<BoundPin>,
     /// Measurement slots in engineering units, keyed by input-channel key.
     slots: BTreeMap<String, f64>,
+    /// Per-channel `expr_scale` — the counts per engineering unit a rule's
+    /// `input()` sees. See [`labwired_config::InputSpec::expr_scale`].
+    expr_scale: BTreeMap<String, f64>,
     channels: &'static [InputChannel],
     cpu_hz: u64,
     /// Simulated cycle at the previous service, for the derived clock.
@@ -88,6 +91,11 @@ pub struct DeclarativeGpioDevice {
     cycle_remainder: u64,
     /// Device time in µs, derived from cycles above.
     elapsed_us: u64,
+    /// Output-register addresses this device must be serviced on SYNCHRONOUSLY,
+    /// from the MMIO write hook rather than the peripheral tick. Non-empty when
+    /// a rule listens for a pin EDGE — see
+    /// [`BusResidentDevice::edge_service_addrs`].
+    edge_addrs: Vec<u64>,
 }
 
 impl DeclarativeGpioDevice {
@@ -108,11 +116,33 @@ impl DeclarativeGpioDevice {
             )
         })?;
         let mut slots = BTreeMap::new();
+        let mut expr_scale = BTreeMap::new();
         if let Some(meta) = &descriptor.metadata {
             for input in &meta.inputs {
                 slots.insert(input.key.clone(), input.default.unwrap_or(0.0));
+                if let Some(scale) = input.expr_scale {
+                    expr_scale.insert(input.key.clone(), scale);
+                }
             }
         }
+        // A part whose rules listen for an EDGE is clocked by firmware, not by
+        // the tick: it must be serviced from the write hook or it samples pad
+        // LEVELS and misses the transitions between them. A part whose rules
+        // only listen for timers and stimuli stays tick-driven and costs the
+        // write path the `is_empty()` check and nothing else.
+        let edge_driven = descriptor
+            .behavior
+            .rules
+            .iter()
+            .any(|r| matches!(r.on, Event::Pin { .. }));
+        let edge_addrs: Vec<u64> = if edge_driven {
+            let mut addrs: Vec<u64> = observed.iter().map(|p| p.addr).collect();
+            addrs.sort_unstable();
+            addrs.dedup();
+            addrs
+        } else {
+            Vec::new()
+        };
         Ok(Self {
             id,
             machine,
@@ -120,7 +150,9 @@ impl DeclarativeGpioDevice {
             last_seen: vec![None; observed.len()],
             observed,
             driven,
+            edge_addrs,
             slots,
+            expr_scale,
             channels,
             cpu_hz: cpu_hz.max(1),
             last_cycle: None,
@@ -143,7 +175,10 @@ impl DeclarativeGpioDevice {
     }
 
     fn fire(&mut self, event: Event) {
-        let mut ctx = PinOnlyCtx { slots: &self.slots };
+        let mut ctx = PinOnlyCtx {
+            slots: &self.slots,
+            expr_scale: &self.expr_scale,
+        };
         self.machine.fire(&event, 0, &mut ctx);
     }
 
@@ -256,6 +291,10 @@ impl BusResidentDevice for DeclarativeGpioDevice {
             let _ = pins.drive_input_bit(pin.addr, pin.bit, level);
             pins.drive_idr_bit(pin.addr, pin.bit, level);
         }
+    }
+
+    fn edge_service_addrs(&self) -> &[u64] {
+        &self.edge_addrs
     }
 
     fn as_sim_input(&mut self) -> &mut dyn SimInput {
@@ -380,6 +419,86 @@ pub(crate) fn validate_rule_names(desc: &DeviceDescriptor) -> Result<()> {
     )
     .with_context(|| format!("part '{}' names something it does not declare", desc.r#type))
 }
+
+// ─── the kit wrapper ───────────────────────────────────────────────────────
+
+/// A `gpio_device` descriptor as a [`PeripheralKit`], so a ported bit-banged
+/// part keeps its entry in the peripheral MANIFEST.
+///
+/// Attach itself still goes through `SystemBus::attach_declarative_device` —
+/// this adds no second attach path, it adds the metadata one. Without it a part
+/// that becomes a `configs/devices/*.yaml` descriptor still attaches (the
+/// universal resolver's declarative step finds it) but VANISHES from the
+/// library: its label, its `config:` keys and its stimulus channels are gone
+/// from the manifest the browser reads, and nothing fails. That is how `keypad`,
+/// `dht22` and `rotary_encoder` came to be absent from it.
+pub struct DeclarativeGpioKit {
+    descriptor: DeviceDescriptor,
+    channels: &'static [InputChannel],
+    metadata: &'static crate::peripherals::kit::KitMetadata,
+}
+
+impl std::fmt::Debug for DeclarativeGpioKit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeclarativeGpioKit")
+            .field("type", &self.descriptor.r#type)
+            .finish()
+    }
+}
+
+impl DeclarativeGpioKit {
+    pub fn from_yaml(yaml: &str) -> Result<Self> {
+        let descriptor = DeviceDescriptor::from_yaml(yaml)?;
+        validate_descriptor(&descriptor)?;
+        let channels = super::declarative_i2c::leak_channels(&descriptor);
+        let metadata = super::declarative_i2c::leak_gpio_metadata(&descriptor, channels);
+        Ok(Self {
+            descriptor,
+            channels,
+            metadata,
+        })
+    }
+}
+
+impl crate::peripherals::kit::PeripheralKit for DeclarativeGpioKit {
+    fn metadata(&self) -> &'static crate::peripherals::kit::KitMetadata {
+        self.metadata
+    }
+
+    fn attach(&self, ctx: &mut crate::peripherals::kit::AttachCtx<'_>) -> Result<()> {
+        // ONE attach path: the same call the universal resolver's declarative
+        // step makes. A kit that built the device itself would be a second
+        // implementation of pad binding, which is exactly the drift this
+        // primitive exists to remove.
+        let _ = self.channels;
+        ctx.bus.attach_declarative_device(ctx.ext, &self.descriptor)
+    }
+}
+
+/// Same bridge the I²C kits use: the registry is a `const` slice of
+/// `&'static dyn PeripheralKit`, and a descriptor is parsed at runtime.
+impl crate::peripherals::kit::PeripheralKit for std::sync::LazyLock<DeclarativeGpioKit> {
+    fn metadata(&self) -> &'static crate::peripherals::kit::KitMetadata {
+        std::sync::LazyLock::force(self).metadata()
+    }
+    fn attach(&self, ctx: &mut crate::peripherals::kit::AttachCtx<'_>) -> Result<()> {
+        std::sync::LazyLock::force(self).attach(ctx)
+    }
+}
+
+/// Avia HX711 24-bit load-cell ADC (declarative `hx711.yaml`).
+///
+/// Migrated from the hand-written `components/hx711.rs`, which is DELETED
+/// along with its private `SystemBus::hx711` list and the `maybe_clock_hx711`
+/// write hook — that hook is now the generic
+/// [`BusResidentDevice::edge_service_addrs`] path any descriptor can use.
+/// `tests/hx711_migration_parity.rs` pins the protocol.
+pub static HX711_KIT: std::sync::LazyLock<DeclarativeGpioKit> = std::sync::LazyLock::new(|| {
+    DeclarativeGpioKit::from_yaml(
+        labwired_config::embedded_device_yaml("hx711").expect("hx711 descriptor is embedded"),
+    )
+    .expect("hx711.yaml is a valid declarative gpio descriptor")
+});
 
 #[cfg(test)]
 mod tests {

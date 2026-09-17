@@ -1,0 +1,237 @@
+# InvenSense MPU-6050 — 6-axis gyro + accelerometer over I²C.
+#
+# Replaces the hand-written `components/mpu6050.rs`, whose wire transcript is
+# pinned in `crates/core/tests/mpu6050_migration_parity.rs`. Register addresses,
+# reset values and scale factors are from the MPU-6000/MPU-6050 Register Map and
+# Register Descriptions, rev 4.2.
+#
+# ── The wire ───────────────────────────────────────────────────────────────
+#
+# One byte of register pointer, then data; the pointer auto-increments on every
+# byte. That is the whole point of this part's driver interface: both the
+# Adafruit and the jrowberg libraries read a FOURTEEN-byte burst from 0x3B and
+# slice ACCEL(6) · TEMP(2) · GYRO(6) out of it.
+#
+# ⚠️ AND THAT IS THE BUG THIS PORT FIXES. The hand-written model computed its
+# channel as `(reg - 0x3B) / 2` over the whole 0x3B..0x48 span, so it had no
+# TEMP_OUT at all and every gyro axis sat one register pair too low: 0x41 (which
+# is TEMP_OUT_H on silicon) returned GYRO_XOUT_H, 0x43 returned GYRO_YOUT_H, and
+# 0x47 returned GYRO_ZOUT_H. A driver doing the standard burst read got the
+# gyro's X axis where it expected the temperature, and its Y axis where it
+# expected X. Six bytes of every fourteen were wrong. Held identical here: every
+# register the old model got RIGHT (WHO_AM_I, the config registers, and the
+# three accelerometer axes at 0x3B..0x40). Deliberately different: 0x41..0x48,
+# which now follow the datasheet.
+#
+# ── Scales ─────────────────────────────────────────────────────────────────
+#
+# Both are firmware-owned bit-fields, so both are `scale_from:` — the register
+# reports what the CURRENT configuration says, not what was configured when the
+# host happened to pose a value.
+#
+#   ACCEL_CONFIG.AFS_SEL (0x1C, bits 4:3): ±2/4/8/16 g at 16384/8192/4096/2048
+#   GYRO_CONFIG.FS_SEL   (0x1B, bits 4:3): ±250/500/1000/2000 °/s at
+#                                          131 / 65.5 / 32.8 / 16.4 LSB per °/s
+#
+# Full-scale SATURATION needs no `clamp_from` here, unlike the ADXL345: at every
+# setting the count at full scale is the end of the signed 16-bit word (±2 g ×
+# 16384 = 32768; ±250 °/s × 131 = 32750), so the register's own width is the
+# saturation. The old model got this wrong in one place — it clamped the
+# engineering value and then cast, so exactly +2.0 g produced 32768, which as an
+# `i16` is −32768. A full-scale reading came back as full-scale NEGATIVE.
+#
+# TEMP_OUT (0x41/0x42) is the datasheet's `T_degC = TEMP_OUT/340 + 36.53`,
+# inverted: `raw = T × 340 − 12420.2`.
+#
+# ── The Tier-2 half: the INT pad ───────────────────────────────────────────
+#
+# DATA_RDY end to end: a sample timer sets INT_STATUS.DATA_RDY (0x3A bit 0), the
+# pad follows it while INT_ENABLE.DATA_RDY_EN (0x38 bit 0) is set, and reading
+# INT_STATUS clears both — `on_read: clear` on the register plus a rule for the
+# pad. The datasheet's own words: "This register is used to determine which
+# interrupt is asserted… the interrupt status is cleared on any read."
+#
+# ⚠️ NOT MODELLED, each named rather than faked:
+#   * **The sample rate.** The timer runs at 1 kHz, the rate a DLPF-enabled
+#     MPU6050 produces with SMPLRT_DIV = 0 — which is what every Arduino sketch
+#     configures. The datasheet's rate is
+#     `gyro output rate / (1 + SMPLRT_DIV)`, where the gyro output rate is 8 kHz
+#     with DLPF_CFG = 0 and 1 kHz otherwise; both inputs are registers, and
+#     `timers:` take a constant `period_us`. Needs: a field-driven timer period.
+#   * **Motion/FIFO/I²C-master interrupts.** Their INT_STATUS bits are declared
+#     and never set; FIFO_EN, the FIFO count and FIFO_R_W are storage.
+#   * **Sleep and the clock source.** PWR_MGMT_1 powers up at 0x40 (SLEEP set)
+#     and is stored and echoed, so a driver that clears it to wake the part sees
+#     what it wrote — but the part reports measurements either way, exactly as
+#     the hand-written model did. Gating them needs a `zero_when` over the
+#     SLEEP bit, which would be a NEW behaviour and belongs in its own change.
+#   * **Self-test, the digital offset registers and the auxiliary I²C master.**
+type: mpu6050
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x68
+    auto_increment: true
+    # The MPU6050 answers 0x00 for reserved addresses inside the map it does
+    # decode, which is what the hand-written model returned for everything it
+    # did not serve.
+    unmapped_byte: 0x00
+    registers:
+      - { name: SELF_TEST_X, addr: 0x0D, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: SELF_TEST_Y, addr: 0x0E, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: SELF_TEST_Z, addr: 0x0F, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: SELF_TEST_A, addr: 0x10, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV). Stored; see the
+      # header for why the timer's period does not follow it.
+      - { name: SMPLRT_DIV, addr: 0x19, width: 1, endian: be, access: rw, reset: 0x00 }
+      - name: CONFIG
+        addr: 0x1A
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: DLPF_CFG,  shift: 0, width_bits: 3 }
+          - { name: EXT_SYNC_SET, shift: 3, width_bits: 3 }
+      - name: GYRO_CONFIG
+        addr: 0x1B
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: FS_SEL, shift: 3, width_bits: 2 }
+          - { name: ZG_ST,  shift: 5 }
+          - { name: YG_ST,  shift: 6 }
+          - { name: XG_ST,  shift: 7 }
+      - name: ACCEL_CONFIG
+        addr: 0x1C
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: AFS_SEL, shift: 3, width_bits: 2 }
+          - { name: ZA_ST,   shift: 5 }
+          - { name: YA_ST,   shift: 6 }
+          - { name: XA_ST,   shift: 7 }
+      - { name: FIFO_EN,     addr: 0x23, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: INT_PIN_CFG, addr: 0x37, width: 1, endian: be, access: rw, reset: 0x00 }
+      - name: INT_ENABLE
+        addr: 0x38
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        bits:
+          - { name: DATA_RDY_EN, shift: 0 }
+          - { name: I2C_MST_INT_EN, shift: 3 }
+          - { name: FIFO_OFLOW_EN, shift: 4 }
+          - { name: MOT_EN, shift: 6 }
+      # "The interrupt status is cleared on any read" — hence `on_read: clear`.
+      # Read-only to the master; the DEVICE sets DATA_RDY through a rule.
+      - name: INT_STATUS
+        addr: 0x3A
+        width: 1
+        endian: be
+        access: r
+        reset: 0x00
+        on_read: clear
+        bits:
+          - { name: DATA_RDY, shift: 0 }
+          - { name: I2C_MST_INT, shift: 3 }
+          - { name: FIFO_OFLOW, shift: 4 }
+          - { name: MOT_INT, shift: 6 }
+
+      # ── The 14-byte measurement burst, 0x3B..0x48 ───────────────────────
+      # Big-endian signed 16-bit, high byte first, exactly as the datasheet
+      # names them (ACCEL_XOUT_H at 0x3B, TEMP_OUT_H at 0x41, GYRO_XOUT_H at
+      # 0x43). A width-2 register covers each _H/_L pair.
+      - { name: ACCEL_XOUT, addr: 0x3B, width: 2, endian: be, access: r, signed: true, source: ax, scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 3, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      - { name: ACCEL_YOUT, addr: 0x3D, width: 2, endian: be, access: r, signed: true, source: ay, scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 3, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      - { name: ACCEL_ZOUT, addr: 0x3F, width: 2, endian: be, access: r, signed: true, source: az, scale_from: { register: ACCEL_CONFIG, mask: 0x03, shift: 3, map: { 0: 16384.0, 1: 8192.0, 2: 4096.0, 3: 2048.0 } } }
+      # T_degC = TEMP_OUT/340 + 36.53  ⇒  TEMP_OUT = T × 340 − 12420.2.
+      - { name: TEMP_OUT,   addr: 0x41, width: 2, endian: be, access: r, signed: true, source: temp, encode: { scale: 340.0, offset: -12420.2 } }
+      - { name: GYRO_XOUT,  addr: 0x43, width: 2, endian: be, access: r, signed: true, source: gx, scale_from: { register: GYRO_CONFIG, mask: 0x03, shift: 3, map: { 0: 131.0, 1: 65.5, 2: 32.8, 3: 16.4 } } }
+      - { name: GYRO_YOUT,  addr: 0x45, width: 2, endian: be, access: r, signed: true, source: gy, scale_from: { register: GYRO_CONFIG, mask: 0x03, shift: 3, map: { 0: 131.0, 1: 65.5, 2: 32.8, 3: 16.4 } } }
+      - { name: GYRO_ZOUT,  addr: 0x47, width: 2, endian: be, access: r, signed: true, source: gz, scale_from: { register: GYRO_CONFIG, mask: 0x03, shift: 3, map: { 0: 131.0, 1: 65.5, 2: 32.8, 3: 16.4 } } }
+
+      - { name: USER_CTRL,   addr: 0x6A, width: 1, endian: be, access: rw, reset: 0x00 }
+      # Power-on 0x40: the SLEEP bit is set. Stored and echoed — see the header.
+      - name: PWR_MGMT_1
+        addr: 0x6B
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x40
+        bits:
+          - { name: CLKSEL,      shift: 0, width_bits: 3 }
+          - { name: TEMP_DIS,    shift: 3 }
+          - { name: CYCLE,       shift: 5 }
+          - { name: SLEEP,       shift: 6 }
+          - { name: DEVICE_RESET, shift: 7 }
+      - { name: PWR_MGMT_2,  addr: 0x6C, width: 1, endian: be, access: rw, reset: 0x00 }
+      - { name: FIFO_COUNT,  addr: 0x72, width: 2, endian: be, access: r,  reset: 0x0000 }
+      - { name: FIFO_R_W,    addr: 0x74, width: 1, endian: be, access: rw, reset: 0x00 }
+      # "WHO_AM_I … the default value of the register is 0x68."
+      - { name: WHO_AM_I,    addr: 0x75, width: 1, endian: be, access: r,  reset: 0x68 }
+
+  # The INT pad. Optional: a board that does not wire it binds nothing.
+  outputs: [INT]
+  output_pins:
+    INT: int_pin
+
+  timers:
+    - { name: sample, period_us: 1000, start: on_reset }
+
+  rules:
+    - on: { timer: sample }
+      do: [ { set: INT_STATUS.DATA_RDY } ]
+    # The pad follows the flag, gated by INT_ENABLE. INT_PIN_CFG.INT_LEVEL
+    # (active low) is not modelled: the pad is active high.
+    - on: { timer: sample }
+      do:
+        - { pin: INT, level: "field(INT_STATUS.DATA_RDY) && field(INT_ENABLE.DATA_RDY_EN)" }
+    # `on_read: clear` has already zeroed the register by the time a rule runs,
+    # so the SAME expression drops the pad.
+    - on: { read: INT_STATUS }
+      do:
+        - { pin: INT, level: "field(INT_STATUS.DATA_RDY) && field(INT_ENABLE.DATA_RDY_EN)" }
+
+metadata:
+  label: "MPU6050 IMU"
+  summary: "6-axis gyro + accelerometer over I2C."
+  detail: "InvenSense MPU-6050 with WHO_AM_I = 0x68. The fourteen-byte measurement burst at 0x3B follows the datasheet - three accelerometer axes, TEMP_OUT, then three gyro axes - so the standard Adafruit / jrowberg burst read parses correctly. Both full-scale selects are live: ACCEL_CONFIG.AFS_SEL and GYRO_CONFIG.FS_SEL set the counts per g and per degree/second at read time. The DATA_RDY interrupt is modelled end to end: a sample timer raises INT_STATUS bit 0, INT_ENABLE gates it onto the INT pad, and any read of INT_STATUS clears both. NOT modelled: the programmable sample rate (the timer runs at the 1 kHz a DLPF-enabled part produces), the FIFO, motion detection, self-test, and the SLEEP bit (stored and echoed, but measurements are reported either way)."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x68; 0x69 selects the AD0=high variant."
+    - name: noise_sigma
+      ty: float
+      doc: "Optional Gaussian noise sigma in channel units (g accel, °/s gyro), seeded and replay-safe. 0/absent = exact reads."
+    - name: int_pin
+      ty: str
+      doc: "Pad the INT output drives (e.g. \"PA0\"). Optional - an unbound pin drives nothing."
+  labs:
+    - { board_id: mpu6050-sensor-lab, chip: stm32f103, example_dir: mpu6050-sensor-lab, demo_elf: demo-mpu6050-sensor-lab.elf }
+  inputs:
+    # The defaults are the hand-written model's power-on sample, expressed in
+    # engineering units at the reset full scale (16384 LSB/g, 131 LSB per °/s):
+    # 0x0123 / 0x0456 / 0x4000 counts of acceleration and 0x10 / 0x20 / 0x30 of
+    # rotation, so the port's first read is byte-identical.
+    #
+    # `noise_sigma_key` on all six motion axes is the config-keyed sigma over a
+    # channel SET the hand-written kit spelled as one scalar: one
+    # `noise_sigma: 0.02` on the placement reaches every axis. `temp` is left
+    # out of it deliberately — that scalar was documented in g and °/s.
+    - { key: ax, label: "Accel X", unit: g, min: -16, max: 16, default: 0.01776123046875, noise_sigma_key: noise_sigma }
+    - { key: ay, label: "Accel Y", unit: g, min: -16, max: 16, default: 0.0677490234375, noise_sigma_key: noise_sigma }
+    - { key: az, label: "Accel Z", unit: g, min: -16, max: 16, default: 1.0, noise_sigma_key: noise_sigma }
+    - { key: gx, label: "Gyro X", unit: "°/s", min: -2000, max: 2000, default: 0.1221374045801527, noise_sigma_key: noise_sigma }
+    - { key: gy, label: "Gyro Y", unit: "°/s", min: -2000, max: 2000, default: 0.2442748091603053, noise_sigma_key: noise_sigma }
+    - { key: gz, label: "Gyro Z", unit: "°/s", min: -2000, max: 2000, default: 0.3664122137404580, noise_sigma_key: noise_sigma }
+    # New: the hand-written model had no temperature at all — the register its
+    # channel would have fed was where the gyro's X axis had been misplaced.
+    - { key: temp, label: "Die temperature", unit: C, min: -40, max: 85, default: 25 }
