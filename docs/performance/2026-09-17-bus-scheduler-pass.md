@@ -167,3 +167,21 @@ baseline rather than against the checked-in file.
   behaviour change.
 * Per-tick (so amortised 512×, not a lever here):
   `collect_enabled_nvic_interrupts` does 16 `SeqCst` atomic loads per tick.
+
+## Re-measured on current main after merging it in
+
+The branch was merged with `origin/main` at `80c01390d` and everything above
+re-run against a binary built from that exact commit, so the PR's numbers are
+against the main it will merge into rather than against its branch point:
+
+| board | mode | main 80c01390d | branch 36bc188e6 | delta |
+|---|---|---|---|---|
+| nrf52840 | **batch** | 230.0 | 158.6 | **−31.0 %** |
+| nrf52840 | step | 1365.1 | 1295.4 | −5.1 % |
+| stm32f405 | **batch** | 229.2 | 157.7 | **−31.2 %** |
+| stm32f405 | step | 973.1 | 903.4 | −7.2 % |
+| esp32c3 | **batch** | 402.2 | 262.2 | **−34.8 %** |
+
+The differential harness was re-captured on `80c01390d` as well (the
+`[batched]` summary line changed in #1145, so the older hashes no longer
+apply) and all 21 hashes match between that binary and the branch.
