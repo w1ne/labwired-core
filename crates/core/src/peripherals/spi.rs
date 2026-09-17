@@ -3101,6 +3101,13 @@ impl crate::Peripheral for Spi {
         }
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for dev in &mut self.attached_devices {
+            crate::peripherals::device::drain_spi_pin_drives(&mut **dev, out);
+        }
+    }
+
     /// EVERY layout here publishes SCK/MOSI/MISO now.
     ///
     /// The EFR32 USART-as-SPI path was the last exception, and it did not

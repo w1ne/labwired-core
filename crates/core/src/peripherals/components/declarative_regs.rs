@@ -66,6 +66,16 @@ pub(crate) fn encode_raw(
     } else {
         (1u32 << bits) - 1
     };
+    // `wrap`: the register is a modular counter of N raw counts, so the count
+    // rolls over instead of saturating. Rounded to an integer FIRST — wrapping
+    // 4095.99 as a float and rounding afterwards would produce 4096, a count a
+    // 12-bit counter cannot hold. `rem_euclid` so a negative measurement lands
+    // on the count the counter would really be showing rather than on the
+    // clamp. See `labwired_config::Encode::wrap` for why this is in counts.
+    if let Some(w) = enc.and_then(|e| e.wrap) {
+        let v = (raw.round() as i64).rem_euclid(i64::from(w.get()));
+        return (v as u32) & mask;
+    }
     if signed {
         let lo = -(2f64.powi((bits - 1) as i32));
         let hi = 2f64.powi((bits - 1) as i32) - 1.0;
@@ -290,6 +300,7 @@ pub(crate) fn read_clears(reg: &RegisterSpec) -> bool {
 /// of the bus it hangs off, so an I²C and an SPI descriptor get bit-identical
 /// firing sequences from the same YAML. Empty ⇒ every method returns without
 /// touching anything, so a device that declares no timer is unchanged.
+#[derive(Debug)]
 pub(crate) struct TimerBank {
     timers: Vec<DeviceTimer>,
     /// Absolute µs at which timer `i` next fires; `None` ⇒ not running.
@@ -348,11 +359,51 @@ impl TimerBank {
     /// several times over one advance fires once per elapsed period, in order,
     /// so a late service pass sees exactly the samples that accrued while the
     /// CPU was elsewhere.
-    pub(crate) fn due(&mut self, now: u64) -> Vec<TimingAction> {
+    /// Start (or restart) a timer by NAME, from `now`. The Tier-2 `timer:`
+    /// action goes through here, so a rule and a `start_on_write` arm the same
+    /// deadline list rather than two.
+    pub(crate) fn start_named(&mut self, name: &str, now: u64) {
+        for (i, t) in self.timers.iter().enumerate() {
+            if t.name == name {
+                self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+            }
+        }
+    }
+
+    /// Stop a timer by NAME. A one-shot that has already fired is idle anyway;
+    /// this is what lets a rule silence a periodic one — a part going to sleep.
+    pub(crate) fn stop_named(&mut self, name: &str) {
+        for (i, t) in self.timers.iter().enumerate() {
+            if t.name == name {
+                self.deadlines[i] = None;
+            }
+        }
+    }
+
+    /// Every firing due at or before `now`, kept per TIMER and tagged with its
+    /// name: ascending deadline, ties broken by declaration order, one entry
+    /// per elapsed period. A periodic timer that is due several times over one
+    /// advance fires once per elapsed period, in order, so a late service pass
+    /// sees exactly the samples that accrued while the CPU was elsewhere.
+    ///
+    /// The name and the per-firing boundary are what a Tier-2 rule needs
+    /// (`on: { timer: NAME }`), and it must come from the SAME traversal that
+    /// runs `on_fire` — not a second clock the rule machine keeps alongside
+    /// this one. Two clocks is how a rule and an `on_fire` come to disagree
+    /// about when a part ticked; there is exactly one here.
+    ///
+    /// ⚠️ A periodic timer whose period is much shorter than the advance is due
+    /// many times, and a very long jump could otherwise spin here; the walk is
+    /// capped at [`MAX_TIMER_CATCHUP`] firings and then re-anchors every still-
+    /// due timer past `now`. The samples beyond the cap are lost, which is what
+    /// a real FIFO reports after the CPU was away too long — and it is a bound,
+    /// not a hang inside a bus tick.
+    pub(crate) fn due_by_timer(&mut self, now: u64) -> Vec<(String, Vec<TimingAction>)> {
         let mut out = Vec::new();
         if self.timers.is_empty() {
             return out;
         }
+        let mut fired = 0u32;
         loop {
             let next = self
                 .deadlines
@@ -361,7 +412,7 @@ impl TimerBank {
                 .filter_map(|(i, d)| d.filter(|deadline| *deadline <= now).map(|d| (d, i)))
                 .min();
             let Some((deadline, i)) = next else { break };
-            out.extend(self.timers[i].on_fire.iter().cloned());
+            out.push((self.timers[i].name.clone(), self.timers[i].on_fire.clone()));
             // Reschedule a periodic timer from its DEADLINE, not from `now`, so
             // it does not drift with the service cadence; a one-shot goes idle
             // until something starts it again.
@@ -369,10 +420,28 @@ impl TimerBank {
                 .period_us
                 .filter(|p| *p > 0)
                 .map(|period| deadline.saturating_add(period));
+            fired += 1;
+            if fired >= MAX_TIMER_CATCHUP {
+                for d in self.deadlines.iter_mut() {
+                    if d.is_some_and(|deadline| deadline <= now) {
+                        *d = Some(now.saturating_add(1));
+                    }
+                }
+                break;
+            }
         }
         out
     }
 }
+
+/// How many timer firings one time advance may replay before the bank gives up
+/// and re-anchors.
+///
+/// A device that was not serviced for a long simulated stretch genuinely owes
+/// many periods — that is the CPU-starvation case a FIFO overflow exists to
+/// show. But an unbounded walk turns a 1 µs period plus a 10 s jump into ten
+/// million iterations inside one bus tick, which is a hang, not fidelity.
+const MAX_TIMER_CATCHUP: u32 = 4096;
 
 /// Apply one timer action to a name-keyed register file. Unknown register
 /// names cannot occur — validation rejects them at load — so a miss is a
@@ -401,7 +470,19 @@ pub(crate) fn apply_timing_action(
 pub(crate) fn validate_timers(
     timers: &[DeviceTimer],
     register_names: &[String],
+    rules: &[labwired_config::Rule],
 ) -> anyhow::Result<()> {
+    // A timer earns its place either by writing registers (`on_fire:`) or by
+    // being something a Tier-2 rule listens for. Before Tier 2 there was only
+    // the first, so "no on_fire" meant dead weight; now a sample clock whose
+    // whole job is to raise `on: { timer: sample }` is a legitimate — and the
+    // most common — shape, and refusing it would make the MPU6050's INT line
+    // unexpressible.
+    let listened_for = |name: &str| {
+        rules
+            .iter()
+            .any(|r| matches!(&r.on, labwired_config::Event::Timer { name: n } if n == name))
+    };
     let known = |name: &String| register_names.iter().any(|r| r == name);
     for t in timers {
         match (t.period_us, t.after_us) {
@@ -419,9 +500,11 @@ pub(crate) fn validate_timers(
             ),
             _ => {}
         }
-        if t.on_fire.is_empty() {
+        if t.on_fire.is_empty() && !listened_for(&t.name) {
             anyhow::bail!(
-                "timer '{}' has no on_fire actions, so it is dead weight",
+                "timer '{}' has no on_fire actions and no rule listens for \
+                 `on: {{ timer: {} }}`, so it is dead weight",
+                t.name,
                 t.name
             );
         }
@@ -477,6 +560,7 @@ mod tests {
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
             on_read: None,
             on_write: None,
         }
@@ -500,6 +584,7 @@ mod tests {
                 offset: 0.0,
                 clamp_min: None,
                 clamp_max: None,
+                wrap: None,
             }),
             scale_from: vec![],
             source_scale: None,
@@ -510,6 +595,7 @@ mod tests {
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
             on_read: None,
             on_write: None,
         };
@@ -570,9 +656,15 @@ mod tests {
         // the same advance. Deadline order decides, declaration order breaks
         // the tie at 20 µs.
         let mut bank = TimerBank::new(&[timer("slow", 20, 1), timer("fast", 10, 2)]);
-        let fired: Vec<String> = bank
-            .due(25)
+        let firings = bank.due_by_timer(25);
+        let by_name: Vec<String> = firings.iter().map(|(name, _)| name.clone()).collect();
+        assert_eq!(by_name, vec!["fast", "slow", "fast"]);
+        // The register actions come out in the same order, which is what the
+        // Tier-1 engine applies — the per-timer grouping is a view of ONE walk,
+        // not a second one that could order differently.
+        let fired: Vec<String> = firings
             .into_iter()
+            .flat_map(|(_, actions)| actions)
             .map(|a| match a {
                 TimingAction::SetBits { register, .. } => register,
                 _ => unreachable!(),
@@ -597,8 +689,36 @@ mod tests {
         }]);
         // Serviced late at 15 µs, then again at 21: the second period is due at
         // 20, not at 25 (which is what rescheduling from `now` would give).
-        assert_eq!(bank.due(15).len(), 1);
-        assert_eq!(bank.due(21).len(), 1);
+        assert_eq!(bank.due_by_timer(15).len(), 1);
+        assert_eq!(bank.due_by_timer(21).len(), 1);
+    }
+
+    /// A very long jump past a very short period is BOUNDED. Without the cap a
+    /// 1 µs timer plus a 10 s advance is ten million iterations inside one bus
+    /// tick — a hang, not fidelity. Past the cap the still-due timers re-anchor
+    /// past `now`, so the next advance starts clean instead of owing the same
+    /// backlog again.
+    #[test]
+    fn a_long_advance_is_capped_and_re_anchors() {
+        use labwired_config::{DeviceTimer, TimerStart, TimingAction};
+        let mut bank = TimerBank::new(&[DeviceTimer {
+            name: "fast".into(),
+            period_us: Some(1),
+            after_us: Option::None,
+            start: TimerStart::OnReset,
+            start_on_write: Option::None,
+            on_fire: vec![TimingAction::SetBits {
+                register: "S".into(),
+                bits: 1,
+            }],
+        }]);
+        let firings = bank.due_by_timer(10_000_000);
+        assert_eq!(firings.len(), MAX_TIMER_CATCHUP as usize);
+        // Re-anchored: the next advance at the same instant owes nothing.
+        assert!(bank.due_by_timer(10_000_000).is_empty());
+        // And it is still running — a cap is not a stop. One more microsecond
+        // is one more period.
+        assert_eq!(bank.due_by_timer(10_000_001).len(), 1);
     }
 
     #[test]
@@ -657,6 +777,7 @@ mod tests {
                         offset: 0.0,
                         clamp_min: None,
                         clamp_max: None,
+                        wrap: None,
                     }),
                 },
                 FieldSpec {
@@ -669,6 +790,7 @@ mod tests {
                         offset: 0.0,
                         clamp_min: None,
                         clamp_max: None,
+                        wrap: None,
                     }),
                 },
             ],
@@ -676,6 +798,7 @@ mod tests {
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
             on_read: None,
             on_write: None,
         };
@@ -715,12 +838,14 @@ mod tests {
                     offset: 0.0,
                     clamp_min: None,
                     clamp_max: None,
+                    wrap: None,
                 }),
             }],
             page: None,
             self_clearing: None,
             popcount: None,
             zero_when: None,
+            bits: vec![],
             on_read: None,
             on_write: None,
         };
@@ -729,5 +854,108 @@ mod tests {
         let b = register_read_bytes(&r, &slots, &HashMap::new());
         let word = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
         assert_eq!((word >> 18) & 0x3FFF, 0x3F9C);
+    }
+
+    /// `encode.wrap` — the modular-counter primitive the AS5600 port found
+    /// missing. Exercised on `encode_raw` directly so the rounding ORDER is
+    /// pinned: a count is produced, THEN reduced.
+    mod wrap {
+        use super::super::encode_raw;
+        use labwired_config::Encode;
+        use std::num::NonZeroU32;
+
+        /// The AS5600 encode: 4096 counts per 360°, wrapped at 4096 counts.
+        fn as5600() -> Encode {
+            Encode {
+                scale: 4096.0 / 360.0,
+                offset: 0.0,
+                clamp_min: None,
+                clamp_max: None,
+                wrap: NonZeroU32::new(4096),
+            }
+        }
+
+        #[test]
+        fn a_full_turn_reads_the_same_count_as_zero() {
+            // THE behaviour: 4096 counts is the same shaft position as 0, so a
+            // full turn must read 0 and not the impossible 4096 nor a clamped
+            // 4095 that is 0.088° short of where the shaft is.
+            assert_eq!(encode_raw(0.0, Some(&as5600()), 1.0, 2, false), 0);
+            assert_eq!(encode_raw(360.0, Some(&as5600()), 1.0, 2, false), 0);
+            assert_eq!(encode_raw(720.0, Some(&as5600()), 1.0, 2, false), 0);
+        }
+
+        #[test]
+        fn every_count_below_a_full_turn_is_unchanged_by_the_wrap() {
+            // The wrap must be invisible everywhere except at the roll-over,
+            // or it would be a silent re-scaling of the whole channel. Swept
+            // over every one of the 4096 counts rather than spot-checked.
+            let plain = Encode {
+                wrap: None,
+                ..as5600()
+            };
+            for count in 0..4096u32 {
+                let deg = f64::from(count) * 360.0 / 4096.0;
+                let wrapped = encode_raw(deg, Some(&as5600()), 1.0, 2, false);
+                assert_eq!(
+                    wrapped,
+                    encode_raw(deg, Some(&plain), 1.0, 2, false),
+                    "count {count} ({deg}°) moved when `wrap` was added"
+                );
+                assert_eq!(wrapped, count, "count {count} does not round-trip");
+            }
+        }
+
+        #[test]
+        fn the_count_is_rounded_before_it_is_reduced() {
+            // 359.99° is 4095.886 counts. Reducing the FLOAT and rounding
+            // afterwards yields 4096 — a count a 12-bit counter cannot hold,
+            // which would then be packed as bit 12 set. Rounding first gives
+            // 4096 → 0, the position the shaft is actually at.
+            let raw = encode_raw(359.99, Some(&as5600()), 1.0, 2, false);
+            assert_eq!(raw, 0, "359.99° rounds to a full turn, which reads 0");
+            assert!(raw <= 4095, "a 12-bit counter cannot answer {raw}");
+        }
+
+        #[test]
+        fn a_negative_angle_lands_on_the_count_the_counter_would_show() {
+            // `rem_euclid`, not `%`: one degree below zero is one degree below
+            // a full turn, which is where the magnet is. A truncating remainder
+            // would answer a negative count and pack it as ~full scale by
+            // accident rather than by meaning it.
+            let expect = 4096 - (4096f64 / 360.0).round() as u32; // -1° → 4085
+            assert_eq!(encode_raw(-1.0, Some(&as5600()), 1.0, 2, false), expect);
+            assert_eq!(encode_raw(-360.0, Some(&as5600()), 1.0, 2, false), 0);
+        }
+
+        #[test]
+        fn a_wrap_that_is_not_a_power_of_two_still_rolls_over() {
+            // The modulus is a COUNT, not a mask: a 360-count-per-turn part
+            // (1°/LSB) rolls at 360, which no bit-width could express.
+            let e = Encode {
+                scale: 1.0,
+                offset: 0.0,
+                clamp_min: None,
+                clamp_max: None,
+                wrap: NonZeroU32::new(360),
+            };
+            assert_eq!(encode_raw(359.0, Some(&e), 1.0, 2, false), 359);
+            assert_eq!(encode_raw(360.0, Some(&e), 1.0, 2, false), 0);
+            assert_eq!(encode_raw(361.0, Some(&e), 1.0, 2, false), 1);
+        }
+
+        #[test]
+        fn wrap_zero_is_refused_at_load_rather_than_ignored() {
+            // A modulus of zero has no meaning. `NonZeroU32` makes it a load
+            // error naming the field instead of a key that parses and does
+            // nothing — the silent-no-op failure this schema refuses.
+            let err = serde_yaml::from_str::<Encode>("scale: 1.0\nwrap: 0\n")
+                .expect_err("wrap: 0 must not parse");
+            assert!(
+                err.to_string().contains("nonzero"),
+                "the error must name the problem, got: {err}"
+            );
+            assert!(serde_yaml::from_str::<Encode>("scale: 1.0\nwrap: 4096\n").is_ok());
+        }
     }
 }

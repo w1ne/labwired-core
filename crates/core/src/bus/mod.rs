@@ -47,7 +47,7 @@ pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
 pub use observed_device::ObservedDevice;
-pub use resident_device::{BusResidentDevice, DevicePins};
+pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub use interrupt_fabric::{
@@ -491,6 +491,22 @@ pub struct SystemBus {
     ///
     /// [`service_gpio_devices`]: Self::service_gpio_devices
     pub gpio_devices: Vec<Box<dyn BusResidentDevice>>,
+    /// **Tier-2 device output pins**: `outputs:` roles of declarative I²C / SPI
+    /// parts, resolved to `(input-register address, bit)` at attach.
+    ///
+    /// An I²C slave lives inside its CONTROLLER and can reach no GPIO, so it
+    /// cannot drive its own INT line. It queues `(role, level)` instead
+    /// ([`I2cDevice::take_pin_drives`](crate::peripherals::i2c::I2cDevice::take_pin_drives)),
+    /// the per-tick pass [`service_device_pin_drives`] collects the queues
+    /// through the controllers, and this map says which pad each role is. No
+    /// engine type crosses into a device model and the narrow
+    /// [`DevicePins`] port is untouched — `tests/bus_resident_device_port.rs`
+    /// is what keeps that true.
+    ///
+    /// Empty by default → the pass early-outs and costs nothing.
+    ///
+    /// [`service_device_pin_drives`]: Self::service_device_pin_drives
+    pub(crate) device_pin_pads: Vec<DevicePinPad>,
     /// Off-chip models the bus holds ONLY so something can read them back — the
     /// WS2812 strip, the hobby servo, the STEP/DIR and unipolar steppers, the
     /// H-bridge channel, the parallel ILI9341 panel. Each is driven by a GPIO

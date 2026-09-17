@@ -1,0 +1,109 @@
+# Texas Instruments TMP117 high-accuracy digital temperature sensor —
+# declarative I²C register-pointer device.
+#
+# Migrated from `peripherals/components/tmp117.rs`, which is deleted with this
+# descriptor; `tests/tmp117_migration_parity.rs` drives that model and this one
+# through the same I²C script and asserts the bytes, plus the behaviours that
+# deliberately change.
+#
+# ── Wire protocol (TMP117 datasheet SNOSCY7, §7.5 "Register maps") ────────
+#
+# The master writes a 1-byte pointer, then either writes a 16-bit value
+# (MSB then LSB) into the pointed register or reads it back MSB first. The
+# pointer does NOT auto-increment — §7.5 gives no block-read mode, and every
+# transaction in TI's own driver re-selects the pointer — so no
+# `auto_increment:` here. A pointer this map does not decode reads a zero word,
+# which is what the hand model answered.
+#
+#   0x00 TEMP_RESULT    r   int16, 7.8125 m°C / LSB (0x0000 = 0 °C)
+#   0x01 CONFIGURATION  rw  alert flags, DATA_READY, conversion mode / rate
+#   0x02 T_HIGH_LIMIT   rw  int16, same scale; POR +192 °C  (0x6000)
+#   0x03 T_LOW_LIMIT    rw  int16, same scale; POR −256 °C  (0x8000)
+#   0x04 EEPROM_UL      rw  EEPROM unlock + busy
+#   0x05 EEPROM1        rw  general-purpose EEPROM word
+#   0x06 EEPROM2        rw  general-purpose EEPROM word
+#   0x07 TEMP_OFFSET    rw  int16, same scale — see the approximation below
+#   0x08 EEPROM3        rw  general-purpose EEPROM word
+#   0x0F DEVICE_ID      r   0x0117 (revision 0x0 in bits 15:12)
+#
+# ── Temperature encoding ─────────────────────────────────────────────────
+#
+# 1 LSB = 7.8125 m°C, i.e. 128 counts per °C, two's-complement over the full
+# 16-bit word (§7.6.1). `scale: 128.0` rather than `1 / 0.0078125`: 0.0078125
+# is 2⁻⁷, so the two are the SAME double and the multiply the engine does is
+# bit-identical to the divide the hand model did — asserted over the whole
+# −55..150 °C channel range in the parity test rather than assumed.
+#
+# ── CONFIGURATION: which bits are firmware's ─────────────────────────────
+#
+#   D15 HIGH_Alert  D14 LOW_Alert  D13 DATA_READY  D12 EEPROM_Busy
+#   D11:10 MOD      D9:7 CONV      D6:5 AVG        D4 T/nA
+#   D3 POL          D2 DR/Alert    D1 Soft_Reset   D0 —
+#
+# `write_mask: 0xDFFF` hands firmware everything except D13. DATA_READY is the
+# conversion's answer, not firmware's: §7.6.2 calls it read-only and the hand
+# model masked it out of every store for the same reason.
+#
+# The POR word is 0x0220 — MOD = 00 (continuous conversion), CONV = 100 and
+# AVG = 01, which Table 7-7 gives as a 1 s conversion cycle with 8 averages.
+#
+# ⚠️ DELIBERATE CHANGE: `reset: 0x2220` — D13 (DATA_READY) reads SET from
+# power-on, where the hand model left it clear until a host stimulus arrived
+# and cleared it again on every TEMP_RESULT read. That model made the flag
+# report "the simulator was poked", not "the part converted": firmware that
+# polls DATA_READY before driving any stimulus — which is what TI's own
+# `tmp117_data_ready()` and SparkFun's `dataReady()` do on every sample —
+# spun forever against it. The part powers up CONVERTING (MOD = 00), so a
+# permanently-set flag is the honest constant: it is exactly the degradation
+# the engine's own `data_ready` primitive falls back to on a family with no
+# absolute-µs source, and the failure it cannot cause is the one that matters.
+# A real conversion cycle needs a timer that both SETS D13 on its deadline and
+# CLEARS it when TEMP_RESULT is read — a cross-register clear-on-read the
+# Tier-1 fields do not have. Pinned by name in `tmp117_migration_parity.rs`.
+#
+# ── Stated approximations, so they are not mistaken for fidelity ─────────
+#
+#   * TEMP_OFFSET (0x07) is read/write storage that is NOT added to
+#     TEMP_RESULT. §7.6.5 adds it to every conversion; doing that needs
+#     arithmetic over register values, which Tier 1 has no expression language
+#     for. The hand model ignored it identically, so this is carried over, not
+#     introduced.
+#   * The alert comparator is not modelled: HIGH_Alert / LOW_Alert (D15:D14)
+#     and the T_HIGH / T_LOW limits are storage, and no alert condition ever
+#     raises a flag or the ALERT pin. Same as the model replaced.
+#   * EEPROM_UL / EEPROM1..3 are volatile storage: nothing is programmed, and
+#     EEPROM_Busy never sets, so a driver that writes a word and reads it back
+#     succeeds immediately instead of polling.
+type: tmp117
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x48
+    registers:
+      # 16-bit big-endian, MSB first, no auto-increment (see the header).
+      - { name: TEMP_RESULT, addr: 0x00, width: 2, endian: be, access: r, signed: true, source: temperature, encode: { scale: 128.0 } }
+      # DATA_READY (D13) is silicon's: outside the write mask, set at reset.
+      - { name: CONFIGURATION, addr: 0x01, width: 2, endian: be, access: rw, write_mask: 0xDFFF, reset: 0x2220 }
+      # POR limits: +192 °C and −256 °C in 7.8125 m°C counts.
+      - { name: T_HIGH_LIMIT, addr: 0x02, width: 2, endian: be, access: rw, reset: 0x6000 }
+      - { name: T_LOW_LIMIT, addr: 0x03, width: 2, endian: be, access: rw, reset: 0x8000 }
+      - { name: EEPROM_UL, addr: 0x04, width: 2, endian: be, access: rw, reset: 0x0000 }
+      - { name: EEPROM1, addr: 0x05, width: 2, endian: be, access: rw, reset: 0x0000 }
+      - { name: EEPROM2, addr: 0x06, width: 2, endian: be, access: rw, reset: 0x0000 }
+      - { name: TEMP_OFFSET, addr: 0x07, width: 2, endian: be, access: rw, reset: 0x0000 }
+      - { name: EEPROM3, addr: 0x08, width: 2, endian: be, access: rw, reset: 0x0000 }
+      # Revision 0x0 in D15:D12, device number 0x117 in D11:D0.
+      - { name: DEVICE_ID, addr: 0x0F, width: 2, endian: be, access: r, reset: 0x0117 }
+
+metadata:
+  label: "TMP117 Temperature"
+  summary: "TI TMP117 high-accuracy digital temperature sensor over I2C."
+  detail: "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result. CONFIGURATION, both alert limits, TEMP_OFFSET and the EEPROM words are read/write storage; DATA_READY reads set because the part powers up in continuous-conversion mode. The alert comparator and the TEMP_OFFSET addition are not modelled."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x48 (ADD0→GND)."
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -55.0, max: 150.0 }

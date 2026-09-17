@@ -252,6 +252,7 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
+            device_pin_pads: Vec::new(),
             observed: Vec::new(),
             motors: Vec::new(),
             motor_cycle_anchor: 0,

@@ -29,8 +29,9 @@
 #
 # The angle registers are 12-bit right-aligned in a 16-bit big-endian word, so
 # the high byte carries only bits 11:8 — exactly what the hand model produced by
-# masking `(raw >> 8) & 0x0F`. A `width: 2` register with a 0..4095 clamp says
-# the same thing without the mask: 4095 never sets bit 12.
+# masking `(raw >> 8) & 0x0F`. A `width: 2` register whose count is reduced
+# modulo 4096 says the same thing without the mask: the reduction can never
+# reach 4096, so bit 12 is never set.
 #
 # ── What this models, and what it refuses to ─────────────────────────────
 #
@@ -61,14 +62,20 @@
 # rather than a silent one — a driver that programs a zero position and expects
 # ANGLE to shift will see it unmoved.
 #
-# ⚠️ A stimulus of EXACTLY 360.0° reads 4095 (full scale) where the hand model
-# wrapped to 0. The old model ran `deg % 360.0` before converting; `encode:` is
-# linear-and-clamp only, so Tier 1 has no way to say "wrap". 4095 is 0.088°
-# short of a full turn and 4096 is a count a 12-bit encoder cannot produce, so
-# the clamp is the closest expressible answer. Every angle below 360° is
-# byte-identical (swept in `as5600_migration_parity.rs`). The fix is a `wrap:`
-# key on `encode`, which is a schema addition rather than an AS5600 special
-# case, and it is written down rather than papered over.
+# The angle registers WRAP rather than clamp: `encode.wrap: 4096` says the
+# register is a 4096-count modular counter, so a stimulus of exactly 360.0°
+# reads 0 — the same shaft position, and the count the silicon shows. This is
+# the primitive the first AS5600 descriptor found missing: it had to clamp, so
+# a full turn answered 4095 (0.088° short of where the magnet is) where the
+# hand model's `deg % 360.0` answered 0. The modulus is stated in COUNTS, not
+# in degrees, because "this register is 4096 counts wide and rolls over" is the
+# property the part has; `% 360.0` is the same fact written in whatever unit
+# the host happened to drive. See `labwired_config::Encode::wrap`.
+#
+# `wrap` and a clamp say opposite things about the end of the range, so the
+# clamp is gone: a counter does not saturate at full scale, it rolls. The
+# reduction can never produce 4096, so bit 12 is still unreachable and the word
+# is still 12-bit right-aligned.
 #
 # BURN (0xFF) is deliberately NOT declared. It permanently fuses the part on
 # silicon; answering its address with storage would model a one-way operation
@@ -92,8 +99,8 @@ behavior:
       # MD = bit 5: a magnet is detected. ML / MH are not modelled (header).
       - { name: STATUS, addr: 0x0B, width: 1, endian: be, access: r, reset: 0x20 }
       # 12-bit angle, right-aligned big-endian. 4096 counts per revolution.
-      - { name: RAW_ANGLE, addr: 0x0C, width: 2, endian: be, access: r, source: angle, encode: { scale: 11.377777777777778, clamp_min: 0, clamp_max: 4095 } }
-      - { name: ANGLE, addr: 0x0E, width: 2, endian: be, access: r, source: angle, encode: { scale: 11.377777777777778, clamp_min: 0, clamp_max: 4095 } }
+      - { name: RAW_ANGLE, addr: 0x0C, width: 2, endian: be, access: r, source: angle, encode: { scale: 11.377777777777778, wrap: 4096 } }
+      - { name: ANGLE, addr: 0x0E, width: 2, endian: be, access: r, source: angle, encode: { scale: 11.377777777777778, wrap: 4096 } }
       # AGC mid-range at 5 V; MAGNITUDE a healthy CORDIC magnitude.
       - { name: AGC, addr: 0x1A, width: 1, endian: be, access: r, reset: 0x80 }
       - { name: MAGNITUDE, addr: 0x1B, width: 2, endian: be, access: r, reset: 0x0C80 }

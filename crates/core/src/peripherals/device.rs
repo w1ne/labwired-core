@@ -156,6 +156,29 @@ pub trait I2cDevice: Send {
     ///
     /// Default no-op: a purely register-mapped device has no clock to advance.
     fn advance_time_us(&mut self, _us: u64) {}
+
+    /// **Tier 2 pin drive.** Hand back, and clear, the `(pin role, level)`
+    /// transitions this device wants put on pads — an INT or DRDY line a
+    /// declarative part's rules asserted.
+    ///
+    /// Why the device does not drive the pad itself: an I²C slave lives inside
+    /// its CONTROLLER, not on the bus, and nothing it can reach has a GPIO in
+    /// it. Handing back primitives instead keeps the narrow
+    /// [`DevicePins`](crate::bus::DevicePins) port intact — the bus resolves the
+    /// role to `(address, bit)` from a map it built at attach and writes it
+    /// there, so no engine type crosses into a device model and
+    /// `bus_resident_device_port.rs` keeps passing unchanged.
+    ///
+    /// The roles are the descriptor's `outputs:` names, not pad labels: a model
+    /// never learns which pin it was wired to. Transition-only — a device that
+    /// re-asserts a level it already holds returns nothing.
+    ///
+    /// Default: empty. Every hand-written model and every Tier-1 descriptor
+    /// drives no pins, and this costs them one `Vec::new()` that the bus's
+    /// `is_empty()` check discards.
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        Vec::new()
+    }
 }
 
 // ── SPI ─────────────────────────────────────────────────────────────────────
@@ -305,6 +328,14 @@ pub trait SpiDevice: Send {
     ///
     /// Default no-op: a purely register-mapped device has no clock to advance.
     fn advance_time_us(&mut self, _us: u64) {}
+
+    /// **Tier 2 pin drive.** Same contract, same units and same reason as
+    /// [`I2cDevice::take_pin_drives`] — a declarative SPI part drives its DRDY
+    /// or IRQ line the same way an I²C one drives INT, and the bus applies both
+    /// through the one narrow pad port. Default: empty.
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        Vec::new()
+    }
 }
 
 // ── UART stream ─────────────────────────────────────────────────────────────
@@ -440,4 +471,55 @@ pub trait I2sDevice: Send {
 /// `bus.write_u8` and crashes the simulator.
 pub trait GpioObserver: Send + Sync + std::fmt::Debug {
     fn on_pin_change(&self, pin: u8, from: bool, to: bool, sim_cycle: u64);
+}
+
+// ── Tier 2 pin-drive collection ─────────────────────────────────────────────
+
+/// Take one I²C device's queued pin transitions and tag them with the device's
+/// system.yaml id.
+///
+/// The id comes from the device's [`SimInput`](crate::sim_input::SimInput)
+/// surface, which is where every attach path already stamps it
+/// (`AttachCtx::attach_i2c_device`). A device with no stamped id is DROPPED
+/// rather than guessed at: the bus resolves a role to a pad through a map keyed
+/// by that id, so an unlabelled device has no pad to drive and driving someone
+/// else's would be worse than driving none.
+pub fn drain_i2c_pin_drives(dev: &mut dyn I2cDevice, out: &mut Vec<(String, String, bool)>) {
+    let drives = dev.take_pin_drives();
+    if drives.is_empty() {
+        return;
+    }
+    let Some(id) = dev
+        .as_sim_input_mut()
+        .and_then(|si| si.component_id())
+        .map(str::to_string)
+    else {
+        return;
+    };
+    out.extend(
+        drives
+            .into_iter()
+            .map(|(role, level)| (id.clone(), role, level)),
+    );
+}
+
+/// SPI twin of [`drain_i2c_pin_drives`]. Falls back to
+/// [`SpiDevice::component_id`] for models that publish their id there rather
+/// than through a stimulus surface.
+pub fn drain_spi_pin_drives(dev: &mut dyn SpiDevice, out: &mut Vec<(String, String, bool)>) {
+    let drives = dev.take_pin_drives();
+    if drives.is_empty() {
+        return;
+    }
+    let id = dev.component_id().map(str::to_string).or_else(|| {
+        dev.as_sim_input_mut()
+            .and_then(|si| si.component_id())
+            .map(str::to_string)
+    });
+    let Some(id) = id else { return };
+    out.extend(
+        drives
+            .into_iter()
+            .map(|(role, level)| (id.clone(), role, level)),
+    );
 }

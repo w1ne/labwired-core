@@ -2457,6 +2457,13 @@ impl crate::Peripheral for I2c {
         }
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for cell in self.attached_devices() {
+            crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
+        }
+    }
+
     /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
     /// and AUTOEND together). Default Peripheral::write_u32 byte-slices and would
     /// assert START before AUTOEND lands, breaking the NBYTES=0 probe path.

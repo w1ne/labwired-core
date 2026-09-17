@@ -184,6 +184,13 @@ impl I2cDevice for UnpoweredI2cDevice {
         // oscillator; with no supply it does not run, so an unpowered sensor
         // must not accrue FIFO samples while the CPU is busy elsewhere.
     }
+
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        // NOT forwarded either, and for the same reason: an unpowered part
+        // cannot assert an interrupt line. Returning nothing leaves the pad
+        // wherever the board's pull leaves it, which is what a dead chip does.
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

@@ -352,6 +352,13 @@ impl I2cDevice for TracingI2cDevice {
     fn advance_time_us(&mut self, us: u64) {
         self.inner.advance_time_us(us);
     }
+    /// Transparent, for the same reason `advance_time_us` is: every attached
+    /// slave is trace-wrapped, so a wrapper that swallowed the pin queue would
+    /// make a Tier-2 part's INT line inert on every real bus while its unit
+    /// tests — which wrap nothing — passed.
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        self.inner.take_pin_drives()
+    }
     fn write(&mut self, data: u8) {
         // The master selects this device by address, then calls start() + write()/read().
         // The wrapper reconstructs the framing universally: the FIRST transfer after a
@@ -523,6 +530,10 @@ impl SpiDevice for TracingSpiDevice {
     /// the machine believed it was driving them.
     fn advance_time_us(&mut self, us: u64) {
         self.inner.advance_time_us(us);
+    }
+    /// Transparent — see the I²C twin above.
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        self.inner.take_pin_drives()
     }
 }
 

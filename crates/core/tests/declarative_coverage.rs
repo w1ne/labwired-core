@@ -32,13 +32,13 @@ use std::path::PathBuf;
 /// Device types modelled as YAML today (`configs/devices/*.yaml`).
 ///
 /// ⚠️ THE YAML COUNT ONLY GOES UP. Raise this when you add a descriptor.
-const YAML_DEVICES_BASELINE: usize = 20;
+const YAML_DEVICES_BASELINE: usize = 22;
 
 /// Device models still hand-written in Rust
 /// (`crates/core/src/peripherals/components/*.rs`, minus [`EXCLUDED`]).
 ///
 /// ⚠️ THE RUST COUNT ONLY GOES DOWN. Lower this when you port one to YAML.
-const RUST_DEVICES_BASELINE: usize = 76;
+const RUST_DEVICES_BASELINE: usize = 74;
 
 /// Files in `components/` that are NOT a device model, with the reason. Listed
 /// here rather than pattern-matched so every exemption is a line someone wrote
@@ -73,6 +73,10 @@ const EXCLUDED: &[(&str, &str)] = &[
     (
         "veml7700_parity.rs",
         "`#[cfg(test)]` harness for the oracle above",
+    ),
+    (
+        "rule_machine.rs",
+        "the Tier-2 rule ENGINE every declarative part's `rules:` runs on, not a part",
     ),
 ];
 

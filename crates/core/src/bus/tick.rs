@@ -708,6 +708,7 @@ impl SystemBus {
             self.service_hcsr04();
         }
         self.service_gpio_devices();
+        self.service_device_pin_drives();
 
         (
             interrupts,

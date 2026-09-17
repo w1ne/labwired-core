@@ -9,6 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+pub mod expr;
+pub mod rules;
+
+pub use rules::{
+    compile_rules, validate_rule_names, Action, BitFieldSpec, CompiledAction, CompiledRule, Event,
+    FifoOverflow, FifoSpec, FrameSpec, PinEdge, RegBits, Rule, RuleCompileError, RuleNames,
+};
+
 fn deserialize_u64_lax<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -2694,6 +2702,27 @@ pub struct I2cSpec {
     /// addressable (a factory NVM / OTP array). See [`IndexedTable`].
     #[serde(default)]
     pub indexed_tables: Vec<IndexedTable>,
+    /// Width of the register POINTER in bytes. `1` (the default) is the
+    /// ordinary register-pointer part: the first byte of a write selects a
+    /// register, the rest are data.
+    ///
+    /// `0` is the **pointerless** shape: the part has exactly one addressable
+    /// register (declared at `addr: 0`) and EVERY byte on the wire is that
+    /// register's data — there is no pointer to write and none to read past.
+    /// The NXP PCF8574 I/O expander is the canonical one: "the master sends one
+    /// byte, which is the port", and a model that insisted on a pointer byte
+    /// would consume the port value as an address and then latch the NEXT byte,
+    /// which for a single-byte write means the port never changes at all.
+    ///
+    /// Nothing else in the register-pointer engine changes: `write_mask`,
+    /// `bits:`, `source:`, reset values and the Tier-2 rules all behave exactly
+    /// as they do for a pointered part.
+    #[serde(default = "default_pointer_bytes")]
+    pub pointer_bytes: u8,
+}
+
+fn default_pointer_bytes() -> u8 {
+    1
 }
 
 /// One **indexed readout port**: the datasheet shape for reading storage that
@@ -3138,7 +3167,7 @@ fn default_addr_mask() -> u8 {
 }
 
 /// CRC-8 parameters. Sensirion parts use `poly 0x31`, `init 0xFF`, no final XOR.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub struct Crc8Spec {
     pub poly: u8,
     pub init: u8,
@@ -3264,6 +3293,15 @@ pub struct RegisterSpec {
     /// [`ZeroWhen`] — the VEML7700 `ALS_SD` shutdown bit is the motivating case.
     #[serde(default)]
     pub zero_when: Option<ZeroWhen>,
+    /// NAMED bit-fields, so a Tier-2 rule can say `set: INT_STATUS.DATA_RDY`
+    /// and `field(CONFIG.GAIN)` instead of carrying a hand-computed mask. Pure
+    /// nomenclature: naming bits changes no read or write behaviour, which is
+    /// why adding this to a shipped descriptor cannot move its transcript.
+    ///
+    /// Distinct from [`fields`](Self::fields), which ASSEMBLES a composite
+    /// measurement word out of sourced sub-values. See [`BitFieldSpec`].
+    #[serde(default)]
+    pub bits: Vec<BitFieldSpec>,
     /// Datasheet side effect of a READ of this register, in the SystemRDL
     /// vocabulary the MCU register machine already uses ([`ReadAction`]).
     ///
@@ -3342,6 +3380,37 @@ pub struct Encode {
     pub clamp_min: Option<f64>,
     #[serde(default)]
     pub clamp_max: Option<f64>,
+    /// **Modular wrap**, in RAW COUNTS: the encoded count is reduced
+    /// `rem_euclid(wrap)` after rounding, so a register that is a modular
+    /// counter rolls over instead of saturating.
+    ///
+    /// ## Why the counts and not the source value
+    ///
+    /// The AS5600 is the motivating part: a 12-bit magnetic encoder whose
+    /// `RAW_ANGLE` is a 4096-count counter, and 4096 counts is the SAME shaft
+    /// position as 0. The hand-written model expressed that as `deg % 360.0`
+    /// on the stimulus, which is the same behaviour written in the unit the
+    /// host happened to drive. Wrapping the counts is the property the silicon
+    /// actually has — the register is N counts wide and rolls — so it is
+    /// stated once per register and does not have to be restated for every
+    /// unit a channel might carry (degrees, radians, turns). It also cannot
+    /// produce a count the part cannot produce: `rem_euclid(4096)` can never
+    /// yield 4096, whereas `value % 360.0` followed by a multiply can round up
+    /// to exactly full scale.
+    ///
+    /// Applied AFTER `scale`/`offset`, after any `clamp_min`/`clamp_max`, and
+    /// after rounding to an integer count — rounding first is what stops
+    /// 359.99° (4095.99 counts) from being wrapped as 4095.99 and then rounded
+    /// UP to an out-of-range 4096. A part that wraps normally declares no
+    /// clamp: the two say opposite things about what happens at the end of the
+    /// range, and `wrap` is the one a counter does.
+    ///
+    /// `NonZeroU32` rather than `u32` so `wrap: 0` is a load error naming the
+    /// field instead of a silently ignored key — a modulus of zero has no
+    /// meaning, and a typo that quietly disables a datasheet behaviour is the
+    /// failure mode this schema is written to refuse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrap: Option<std::num::NonZeroU32>,
 }
 
 fn one_f64() -> f64 {
@@ -3515,6 +3584,37 @@ pub struct DeviceBehavior {
     /// primitives.
     #[serde(default)]
     pub analog: Option<AnalogSpec>,
+
+    // ── Tier 2 (`crates/config/src/rules.rs`) ──────────────────────────────
+    //
+    // Every field below is optional and defaults to empty, so a Tier-1
+    // descriptor deserialises byte for byte as it did before they existed.
+    /// Declared states. The FIRST is the reset state. Empty ⇒ the part has one
+    /// implicit state named `""` and `state == …` is never true.
+    #[serde(default)]
+    pub states: Vec<String>,
+    /// Integer variables and their reset values. The scratch a rule needs that
+    /// is not a register the master can see — a bit counter, a latched opcode.
+    #[serde(default)]
+    pub vars: BTreeMap<String, i64>,
+    /// Sample queues (see [`FifoSpec`]).
+    #[serde(default)]
+    pub fifos: Vec<FifoSpec>,
+    /// Pin ROLES this part drives. Each binds to a pad through a `config:` key
+    /// exactly as [`pins`](Self::pins) does — the key is the role name unless
+    /// [`output_pins`](Self::output_pins) maps it to a different one.
+    #[serde(default)]
+    pub outputs: Vec<String>,
+    /// Optional role → `config:` key map for [`outputs`](Self::outputs), for a
+    /// part whose config key is not simply the role name (`INT` → `int_pin`).
+    #[serde(default)]
+    pub output_pins: BTreeMap<String, String>,
+    /// Message framing for a command-shell part (see [`FrameSpec`]).
+    #[serde(default)]
+    pub frames: Option<FrameSpec>,
+    /// The rules themselves (see [`Rule`]). Fire in declaration order.
+    #[serde(default)]
+    pub rules: Vec<Rule>,
     /// **Free-running device timers** — the part's own clock, not the bus's.
     /// Each fires [`TimingAction`]s into the register file after a delay
     /// (`after_us`) or on a period (`period_us`), advanced by the device's
@@ -3682,10 +3782,12 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "mcp9808" => Some(include_str!("../../../configs/devices/mcp9808.yaml")),
         "pca9685" => Some(include_str!("../../../configs/devices/pca9685.yaml")),
         "vcnl4010" => Some(include_str!("../../../configs/devices/vcnl4010.yaml")),
+        "pcf8574" => Some(include_str!("../../../configs/devices/pcf8574.yaml")),
         "vl53l0x" => Some(include_str!("../../../configs/devices/vl53l0x.yaml")),
         "as5600" => Some(include_str!("../../../configs/devices/as5600.yaml")),
         "sht30" => Some(include_str!("../../../configs/devices/sht30.yaml")),
         "at24c256" => Some(include_str!("../../../configs/devices/at24c256.yaml")),
+        "tmp117" => Some(include_str!("../../../configs/devices/tmp117.yaml")),
         "gp2y0a21" => Some(include_str!("../../../configs/devices/gp2y0a21.yaml")),
         "dc-motor" | "dc_motor" => Some(include_str!("../../../configs/devices/dc_motor.yaml")),
         "bldc-motor" | "bldc_motor" => {

@@ -23,6 +23,10 @@
 //!     every configuration write and read back 0 forever, so a driver that
 //!     programmed a zero position and verified it saw its write vanish.
 //!
+//! No longer different: exactly 360.0°. The first version of this descriptor
+//! had to clamp there because `encode:` could not wrap; `encode.wrap: 4096`
+//! landed with this file's second revision and a full turn reads 0 again.
+//!
 //! Scripts are driven through Phase A's shared harness
 //! (`tests/common/transcript.rs`), the same one the byte-parity ratchet uses.
 
@@ -194,9 +198,10 @@ fn the_encoded_angle_matches_over_the_whole_range() {
     // The encode is a multiply where the old model divided, so the two could
     // round apart at a boundary. Swept in 0.05° steps — 7201 comparisons —
     // rather than asserted at a handful of convenient angles.
-    // 0.00 .. 359.95 in 0.05° steps. 360° itself is the one value that differs
-    // and has its own test below.
-    for step in 0..7200u32 {
+    // 0.00 .. 360.00 in 0.05° steps, the full turn included: with
+    // `encode.wrap` there is no longer a value in the channel range where the
+    // two models disagree.
+    for step in 0..=7200u32 {
         let angle = f64::from(step) * 0.05;
         let (old, new) = both(angle, &script([read_at(0x0C, 2), read_at(0x0E, 2)]));
         assert_eq!(old, new, "angle {angle}: the encoded word differs");
@@ -242,17 +247,13 @@ fn a_configuration_write_now_sticks() {
 }
 
 #[test]
-fn exactly_360_degrees_reads_full_scale_instead_of_wrapping_to_zero() {
-    // THE primitive Tier 1 is missing: a wrap (modulo) encode. The old model
-    // ran `deg % 360.0` before converting, so a full turn read 0 — which is
-    // what a 12-bit encoder does, since 4096 counts is the same shaft position
-    // as 0. `encode:` is linear-and-clamp only, so the descriptor answers 4095
-    // (0.088° short of a turn) rather than 0 or an impossible 4096.
-    //
-    // Recorded here rather than hidden: every angle in 0..359.95 is identical
-    // (swept above), and the only firmware this can reach is one driven to
-    // exactly 360.0 by a stimulus script. The fix is a `wrap:` on `encode`,
-    // which is a Tier-1 schema addition, not an AS5600 special case.
+fn exactly_360_degrees_wraps_to_zero_like_the_model_it_replaces() {
+    // This was the ONE deliberate difference the first AS5600 descriptor had
+    // to declare: `encode:` was linear-and-clamp only, so a full turn answered
+    // a clamped 4095 (0.088° short of where the magnet is) where the hand
+    // model's `deg % 360.0` answered 0. `encode.wrap: 4096` is that missing
+    // primitive, so the difference is GONE — a full turn is the same shaft
+    // position as 0 and now reads the same count.
     let (old, new) = both(360.0, &read_at(0x0C, 2));
 
     assert_eq!(
@@ -260,11 +261,32 @@ fn exactly_360_degrees_reads_full_scale_instead_of_wrapping_to_zero() {
         vec![0x00, 0x00],
         "the model this replaces wrapped to 0"
     );
-    assert_eq!(new, vec![0x0F, 0xFF], "the descriptor clamps to full scale");
+    assert_eq!(new, old, "encode.wrap must reproduce the wrap, not clamp");
     assert_ne!(
-        old, new,
-        "this is the missing primitive, not a rounding slip"
+        new,
+        vec![0x0F, 0xFF],
+        "0x0FFF is the CLAMPED answer this primitive exists to replace"
     );
+}
+
+#[test]
+fn the_full_turn_reads_the_same_count_as_the_start_of_one() {
+    // `wrap` is a modular counter, not a special case for the one value 360.0.
+    // The declared channel range is 0..360°, so 360.0 and 0.0 are the two
+    // stimuli in range that are the SAME shaft position; they must produce the
+    // same two bytes, and the count either side of the roll-over must not move.
+    let full = assert_parity("360°", 360.0, &read_at(0x0C, 2));
+    let zero = assert_parity("0°", 0.0, &read_at(0x0C, 2));
+    assert_eq!(full, zero, "a full turn is the same shaft position as 0");
+
+    let just_under = assert_parity("359.95°", 359.95, &read_at(0x0C, 2));
+    assert_eq!(
+        just_under,
+        vec![0x0F, 0xFF],
+        "the last count before the roll"
+    );
+    let just_over = assert_parity("0.05°", 0.05, &read_at(0x0C, 2));
+    assert_eq!(just_over, vec![0x00, 0x01], "the first count after it");
 }
 
 #[test]
