@@ -32,6 +32,11 @@ pub const NEXT_PC_SLOT: i32 = 16 * 4;
 pub const FAULT_PC_SLOT: u32 = 68;
 pub const FAULT_RETIRED_SLOT: u32 = 72;
 pub const RES_FLAG_SLOT: u32 = 76;
+/// IT state (`cond << 4 | mask`) as of BEFORE the faulting instruction.
+/// Written by every [`Body::emit_fault`]/[`Body::emit_unsupported`] and
+/// re-applied by the runtime on an interpreter resume, so a side-exit in the
+/// middle of an IT body does not replay that instruction unpredicated.
+pub const IT_STATE_SLOT: u32 = 80;
 pub const RAM_WINDOW_OFF: u32 = 256;
 
 pub type RamWindow = (u32, u32);
@@ -291,6 +296,38 @@ fn it_body_len(mask: u8) -> u32 {
     }
 }
 
+/// Why one instruction is refused a place in a compiled IT body. The body is
+/// compiled only when every slot is predicable, because `Body.it_state` models
+/// exactly one live IT block; an unnamed refusal here silently changes what
+/// `ready_instr_count` reports, so every case is spelled out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ItBodyBail {
+    /// A nested IT needs a second live IT state; the walker only tracks one.
+    NestedIt,
+    /// LDR literal may resolve to the code view, a windowed load, or a fault
+    /// depending on the link address; kept on the interpreter (the one
+    /// deliberate hole in IT mem coverage).
+    LdrLit,
+    /// Not ALU-emittable and not mem-emittable (control flow, unmodeled, or
+    /// memory with no RAM window to bound it).
+    Unsupported,
+}
+
+/// `None` when `inst` can join a compiled IT body, else the named refusal.
+pub(super) fn it_body_bail(inst: &Instruction, mem_ok: bool) -> Option<ItBodyBail> {
+    if matches!(inst, Instruction::It { .. }) {
+        return Some(ItBodyBail::NestedIt);
+    }
+    if matches!(inst, Instruction::LdrLit { .. }) {
+        return Some(ItBodyBail::LdrLit);
+    }
+    if is_alu_emittable(inst) || (mem_ok && is_mem_emittable(inst)) {
+        None
+    } else {
+        Some(ItBodyBail::Unsupported)
+    }
+}
+
 fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
     let mut ops = Vec::new();
     let mut cur = pc;
@@ -308,9 +345,8 @@ fn walk_ops(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<Op> {
                     ok = false;
                     break;
                 };
-                if !is_alu_emittable(&pi)
-                    || matches!(pi, Instruction::It { .. } | Instruction::LdrLit { .. })
-                {
+                if let Some(bail) = it_body_bail(&pi, mem_ok) {
+                    tracing::debug!("IT body bail at {peek_pc:#x}: {bail:?}");
                     ok = false;
                     break;
                 }
@@ -1196,6 +1232,7 @@ impl Body {
         }
         self.store_const_at(FAULT_PC_SLOT, pc as i32);
         self.store_const_at(FAULT_RETIRED_SLOT, self.emitted as i32);
+        self.store_const_at(IT_STATE_SLOT, self.it_state as i32);
         self.i32_const(WIRE_MEM_FAULT);
         self.buf.push(op::RETURN);
     }
@@ -1213,6 +1250,7 @@ impl Body {
         }
         self.store_const_at(FAULT_PC_SLOT, pc as i32);
         self.store_const_at(FAULT_RETIRED_SLOT, self.emitted as i32);
+        self.store_const_at(IT_STATE_SLOT, self.it_state as i32);
         self.i32_const(WIRE_UNSUPPORTED);
         self.buf.push(op::RETURN);
     }
