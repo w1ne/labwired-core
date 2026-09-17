@@ -116,6 +116,13 @@ impl StimulusOutcome {
     }
 }
 
+/// The one outcome shape a run's writers all derive from: `write_outputs` and
+/// `write_config_error_outputs` build exactly one of these, and `write_junit_xml`
+/// takes it by reference instead of re-extracting its fields into a positional
+/// parameter list. A plain alias for `TestResult` (result.json's own schema —
+/// serde field names must not move), not a new type.
+pub(crate) type TestOutcome = TestResult;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct TestResult {
     pub(crate) result_schema_version: String,
