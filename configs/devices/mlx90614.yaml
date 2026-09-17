@@ -1,0 +1,119 @@
+# Melexis MLX90614 single-point IR thermometer — declarative I²C COMMAND device
+# speaking SMBus.
+#
+# Migrated from `peripherals/components/mlx90614.rs`, which is deleted with this
+# descriptor; `tests/mlx90614_migration_parity.rs` drives that model and this
+# one through the same I²C script and asserts the bytes, plus the behaviours
+# that deliberately change.
+#
+# ── Wire protocol (MLX90614 datasheet rev 10, §8.4.3 "Read word") ─────────
+#
+# SMBus read-word: the master writes ONE command byte, issues a repeated START,
+# then clocks three bytes out — **LSB, MSB, PEC**.
+#
+#   0x06 Ta     ambient (chip) temperature
+#   0x07 TOBJ1  object 1 — what the optics point at, i.e. the surface
+#   0x08 TOBJ2  object 2 — a single-zone part mirrors TOBJ1
+#
+# Two things about that frame are why this part waited for Tier 1 to grow:
+#
+# **The word is little-endian.** SMBus 3.1 §6.5.5 sends data low byte first, and
+# every SMBus read-word part on the market therefore answers LSB then MSB. A
+# response word that could only be big-endian would have put the two halves of
+# the measurement in the wrong order — not a byte-order nicety but a different
+# number.
+#
+# **The PEC covers the whole transaction.** SMBus 3.1 §6.4.1: the Packet Error
+# Code is a CRC-8 (poly 0x07, init 0) over `[addr·W, command, addr·R, LSB, MSB]`
+# — the address and command bytes the MASTER drove included. `crc8:` framed the
+# response word alone, so a driver that validates the PEC (which the good MLX
+# drivers do, and which the hand model's own comment said they do) would have
+# rejected every reading. `covers: transaction` is that scope; the address it
+# uses is the address the device is attached at, so a part moved by
+# `i2c_address:` still answers a PEC its driver accepts.
+#
+# ── Temperature encoding ─────────────────────────────────────────────────
+#
+# §8.4.4: `T[K] = raw × 0.02`, so `raw = T[K] × 50` and the register holds an
+# ABSOLUTE temperature. The two `derived:` channels are that conversion — °C to
+# K — written as the datasheet writes it, and the `encode: { scale: 50.0 }` is
+# the 0.02 K/LSB. Splitting it that way is not cosmetic: folding the +273.15
+# into `encode.offset` would multiply before adding where the datasheet adds
+# before multiplying, and the two orders round apart by one LSB at every
+# temperature whose count lands exactly halfway between two counts — which is
+# every 0.02 °C. The parity test sweeps the whole −70..380 °C channel range.
+#
+# The `clamp_max: 32767` is the model's, not the datasheet's: §8.4.4 marks the
+# top bit of the RAM word as an error flag, so a valid reading never sets it.
+#
+# ── Stated approximations, so they are not mistaken for fidelity ─────────
+#
+#   * Only the three RAM temperature commands are decoded. The EEPROM commands
+#     (0x20..0x3F — emissivity, the SMBus address, the config register) and the
+#     sleep / flag commands are not modelled.
+#     ⚠️ DELIBERATE CHANGE: the hand model answered EVERY command byte with an
+#     object-temperature frame, so a driver reading its own SMBus address out of
+#     EEPROM at 0x2E was handed a temperature and believed it. Here an undecoded
+#     command queues no response and the read returns 0xFF. Asserted by name in
+#     the parity test.
+#   * ⚠️ DELIBERATE CHANGE: a read with no preceding command byte returns 0xFF.
+#     The hand model powered up with its RAM pointer already on TOBJ1, so a bare
+#     read — a transaction no MLX driver issues — answered an object temperature.
+#   * There is no conversion time: a reading is always available. The part's
+#     real IIR/FIR settling (§8.3) is not modelled, which is what the hand model
+#     did too.
+type: mlx90614
+
+behavior:
+  primitive: i2c_device
+  # §8.4.4: the RAM word is an ABSOLUTE temperature in 0.02 K units, so the
+  # °C → K conversion is a step the datasheet itself takes.
+  derived:
+    - { name: surface_k, expr: "surface_temp + 273.15" }
+    - { name: ambient_k, expr: "ambient_temp + 273.15" }
+  i2c:
+    default_address: 0x5A
+    # One command byte, not a Sensirion 16-bit opcode.
+    code_width: 1
+    # The SMBus Packet Error Code: poly 0x07, init 0, over the addressed frame.
+    crc8: { poly: 0x07, init: 0x00, covers: transaction }
+    commands:
+      - name: TA
+        code: 0x06
+        response:
+          - { source: ambient_k, width: 2, endian: le, encode: { scale: 50.0, clamp_min: 0.0, clamp_max: 32767.0 } }
+      - name: TOBJ1
+        code: 0x07
+        response:
+          - { source: surface_k, width: 2, endian: le, encode: { scale: 50.0, clamp_min: 0.0, clamp_max: 32767.0 } }
+      # Single-zone part: object 2 mirrors object 1.
+      - name: TOBJ2
+        code: 0x08
+        response:
+          - { source: surface_k, width: 2, endian: le, encode: { scale: 50.0, clamp_min: 0.0, clamp_max: 32767.0 } }
+
+metadata:
+  label: "Melexis MLX90614 IR Temp"
+  summary: "Single-point IR (non-contact) thermometer over SMBus/I2C."
+  detail: "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC over the whole addressed transaction. Both temperatures are externally driven inputs (channels surface_temp / ambient_temp); driving the surface below the air dew point is what makes firmware flag the surface condensation an air-only humidity index misses."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the MLX90614 fixed address 0x5A."
+    - name: surface_temp_c
+      ty: float
+      doc: "Initial surface (object) temperature, °C. Default 18. Drive it at runtime with the `surface_temp` input channel."
+    - name: ambient_temp_c
+      ty: float
+      doc: "Initial ambient (chip) temperature reported on Ta, °C. Default 22. Runtime channel: `ambient_temp`."
+  inputs:
+    # `config_key:` because the kit this replaces named the seed and the runtime
+    # channel differently, and three shipped system.yaml files set the seed.
+    - { key: surface_temp, label: "Surface temperature", unit: "°C", min: -70.0, max: 380.0, default: 18.0, config_key: surface_temp_c }
+    - { key: ambient_temp, label: "Ambient temperature", unit: "°C", min: -40.0, max: 125.0, default: 22.0, config_key: ambient_temp_c }
+  labs:
+    - board_id: esp32c3-leo-airquality
+      chip: esp32c3
+      example_dir: esp32c3-leo-airquality
+      demo_elf: demo-esp32c3-leo-airquality.elf

@@ -48,11 +48,12 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
 use labwired_config::{
-    AddWrap, AutoIncrement, Crc8Spec, DataReady, DeviceDescriptor, Endian, Event, FrameSpec,
-    I2cAccess, I2cCommand, I2cRegister, I2cSpec, IndexedTable, ObservableSpec, ReadComplete,
-    ResponseWord, UpdateRule,
+    AddWrap, AddressRemap, AutoIncrement, Crc8Covers, Crc8Spec, DataReady, DeviceDescriptor,
+    Endian, Event, FrameSpec, I2cAccess, I2cCommand, I2cRegister, I2cSpec, IndexedTable,
+    ObservableSpec, ReadComplete, ResponseWord, UpdateRule,
 };
 
+use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
     apply_timing_action, apply_write, apply_write_masked, encode_raw, observe, pack, read_clears,
     register_read_bytes, unpack, validate_timers, TimerBank,
@@ -207,6 +208,16 @@ pub struct GenericI2cDevice {
     /// `advance_time_us`. Empty ⇒ every timer code path short-circuits.
     timers: TimerBank,
 
+    /// `behavior.derived` compiled once at load: named values computed from the
+    /// stimulus channels on every read (see `declarative_expr`). Empty ⇒ the
+    /// slot view is exactly what it was before derived channels existed.
+    derived: Vec<CompiledExpr>,
+    /// Hybrid auto-increment jumps (`I2cSpec.auto_increment_map`). Empty ⇒ the
+    /// pointer always steps by one.
+    auto_increment_map: Vec<AddressRemap>,
+    /// `(channel key, the `config:` key that seeds it)` for every declared
+    /// input — see `seed_from_config`.
+    seed_keys: Vec<(String, String)>,
     /// **Tier 2**: the part's states, variables, FIFOs and output pins (see
     /// [`RuleMachine`]). `None` ⇒ the descriptor declares none of it, and every
     /// rule code path below short-circuits — which is what keeps every Tier-1
@@ -327,6 +338,30 @@ impl GenericI2cDevice {
             channels,
             component_id: None,
             timers: TimerBank::new(&descriptor.behavior.timers),
+            derived: compile_derived(
+                &descriptor.behavior.derived,
+                &descriptor
+                    .metadata
+                    .as_ref()
+                    .map(|m| m.inputs.iter().map(|i| i.key.clone()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+            )?,
+            auto_increment_map: spec.auto_increment_map.clone(),
+            seed_keys: descriptor
+                .metadata
+                .as_ref()
+                .map(|m| {
+                    m.inputs
+                        .iter()
+                        .map(|i| {
+                            (
+                                i.key.clone(),
+                                i.config_key.clone().unwrap_or_else(|| i.key.clone()),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             noise: descriptor
                 .metadata
                 .as_ref()
@@ -365,20 +400,28 @@ impl GenericI2cDevice {
     /// Thermal lag uses the same accumulated µs source as `delay_us` gating;
     /// buses without an honest µs source get noise+bias but no lag.
     fn observed_slots(&mut self) -> HashMap<String, f64> {
-        if self.noise.is_empty() {
-            return self.slots.clone();
+        let mut view = if self.noise.is_empty() {
+            self.slots.clone()
+        } else {
+            let now = self.time_source_seen.then_some(self.elapsed_us);
+            self.slots
+                .iter()
+                .map(|(k, &v)| {
+                    let v = match self.noise.get_mut(k) {
+                        Some(n) if !n.is_noop() => n.sample(v, now),
+                        _ => v,
+                    };
+                    (k.clone(), v)
+                })
+                .collect()
+        };
+        // Derived channels are computed from the OBSERVED values, so a derived
+        // quantity is a function of what the part measured (noise, bias and
+        // thermal lag included) rather than of the noiseless stimulus behind it.
+        if !self.derived.is_empty() {
+            eval_derived(&self.derived, &mut view);
         }
-        let now = self.time_source_seen.then_some(self.elapsed_us);
-        self.slots
-            .iter()
-            .map(|(k, &v)| {
-                let v = match self.noise.get_mut(k) {
-                    Some(n) if !n.is_noop() => n.sample(v, now),
-                    _ => v,
-                };
-                (k.clone(), v)
-            })
-            .collect()
+        view
     }
 
     /// Read a named observable channel in engineering units (e.g. the PCA9685
@@ -691,10 +734,40 @@ impl GenericI2cDevice {
         }
     }
 
+    /// Seed every declared input channel from an `external_devices` `config:`
+    /// block, given a lookup for one key.
+    ///
+    /// A channel may name a DIFFERENT config key than its runtime key
+    /// ([`labwired_config::InputSpec::config_key`]) — the MLX90614 kit this
+    /// replaces took `surface_temp_c` in `config:` and served `surface_temp` as
+    /// the runtime channel, and three shipped `system.yaml` files set the
+    /// former. The channel key itself is still accepted, so a file written
+    /// against either spelling works.
+    ///
+    /// Lives here rather than in the kit because BOTH attach paths need it: the
+    /// `PeripheralKit` pass and `i2c_factory::build_i2c_device`, which is what a
+    /// controller that only builds slaves (the ESP32-C3 I²C, nRF TWIM) calls.
+    /// Seeding in one and not the other is how the same YAML would boot at two
+    /// different temperatures depending on which MCU it hung off.
+    pub fn seed_from_config(&mut self, get: impl Fn(&str) -> Option<f64>) {
+        for (channel, config_key) in self.seed_keys.clone() {
+            if let Some(v) = get(&config_key).or_else(|| get(&channel)) {
+                self.seed_input(&channel, v);
+            }
+        }
+    }
+
     /// The pointer one address on, wrapped within the width the part's pointer
     /// actually has: a 1-byte pointer rolls 0xFF → 0x00 exactly as it did when
     /// the pointer was a `u8`, and a 2-byte pointer rolls at 0xFFFF.
     fn next_pointer(&self, ptr: u16) -> u16 {
+        // Hybrid auto-increment: the pointer JUMPS rather than steps. Checked
+        // before the step, and only here — an explicit pointer write never
+        // passes through this function, which is what "only the auto-increment
+        // path is remapped" means. See `I2cSpec::auto_increment_map`.
+        if let Some(remap) = self.auto_increment_map.iter().find(|m| m.from == ptr) {
+            return remap.to;
+        }
         let span: u16 = if self.pointer_width >= 2 {
             0xFFFF
         } else {
@@ -794,23 +867,46 @@ impl GenericI2cDevice {
     }
 
     /// Build the response bytes for a dispatched command (before delay gating).
-    /// `slots` is the noise-applied observation view computed by the caller.
-    fn build_response(&self, cmd: &I2cCommand, slots: &HashMap<String, f64>) -> Vec<u8> {
+    /// `slots` is the noise-applied observation view computed by the caller;
+    /// `code` is the command the master wrote, which the SMBus PEC covers.
+    fn build_response(&self, cmd: &I2cCommand, code: u16, slots: &HashMap<String, f64>) -> Vec<u8> {
+        let transaction_pec = self
+            .crc8
+            .is_some_and(|c| c.covers == Crc8Covers::Transaction);
         let mut out = Vec::new();
         for word in &cmd.response {
             let raw = Self::response_word_raw(word, slots);
-            let bytes = pack(raw, word.width, Endian::Be); // commands are BE on wire
+            let bytes = pack(raw, word.width, word.endian);
             match &self.crc8 {
                 // CRC framing is per 16-bit word, exactly like the Sensirion
                 // read buffer (see super::sensirion::encode_words).
-                Some(c) => {
+                Some(c) if !transaction_pec => {
                     for chunk in bytes.chunks(2) {
                         out.extend_from_slice(chunk);
                         out.push(crc8(chunk, c.poly, c.init));
                     }
                 }
-                None => out.extend_from_slice(&bytes),
+                _ => out.extend_from_slice(&bytes),
             }
+        }
+        // SMBus Packet Error Code: ONE byte at the end of the frame, computed
+        // over the bytes the MASTER drove as well as the ones the slave
+        // answered — `[addr·W, command, addr·R, data…]` (SMBus 3.1 §6.4.1,
+        // MLX90614 §8.4.3). The address is the one this device is attached at,
+        // so a part moved by `i2c_address:` still answers a PEC its driver
+        // accepts. A `code_width: 1` opcode contributes its single byte, which
+        // is the only form SMBus defines.
+        if transaction_pec {
+            let c = self.crc8.expect("transaction_pec implies a crc8 spec");
+            let mut frame = Vec::with_capacity(out.len() + 4);
+            frame.push(self.address << 1);
+            if self.code_width >= 2 {
+                frame.push((code >> 8) as u8);
+            }
+            frame.push((code & 0xFF) as u8);
+            frame.push((self.address << 1) | 1);
+            frame.extend_from_slice(&out);
+            out.push(crc8(&frame, c.poly, c.init));
         }
         out
     }
@@ -837,7 +933,7 @@ impl GenericI2cDevice {
         // One observation per dispatched command: the whole response frame
         // (every word + CRC) is computed from a single noise-applied slot view.
         let slots = self.observed_slots();
-        let resp = self.build_response(&cmd, &slots);
+        let resp = self.build_response(&cmd, code, &slots);
         match cmd.delay_us {
             Some(us) if us > 0 => {
                 self.pending = Some(resp);
@@ -1419,6 +1515,32 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         &names,
         &descriptor.behavior.rules,
     )?;
+    // Derived channels are compiled here as well as at construction, so a
+    // manifest preflight rejects a broken expression without building a device.
+    let input_keys: Vec<String> = descriptor
+        .metadata
+        .as_ref()
+        .map(|m| m.inputs.iter().map(|i| i.key.clone()).collect())
+        .unwrap_or_default();
+    let derived = compile_derived(&descriptor.behavior.derived, &input_keys)?;
+    // A `source_from` table entry that names no channel would read 0.0 forever
+    // on that mux setting — a converter silently reporting ground on one of its
+    // inputs, which is exactly the kind of quiet wrong answer a twin exists to
+    // refuse.
+    for reg in spec.registers.iter().filter(|r| r.source_from.is_some()) {
+        let sf = reg.source_from.as_ref().expect("filtered");
+        for (value, key) in &sf.table {
+            let known =
+                input_keys.iter().any(|k| k == key) || derived.iter().any(|d| &d.name == key);
+            if !known {
+                bail!(
+                    "register '{}' source_from maps field value {value} to '{key}', which is \
+                     neither a declared input channel nor a derived channel",
+                    reg.name
+                );
+            }
+        }
+    }
     // Tier 2: every expression must parse and every name a rule mentions must
     // be declared. Both are LOAD errors, so a typo in a generated part document
     // fails in manifest preflight rather than evaluating to a silent zero at
@@ -1591,6 +1713,78 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
     if spec.page_register.is_some() && !spec.registers.iter().any(|r| r.page.is_some()) {
         bail!("`page_register` is declared but no register names a `page`");
     }
+    // `source_from` is a mux over another register's bit-field: the register has
+    // to exist, the mask has to select something, and a table that maps nothing
+    // is a mux that never switches.
+    for reg in spec.registers.iter().filter(|r| r.source_from.is_some()) {
+        let sf = reg.source_from.as_ref().expect("filtered");
+        if !spec.registers.iter().any(|r| r.name == sf.register) {
+            bail!(
+                "register '{}' source_from register '{}' is not a declared register",
+                reg.name,
+                sf.register
+            );
+        }
+        if sf.mask == 0 {
+            bail!(
+                "register '{}' source_from mask is 0 — the mux could never switch",
+                reg.name
+            );
+        }
+        if sf.table.is_empty() {
+            bail!(
+                "register '{}' source_from declares an empty table — it selects nothing",
+                reg.name
+            );
+        }
+    }
+    // A field's `scale_from` reads the same register file a register's does.
+    for reg in &spec.registers {
+        for f in &reg.fields {
+            for sf in &f.scale_from {
+                if !spec.registers.iter().any(|r| r.name == sf.register) {
+                    bail!(
+                        "register '{}' field '{}' scale_from register '{}' is not a declared \
+                         register",
+                        reg.name,
+                        f.source,
+                        sf.register
+                    );
+                }
+            }
+        }
+    }
+    // Hybrid auto-increment. Every failure here is silent otherwise: a jump on a
+    // device whose pointer never walks does nothing, two jumps from one address
+    // make the walk depend on declaration order, and a jump to itself parks the
+    // pointer forever on one byte.
+    if !spec.auto_increment_map.is_empty() {
+        if !spec.auto_increment {
+            bail!(
+                "behavior.i2c declares auto_increment_map but auto_increment is false — the \
+                 pointer never walks, so the jump could never be taken"
+            );
+        }
+        for (i, m) in spec.auto_increment_map.iter().enumerate() {
+            if m.from == m.to {
+                bail!(
+                    "auto_increment_map entry {i} jumps {:#06x} to itself — the pointer would \
+                     never leave that byte",
+                    m.from
+                );
+            }
+            if spec.auto_increment_map[..i]
+                .iter()
+                .any(|e| e.from == m.from)
+            {
+                bail!(
+                    "auto_increment_map declares {:#06x} twice — which jump wins would depend \
+                     on declaration order",
+                    m.from
+                );
+            }
+        }
+    }
     for pc in spec.registers.iter().filter_map(|r| r.popcount.as_ref()) {
         for name in &pc.registers {
             if !spec.registers.iter().any(|r| &r.name == name) {
@@ -1602,25 +1796,45 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
     // `data_ready` validation exists for: the gate would never fire (or could
     // never be lifted), and the model would look faithful while behaving like
     // the un-gated part it replaced.
-    for reg in spec.registers.iter().filter(|r| r.zero_when.is_some()) {
-        let z = reg.zero_when.as_ref().expect("filtered");
+    for reg in spec.registers.iter() {
+        if reg.zero_when.is_some() && reg.zero_unless.is_some() {
+            bail!(
+                "register '{}' declares both zero_when and zero_unless — a gate has one \
+                 polarity, and the two together say the part is both on and off",
+                reg.name
+            );
+        }
+    }
+    for reg in spec
+        .registers
+        .iter()
+        .filter(|r| r.zero_when.is_some() || r.zero_unless.is_some())
+    {
+        // ONE branch for both polarities: `zero_unless` needs firmware to be
+        // able to SET the bit and `zero_when` to be able to CLEAR it, and both
+        // are the same question — can firmware write it at all.
+        let (key, z) = match (&reg.zero_when, &reg.zero_unless) {
+            (Some(z), _) => ("zero_when", z),
+            (_, Some(z)) => ("zero_unless", z),
+            _ => unreachable!("filtered"),
+        };
         let gate = match spec.registers.iter().find(|r| r.name == z.register) {
             Some(g) => g,
             None => bail!(
-                "register '{}' zero_when register '{}' is not a declared register",
+                "register '{}' {key} register '{}' is not a declared register",
                 reg.name,
                 z.register
             ),
         };
         if z.mask == 0 {
             bail!(
-                "register '{}' zero_when mask is 0 — the gate could never fire",
+                "register '{}' {key} mask is 0 — the gate could never fire",
                 reg.name
             );
         }
         if z.register == reg.name {
             bail!(
-                "register '{}' zero_when gates itself — the gate would erase the very bits \
+                "register '{}' {key} gates itself — the gate would erase the very bits \
                  that control it",
                 reg.name
             );
@@ -1635,7 +1849,7 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
         };
         if z.mask & !writable != 0 {
             bail!(
-                "register '{}' zero_when mask {:#x} includes bits firmware cannot write in '{}' \
+                "register '{}' {key} mask {:#x} includes bits firmware cannot write in '{}' \
                  — the part could never be powered on",
                 reg.name,
                 z.mask,
@@ -1744,18 +1958,29 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
             spec.code_width
         );
     }
-    if spec.crc8.is_some() {
-        for cmd in &spec.commands {
-            for word in &cmd.response {
-                if word.width % 2 != 0 {
-                    bail!(
-                        "command '{}' has an odd-width response word ({}); CRC-8 framing is \
-                         computed per 16-bit word",
-                        cmd.name,
-                        word.width
-                    );
+    if let Some(c) = spec.crc8 {
+        if c.covers == Crc8Covers::Response {
+            for cmd in &spec.commands {
+                for word in &cmd.response {
+                    if word.width % 2 != 0 {
+                        bail!(
+                            "command '{}' has an odd-width response word ({}); CRC-8 framing is \
+                             computed per 16-bit word",
+                            cmd.name,
+                            word.width
+                        );
+                    }
                 }
             }
+        }
+        // An SMBus PEC covers `[addr·W, command, addr·R, data…]`, so it is a
+        // property of a COMMAND transaction. On a register device there is no
+        // command byte to checksum and the key would parse and do nothing.
+        if c.covers == Crc8Covers::Transaction && spec.commands.is_empty() {
+            bail!(
+                "behavior.i2c declares crc8.covers: transaction but no commands — an SMBus PEC \
+                 covers the command byte the master wrote, so it needs a command device"
+            );
         }
     }
     Ok(())
@@ -1929,13 +2154,9 @@ impl PeripheralKit for DeclarativeI2cKit {
         let address = ctx.i2c_address_or(spec.default_address)?;
         let mut device =
             GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels)?;
-        // Honour `config:` overrides that name an input channel (e.g. a `lux`
+        // Honour `config:` overrides that seed an input channel (e.g. a `lux`
         // seed), matching how a hand-written kit seeded its initial reading.
-        for input in self.channels {
-            if let Some(v) = ctx.config_f64(input.key) {
-                device.seed_input(input.key, v);
-            }
-        }
+        device.seed_from_config(|key| ctx.config_f64(key));
         // Tier 2: bind `outputs:` roles to pads BEFORE the device goes in, so a
         // wiring error is reported against the placement rather than leaving a
         // device attached with an interrupt line that goes nowhere.
@@ -2113,6 +2334,65 @@ pub static TMP117_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("tmp117").expect("tmp117 descriptor is embedded"),
     )
     .expect("tmp117.yaml is a valid declarative i2c descriptor")
+});
+
+/// TI INA219 current / bus-voltage monitor (declarative `ina219.yaml`). The
+/// first descriptor to use `behavior.derived`: its POWER register is the
+/// product of two stimulus channels. Migrated from a hand-written model whose
+/// bus voltage TRUNCATED to the 4 mV LSB and whose POWER truncated an
+/// intermediate to whole milliwatts; see `tests/ina219_migration_parity.rs`.
+pub static INA219_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("ina219").expect("ina219 descriptor is embedded"),
+    )
+    .expect("ina219.yaml is a valid declarative i2c descriptor")
+});
+
+/// TI ADS1115 16-bit ADC (declarative `ads1115.yaml`) — the `source_from`
+/// multiplexer: CONVERSION reports whichever input CONFIG's MUX bits select, at
+/// the full scale its PGA bits select. Migrated from a hand-written model that
+/// answered all four differential pairs with AIN0; see
+/// `tests/ads1115_migration_parity.rs`.
+pub static ADS1115_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("ads1115").expect("ads1115 descriptor is embedded"),
+    )
+    .expect("ads1115.yaml is a valid declarative i2c descriptor")
+});
+
+/// NXP MMA8451Q accelerometer (declarative `mma8451q.yaml`) — the
+/// left-justified 14-bit field with a per-field `scale_from`, and the inverted
+/// `zero_unless` standby gate. Migrated from a hand-written model that wrapped
+/// full positive scale to full NEGATIVE scale; see
+/// `tests/mma8451q_migration_parity.rs`.
+pub static MMA8451Q_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("mma8451q").expect("mma8451q descriptor is embedded"),
+    )
+    .expect("mma8451q.yaml is a valid declarative i2c descriptor")
+});
+
+/// NXP FXOS8700CQ 6-axis sensor (declarative `fxos8700.yaml`) — the
+/// `auto_increment_map` hybrid jump (0x06 → 0x33). Migrated from a hand-written
+/// model that invented a "grazing cow" pose no stimulus had driven; see
+/// `tests/fxos8700_migration_parity.rs`.
+pub static FXOS8700_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("fxos8700").expect("fxos8700 descriptor is embedded"),
+    )
+    .expect("fxos8700.yaml is a valid declarative i2c descriptor")
+});
+
+/// Melexis MLX90614 IR thermometer (declarative `mlx90614.yaml`) — the SMBus
+/// command device: a little-endian response word and a PEC over the whole
+/// addressed transaction. Migrated from a hand-written model that answered
+/// every command byte with a temperature; see
+/// `tests/mlx90614_migration_parity.rs`.
+pub static MLX90614_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("mlx90614").expect("mlx90614 descriptor is embedded"),
+    )
+    .expect("mlx90614.yaml is a valid declarative i2c descriptor")
 });
 
 #[cfg(test)]

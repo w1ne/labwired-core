@@ -2576,6 +2576,19 @@ pub struct InputSpec {
     /// drives `advance_time_us` (degrades to no lag elsewhere).
     #[serde(default)]
     pub thermal_tau_s: Option<f64>,
+    /// The `external_devices` `config:` key that SEEDS this channel's starting
+    /// value, when it differs from `key`. Absent ⇒ the channel key itself,
+    /// which is what the declarative kit has always used.
+    ///
+    /// Needed by a port whose hand-written kit named the two differently: the
+    /// MLX90614 kit takes `surface_temp_c` / `ambient_temp_c` in `config:` and
+    /// serves `surface_temp` / `ambient_temp` as runtime channels, and three
+    /// shipped `system.yaml` files set the former. Without this the seed would
+    /// silently do nothing and the part would boot at the descriptor default —
+    /// a config key that parses and changes nothing, which is the failure mode
+    /// this schema refuses elsewhere.
+    #[serde(default)]
+    pub config_key: Option<String>,
 }
 
 /// The `behavior.i2c` section of a declarative `i2c_device` — a datasheet-shaped
@@ -2660,6 +2673,27 @@ pub struct I2cSpec {
     /// wrong byte the moment a gap or a 2-byte register appears in the span.
     #[serde(default)]
     pub auto_increment: bool,
+    /// **Hybrid auto-increment**: addresses the byte-wise auto-increment
+    /// pointer JUMPS from instead of stepping through. Each entry says "after
+    /// serving `from`, the next address is `to`" — only on the auto-increment
+    /// walk; an explicit pointer write is never remapped. Empty ⇒ the pointer
+    /// always steps by one, which is every device written before this existed.
+    ///
+    /// This is the datasheet shape for a part whose register map is two blocks
+    /// the driver wants as ONE burst. The NXP FXOS8700CQ is the motivating
+    /// case: §14.2 "hybrid mode" says that with `M_CTRL_REG2.hyb_autoinc_mode`
+    /// set, a read that walks off the end of the accelerometer block (0x06)
+    /// continues at the magnetometer block (0x33), so the 6-axis driver reads
+    /// all twelve bytes in a single transaction. Without the jump that driver
+    /// reads 0x07..0x0C — reserved space — as its magnetometer data.
+    ///
+    /// The remap is UNCONDITIONAL here: it does not read the enable bit, because
+    /// "this map applies only while that bit is set" is a state machine, not a
+    /// map. A descriptor that declares the jump therefore models the part in
+    /// hybrid mode; see the FXOS8700 descriptor for that stated as a modelled
+    /// scope rather than left implicit.
+    #[serde(default)]
+    pub auto_increment_map: Vec<AddressRemap>,
     /// Byte returned for an address inside an auto-increment block that no
     /// declared register covers. Absent ⇒ `0xFF`, matching what a non-
     /// auto-incrementing device already returns past the end of a register.
@@ -2723,6 +2757,14 @@ pub struct I2cSpec {
 
 fn default_pointer_bytes() -> u8 {
     1
+}
+
+/// One entry of [`I2cSpec::auto_increment_map`]: after the auto-increment
+/// pointer has served `from`, the next address it serves is `to`.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub struct AddressRemap {
+    pub from: u16,
+    pub to: u16,
 }
 
 /// One **indexed readout port**: the datasheet shape for reading storage that
@@ -3171,6 +3213,35 @@ fn default_addr_mask() -> u8 {
 pub struct Crc8Spec {
     pub poly: u8,
     pub init: u8,
+    /// **What the checksum covers.** See [`Crc8Covers`]. Absent ⇒ `response`,
+    /// the per-16-bit-word framing every descriptor written before this had.
+    #[serde(default)]
+    pub covers: Crc8Covers,
+}
+
+/// The two scopes a command device's CRC-8 is computed over.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Crc8Covers {
+    /// One checksum byte after EVERY 16-bit word of the response, computed over
+    /// that word alone. The Sensirion framing (SHT3x/SCD4x), and the default.
+    #[default]
+    Response,
+    /// ONE checksum byte after the whole response, computed over the ADDRESSED
+    /// SMBus frame: `[addr << 1, command, (addr << 1) | 1, data…]`.
+    ///
+    /// This is the SMBus Packet Error Code (SMBus 3.1 §6.4.1): the checksum
+    /// covers the address and command bytes the master drove, not only the
+    /// bytes the slave answered, so it cannot be computed from the response in
+    /// isolation. The Melexis MLX90614 is the motivating case — its datasheet
+    /// §8.4.3 "read word" is exactly `[addr·W, cmd, addr·R, LSB, MSB, PEC]`,
+    /// and a driver that validates the PEC (which the good MLX drivers do)
+    /// rejects every reading from a model that checksums the word alone.
+    ///
+    /// The address used is the address the device is ATTACHED at, so a part
+    /// moved to a second address by `i2c_address:` still answers a PEC its
+    /// driver accepts.
+    Transaction,
 }
 
 /// Byte order of a register's on-wire word.
@@ -3293,6 +3364,35 @@ pub struct RegisterSpec {
     /// [`ZeroWhen`] — the VEML7700 `ALS_SD` shutdown bit is the motivating case.
     #[serde(default)]
     pub zero_when: Option<ZeroWhen>,
+    /// The INVERTED power-gate: this register reads all-zero **unless** a
+    /// masked bit of the named register is set. Same [`ZeroWhen`] shape, and a
+    /// register declares at most one of the two (declaring both is a load
+    /// error).
+    ///
+    /// Half the datasheets on the market spell the enable the other way round.
+    /// The NXP MMA8451Q is the motivating case: §6.1 `CTRL_REG1.ACTIVE` is the
+    /// bit that takes the part OUT of standby, so the output registers read
+    /// zero while it is **clear** — the opposite polarity to the VEML7700's
+    /// `ALS_SD` shutdown bit that [`ZeroWhen`] was written for.
+    ///
+    /// ## Why a second key and not `zero_when: { …, negate: true }`
+    ///
+    /// The polarity ends up in the KEY NAME, where the line reads as the
+    /// datasheet sentence — `zero_unless: { register: CTRL_REG1, mask: 0x01 }`
+    /// is "reads zero unless ACTIVE is set" — instead of in a boolean whose
+    /// absence silently means one of the two. A missing or mistyped `negate:`
+    /// would flip a power gate with no error: the part would read plausible
+    /// measurements while it is supposed to be asleep, which is precisely the
+    /// class of silent-fidelity bug the gate exists to expose. A misspelled
+    /// KEY, by contrast, is an unknown field on a struct. The two spellings
+    /// share one struct and one engine branch, so there is still exactly one
+    /// definition of what a gate is.
+    #[serde(default)]
+    pub zero_unless: Option<ZeroWhen>,
+    /// **Source multiplexer**: the stimulus channel this register reports is
+    /// selected by a bit-field of ANOTHER register. See [`SourceFrom`].
+    #[serde(default)]
+    pub source_from: Option<SourceFrom>,
     /// NAMED bit-fields, so a Tier-2 rule can say `set: INT_STATUS.DATA_RDY`
     /// and `field(CONFIG.GAIN)` instead of carrying a hand-computed mask. Pure
     /// nomenclature: naming bits changes no read or write behaviour, which is
@@ -3345,6 +3445,27 @@ pub struct FieldSpec {
     pub signed: bool,
     #[serde(default)]
     pub encode: Option<Encode>,
+    /// Zero or more bit-field-selected scale factors, multiplied together and
+    /// into `encode.scale` — the SAME shape, and the same engine helper, as
+    /// [`RegisterSpec::scale_from`], applied to one field of a composite word.
+    ///
+    /// This is what makes a **left-justified** output register expressible. The
+    /// NXP MMA8451Q is the motivating case: `OUT_X` (0x01) is a 16-bit word
+    /// carrying a 14-bit signed count at bit 2, so the low two bits are always
+    /// 0 on silicon (§6.2), and the counts-per-g the value is encoded at is
+    /// chosen by `XYZ_DATA_CFG.FS` — 4096 / 2048 / 1024 for ±2/±4/±8 g
+    /// (Table 5). Placing the value with `shift: 2` / `width_bits: 14` already
+    /// rounds to 14 bits BEFORE the shift, which is the half that makes the low
+    /// bits zero; without a per-field `scale_from` the full-scale select was
+    /// simply unreachable, so a descriptor could have the justification or the
+    /// range switch but never both.
+    ///
+    /// Spelled `scale_from` and not `justify:`/`shift:` because the shift is
+    /// already `shift` — a second key meaning "shift" would be two ways to say
+    /// one thing, and a descriptor that set both would have to define which
+    /// wins.
+    #[serde(default, deserialize_with = "de_scale_from_list")]
+    pub scale_from: Vec<ScaleFrom>,
 }
 
 /// Accept either a single `scale_from` mapping or a YAML list of them, yielding
@@ -3432,6 +3553,39 @@ pub struct ScaleFrom {
     pub map: std::collections::BTreeMap<u32, f64>,
 }
 
+/// A register-bit-field-keyed **source** map: which measurement channel a
+/// register reports is chosen by another register's bit-field.
+///
+/// This is the datasheet shape for every multiplexed converter. The TI ADS1115
+/// is the motivating case: its CONVERSION register (0x00) reports whichever
+/// input the CONFIG register's MUX bits [14:12] select (§9.3.3, Table 8) —
+/// four single-ended channels and four differential pairs. [`ScaleFrom`]
+/// already covers the other half of that datasheet sentence (the PGA bits pick
+/// the full scale), and this is the same extraction (`(reg >> shift) & mask`)
+/// applied to the QUESTION rather than to the answer's scale.
+///
+/// The extraction is spelled exactly like [`ScaleFrom`]'s — `register`, `mask`,
+/// `shift` — rather than naming a field, because the register map has no named
+/// bit-fields to refer to: an author who has written one `scale_from` already
+/// knows this, and the two cannot drift apart into two ways of saying "these
+/// bits of that register".
+///
+/// A field value with no `table` entry falls back to the register's own
+/// [`RegisterSpec::source`] when it declares one, and reads as 0 otherwise. A
+/// table that covers every value the mask can produce therefore cannot be
+/// surprised; one that does not says so by leaving `source` set.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SourceFrom {
+    /// Name of the register whose bit-field selects the channel.
+    pub register: String,
+    /// Mask applied after `shift`.
+    pub mask: u32,
+    #[serde(default)]
+    pub shift: u8,
+    /// Extracted field value → the input (or [`DerivedChannel`]) key read.
+    pub table: std::collections::BTreeMap<u32, String>,
+}
+
 /// One command in a command device's command set.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct I2cCommand {
@@ -3462,12 +3616,26 @@ pub struct ResponseWord {
     /// A fixed value (e.g. a data-ready flag or serial-number word).
     #[serde(rename = "const", default)]
     pub const_value: Option<u32>,
-    /// Word width in bytes (big-endian on the wire). Default 2.
+    /// Word width in bytes. Default 2.
     #[serde(default = "default_response_width")]
     pub width: u8,
+    /// Byte order of this word on the wire. Absent ⇒ `be`, the Sensirion
+    /// 16-bit big-endian word every command descriptor written before this had.
+    ///
+    /// SMBus is little-endian by definition (SMBus 3.1 §6.5.5: "data is sent
+    /// low byte first"), so every SMBus read-word part answers LSB then MSB —
+    /// the MLX90614's §8.4.3 frame among them. A big-endian-only response word
+    /// made those parts inexpressible: byte-swapping the value into the encode
+    /// would produce a word whose two halves are a different measurement.
+    #[serde(default = "default_response_endian")]
+    pub endian: Endian,
     /// Linear encoding for a `source` word.
     #[serde(default)]
     pub encode: Option<Encode>,
+}
+
+fn default_response_endian() -> Endian {
+    Endian::Be
 }
 
 fn default_response_width() -> u8 {
@@ -3627,6 +3795,61 @@ pub struct DeviceBehavior {
     /// clock of its own, which is every descriptor written before this existed.
     #[serde(default)]
     pub timers: Vec<DeviceTimer>,
+    /// **Derived measurement channels** — named values computed from the
+    /// device's stimulus channels (and from earlier derived names) by a small
+    /// arithmetic expression, evaluated fresh on every read. A `source:` on a
+    /// register, a field or a response word may name one exactly as it names a
+    /// stimulus channel. Empty ⇒ the read path is untouched, which is every
+    /// descriptor written before this existed. See [`DerivedChannel`].
+    #[serde(default)]
+    pub derived: Vec<DerivedChannel>,
+}
+
+/// One **derived channel**: a named value computed from other channels.
+///
+/// This is the datasheet shape for a register that reports a QUANTITY THE PART
+/// COMPUTES rather than one it senses. The INA219 is the motivating case: its
+/// POWER register (0x03) is `bus_mV × |I_mA| / 1000` in 2 mW units (§8.5.4) —
+/// a product of two stimulus channels. `source:` takes one key and `scale_from`
+/// scales by a *register* field, so before this the only options were a POWER
+/// register left at reset-0 (a power monitor that reports no power to
+/// `getPower_mW()`) or a third `power` stimulus channel the host would have to
+/// keep consistent with the other two by hand.
+///
+/// ## The expression language, and why it is this small
+///
+/// `expr` is infix arithmetic over:
+///   * **names** — a `metadata.inputs` channel key, or a derived channel
+///     declared EARLIER in this list;
+///   * **decimal literals** — `500.0`, `-1`, `1e3`;
+///   * **operators** — `+ - * /` with the usual precedence, unary `-`, and
+///     parentheses;
+///   * **functions** — `abs(x)`, `min(a, b)`, `max(a, b)`. Nothing else.
+///
+/// There is no `round`, no `floor`, no conditional and no comparison, because
+/// each of those is a decision about the part's QUANTISER or its STATE, and
+/// both of those belong to primitives that say so: rounding to a register count
+/// is [`Encode`]'s job (one rule for every device), and a value that depends on
+/// what the part is currently doing is a state machine, not an expression.
+///
+/// ## Evaluation order and cycles
+///
+/// Channels are evaluated in declaration order, so a later one may read an
+/// earlier one. A name that is neither a declared input nor an EARLIER derived
+/// channel is a **load error** naming both the channel and the name — which is
+/// also why a cycle cannot be written: `a` cannot see `b` unless `b` is above
+/// it, so no chain can close. The alternative (resolve by dependency and detect
+/// cycles) would let a descriptor read top-to-bottom in an order it is not
+/// evaluated in, and a reader holding the datasheet would have to build the
+/// graph in their head to know what `POWER` means.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DerivedChannel {
+    /// The name a `source:` addresses this value by. Must not collide with a
+    /// declared `metadata.inputs` key: a `source:` naming both would be
+    /// ambiguous, so that is a load error rather than a precedence rule.
+    pub name: String,
+    /// The arithmetic expression, in the grammar above.
+    pub expr: String,
 }
 
 /// One free-running timer owned by a declarative device.
@@ -4171,6 +4394,11 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "sht30" => Some(include_str!("../../../configs/devices/sht30.yaml")),
         "at24c256" => Some(include_str!("../../../configs/devices/at24c256.yaml")),
         "tmp117" => Some(include_str!("../../../configs/devices/tmp117.yaml")),
+        "ina219" => Some(include_str!("../../../configs/devices/ina219.yaml")),
+        "ads1115" => Some(include_str!("../../../configs/devices/ads1115.yaml")),
+        "mma8451q" => Some(include_str!("../../../configs/devices/mma8451q.yaml")),
+        "fxos8700" => Some(include_str!("../../../configs/devices/fxos8700.yaml")),
+        "mlx90614" => Some(include_str!("../../../configs/devices/mlx90614.yaml")),
         "oled-ssd1306" => Some(include_str!("../../../configs/devices/ssd1306.yaml")),
         "oled-ssd1306-128x32" => Some(include_str!("../../../configs/devices/ssd1306_128x32.yaml")),
         "st7789-170x320" => Some(include_str!("../../../configs/devices/st7789.yaml")),
