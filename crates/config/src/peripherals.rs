@@ -1064,6 +1064,50 @@ pub struct SpiSpec {
     /// Register map addressed by the command byte.
     #[serde(default)]
     pub registers: Vec<RegisterSpec>,
+    /// **Flat RAM behind the declared map.** Present ⇒ every command-byte
+    /// address that no [`registers`](Self::registers) entry covers is one byte
+    /// of this array: a read serves it, a write stores it. Absent ⇒ an
+    /// undeclared address reads `0xFF` (open bus) and swallows writes, which is
+    /// what every descriptor written before this key existed meant.
+    ///
+    /// This is the shape of a **register shell** — a part whose datasheet map
+    /// is a few meaningful registers in a large space of storage the driver
+    /// configures and reads back. Three shipped models were exactly that and
+    /// nothing else: the SX1278's 128 bytes, the MFRC522's 64 and the
+    /// nRF24L01+'s 24, each a `[u8; N]` behind an address/data phase machine.
+    /// Declaring them one `RegisterSpec` at a time would mean inventing a name
+    /// per address, and an address left undeclared is not a blank — it reads
+    /// `0xFF` and drops the driver's write, which is a different part.
+    ///
+    /// Declared registers still WIN at their own addresses, so a part may mix
+    /// the two: the nRF24L01+'s STATUS is a `write_one_to_clear` register and
+    /// the other twenty-three addresses are storage.
+    #[serde(default)]
+    pub register_file: Option<SpiRegisterFile>,
+}
+
+/// Flat byte storage backing an SPI part's undeclared addresses
+/// (see [`SpiSpec::register_file`]).
+///
+/// Deliberately NOT [`RegisterFileSpec`], which is the I²C key: that one owns a
+/// write-POINTER (`pointer_mask`, `first_write_after_start_sets_pointer`,
+/// `auto_increment`) because an I²C register-file part selects its address with
+/// a bus write. An SPI part's address comes out of the command byte and its
+/// walk is [`SpiFraming::auto_increment`], so those three keys would be dead
+/// fields a descriptor could set and have ignored.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpiRegisterFile {
+    /// Number of one-byte cells. An address at or above it is not backed, so it
+    /// reads `0xFF` and drops writes exactly as an undeclared address does
+    /// without this key.
+    pub size: usize,
+    /// Value every cell powers up holding, before `reset` is stamped over it.
+    /// Absent ⇒ 0.
+    #[serde(default)]
+    pub fill: Option<u8>,
+    /// Sparse power-on values, keyed by address.
+    #[serde(default)]
+    pub reset: BTreeMap<u16, u8>,
 }
 
 /// SPI command-byte framing. Defaults are the ADXL345 convention: one command
@@ -1091,6 +1135,46 @@ pub struct SpiFraming {
     /// one; false ⇒ only the selected register is served.
     #[serde(default = "default_true")]
     pub auto_increment: bool,
+    /// **The command byte is an OPCODE plus an address**, not one direction
+    /// bit: `mosi & op_mask` selects the operation and is compared against
+    /// [`op_read`](Self::op_read) and [`op_write`](Self::op_write). Absent ⇒
+    /// [`rw_bit`](Self::rw_bit) decides, which is every descriptor written
+    /// before this key existed.
+    ///
+    /// It WINS over `rw_bit`. `rw_bit` carries a non-`None` default, so there
+    /// is no way to tell a defaulted one from a declared one and "declaring
+    /// both is an error" would reject every descriptor that sets `op_mask`. The
+    /// op field is the more specific statement of the same datasheet sentence,
+    /// so it is the one that decides.
+    ///
+    /// A command byte matching NEITHER value selects no register at all. Its
+    /// data phase serves [`command_response`](Self::command_response) (or
+    /// `0xFF` without one) and drops writes — which is what a part does with a
+    /// command that is not a register access. The nRF24L01+ (§8.3.1, Table 19)
+    /// is the motivating case: `R_REGISTER` is `000A AAAA` and `W_REGISTER` is
+    /// `001A AAAA`, but `W_TX_PAYLOAD` is `1010 0000` and `FLUSH_RX` is
+    /// `1110 0010`. Decoded by bit 5 alone, a 32-byte `W_TX_PAYLOAD` burst
+    /// writes its payload over CONFIG, EN_AA, EN_RXADDR and the rest — the
+    /// register file silently destroyed by the command that sends a packet.
+    #[serde(default)]
+    pub op_mask: Option<u8>,
+    /// Value of the `op_mask` field that means "read the addressed register".
+    #[serde(default)]
+    pub op_read: Option<u8>,
+    /// Value of the `op_mask` field that means "write the addressed register".
+    #[serde(default)]
+    pub op_write: Option<u8>,
+    /// **Register whose word is clocked OUT while the command byte is clocked
+    /// IN.** Absent ⇒ `0x00`, the byte every descriptor written before this key
+    /// returned during the command phase.
+    ///
+    /// nRF24L01+ §8.3.1: "the STATUS register is serially shifted out on the
+    /// MISO pin simultaneously with the command word on MOSI". Every RF24-style
+    /// driver reads its interrupt flags that way — `write_register` returns the
+    /// byte the command phase produced — so a part that answers `0x00` there
+    /// reports no interrupt has ever fired.
+    #[serde(default)]
+    pub command_response: Option<String>,
 }
 
 impl Default for SpiFraming {
@@ -1102,6 +1186,10 @@ impl Default for SpiFraming {
             addr_mask: default_addr_mask(),
             addr_shift: 0,
             auto_increment: true,
+            op_mask: None,
+            op_read: None,
+            op_write: None,
+            command_response: None,
         }
     }
 }
@@ -1179,6 +1267,11 @@ pub type I2cAccess = RegisterAccess;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RegisterSpec {
     pub name: String,
+    /// **FIFO drain port**: while the named FIFO is NON-EMPTY, a read of this
+    /// register serves one packed component of its oldest entry instead of the
+    /// live [`source`](Self::source). See [`RegisterFifo`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fifo: Option<RegisterFifo>,
     /// Pointer the master writes to select this register.
     ///
     /// One byte on almost every part; two on a device that declares
@@ -1338,6 +1431,28 @@ pub struct RegisterSpec {
     /// store, which is what every descriptor written before this field meant.
     #[serde(default)]
     pub on_write: Option<WriteAction>,
+    /// **Streaming port**: the byte-wise auto-increment pointer does NOT
+    /// advance past this register. The register IS the port, and what moves is
+    /// an internal address counter the master cannot address.
+    ///
+    /// Absent ⇒ the pointer steps, which is every register written before this
+    /// key existed.
+    ///
+    /// The Bosch BMI270's config upload is the motivating case: §"Initialization
+    /// sequence" has the host stream the ~8 KB feature-engine image into
+    /// `INIT_DATA` (0x5E) in one burst, with `INIT_ADDR` advancing inside the
+    /// part. A pointer that stepped per byte would walk the whole map thirty-two
+    /// times in that one transaction — over `ACC_CONF`, over `PWR_CTRL`, and
+    /// over `CMD` (0x7E), where one byte in every 256 of a firmware image is
+    /// `0xB6` and issues a SOFT RESET. The upload would reset the part it is
+    /// trying to initialise, repeatedly, and the handshake it exists to satisfy
+    /// could never complete.
+    ///
+    /// It holds the pointer in BOTH directions, because that is what a port is:
+    /// a part's FIFO data register (the BMI270's own `FIFO_DATA`, 0x24) is read
+    /// the same way it is written.
+    #[serde(default)]
+    pub stream: bool,
     /// **Civil-calendar decomposition** of the register's `source:` channel,
     /// which must carry Unix seconds (UTC). Present ⇒ a read reports THIS field
     /// of that instant rather than the instant itself, and a write to the
@@ -1495,6 +1610,45 @@ pub struct Encode {
     /// wrapping into a neighbouring field.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bcd: bool,
+    /// **Which bits carry the NUMBER.** Bits outside this mask are plain flags:
+    /// stored as written and served back verbatim, untouched by the numeric
+    /// encoding. Absent ⇒ the whole word is the number, which is what every
+    /// descriptor written before this key means.
+    ///
+    /// ## Why a register needs this
+    ///
+    /// The DS3231's alarm registers are the case. `A1M1` is bit 7 of the SAME
+    /// byte whose low seven bits are the BCD seconds, and the four mask bits
+    /// are what decide the alarm RATE — once a second, when the seconds match,
+    /// when the minutes and seconds match, and so on. A `bcd:` that claims the
+    /// whole word runs the flag through the nibble decode, so `0x89` ("mask
+    /// set, 9 seconds") stores as 89 and reads back `0x89` only by accident;
+    /// masking the flag away instead — which is what those registers did before
+    /// this key — makes alarm matching unexpressible, because the bit that
+    /// decides the rate is gone.
+    ///
+    /// With `value_mask`, the stored word is `number | flags` and both halves
+    /// survive a round trip:
+    ///
+    /// ```yaml
+    /// - { name: ALARM1_SECONDS, addr: 0x07, width: 1, access: rw,
+    ///     encode: { bcd: true, value_mask: 0x7F },
+    ///     bits: [{ name: A1M1, shift: 7 }] }
+    /// ```
+    ///
+    /// A rule then reads the number as `reg(ALARM1_SECONDS) & 0x7F` and the
+    /// flag as `field(ALARM1_SECONDS.A1M1)` — two independent things in one
+    /// byte, which is what the silicon has.
+    ///
+    /// ⚠️ The number must fit inside the mask in BOTH domains: decimal 59 is
+    /// `0x3B` and its BCD form is `0x59`, and both sit inside `0x7F`. A mask
+    /// too narrow for the BCD form would truncate the tens digit on the wire.
+    ///
+    /// Only meaningful with [`bcd`](Self::bcd) today, and only on a STORAGE
+    /// register — a register with a `source:` computes its whole word at read
+    /// time and has no stored flags to preserve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_mask: Option<u32>,
     /// Rounding applied to the encoded value before it becomes an integer
     /// count. Absent ⇒ [`Rounding::Nearest`], which is what every descriptor
     /// written before this field existed means (`f64::round`).
@@ -1505,6 +1659,38 @@ pub struct Encode {
     /// `clamp_max` pair. See [`ClampFrom`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clamp_from: Vec<ClampFrom>,
+}
+
+/// One register's view into a FIFO — the drain seam.
+///
+/// ## Why "non-empty", rather than a mode flag
+///
+/// A part with a FIFO has a BYPASS mode in which its data registers serve the
+/// live conversion, and a FIFO mode in which the same registers walk the queue.
+/// Both behaviours are already implied by the queue itself: in bypass the
+/// [`FifoFill`](crate::FifoFill) guard is false, nothing is ever pushed, the
+/// FIFO is always empty, and the register falls through to `source:`.
+///
+/// So there is no second mode switch to keep in step with the first. A
+/// descriptor that gets its fill guard right gets its read path right for
+/// free, and a Tier-1 register with no `fifo:` is untouched.
+///
+/// ## Popping
+///
+/// `pop: true` on the LAST slot a driver reads is what advances the queue. The
+/// ADXL345's burst is `DATAX0 .. DATAZ1`, so `DATAZ0` carries the pop; a driver
+/// that stops after X gets the same sample again, which is exactly what the
+/// silicon does with a FIFO whose read was abandoned.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct RegisterFifo {
+    /// The FIFO this register drains.
+    pub name: String,
+    /// Which packed component of the entry, indexing
+    /// [`FifoFill::pack`](crate::FifoFill::pack).
+    pub slot: u8,
+    /// Whether completing a read of this register POPS the entry.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pop: bool,
 }
 
 /// How an encoded value becomes an integer count.
@@ -1787,6 +1973,15 @@ pub struct DeviceBehavior {
     /// framing and the command table. Absent for non-display primitives.
     #[serde(default)]
     pub display: Option<DisplaySpec>,
+    /// For the `led_strip` primitive: an addressable LED strip's wire protocol
+    /// and artifact contract. Absent for every other primitive.
+    #[serde(default)]
+    pub led_strip: Option<LedStripSpec>,
+    /// For the `uart_device` primitive: the part's frame shape, its command
+    /// table and what it says unprompted. See [`UartSpec`]. Absent for every
+    /// other primitive.
+    #[serde(default)]
+    pub uart: Option<UartSpec>,
 
     // ── Tier 2 (`crates/config/src/rules.rs`) ──────────────────────────────
     //
@@ -1909,8 +2104,18 @@ pub struct DeviceTimer {
     /// Diagnostic name. Not addressable from the bus.
     pub name: String,
     /// Repeating period in µs. Mutually exclusive with `after_us`.
+    ///
+    /// When [`period_from`](Self::period_from) is also declared, this is the
+    /// period the source register's RESET value gives — the rate the part ticks
+    /// at before firmware writes anything — and the field takes over from the
+    /// first write onward.
     #[serde(default)]
     pub period_us: Option<u64>,
+    /// **Field-driven period**: the repeating period is looked up from another
+    /// register's bit-field instead of being the constant
+    /// [`period_us`](Self::period_us). See [`TimerPeriodFrom`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period_from: Option<TimerPeriodFrom>,
     /// One-shot delay in µs, measured from the moment the timer starts.
     /// Mutually exclusive with `period_us`.
     #[serde(default)]
@@ -1931,6 +2136,69 @@ pub struct DeviceTimer {
     /// does not restrict them.
     #[serde(default)]
     pub on_fire: Vec<TimingAction>,
+}
+
+/// A register-bit-field-keyed **timer period**, the timing twin of
+/// [`ScaleFrom`] and [`ClampFrom`].
+///
+/// ## Why a part needs this
+///
+/// A sample rate is a register on nearly every part that has one, and a
+/// constant `period_us` is right for exactly one setting of it. Four shipped
+/// descriptors said so in their own headers before this key existed:
+///
+/// * **DS3231** `CONTROL.RS2:RS1` — the INT/SQW square wave is 1 Hz, 1.024 kHz,
+///   4.096 kHz or 8.192 kHz. The power-on value is 8.192 kHz, so a model with a
+///   constant 1 Hz was not merely inflexible, it was wrong at reset.
+/// * **ADXL345** `BW_RATE[3:0]` — sixteen output data rates, 3200 Hz halving
+///   down to 0.098 Hz. A driver that asks for 800 Hz and gets 100 Hz sees one
+///   sample in eight.
+/// * **MPU6050** `SMPLRT_DIV` + `DLPF_CFG`, and **HX711**'s gain pulses.
+///
+/// ## The shape, and why it is a TABLE
+///
+/// The engine extracts `(reg(register) >> shift) & mask` — or the named
+/// `field:`, which is the same thing spelled the way the datasheet spells it —
+/// and looks the value up in `table`, whose values are periods in µs.
+///
+/// A table rather than an arithmetic rule because that is the shape of the
+/// datasheet: these are enumerations with footnotes, not formulas. Even the
+/// ADXL345's, which IS a clean halving, has a non-halving low end in the
+/// datasheet's own table. A part whose rate genuinely is a formula over a wide
+/// field (the MPU6050's 8-bit `SMPLRT_DIV`) does not fit here and is named as
+/// still-blocked rather than approximated by a 256-row table.
+///
+/// An **unmapped** field value leaves [`DeviceTimer::period_us`] in force —
+/// the same "unmapped ⇒ neutral" rule `scale_from` and `clamp_from` have — so
+/// a reserved encoding does not silently stop the part's clock.
+///
+/// ## When the period changes under a RUNNING timer
+///
+/// The deadline is re-anchored to `now + the new period`. It is not
+/// recomputed from the old deadline: firmware that rewrites the rate register
+/// has restarted the divider, and keeping the old anchor would make the first
+/// interval after the change a length that neither setting has.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct TimerPeriodFrom {
+    /// Name of the register whose bit-field selects the period.
+    pub register: String,
+    /// A named `bits:` field of that register. Exactly one of this and
+    /// [`mask`](Self::mask) is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+    /// An explicit mask, applied after [`shift`](Self::shift), for a part that
+    /// has no name for the bits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask: Option<u32>,
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub shift: u8,
+    /// Extracted field value → repeating period in µs. A zero period is a load
+    /// error: it would fire without bound.
+    pub table: std::collections::BTreeMap<u32, u64>,
+}
+
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
 }
 
 /// When a [`DeviceTimer`] begins running.
@@ -2087,6 +2355,30 @@ pub struct DisplaySpec {
     /// and `generation` are always present because they describe the payload
     /// itself; everything else is listed here.
     pub artifact_meta: Vec<DisplayMetaField>,
+    /// Extra conditions, beyond DISPON and awake, that must hold for the panel
+    /// to emit light.
+    ///
+    /// Forced by the RM67162, and general to every emissive panel. A backlit
+    /// TFT's brightness is a separate pin the controller knows nothing about,
+    /// so `display_on AND awake` is the whole truth there. An AMOLED has no
+    /// backlight: brightness lives INSIDE the controller (`WRDISBV`, DCS 0x51)
+    /// and its reset value is 0x00, i.e. black. Firmware ported from a TFT
+    /// sends a perfect init and a full frame, never writes 0x51, and shows
+    /// nothing on the bench. Without this a model would report that firmware
+    /// `lit` and flatter a driver that cannot work.
+    #[serde(default)]
+    pub lit_requires: Vec<DisplayLitRequirement>,
+}
+
+/// One clause of [`DisplaySpec::lit_requires`]: a declared var that must be at
+/// least `min` for the panel to be lit.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DisplayLitRequirement {
+    /// Name of the var (see [`DisplaySpec::vars`]).
+    pub var: String,
+    /// The smallest value that still emits light. `1` for a brightness whose
+    /// reset value is 0.
+    pub min: u32,
 }
 
 /// What a CS assert does to a stream that is already open.
@@ -2135,13 +2427,59 @@ pub enum DisplayMetaField {
         #[serde(rename = "as")]
         published_as: String,
     },
+    /// The CURRENT VALUE OF A DECLARED VAR, raw or hex-formatted.
+    ///
+    /// Written `- { var: brightness }` or `- { var: colmod, format: hex8 }`.
+    /// Forced by the RM67162, whose artifact has always carried `brightness`
+    /// as a number and `colmod` / `madctl` as `"0x55"`-style strings. The
+    /// formatting is part of the published contract — a consumer that parsed
+    /// `"0x55"` reads `85` if the key silently becomes a number — so it is
+    /// stated per entry rather than guessed from the value.
+    Var {
+        var: String,
+        /// Publish under this key instead of the var's own name.
+        #[serde(default, rename = "as")]
+        published_as: Option<String>,
+        #[serde(default)]
+        format: DisplayMetaFormat,
+    },
+}
+
+/// How a [`DisplayMetaField::Var`] renders into the artifact's `meta`.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayMetaFormat {
+    /// A JSON number.
+    #[default]
+    Raw,
+    /// `"0xNN"` — two hex digits, upper case.
+    Hex8,
+    /// `"0xNNNN"` — four hex digits, upper case.
+    Hex16,
 }
 
 impl DisplayMetaField {
-    pub fn flag(&self) -> DisplayMetaFlag {
+    /// The flag this entry publishes, or `None` for a var entry.
+    pub fn flag(&self) -> Option<DisplayMetaFlag> {
         match self {
-            Self::Flag(f) => *f,
-            Self::Renamed { flag, .. } => *flag,
+            Self::Flag(f) => Some(*f),
+            Self::Renamed { flag, .. } => Some(*flag),
+            Self::Var { .. } => None,
+        }
+    }
+
+    /// The var this entry reads, or `None` for a flag entry.
+    pub fn var(&self) -> Option<&str> {
+        match self {
+            Self::Var { var, .. } => Some(var),
+            _ => None,
+        }
+    }
+
+    pub fn format(&self) -> DisplayMetaFormat {
+        match self {
+            Self::Var { format, .. } => *format,
+            _ => DisplayMetaFormat::Raw,
         }
     }
 
@@ -2150,6 +2488,15 @@ impl DisplayMetaField {
         match self {
             Self::Flag(f) => f.default_key(),
             Self::Renamed { published_as, .. } => published_as,
+            Self::Var {
+                var,
+                published_as: None,
+                ..
+            } => var,
+            Self::Var {
+                published_as: Some(k),
+                ..
+            } => k,
         }
     }
 }
@@ -2181,6 +2528,17 @@ pub enum DisplayMetaFlag {
     Powered,
     /// Inversion flag. Recorded, never applied to the stored bytes.
     Inverted,
+    /// The COMPLEMENT of `awake`, ungated by the supply — the name the RM67162
+    /// artifact has always published. Not a rename of `awake`: `awake` is
+    /// supply-gated (`powered && awake`) and this is the raw sleep flag, so an
+    /// unpowered panel reports `asleep: true` rather than `awake: false`, and
+    /// the two would disagree for a panel that had been woken and then lost its
+    /// rail.
+    Asleep,
+    /// Which of the two real D/C wirings this placement uses: `"gpio"` when
+    /// firmware toggles a pin, `"controller_dcx"` when the SPI controller
+    /// drives the line itself. A string, because it is a choice and not a flag.
+    DcSource,
 }
 
 impl DisplayMetaFlag {
@@ -2197,6 +2555,172 @@ impl DisplayMetaFlag {
             Self::Lit => "lit",
             Self::Powered => "powered",
             Self::Inverted => "inverted",
+            Self::Asleep => "asleep",
+            Self::DcSource => "dc_source",
+        }
+    }
+}
+
+// ─── the `led_strip` primitive ──────────────────────────────────────────────
+//
+// An addressable LED strip is a PER-LED COLOUR ARRAY clocked by a wire
+// protocol. It is not a framebuffer panel: there is no address counter, no
+// command table, no window, and no frame memory that a later command re-reads.
+// Writing it as a `display` would have meant inventing all four.
+//
+// What is data: the strip's colour order on the wire, how many LEDs, which
+// protocol clocks them in, and — for the single-wire parts — the bit-timing
+// table the datasheet states in nanoseconds. What is engine: the two decoders,
+// and the artifact.
+//
+// WHAT IS DELIBERATELY NOT HERE, on both wires: power draw and daisy-chain
+// propagation delay. Neither is observable in the colour array, which is the
+// only thing this primitive claims to reproduce.
+
+/// The `behavior.led_strip` section: one addressable strip, entirely as data.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LedStripSpec {
+    /// How bytes reach the strip.
+    pub wire: LedStripWire,
+    /// `crate::inspect::artifact_format` name the artifact carries, so a
+    /// consumer decoding the bytes reads the same string it always did. It is
+    /// also what states the payload's BYTE ORDER (`APA102_RGB` vs
+    /// `ws2812_grb`) — there is no second key repeating that fact, because two
+    /// keys for one fact is how a descriptor starts lying.
+    pub artifact_format: String,
+    /// Default strip length when the placement states no `num_pixels`.
+    pub default_pixels: u32,
+    /// Whether this strip's supply connection is modelled: the engine exposes a
+    /// `powered` config key, refuses the wire when it is explicitly `false`,
+    /// and reports `powered` in the artifact.
+    ///
+    /// TRUE for the APA102, which is the clearest case in the tree: the LEDs
+    /// draw every milliamp from the rail and none from the data lines, so a
+    /// diagram wiring only CLK/DATA/CS is completely dark on a bench.
+    #[serde(default)]
+    pub supply_gated: bool,
+    /// Which facts the artifact's `meta` carries. `w`, `h`, `format` and
+    /// `generation` are always present because they describe the payload;
+    /// everything else is listed here, for the same reason a display's is.
+    pub artifact_meta: Vec<LedStripMetaField>,
+    /// `nrz_gpio` only: the bit-timing table, in nanoseconds.
+    #[serde(default)]
+    pub timing: Option<LedStripTiming>,
+    /// `spi_frames` only: the framing of one SPI transaction.
+    #[serde(default)]
+    pub spi_frames: Option<LedStripSpiFrames>,
+}
+
+/// Which wire protocol clocks a strip's colours in.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LedStripWire {
+    /// Clocked SPI: a start frame, one fixed-size frame per LED, an end frame.
+    /// The strip latches when CS is released (APA102 / DotStar).
+    SpiFrames,
+    /// ONE self-clocked data wire carrying an NRZ stream, decoded from GPIO
+    /// EDGE TIMING: every bit is a HIGH pulse whose DURATION is the bit value.
+    /// A long LOW gap latches the frame (WS2812 / WS2812B / SK6812).
+    NrzGpio,
+}
+
+/// The single-wire bit timing, IN NANOSECONDS, as the datasheet states it.
+///
+/// Stated rather than hard-coded because it is the part's own number: a SK6812
+/// and a WS2812B share this decoder and differ here. The engine scales these to
+/// simulated cycles with the firmware's clock, so the decode tracks the same
+/// time base the edges were scheduled on.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct LedStripTiming {
+    /// HIGH duration, in ns, separating a `0` (short high) from a `1` (long
+    /// high). The mid-point between T0H and T1H.
+    pub high_threshold_ns: u64,
+    /// LOW-gap duration, in ns, that ends a frame and displays it. The
+    /// datasheet minimum is the reset time; a detector below it must still be
+    /// far above any inter-bit low.
+    pub reset_threshold_ns: u64,
+    /// Bits per LED. 24 for an RGB part.
+    pub bits_per_pixel: u32,
+}
+
+/// The framing of one clocked-SPI transaction.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct LedStripSpiFrames {
+    /// Bytes that must open the transaction, matched exactly. A transaction
+    /// that does not start with them latches NOTHING — a glitchy transfer must
+    /// not blank a strip.
+    pub start_frame: Vec<u8>,
+    /// Size of one LED frame, in bytes.
+    pub frame_bytes: u32,
+    /// Mask applied to an LED frame's first byte, and the value that mask must
+    /// equal for the frame to be an LED frame. Anything else is the end frame
+    /// or garbage and STOPS the decode.
+    pub header_mask: u8,
+    pub header_value: u8,
+    /// Mask selecting the global-brightness field out of that same first byte.
+    /// Absent ⇒ this strip has no per-LED brightness field.
+    #[serde(default)]
+    pub brightness_mask: Option<u8>,
+    /// Index, within one LED frame, of each colour byte in `colour_order`.
+    pub colour_bytes: Vec<u8>,
+}
+
+/// A fact about a clocked strip that the artifact's `meta` can carry.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LedStripMetaFlag {
+    /// Per-LED global brightness, as an array. `spi_frames` only.
+    Brightness,
+    /// How many LEDs the decoder actually reconstructed.
+    PixelsDecoded,
+    /// How many of them carry a non-zero colour.
+    LitPixels,
+    /// The strip's supply pins are connected in the design.
+    Powered,
+    /// The chip-select pad label. `spi_frames` only.
+    CsPin,
+    /// The data pad number. `nrz_gpio` only.
+    DataPin,
+}
+
+impl LedStripMetaFlag {
+    pub fn default_key(self) -> &'static str {
+        match self {
+            Self::Brightness => "brightness",
+            Self::PixelsDecoded => "pixels_decoded",
+            Self::LitPixels => "lit_pixels",
+            Self::Powered => "powered",
+            Self::CsPin => "cs_pin",
+            Self::DataPin => "data_pin",
+        }
+    }
+}
+
+/// One entry of [`LedStripSpec::artifact_meta`], optionally renamed. Same shape
+/// and the same reason as [`DisplayMetaField`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum LedStripMetaField {
+    Flag(LedStripMetaFlag),
+    Renamed {
+        flag: LedStripMetaFlag,
+        #[serde(rename = "as")]
+        published_as: String,
+    },
+}
+
+impl LedStripMetaField {
+    pub fn flag(&self) -> LedStripMetaFlag {
+        match self {
+            Self::Flag(f) => *f,
+            Self::Renamed { flag, .. } => *flag,
+        }
+    }
+
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Flag(f) => f.default_key(),
+            Self::Renamed { published_as, .. } => published_as,
         }
     }
 }
@@ -2300,6 +2824,19 @@ pub enum DisplayDcSource {
     /// of it. Command PARAMETERS then arrive on the command stream, and every
     /// data-stream byte is frame memory.
     ControlByte,
+    /// A D/C line that the SPI **controller** may drive itself — the nRF54L
+    /// SPIM's `PSEL.DCX` + `DCXCNT`, which holds D/C low for the first DCXCNT
+    /// bytes of a transfer and high for the rest, with no firmware pin write
+    /// anywhere.
+    ///
+    /// The byte-level framing is identical to [`Self::Pin`]: the device latches
+    /// a level and reads it before each transfer. What differs is ATTACH. A
+    /// `pin` panel demands `dc_pin` and resolves it to a GPIO output register;
+    /// an `hw_dcx` panel accepts EITHER `dc_pin` (an nRF52-era or STM32 board,
+    /// where firmware toggles the line) OR `hw_dcx: true` (the controller
+    /// drives it), and requires exactly one of them. Neither is inference: both
+    /// are wires, and which one is connected is a fact about the board.
+    HwDcx,
 }
 
 /// Which addressing modes the controller implements and which one it powers on

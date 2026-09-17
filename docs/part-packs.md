@@ -512,11 +512,402 @@ The pads such a part drives still go out through the narrowed `DevicePins` port,
 exactly as on the tick pass — this changes WHEN `service` runs, not what it may
 touch.
 
+## `uart_device` — a part whose whole interface is a byte stream
+
+Two shapes a register map cannot reach because the part has no registers: an
+**AT command shell** (HC-05, SIM800L, every cellular modem) and an
+**unsolicited stream** (a GPS emitting NMEA once a second). Both were
+hand-written Rust, and the three models this primitive replaced were the same
+file three times — the same line buffer, the same 128-byte cap, the same `poll`
+that pops one byte. Only the command LADDER differed, and a ladder is a table.
+
+```yaml
+behavior:
+  primitive: uart_device
+  uart:
+    baud: 38400                         # the datasheet's rate; diagnostic today
+    frames:
+      terminator: "\r\n"                # every byte of this ends a frame
+      max_bytes: 128                    # a longer line is truncated, not grown
+      ignore_case: true                 # the AT default
+    responses:                          # tried IN ORDER; first match wins
+      - { match: { prefix: "AT+VERSION" }, respond: "+VERSION:x\r\nOK\r\n" }
+      - { match: "AT+NAME?",              respond: "+NAME:HC-05\r\nOK\r\n" }
+      - { match: "AT",                    respond: "OK\r\n" }
+      - { match: { prefix: "AT+" },       respond: "OK\r\n", delay_us: 90000 }
+      - { match: any,                     respond: "ERROR\r\n" }
+```
+
+`match:` is `any`, a bare literal (which means EXACT), or `{ exact: … }` /
+`{ prefix: … }`. There is no regex: a datasheet's command table is literals and
+prefixes, and a regex in a part document is a second language with its own
+failure modes. A response may also carry `do: [ … ]` — the same [`Action`]
+vocabulary a rule uses — so a command that switches the part's mode answers
+from the new mode.
+
+⚠️ **A frame that is empty after trimming produces nothing.** `AT\r\n` is two
+terminator bytes, so the `\r` completes the frame and the `\n` completes an
+empty one; without that rule every command is answered twice.
+
+### Unsolicited output, and templates
+
+```yaml
+  timers:
+    - { name: sentence, period_us: 500000, start: on_reset }
+  uart:
+    unsolicited:
+      - timer: sentence
+        when: "var(idx) % 2 == 0"
+        wrap: nmea
+        template: "GPGGA,120000.00,{abs(input(lat)) / 10000000 * 1000000 + (abs(input(lat)) % 10000000 * 6 + 50) / 100:09.4},{input(lat) >= 0:char(N,S)},…"
+  rules:
+    - on: { timer: sentence }
+      do: [ { var: idx, value: "var(idx) + 1" } ]
+```
+
+⚠️ **Every `unsolicited:` guard is evaluated BEFORE the timer's rules run**, so
+two entries guarded `% 2 == 0` and `% 2 == 1` are mutually exclusive. If the
+rule that increments `idx` ran first, the second guard would see the
+incremented value and every tick would emit both sentences.
+
+A **template** is literal text with `{EXPR}` or `{EXPR:FORMAT}` placeholders
+over the ordinary integer expression language. The formats are:
+
+| spelling | meaning |
+|---|---|
+| none, or `d` | plain decimal |
+| `W.P` / `0W.P` / `.P` | fixed point: the integer is a count of `10^-P`, printed with `P` decimals, zero-padded to `W` characters total |
+| `WX` | uppercase hex, zero-padded to `W` |
+| `char(A,B)` | one character: `A` when the value is non-zero, else `B` |
+
+**No float ever crosses the boundary**, which is what makes a rendered sentence
+bit-identical on native and wasm. An NMEA position is `DDMM.mmmm`: the channel
+declares `expr_scale: 10000000` so `input(lat)` is degrees × 1e7, integer
+arithmetic converts to 1e-4 minutes, and `{…:09.4}` prints it. `abs()` takes
+the magnitude and `char(N,S)` carries the hemisphere, because that is how the
+sentence is shaped — a number and a sign in two different fields.
+
+`wrap: nmea` is the one framing the engine knows: `$`, the payload, `*`, the
+two uppercase hex digits of the XOR over the payload, CRLF. It is a key rather
+than something a template could contain because the checksum is over the
+template's own OUTPUT.
+
+## FIFO streams
+
+The shape a register map cannot fake: a queue the part fills on its own clock
+and firmware drains. The depth and the overflow policy are the whole point — a
+model that always hands back the newest sample passes firmware that never
+drains fast enough, which is precisely the CPU-starvation bug worth simulating.
+
+```yaml
+  fifos:
+    - name: samples
+      depth: 32
+      overflow: drop_newest            # "collects up to 32 values and then stops"
+      fill:
+        timer: sample                  # the SAME timer a rule may listen for
+        when: "field(FIFO_CTL.FIFO_MODE) != 0"
+        pack:                          # one entry, MSB-first, 63 bits max
+          - { expr: "reported(DATAX0)", width_bits: 16 }
+          - { expr: "reported(DATAY0)", width_bits: 16 }
+          - { expr: "reported(DATAZ0)", width_bits: 16 }
+      count: { register: FIFO_STATUS, field: ENTRIES }
+      watermark:
+        entries_from: { register: FIFO_CTL, field: SAMPLES }
+        set: INT_SOURCE.WATERMARK
+
+    # …and the registers that drain it:
+      - { name: DATAX0, addr: 0x32, …, fifo: { name: samples, slot: 0 } }
+      - { name: DATAY0, addr: 0x34, …, fifo: { name: samples, slot: 1 } }
+      - { name: DATAZ0, addr: 0x36, …, fifo: { name: samples, slot: 2, pop: true } }
+```
+
+⚠️ **Bypass mode needs no second switch.** A `fifo:` register serves the
+queue's oldest entry while the queue is NON-EMPTY and falls through to its live
+`source:` when it is empty. In bypass the fill guard is false, so nothing is
+ever queued, so the register reports the live conversion — byte for byte what
+the part did before the FIFO existed. Get the fill guard right and the read
+path is right for free.
+
+⚠️ **`pop: true` goes on the LAST register of the burst.** A driver that
+abandons the burst earlier gets the same sample again, which is what silicon
+does with a read that never completed — and the trap a pop-on-first-byte model
+would hide.
+
+⚠️ **The watermark FOLLOWS the depth** unless the part declares `latch: true`.
+That is what makes a driver's "drain until the watermark drops" loop terminate.
+
+### `reported(REG)` — the word a register would put on the wire
+
+`reg(NAME)` is the register's STORED word. For a measurement register that is
+its reset value forever: nothing writes it, because the value is computed at
+read time from the stimulus channel. `input(KEY)` is not the same thing either
+— it borrows only the register's `encode:`, so a part whose counts-per-unit
+comes from `scale_from` (the ADXL345's range bits) gets the raw engineering
+value instead of the count.
+
+`reported(NAME)` is the word the register would put on the wire right now,
+through the same function the read path uses. A FIFO that packs what the data
+registers report, and an alarm that compares against the clock the time
+registers report, both need this and nothing else will do.
+
+### The stream parts that did NOT become data, and why
+
+`adxl345.yaml` is the FIFO primitive's proof part. Four more parts were looked
+at for this round and none of them is a FIFO port; each is named here with the
+reason, because "not yet ported" and "there is nothing there to port" are very
+different facts.
+
+- **BMI270** — **has no FIFO at all.** The shipped Rust model answered
+  `CMD_FIFO_FLUSH` with a comment that says `no FIFO modelled`, and there is no
+  queue, no watermark and no `FIFO_LENGTH` behind it. Porting it was a Tier-1 +
+  Tier-2 register job (the config-load handshake gate, the paged FEATURES
+  window, `scale_from` over `ACC_RANGE`/`GYR_RANGE`), not a stream job — and
+  that job is now **done**: `bmi270.yaml`, byte-identical, the `stream:` key
+  below. It still provides no FIFO coverage, which is why it stays named here.
+- **MAX30102** — a real 32-deep FIFO, and still not portable as data, for two
+  independent reasons. Its samples are **synthesised in Rust**: the model runs
+  a seeded LCG to shape a photoplethysmogram with a systolic upstroke, a
+  dicrotic notch and a diastolic decay. `fills[].pack` packs EXPRESSIONS over
+  stimulus channels; it cannot generate a waveform, and a port that dropped the
+  waveform would be a different part wearing the same `device_type`. Second,
+  its sample clock is a stated **thunk** — the model's own header calls
+  advancing one sample period per completed I²C transaction "a deliberate
+  stand-in for the missing clock hook, not silicon behaviour". A declarative
+  port has a real timer and would therefore not be a parity port. A waveform
+  primitive is the honest unblock, and it is a primitive, not a key.
+- **SX1278 / RA-02** and **nRF24L01+** — SPI register **shells with no air
+  link**, no FIFO, and no IRQ pin (`no RF air link`, `no air link`, in their own
+  first lines). 138 and 191 lines each, nearly all of it a register array behind
+  an address/data phase machine.
+
+  ⚠️ This entry used to say porting them "would move a stub, not a model", and
+  that was the wrong call. A stub in Rust is engine code: it ships in every
+  binary, only a Rust programmer can change it, and the declarative engine has
+  to stay bug-compatible with it forever. A stub in YAML is three lines of
+  `register_file:` that a customer can fork. They are **ported** —
+  `lora_sx1278.yaml`, `nrf24l01.yaml`, `rc522.yaml` — and what is still missing
+  is stated in each descriptor's own header rather than in this list. The rule
+  that survives is the one about the FAKE: nothing invents a packet, a tag or an
+  RSSI, and `nrf24l01.yaml` says in its first paragraph that a `write()` waiting
+  on TX_DS waits forever.
+- **MCP2515** — the SPI and register half is expressible, but the part's reason
+  to exist is `attach_can_bus`: a `Sender`/`Receiver` pair of `CanFrame`s the
+  engine hands it, plus `poll_external_bus`. That is an engine SEAM, not a
+  descriptor key. A pack could declare `bus: can` and have the engine wire it,
+  which is the shape to build — and it is a primitive-level change with its own
+  attach contract, so it is named here rather than half-done.
+
+## Register-shell keys
+
+A **register shell** is a part whose datasheet map is a few meaningful registers
+in a large space of storage the driver configures and reads back — and whose
+interesting behaviour (a radio, an RF field) is not modelled at all. Five
+shipped models were exactly that: the SX1278's 128 bytes, the MFRC522's 64, the
+nRF24L01+'s 24, plus the two shells' framing quirks. The keys below are what it
+took to make all of them data, and each is named with the datasheet sentence
+that forced it.
+
+### `spi.register_file` — flat RAM behind the declared map
+
+Every command-byte address that no `registers:` entry covers is one byte of this
+array: a read serves it, a write stores it. Absent ⇒ an undeclared address reads
+`0xFF` (open bus) and swallows writes, which is what every descriptor written
+before this key meant.
+
+```yaml
+spi:
+  registers:
+    - { name: RegVersion, addr: 0x42, width: 1, endian: be, access: r, reset: 0x12 }
+  register_file:
+    size: 0x80          # cells; an address at or above it is not backed
+    fill: 0x00          # optional: what every cell powers up holding
+    reset: { 0x01: 0x09 }   # sparse power-on values, stamped over `fill`
+```
+
+Declared registers still **win** at their own addresses, so a part may mix the
+two: the nRF24L01+'s `STATUS` is a `write_one_to_clear` register and the other
+twenty-three addresses are storage.
+
+Why a file rather than one `RegisterSpec` per address: an address left
+undeclared is not a blank. It reads `0xFF` and drops the driver's write, which is
+a different part — so the alternative is inventing a name for 128 addresses,
+127 of which the datasheet calls reserved.
+
+It is deliberately **not** the I²C `register_file:`. That one owns a write
+POINTER (`pointer_mask`, `first_write_after_start_sets_pointer`,
+`auto_increment`) because an I²C register-file part selects its address with a
+bus write. A SPI part's address comes out of the command byte and its walk is
+`framing.auto_increment`, so those three keys would be dead fields a descriptor
+could set and have ignored.
+
+Proved by **`lora_sx1278.yaml`**, **`rc522.yaml`** and **`nrf24l01.yaml`**.
+
+### `spi.framing.op_mask` / `op_read` / `op_write` — an OPCODE command byte
+
+`mosi & op_mask` selects the operation and is compared against `op_read` and
+`op_write`. A command byte matching NEITHER selects no register at all: its data
+phase serves `command_response` (or `0xFF`) and **drops writes**.
+
+```yaml
+framing:
+  op_mask: 0xE0
+  op_read: 0x00       # R_REGISTER is 000A AAAA
+  op_write: 0x20      # W_REGISTER is 001A AAAA
+  addr_mask: 0x1F
+```
+
+It WINS over `rw_bit`. `rw_bit` carries a non-`None` default, so there is no way
+to tell a defaulted one from a declared one and "declaring both is an error"
+would reject every descriptor that sets `op_mask`; the op field is the more
+specific statement of the same datasheet sentence, so it decides.
+
+Proved by **`nrf24l01.yaml`** (§8.3.1, Table 19). Decoded by bit 5 alone — the
+only direction vocabulary the engine had — `W_TX_PAYLOAD` (1010 0000) is a WRITE
+to address 0x00, so a 32-byte payload burst walks its payload over CONFIG,
+EN_AA, EN_RXADDR, SETUP_AW, SETUP_RETR, RF_CH and RF_SETUP. The register file is
+silently destroyed by the command that sends a packet.
+
+### `spi.framing.command_response` — the word clocked out during the command byte
+
+Names the register whose word rides out on MISO while the master clocks the
+command word in. Absent ⇒ `0x00`, the byte every descriptor returned there
+before.
+
+nRF24L01+ §8.3.1: "the STATUS register is serially shifted out on the MISO pin
+simultaneously with the command word on MOSI". Every RF24-style driver reads its
+interrupt flags that way — `write_register()` returns the byte the command phase
+produced — so a part answering `0x00` there reports that no interrupt has ever
+fired.
+
+### `registers[].stream` — a port that holds the auto-increment pointer
+
+The byte-wise auto-increment pointer does not advance past this register. The
+register IS the port; what moves is an internal address counter the master
+cannot address. It holds the pointer in **both** directions, because that is
+what a port is.
+
+```yaml
+- { name: INIT_DATA, addr: 0x5E, width: 1, endian: le, access: rw, stream: true }
+```
+
+Proved by **`bmi270.yaml`**. Bosch's initialisation sequence streams the ~8 KB
+feature-engine image into `INIT_DATA` in one burst, with `INIT_ADDR` advancing
+inside the part. ⚠️ A pointer that stepped per byte would walk that one
+transaction over the whole map thirty-two times — over `ACC_CONF`, over
+`PWR_CTRL`, and over `CMD` (0x7E), where **one byte in every 256 of a firmware
+image is `0xB6`, which is SOFTRESET**. The upload would reset the part it is
+initialising, repeatedly, and the handshake it exists to satisfy could never
+complete. A part's FIFO data register (the BMI270's own `FIFO_DATA`, 0x24) has
+the same shape.
+
+### The register and command shells that did NOT port, and why
+
+Five more were looked at this round. Each is named with the missing primitive,
+because "not yet ported" and "there is nothing there to port" are different
+facts — and so is "the model fakes it, and the fake is what you would be
+porting".
+
+- **SPS30** — a Sensirion command shell, and two things in it are not data.
+  Its measured values are **IEEE-754 `f32`** on the wire (`value.to_be_bytes()`,
+  datasheet §5.3.2), and a `response[]` word is an integer encoding. Worse, the
+  response SHAPE is chosen by a parameter word the driver sent earlier:
+  `start_measurement(0x0300)` makes each value two words plus two CRCs and
+  `0x0500` makes it one word plus one, so the same opcode answers 60 bytes or 30
+  depending on stored state. The primitives are a float response word and a
+  response set selected by a `state:`; both are real, neither exists.
+- **PN532** — an I²C command shell whose command is not at a fixed offset: the
+  model scans the whole write stream for the byte pair `D4 02` anywhere in it
+  and answers with a 19-byte literal ACK + firmware frame. `commands:` matches a
+  fixed-width opcode at the head of the transaction and answers in 16-bit words.
+  The missing primitive is the `uart_device` `responses:` table — a pattern match
+  and a literal byte string — on an I²C transport. The RF field is not modelled
+  either way: `PICC_IsNewCardPresent()` finds nothing because there is nothing
+  in the field to find.
+- **MLX90640** — 16-bit addressing (`pointer_width: 2`) is already a key, and
+  the rest is not. Its 832-word EEPROM is a **self-consistent linearised
+  calibration set computed in Rust**, chosen so the unmodified Melexis driver's
+  `ExtractParameters` + `CalculateTo` collapses to an invertible `count ↔ °C`
+  relation; its 768-word RAM is the thermal scene pushed back through that
+  inversion, per pixel. `register_file.fill` fills an array with a constant and
+  `reset:` stamps single cells — neither computes 1600 words from a scene. The
+  primitive is a 2-D stimulus **grid** with a per-cell computed source, and it is
+  a primitive, not a key.
+- **DRV2605L** — its time base is a stated **thunk**, the same disqualification
+  MAX30102 has. The model implements no `advance_time_us`: playback moves only
+  when a caller invokes `advance_us` by hand, and the header says so ("Nothing
+  advances on its own: a haptic effect started and never stepped stays
+  asserted"). A declarative port has a real timer, so it would not be a parity
+  port — it would be a different part that happens to answer the same probe. The
+  effect library is a second, smaller problem: TI does not publish the ROM
+  waveforms' durations or amplitudes, so the model's table is a stated
+  approximation rather than data anyone can check.
+- **lipo_charger** — an `analog_source` in shape, but its pin voltage is
+  computed from **two** channels rather than looked up on a curve over one:
+  `3300 + 9 × soc_pct`, plus a 150 mV charge bump **iff** `usb_present ≥ 0.5`,
+  clamped to 4200 mV, then integer-divided by the ÷2 divider. Three gaps for one
+  small part — `analog.source` naming a `derived:` channel, a threshold on a
+  boolean channel, and the model's two integer truncations — and inventing all
+  three for one part is how a vocabulary stops being a vocabulary.
+
+## `timers[].period_from` — a field-driven timer period
+
+A sample rate is a REGISTER on nearly every part that has one, and a constant
+`period_us` is right for exactly one setting of it.
+
+```yaml
+  timers:
+    - name: sample
+      period_us: 10000               # what the source register's RESET value gives
+      start: on_reset
+      period_from:
+        register: BW_RATE
+        field: RATE                  # or `mask:` + `shift:`
+        table:                       # field value → period in µs
+          0x9: 20000                 #   50 Hz
+          0xA: 10000                 #  100 Hz — the reset value
+          0xD: 1250                  #  800 Hz
+```
+
+A **table** rather than a formula because that is the shape of the datasheet:
+these are enumerations with footnotes. A part whose rate genuinely is a formula
+over a wide field (the MPU6050's 8-bit `SMPLRT_DIV`) does not fit and is named
+as still-blocked rather than approximated by a 256-row table.
+
+An **unmapped** field value is NEUTRAL — `period_us` stays in force, the same
+rule `scale_from` and `clamp_from` have — so a reserved encoding cannot
+silently stop the part's clock. A RUNNING timer whose period changed is
+re-anchored to `now + the new period`: firmware that rewrote the rate register
+restarted the divider.
+
+## `set_input:` — a rule that assigns a stimulus channel
+
+Every other action changes something firmware can see through the wire. This
+one changes what the part MEASURES, which is the only way a part can hold a
+quantity that moves on its own clock.
+
+```yaml
+  timers:
+    - { name: tick, period_us: 1000000, start: on_reset }
+  rules:
+    - on: { timer: tick }
+      when: "field(CONTROL.EOSC) == 0"
+      do: [ { set_input: unix_time, value: "input(unix_time) + 1" } ]
+```
+
+`value:` is in the same domain `input()` reads back, and `set_input` is its
+exact inverse — a rule that writes back what it read changes nothing.
+
+⚠️ **It does NOT raise `on: { input: KEY }`.** A rule that fed its own trigger
+would be a loop, and the machine's recursion guard would drop the re-entry
+silently rather than run it. A HOST driving the channel still raises the event,
+because that is an outside event.
+
 ## What a pack cannot do
 
 A pack is data interpreted by a **primitive** — `i2c_device`, `spi_device`,
-`analog_source`, `display`, `gpio_device`, `quadrature`, `matrix`, `one_wire`,
-`pulse_echo`.
+`analog_source`, `display`, `led_strip`, `gpio_device`, `uart_device`,
+`quadrature`, `matrix`, `one_wire`, `pulse_echo`.
 Those primitives are the irreducible timing algorithms, and they live in Rust in
 this repository.
 
@@ -537,6 +928,62 @@ are never transformed: contrast, gamma and inversion are reported as flags, so
 what the artifact holds is what firmware wrote and a photograph of the glass can
 be compared against it. The proof parts are `ssd1306.yaml` (I²C, page-major
 1 bpp) and `st7789.yaml` (SPI, row-major RGB565 with MADCTL orientation).
+
+`led_strip` is the primitive for addressable LED strips, and it is separate from
+`display` on purpose: a strip is a per-LED COLOUR ARRAY clocked by a wire
+protocol, with no address counter, no command table, no window and no frame
+memory a later command re-reads — the four things `display` exists to interpret.
+Expressing a strip as a display would mean inventing all four and then declaring
+in every descriptor that none of them moves.
+
+The descriptor says which wire clocks the LEDs in, and the engine owns the two
+decoders:
+
+```yaml
+# configs/devices/apa102.yaml — the clocked wire
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: spi_frames
+    artifact_format: APA102_RGB
+    default_pixels: 8
+    supply_gated: true
+    spi_frames:
+      start_frame: [0x00, 0x00, 0x00, 0x00]
+      frame_bytes: 4
+      header_mask: 0xE0      # an LED frame's first byte has its top 3 bits set
+      header_value: 0xE0     # a byte that fails this STOPS the decode
+      brightness_mask: 0x1F  # must not overlap header_mask — the engine refuses it
+      colour_bytes: [3, 2, 1]  # the wire carries B,G,R; the artifact publishes R,G,B
+    artifact_meta: [brightness, powered, cs_pin]
+```
+
+```yaml
+# configs/devices/ws2812.yaml — the single wire
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: nrz_gpio
+    artifact_format: ws2812_grb
+    default_pixels: 1
+    timing:
+      high_threshold_ns: 500    # a HIGH longer than this is a 1 bit
+      reset_threshold_ns: 40000 # a LOW longer than this latches the frame
+      bits_per_pixel: 24
+    artifact_meta: [pixels_decoded, lit_pixels, data_pin]
+```
+
+`wire: spi_frames` attaches as an SPI device and latches on CS RELEASE, which is
+what silicon does: a transaction shorter than a start frame plus one LED frame
+leaves the previous colours untouched, so a glitchy transfer cannot blank a
+strip. `wire: nrz_gpio` attaches as a GPIO observer on ONE pad and decodes real
+edge times — every bit is a HIGH pulse whose DURATION is the bit value, and a
+long LOW gap latches the frame. Nothing about the byte stream is inferred.
+
+The artifact is the LED colour array in wire order plus the `meta` keys the
+descriptor lists, so what the browser's strip overlay reads is the descriptor's
+contract rather than a house style. The proof parts are `apa102.yaml` (clocked)
+and `ws2812.yaml` (single-wire).
 
 So: a part whose datasheet behaviour is a register map, a command/response
 protocol, a framebuffer command table, or one of the pin-timing shapes above is

@@ -190,20 +190,50 @@ pub(crate) fn encode_raw_bits(
     }
 }
 
+/// The inverse of [`encode_raw`]'s LINEAR half: a raw count back to the
+/// engineering value that would encode to it.
+///
+/// This is what makes `set_input:` the exact inverse of `input()` on a
+/// register device — a rule that writes back what it read changes nothing.
+///
+/// ⚠️ Only the linear half inverts. `clamp`, `wrap` and `round` are one-way by
+/// construction (they throw information away on purpose), and they are applied
+/// again on the very next read, so the round trip a rule can observe is
+/// exactly the one this function provides.
+pub(crate) fn decode_raw(count: i64, enc: Option<&Encode>, extra_scale: f64, width: u8) -> f64 {
+    let decoded = if enc.map(|e| e.bcd).unwrap_or(false) {
+        from_bcd(count as u32, width)
+    } else {
+        count
+    };
+    let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
+    let offset = enc.map(|e| e.offset).unwrap_or(0.0);
+    // A zero scale is a degenerate descriptor; 0.0 keeps this total, the same
+    // rule the expression evaluator's divide-by-zero has.
+    if scale == 0.0 {
+        return 0.0;
+    }
+    (decoded as f64 - offset) / scale
+}
+
 /// The write dual of the `bcd` encode: the word the master put on the wire,
 /// decoded to the integer the model stores. A register that is not BCD stores
 /// what was written, unchanged.
 pub(crate) fn decode_write(reg: &RegisterSpec, written: u32) -> u32 {
     match reg.encode.as_ref() {
         Some(e) if e.bcd => {
-            let mut v = from_bcd(written, reg.width);
+            // `value_mask:` — the masked bits are the number and the rest are
+            // flags the master wrote verbatim. The clamp applies to the NUMBER
+            // only; a flag is not in range of anything.
+            let mask = e.value_mask.unwrap_or(u32::MAX);
+            let mut v = from_bcd(written & mask, reg.width);
             if let Some(lo) = e.clamp_min {
                 v = v.max(lo as i64);
             }
             if let Some(hi) = e.clamp_max {
                 v = v.min(hi as i64);
             }
-            v as u32
+            (v as u32 & mask) | (written & !mask)
         }
         _ => written,
     }
@@ -496,10 +526,18 @@ pub(crate) fn register_read_bytes(
         let stored = reg_values.get(&reg.name).copied().unwrap_or(reg.reset);
         // A BCD storage register holds its value in DECIMAL (so `reg()` and
         // every guard reading it are in decimal) and puts nibbles on the wire.
-        if reg.encode.as_ref().is_some_and(|e| e.bcd) {
-            to_bcd(i64::from(stored), reg.width)
-        } else {
-            stored
+        //
+        // `value_mask:` splits the word: the masked bits are the number and
+        // everything else is a plain flag, served back exactly as written. That
+        // is the DS3231 alarm-byte shape — a BCD number and its A1Mx mask bit
+        // in one byte — and without it one of the two has to be thrown away.
+        match reg.encode.as_ref() {
+            Some(e) if e.bcd => {
+                let mask = e.value_mask.unwrap_or(u32::MAX);
+                let number = to_bcd(i64::from(stored & mask), reg.width);
+                (number & mask) | (stored & !mask)
+            }
+            _ => stored,
         }
     };
     pack(raw, reg.width, reg.endian)
@@ -589,6 +627,11 @@ pub(crate) fn read_clears(reg: &RegisterSpec) -> bool {
 
 // ─── Tier 1: device timers ─────────────────────────────────────────────────
 
+/// Resolve `(register, field)` to that field's `(shift, mask)` — the one
+/// lookup [`TimerBank::apply_period_from`] needs from the owning device, named
+/// so the signature reads as what it is.
+pub(crate) type FieldBitsFn<'a> = dyn Fn(&str, &str) -> Option<(u8, u32)> + 'a;
+
 /// The declared [`DeviceTimer`]s of one device plus their running deadlines.
 ///
 /// Shared by both declarative engines: a timer is a property of the PART, not
@@ -600,21 +643,31 @@ pub(crate) struct TimerBank {
     timers: Vec<DeviceTimer>,
     /// Absolute µs at which timer `i` next fires; `None` ⇒ not running.
     deadlines: Vec<Option<u64>>,
+    /// Timer `i`'s EFFECTIVE interval in µs — the declared `period_us` /
+    /// `after_us`, or whatever [`labwired_config::TimerPeriodFrom`] last
+    /// resolved to. Cached rather than recomputed per firing so the hot path
+    /// (`due_by_timer`, called on every time advance of every declarative
+    /// device) never touches the register file; the owning device refreshes it
+    /// through [`apply_period_from`](Self::apply_period_from) after a write.
+    periods: Vec<Option<u64>>,
 }
 
 impl TimerBank {
     /// Arm the `on_reset` timers at power-on; leave `manual` ones idle.
     pub(crate) fn new(timers: &[DeviceTimer]) -> Self {
+        let periods: Vec<Option<u64>> = timers.iter().map(Self::declared_interval).collect();
         let deadlines = timers
             .iter()
-            .map(|t| match t.start {
-                TimerStart::OnReset => Self::interval(t),
+            .zip(periods.iter())
+            .map(|(t, p)| match t.start {
+                TimerStart::OnReset => *p,
                 TimerStart::Manual => None,
             })
             .collect();
         Self {
             timers: timers.to_vec(),
             deadlines,
+            periods,
         }
     }
 
@@ -622,11 +675,95 @@ impl TimerBank {
         self.timers.is_empty()
     }
 
-    /// The declared delay of a timer: its period, or its one-shot delay.
+    /// The DECLARED delay of a timer: its period, or its one-shot delay.
     /// Validation guarantees exactly one is present and non-zero, so a
     /// descriptor that slipped through with neither simply never runs.
-    fn interval(t: &DeviceTimer) -> Option<u64> {
+    ///
+    /// This is the reset-value interval. A timer with a
+    /// [`TimerPeriodFrom`](labwired_config::TimerPeriodFrom) overrides it from
+    /// the register file; see [`apply_period_from`](Self::apply_period_from).
+    fn declared_interval(t: &DeviceTimer) -> Option<u64> {
         t.period_us.or(t.after_us).filter(|us| *us > 0)
+    }
+
+    /// Timer `i`'s effective interval — the cached one, which is the declared
+    /// one until a `period_from` resolves to something else.
+    fn interval(&self, i: usize) -> Option<u64> {
+        self.periods[i]
+    }
+
+    /// Re-resolve every `period_from` timer against the register file.
+    ///
+    /// The owning device calls this wherever a register write lands (and once
+    /// after attach), because a rate register is exactly the thing firmware
+    /// writes. `reg` reads a register's stored word by name and `field_bits`
+    /// resolves a named `bits:` field to `(shift, mask)` — the same two lookups
+    /// [`RuleCtx`](super::rule_machine::RuleCtx) offers, so the field a rule
+    /// reads and the field a timer reads cannot disagree.
+    ///
+    /// ⚠️ A RUNNING periodic timer whose period changed is re-anchored to
+    /// `now + the new period`, not rescheduled from its old deadline: firmware
+    /// that rewrote the rate register restarted the divider, and keeping the
+    /// old anchor would make the first interval after the write a length
+    /// neither setting has.
+    ///
+    /// An unmapped field value is NEUTRAL — the declared `period_us` stays in
+    /// force — the same rule `scale_from` and `clamp_from` have, so a reserved
+    /// encoding cannot silently stop the part's clock.
+    pub(crate) fn apply_period_from(
+        &mut self,
+        now: u64,
+        reg: &dyn Fn(&str) -> Option<u32>,
+        field_bits: &FieldBitsFn<'_>,
+    ) {
+        for i in 0..self.timers.len() {
+            let Some(spec) = self.timers[i].period_from.clone() else {
+                continue;
+            };
+            let Some(word) = reg(&spec.register) else {
+                continue;
+            };
+            let (shift, mask) = match (&spec.field, spec.mask) {
+                (Some(f), _) => match field_bits(&spec.register, f) {
+                    Some(sm) => sm,
+                    None => continue,
+                },
+                (None, Some(m)) => (spec.shift, m << spec.shift),
+                (None, None) => continue,
+            };
+            let value = (word & mask) >> shift;
+            let resolved = match spec.table.get(&value) {
+                Some(us) if *us > 0 => *us,
+                // Unmapped (or a zero the validator let through): neutral.
+                _ => match Self::declared_interval(&self.timers[i]) {
+                    Some(us) => us,
+                    None => continue,
+                },
+            };
+            if self.periods[i] == Some(resolved) {
+                continue;
+            }
+            self.periods[i] = Some(resolved);
+            if self.deadlines[i].is_some() {
+                self.deadlines[i] = Some(now.saturating_add(resolved));
+            }
+        }
+    }
+
+    /// Whether any timer's period is field-driven, so a device can skip the
+    /// refresh entirely — which is every descriptor written before the key.
+    pub(crate) fn has_field_driven_period(&self) -> bool {
+        self.timers.iter().any(|t| t.period_from.is_some())
+    }
+
+    /// Timer `name`'s effective period in µs — diagnostics and tests, so a
+    /// test can assert the RESOLVED rate rather than inferring it from firing
+    /// counts.
+    pub(crate) fn period_us_of(&self, name: &str) -> Option<u64> {
+        self.timers
+            .iter()
+            .position(|t| t.name == name)
+            .and_then(|i| self.periods[i])
     }
 
     /// (Re)start every timer whose `start_on_write` names `register` and whose
@@ -645,7 +782,7 @@ impl TimerBank {
             if trigger.mask.is_some_and(|m| stored & m == 0) {
                 continue;
             }
-            self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+            self.deadlines[i] = self.periods[i].map(|us| now.saturating_add(us));
         }
     }
 
@@ -658,9 +795,9 @@ impl TimerBank {
     /// action goes through here, so a rule and a `start_on_write` arm the same
     /// deadline list rather than two.
     pub(crate) fn start_named(&mut self, name: &str, now: u64) {
-        for (i, t) in self.timers.iter().enumerate() {
-            if t.name == name {
-                self.deadlines[i] = Self::interval(t).map(|us| now.saturating_add(us));
+        for i in 0..self.timers.len() {
+            if self.timers[i].name == name {
+                self.deadlines[i] = self.interval(i).map(|us| now.saturating_add(us));
             }
         }
     }
@@ -711,8 +848,12 @@ impl TimerBank {
             // Reschedule a periodic timer from its DEADLINE, not from `now`, so
             // it does not drift with the service cadence; a one-shot goes idle
             // until something starts it again.
+            // Periodic timers reschedule from their own EFFECTIVE period,
+            // which `period_from` may have changed since the last firing; a
+            // one-shot (`after_us`, no `period_us`) goes idle.
             self.deadlines[i] = self.timers[i]
                 .period_us
+                .and(self.periods[i])
                 .filter(|p| *p > 0)
                 .map(|period| deadline.saturating_add(period));
             fired += 1;
@@ -816,6 +957,43 @@ pub(crate) fn validate_timers(
                 );
             }
         }
+        if let Some(spec) = &t.period_from {
+            anyhow::ensure!(
+                known(&spec.register),
+                "timer '{}' takes its period from '{}', which is not a declared register",
+                t.name,
+                spec.register
+            );
+            anyhow::ensure!(
+                spec.field.is_some() != spec.mask.is_some(),
+                "timer '{}' period_from must name exactly one of `field:` and `mask:`",
+                t.name
+            );
+            anyhow::ensure!(
+                !spec.table.is_empty(),
+                "timer '{}' period_from has an empty `table:`, so every field value would be \
+                 unmapped and the key would change nothing",
+                t.name
+            );
+            for (value, us) in &spec.table {
+                anyhow::ensure!(
+                    *us > 0,
+                    "timer '{}' period_from maps field value {value} to a zero period, which \
+                     would fire without bound",
+                    t.name
+                );
+            }
+            // A field-driven PERIOD on a one-shot is a contradiction: `after_us`
+            // is a delay measured once, and a table of repeating rates has
+            // nothing to say about it.
+            anyhow::ensure!(
+                t.period_us.is_some(),
+                "timer '{}' declares period_from but no period_us — period_us is the period the \
+                 source register's RESET value gives, and without it the part has no rate before \
+                 firmware writes anything",
+                t.name
+            );
+        }
         if let Some(trigger) = &t.start_on_write {
             if !known(&trigger.register) {
                 anyhow::bail!(
@@ -838,6 +1016,7 @@ mod tests {
     fn reg(name: &str, addr: u16, width: u8, endian: Endian, source: Option<&str>) -> RegisterSpec {
         RegisterSpec {
             name: name.into(),
+            fifo: None,
             addr,
             width,
             endian,
@@ -859,6 +1038,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         }
@@ -870,6 +1050,7 @@ mod tests {
         use std::collections::HashMap;
         let r = RegisterSpec {
             name: "DATAX".into(),
+            fifo: None,
             addr: 0x32,
             width: 2,
             endian: Endian::Le,
@@ -884,6 +1065,7 @@ mod tests {
                 clamp_max: None,
                 wrap: None,
                 bcd: false,
+                value_mask: None,
                 round: None,
                 clamp_from: vec![],
             }),
@@ -900,6 +1082,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         };
@@ -951,6 +1134,7 @@ mod tests {
             after_us: Option::None,
             start: TimerStart::OnReset,
             start_on_write: Option::None,
+            period_from: None,
             on_fire: vec![TimingAction::SetBits {
                 register: name.into(),
                 bits,
@@ -986,6 +1170,7 @@ mod tests {
             after_us: Option::None,
             start: TimerStart::OnReset,
             start_on_write: Option::None,
+            period_from: None,
             on_fire: vec![TimingAction::SetBits {
                 register: "S".into(),
                 bits: 1,
@@ -1011,6 +1196,7 @@ mod tests {
             after_us: Option::None,
             start: TimerStart::OnReset,
             start_on_write: Option::None,
+            period_from: None,
             on_fire: vec![TimingAction::SetBits {
                 register: "S".into(),
                 bits: 1,
@@ -1058,6 +1244,7 @@ mod tests {
         // (scale 4.0); internal °C at bits[15:4] signed 12-bit, 0.0625°C/LSB (16.0).
         let r = RegisterSpec {
             name: "OUT".into(),
+            fifo: None,
             addr: 0,
             width: 4,
             endian: Endian::Be,
@@ -1083,6 +1270,7 @@ mod tests {
                         clamp_max: None,
                         wrap: None,
                         bcd: false,
+                        value_mask: None,
                         round: None,
                         clamp_from: vec![],
                     }),
@@ -1100,6 +1288,7 @@ mod tests {
                         clamp_max: None,
                         wrap: None,
                         bcd: false,
+                        value_mask: None,
                         round: None,
                         clamp_from: vec![],
                     }),
@@ -1114,6 +1303,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         };
@@ -1131,6 +1321,7 @@ mod tests {
         use std::collections::HashMap;
         let r = RegisterSpec {
             name: "OUT".into(),
+            fifo: None,
             addr: 0,
             width: 4,
             endian: Endian::Be,
@@ -1155,6 +1346,7 @@ mod tests {
                     clamp_max: None,
                     wrap: None,
                     bcd: false,
+                    value_mask: None,
                     round: None,
                     clamp_from: vec![],
                 }),
@@ -1168,6 +1360,7 @@ mod tests {
             on_read: None,
             on_write: None,
             calendar: None,
+            stream: false,
             zero_unless: None,
             source_from: None,
         };
@@ -1195,6 +1388,7 @@ mod tests {
                 clamp_max: None,
                 wrap: NonZeroU32::new(4096),
                 bcd: false,
+                value_mask: None,
                 round: None,
                 clamp_from: vec![],
             }
@@ -1218,6 +1412,7 @@ mod tests {
             let plain = Encode {
                 wrap: None,
                 bcd: false,
+                value_mask: None,
                 round: None,
                 clamp_from: vec![],
                 ..as5600()
@@ -1267,6 +1462,7 @@ mod tests {
                 clamp_max: None,
                 wrap: NonZeroU32::new(360),
                 bcd: false,
+                value_mask: None,
                 round: None,
                 clamp_from: vec![],
             };
@@ -1307,6 +1503,7 @@ mod tests {
                 clamp_max: None,
                 wrap: None,
                 bcd: false,
+                value_mask: None,
                 round: None,
                 clamp_from: vec![],
             }
@@ -1599,5 +1796,117 @@ mod tests {
             assert_eq!(calendar_get(c, CalendarField::Month), 7);
             assert_eq!(calendar_get(c, CalendarField::Weekday), 4);
         }
+    }
+}
+
+#[cfg(test)]
+mod period_from_tests {
+    use super::*;
+    use labwired_config::{DeviceTimer, TimerPeriodFrom, TimerStart};
+    use std::collections::BTreeMap;
+
+    fn rate_timer(start: TimerStart) -> DeviceTimer {
+        DeviceTimer {
+            name: "sample".into(),
+            period_us: Some(10_000),
+            after_us: None,
+            start,
+            start_on_write: None,
+            on_fire: Vec::new(),
+            period_from: Some(TimerPeriodFrom {
+                register: "BW_RATE".into(),
+                field: Some("RATE".into()),
+                mask: None,
+                shift: 0,
+                table: BTreeMap::from([(0x9u32, 20_000u64), (0xAu32, 10_000), (0xDu32, 1_250)]),
+            }),
+        }
+    }
+
+    /// Resolve `period_from` against a register file holding exactly
+    /// `BW_RATE = word`, in the shape `apply_period_from` takes.
+    fn resolve(bank: &mut TimerBank, now: u64, word: u32) {
+        let reg = move |name: &str| (name == "BW_RATE").then_some(word);
+        let bits = |register: &str, field: &str| {
+            (register == "BW_RATE" && field == "RATE").then_some((0u8, 0x0Fu32))
+        };
+        bank.apply_period_from(now, &reg, &bits);
+    }
+
+    #[test]
+    fn the_field_value_selects_the_period() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::OnReset)]);
+        assert_eq!(
+            bank.period_us_of("sample"),
+            Some(10_000),
+            "the declared one"
+        );
+        resolve(&mut bank, 0, 0x0D);
+        assert_eq!(bank.period_us_of("sample"), Some(1_250), "800 Hz");
+        resolve(&mut bank, 0, 0x09);
+        assert_eq!(bank.period_us_of("sample"), Some(20_000), "50 Hz");
+    }
+
+    /// ⚠️ An unmapped value is NEUTRAL — the declared `period_us` stays in
+    /// force. A reserved encoding must not silently stop the part's clock.
+    #[test]
+    fn an_unmapped_field_value_leaves_the_declared_period() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::OnReset)]);
+        resolve(&mut bank, 0, 0x0D);
+        assert_eq!(bank.period_us_of("sample"), Some(1_250));
+        resolve(&mut bank, 0, 0x03); // not in the table
+        assert_eq!(bank.period_us_of("sample"), Some(10_000));
+    }
+
+    /// ⚠️ A RUNNING timer is re-anchored to `now + the new period`, not
+    /// rescheduled from its old deadline. Firmware that rewrote the rate
+    /// register restarted the divider.
+    #[test]
+    fn a_running_timer_re_anchors_on_a_rate_change() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::OnReset)]);
+        // 10 ms period, armed at 0. Walk to 6 ms, then ask for 800 Hz.
+        assert!(bank.due_by_timer(6_000).is_empty());
+        resolve(&mut bank, 6_000, 0x0D);
+        // The old deadline was 10 000; the new one is 6 000 + 1 250.
+        assert!(bank.due_by_timer(7_249).is_empty(), "not yet");
+        assert_eq!(
+            bank.due_by_timer(7_250).len(),
+            1,
+            "one period after the write"
+        );
+    }
+
+    /// A timer that is NOT running does not get armed by a rate change — the
+    /// period is resolved, the deadline stays `None`.
+    #[test]
+    fn a_stopped_timer_resolves_its_period_without_starting() {
+        let mut bank = TimerBank::new(&[rate_timer(TimerStart::Manual)]);
+        resolve(&mut bank, 0, 0x0D);
+        assert_eq!(bank.period_us_of("sample"), Some(1_250));
+        assert!(
+            bank.due_by_timer(1_000_000).is_empty(),
+            "resolving a period must not arm a manual timer"
+        );
+        bank.start_named("sample", 0);
+        assert_eq!(
+            bank.due_by_timer(1_250).len(),
+            1,
+            "and starting it uses the RESOLVED period, not the declared one"
+        );
+    }
+
+    #[test]
+    fn a_part_with_no_field_driven_period_says_so() {
+        let plain = DeviceTimer {
+            name: "t".into(),
+            period_us: Some(5),
+            after_us: None,
+            start: TimerStart::OnReset,
+            start_on_write: None,
+            on_fire: Vec::new(),
+            period_from: None,
+        };
+        assert!(!TimerBank::new(&[plain]).has_field_driven_period());
+        assert!(TimerBank::new(&[rate_timer(TimerStart::OnReset)]).has_field_driven_period());
     }
 }

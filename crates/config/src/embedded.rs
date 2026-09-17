@@ -179,6 +179,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/ili9341.yaml"),
     ),
     (
+        &["amoled-rm67162"],
+        include_str!("../../../configs/devices/rm67162.yaml"),
+    ),
+    (
+        &["apa102"],
+        include_str!("../../../configs/devices/apa102.yaml"),
+    ),
+    (
+        &["neopixel", "ws2812"],
+        include_str!("../../../configs/devices/ws2812.yaml"),
+    ),
+    (
         &["gp2y0a21"],
         include_str!("../../../configs/devices/gp2y0a21.yaml"),
     ),
@@ -189,6 +201,46 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["bldc-motor", "bldc_motor"],
         include_str!("../../../configs/devices/bldc_motor.yaml"),
+    ),
+    (
+        &["hc-05", "hc05"],
+        include_str!("../../../configs/devices/hc-05.yaml"),
+    ),
+    (
+        &["sim800l"],
+        include_str!("../../../configs/devices/sim800l.yaml"),
+    ),
+    (
+        &["neo6m-gps"],
+        include_str!("../../../configs/devices/neo6m-gps.yaml"),
+    ),
+    (
+        &["lora-sx1278"],
+        include_str!("../../../configs/devices/lora_sx1278.yaml"),
+    ),
+    (
+        &["rc522"],
+        include_str!("../../../configs/devices/rc522.yaml"),
+    ),
+    (
+        &["nrf24l01"],
+        include_str!("../../../configs/devices/nrf24l01.yaml"),
+    ),
+    (
+        &["scd41"],
+        include_str!("../../../configs/devices/scd41.yaml"),
+    ),
+    (
+        &["sgp41"],
+        include_str!("../../../configs/devices/sgp41.yaml"),
+    ),
+    (
+        &["bmi270"],
+        include_str!("../../../configs/devices/bmi270.yaml"),
+    ),
+    (
+        &["cap1188"],
+        include_str!("../../../configs/devices/cap1188.yaml"),
     ),
 ];
 

@@ -176,7 +176,7 @@ impl DeclarativeGpioDevice {
 
     fn fire(&mut self, event: Event) {
         let mut ctx = PinOnlyCtx {
-            slots: &self.slots,
+            slots: &mut self.slots,
             expr_scale: &self.expr_scale,
         };
         self.machine.fire(&event, 0, &mut ctx);

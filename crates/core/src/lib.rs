@@ -17,6 +17,7 @@ pub mod cpu;
 pub mod cycle_clock;
 pub mod decoder;
 pub mod fidelity;
+pub mod hashers;
 pub mod host_time;
 pub mod inspect;
 pub mod interrupt;

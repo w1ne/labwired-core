@@ -1,0 +1,66 @@
+# WS2812 / WS2812B / SK6812 "NeoPixel" — single-wire addressable RGB LED strip.
+# Declarative `led_strip` primitive.
+#
+# THE BIT IS A DURATION, NOT A LEVEL. One data wire carries a self-clocked NRZ
+# stream: every bit is a HIGH pulse immediately followed by a LOW pulse, and a
+# `0` and a `1` differ ONLY in how long the HIGH lasts -- ~0.35 us versus
+# ~0.7 us, the following low padding each bit to ~1.25 us. So the decoder needs
+# nothing but the HIGH duration of each bit, compared against a threshold
+# half-way between the two.
+#
+#   bit 0:  __###________   T0H~0.35us  T0L~0.8us
+#   bit 1:  __######_____   T1H~0.7us   T1L~0.6us
+#
+# Each LED is 24 bits, MSB first, in GRB order. A RESET / LATCH gap -- the line
+# held low for at least ~50 us -- ends a frame and displays it.
+#
+# THE TIMING TABLE IS DATA, not a house constant, because it is the part's own
+# number: a SK6812 and a WS2812B share this decoder and differ here. The engine
+# scales these nanoseconds to simulated cycles with the FIRMWARE's clock, so
+# the decode tracks the same time base the edges were scheduled on. 40 us is a
+# safe reset detector: it is far below the datasheet's 50 us minimum and far
+# above any inter-bit low (<= ~0.8 us), so no ordinary bit can trip it -- the
+# engine refuses a table where the two thresholds cross.
+#
+# HOW IT IS DRIVEN. On the ESP32-S3 the pad is driven by the RMT peripheral's
+# timed playback through the GPIO matrix. This part attaches as a GPIO
+# OBSERVER and decodes purely from `(pin, from, to, sim_cycle)` callbacks.
+# Nothing about the byte stream is inferred: a strip that never saw an edge
+# reports zero decoded LEDs, not a plausible pattern.
+#
+# NO SUPPLY GATE, unlike the APA102. That is not an oversight and not a style
+# choice: this model has never had one, every shipped manifest omits the key,
+# and inventing one here would darken labs that work today. The engine refuses
+# an `artifact_meta: [powered]` on a strip that is not `supply_gated`, so the
+# absence cannot be reported as a measurement.
+#
+# NOT modelled, deliberately: power draw and daisy-chain propagation delay.
+type: neopixel
+
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: nrz_gpio
+    artifact_format: ws2812_grb
+    default_pixels: 1
+    timing:
+      high_threshold_ns: 500
+      reset_threshold_ns: 40000
+      bits_per_pixel: 24
+    artifact_meta: [pixels_decoded, lit_pixels, data_pin]
+
+metadata:
+  label: "WS2812 / Neopixel strip"
+  summary: "Addressable RGB LED strip on one data pin (edge-timed bit stream)."
+  detail: "Attaches as a GPIO observer on data_pin. On ESP32-S3 the RMT + GPIO matrix drive real edges; elsewhere the strip is held for readback until edges appear. Alias type `ws2812` resolves to this kit."
+  category: gpio
+  config_keys:
+    - name: data_pin
+      ty: str
+      doc: "Data line GPIO (e.g. \"GPIO48\"). Defaults to GPIO48."
+    - name: num_pixels
+      ty: int
+      doc: "Number of LEDs on the strip. Defaults to 1."
+    - name: cpu_hz
+      ty: int
+      doc: "Simulated CPU Hz for edge timing. Defaults to the system's clock (the manifest's `cpu_hz:`, else the chip descriptor's)."

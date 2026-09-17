@@ -1,0 +1,79 @@
+# HC-05 Bluetooth SPP module — an AT command shell on a UART.
+#
+# Declarative `uart_device`; replaces the hand-written `components/hc05.rs`,
+# whose wire transcript is pinned byte for byte in
+# `crates/core/tests/uart_migration_parity.rs`.
+#
+# ── What this part IS ──────────────────────────────────────────────────────
+#
+# The HC-05's firmware exposes two modes on one UART: an AT command shell
+# (KEY/EN pin high at power-up) and a transparent SPP data pipe. What was
+# modelled — and what is modelled here — is the SHELL, because that is the half
+# a driver interacts with programmatically: every Arduino sketch that uses an
+# HC-05 sends `AT`, `AT+NAME?`, `AT+UART=...` and checks for `OK`.
+#
+# ── ⚠️ What this part IS NOT — named, not faked ───────────────────────────
+#
+# **There is no radio.** No pairing, no inquiry, no link state, no RSSI, no
+# transparent data path. The two identification strings below are CONSTANTS,
+# and they are constants in the part document where you can see them rather
+# than in a Rust `format!` where you cannot:
+#
+#   * `+VERSION:labwired-hc05-sim` — the hand-written model's own string. It is
+#     NOT a real HC-05 firmware version (those read `+VERSION:2.0-20100601`);
+#     it deliberately says "simulator" so a sketch that logs it does not claim
+#     to have talked to silicon.
+#   * `+NAME:HC-05` — the factory default name. A write (`AT+NAME=...`) is
+#     accepted and answered `OK`, and the query still reports the default:
+#     storing it would need a string variable, and `vars:` are integers.
+#     Naming that here is the point — the hand-written model had the same hole
+#     and said nothing about it.
+#
+# ── The command table, and why its ORDER is the datasheet's ────────────────
+#
+# `responses:` is tried top to bottom and the FIRST match wins, exactly as
+# `rules:` fire in declaration order. The order below reproduces the
+# hand-written `handle_line` ladder arm for arm:
+#
+#   1. `AT+VERSION` as a PREFIX — the old model matched `AT+VERSION?` and then
+#      `starts_with("AT+VERSION")`, which subsumes it, so `AT+VERSION`,
+#      `AT+VERSION?` and `AT+VERSIONFOO` all answer the same thing.
+#   2. `AT+NAME?` EXACTLY — `AT+NAME=Robot` is a write and falls through to the
+#      bare `OK` below, which is what the old model did.
+#   3. `AT` exactly, then `AT+` and `AT ` as prefixes → `OK`.
+#   4. anything else → `ERROR`.
+#
+# Matching folds ASCII case (`frames.ignore_case`, the default), which is what
+# the old model's `to_ascii_uppercase()` did.
+#
+# ⚠️ A frame that is empty after trimming produces NOTHING. `AT\r\n` is two
+# terminator bytes, so the `\r` completes the frame and the `\n` completes an
+# empty one; without that rule every command would be answered twice.
+type: hc-05
+
+behavior:
+  primitive: uart_device
+  uart:
+    # The module's factory rate. Diagnostic today — the hosting UART paces
+    # every stream peer at one byte per bus tick — but it belongs with the part.
+    baud: 38400
+    frames:
+      # Both bytes terminate, and a run of them is ONE frame: hosts in the wild
+      # send `AT\r`, `AT\n` and `AT\r\n` and all three must work.
+      terminator: "\r\n"
+      # The hand-written model's `if self.rx_line.len() < 128` cap.
+      max_bytes: 128
+    responses:
+      - { match: { prefix: "AT+VERSION" }, respond: "+VERSION:labwired-hc05-sim\r\nOK\r\n" }
+      - { match: "AT+NAME?",              respond: "+NAME:HC-05\r\nOK\r\n" }
+      - { match: "AT",                    respond: "OK\r\n" }
+      - { match: { prefix: "AT+" },       respond: "OK\r\n" }
+      - { match: { prefix: "AT " },       respond: "OK\r\n" }
+      - { match: any,                     respond: "ERROR\r\n" }
+
+metadata:
+  label: "HC-05 Bluetooth"
+  summary: "Bluetooth SPP module with AT command shell over UART."
+  detail: "Declarative AT shell: OK to AT/AT+…, +VERSION and +NAME? answered from constants declared in the part document, ERROR to anything that is not an AT line. NOT modelled: the radio — no pairing, no inquiry, no link state, no RSSI and no transparent data pipe. AT+NAME= is accepted and answered OK but not stored."
+  category: uart
+  config_keys: []

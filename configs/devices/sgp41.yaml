@@ -1,0 +1,72 @@
+# Sensirion SGP41 VOC + NOx gas sensor — declarative I²C command device.
+# Datasheet: SGP41 rev 1.1. 16-bit big-endian opcodes; every response word is
+# 16-bit big-endian followed by a Sensirion CRC-8 (poly 0x31, init 0xFF).
+#
+# Migrated from `peripherals/components/sgp41.rs`, deleted with this descriptor;
+# `tests/sensirion_migration_parity.rs` drives both through the same script.
+#
+# The SGP41's native output IS the raw tick, so that is the engineering unit
+# here: the VOC Index (1..500) is computed on the HOST by Sensirion's Gas Index
+# Algorithm from these ticks, exactly as on real hardware. The model does not
+# invent it.
+#
+# NOT modelled, and not faked: the MOx heater's conditioning physics (the
+# conditioning command answers with the same VOC tick the measurement does),
+# the RH/T compensation the two parameter words carry (accepted and discarded,
+# which is what the model did), and any drift or warm-up transient. The serial
+# number and the self-test result are CONSTANTS — data, not behaviour.
+type: sgp41
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x59
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      # §4.3. Two parameter words (RH, T) follow the opcode; they are accepted
+      # and discarded. Conditioning returns the VOC raw signal only.
+      - name: execute_conditioning
+        code: 0x2612
+        params_words: 2
+        response:
+          - { source: voc_sraw, width: 2 }
+      # §4.2 measure_raw_signals — SRAW_VOC then SRAW_NOX.
+      - name: measure_raw_signals
+        code: 0x2619
+        params_words: 2
+        response:
+          - { source: voc_sraw, width: 2 }
+          - { source: nox_sraw, width: 2 }
+      # §4.5: the low byte is the result, 0x00 ⇒ all tests passed.
+      - name: execute_self_test
+        code: 0x280E
+        response:
+          - { const: 0xD400, width: 2 }
+      - { name: turn_heater_off, code: 0x3615 }
+      # Three constant words. "SGP4" plus a tag — a serial number is data.
+      - name: get_serial_number
+        code: 0x3682
+        response:
+          - { const: 0x5347, width: 2 }
+          - { const: 0x5034, width: 2 }
+          - { const: 0x0031, width: 2 }
+
+metadata:
+  label: "Sensirion SGP41 VOC/NOx"
+  summary: "MOx gas sensor returning raw VOC/NOx signals over I2C."
+  detail: >-
+    Sensirion SGP41 at fixed address 0x59, speaking the real Sensirion command
+    protocol with CRC-8 (poly 0x31). Returns raw SRAW_VOC / SRAW_NOX ticks that
+    the on-host Sensirion Gas Index Algorithm converts to a VOC Index. The raw
+    signals are externally driven inputs (channels voc_sraw / nox_sraw); config
+    only seeds their initial values.
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to the SGP41 fixed address 0x59." }
+    - { name: voc_sraw, ty: float, doc: "Initial raw VOC tick (~20000..40000). Default 28000. Drive it at runtime with the `voc_sraw` input channel." }
+    - { name: nox_sraw, ty: float, doc: "Initial raw NOx tick. Default 16000. Runtime channel: `nox_sraw`." }
+  inputs:
+    - { key: voc_sraw, label: "VOC raw", unit: ticks, min: 0, max: 65535, default: 28000 }
+    - { key: nox_sraw, label: "NOx raw", unit: ticks, min: 0, max: 65535, default: 16000 }
+  labs:
+    - { board_id: esp32c3-leo-airquality, chip: esp32c3, example_dir: esp32c3-leo-airquality, demo_elf: demo-esp32c3-leo-airquality.elf }

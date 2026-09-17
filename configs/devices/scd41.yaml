@@ -1,0 +1,104 @@
+# Sensirion SCD41 photoacoustic CO₂ + temperature + humidity sensor —
+# declarative I²C command device. Datasheet: SCD4x rev 1.3. 16-bit big-endian
+# opcodes; every response word is 16-bit big-endian followed by a Sensirion
+# CRC-8 (poly 0x31, init 0xFF), which is what lets the UNMODIFIED Sensirion
+# SCD4x vendor driver decode this part on target.
+#
+# Migrated from `peripherals/components/scd41.rs`, deleted with this descriptor;
+# `tests/sensirion_migration_parity.rs` drives both through the same script.
+#
+# Word encodings (§3.6.2), inverted:
+#   CO₂  [ppm] = word                     ⇒ scale 1, clamped to the 0..40000
+#                                           range §1.1 gives the part
+#   T    [°C]  = -45 + 175 · word / 65535 ⇒ scale 65535/175, offset 45·65535/175
+#   RH   [%]   = 100 · word / 65535       ⇒ scale 655.35
+#
+# ⚠️ The temperature offset literal is the DOUBLE that reproduces the model's
+# `((T + 45) / 175) × 65535` exactly — `encode:` multiplies and adds where that
+# expression adds, divides and then multiplies, and the two orders round apart
+# by one LSB at −27.5 °C, where the product lands on 6553.5. The same literal
+# `sht30.yaml` and `sht31.yaml` carry, and `sensirion_migration_parity.rs`
+# sweeps the whole declared channel range so an edit to it fails rather than
+# drifting the last bit of the word.
+#
+# ── What is data, and what is NOT modelled ───────────────────────────────
+# The serial number and the self-test result are CONSTANTS (§3.9.2, §3.9.3) —
+# a serial number is data. The data-ready word is the constant 0x8006, which is
+# the part reporting ALWAYS READY: no conversion time, no periodic cadence, no
+# low-power distinction. That is what the model this replaces did, and it is a
+# stated stand-in rather than a measurement.
+#
+# `start_periodic_measurement` / `stop_periodic_measurement` are accepted and
+# change NOTHING. The model kept a `periodic_running` flag that nothing ever
+# read — not the data-ready word, not the measurement, not an accessor — so
+# porting it as a `states:` block would have added state no read path consults,
+# which is a different model wearing the same transcript.
+#
+# Also not modelled: the ASC calibration machinery, the temperature offset and
+# altitude/pressure compensation registers (their opcodes are undeclared, so
+# they queue no response and read 0xFF — exactly as the model's empty response
+# buffer did), and the single-shot measurement duration.
+type: scd41
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x62
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      - { name: start_periodic_measurement, code: 0x21B1 }
+      - { name: start_low_power_periodic_measurement, code: 0x21AC }
+      - { name: stop_periodic_measurement, code: 0x3F86 }
+      # §3.5.2. Data is ready when the low 11 bits are non-zero.
+      - name: get_data_ready_status
+        code: 0xE4B8
+        response:
+          - { const: 0x8006, width: 2 }
+      - name: read_measurement
+        code: 0xEC05
+        response:
+          - { source: co2, width: 2, encode: { clamp_min: 0.0, clamp_max: 40000.0 } }
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: get_serial_number
+        code: 0x3682
+        response:
+          - { const: 0x4C45, width: 2 }
+          - { const: 0x4F31, width: 2 }
+          - { const: 0x0041, width: 2 }
+      # §3.9.3: 0x0000 ⇒ no sensor malfunction.
+      - name: perform_self_test
+        code: 0x3639
+        response:
+          - { const: 0x0000, width: 2 }
+      # A write-only trigger: the vendor driver issues it and then reads the
+      # result through read_measurement.
+      - { name: measure_single_shot, code: 0x219D }
+      - { name: reinit, code: 0x3646 }
+      - { name: perform_factory_reset, code: 0x3632 }
+      - { name: wake_up, code: 0x36F6 }
+
+metadata:
+  label: "Sensirion SCD41 CO₂"
+  summary: "Photoacoustic CO₂ + temperature + humidity sensor over I2C."
+  detail: >-
+    Sensirion SCD41 at fixed address 0x62, speaking the real Sensirion command
+    protocol (16-bit commands, 16-bit words + CRC-8 poly 0x31), so the
+    unmodified Sensirion SCD4x vendor driver decodes it on-target. The reported
+    CO₂, temperature and humidity are externally driven inputs (channels co2 /
+    temperature / humidity); config only seeds their initial values.
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to the SCD41 fixed address 0x62." }
+    - { name: co2_ppm, ty: float, doc: "Initial CO₂ the part reports, ppm. Default 450. Drive it at runtime with the `co2` input channel." }
+    - { name: temp_c, ty: float, doc: "Initial temperature, °C. Default 22.0. Runtime channel: `temperature`." }
+    - { name: rh_pct, ty: float, doc: "Initial relative humidity, %. Default 45.0. Runtime channel: `humidity`." }
+  inputs:
+    # `config_key:` — the placement seeds these under the names the hand-written
+    # kit used, which are not the runtime channel keys. Without it every shipped
+    # system.yaml that sets `co2_ppm:` would parse and silently do nothing.
+    - { key: co2, label: "CO₂", unit: ppm, min: 0, max: 40000, default: 450, config_key: co2_ppm }
+    - { key: temperature, label: "Temperature", unit: "°C", min: -45, max: 130, default: 22, config_key: temp_c }
+    - { key: humidity, label: "Humidity", unit: "%RH", min: 0, max: 100, default: 45, config_key: rh_pct }
+  labs:
+    - { board_id: esp32c3-leo-airquality, chip: esp32c3, example_dir: esp32c3-leo-airquality, demo_elf: demo-esp32c3-leo-airquality.elf }

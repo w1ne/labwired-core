@@ -1,0 +1,302 @@
+# Microchip CAP1188 8-channel capacitive touch controller — declarative I²C
+# register device. Datasheet: CAP1188 rev 1.4, §5 "Register Descriptions".
+#
+# Migrated from `peripherals/components/cap1188.rs` (645 lines), deleted with
+# this descriptor; `tests/cap1188_migration_parity.rs` drives that model's
+# transcript against this one.
+#
+# ── The latch, which is the part firmware most often gets wrong ──────────
+# Sensor Input Status bits and MAIN_CONTROL.INT are LATCHED: they do not clear
+# when read. Firmware clears them by writing MAIN_CONTROL back with INT = 0, and
+# a status bit only actually clears if the pad has been RELEASED by then — a
+# still-held pad immediately re-asserts INT. A driver that forgets the write-0
+# sees the same stuck interrupt it would see on hardware. That is the whole
+# `on: { write: MAIN_CONTROL }` rule below.
+#
+# ── What is a MODELLING CHOICE, not a datasheet value ────────────────────
+# The analogue calibration loop is not simulated, so:
+#   * a pad counts as touched at 50 % of full-scale delta — one fixed threshold,
+#     63 of the 127 counts the signed delta registers hold;
+#   * 127 counts is "100 % touch strength". The datasheet's own examples sit in
+#     the tens-to-low-hundreds for a firm press, and full scale is a choice.
+#   * REVISION (0xFF) reads 0x83. The datasheet lists it as the default but it is
+#     silicon-revision dependent and NOT independently verified. Probe with
+#     PRODUCT_ID / MANUFACTURER_ID; nothing should branch on REVISION.
+#
+# ── NOT modelled ─────────────────────────────────────────────────────────
+# The ALERT pad (nothing drives a pin; MAIN_CONTROL.INT is the only interrupt a
+# driver can see), the noise detector (NOISE_FLAGS is storage a driver clears by
+# writing ones, and nothing ever sets it), multiple-touch blocking, the guard
+# channel, the LED drivers, recalibration, standby and deep sleep. Every one of
+# those registers is storage: a driver writes it and reads back what it wrote,
+# which is the register interface behaving correctly and the behaviour still
+# absent.
+type: cap1188
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x29
+    auto_increment: true
+    # The model answered 0 for every address it did not decode, and dropped the
+    # write. An undeclared address here does both.
+    unmapped_byte: 0x00
+    registers:
+      # INT (bit 0) is silicon-owned: `write_mask` keeps it, and the rule below
+      # is what a write-0 actually does. The gain / standby / deep-sleep bits
+      # are storage, so a read-modify-write round-trips.
+      - name: MAIN_CONTROL
+        addr: 0x00
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x00
+        write_mask: 0xFE
+        bits: [{ name: INT, shift: 0 }]
+      # Bit 0 is GENERAL_TOUCH: at least one pad reads as touched RIGHT NOW.
+      # Unlike SENSOR_INPUT_STATUS it does not latch, so the rules recompute it
+      # wherever the live mask changes.
+      - { name: GENERAL_STATUS, addr: 0x02, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: SENSOR_INPUT_STATUS, addr: 0x03, width: 1, endian: be, access: r, reset: 0x00 }
+      # Write-1-to-clear, and nothing ever sets a flag.
+      - { name: NOISE_FLAGS, addr: 0x0A, width: 1, endian: be, access: rw, reset: 0x00,
+          on_write: write_one_to_clear }
+
+      # Per-channel delta count: how far the measured capacitance moved from the
+      # calibrated base, signed 8-bit. `zero_unless` is the datasheet sentence
+      # that a DISABLED channel reports nothing — the inverted power gate,
+      # per channel.
+      - { name: DELTA_COUNT_1, addr: 0x10, width: 1, endian: be, access: r,
+          signed: true, source: touch1,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x01 } }
+      - { name: DELTA_COUNT_2, addr: 0x11, width: 1, endian: be, access: r,
+          signed: true, source: touch2,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x02 } }
+      - { name: DELTA_COUNT_3, addr: 0x12, width: 1, endian: be, access: r,
+          signed: true, source: touch3,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x04 } }
+      - { name: DELTA_COUNT_4, addr: 0x13, width: 1, endian: be, access: r,
+          signed: true, source: touch4,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x08 } }
+      - { name: DELTA_COUNT_5, addr: 0x14, width: 1, endian: be, access: r,
+          signed: true, source: touch5,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x10 } }
+      - { name: DELTA_COUNT_6, addr: 0x15, width: 1, endian: be, access: r,
+          signed: true, source: touch6,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x20 } }
+      - { name: DELTA_COUNT_7, addr: 0x16, width: 1, endian: be, access: r,
+          signed: true, source: touch7,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x40 } }
+      - { name: DELTA_COUNT_8, addr: 0x17, width: 1, endian: be, access: r,
+          signed: true, source: touch8,
+          encode: { scale: 1.27, round: floor, clamp_min: 0.0, clamp_max: 127.0 },
+          zero_unless: { register: SENSOR_INPUT_ENABLE, mask: 0x80 } }
+
+      - { name: SENSITIVITY,   addr: 0x1F, width: 1, endian: be, access: rw, reset: 0x2F }
+      - { name: CONFIGURATION, addr: 0x20, width: 1, endian: be, access: rw, reset: 0x20 }
+      - name: SENSOR_INPUT_ENABLE
+        addr: 0x21
+        width: 1
+        endian: be
+        access: rw
+        reset: 0xFF
+        bits:
+          - { name: CS1, shift: 0 }
+          - { name: CS2, shift: 1 }
+          - { name: CS3, shift: 2 }
+          - { name: CS4, shift: 3 }
+          - { name: CS5, shift: 4 }
+          - { name: CS6, shift: 5 }
+          - { name: CS7, shift: 6 }
+          - { name: CS8, shift: 7 }
+      - name: INTERRUPT_ENABLE
+        addr: 0x27
+        width: 1
+        endian: be
+        access: rw
+        reset: 0xFF
+        bits:
+          - { name: CS1, shift: 0 }
+          - { name: CS2, shift: 1 }
+          - { name: CS3, shift: 2 }
+          - { name: CS4, shift: 3 }
+          - { name: CS5, shift: 4 }
+          - { name: CS6, shift: 5 }
+          - { name: CS7, shift: 6 }
+          - { name: CS8, shift: 7 }
+      - { name: CONFIGURATION_2, addr: 0x44, width: 1, endian: be, access: rw, reset: 0x40 }
+      - { name: PRODUCT_ID,      addr: 0xFD, width: 1, endian: be, access: r, reset: 0x50 }
+      - { name: MANUFACTURER_ID, addr: 0xFE, width: 1, endian: be, access: r, reset: 0x5D }
+      - { name: REVISION,        addr: 0xFF, width: 1, endian: be, access: r, reset: 0x83 }
+
+  vars:
+    # The LIVE pad mask — what a finger is doing right now, which is not what
+    # SENSOR_INPUT_STATUS holds. There is no register for it: GENERAL_STATUS
+    # reports only whether it is non-zero, and the write-0 handler needs the
+    # mask itself to decide which latched bits may drop.
+    touched: 0
+    # Scratch for one channel's "touched and enabled" verdict, so the three
+    # places that consume it cannot drift.
+    t: 0
+
+  rules:
+    # ── CS1 ────────────────────────────────────────────────────────────
+    - on: { input: touch1 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch1) >= 63) && (field(SENSOR_INPUT_ENABLE.CS1) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xfe) | (var(t) << 0)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 0)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS1))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS2 ────────────────────────────────────────────────────────────
+    - on: { input: touch2 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch2) >= 63) && (field(SENSOR_INPUT_ENABLE.CS2) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xfd) | (var(t) << 1)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 1)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS2))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS3 ────────────────────────────────────────────────────────────
+    - on: { input: touch3 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch3) >= 63) && (field(SENSOR_INPUT_ENABLE.CS3) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xfb) | (var(t) << 2)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 2)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS3))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS4 ────────────────────────────────────────────────────────────
+    - on: { input: touch4 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch4) >= 63) && (field(SENSOR_INPUT_ENABLE.CS4) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xf7) | (var(t) << 3)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 3)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS4))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS5 ────────────────────────────────────────────────────────────
+    - on: { input: touch5 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch5) >= 63) && (field(SENSOR_INPUT_ENABLE.CS5) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xef) | (var(t) << 4)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 4)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS5))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS6 ────────────────────────────────────────────────────────────
+    - on: { input: touch6 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch6) >= 63) && (field(SENSOR_INPUT_ENABLE.CS6) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xdf) | (var(t) << 5)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 5)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS6))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS7 ────────────────────────────────────────────────────────────
+    - on: { input: touch7 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch7) >= 63) && (field(SENSOR_INPUT_ENABLE.CS7) != 0)" }
+        - { var: touched, value: "(var(touched) & 0xbf) | (var(t) << 6)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 6)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS7))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+    # ── CS8 ────────────────────────────────────────────────────────────
+    - on: { input: touch8 }
+      do:
+        # A pad counts as touched at or above 63 counts — 50 % of the 127-count
+        # full scale — and only while its channel is ENABLED.
+        - { var: t, value: "(input(touch8) >= 63) && (field(SENSOR_INPUT_ENABLE.CS8) != 0)" }
+        - { var: touched, value: "(var(touched) & 0x7f) | (var(t) << 7)" }
+        # The STATUS bit LATCHES: a release does not clear it, only a write-0 to
+        # MAIN_CONTROL.INT does, and only for a pad that has since been released.
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) | (var(t) << 7)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | (var(t) & field(INTERRUPT_ENABLE.CS8))" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+
+    # Firmware clears the interrupt. Only RELEASED pads drop out of the latch;
+    # a pad still held re-asserts INT in the same write, which is exactly the
+    # stuck interrupt a driver that forgets this write would see on hardware.
+    - on: { write: MAIN_CONTROL }
+      when: "(written & 0x01) == 0"
+      do:
+        - { write: { register: MAIN_CONTROL, value: "reg(MAIN_CONTROL) & 0xFE" } }
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) & var(touched)" } }
+        - { write: { register: MAIN_CONTROL,
+                     value: "reg(MAIN_CONTROL) | ((reg(SENSOR_INPUT_STATUS) & reg(INTERRUPT_ENABLE)) != 0)" } }
+
+    # Disabling a channel stops it reporting IMMEDIATELY: the live mask and the
+    # latch both lose the bit, and the delta register's `zero_unless` covers the
+    # third place the channel was visible.
+    - on: { write: SENSOR_INPUT_ENABLE }
+      do:
+        - { var: touched, value: "var(touched) & reg(SENSOR_INPUT_ENABLE)" }
+        - { write: { register: SENSOR_INPUT_STATUS,
+                     value: "reg(SENSOR_INPUT_STATUS) & reg(SENSOR_INPUT_ENABLE)" } }
+        - { write: { register: GENERAL_STATUS, value: "var(touched) != 0" } }
+
+metadata:
+  label: "CAP1188 Touch"
+  summary: "Microchip CAP1188 8-channel capacitive touch controller over I2C."
+  detail: >-
+    Multi-channel touch sensor. Prefer a single GPIO touch for ring-class
+    products; this kit remains for boards that wire the CAP1188.
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit slave address. Defaults to 0x29." }
+  inputs:
+    - { key: touch1, label: "Touch CS1", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch2, label: "Touch CS2", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch3, label: "Touch CS3", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch4, label: "Touch CS4", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch5, label: "Touch CS5", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch6, label: "Touch CS6", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch7, label: "Touch CS7", unit: "%", min: 0, max: 100, default: 0 }
+    - { key: touch8, label: "Touch CS8", unit: "%", min: 0, max: 100, default: 0 }

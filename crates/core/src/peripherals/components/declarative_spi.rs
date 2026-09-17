@@ -18,13 +18,13 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
 use labwired_config::{
-    DeviceDescriptor, Event, FrameSpec, RegisterAccess, RegisterSpec, SpiFraming,
+    DeviceDescriptor, Event, FrameSpec, RegisterAccess, RegisterSpec, SpiFraming, SpiRegisterFile,
 };
 
 use super::declarative_expr::{compile_derived, eval_derived, CompiledExpr};
 use super::declarative_regs::{
-    apply_timing_action, apply_write, encode_raw, leak_labs, read_clears, register_read_bytes,
-    unpack, validate_timers, TimerBank,
+    apply_timing_action, apply_write, decode_raw, encode_raw, leak_labs, read_clears,
+    register_read_bytes, unpack, validate_timers, TimerBank,
 };
 use super::rule_machine::{RuleCtx, RuleMachine};
 use crate::peripherals::spi::{SpiDevice, SpiSampling};
@@ -47,6 +47,11 @@ pub struct GenericSpiDevice {
     cmd_consumed: u8,
     is_read: Option<bool>,
     cur_addr: Option<u16>,
+    /// The command byte selected a register. False only when
+    /// [`SpiFraming::op_mask`] matched neither `op_read` nor `op_write` — a
+    /// command that is not a register access at all, whose data phase serves
+    /// `command_response` and drops writes.
+    addressed: bool,
     read_buf: Vec<u8>,
     /// Name of the register whose word ENDS at each `read_buf` index, so a
     /// burst can apply `on_read` at the moment each register's last byte
@@ -90,6 +95,23 @@ pub struct GenericSpiDevice {
     /// MOSI bytes clocked since the last `frame` event, for a [`FrameSpec`]
     /// with a fixed `length`.
     frame_bytes: u16,
+
+    /// Flat RAM behind every address no declared register covers
+    /// (`behavior.spi.register_file`). `None` ⇒ an undeclared address reads
+    /// `0xFF` and drops writes, which is what the engine always did.
+    file: Option<Vec<u8>>,
+}
+
+/// Materialise a [`SpiRegisterFile`] into its power-on bytes: `fill`
+/// everywhere, then the sparse `reset` entries stamped over it.
+fn build_file(spec: &SpiRegisterFile) -> Vec<u8> {
+    let mut file = vec![spec.fill.unwrap_or(0); spec.size];
+    for (addr, value) in &spec.reset {
+        if let Some(cell) = file.get_mut(usize::from(*addr)) {
+            *cell = *value;
+        }
+    }
+    file
 }
 
 /// Validate the static descriptor contract for the `spi_device` primitive.
@@ -108,8 +130,55 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         .spi
         .as_ref()
         .context("declarative spi device is missing behavior.spi")?;
-    if spec.registers.is_empty() {
-        bail!("behavior.spi declares no registers");
+    if spec.registers.is_empty() && spec.register_file.is_none() {
+        bail!("behavior.spi declares no registers and no register_file");
+    }
+    if let Some(file) = &spec.register_file {
+        if file.size == 0 {
+            bail!("behavior.spi register_file size is 0 — it backs no address");
+        }
+        for addr in file.reset.keys() {
+            if usize::from(*addr) >= file.size {
+                bail!(
+                    "behavior.spi register_file reset address {addr:#06x} is past the end of a \
+                     {}-byte file — the value would be silently dropped",
+                    file.size
+                );
+            }
+        }
+    }
+    // `op_mask` without a value to match addresses NOTHING: every command byte
+    // would fall through to the unaddressed path and the part would answer its
+    // command-response word forever.
+    if spec.framing.op_mask.is_some()
+        && spec.framing.op_read.is_none()
+        && spec.framing.op_write.is_none()
+    {
+        bail!(
+            "behavior.spi framing declares op_mask but neither op_read nor op_write, so no \
+             command byte could ever select a register"
+        );
+    }
+    if spec.framing.op_mask.is_none()
+        && (spec.framing.op_read.is_some() || spec.framing.op_write.is_some())
+    {
+        bail!("behavior.spi framing declares op_read/op_write without op_mask to extract them");
+    }
+    if let Some(name) = &spec.framing.command_response {
+        let reg = spec
+            .registers
+            .iter()
+            .find(|r| &r.name == name)
+            .with_context(|| {
+                format!("behavior.spi framing command_response '{name}' is not a declared register")
+            })?;
+        if reg.width != 1 {
+            bail!(
+                "behavior.spi framing command_response '{name}' is {} bytes wide; the command \
+                 phase clocks out exactly one byte",
+                reg.width
+            );
+        }
     }
     if spec.framing.command_bytes > 1 {
         bail!(
@@ -202,6 +271,7 @@ impl GenericSpiDevice {
             cmd_consumed: 0,
             is_read: None,
             cur_addr: None,
+            addressed: true,
             read_buf: Vec::new(),
             read_ends: Vec::new(),
             read_idx: 0,
@@ -216,6 +286,7 @@ impl GenericSpiDevice {
             rules: RuleMachine::from_behavior(&descriptor.behavior)?,
             frames: descriptor.behavior.frames.clone(),
             frame_bytes: 0,
+            file: spec.register_file.as_ref().map(build_file),
         })
     }
 
@@ -272,7 +343,98 @@ impl GenericSpiDevice {
     /// 0x37 returned FIFO_CTL — with nothing to distinguish it from real data.
     /// Matching on the span and dropping the bytes before `start` serves the
     /// address the caller actually named.
+    /// Decode the command byte into a direction and an address.
+    ///
+    /// Two spellings, and `op_mask` is the more specific one so it wins: a part
+    /// whose command byte is one direction BIT (ADXL345) declares `rw_bit`, and
+    /// a part whose command byte is an OPCODE plus an address (nRF24L01+
+    /// §8.3.1) declares the op field. An op matching neither `op_read` nor
+    /// `op_write` addresses nothing at all.
+    fn decode_command(&mut self, mosi: u8) {
+        self.addressed = true;
+        if let Some(mask) = self.framing.op_mask {
+            let op = mosi & mask;
+            if self.framing.op_read == Some(op) {
+                self.is_read = Some(true);
+            } else if self.framing.op_write == Some(op) {
+                self.is_read = Some(false);
+            } else {
+                self.addressed = false;
+                self.is_read = Some(true);
+                self.cur_addr = None;
+                return;
+            }
+        } else if let Some(bit) = self.framing.rw_bit {
+            let set = (mosi >> bit) & 1 == 1;
+            self.is_read = Some(set == self.framing.rw_read_high);
+        }
+        self.cur_addr = Some(u16::from(
+            (mosi >> self.framing.addr_shift) & self.framing.addr_mask,
+        ));
+    }
+
+    /// The `command_response:` register's byte, right now, through the same
+    /// read function the data phase uses. `None` ⇒ the descriptor declares none.
+    fn command_response_byte(&self) -> Option<u8> {
+        let name = self.framing.command_response.as_deref()?;
+        let reg = self.registers.iter().find(|r| r.name == name)?;
+        register_read_bytes(reg, &self.slot_view(), &self.reg_values)
+            .first()
+            .copied()
+    }
+
+    /// The read stream of a part that declares a `register_file:`.
+    ///
+    /// Walks ADDRESSES rather than declared registers, because with a file
+    /// every address exists: each step serves the register covering it when
+    /// there is one and the flat cell otherwise. That is what lets a descriptor
+    /// mix the two — the nRF24L01+'s STATUS is a `write_one_to_clear` register
+    /// sitting at 0x07 of twenty-four bytes of storage.
+    fn build_read_buf_file(&self, start: u16) -> (Vec<u8>, Vec<Option<String>>) {
+        let file = self.file.as_ref().expect("caller checked");
+        let slots = self.slot_view();
+        let track_ends = self.registers.iter().any(read_clears);
+        let mut out: Vec<u8> = Vec::new();
+        let mut ends: Vec<Option<String>> = Vec::new();
+        let mut addr = start;
+        loop {
+            match self.find_register_containing(addr) {
+                Some(r) => {
+                    let skip = usize::from(addr - r.addr);
+                    let bytes: Vec<u8> = register_read_bytes(r, &slots, &self.reg_values)
+                        .into_iter()
+                        .skip(skip)
+                        .collect();
+                    let n = bytes.len();
+                    out.extend(bytes);
+                    if track_ends {
+                        ends.resize(out.len(), None);
+                        if n > 0 && read_clears(r) {
+                            let last = out.len() - 1;
+                            ends[last] = Some(r.name.clone());
+                        }
+                    }
+                    addr = r.addr.saturating_add(u16::from(r.width));
+                }
+                None => {
+                    out.push(file.get(usize::from(addr)).copied().unwrap_or(0xFF));
+                    if track_ends {
+                        ends.resize(out.len(), None);
+                    }
+                    addr = addr.saturating_add(1);
+                }
+            }
+            if !self.framing.auto_increment || usize::from(addr) >= file.len() {
+                break;
+            }
+        }
+        (out, ends)
+    }
+
     fn build_read_buf(&self, start: u16) -> (Vec<u8>, Vec<Option<String>>) {
+        if self.file.is_some() {
+            return self.build_read_buf_file(start);
+        }
         let mut out = Vec::new();
         // Which register's word ENDS at each byte index — the hook `on_read`
         // needs, and nothing else. Left empty when no register declares one, so
@@ -353,7 +515,8 @@ impl GenericSpiDevice {
 struct SpiRuleCtx<'a> {
     registers: &'a [RegisterSpec],
     reg_values: &'a mut HashMap<String, u32>,
-    slots: &'a HashMap<String, f64>,
+    /// `&mut` because [`RuleCtx::set_input`] writes here — see that method.
+    slots: &'a mut HashMap<String, f64>,
 }
 
 impl RuleCtx for SpiRuleCtx<'_> {
@@ -368,6 +531,21 @@ impl RuleCtx for SpiRuleCtx<'_> {
         let f = reg.bits.iter().find(|b| b.name == field)?;
         Some((f.shift, f.mask()))
     }
+    fn reported(&self, name: &str) -> Option<i64> {
+        let reg = self.registers.iter().find(|r| r.name == name)?;
+        // Same function the read path uses, for the same reason as the I²C
+        // twin: a rule and the wire must not disagree about a register.
+        let bytes = register_read_bytes(reg, self.slots, self.reg_values);
+        let word = unpack(&bytes, reg.endian);
+        if reg.signed {
+            let bits = 8 * u32::from(reg.width);
+            if bits < 32 && word & (1 << (bits - 1)) != 0 {
+                return Some(i64::from(word as i32 | !((1i32 << bits) - 1)));
+            }
+        }
+        Some(i64::from(word))
+    }
+
     fn input(&self, key: &str) -> i64 {
         let raw = self.slots.get(key).copied().unwrap_or(0.0);
         match self
@@ -394,6 +572,28 @@ impl RuleCtx for SpiRuleCtx<'_> {
             None => raw as i64,
         }
     }
+
+    fn set_input(&mut self, key: &str, value: i64) {
+        // The exact inverse of `input` above, through the SAME register lookup,
+        // so a rule that writes back what it read changes nothing.
+        if !self.slots.contains_key(key) {
+            return;
+        }
+        let engineering = match self
+            .registers
+            .iter()
+            .find(|r| r.source.as_deref() == Some(key))
+        {
+            Some(reg) => decode_raw(
+                value,
+                reg.encode.as_ref(),
+                reg.source_scale.unwrap_or(1.0),
+                reg.width,
+            ),
+            None => value as f64,
+        };
+        self.slots.insert(key.to_string(), engineering);
+    }
 }
 
 impl GenericSpiDevice {
@@ -406,7 +606,7 @@ impl GenericSpiDevice {
             let mut ctx = SpiRuleCtx {
                 registers: &self.registers,
                 reg_values: &mut self.reg_values,
-                slots: &self.slots,
+                slots: &mut self.slots,
             };
             machine.fire(&event, written, &mut ctx);
         }
@@ -492,6 +692,7 @@ impl SpiDevice for GenericSpiDevice {
         self.cmd_consumed = 0;
         self.is_read = None;
         self.cur_addr = None;
+        self.addressed = true;
         self.read_buf.clear();
         self.read_ends.clear();
         self.read_idx = 0;
@@ -564,6 +765,7 @@ impl GenericSpiDevice {
                 self.cmd_consumed = 0;
                 self.is_read = Some(true);
                 self.cur_addr = Some(0);
+                self.addressed = true;
                 self.read_buf.clear();
                 self.read_idx = 0;
                 self.latched = false;
@@ -574,21 +776,41 @@ impl GenericSpiDevice {
         if self.framing.command_bytes > 0 && self.cmd_consumed < self.framing.command_bytes {
             self.cmd_consumed += 1;
             if self.cmd_consumed == self.framing.command_bytes {
-                if let Some(bit) = self.framing.rw_bit {
-                    let set = (mosi >> bit) & 1 == 1;
-                    self.is_read = Some(set == self.framing.rw_read_high);
-                }
-                self.cur_addr = Some(u16::from(
-                    (mosi >> self.framing.addr_shift) & self.framing.addr_mask,
-                ));
+                self.decode_command(mosi);
             }
-            return 0x00;
+            // `command_response:` is the word a part clocks out WHILE the master
+            // clocks the command in (nRF24L01+ §8.3.1). Absent ⇒ 0x00, which is
+            // what every descriptor written before that key returned here.
+            return self.command_response_byte().unwrap_or(0x00);
         }
         // Data phase.
+        //
+        // A command that addressed nothing (an `op_mask` match against neither
+        // `op_read` nor `op_write`) serves the command-response word and drops
+        // writes: a payload burst must not land on the register file.
+        if !self.addressed {
+            return self.command_response_byte().unwrap_or(0xFF);
+        }
         let addr = self.cur_addr.unwrap_or(0);
         // Writes require an explicit rw_bit in the framing; a part with rw_bit: None never leaves is_read == None, so every data byte is a read.
         let write = matches!(self.is_read, Some(false));
         if write {
+            // Flat RAM behind the declared map: an address no register covers
+            // is one byte of `register_file`, stored and served verbatim.
+            if self.file.is_some() && self.find_register_containing(addr).is_none() {
+                if let Some(cell) = self
+                    .file
+                    .as_mut()
+                    .and_then(|f| f.get_mut(usize::from(addr)))
+                {
+                    *cell = mosi;
+                }
+                self.write_acc.clear();
+                if self.framing.auto_increment {
+                    self.cur_addr = Some(addr.saturating_add(1));
+                }
+                return 0x00;
+            }
             self.write_acc.push(mosi);
             // The completed write is computed under a CLONED register so the
             // Tier-2 event below can take `&mut self`.
@@ -610,7 +832,15 @@ impl GenericSpiDevice {
                     }
                     self.write_acc.clear();
                     if self.framing.auto_increment {
-                        if let Some(next) = self.next_addr_above(addr) {
+                        // With a `register_file` every address exists, so the
+                        // walk steps one byte past this register's word rather
+                        // than skipping to the next DECLARED one.
+                        let next = if self.file.is_some() {
+                            Some(addr.saturating_add(u16::from(reg.width)))
+                        } else {
+                            self.next_addr_above(addr)
+                        };
+                        if let Some(next) = next {
                             self.cur_addr = Some(next);
                         }
                     }
@@ -710,26 +940,49 @@ fn leak_metadata(
     let summary = meta
         .and_then(|m| m.summary.clone())
         .unwrap_or_else(|| "Declarative SPI device.".to_string());
-    let config_keys: &'static [ConfigKey] = Box::leak(
-        vec![
-            ConfigKey {
-                name: "cs_pin",
-                ty: ConfigType::Str,
-                doc: "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\").",
-            },
-            ConfigKey {
-                name: "spi_mode",
-                ty: ConfigType::Int,
-                doc: "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange.",
-            },
-        ]
-        .into_boxed_slice(),
-    );
+    // Long-form detail, and an explicit `metadata.config_keys` taken as the
+    // COMPLETE set — the same contract [`DeviceMetadata`] documents and the
+    // I²C kit already honours. Without them a hand-written kit's manifest entry
+    // could not be reproduced by the descriptor that replaces it, so a port
+    // that changed no byte on the wire still moved the library record.
+    let detail = meta
+        .and_then(|m| m.detail.clone())
+        .unwrap_or_else(|| summary.clone());
+    let declared_keys = meta.map(|m| m.config_keys.as_slice()).unwrap_or(&[]);
+    let config_keys: &'static [ConfigKey] = if declared_keys.is_empty() {
+        Box::leak(
+            vec![
+                ConfigKey {
+                    name: "cs_pin",
+                    ty: ConfigType::Str,
+                    doc: "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\").",
+                },
+                ConfigKey {
+                    name: "spi_mode",
+                    ty: ConfigType::Int,
+                    doc: "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange.",
+                },
+            ]
+            .into_boxed_slice(),
+        )
+    } else {
+        Box::leak(
+            declared_keys
+                .iter()
+                .map(|k| ConfigKey {
+                    name: leak(k.name.clone()),
+                    ty: super::declarative_i2c::config_type_from_str(&k.ty),
+                    doc: leak(k.doc.clone()),
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    };
     Box::leak(Box::new(KitMetadata {
         device_type: leak(descriptor.r#type.clone()),
         label: leak(label),
-        summary: leak(summary.clone()),
-        detail: leak(summary),
+        summary: leak(summary),
+        detail: leak(detail),
         transport: Transport::Spi,
         category: Category::Spi,
         config_keys,
@@ -805,6 +1058,31 @@ pub static MAX31855_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("max31855").expect("max31855 descriptor embedded"),
     )
     .expect("max31855.yaml is a valid declarative spi descriptor")
+});
+
+/// Semtech SX1278 / RA-02 LoRa module (declarative `lora_sx1278.yaml`).
+pub static LORA_SX1278_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("lora-sx1278")
+            .expect("lora-sx1278 descriptor embedded"),
+    )
+    .expect("lora_sx1278.yaml is a valid declarative spi descriptor")
+});
+
+/// NXP MFRC522 / RC522 reader (declarative `rc522.yaml`).
+pub static RC522_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("rc522").expect("rc522 descriptor embedded"),
+    )
+    .expect("rc522.yaml is a valid declarative spi descriptor")
+});
+
+/// Nordic nRF24L01+ transceiver (declarative `nrf24l01.yaml`).
+pub static NRF24L01_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("nrf24l01").expect("nrf24l01 descriptor embedded"),
+    )
+    .expect("nrf24l01.yaml is a valid declarative spi descriptor")
 });
 
 #[cfg(test)]
@@ -1202,6 +1480,155 @@ behavior:
             err.contains("out of range for an SPI command byte"),
             "got: {err}"
         );
+    }
+
+    // ─── register_file / op_mask / command_response ────────────────────
+    //
+    // The three keys the register-shell ports added, each proved on a MINIMAL
+    // descriptor rather than only through a shipped part: a load rule that only
+    // one real file exercises is a rule nobody has checked.
+
+    const SHELL: &str = r#"
+type: test:shell
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 1
+      op_mask: 0xE0
+      op_read: 0x00
+      op_write: 0x20
+      addr_mask: 0x1F
+      auto_increment: true
+      command_response: STATUS
+    registers:
+      - { name: STATUS, addr: 0x07, width: 1, endian: be, access: rw, reset: 0x5A,
+          on_write: write_one_to_clear }
+    register_file:
+      size: 0x10
+      fill: 0x11
+      reset: { 0x00: 0x99 }
+"#;
+
+    fn shell() -> GenericSpiDevice {
+        GenericSpiDevice::from_yaml(SHELL, "PA4").expect("the shell fixture must load")
+    }
+
+    #[test]
+    fn a_register_file_serves_fill_and_reset_and_stores_writes() {
+        let mut d = shell();
+        d.cs_select();
+        d.transfer(0x00); // R_REGISTER 0x00
+        assert_eq!(d.transfer(0), 0x99, "the sparse reset entry");
+        assert_eq!(d.transfer(0), 0x11, "and `fill` everywhere else");
+        d.cs_release();
+
+        d.cs_select();
+        d.transfer(0x23); // W_REGISTER 0x03
+        d.transfer(0xC3);
+        d.cs_release();
+
+        d.cs_select();
+        d.transfer(0x03);
+        assert_eq!(d.transfer(0), 0xC3);
+        d.cs_release();
+    }
+
+    #[test]
+    fn a_declared_register_wins_over_the_file_at_its_own_address() {
+        let mut d = shell();
+        d.cs_select();
+        d.transfer(0x07);
+        assert_eq!(d.transfer(0), 0x5A, "STATUS, not the file's 0x11");
+        d.cs_release();
+        // …and its `on_write` applies, which a file cell could never do.
+        d.cs_select();
+        d.transfer(0x27);
+        d.transfer(0x0A);
+        d.cs_release();
+        d.cs_select();
+        d.transfer(0x07);
+        assert_eq!(
+            d.transfer(0),
+            0x50,
+            "write-one-to-clear cleared bits 3 and 1"
+        );
+        d.cs_release();
+    }
+
+    #[test]
+    fn an_address_past_the_end_of_the_file_is_open_bus() {
+        let mut d = shell();
+        d.cs_select();
+        d.transfer(0x10); // R_REGISTER 0x10 — the file holds 0x00..0x0F
+        assert_eq!(d.transfer(0), 0xFF);
+        d.cs_release();
+    }
+
+    #[test]
+    fn command_response_rides_out_on_the_command_byte() {
+        let mut d = shell();
+        d.cs_select();
+        assert_eq!(d.transfer(0xFF), 0x5A, "NOP answers STATUS");
+        d.cs_release();
+    }
+
+    #[test]
+    fn an_unmatched_op_addresses_nothing() {
+        let mut d = shell();
+        // 0xA0 & 0xE0 is neither op_read nor op_write, so these four bytes must
+        // NOT land on file cells 0x00..0x03.
+        d.cs_select();
+        for b in [0xA0u8, 0xDE, 0xAD, 0xBE, 0xEF] {
+            assert_eq!(d.transfer(b), 0x5A, "an unaddressed frame serves STATUS");
+        }
+        d.cs_release();
+        d.cs_select();
+        d.transfer(0x00);
+        assert_eq!(d.transfer(0), 0x99, "cell 0 still holds its reset value");
+        d.cs_release();
+    }
+
+    #[test]
+    fn op_mask_without_a_matching_value_is_a_load_error() {
+        let yaml = SHELL
+            .replace("      op_read: 0x00\n", "")
+            .replace("      op_write: 0x20\n", "");
+        let err = GenericSpiDevice::from_yaml(&yaml, "PA4")
+            .err()
+            .expect("op_mask with nothing to match must be rejected")
+            .to_string();
+        assert!(err.contains("neither op_read nor op_write"), "got: {err}");
+    }
+
+    #[test]
+    fn op_read_without_op_mask_is_a_load_error() {
+        let yaml = SHELL.replace("      op_mask: 0xE0\n", "");
+        let err = GenericSpiDevice::from_yaml(&yaml, "PA4")
+            .err()
+            .expect("op_read without op_mask must be rejected")
+            .to_string();
+        assert!(err.contains("without op_mask"), "got: {err}");
+    }
+
+    #[test]
+    fn command_response_must_name_a_declared_register() {
+        let yaml = SHELL.replace("command_response: STATUS", "command_response: NOPE");
+        let err = GenericSpiDevice::from_yaml(&yaml, "PA4")
+            .err()
+            .expect("a dangling command_response must be rejected")
+            .to_string();
+        assert!(err.contains("is not a declared register"), "got: {err}");
+    }
+
+    #[test]
+    fn a_register_file_reset_past_the_end_is_a_load_error() {
+        let yaml = SHELL.replace("reset: { 0x00: 0x99 }", "reset: { 0x40: 0x99 }");
+        let err = GenericSpiDevice::from_yaml(&yaml, "PA4")
+            .err()
+            .expect("a reset entry the file cannot hold must be rejected")
+            .to_string();
+        assert!(err.contains("past the end"), "got: {err}");
     }
 
     #[test]

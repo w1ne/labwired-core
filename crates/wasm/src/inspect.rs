@@ -1181,16 +1181,23 @@ impl WasmSimulator {
 
             if device_type == "neo6m-gps" {
                 for stream in &uart.attached_streams {
+                    // ⚠️ ONE downcast, to the ENGINE's declarative stream
+                    // device, not to a concrete part model. The NEO-6M is a
+                    // `configs/devices/neo6m-gps.yaml` descriptor now, and
+                    // `lat` / `lon` / `fix` are its declared stimulus channels
+                    // — so this reads the same slots `set_input` writes, and a
+                    // second GPS part costs no second downcast here.
                     if let Some(gps) = stream.as_any().and_then(|a| {
-                        a.downcast_ref::<labwired_core::peripherals::components::Neo6mGps>()
+                        a.downcast_ref::<
+                            labwired_core::peripherals::components::declarative_uart::DeclarativeUartDevice,
+                        >()
                     }) {
-                        let (lat, lon) = gps.position();
                         states.push(serde_json::json!({
                             "id": binding.id,
                             "kind": "neo6m-gps",
-                            "lat": lat,
-                            "lon": lon,
-                            "has_fix": gps.has_fix(),
+                            "lat": gps.slot("lat").unwrap_or(0.0),
+                            "lon": gps.slot("lon").unwrap_or(0.0),
+                            "has_fix": gps.slot("fix").unwrap_or(0.0) >= 0.5,
                         }));
                         break;
                     }

@@ -329,15 +329,15 @@ fn run_s3_rom_boot_no_elf(
     // No ELF: empty firmware bytes degrade symbol/hash diagnostics gracefully; a
     // placeholder path is recorded as config.firmware in result.json.
     let placeholder = std::path::PathBuf::from("<flash-image>");
-    let exit_code = execute_test_loop(
+    let exit_code = execute_test_loop(&mut TestExecutionContext {
         args,
-        &mut machine,
+        machine: &mut machine,
         resolved_limits,
         assertions,
-        &[],
-        &uart_tx,
-        &metrics,
-        &placeholder,
+        firmware_bytes: &[],
+        uart_tx: &uart_tx,
+        metrics: &metrics,
+        firmware_path: &placeholder,
         system_path,
         faults,
         require_fault_fired,
@@ -345,12 +345,12 @@ fn run_s3_rom_boot_no_elf(
         stimuli,
         uart_injections,
         // Xtensa is never JIT-eligible (the JIT is RISC-V only).
-        false,
-        labwired_core::Arch::XtensaLx7,
+        jit_eligible: false,
+        arch: labwired_core::Arch::XtensaLx7,
         stack_paint,
         chip_mem,
-        Some(system),
-    );
+        system: Some(system),
+    });
     // Same readout the ELF-bearing S3 arm emits — a panel wired to this machine
     // must report identically whether or not an ELF came with the request.
     emit_device_block_readout(&machine.bus);
@@ -619,15 +619,15 @@ fn run_c3_rom_boot_no_elf(
     // No ELF: empty firmware bytes degrade symbol/hash diagnostics gracefully; a
     // placeholder path is recorded as config.firmware in result.json.
     let placeholder = std::path::PathBuf::from("<flash-image>");
-    execute_test_loop(
+    execute_test_loop(&mut TestExecutionContext {
         args,
-        &mut machine,
+        machine: &mut machine,
         resolved_limits,
         assertions,
-        &[],
-        &uart_tx,
-        &metrics,
-        &placeholder,
+        firmware_bytes: &[],
+        uart_tx: &uart_tx,
+        metrics: &metrics,
+        firmware_path: &placeholder,
         system_path,
         faults,
         require_fault_fired,
@@ -635,12 +635,12 @@ fn run_c3_rom_boot_no_elf(
         stimuli,
         uart_injections,
         // rom-boot is never JIT-eligible (it forces cycle-accurate stepping).
-        false,
-        labwired_core::Arch::RiscV,
+        jit_eligible: false,
+        arch: labwired_core::Arch::RiscV,
         stack_paint,
         chip_mem,
         system,
-    )
+    })
 }
 
 pub(crate) fn run_test(
@@ -1620,29 +1620,29 @@ pub(crate) fn run_test(
                 machine
             };
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
-            let exit_code = execute_test_loop(
-                &args,
-                &mut machine,
-                &resolved_limits,
-                &assertions,
-                &firmware_bytes,
-                &uart_tx,
-                &metrics,
-                &firmware_path,
-                system_path.as_ref(),
-                &faults,
+            let exit_code = execute_test_loop(&mut TestExecutionContext {
+                args: &args,
+                machine: &mut machine,
+                resolved_limits: &resolved_limits,
+                assertions: &assertions,
+                firmware_bytes: &firmware_bytes,
+                uart_tx: &uart_tx,
+                metrics: &metrics,
+                firmware_path: &firmware_path,
+                system_path: system_path.as_ref(),
+                faults: &faults,
                 require_fault_fired,
                 fault_evidence,
-                &stimuli,
-                &uart_injections,
+                stimuli: &stimuli,
+                uart_injections: &uart_injections,
                 // Xtensa (ESP32) path: never JIT-eligible (the RV32IMC JIT is
                 // RISC-V only), so keep the exact current observer-based metrics.
-                false,
-                labwired_core::Arch::XtensaLx7,
+                jit_eligible: false,
+                arch: labwired_core::Arch::XtensaLx7,
                 stack_paint,
                 chip_mem,
-                resolved_system.as_ref(),
-            );
+                system: resolved_system.as_ref(),
+            });
             // Device-block render readout (see `emit_device_block_readout` —
             // shared with the ELF-less S3 rom-boot arm).
             emit_device_block_readout(&machine.bus);
@@ -1818,27 +1818,27 @@ pub(crate) fn run_test(
                 machine.add_observer(metrics.clone());
             }
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
-            execute_test_loop(
-                &args,
-                &mut machine,
-                &resolved_limits,
-                &assertions,
-                &firmware_bytes,
-                &uart_tx,
-                &metrics,
-                &firmware_path,
-                system_path.as_ref(),
-                &faults,
+            execute_test_loop(&mut TestExecutionContext {
+                args: &args,
+                machine: &mut machine,
+                resolved_limits: &resolved_limits,
+                assertions: &assertions,
+                firmware_bytes: &firmware_bytes,
+                uart_tx: &uart_tx,
+                metrics: &metrics,
+                firmware_path: &firmware_path,
+                system_path: system_path.as_ref(),
+                faults: &faults,
                 require_fault_fired,
                 fault_evidence,
-                &stimuli,
-                &uart_injections,
+                stimuli: &stimuli,
+                uart_injections: &uart_injections,
                 jit_eligible,
-                program.arch,
+                arch: program.arch,
                 stack_paint,
                 chip_mem,
-                resolved_system.as_ref(),
-            )
+                system: resolved_system.as_ref(),
+            })
         }};
     }
 

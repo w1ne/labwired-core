@@ -80,6 +80,132 @@ pub struct FifoSpec {
     /// What a push into a full FIFO does.
     #[serde(default)]
     pub overflow: FifoOverflow,
+    /// **The sample stream**: what fills this FIFO, on whose clock. Absent ⇒
+    /// the FIFO is filled only by explicit `push:` actions, which is every
+    /// descriptor written before this key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<FifoFill>,
+    /// Register field that REFLECTS the number of entries held, refreshed
+    /// after every fill and every drain. The ADXL345's `FIFO_STATUS[5:0]` and
+    /// the MAX30102's write pointer are this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<FifoRegisterField>,
+    /// **Watermark**: the bit the part raises once the FIFO holds enough.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watermark: Option<FifoWatermark>,
+}
+
+/// One packed component of a FIFO entry.
+///
+/// An entry is not one number. A motion FIFO holds three axes per sample and a
+/// PPG FIFO holds two channels; the whole point of a FIFO sensor is that a
+/// burst read walks those components out in order. Each is an EXPRESSION in the
+/// ordinary rule language, so a descriptor says what a sample IS —
+/// `input(x)`, or a register the part already knows how to encode — rather than
+/// naming a hidden hook.
+///
+/// Components are packed MSB-first in declaration order and the total must fit
+/// in 63 bits, which two 3-axis 16-bit samples or six 10-bit ones do.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FifoField {
+    /// The value, as an integer expression.
+    pub expr: String,
+    /// Width in bits. The stored component is truncated to this, which is what
+    /// a converter's output register does.
+    pub width_bits: u8,
+}
+
+/// What fills a FIFO, and when.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FifoFill {
+    /// The [`crate::DeviceTimer`] whose every firing pushes one entry. The
+    /// SAME timer a `on: { timer: … }` rule may listen for, so a part has one
+    /// sample clock and not two.
+    pub timer: String,
+    /// Integer guard. Absent ⇒ every firing fills.
+    ///
+    /// This is how a part with a FIFO MODE register expresses bypass: the
+    /// ADXL345 in bypass collects nothing, so its guard is
+    /// `field(FIFO_CTL.FIFO_MODE) != 0` and the FIFO simply stays empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    /// The entry's components, packed MSB-first in declaration order.
+    pub pack: Vec<FifoField>,
+}
+
+/// A `REGISTER.FIELD` pair a FIFO reflects a number into.
+///
+/// Spelled `INT_SOURCE.WATERMARK`, which is how [`RegBits`] and every `on:
+/// { write: REG.FIELD }` in this schema name a field — one spelling for one
+/// idea. The `{ register, field }` map form is accepted too, for a generator
+/// that emits the regular shape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FifoRegisterField {
+    pub register: String,
+    pub field: String,
+}
+
+impl Serialize for FifoRegisterField {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&format!("{}.{}", self.register, self.field))
+    }
+}
+
+impl<'de> Deserialize<'de> for FifoRegisterField {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_yaml::Value::deserialize(d)?;
+        if let Some(text) = v.as_str() {
+            let (register, field) = text.split_once('.').ok_or_else(|| {
+                D::Error::custom(format!(
+                    "`{text}` names a register but no field — write `{text}.FIELD`"
+                ))
+            })?;
+            return Ok(Self {
+                register: register.to_string(),
+                field: field.to_string(),
+            });
+        }
+        let map = v.as_mapping().ok_or_else(|| {
+            D::Error::custom("expected `REGISTER.FIELD` or `{ register, field }`")
+        })?;
+        let get = |k: &str| {
+            map.get(serde_yaml::Value::from(k))
+                .and_then(|x| x.as_str())
+                .map(str::to_string)
+        };
+        match (get("register"), get("field")) {
+            (Some(register), Some(field)) => Ok(Self { register, field }),
+            _ => Err(D::Error::custom(
+                "`{ register, field }` needs both keys; or write `REGISTER.FIELD`",
+            )),
+        }
+    }
+}
+
+/// When a FIFO raises its watermark bit.
+///
+/// The bit is SET while the depth condition holds and CLEARED when it stops,
+/// refreshed after every fill and every drain — which is what makes a driver's
+/// "drain until the watermark drops" loop terminate. A part whose watermark
+/// LATCHES until firmware clears it says so with `latch: true`.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FifoWatermark {
+    /// Constant threshold in ENTRIES: the bit is set while the FIFO holds this
+    /// many or more. Exactly one of this and
+    /// [`entries_from`](Self::entries_from) is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries: Option<usize>,
+    /// Threshold read from a register field, for the parts where firmware sets
+    /// it — which is most of them (the ADXL345's `FIFO_CTL.SAMPLES`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries_from: Option<FifoRegisterField>,
+    /// The bit to raise.
+    pub set: FifoRegisterField,
+    /// Whether the bit STAYS set once raised (firmware clears it) rather than
+    /// following the depth. Default false — the level behaviour, which is what
+    /// a watermark is on the parts modelled here.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub latch: bool,
 }
 
 fn one_u8() -> u8 {
@@ -456,6 +582,24 @@ pub enum Action {
     Pin { name: String, level: String },
     /// Assign a variable.
     Var { name: String, value: String },
+    /// **Assign a stimulus channel** — the part writing its OWN sensed value.
+    ///
+    /// Every other action changes something firmware can see through the wire.
+    /// This one changes what the part MEASURES, which is the only way a part
+    /// can have a quantity that moves on its own clock: a real-time clock's
+    /// seconds, a counter that free-runs, a shaft that keeps turning.
+    ///
+    /// `value` is an EXPRESSION in the same domain [`crate::expr::Expr::Input`]
+    /// reads back, so `set_input: { key: unix_time, value: "input(unix_time) +
+    /// 1" }` is a clock that ticks. The round trip is the contract: whatever a
+    /// rule writes here, `input()` reads back.
+    ///
+    /// ⚠️ It does NOT raise `on: { input: KEY }`. A rule that fed its own
+    /// trigger would be a loop, and the machine's recursion guard would drop
+    /// the re-entry silently rather than run it — so the rule is stated rather
+    /// than left to be discovered. A HOST driving the channel through
+    /// `set_input` still raises the event, because that is an outside event.
+    SetInput { key: String, value: String },
 }
 
 impl Serialize for Action {
@@ -512,6 +656,10 @@ impl Serialize for Action {
             }
             Action::Var { name, value } => {
                 m.insert(Value::from("var"), Value::from(name.clone()));
+                m.insert(Value::from("value"), Value::from(value.clone()));
+            }
+            Action::SetInput { key, value } => {
+                m.insert(Value::from("set_input"), Value::from(key.clone()));
                 m.insert(Value::from("value"), Value::from(value.clone()));
             }
         }
@@ -624,6 +772,23 @@ impl<'de> Deserialize<'de> for Action {
             };
             return Ok(Action::Pin { name, level });
         }
+        if get("set_input").is_some() {
+            let inner = nested("set_input");
+            let key = scalar("set_input", inner)
+                .or_else(|| {
+                    inner
+                        .and_then(|m| m.get(serde_yaml::Value::from("key")))
+                        .and_then(|x| x.as_str())
+                        .map(str::to_string)
+                })
+                .ok_or_else(|| D::Error::custom("`set_input:` needs a channel key"))?;
+            let value = sibling("value", inner)
+                .ok_or_else(|| D::Error::custom("`set_input:` is missing `value:`"))?;
+            return Ok(Action::SetInput {
+                key,
+                value: yaml_expr::<D::Error>("set_input.value", &value)?,
+            });
+        }
         if get("var").is_some() {
             let inner = nested("var");
             let name = scalar("var", inner)
@@ -637,7 +802,7 @@ impl<'de> Deserialize<'de> for Action {
         }
         Err(D::Error::custom(
             "unknown action; expected one of set:, clear:, write:, goto:, timer:, push:, pop:, \
-             pin:, var:",
+             pin:, var:, set_input:",
         ))
     }
 }
@@ -693,6 +858,7 @@ pub enum CompiledAction {
     Pop { fifo: String },
     Pin { name: String, level: Expr },
     Var { name: String, value: Expr },
+    SetInput { key: String, value: Expr },
 }
 
 /// A rule that would not compile. Names the rule INDEX, because a rule has no
@@ -769,6 +935,10 @@ pub fn compile_rules(rules: &[Rule]) -> Result<Vec<CompiledRule>, RuleCompileErr
                 Action::Var { name, value } => CompiledAction::Var {
                     name: name.clone(),
                     value: parse(format!("do[{j}].var.value"), value)?,
+                },
+                Action::SetInput { key, value } => CompiledAction::SetInput {
+                    key: key.clone(),
+                    value: parse(format!("do[{j}].set_input.value"), value)?,
                 },
             });
         }
@@ -898,6 +1068,11 @@ pub fn validate_rule_names(rules: &[Rule], names: &RuleNames<'_>) -> anyhow::Res
                     "{}: no variable named '{name}' in `vars:`",
                     at("var")
                 ),
+                Action::SetInput { key, .. } => anyhow::ensure!(
+                    has(names.inputs, key),
+                    "{}: no stimulus channel named '{key}' in `metadata.inputs`",
+                    at("set_input")
+                ),
             }
         }
     }
@@ -914,9 +1089,9 @@ pub fn rule_expression_registers(rules: &[CompiledRule]) -> Vec<String> {
         }
         for a in &rule.actions {
             match a {
-                CompiledAction::Write { value, .. } | CompiledAction::Var { value, .. } => {
-                    value.registers(&mut out)
-                }
+                CompiledAction::Write { value, .. }
+                | CompiledAction::Var { value, .. }
+                | CompiledAction::SetInput { value, .. } => value.registers(&mut out),
                 CompiledAction::Push {
                     value: Some(value), ..
                 } => value.registers(&mut out),

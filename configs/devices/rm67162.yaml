@@ -1,0 +1,128 @@
+# Raydium RM67162 — 240x536 RGB565 AMOLED over 4-wire SPI (DBI Type-C).
+# Declarative `display` primitive: the same engine that reads st7789.yaml and
+# ili9341.yaml. What is new here is not the panel, it is two facts about an
+# EMISSIVE panel that a backlit TFT descriptor never had to state.
+#
+# 1. BRIGHTNESS IS INSIDE THE CONTROLLER (`lit_requires`).
+#    A TFT is lit by a backlight the firmware drives on a separate GPIO or PWM
+#    pin, so the controller knows nothing about it and `display_on AND awake` is
+#    the whole truth. An AMOLED has no backlight — every pixel emits — and its
+#    brightness is the DCS command WRDISBV (0x51), whose reset value is 0x00,
+#    i.e. BLACK. A driver ported from a TFT sends a perfect init and a full
+#    frame, never writes 0x51, and shows nothing on the bench. `lit_requires`
+#    folds that var into `lit`, so the artifact reports that firmware dark.
+#
+# 2. D/C CAN COME FROM THE CONTROLLER (`dc.source: hw_dcx`).
+#    Both wirings are real hardware. Every nRF52-era and STM32 board toggles a
+#    GPIO between transfers (`dc_pin`). The nRF54L SPIM drives the line ITSELF
+#    from PSEL.DCX + DCXCNT — low for the first DCXCNT bytes of a transfer, high
+#    for the rest — with no firmware pin write anywhere, which is how
+#    `examples/nrf54lm20a-snake` is wired. Exactly one of the two is required
+#    and the artifact publishes which (`dc_source`), because a panel that framed
+#    nothing and a panel that was never sent anything look identical otherwise.
+#
+# There is NO infer-framing-from-byte-values fallback, for the reason
+# ili9341.yaml measures: a stock init's 0xCB carries a parameter 0x2C, an
+# inferring model reads it as RAMWR, and the rest of the init — SLPOUT and
+# DISPON included — lands in frame memory as pixels.
+#
+# NOT modelled, and deliberately given no parameter count: every vendor command
+# a stock Lilygo T-Display-S3 AMOLED init sends (0xFE page select, 0xC4 SPI
+# mode, 0x35 TE, 0x44 tear scanline, gamma). An unlisted opcode is consumed and
+# CLOSES the stream; its parameter bytes then arrive with nothing open and are
+# dropped — which is what the controller does with them.
+type: amoled-rm67162
+
+behavior:
+  primitive: display
+  display:
+    width: 240
+    height: 536
+    pixel_format: rgb565
+    artifact_format: rgb565_be
+    ram: { bytes: 257280, layout: row_major, stream: command }
+    dc: { source: hw_dcx, pin_role: dc, command_level: 0 }
+    addressing: { modes: [horizontal], default: horizontal }
+    # MADCTL D7 = page address order (MY), D6 = column address order (MX),
+    # D5 = page/column exchange (MV). MV changes what a legal column IS
+    # (0..239 when MV=0, 0..535 when MV=1), so it moves the window clamp as
+    # well as the pixel map.
+    vars: { madctl: 0, colmod: 0x55, brightness: 0 }
+    orientation: { var: madctl, swap_bit: 0x20, mirror_x_bit: 0x40, mirror_y_bit: 0x80 }
+    supply_gated: true
+    # WRDISBV resets to 0x00 and 0x00 means black. See the header.
+    lit_requires: [{ var: brightness, min: 1 }]
+    artifact_meta:
+      - display_on
+      - lit
+      - powered
+      - asleep
+      - { var: brightness }
+      - { var: colmod, format: hex8 }
+      - { var: madctl, format: hex8 }
+      - dc_source
+      - painted_bytes
+      - total_bytes
+      - top_colour
+      - top_colour_pixels
+    commands:
+      # SWRESET on this controller CLEARS FRAME MEMORY as well as the control
+      # state — unlike the MIPI ST7789V §9.1.22 / ILI9341 §8.2.2 reading, where
+      # "the Frame Memory contents are unaffected". That is why `reset_control`
+      # and `clear_ram` are two actions and neither implies the other.
+      - opcode: 0x01
+        name: SWRESET
+        do:
+          - { reset_control: true }
+          - { clear_ram: true }
+      - { opcode: 0x10, name: SLPIN,   do: [ { awake: false } ] }
+      - { opcode: 0x11, name: SLPOUT,  do: [ { awake: true } ] }
+      - { opcode: 0x28, name: DISPOFF, do: [ { display_on: false } ] }
+      - { opcode: 0x29, name: DISPON,  do: [ { display_on: true } ] }
+      # CASET / RASET: 16-bit big-endian start and end, CLAMPED to the
+      # addressable extent in the CURRENT orientation.
+      - opcode: 0x2A
+        name: CASET
+        args: 4
+        do:
+          - set_window:
+              axis: col
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      - opcode: 0x2B
+        name: RASET
+        args: 4
+        do:
+          - set_window:
+              axis: row
+              start: { args: [0, 1], clamp_axis_max: true }
+              end: { args: [2, 3], clamp_axis_max: true }
+      # RAMWR rewinds the counters to the window origin.
+      - { opcode: 0x2C, name: RAMWR, do: [ { ram_write: { reset_cursor: true } } ] }
+      - { opcode: 0x36, name: MADCTL, args: 1, do: [ { set_var: { name: madctl, value: { args: [0] } } } ] }
+      # COLMOD is RECORDED and reported, never acted on: this model is RGB565
+      # throughout, and honouring 0x75 (18-bit) or 0x77 (24-bit) would mean
+      # claiming a pixel depth the artifact does not carry. Publishing the byte
+      # is how firmware that asked for one of those can be told apart from
+      # firmware that asked for RGB565.
+      - { opcode: 0x3A, name: COLMOD, args: 1, do: [ { set_var: { name: colmod, value: { args: [0] } } } ] }
+      - { opcode: 0x51, name: WRDISBV, args: 1, do: [ { set_var: { name: brightness, value: { args: [0] } } } ] }
+
+metadata:
+  label: "RM67162 AMOLED"
+  summary: "240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C)."
+  detail: "Raydium RM67162 emissive panel. Implements the DCS command / RAMWR stream against an in-memory framebuffer. Unlike a backlit TFT, brightness lives in the controller (WRDISBV 0x51, reset 0x00 = black), so the artifact reports `lit` -- DISPON AND awake AND non-zero brightness -- alongside the raw pixels. D/C framing comes either from a GPIO or from the SPI controller's own DCX line."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select pin label. With a controller-driven hardware CSN (nRF54L PSEL.CSN) this is documentation only -- the controller asserts chip select itself."
+    - name: dc_pin
+      ty: str
+      doc: "Data/command GPIO pin. Use this when the firmware toggles D/C itself between transfers, which is how nRF52-era and STM32 boards wire a panel. Mutually exclusive with `hw_dcx`."
+    - name: hw_dcx
+      ty: bool
+      doc: "Set when the SPI controller drives D/C itself (nRF54L SPIM PSEL.DCX + DCXCNT). No GPIO is involved. Mutually exclusive with `dc_pin`. Exactly one of the two is required: this model has no infer-framing-from-byte-values fallback, because that inference desynchronises on a real init sequence."
+    - name: powered
+      ty: bool
+      doc: "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports `lit: false`, `painted_bytes: 0`, which is what the part does on a bench."

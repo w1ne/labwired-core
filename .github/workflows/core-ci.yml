@@ -499,6 +499,13 @@ jobs:
           shared-key: core-pr-gate
           workspaces: |
             . -> target
+          # Read-only on the PR lane. `pr-gate-warm` (push to main, below) owns
+          # this key; a PR restores it from `refs/heads/main`. With the default
+          # `save-if: true` every open PR also wrote a ~520 MB PR-ref copy that
+          # only that PR could read, and those copies were what evicted main's
+          # entry out of the 10 GB budget (measured 2026-09-17: 10.4 GB / 19
+          # caches, four PR-ref copies of this key, none on main).
+          save-if: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -741,6 +748,119 @@ jobs:
       # no network, and a PR that touches the sketch is told before the merge.
       - name: BLE Pong fixture provenance (committed .ino ↔ .bin)
         run: cargo test -p labwired-core --test fixture_ble_pong_provenance
+
+  # ── Cache seed for pr-gate (push to main; asserts nothing) ────────────────
+  #
+  # WHY THIS JOB EXISTS: `pr-gate` compiles COLD on every pull request, and it
+  # is the job with a 12-minute wall and a note above it saying not to raise it.
+  #
+  # Measured 2026-09-17, `gh api repos/w1ne/labwired-core/actions/caches`:
+  # every `v0-rust-core-pr-gate-*` entry sat on a `refs/pull/N/merge` ref
+  # (#1161, #1163, #1165, #1167) and not one on `refs/heads/main`. GitHub scopes
+  # caches by ref — a PR reads its BASE branch's caches and never another PR's
+  # (rust-cache README: "Caches from base branches are available to PRs, but not
+  # across unrelated branches") — so a PR-ref cache warms nothing but that one
+  # PR, and a PR-ref cache is only written when the job finishes: rust-cache
+  # saves in a POST step, and a job killed by `timeout-minutes` is `cancelled`,
+  # which skips it. Cold build → 12 minutes → killed → no save → still cold.
+  #
+  # That loop is not theoretical. pr-gate durations on 2026-09-17:
+  #   run 35276748276  cancelled  12m21s   (the wall)
+  #   run 35265121582  cancelled  12m20s   (the wall)
+  #   run 35271119704  success    10m27s
+  #   run 35274783176  success     9m14s
+  #   run 35265379900  success     9m13s
+  # The passing runs are inside a minute of the cap. A `Cargo.lock` change
+  # spends that minute.
+  #
+  # WHAT IT DOES: nothing but populate `core-pr-gate` on `refs/heads/main`, so
+  # the next pull request restores it instead of building the dependency graph
+  # from source. The cache key must be IDENTICAL to pr-gate's or this buys
+  # nothing, so read the four things that compose it (rust-cache `src/config.ts`)
+  # before touching either job:
+  #   v0-rust | -<shared-key> | -<os>-<arch> | -<rust+env hash> | -<lockfile hash>
+  # i.e. `shared-key: core-pr-gate`, the same `dtolnay/rust-toolchain@1.95.0`
+  # with the same components, the same runner image, the same `workspaces`.
+  # Changing any of them in ONE of the two jobs silently un-warms pr-gate: the
+  # only symptom is `No cache found.` in a log nobody reads.
+  #
+  # WHY COMPILE-ONLY AND NOT JUST `if: push` ON pr-gate ITSELF: rust-cache
+  # stores the DEPENDENCY artifacts (it prunes workspace members from
+  # `target/`), so running the assertions again on main would buy no extra cache
+  # and would duplicate `core-integrity`, which already tests main's push. These
+  # are pr-gate's cargo steps with `--no-run` where a run adds nothing.
+  #
+  # ⚠️ THIS JOB ASSERTS NOTHING AND MUST NOT BECOME A GATE. `continue-on-error`
+  # is deliberate: main's verdict is `core-integrity`'s job, and a second red
+  # tick next to it would mean "the cache seed did not build", which is not a
+  # statement about the commit. `cache-on-failure: true` for the same reason —
+  # a partially built `target/` is still worth more to the next PR than nothing.
+  # If you ever want this to gate something, add the context to branch
+  # protection in the SAME change, the way `browser-layer` was split out.
+  #
+  # ⚠️ CACHE BUDGET. The repo was at 10.42 GB of a 10 GB budget when this
+  # landed, i.e. already evicting. This entry is ~520 MB. `pr-gate` still has
+  # rust-cache's default `save-if: true`, so each open PR also writes a ~520 MB
+  # PR-ref copy that only that PR can read — those are the entries most likely
+  # to evict THIS one — so the PR lane's `Cache dependencies` step above now
+  # carries `save-if: false`, the same remedy the `pr-workspace-tests` note
+  # below records for the `core-ci` key: main owns the cache, PRs only read it.
+  pr-gate-warm:
+    name: pr-gate-warm
+    # push-to-main only. Not `pull_request` (a PR-ref save is the problem this
+    # job exists to fix), not `schedule` (a nightly seed is up to 24 h stale
+    # against a lockfile that moves several times a day), not `dispatch`
+    # (a dispatch on a branch writes to that branch's scope, not main's).
+    if: github.event_name == 'push' && github.repository == 'w1ne/labwired-core'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    # Generous on purpose: the FIRST run of this job is the cold build that
+    # every PR is paying for today, and a cold pr-gate has been measured at
+    # 12m+. Killing the seed at 12 minutes would reproduce, on main, exactly
+    # the no-save-on-timeout loop described above.
+    timeout-minutes: 30
+    steps:
+      # Shallow: this job runs no git-history-dependent gate. (pr-gate needs
+      # `fetch-depth: 0` for its Python drift gates; none of those run here and
+      # the checkout depth does not enter the cache key.)
+      - uses: actions/checkout@v4
+
+      # Components must match pr-gate's. `src/config.ts` hashes
+      # `rustc -vV` plus every toolchain in `rustup toolchain list`, so the
+      # toolchain PIN is what has to agree; the components are mirrored anyway
+      # so that a future pin change to either job is an obvious mismatch in
+      # review rather than a silent cache miss.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-pr-gate
+          workspaces: |
+            . -> target
+          # The entire point of the job. Spelled out rather than left to the
+          # default so that deleting it reads as the decision it is.
+          save-if: true
+          cache-on-failure: true
+
+      # pr-gate's cargo steps, compile-only. `cargo clippy --all-targets`
+      # resolves to `default-members` (cli, core, dap, loader, labwired-fuzz) —
+      # keep it bare for the same reason pr-gate's note says to: narrowing it
+      # narrows what lands in the cache. No `-D warnings`: this job renders no
+      # verdict, and a lint that is a warning on main should not stop the seed
+      # from building the other 400 dependencies.
+      - name: Warm the dependency graph pr-gate compiles
+        run: |
+          cargo clippy --all-targets
+          cargo test --lib --no-run
+          cargo test --no-run -p labwired-core \
+            --test avr_nano_golden_survival \
+            --test esp32_classic_walk_differential \
+            --test firmware_survival \
+            --test fixture_ble_pong_provenance
 
   # ── Browser-configuration observable gate (PR; parallel with pr-gate) ──────
   #

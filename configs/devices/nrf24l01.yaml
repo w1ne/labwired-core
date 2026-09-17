@@ -1,0 +1,83 @@
+# Nordic nRF24L01+ 2.4 GHz transceiver — declarative SPI register shell.
+# Datasheet: nRF24L01+ Product Specification v1.0, §8.3 "SPI operation" and
+# §9.1 Table 28 (register map).
+#
+# ⚠️ THERE IS NO AIR LINK, and there never was. The hand-written model this
+# replaces (`components/nrf24l01.rs`, 191 lines) was a `[u8; 0x18]` behind a
+# command/data phase machine, and this descriptor is that. What is NOT modelled,
+# reported rather than faked:
+#   * the radio itself — no packet is ever transmitted or received, so RX_DR,
+#     TX_DS and MAX_RT never set themselves and a `write()` that waits on them
+#     waits forever;
+#   * the TX and RX FIFOs (§7.3.4) — `W_TX_PAYLOAD`, `R_RX_PAYLOAD`,
+#     `FLUSH_TX`, `FLUSH_RX` and `R_RX_PL_WID` are ACCEPTED and discarded, and
+#     FIFO_STATUS (0x17) reads whatever is stored there;
+#   * the IRQ pad and the CE pin.
+# A driver that probes and configures the part sees what it saw before; a
+# driver that expects a packet sees nothing, which is the honest answer.
+type: nrf24l01
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 1
+      # §8.3.1 Table 19: the command byte is an OPCODE, not a direction bit.
+      # `R_REGISTER` is 000A AAAA and `W_REGISTER` is 001A AAAA, so the five
+      # low bits are an address only for those two. Everything else —
+      # `W_TX_PAYLOAD` (1010 0000), `FLUSH_RX` (1110 0010), `NOP` (1111 1111) —
+      # addresses no register, and its data bytes must not land on one: decoded
+      # by bit 5 alone, a 32-byte payload burst overwrites CONFIG, EN_AA,
+      # EN_RXADDR, SETUP_AW and the rest.
+      op_mask: 0xE0
+      op_read: 0x00
+      op_write: 0x20
+      addr_mask: 0x1F
+      auto_increment: true
+      # §8.3.1: "The STATUS register is serially shifted out on the MISO pin
+      # simultaneously with the command word on MOSI." Every RF24-style driver
+      # reads its interrupt flags from the byte a `write_register` returned.
+      command_response: STATUS
+    registers:
+      # §9.1: STATUS is write-1-to-clear on RX_DR/TX_DS/MAX_RT; RX_P_NO and
+      # TX_FULL are silicon-owned. The whole byte is offered to the clear
+      # because that is what the model this replaces did, and the three bits
+      # that are not clearable are never set by anything here.
+      - name: STATUS
+        addr: 0x07
+        width: 1
+        endian: be
+        access: rw
+        reset: 0x0E
+        on_write: write_one_to_clear
+        bits:
+          - { name: TX_FULL, shift: 0 }
+          - { name: RX_P_NO, shift: 1, width_bits: 3 }
+          - { name: MAX_RT,  shift: 4 }
+          - { name: TX_DS,   shift: 5 }
+          - { name: RX_DS,   shift: 6 }
+    # Table 28's other twenty-three addresses are storage, at the datasheet's
+    # reset values for the five that are not zero: CONFIG 0x08 (EN_CRC),
+    # EN_RXADDR 0x03, SETUP_AW 0x03, RF_CH 0x02, RF_SETUP 0x0F. ⚠️ EN_AA (0x01)
+    # powers up at 0x00 here, not the datasheet's 0x3F — the old model seeded it
+    # that way and the port holds its bytes; a driver that leaves auto-ack at
+    # its reset value therefore sees it DISABLED, which is a fidelity gap this
+    # descriptor states rather than silently corrects.
+    register_file:
+      size: 0x18
+      reset:
+        0x00: 0x08
+        0x02: 0x03
+        0x03: 0x03
+        0x05: 0x02
+        0x06: 0x0F
+
+metadata:
+  label: "nRF24L01+"
+  summary: "2.4 GHz SPI transceiver register shell (no air link)."
+  detail: >-
+    Nordic nRF24L01+ SPI R_REGISTER/W_REGISTER model for CONFIG/STATUS and
+    companion registers. RF packet radio is not simulated.
+  category: spi
+  config_keys:
+    - { name: cs_pin, ty: str, doc: "CSN GPIO pin (e.g. \"PA4\"). Defaults to PA4." }

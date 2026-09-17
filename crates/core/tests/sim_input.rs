@@ -135,9 +135,8 @@ fn set_input_rejects_unknown_channel_and_out_of_range() {
 // and bus-direct sensors (HC-SR04) — plus deliberate channel-key collisions to
 // exercise `component` disambiguation.
 
-use labwired_core::peripherals::components::{
-    GenericSpiDevice, Neo6mGps, QuectelBg770a, Sn74hc165, Vl53l1x,
-};
+use labwired_core::peripherals::components::declarative_uart::DeclarativeUartDevice;
+use labwired_core::peripherals::components::{GenericSpiDevice, QuectelBg770a, Sn74hc165, Vl53l1x};
 use labwired_core::peripherals::spi::Spi;
 use labwired_core::peripherals::uart::{Uart, UartStreamDevice};
 
@@ -280,7 +279,11 @@ fn drives_each_transport_through_the_generic_api() {
 
     // UART stream (unique key): GPS latitude lands in the NMEA source.
     bus.set_input(None, "lat", 50.45).expect("drive gps lat");
-    let (lat, lon) = with_device::<Neo6mGps, _>(&mut bus, "uart1", |gps| gps.position());
+    // The GPS is a declarative `uart_device` now: the slots ARE the channels,
+    // so this reads exactly what `set_input` wrote.
+    let (lat, lon) = with_device::<DeclarativeUartDevice, _>(&mut bus, "uart1", |gps| {
+        (gps.slot("lat").unwrap(), gps.slot("lon").unwrap())
+    });
     assert_eq!(lat, 50.45);
     assert_ne!(lon, 0.0, "driving lat must preserve lon");
 
@@ -477,7 +480,8 @@ fn set_inputs_is_all_or_nothing() {
         )
     });
     assert_eq!((ax, ay), (16384, -16384));
-    let (lat, _) = with_device::<Neo6mGps, _>(&mut bus, "uart1", |gps| gps.position());
+    let lat =
+        with_device::<DeclarativeUartDevice, _>(&mut bus, "uart1", |gps| gps.slot("lat").unwrap());
     assert_eq!(lat, 50.45);
 }
 

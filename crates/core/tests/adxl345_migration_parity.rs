@@ -266,6 +266,230 @@ fn data_ready_drives_the_mapped_interrupt_pad() {
     assert_eq!(dev.take_pin_drives(), vec![("INT2".to_string(), true)]);
 }
 
+// ─── the output data rate is a REGISTER ────────────────────────────────────
+
+/// **`timers[].period_from` on the wire.** Datasheet Table 7/8: `BW_RATE[3:0]`
+/// selects one of sixteen output data rates, and the silicon divides a 3200 Hz
+/// master by powers of two.
+///
+/// A model with a constant `period_us` reports 100 Hz for all sixteen, so a
+/// driver that configures 800 Hz — which every ADXL345 example that cares about
+/// vibration does — gets one sample in eight and no test notices.
+#[test]
+fn the_sample_rate_follows_bw_rate() {
+    // (BW_RATE code, period µs, datasheet rate)
+    const RATES: &[(u8, u64, &str)] = &[
+        (0x06, 160_000, "6.25 Hz"),
+        (0x08, 40_000, "25 Hz"),
+        (0x0A, 10_000, "100 Hz — the reset value"),
+        (0x0D, 1_250, "800 Hz"),
+        (0x0F, 313, "3200 Hz (312.5 µs, rounded up)"),
+    ];
+    for (code, period_us, label) in RATES {
+        let mut dev = declarative();
+        write(&mut dev, 0x2C, *code);
+        assert_eq!(
+            dev.timer_period_us("sample"),
+            Some(*period_us),
+            "BW_RATE {code:#04x} ({label}) did not reach the sample timer"
+        );
+    }
+}
+
+/// The reset value is 100 Hz, and it resolves from the FIELD before firmware
+/// has written anything — the `period_us` fallback and the table's `0xA` entry
+/// agree, which is what makes the reset behaviour unchanged by this key.
+#[test]
+fn the_sample_rate_powers_up_at_one_hundred_hertz() {
+    let dev = declarative();
+    assert_eq!(dev.timer_period_us("sample"), Some(10_000));
+}
+
+/// …and the resolved number is what DATA_READY actually runs at. At 800 Hz the
+/// flag comes back 1250 µs after a read cleared it, not 10 ms.
+#[test]
+fn a_faster_rate_makes_data_ready_reappear_sooner() {
+    let mut dev = declarative();
+    write(&mut dev, 0x2C, 0x0D); // 800 Hz
+    write(&mut dev, 0x2E, 0x80); // INT_ENABLE.DATA_READY
+                                 // Clear whatever the reset rate already queued.
+    let _ = read_byte(&mut dev, 0x30);
+    let _ = dev.take_pin_drives();
+
+    dev.advance_time_us(1_249);
+    assert_eq!(
+        read_byte(&mut dev, 0x30) & 0x80,
+        0x00,
+        "inside the 800 Hz period"
+    );
+    dev.advance_time_us(1);
+    assert_eq!(
+        read_byte(&mut dev, 0x30) & 0x80,
+        0x80,
+        "a new sample at 1250 µs — a constant 10 ms period would still be idle"
+    );
+}
+
+// ─── the 32-entry sample FIFO ──────────────────────────────────────────────
+
+/// Read one x/y/z sample the way every ADXL345 driver does: point at 0x32 and
+/// clock six bytes out of one transaction.
+fn burst_xyz(dev: &mut GenericI2cDevice) -> (i16, i16, i16) {
+    dev.start();
+    dev.write(0x32);
+    dev.start();
+    let b: Vec<u8> = (0..6).map(|_| dev.read()).collect();
+    dev.stop();
+    (
+        i16::from_le_bytes([b[0], b[1]]),
+        i16::from_le_bytes([b[2], b[3]]),
+        i16::from_le_bytes([b[4], b[5]]),
+    )
+}
+
+fn enter_fifo_mode(dev: &mut GenericI2cDevice, samples: u8) {
+    // FIFO_CTL: FIFO_MODE = 01 (FIFO), SAMPLES = watermark in entries.
+    write(dev, 0x38, 0x40 | (samples & 0x1F));
+}
+
+/// ⚠️ **Bypass needs no second switch.** In FIFO_MODE = 00 the fill guard is
+/// false, so nothing is ever queued, so the data registers fall through to the
+/// live conversion — byte for byte what this part did before the FIFO existed.
+#[test]
+fn bypass_mode_still_serves_the_live_conversion() {
+    let mut dev = declarative();
+    dev.set_input("x", 1.0).unwrap();
+    dev.advance_time_us(100_000); // ten sample periods
+    assert_eq!(read_byte(&mut dev, 0x39), 0x00, "FIFO_STATUS.ENTRIES is 0");
+    assert_eq!(burst_xyz(&mut dev).0, 256, "+1 g at the reset range");
+    dev.set_input("x", -1.0).unwrap();
+    assert_eq!(
+        burst_xyz(&mut dev).0,
+        -256,
+        "the live value follows the stimulus with no queue in the way"
+    );
+}
+
+/// The queue fills at the OUTPUT DATA RATE — the one the `sample` timer runs
+/// at, which `period_from` reads from BW_RATE — and its depth is reflected into
+/// FIFO_STATUS.ENTRIES.
+#[test]
+fn the_fifo_fills_at_the_output_data_rate() {
+    let mut dev = declarative();
+    enter_fifo_mode(&mut dev, 16);
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 0, "empty to start");
+    // The reset rate is 100 Hz: ten periods is ten samples.
+    dev.advance_time_us(10 * 10_000);
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 10);
+    // Ask for 800 Hz and the same wall-clock fills eight times as fast.
+    write(&mut dev, 0x2C, 0x0D);
+    dev.advance_time_us(8 * 1_250);
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 18);
+}
+
+/// A burst read walks the OLDEST sample out, and the queue advances by one.
+/// The three axes come back in the order they were packed.
+#[test]
+fn a_burst_read_drains_one_sample_in_order() {
+    let mut dev = declarative();
+    enter_fifo_mode(&mut dev, 1);
+    // Three samples at three different positions.
+    for (i, g) in [(0, 0.5f64), (1, -0.25), (2, 1.0)] {
+        let _ = i;
+        dev.set_input("x", g).unwrap();
+        dev.set_input("y", -g).unwrap();
+        dev.set_input("z", 0.0).unwrap();
+        dev.advance_time_us(10_000);
+    }
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 3);
+    // 256 counts per g at the reset range.
+    assert_eq!(burst_xyz(&mut dev), (128, -128, 0), "the oldest sample");
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 2, "and it popped");
+    assert_eq!(burst_xyz(&mut dev), (-64, 64, 0));
+    assert_eq!(burst_xyz(&mut dev), (256, -256, 0));
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 0, "drained");
+    // An empty queue falls back to the live conversion, which is still the
+    // last position driven.
+    assert_eq!(burst_xyz(&mut dev), (256, -256, 0));
+}
+
+/// ⚠️ The entry pops on the LAST register of the burst. A driver that reads
+/// only X gets the SAME sample again — which is what silicon does with a read
+/// that never completed, and the trap a pop-on-first-byte model would hide.
+#[test]
+fn an_abandoned_burst_does_not_pop_the_entry() {
+    let mut dev = declarative();
+    enter_fifo_mode(&mut dev, 1);
+    dev.set_input("x", 1.0).unwrap();
+    dev.advance_time_us(10_000);
+    dev.set_input("x", 0.5).unwrap();
+    dev.advance_time_us(10_000);
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 2);
+
+    // Read X only, twice.
+    for _ in 0..2 {
+        dev.start();
+        dev.write(0x32);
+        dev.start();
+        let (lo, hi) = (dev.read(), dev.read());
+        dev.stop();
+        assert_eq!(i16::from_le_bytes([lo, hi]), 256, "the same oldest sample");
+    }
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 2, "nothing popped");
+    // The full burst does advance it.
+    assert_eq!(burst_xyz(&mut dev).0, 256);
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 1);
+}
+
+/// INT_SOURCE.WATERMARK rises once the queue holds FIFO_CTL.SAMPLES entries
+/// and FALLS as the driver drains below it — which is what makes a
+/// "drain until the watermark drops" loop terminate.
+#[test]
+fn the_watermark_follows_the_declared_sample_count() {
+    let mut dev = declarative();
+    enter_fifo_mode(&mut dev, 4);
+    let watermark = |d: &mut GenericI2cDevice| read_byte(d, 0x30) & 0x02 != 0;
+    for _ in 0..3 {
+        dev.advance_time_us(10_000);
+    }
+    assert!(!watermark(&mut dev), "three entries is below four");
+    dev.advance_time_us(10_000);
+    assert!(watermark(&mut dev), "the fourth entry raises it");
+    burst_xyz(&mut dev);
+    assert!(
+        !watermark(&mut dev),
+        "draining below the mark drops it again"
+    );
+}
+
+/// ⚠️ **Overflow: the part stops collecting.** Datasheet: in FIFO mode the
+/// ADXL345 "collects up to 32 values and then stops". So the 33rd sample is
+/// LOST and the first one is still at the head — a drop-oldest model would
+/// hand the driver the newest 32 and hide exactly the CPU-starvation failure a
+/// FIFO exists to show.
+#[test]
+fn a_full_fifo_drops_the_newest_sample_not_the_oldest() {
+    let mut dev = declarative();
+    enter_fifo_mode(&mut dev, 1);
+    dev.set_input("x", 1.0).unwrap();
+    dev.advance_time_us(10_000); // sample 1 at +1 g
+    dev.set_input("x", 0.0).unwrap();
+    for _ in 0..31 {
+        dev.advance_time_us(10_000); // samples 2..32 at 0 g
+    }
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 32, "full");
+    dev.set_input("x", -1.0).unwrap();
+    for _ in 0..10 {
+        dev.advance_time_us(10_000); // ten samples with nowhere to go
+    }
+    assert_eq!(read_byte(&mut dev, 0x39) & 0x3F, 32, "still 32, not 42");
+    assert_eq!(
+        burst_xyz(&mut dev).0,
+        256,
+        "the OLDEST sample survived; the newest ones were dropped"
+    );
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 fn write(dev: &mut GenericI2cDevice, reg: u8, value: u8) {

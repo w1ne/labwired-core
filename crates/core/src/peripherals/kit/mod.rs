@@ -91,7 +91,7 @@ pub struct KitMetadata {
     pub inputs: &'static [crate::sim_input::InputChannel],
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Transport {
     Uart,
