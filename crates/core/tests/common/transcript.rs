@@ -33,6 +33,7 @@
 //! | [`Step::Read`] | N bytes device→master, collected | — (rejected) |
 //! | [`Step::CsSelect`] / [`Step::CsRelease`] | — (rejected) | CS↓ / CS↑ |
 //! | [`Step::Transfer`] | — (rejected) | full-duplex bytes, MISO collected |
+//! | [`Step::Dc`] | — (rejected) | D/C pad level, latched by the device |
 //! | [`Step::AdvanceUs`] | `advance_time_us` | `advance_time_us` |
 //! | [`Step::Input`] | `set_input` | `set_input` |
 //!
@@ -68,6 +69,14 @@ pub enum Step<'a> {
     CsRelease,
     /// SPI: clock these MOSI bytes; every MISO byte lands in the transcript.
     Transfer(&'a [u8]),
+    /// SPI: clock ONE MOSI byte. Same as a one-element [`Step::Transfer`], but
+    /// owned, so a helper can build a script without borrowing a temporary.
+    TransferByte(u8),
+    /// SPI: drive the device's D/C pad. A 4-wire display frames a command byte
+    /// from this line and nothing else, so a script that cannot move it cannot
+    /// drive a display at all — which is why the step is here rather than in a
+    /// private helper beside one panel's test.
+    Dc(bool),
     /// Advance the device's own clock by this many simulated microseconds.
     /// Legal on both buses — that symmetry is the point of Phase A.
     AdvanceUs(u64),
@@ -140,6 +149,8 @@ pub fn run_spi(dev: &mut dyn SpiDevice, script: &[Step<'_>]) -> Transcript {
             Step::CsSelect => dev.cs_select(),
             Step::CsRelease => dev.cs_release(),
             Step::Transfer(mosi) => bytes.extend(mosi.iter().map(|&b| dev.transfer(b))),
+            Step::TransferByte(mosi) => bytes.push(dev.transfer(*mosi)),
+            Step::Dc(level) => dev.set_dc_level(*level),
             Step::AdvanceUs(us) => dev.advance_time_us(*us),
             Step::Input(key, value) => {
                 let sim = dev
@@ -194,6 +205,24 @@ pub fn send_cmd8(code: u8) -> Vec<Step<'static>> {
 /// Read `n` bytes from a fresh read phase (a command device has no pointer).
 pub fn read_stream(n: usize) -> Vec<Step<'static>> {
     vec![Step::Start, Step::Read(n), Step::Stop]
+}
+
+/// A D/C-framed command: D/C low for the opcode, high for its parameters. The
+/// framing every MIPI DCS panel uses, written once.
+pub fn dc_command(opcode: u8, params: &[u8]) -> Vec<Step<'static>> {
+    // Each byte is its own owned `TransferByte` step: `Transfer` borrows its
+    // slice, and a script built from a temporary could not outlive this call.
+    let mut steps = vec![Step::Dc(false), Step::TransferByte(opcode), Step::Dc(true)];
+    steps.extend(params.iter().map(|&p| Step::TransferByte(p)));
+    steps
+}
+
+/// A D/C-framed data burst: D/C high, then these bytes. Pixels, or the
+/// parameters of a command already opened by [`dc_command`].
+pub fn dc_data(bytes: &[u8]) -> Vec<Step<'static>> {
+    let mut steps = vec![Step::Dc(true)];
+    steps.extend(bytes.iter().map(|&b| Step::TransferByte(b)));
+    steps
 }
 
 /// One CS-framed SPI transfer: CS↓, clock `mosi`, CS↑.

@@ -1451,7 +1451,7 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 4dca1da4fc8a97d5c7cc4c9b5187249c36fda8dd100dff28bd4a6a90cced18d1
+    drift_ack_digest: 9391634fbc6084eeac47d85e20f265d51b8a07c98bf3b16ea23e63e77bc20a9c
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -4652,7 +4652,7 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: f08af71ee7254bf281170769e0cc2ad23e990058b9d7797c00016018c573c721
+    drift_ack_digest: 63503e5fbb189eba9682cfb3f1022dfc6c7da4f8df183fa9191aef60de57c49e
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs

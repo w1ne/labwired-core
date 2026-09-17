@@ -841,10 +841,10 @@ fn write_read_drives_attached_bmp280() {
 #[test]
 fn inspect_ssd1306_framebuffer_reports_ink_metrics() {
     use crate::inspect::InspectOpts;
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::ssd1306;
 
     let mut p = Esp32c3I2c::new();
-    p.push_slave(Box::new(Ssd1306::new(0x3C)));
+    p.push_slave(Box::new(ssd1306(0x3C)));
 
     // Same transaction shape as the C3 OLED firmware:
     // RSTART; WRITE 3 (addr+W, control=0x40, one framebuffer byte); STOP.
@@ -869,10 +869,10 @@ fn inspect_ssd1306_framebuffer_reports_ink_metrics() {
 #[test]
 fn register_addressed_write_delivers_payload_to_ssd1306() {
     use crate::inspect::InspectOpts;
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::ssd1306;
 
     let mut p = Esp32c3I2c::new();
-    p.push_slave(Box::new(Ssd1306::new(0x3C)));
+    p.push_slave(Box::new(ssd1306(0x3C)));
 
     // Arduino-ESP32 / ESP-IDF may program SLAVE_ADDR with addr<<1 and
     // write only the SSD1306 payload bytes to TXFIFO: control byte 0x40,
@@ -899,10 +899,10 @@ fn register_addressed_write_delivers_payload_to_ssd1306() {
 #[test]
 fn end_paused_address_phase_carries_active_slave() {
     use crate::inspect::InspectOpts;
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::ssd1306;
 
     let mut p = Esp32c3I2c::new();
-    p.push_slave(Box::new(Ssd1306::new(0x3C)));
+    p.push_slave(Box::new(ssd1306(0x3C)));
 
     // Arduino-ESP32 splits a write: address phase ends with END_DETECT,
     // then payload bytes are sent by a second command-list run.
@@ -1112,13 +1112,13 @@ fn set_bus_trace_records_transactions_for_attached_slaves() {
 /// underrun-refill path.
 #[test]
 fn multi_chunk_pixel_burst_delivers_every_byte_to_ssd1306() {
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::{ssd1306, GenericDisplay};
 
     const ADDR7: u8 = 0x3C;
     const ADDR_W: u32 = (ADDR7 as u32) << 1; // 0x78, R/W = write
 
     let mut p = Esp32c3I2c::new();
-    p.push_slave(Box::new(Ssd1306::new(ADDR7)));
+    p.push_slave(Box::new(ssd1306(ADDR7)));
 
     // ── Init: a short command transaction that fits in ONE FIFO load (the
     //    prologue that already works in the field). Horizontal addressing,
@@ -1207,7 +1207,7 @@ fn multi_chunk_pixel_burst_delivers_every_byte_to_ssd1306() {
     let oled = p
         .attached_slaves()
         .iter()
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("SSD1306 attached");
     let fb = oled.framebuffer();
     assert_eq!(

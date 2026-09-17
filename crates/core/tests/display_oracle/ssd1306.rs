@@ -1,10 +1,13 @@
+//! ⚠️ VERBATIM COPY of the deleted `components/ssd1306.rs`. See `mod.rs`.
+//! Do not edit: its only job is to disagree with the YAML model if the port moved a byte.
+
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
 //
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::peripherals::i2c::I2cDevice;
+use labwired_core::peripherals::i2c::I2cDevice;
 use std::any::Any;
 
 const WIDTH: usize = 128;
@@ -243,21 +246,21 @@ impl I2cDevice for Ssd1306 {
     fn artifacts(
         &self,
         id: &str,
-        opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
+        opts: &labwired_core::inspect::InspectOpts,
+    ) -> Vec<labwired_core::inspect::Artifact> {
         let fb = self.framebuffer();
-        vec![crate::inspect::Artifact {
+        vec![labwired_core::inspect::Artifact {
             kind: "framebuffer".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
                 "w": self.width(),
                 "h": self.height(),
-                "format": crate::inspect::artifact_format::SSD1306_PAGE,
-                "generation": crate::inspect::artifact_generation(fb),
+                "format": labwired_core::inspect::artifact_format::SSD1306_PAGE,
+                "generation": labwired_core::inspect::artifact_generation(fb),
                 "ink_bytes": self.ink_bytes(),
                 "lit_pixels": self.lit_pixels(),
             }),
-            bytes: crate::inspect::artifact_bytes(fb, opts),
+            bytes: labwired_core::inspect::artifact_bytes(fb, opts),
         }]
     }
 
@@ -310,217 +313,5 @@ impl I2cDevice for Ssd1306 {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
-    }
-}
-
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
-};
-
-pub struct Ssd1306Kit;
-pub static SSD1306_KIT: Ssd1306Kit = Ssd1306Kit;
-
-static SSD1306_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "oled-ssd1306",
-    label: "SSD1306 OLED",
-    summary: "128×64 monochrome OLED display over I2C with a paged framebuffer.",
-    detail: "Solomon Systech SSD1306 with the canonical 0x3C / 0x3D address pair. Tracks the \
-             8-page-by-128-column framebuffer; the WASM bridge surfaces pixel state for the \
-             playground's display overlay.",
-    transport: Transport::I2c,
-    category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
-        ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
-    }],
-    labs: &[LabRef {
-        board_id: "ssd1306-hello-lab",
-        chip: "stm32f103",
-        example_dir: "ssd1306-hello-lab",
-        demo_elf: "demo-ssd1306-hello-lab.elf",
-    }],
-};
-
-impl PeripheralKit for Ssd1306Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &SSD1306_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let address = ctx.i2c_address_or(0x3C)?;
-        // attach_i2c_device works on both the STM32 I2c and the ESP32-C3
-        // Esp32c3I2c controllers, so the OLED can sit on either family's bus.
-        ctx.attach_i2c_device(Box::new(Ssd1306::new(address)))
-    }
-}
-
-// ─── 0.91″ 128×32 variant ───────────────────────────────────────────────────
-
-pub struct Ssd1306Oled091Kit;
-pub static SSD1306_128X32_KIT: Ssd1306Oled091Kit = Ssd1306Oled091Kit;
-
-static SSD1306_128X32_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "oled-ssd1306-128x32",
-    label: "SSD1306 OLED 0.91″",
-    summary: "0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer.",
-    detail: "Solomon Systech SSD1306 in the 0.91-inch 128×32 form factor (4 GDDRAM pages). \
-             Identical command set to the 128×64 panel — only the page count differs. \
-             Canonical 0x3C / 0x3D address pair; the WASM bridge surfaces pixel state for the \
-             playground's display overlay.",
-    transport: Transport::I2c,
-    category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
-        ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
-    }],
-    // No lab yet: examples/ssd1306-128x32-lab has only a README + system.yaml — no demo
-    // firmware/ELF is built or published. Declaring a LabRef would promise a
-    // one-click demo that 404s (the playground gate rightly rejects it).
-    // Re-add the LabRef when the demo firmware ships.
-    labs: &[],
-};
-
-impl PeripheralKit for Ssd1306Oled091Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &SSD1306_128X32_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let address = ctx.i2c_address_or(0x3C)?;
-        ctx.attach_i2c_device(Box::new(Ssd1306::new_128x32(address)))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Ssd1306;
-    use crate::peripherals::i2c::I2cDevice;
-
-    fn command(dev: &mut Ssd1306, byte: u8) {
-        dev.write(0x00);
-        dev.write(byte);
-        dev.stop();
-    }
-
-    #[test]
-    fn split_init_and_window_commands_do_not_shift_framebuffer() {
-        let mut dev = Ssd1306::new(0x3c);
-        for cmd in [
-            0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8,
-            0xDA, 0x12, 0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0x2E, 0xAF,
-        ] {
-            command(&mut dev, cmd);
-        }
-
-        for cmd in [0x21, 0, 127, 0x22, 0, 7] {
-            command(&mut dev, cmd);
-        }
-
-        dev.write(0x40);
-        dev.write(0xaa);
-        dev.stop();
-
-        assert_eq!(
-            dev.framebuffer()[0],
-            0xaa,
-            "split Wire command transactions must still start data at column 0"
-        );
-        assert_eq!(
-            dev.framebuffer()[39],
-            0,
-            "init command parameters must not be misread as column-nibble commands"
-        );
-    }
-
-    /// Every transfer is its own START, and the driver sends ONE STOP at the
-    /// end of the frame. That is what the nRF52 TWIM does: one STARTTX per
-    /// transfer, `TASKS_STOP` only after the framebuffer burst.
-    ///
-    /// The model used to reset its control-byte state in `stop()` alone, so
-    /// each transfer after the first fed its leading control byte to
-    /// `handle_command`. The `0x40` in front of the framebuffer became "set
-    /// display start line" and all 1024 pixel bytes were parsed as commands:
-    /// on the secure-boot lab the panel came out shifted 49 columns with rows
-    /// wrapped into the wrong pages. Painting nothing would have been easier
-    /// to spot than painting the wrong thing convincingly.
-    #[test]
-    fn transfers_under_one_stop_keep_their_control_bytes() {
-        let mut dev = Ssd1306::new(0x3c);
-
-        // Init burst: START + [control, cmd, ...params] per transfer, no STOP.
-        for transfer in [
-            [0x00u8, 0xAE, 0x00].as_slice(),
-            &[0x00, 0xD5, 0x80],
-            &[0x00, 0x20, 0x00],
-            &[0x00, 0xA1],
-            &[0x00, 0xAF],
-        ] {
-            dev.start();
-            for &b in transfer {
-                dev.write(b);
-            }
-        }
-
-        // Window, then the data burst — still no STOP until the very end.
-        dev.start();
-        for &b in &[0x00u8, 0x21, 0x00, 0x7F] {
-            dev.write(b);
-        }
-        dev.start();
-        for &b in &[0x00u8, 0x22, 0x00, 0x07] {
-            dev.write(b);
-        }
-        dev.start();
-        dev.write(0x40); // data stream
-        for i in 0..8u32 {
-            dev.write(0x80 | i as u8);
-        }
-        dev.stop();
-
-        let fb = dev.framebuffer();
-        assert_eq!(
-            &fb[..8],
-            &[0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87],
-            "data must land at column 0 of page 0, not wherever a mis-parsed \
-             control byte moved the cursor"
-        );
-    }
-
-    #[test]
-    fn panel_128x32_has_four_pages_and_half_size_framebuffer() {
-        let dev = Ssd1306::new_128x32(0x3c);
-        assert_eq!(dev.width(), 128);
-        assert_eq!(dev.height(), 32, "0.91″ panel is 32 rows tall");
-        assert_eq!(
-            dev.framebuffer().len(),
-            128 * 4,
-            "128×32 GDDRAM is 4 pages (512 bytes), half the 128×64 panel"
-        );
-    }
-
-    #[test]
-    fn panel_128x32_writes_data_into_all_four_pages() {
-        let mut dev = Ssd1306::new_128x32(0x3c);
-        // Horizontal addressing across the full 128×32 window.
-        for cmd in [0x20, 0x00, 0x21, 0, 127, 0x22, 0, 3] {
-            command(&mut dev, cmd);
-        }
-        // Stream one full page-row worth of columns into the last page.
-        for cmd in [0xB3, 0x00, 0x10] {
-            command(&mut dev, cmd);
-        }
-        dev.write(0x40);
-        dev.write(0xff);
-        dev.stop();
-        // Last page starts at byte 3*128 = 384; column 0 there must be lit.
-        assert_eq!(
-            dev.framebuffer()[3 * 128],
-            0xff,
-            "page 3 (rows 24..31) must be addressable on the 128×32 panel"
-        );
     }
 }
