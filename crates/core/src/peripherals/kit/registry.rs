@@ -21,7 +21,7 @@ use crate::peripherals::components;
 /// `bus/mod.rs` — both paths coexist during migration.
 pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bg770a::BG770A_KIT,
-    &components::neo6m::NEO6M_KIT,
+    &components::declarative_uart::NEO6M_KIT,
     &components::ydlidar::YDLIDAR_KIT,
     &components::declarative_i2c::ADXL345_I2C_KIT,
     &components::declarative_i2c::INA219_KIT,
@@ -29,7 +29,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_i2c::DS3231_KIT,
     &components::declarative_gpio::HX711_KIT,
     &components::bno055::BNO055_KIT,
-    &components::hc05::HC05_KIT,
+    &components::declarative_uart::HC05_KIT,
     &components::nrf24l01::NRF24L01_KIT,
     &components::microsd::MICROSD_KIT,
     &components::mcp2515::MCP2515_KIT,
@@ -43,7 +43,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::atecc608a::ATECC608A_KIT,
     &components::pn532::PN532_KIT,
     &components::lora_sx1278::LORA_SX1278_KIT,
-    &components::sim800l::SIM800L_KIT,
+    &components::declarative_uart::SIM800L_KIT,
     &components::declarative_display::SSD1306_KIT,
     &components::declarative_display::SSD1306_128X32_KIT,
     &components::declarative_display::SH1107_KIT,

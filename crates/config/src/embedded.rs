@@ -190,6 +190,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["bldc-motor", "bldc_motor"],
         include_str!("../../../configs/devices/bldc_motor.yaml"),
     ),
+    (
+        &["hc-05", "hc05"],
+        include_str!("../../../configs/devices/hc-05.yaml"),
+    ),
+    (
+        &["sim800l"],
+        include_str!("../../../configs/devices/sim800l.yaml"),
+    ),
+    (
+        &["neo6m-gps"],
+        include_str!("../../../configs/devices/neo6m-gps.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.

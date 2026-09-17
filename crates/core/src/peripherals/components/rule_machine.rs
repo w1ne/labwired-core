@@ -69,6 +69,14 @@ use labwired_config::{
 pub trait RuleCtx {
     /// A register's current stored word. `None` ⇒ no such register.
     fn reg(&self, name: &str) -> Option<u32>;
+    /// The word a register would put on the wire RIGHT NOW: its stored value
+    /// for an ordinary register, and the fully encoded measurement — through
+    /// `scale_from`, `clamp_from`, `calendar:` and the rest — for one with a
+    /// `source:`. See [`labwired_config::expr::Expr::Reported`] for why this
+    /// is neither [`reg`](Self::reg) nor [`input`](Self::input).
+    ///
+    /// `None` ⇒ no such register, or a part with no register file at all.
+    fn reported(&self, name: &str) -> Option<i64>;
     /// Store a register's word, bypassing `write_mask` — this is the DEVICE
     /// writing its own register, not the master writing it.
     fn set_reg(&mut self, name: &str, value: u32);
@@ -77,13 +85,26 @@ pub trait RuleCtx {
     /// A SimInput channel's value as an integer: passed through the `encode:`
     /// of a register that sources the key when one exists, else truncated.
     fn input(&self, key: &str) -> i64;
+    /// Assign a SimInput channel, in the SAME integer domain
+    /// [`input`](Self::input) reads back — the exact inverse, so a rule that
+    /// writes what it read changes nothing.
+    ///
+    /// Required rather than defaulted. A default no-op would compile, pass
+    /// every unit test, and wire nothing: a `set_input:` in a descriptor would
+    /// parse, validate, run, and silently do nothing on whichever transport
+    /// forgot to implement it.
+    fn set_input(&mut self, key: &str, value: i64);
 }
 
 /// A [`RuleCtx`] for a part with no register map. Every register lookup misses,
 /// which is the truth for a pins-only part.
 pub struct PinOnlyCtx<'a> {
     /// Input channel values in engineering units.
-    pub slots: &'a BTreeMap<String, f64>,
+    ///
+    /// `&mut` because [`RuleCtx::set_input`] writes here: a pins-only or
+    /// stream part's channels ARE its whole measurable state, so a rule that
+    /// advances a free-running quantity has nowhere else to put it.
+    pub slots: &'a mut BTreeMap<String, f64>,
     /// Per-channel `expr_scale` (see
     /// [`labwired_config::InputSpec::expr_scale`]): the factor that turns an
     /// engineering value into the integer count the part's own protocol shifts.
@@ -94,6 +115,9 @@ pub struct PinOnlyCtx<'a> {
 
 impl RuleCtx for PinOnlyCtx<'_> {
     fn reg(&self, _name: &str) -> Option<u32> {
+        None
+    }
+    fn reported(&self, _name: &str) -> Option<i64> {
         None
     }
     fn set_reg(&mut self, _name: &str, _value: u32) {}
@@ -107,6 +131,75 @@ impl RuleCtx for PinOnlyCtx<'_> {
         // biases every reading toward zero by up to a whole count.
         (value * scale).round() as i64
     }
+
+    fn set_input(&mut self, key: &str, value: i64) {
+        // The exact inverse of `input` above: divide back out of the
+        // `expr_scale` domain. A channel the part does not declare is DROPPED
+        // rather than created — validation refuses such a name at load, so
+        // anything arriving here is declared, and inventing a slot would make
+        // a typo look like it worked.
+        if !self.slots.contains_key(key) {
+            return;
+        }
+        let scale = self.expr_scale.get(key).copied().unwrap_or(1.0);
+        let engineering = if scale == 0.0 {
+            0.0
+        } else {
+            value as f64 / scale
+        };
+        self.slots.insert(key.to_string(), engineering);
+    }
+}
+
+/// A FIFO's `fill:` block with every expression parsed.
+#[derive(Debug)]
+struct CompiledFill {
+    timer: String,
+    when: Option<Expr>,
+    /// `(expression, width in bits)`, MSB-first in declaration order.
+    pack: Vec<(Expr, u8)>,
+}
+
+impl CompiledFill {
+    fn compile(spec: &FifoSpec) -> Result<Option<Self>> {
+        let Some(fill) = &spec.fill else {
+            return Ok(None);
+        };
+        let parse = |src: &str, what: &str| -> Result<Expr> {
+            Expr::parse(src)
+                .map_err(|e| anyhow::anyhow!("fifo '{}' {what}: {e} — in `{src}`", spec.name))
+        };
+        let total: u32 = fill.pack.iter().map(|f| u32::from(f.width_bits)).sum();
+        anyhow::ensure!(
+            total <= 63,
+            "fifo '{}' packs {total} bits into one entry; the limit is 63 (an entry is one i64, \
+             which holds two 3-axis 16-bit samples or six 10-bit ones)",
+            spec.name
+        );
+        anyhow::ensure!(
+            !fill.pack.is_empty(),
+            "fifo '{}' declares a `fill:` with an empty `pack:`, so every entry would be zero",
+            spec.name
+        );
+        Ok(Some(Self {
+            timer: fill.timer.clone(),
+            when: match &fill.when {
+                Some(src) => Some(parse(src, "fill.when")?),
+                None => None,
+            },
+            pack: fill
+                .pack
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    Ok((
+                        parse(&f.expr, &format!("fill.pack[{i}].expr"))?,
+                        f.width_bits,
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?,
+        }))
+    }
 }
 
 /// The machine.
@@ -119,6 +212,10 @@ pub struct RuleMachine {
     vars: BTreeMap<String, i64>,
     fifo_specs: Vec<FifoSpec>,
     fifos: Vec<VecDeque<i64>>,
+    /// Per-FIFO compiled `fill:` — the guard and the packed component
+    /// expressions, parsed ONCE at load. `None` for a FIFO with no `fill:`,
+    /// which is one filled only by explicit `push:` actions.
+    fifo_fills: Vec<Option<CompiledFill>>,
     /// Timer NAMES the part declares, so a `timer:` action can say which one it
     /// means. The timers themselves live in the device's
     /// [`TimerBank`](super::declarative_regs::TimerBank) — see the module note.
@@ -164,6 +261,11 @@ impl RuleMachine {
             var_resets: behavior.vars.clone(),
             vars: behavior.vars.clone(),
             fifos: behavior.fifos.iter().map(|_| VecDeque::new()).collect(),
+            fifo_fills: behavior
+                .fifos
+                .iter()
+                .map(CompiledFill::compile)
+                .collect::<Result<Vec<_>>>()?,
             fifo_specs: behavior.fifos.clone(),
             timer_names: behavior.timers.iter().map(|t| t.name.clone()).collect(),
             pending_timers: Vec::new(),
@@ -299,6 +401,207 @@ impl RuleMachine {
         self.firing = false;
     }
 
+    // ── FIFO streams ───────────────────────────────────────────────────────
+
+    /// Fill every FIFO whose `fill.timer` is `timer` and whose guard passes.
+    ///
+    /// Called by the owning device on each firing of that timer, BEFORE the
+    /// `timer:` rules run — so a rule guarded on `fifo_len(samples)` sees the
+    /// sample this tick produced, which is what a watermark rule needs.
+    ///
+    /// Returns whether anything was pushed, so the caller can skip the
+    /// register reflection when nothing moved.
+    pub fn fill_on_timer(&mut self, timer: &str, ctx: &mut dyn RuleCtx) -> bool {
+        let mut pushed = false;
+        for i in 0..self.fifo_fills.len() {
+            let Some(fill) = &self.fifo_fills[i] else {
+                continue;
+            };
+            if fill.timer != timer {
+                continue;
+            }
+            // Taken out so the guard and the components can be evaluated while
+            // `self` is borrowed for `Env`.
+            let fill = self.fifo_fills[i].take().expect("checked above");
+            let passes = match &fill.when {
+                Some(guard) => self.eval(guard, &*ctx) != 0,
+                None => true,
+            };
+            if passes {
+                let mut entry: i64 = 0;
+                for (expr, width) in &fill.pack {
+                    let value = self.eval(expr, &*ctx);
+                    let bits = u32::from(*width).min(63);
+                    let mask: i64 = if bits >= 63 {
+                        i64::MAX
+                    } else {
+                        (1i64 << bits) - 1
+                    };
+                    // MSB-first in declaration order: the first component ends
+                    // up in the high bits, which is the order a burst read
+                    // walks them out in.
+                    entry = (entry << bits) | (value & mask);
+                }
+                self.push_entry(i, entry);
+                pushed = true;
+            }
+            self.fifo_fills[i] = Some(fill);
+        }
+        pushed
+    }
+
+    /// One packed component of a FIFO's OLDEST entry, sign-extended out of its
+    /// declared width. `None` when the FIFO is empty or has no such slot —
+    /// which is what makes a register with `fifo:` fall through to its live
+    /// `source:` in bypass mode.
+    pub fn fifo_peek(&self, name: &str, slot: u8) -> Option<i64> {
+        let i = self.fifo_index(name)?;
+        let fill = self.fifo_fills[i].as_ref()?;
+        let entry = *self.fifos[i].front()?;
+        let slot = usize::from(slot);
+        if slot >= fill.pack.len() {
+            return None;
+        }
+        // Components were packed MSB-first, so slot `s` sits above every
+        // component after it.
+        let below: u32 = fill.pack[slot + 1..]
+            .iter()
+            .map(|(_, w)| u32::from(*w))
+            .sum();
+        let bits = u32::from(fill.pack[slot].1).min(63);
+        let mask: i64 = if bits >= 63 {
+            i64::MAX
+        } else {
+            (1i64 << bits) - 1
+        };
+        let raw = (entry >> below) & mask;
+        // Sign-extend: an accelerometer's axis is two's complement, and a
+        // register serving it must report -1 rather than 0xFFFF.
+        if bits < 63 && raw & (1 << (bits - 1)) != 0 {
+            Some(raw | !mask)
+        } else {
+            Some(raw)
+        }
+    }
+
+    /// Discard a FIFO's oldest entry. Returns whether one was there.
+    pub fn fifo_pop(&mut self, name: &str) -> bool {
+        match self.fifo_index(name) {
+            Some(i) => self.fifos[i].pop_front().is_some(),
+            None => false,
+        }
+    }
+
+    /// Reflect every FIFO's depth into the registers it declares: the `count:`
+    /// field and the `watermark:` bit.
+    ///
+    /// Called after every fill and every drain. The watermark FOLLOWS the depth
+    /// unless the part declared `latch: true`, which is what makes a driver's
+    /// "drain until the watermark drops" loop terminate — a latched bit that
+    /// only firmware can clear would spin it forever on a part whose datasheet
+    /// says otherwise.
+    pub fn refresh_fifo_registers(&mut self, ctx: &mut dyn RuleCtx) {
+        for i in 0..self.fifo_specs.len() {
+            let held = self.fifos[i].len();
+            let spec = self.fifo_specs[i].clone();
+            if let Some(count) = &spec.count {
+                Self::write_field(ctx, &count.register, &count.field, held as u32);
+            }
+            let Some(wm) = &spec.watermark else { continue };
+            let threshold = match (wm.entries, &wm.entries_from) {
+                (Some(n), _) => n,
+                (None, Some(f)) => match ctx.field_bits(&f.register, &f.field) {
+                    Some((shift, mask)) => {
+                        ((ctx.reg(&f.register).unwrap_or(0) & mask) >> shift) as usize
+                    }
+                    None => continue,
+                },
+                // Validation refuses a watermark with neither.
+                (None, None) => continue,
+            };
+            // A threshold of zero means "any entry at all"; a FIFO holding
+            // nothing never raises the bit, which is what empty means.
+            let reached = held > 0 && held >= threshold.max(1);
+            if !reached && wm.latch {
+                continue;
+            }
+            Self::write_field(ctx, &wm.set.register, &wm.set.field, u32::from(reached));
+        }
+    }
+
+    /// Store `value` into a named bit-field of a register, leaving the rest.
+    fn write_field(ctx: &mut dyn RuleCtx, register: &str, field: &str, value: u32) {
+        let Some((shift, mask)) = ctx.field_bits(register, field) else {
+            return;
+        };
+        let prev = ctx.reg(register).unwrap_or(0);
+        let next = (prev & !mask) | ((value << shift) & mask);
+        if next != prev {
+            ctx.set_reg(register, next);
+        }
+    }
+
+    /// Push one already-packed entry, honouring the declared depth and
+    /// overflow policy. Shared by [`fill_on_timer`](Self::fill_on_timer) and
+    /// the `push:` action so a streamed entry and a rule-pushed one overflow
+    /// the same way.
+    fn push_entry(&mut self, i: usize, value: i64) {
+        let depth = self.fifo_specs[i].depth;
+        if self.fifos[i].len() >= depth {
+            self.fifo_overflows = self.fifo_overflows.saturating_add(1);
+            match self.fifo_specs[i].overflow {
+                FifoOverflow::DropOldest => {
+                    self.fifos[i].pop_front();
+                }
+                // The part stopped sampling: the incoming entry is lost.
+                FifoOverflow::DropNewest => return,
+            }
+        }
+        self.fifos[i].push_back(value);
+    }
+
+    /// Run a list of actions that is NOT attached to an event.
+    ///
+    /// The `uart_device` primitive's command table is the caller: a matched
+    /// [`UartResponse`](labwired_config::UartResponse) may carry `do:` actions,
+    /// and those are the same [`CompiledAction`]s a rule runs, applied through
+    /// the same `apply`. Giving the table its own interpreter is exactly how a
+    /// `set:` inside a response would come to mean something different from a
+    /// `set:` inside a rule.
+    ///
+    /// The recursion guard is honoured, so an action that somehow re-entered
+    /// the machine is dropped rather than looping.
+    pub fn run_actions(&mut self, actions: &[CompiledAction], ctx: &mut dyn RuleCtx) {
+        if self.firing {
+            return;
+        }
+        self.firing = true;
+        for action in actions {
+            self.apply(action, ctx);
+        }
+        self.firing = false;
+    }
+
+    /// Evaluate one compiled expression against this machine and `ctx`.
+    ///
+    /// Public because a `uart:` block's guards and templates live OUTSIDE the
+    /// rule list but must see exactly the same `var()` / `state` / `input()`
+    /// the rules see. Two environments is how an `unsolicited:` guard and the
+    /// rule that feeds it would come to disagree.
+    pub fn eval_expr(&self, e: &Expr, ctx: &dyn RuleCtx) -> i64 {
+        self.eval(e, ctx)
+    }
+
+    /// Render a [`Template`](labwired_config::Template) against this machine
+    /// and `ctx`. Same environment as [`eval_expr`](Self::eval_expr).
+    pub fn render_template(
+        &self,
+        template: &labwired_config::Template,
+        ctx: &dyn RuleCtx,
+    ) -> String {
+        template.render(&Env { m: self, ctx })
+    }
+
     /// Record the device's elapsed µs. The machine does NOT schedule anything:
     /// its owner's [`TimerBank`](super::declarative_regs::TimerBank) decides
     /// when a timer is due and calls [`fire`](Self::fire) with
@@ -401,18 +704,7 @@ impl RuleMachine {
                         None => return,
                     },
                 };
-                let depth = self.fifo_specs[i].depth;
-                if self.fifos[i].len() >= depth {
-                    self.fifo_overflows = self.fifo_overflows.saturating_add(1);
-                    match self.fifo_specs[i].overflow {
-                        FifoOverflow::DropOldest => {
-                            self.fifos[i].pop_front();
-                        }
-                        // The part stopped sampling: the incoming entry is lost.
-                        FifoOverflow::DropNewest => return,
-                    }
-                }
-                self.fifos[i].push_back(v);
+                self.push_entry(i, v);
             }
             CompiledAction::Pop { fifo } => {
                 if let Some(i) = self.fifo_index(fifo) {
@@ -428,6 +720,15 @@ impl RuleMachine {
             CompiledAction::Var { name, value } => {
                 let v = self.eval(value, &*ctx);
                 self.vars.insert(name.clone(), v);
+            }
+            CompiledAction::SetInput { key, value } => {
+                // ⚠️ No `Event::Input` is raised. A rule that fed its own
+                // trigger would be a loop, and `fire`'s recursion guard would
+                // drop the re-entry silently rather than run it — so the rule
+                // is that a rule-driven assignment is not an outside event,
+                // stated here and in `Action::SetInput`.
+                let v = self.eval(value, &*ctx);
+                ctx.set_input(key, v);
             }
         }
     }
@@ -486,6 +787,9 @@ impl EvalCtx for Env<'_> {
     fn reg(&self, name: &str) -> i64 {
         i64::from(self.ctx.reg(name).unwrap_or(0))
     }
+    fn reported(&self, name: &str) -> i64 {
+        self.ctx.reported(name).unwrap_or(0)
+    }
     fn field(&self, register: &str, field: &str) -> i64 {
         match self.ctx.field_bits(register, field) {
             Some((shift, mask)) => {
@@ -533,6 +837,9 @@ mod tests {
         fn reg(&self, name: &str) -> Option<u32> {
             self.values.get(name).copied()
         }
+        fn reported(&self, name: &str) -> Option<i64> {
+            self.values.get(name).map(|v| i64::from(*v))
+        }
         fn set_reg(&mut self, name: &str, value: u32) {
             self.values.insert(name.to_string(), value);
         }
@@ -543,6 +850,9 @@ mod tests {
         }
         fn input(&self, key: &str) -> i64 {
             self.inputs.get(key).copied().unwrap_or(0)
+        }
+        fn set_input(&mut self, key: &str, value: i64) {
+            self.inputs.insert(key.to_string(), value);
         }
     }
 
