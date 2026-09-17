@@ -1,10 +1,13 @@
+//! ⚠️ VERBATIM COPY of the deleted `components/sh1107.rs`. See `mod.rs`.
+//! Do not edit: its only job is to disagree with the YAML model if the port moved a byte.
+
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
 //
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::peripherals::i2c::I2cDevice;
+use labwired_core::peripherals::i2c::I2cDevice;
 use std::any::Any;
 
 const WIDTH: usize = 128;
@@ -17,7 +20,7 @@ const PAGES: usize = 16; // 128 rows / 8 rows per page
 /// 0x40 (data stream) are honoured; unsupported commands are silently ignored.
 ///
 /// The SH1107 differs from the SSD1306 (`configs/devices/ssd1306.yaml`, read by
-/// the [`super::declarative_display`] engine) in three ways that
+/// the `declarative_display` engine) in three ways that
 /// matter for the framebuffer: 16 pages instead of 8 (128 rows), a 7-bit column
 /// address (higher-nibble commands 0x10–0x17), and single-byte addressing-mode
 /// selects (0x20 = page, 0x21 = vertical) rather than the SSD1306's
@@ -188,22 +191,22 @@ impl I2cDevice for Sh1107 {
     fn artifacts(
         &self,
         id: &str,
-        opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
+        opts: &labwired_core::inspect::InspectOpts,
+    ) -> Vec<labwired_core::inspect::Artifact> {
         let fb = self.framebuffer();
-        vec![crate::inspect::Artifact {
+        vec![labwired_core::inspect::Artifact {
             kind: "framebuffer".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
                 "w": self.width(),
                 "h": self.height(),
-                "format": crate::inspect::artifact_format::SH1107_PAGE,
-                "generation": crate::inspect::artifact_generation(fb),
+                "format": labwired_core::inspect::artifact_format::SH1107_PAGE,
+                "generation": labwired_core::inspect::artifact_generation(fb),
                 "ink_bytes": self.ink_bytes(),
                 "lit_pixels": self.lit_pixels(),
                 "display_on": self.display_on(),
             }),
-            bytes: crate::inspect::artifact_bytes(fb, opts),
+            bytes: labwired_core::inspect::artifact_bytes(fb, opts),
         }]
     }
 
@@ -250,149 +253,5 @@ impl I2cDevice for Sh1107 {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
-    }
-}
-
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
-};
-
-pub struct Sh1107Kit;
-pub static SH1107_KIT: Sh1107Kit = Sh1107Kit;
-
-static SH1107_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "oled-sh1107",
-    label: "SH1107 OLED",
-    summary: "128×128 monochrome OLED display over I2C with a paged framebuffer.",
-    detail: "Sino Wealth SH1107 128×128 OLED (e.g. the 1.5\" GME128128-01-IIC module) on the \
-             canonical 0x3C / 0x3D address pair. Tracks the 16-page-by-128-column framebuffer; \
-             the WASM bridge surfaces pixel state for the playground's display overlay.",
-    transport: Transport::I2c,
-    category: Category::I2c,
-    config_keys: &[ConfigKey {
-        name: "i2c_address",
-        ty: ConfigType::Int,
-        doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
-    }],
-    labs: &[LabRef {
-        board_id: "openai-deck-s3",
-        chip: "esp32s3",
-        example_dir: "openai-deck-s3",
-        demo_elf: "demo-openai-deck-s3.elf",
-    }],
-};
-
-impl PeripheralKit for Sh1107Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &SH1107_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let address = ctx.i2c_address_or(0x3C)?;
-        // attach_i2c_device works on both the STM32 I2c and the ESP32-C3
-        // Esp32c3I2c controllers, so the OLED can sit on either family's bus.
-        ctx.attach_i2c_device(Box::new(Sh1107::new(address)))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Sh1107, PAGES, WIDTH};
-    use crate::peripherals::i2c::I2cDevice;
-
-    fn command(dev: &mut Sh1107, byte: u8) {
-        dev.write(0x00);
-        dev.write(byte);
-        dev.stop();
-    }
-
-    fn set_page(dev: &mut Sh1107, page: u8) {
-        command(dev, 0xB0 | (page & 0x0F));
-    }
-
-    fn set_column(dev: &mut Sh1107, col: u8) {
-        command(dev, col & 0x0F); // lower nibble
-        command(dev, 0x10 | (col >> 4)); // higher nibble
-    }
-
-    #[test]
-    fn init_params_do_not_corrupt_framebuffer_and_data_lands_at_origin() {
-        let mut dev = Sh1107::new(0x3c);
-        // A representative SH1107 init stream: several single-parameter commands
-        // whose parameters must be consumed, not mis-read as column/page moves.
-        for cmd in [
-            0xAE, 0xD5, 0x51, 0x20, 0x81, 0x4F, 0xAD, 0x8A, 0xA8, 0x7F, 0xD3, 0x60, 0xDC, 0x00,
-            0xD9, 0x22, 0xDB, 0x35, 0xA4, 0xA6, 0xAF,
-        ] {
-            command(&mut dev, cmd);
-        }
-
-        set_page(&mut dev, 0);
-        set_column(&mut dev, 0);
-        dev.write(0x40);
-        dev.write(0xAA);
-        dev.stop();
-
-        assert_eq!(
-            dev.framebuffer()[0],
-            0xAA,
-            "data must start at page 0 / column 0 after the init stream"
-        );
-        assert!(dev.display_on(), "0xAF must turn the panel on");
-    }
-
-    #[test]
-    fn addresses_the_full_128_rows_and_128_columns() {
-        let mut dev = Sh1107::new(0x3c);
-        // Bottom page (15) and last column (127) — only reachable on a 16-page,
-        // 7-bit-column SH1107, not an 8-page SSD1306.
-        set_page(&mut dev, 15);
-        set_column(&mut dev, 127);
-        dev.write(0x40);
-        dev.write(0xFF);
-        dev.stop();
-
-        let idx = 15 * WIDTH + 127;
-        assert_eq!(idx, PAGES * WIDTH - 1);
-        assert_eq!(
-            dev.framebuffer()[idx],
-            0xFF,
-            "page 15 / column 127 must be writable"
-        );
-    }
-
-    #[test]
-    fn page_addressing_auto_increments_column() {
-        let mut dev = Sh1107::new(0x3c);
-        command(&mut dev, 0x20); // page addressing mode
-        set_page(&mut dev, 2);
-        set_column(&mut dev, 10);
-        dev.write(0x40);
-        for b in [0x01u8, 0x02, 0x03] {
-            dev.write(b);
-        }
-        dev.stop();
-        assert_eq!(
-            &dev.framebuffer()[2 * WIDTH + 10..2 * WIDTH + 13],
-            &[0x01, 0x02, 0x03]
-        );
-    }
-
-    #[test]
-    fn vertical_addressing_auto_increments_page() {
-        let mut dev = Sh1107::new(0x3c);
-        command(&mut dev, 0x21); // vertical addressing mode
-        set_page(&mut dev, 0);
-        set_column(&mut dev, 5);
-        dev.write(0x40);
-        for b in [0x11u8, 0x22, 0x33] {
-            dev.write(b);
-        }
-        dev.stop();
-        assert_eq!(dev.framebuffer()[5], 0x11);
-        assert_eq!(dev.framebuffer()[WIDTH + 5], 0x22);
-        assert_eq!(dev.framebuffer()[2 * WIDTH + 5], 0x33);
     }
 }

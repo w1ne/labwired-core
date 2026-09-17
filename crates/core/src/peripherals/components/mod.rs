@@ -29,7 +29,6 @@ pub mod hc05;
 pub mod hc595;
 pub mod hc595_7seg;
 pub mod i2c_factory;
-pub mod ili9341;
 pub mod ili9341_parallel;
 pub mod inmp441;
 pub mod iolink_master;
@@ -57,7 +56,6 @@ pub mod neo6m;
 pub mod nrf24l01;
 pub mod ntc_thermistor;
 pub mod pca9685;
-pub mod pcd8544;
 pub mod pn532;
 pub mod potentiometer;
 pub mod rc522;
@@ -70,7 +68,6 @@ pub mod servo;
 pub mod seven_seg_font;
 pub mod seven_segment;
 pub mod sgp41;
-pub mod sh1107;
 pub mod shm_i2c;
 pub mod sim800l;
 pub mod sn74hc165;
@@ -104,7 +101,8 @@ pub use bmi270::{Bmi270, BMI270_ADDR, BMI270_CHIP_ID};
 pub use bmp280::Bmp280;
 pub use cap1188::{Cap1188, CAP1188_ADDR};
 pub use declarative_display::{
-    ssd1306, ssd1306_128x32, st7789, DeclarativeDisplayKit, GenericDisplay,
+    ili9341, pcd8544, sh1107, ssd1306, ssd1306_128x32, st7789, DeclarativeDisplayKit,
+    GenericDisplay,
 };
 pub use declarative_gpio::DeclarativeGpioDevice;
 pub use declarative_i2c::{DeclarativeI2cKit, GenericI2cDevice};
@@ -116,7 +114,6 @@ pub use i2c_factory::{
     build_external_i2c_device, build_i2c_device, build_i2c_tree, i2c_mux_child_ids,
     is_i2c_mux_type, validate_i2c_mux_topology,
 };
-pub use ili9341::Ili9341;
 pub use ili9341_parallel::{Ili9341Parallel, ParallelPins};
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,
@@ -129,13 +126,11 @@ pub use mlx90640::{Mlx90640, ThermalScene, MLX90640_ADDR};
 pub use neo6m::Neo6mGps;
 pub use ntc_thermistor::NtcThermistor;
 pub use pca9685::Pca9685;
-pub use pcd8544::Pcd8544;
 pub use potentiometer::Potentiometer;
 pub use rule_machine::{RuleCtx, RuleMachine};
 pub use scd41::{Scd41, SCD41_ADDR};
 pub use servo::{LedcServoDriver, McpwmServoDriver, Servo, ServoCal};
 pub use sgp41::{Sgp41, SGP41_ADDR};
-pub use sh1107::Sh1107;
 pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use sps30::{Sps30, SPS30_ADDR};
