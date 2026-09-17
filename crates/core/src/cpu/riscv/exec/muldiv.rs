@@ -14,6 +14,11 @@ use crate::SimResult;
 
 impl RiscV {
     // RV32M Extension
+    // Single call site in `step`. Left out of line, a per-class split costs a call and
+    // a second variant match per instruction; the same split measured +13.7% Ir/step
+    // on every Cortex-M board in the core-perf batch gate. Inlining keeps the codegen
+    // of the pre-split function while the source stays split.
+    #[inline(always)]
     pub(in crate::cpu::riscv) fn exec_muldiv(&mut self, instruction: Instruction) -> SimResult<()> {
         match instruction {
             Instruction::Mul { rd, rs1, rs2 } => {
