@@ -345,6 +345,21 @@ impl CortexM {
         self.basepri != 0 && prio >= self.basepri as i32
     }
 
+    /// Whether ANY exception is pending — the cheap precondition every
+    /// pending-exception decision starts with.
+    ///
+    /// A four-way OR rather than `self.pending_exceptions.iter().any(..)`:
+    /// the iterator form compiled to a real loop over the array and cost
+    /// 16 Ir per retired instruction in `step_batch` alone
+    /// (docs/performance/2026-09-17-bus-scheduler-pass.md). Same answer —
+    /// `w0 | w1 | w2 | w3 != 0` is true exactly when some word is non-zero —
+    /// with no branch per word.
+    #[inline(always)]
+    fn any_exception_pending(&self) -> bool {
+        let [w0, w1, w2, w3] = self.pending_exceptions;
+        (w0 | w1 | w2 | w3) != 0
+    }
+
     /// Among the pending exceptions, return the one with the highest
     /// priority (lowest numeric value). Ties break by exception number
     /// (lower number wins, per ARMv7-M B1.5.4).
@@ -538,7 +553,7 @@ impl CortexM {
     /// preempt, so it is not a wake event. Mirrors the takeable-exception break
     /// in `step_batch`, minus the `!self.primask` guard.
     fn wfi_wake_pending(&self) -> bool {
-        if !self.pending_exceptions.iter().any(|&w| w != 0) {
+        if !self.any_exception_pending() {
             return false;
         }
         let Some(exc) = self.highest_priority_pending() else {
@@ -674,7 +689,7 @@ impl CortexM {
     /// PRIMASK/BASEPRI/FAULTMASK, and higher priority than the active
     /// exception. A backend must not run a compiled block while this holds.
     pub fn jit_takeable_exception(&self) -> bool {
-        if !self.pending_exceptions.iter().any(|&w| w != 0) {
+        if !self.any_exception_pending() {
             return false;
         }
         let Some(exc) = self.highest_priority_pending() else {
@@ -1186,7 +1201,7 @@ impl Cpu for CortexM {
                 // between batches, wedging every batched IRQ-driven Cortex-M
                 // firmware (walk-free campaign B1 surfaced this — batching is
                 // pointless if an armed SysTick freezes the run loop).
-                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) {
+                if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -1234,7 +1249,7 @@ impl Cpu for CortexM {
                 // Same early-out rule as the SystemBus arm above: break only
                 // after progress; at the batch top a takeable pending
                 // exception is dispatched by `step_internal`, never spun on.
-                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) {
+                if executed > 0 && self.any_exception_pending() {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -1597,11 +1612,23 @@ impl CortexM {
         // active exception's. This is the dispatch path that makes
         // FreeRTOS PendSV-driven context switches behave correctly —
         // PendSV at priority 0xFF only runs when no other ISR is active.
-        let exception_num = self.highest_priority_pending().unwrap_or(0);
-        if self.pending_exceptions.iter().any(|&w| w != 0)
-            && !self.masked_by_primask(exception_num)
-            && exception_num != 0
-        {
+        //
+        // Ask "is anything pending at all" FIRST. `highest_priority_pending`
+        // walks the pending bitmap through a slice iterator and consults
+        // `exception_priority` per set bit; with nothing pending — every
+        // instruction of every firmware that is not currently taking an
+        // interrupt — it does all of that to return `None`. Measured at 60
+        // Ir per instruction on nrf52840, ~26 % of the whole per-step cost
+        // (docs/performance/2026-09-17-bus-scheduler-pass.md). The guard is
+        // behaviour-preserving by construction: with no bit set the old
+        // `unwrap_or(0)` produced `exception_num == 0`, and the `&& exception_num
+        // != 0` arm below already made the whole block dead.
+        let exception_num = if self.any_exception_pending() {
+            self.highest_priority_pending().unwrap_or(0)
+        } else {
+            0
+        };
+        if exception_num != 0 && !self.masked_by_primask(exception_num) {
             let take_prio = self.exception_priority(exception_num);
             let active_prio = self.exception_priority(self.active_exception);
             let can_take = take_prio < active_prio
