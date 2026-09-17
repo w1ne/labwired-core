@@ -212,12 +212,15 @@ fn the_analog_manifest_writes_a_waveform_trace() {
 #[test]
 fn an_unsupported_element_fails_manifest_validation() {
     let root = repo_root();
-    let dir = labwired_cli::test_support::unique_temp_dir("labwired-analog-diode");
+    let dir = labwired_cli::test_support::unique_temp_dir("labwired-analog-subckt");
     std::fs::create_dir_all(&dir).expect("create temp dir");
     std::fs::write(
         dir.join("diode.cir"),
-        "* a diode is outside the in-core subset\n\
-         Vin in 0 dc 0\nR1 in out 1k\nD1 out 0 dmod\n.end\n",
+        // A subcircuit call: still outside the in-core subset now that `D` is
+        // inside it. Subcircuits need a model library and a flattener, which
+        // is exactly what the ngspice wrapper is for.
+        "* a subcircuit is outside the in-core subset\n\
+         Vin in 0 dc 0\nR1 in out 1k\nX1 out 0 opamp\n.end\n",
     )
     .expect("write netlist");
     let manifest = dir.join("system.yaml");
@@ -254,4 +257,297 @@ fn an_unsupported_element_fails_manifest_validation() {
             && stderr.contains("labwired_ngspice.py"),
         "the error must name the adapter that can run it: {stderr}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Nonlinear devices: the same deck, both engines
+// ---------------------------------------------------------------------------
+
+/// Tolerance on every sample of the nonlinear differentials, as a fraction of
+/// the circuit's full scale.
+///
+/// Full scale rather than the sample: near a zero crossing a relative-to-sample
+/// error is unbounded and meaningless, and what a user sees is an ADC reading
+/// against a rail.
+///
+/// **5e-4 (0.05 %), not the 2 % a differential like this is usually written
+/// with.** 2 % was measured to be vacuous here. The three decks below actually
+/// agree with ngspice to 2.5e-3 %, 2.6e-5 % and 1.0e-6 % of full scale, and
+/// perturbing the engine's thermal voltage by 1 % — a wrong physical constant,
+/// the exact class of bug this test exists to catch — moves the rectifier by
+/// 0.13 % and the amplifier by 0.24 %. At 2 % that sabotage passes. At 0.05 %
+/// it fails with 2.5x margin, while still leaving 20x headroom over the worst
+/// honest disagreement, which is the fixed-step-versus-adaptive-step
+/// difference between the two integrators.
+///
+/// The MOSFET deck is the weak one and is named as such: a level-1 FET has no
+/// thermal voltage, so that sabotage moves it by 1e-6 %. Its guard is the
+/// operating-point hand calculation in
+/// `crates/core/tests/analog_devices.rs`, which checks `VTO`, `KP` and
+/// `LAMBDA` against the closed form directly.
+const DEVICE_TOLERANCE: f64 = 5e-4;
+
+/// One deck, run by both engines, compared at every sample.
+struct Differential {
+    /// What the failure message calls it.
+    name: &'static str,
+    /// SPICE text. Both engines parse this exact string; the in-core engine
+    /// ignores the `.model` parameters it has no term for and the analysis
+    /// cards, and ngspice ignores nothing.
+    deck: &'static str,
+    /// Node to compare.
+    node: &'static str,
+    /// Sample interval, seconds.
+    sample: f64,
+    /// Internal solver steps per sample. ngspice is told the same number as
+    /// its maximum step, so neither engine is integrating on a coarser grid
+    /// than the other.
+    substeps: u32,
+    /// Samples to compare.
+    samples: usize,
+    /// Denominator of the error, volts.
+    full_scale: f64,
+    /// The compared trace must swing at least this far, or the differential is
+    /// agreeing about a flat line and proving nothing.
+    minimum_swing: f64,
+}
+
+const DIFFERENTIALS: &[Differential] = &[
+    Differential {
+        name: "half-wave rectifier",
+        deck: "* half-wave rectifier: D + R + VSIN\n\
+               Vin in 0 SIN(0 5 1k)\n\
+               D1 in out DMOD\n\
+               R1 out 0 1k\n\
+               .model DMOD D(IS=2.52n N=1.752 RS=0.568)\n",
+        node: "out",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 5.0,
+        minimum_swing: 4.0,
+    },
+    Differential {
+        name: "common-emitter amplifier",
+        // The coupling capacitor is not decoration: without it the ideal
+        // source sits across the bias divider through its own impedance and
+        // pulls the base to 0.23 V, and the stage is cut off. Both engines
+        // agree about that to seven digits, which is exactly why the swing
+        // assertion below exists — a differential on a dead circuit passes.
+        deck: "* common-emitter amplifier: Q + resistors + VDC + VSIN\n\
+               Vcc vcc 0 dc 12\n\
+               Vin in 0 SIN(0 0.25 1k)\n\
+               Cin in b 10u\n\
+               Rb1 vcc b 47k\n\
+               Rb2 b 0 10k\n\
+               Rc vcc c 2.2k\n\
+               Re e 0 470\n\
+               Q1 c b e QMOD\n\
+               .model QMOD NPN(IS=1e-14 BF=200 BR=2 NF=1 NR=1)\n",
+        node: "c",
+        sample: 20e-6,
+        substeps: 20,
+        samples: 100,
+        full_scale: 12.0,
+        minimum_swing: 1.0,
+    },
+    Differential {
+        name: "NMOS inverter",
+        deck: "* NMOS inverter: M + R + VPULSE\n\
+               Vdd vdd 0 dc 5\n\
+               Vg g 0 PULSE(0 5 2u 200n 200n 18u 40u)\n\
+               Rd vdd d 10k\n\
+               M1 d g 0 0 MMOD\n\
+               .model MMOD NMOS(VTO=1 KP=20u LAMBDA=0.02 W=20u L=2u)\n",
+        node: "d",
+        sample: 200e-9,
+        substeps: 10,
+        samples: 400,
+        full_scale: 5.0,
+        minimum_swing: 4.0,
+    },
+];
+
+/// Solve `deck` with the in-core engine, sampling `node` at every boundary.
+fn in_core_series(case: &Differential) -> Vec<f64> {
+    let circuit = labwired_core::analog::parse_netlist(case.deck)
+        .unwrap_or_else(|error| panic!("{}: {error}", case.name));
+    assert!(
+        circuit.is_nonlinear(),
+        "{}: this differential is about a nonlinear device",
+        case.name
+    );
+    let mut solver = labwired_core::analog::Solver::new(
+        circuit,
+        labwired_core::analog::Integration::Trapezoidal,
+    )
+    .unwrap_or_else(|error| panic!("{}: {error}", case.name));
+    let node = solver
+        .circuit()
+        .node(case.node)
+        .unwrap_or_else(|| panic!("{}: no node `{}`", case.name, case.node));
+
+    let h = case.sample / f64::from(case.substeps);
+    let mut series = Vec::with_capacity(case.samples);
+    for sample in 0..case.samples {
+        for substep in 0..case.substeps {
+            solver.advance(h).unwrap_or_else(|error| {
+                panic!("{}: sample {sample} substep {substep}: {error}", case.name)
+            });
+        }
+        series.push(solver.node_voltage(node));
+    }
+    series
+}
+
+/// Solve the same deck with ngspice, resampled onto the same uniform grid.
+///
+/// `linearize` is what makes the comparison honest: ngspice runs its own
+/// adaptive-step transient and would otherwise report its own time points, so
+/// a comparison would be measuring interpolation rather than physics. The
+/// maximum internal step is pinned to the in-core substep, so ngspice is not
+/// given a finer integration than the engine under test.
+fn ngspice_series(case: &Differential) -> Vec<f64> {
+    let dir = labwired_cli::test_support::unique_temp_dir("labwired-ngspice-diff");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let data = dir.join("out.data");
+    let cir = dir.join("deck.cir");
+    let tmax = case.sample / f64::from(case.substeps);
+    let tstop = case.sample * case.samples as f64;
+    std::fs::write(
+        &cir,
+        format!(
+            "{deck}\
+             .options temp=26.85 tnom=26.85 reltol=1e-9 abstol=1e-15 vntol=1e-12 gmin=1e-12\n\
+             .control\n\
+             tran {sample:e} {tstop:e} 0 {tmax:e}\n\
+             linearize v({node})\n\
+             wrdata {data} v({node})\n\
+             .endc\n\
+             .end\n",
+            deck = case.deck,
+            sample = case.sample,
+            tstop = tstop,
+            tmax = tmax,
+            node = case.node,
+            data = data.display(),
+        ),
+    )
+    .expect("write deck");
+
+    let output = Command::new("ngspice")
+        .arg("-b")
+        .arg(&cir)
+        .current_dir(&dir)
+        .output()
+        .expect("ngspice runs");
+    assert!(
+        output.status.success(),
+        "{}: ngspice failed: {}",
+        case.name,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = std::fs::read_to_string(&data).unwrap_or_else(|error| {
+        panic!(
+            "{}: ngspice wrote no data ({error}); stdout was {}",
+            case.name,
+            String::from_utf8_lossy(&output.stdout)
+        )
+    });
+    // `wrdata` writes one `<time> <value>` pair per line. The first row is the
+    // operating point at t = 0, which the in-core series does not include
+    // because it reports the END of each step.
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let _time = fields.next()?;
+            fields.next()?.parse::<f64>().ok()
+        })
+        .skip(1)
+        .collect()
+}
+
+/// True when the `ngspice` binary is on PATH.
+fn ngspice_binary_available() -> bool {
+    Command::new("ngspice")
+        .arg("-v")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+#[test]
+fn nonlinear_devices_match_ngspice_on_the_same_deck() {
+    if !ngspice_binary_available() {
+        // Still exercise the in-core half, so a missing ngspice cannot hide a
+        // solver that stopped converging.
+        for case in DIFFERENTIALS {
+            let series = in_core_series(case);
+            assert_eq!(series.len(), case.samples);
+            assert!(series.iter().all(|v| v.is_finite()));
+        }
+        eprintln!(
+            "SKIP: `ngspice` is not on PATH, so the reference half of the \
+             device differential cannot run. Install it (macOS: `brew install ngspice`; \
+             Debian/Ubuntu: `apt install ngspice`). The in-core engine solved all \
+             {} decks and is covered on its own by \
+             `cargo test -p labwired-core --test analog_devices`.",
+            DIFFERENTIALS.len()
+        );
+        return;
+    }
+
+    for case in DIFFERENTIALS {
+        let ours = in_core_series(case);
+        let theirs = ngspice_series(case);
+        assert!(
+            theirs.len() >= case.samples,
+            "{}: ngspice returned {} samples, wanted {}",
+            case.name,
+            theirs.len(),
+            case.samples
+        );
+
+        let swing = {
+            let max = ours.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let min = ours.iter().cloned().fold(f64::INFINITY, f64::min);
+            max - min
+        };
+        assert!(
+            swing >= case.minimum_swing,
+            "{}: the trace only swings {swing} V, so agreeing with ngspice about it \
+             proves nothing; expected at least {} V",
+            case.name,
+            case.minimum_swing
+        );
+
+        let mut worst = 0.0_f64;
+        let mut worst_sample = 0;
+        for (index, (a, n)) in ours.iter().zip(theirs.iter()).enumerate() {
+            let error = (a - n).abs() / case.full_scale;
+            if error > worst {
+                worst = error;
+                worst_sample = index;
+            }
+        }
+        let (a, n) = (ours[worst_sample], theirs[worst_sample]);
+        assert!(
+            worst < DEVICE_TOLERANCE,
+            "{}: worst disagreement at sample {} (t = {:e} s): in-core {a} V vs \
+             ngspice {n} V — {:.3} % of {} V full scale",
+            case.name,
+            worst_sample + 1,
+            (worst_sample as f64 + 1.0) * case.sample,
+            worst * 100.0,
+            case.full_scale
+        );
+        eprintln!(
+            "{}: {} samples, swing {swing:.3} V, worst |delta| = {:e} % of full scale \
+             (sample {}: in-core {a} V vs ngspice {n} V)",
+            case.name,
+            case.samples,
+            worst * 100.0,
+            worst_sample + 1
+        );
+    }
 }

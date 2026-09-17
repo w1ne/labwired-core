@@ -527,7 +527,6 @@ pub struct SystemBus {
     pub tm1637: Vec<crate::peripherals::components::tm1637_7seg::Tm1637>,
     /// HX711 load-cell amps bit-banged over SCK/DT. Write-hook clocks data out;
     /// DT level is driven onto the MCU input register. Empty → zero cost.
-    pub hx711: Vec<crate::peripherals::components::hx711::Hx711>,
     /// Direct-drive single-digit 7-segment displays: eight segment GPIOs plus a
     /// common pin, no driver chip. Sampled by the GPIO write-hook
     /// (`maybe_sample_seven_segment`), which recomputes the lit segments

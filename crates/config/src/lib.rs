@@ -2569,9 +2569,42 @@ pub struct InputSpec {
     /// Gaussian noise sigma applied per read, in `unit` (seeded, replay-safe).
     #[serde(default)]
     pub noise_sigma: Option<f64>,
+    /// Name of a `config:` key whose value OVERRIDES
+    /// [`noise_sigma`](Self::noise_sigma) for this channel when the placement
+    /// sets it.
+    ///
+    /// The descriptor's own `noise_sigma` is a property of the part; this is
+    /// the knob a board hands the user. A part whose datasheet quotes one noise
+    /// figure for a whole channel SET — an IMU's six axes, a magnetometer's
+    /// three — names the same key on each of them, which is how `noise_sigma:
+    /// 0.02` on an `external_devices` entry reaches all six axes at once. It is
+    /// spelled once per channel rather than as a group, so a part whose axes
+    /// have genuinely different figures can still say so, and so that reading
+    /// one channel's entry tells you everything that moves it.
+    ///
+    /// The key must also be declared in `metadata.config_keys` to be advertised
+    /// in the peripheral manifest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub noise_sigma_key: Option<String>,
     /// Constant offset applied to the channel value, in `unit`.
     #[serde(default)]
     pub bias: Option<f64>,
+    /// Factor `input(KEY)` multiplies this channel by before it becomes the
+    /// INTEGER a rule expression sees. Absent ⇒ 1.0.
+    ///
+    /// The rule language is integer-only, and `input()` is defined as "the
+    /// value as the part reports it" — for a register device that is the
+    /// register's own `encode:`, which is why a rule comparing `input(x)`
+    /// against `reg(DATA)` compares like with like. A pins-only part has no
+    /// register to borrow an encoding from, so it states the same thing here:
+    /// the counts its protocol shifts out per engineering unit.
+    ///
+    /// The HX711 is the motivating case. Its channel is grams and its frame is
+    /// 24 bits at 100 counts per gram; without this, `input(weight)` truncates
+    /// to whole grams and a load cell loses exactly the digits it exists to
+    /// measure — silently, because 10 g and 10.5 g both read 10.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expr_scale: Option<f64>,
     /// First-order thermal-lag time constant in seconds; requires a bus that
     /// drives `advance_time_us` (degrades to no lag elsewhere).
     #[serde(default)]
@@ -3430,6 +3463,40 @@ pub struct RegisterSpec {
     /// store, which is what every descriptor written before this field meant.
     #[serde(default)]
     pub on_write: Option<WriteAction>,
+    /// **Civil-calendar decomposition** of the register's `source:` channel,
+    /// which must carry Unix seconds (UTC). Present ⇒ a read reports THIS field
+    /// of that instant rather than the instant itself, and a write to the
+    /// register RECOMPOSES — it replaces this field of the sourced channel and
+    /// leaves the other six alone. See [`CalendarField`].
+    ///
+    /// The DS3231's `0x00..=0x06` are exactly this: one settable clock read out
+    /// as seven registers. Modelling them as seven independent storage bytes is
+    /// what makes a model where writing `SECONDS` and reading `MINUTES` can
+    /// disagree about which minute it is, and where advancing time moves
+    /// nothing. Modelling them as seven *read-only* views of one channel is the
+    /// opposite failure: `RTClib::adjust()` is the first call every sketch
+    /// makes, and it would do nothing at all.
+    ///
+    /// The conversion is Howard Hinnant's civil-from-days / days-from-civil
+    /// pair, in UTC, with no leap seconds — the same arithmetic the hand-written
+    /// DS3231 model used, so the port reproduces its transcript.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calendar: Option<CalendarField>,
+}
+
+/// One field of a civil calendar instant (see [`RegisterSpec::calendar`]).
+/// `Year` is the two-digit year an RTC holds (`0..=99`), `Weekday` is 1..=7
+/// with Sunday = 1, which is the DS3231/DS1307 convention.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarField {
+    Second,
+    Minute,
+    Hour,
+    Weekday,
+    Day,
+    Month,
+    Year,
 }
 
 /// One sourced bit-field within a composite register word (see
@@ -3532,6 +3599,94 @@ pub struct Encode {
     /// failure mode this schema is written to refuse.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wrap: Option<std::num::NonZeroU32>,
+    /// **Binary-coded decimal**, applied SYMMETRICALLY at the wire boundary:
+    /// a read encodes the integer count as packed BCD (two decimal digits per
+    /// byte, tens in the high nibble), and a write decodes the BCD the master
+    /// put on the wire back to an integer before anything stores it.
+    ///
+    /// This is the real-time-clock register shape (DS3231, DS1307, PCF8563):
+    /// `12` seconds reads as `0x12`, and a driver that writes `0x59` means 59.
+    /// It is the LAST step of the read encode — after `scale`, `offset`, the
+    /// clamp window and `wrap` — and the FIRST step of the write decode, so the
+    /// stored word and every expression that reads it (`reg()`, `field()`,
+    /// `scale_from`) are in decimal, never in nibbles. A model that stored the
+    /// nibbles instead would make `reg(SECONDS) < 60` a guard that is false for
+    /// a third of every minute.
+    ///
+    /// A nibble above 9 is not a decimal digit. On the write side such a byte
+    /// is decoded the way the silicon's counter chain does — `(hi & 0xF) * 10 +
+    /// (lo & 0xF)`, so `0x1A` is 20 — and on the read side a count wider than
+    /// the digits the register holds saturates at all-nines rather than
+    /// wrapping into a neighbouring field.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bcd: bool,
+    /// Rounding applied to the encoded value before it becomes an integer
+    /// count. Absent ⇒ [`Rounding::Nearest`], which is what every descriptor
+    /// written before this field existed means (`f64::round`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub round: Option<Rounding>,
+    /// Field-driven clamp: the saturation window is read from another
+    /// register's bit-field instead of being the constant `clamp_min`/
+    /// `clamp_max` pair. See [`ClampFrom`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clamp_from: Vec<ClampFrom>,
+}
+
+/// How an encoded value becomes an integer count.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Rounding {
+    /// `f64::round` — half away from zero. The default, and what every
+    /// descriptor written before `round:` existed means.
+    #[default]
+    Nearest,
+    /// `f64::floor` — toward negative infinity. This is the division a
+    /// counter-field decomposition needs: `hour = floor(t / 3600) mod 24` is
+    /// the hour, while rounding to nearest makes the second half of every hour
+    /// report the next one.
+    Floor,
+    /// `f64::ceil` — toward positive infinity.
+    Ceil,
+    /// `f64::trunc` — toward zero.
+    Trunc,
+}
+
+/// A register-bit-field-keyed clamp window, the mirror of [`ScaleFrom`]. The
+/// engine extracts `(value(register) >> shift) & mask` and looks the field
+/// value up in `map`; the entry is the `[min, max]` window, in RAW COUNTS,
+/// applied where the constant `clamp_min`/`clamp_max` pair is applied.
+///
+/// ## Why a part needs this
+///
+/// The ADXL345 is the motivating case. Its output is 10 bits in the default
+/// mode and up to 13 in FULL_RES, and the range the part saturates at is
+/// `DATA_FORMAT[1:0]` — ±2/4/8/16 g. Both halves are firmware-owned and both
+/// move the saturation point, so a constant `clamp_max` would be right for
+/// exactly one of the four settings and would silently stop the part
+/// saturating at the other three. The clamp is a *consequence* of a register
+/// the driver wrote, the same way [`ScaleFrom`] makes the LSB size one.
+///
+/// A field value absent from `map` leaves the constant window (or no window)
+/// in force, which is the same "unmapped ⇒ neutral" rule `scale_from` has.
+/// Several `clamp_from` entries INTERSECT: each narrows the window, so a part
+/// whose resolution bit and range bits both bound the count states each once.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ClampFrom {
+    /// Name of the register whose bit-field selects the window.
+    pub register: String,
+    /// Mask applied after `shift`.
+    pub mask: u32,
+    #[serde(default)]
+    pub shift: u8,
+    /// Extracted field value → `[min, max]` window in raw counts.
+    pub map: std::collections::BTreeMap<u32, ClampWindow>,
+}
+
+/// One `[min, max]` saturation window in raw counts (see [`ClampFrom`]).
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub struct ClampWindow {
+    pub min: f64,
+    pub max: f64,
 }
 
 fn one_f64() -> f64 {
@@ -4394,6 +4549,10 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "sht30" => Some(include_str!("../../../configs/devices/sht30.yaml")),
         "at24c256" => Some(include_str!("../../../configs/devices/at24c256.yaml")),
         "tmp117" => Some(include_str!("../../../configs/devices/tmp117.yaml")),
+        "ds3231" => Some(include_str!("../../../configs/devices/ds3231.yaml")),
+        "adxl345" => Some(include_str!("../../../configs/devices/adxl345.yaml")),
+        "mpu6050" => Some(include_str!("../../../configs/devices/mpu6050.yaml")),
+        "hx711" => Some(include_str!("../../../configs/devices/hx711.yaml")),
         "ina219" => Some(include_str!("../../../configs/devices/ina219.yaml")),
         "ads1115" => Some(include_str!("../../../configs/devices/ads1115.yaml")),
         "mma8451q" => Some(include_str!("../../../configs/devices/mma8451q.yaml")),

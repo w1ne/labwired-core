@@ -257,7 +257,6 @@ impl SystemBus {
             motors: Vec::new(),
             motor_cycle_anchor: 0,
             tm1637: Vec::new(),
-            hx711: Vec::new(),
             seven_segment: Vec::new(),
             analog_inputs: Vec::new(),
             can_diagnostic_testers: Vec::new(),

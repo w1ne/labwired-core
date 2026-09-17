@@ -9,7 +9,7 @@
 // plumbing that wraps these per-class dispatches.
 
 use super::super::CortexM;
-use crate::cpu::cortex_m::AccessWidth;
+use crate::cpu::cortex_m::{vfp_binop, vfp_fma, AccessWidth, VfpBinOp};
 use crate::decoder::arm::Instruction;
 use crate::{Bus, SimResult};
 
@@ -47,53 +47,53 @@ impl CortexM {
                 *pc_increment = 4;
             }
             Instruction::VmulF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                self.fpu_s[sd as usize] = (a * b).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Mul, a, b, self.fpscr);
                 *pc_increment = 4;
             }
             Instruction::VaddF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                self.fpu_s[sd as usize] = (a + b).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Add, a, b, self.fpscr);
                 *pc_increment = 4;
             }
             Instruction::VsubF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                self.fpu_s[sd as usize] = (a - b).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Sub, a, b, self.fpscr);
                 *pc_increment = 4;
             }
             Instruction::VdivF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                self.fpu_s[sd as usize] = (a / b).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                self.fpu_s[sd as usize] = vfp_binop(VfpBinOp::Div, a, b, self.fpscr);
                 *pc_increment = 4;
             }
             Instruction::VfmaF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                let c = f32::from_bits(self.fpu_s[sd as usize]);
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                let c = self.fpu_s[sd as usize];
                 // Fused: single rounding of (a*b)+c, not a*b rounded then +c.
-                self.fpu_s[sd as usize] = a.mul_add(b, c).to_bits();
+                self.fpu_s[sd as usize] = vfp_fma(a, b, c, false, false, self.fpscr);
             }
             Instruction::VfmsF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                let c = f32::from_bits(self.fpu_s[sd as usize]);
-                self.fpu_s[sd as usize] = (-a).mul_add(b, c).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                let c = self.fpu_s[sd as usize];
+                self.fpu_s[sd as usize] = vfp_fma(a, b, c, true, false, self.fpscr);
             }
             Instruction::VfnmaF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                let c = f32::from_bits(self.fpu_s[sd as usize]);
-                self.fpu_s[sd as usize] = a.mul_add(b, -c).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                let c = self.fpu_s[sd as usize];
+                self.fpu_s[sd as usize] = vfp_fma(a, b, c, false, true, self.fpscr);
             }
             Instruction::VfnmsF32 { sd, sn, sm } => {
-                let a = f32::from_bits(self.fpu_s[sn as usize]);
-                let b = f32::from_bits(self.fpu_s[sm as usize]);
-                let c = f32::from_bits(self.fpu_s[sd as usize]);
-                self.fpu_s[sd as usize] = (-a).mul_add(b, -c).to_bits();
+                let a = self.fpu_s[sn as usize];
+                let b = self.fpu_s[sm as usize];
+                let c = self.fpu_s[sd as usize];
+                self.fpu_s[sd as usize] = vfp_fma(a, b, c, true, true, self.fpscr);
             }
             Instruction::VmovSnRt { sn, rt } => {
                 self.fpu_s[sn as usize] = self.read_reg(rt);

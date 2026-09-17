@@ -336,10 +336,187 @@ Needed where a hand-written kit named the two differently and shipped
 `system.yaml` files already set the seed. Without it the seed would parse and
 silently do nothing, and the part would boot at the descriptor default.
 
+## Register encoding keys
+
+`encode:` is the register's measurement encoding. Beyond `scale` / `offset` /
+`clamp_min` / `clamp_max` / `wrap` it carries four keys that exist because a
+real part needed them, and each is documented here with the part that found it.
+
+### `encode: { bcd: true }` — binary-coded decimal, both directions
+
+Two decimal digits per byte, tens in the high nibble. **Symmetric**: a read
+encodes, a write decodes. It is the LAST step of the read encode (after scale,
+offset, the clamp window and `wrap`) and the FIRST step of the write decode, so
+the word the model STORES is always decimal — `reg()`, `field()` and
+`scale_from` all read a number, never a pair of nibbles.
+
+```yaml
+# DS3231 0x00: the seconds of a settable clock. `write_mask` on a BCD register
+# is a plain AND on the byte the master wrote (the wire domain), because the
+# flag packed alongside is not part of the number.
+- { name: SECONDS, addr: 0x00, width: 1, endian: be, access: rw,
+    source: unix_time, calendar: second, write_mask: 0x7F,
+    encode: { bcd: true } }
+
+# A plain BCD storage register — an alarm byte, clamped to the range it holds.
+- { name: ALARM1_SECONDS, addr: 0x07, width: 1, endian: be, access: rw,
+    write_mask: 0x7F, encode: { bcd: true, clamp_min: 0.0, clamp_max: 59.0 } }
+```
+
+A nibble above 9 is not a decimal digit; on the write side it is decoded the way
+a counter chain reads it (`0x1A` is 20), and on the read side a count with more
+digits than the register holds saturates at all-nines.
+
+### `calendar:` — one civil field of a settable clock
+
+On a register whose `source:` carries Unix seconds. A **read** reports that
+civil field of the instant; a **write** RECOMPOSES — it replaces that field and
+leaves the other six. Fields: `second` `minute` `hour` `weekday` `day` `month`
+`year` (`year` is the two digits an RTC holds, `weekday` is 1..7 Sunday-first).
+
+```yaml
+- { name: HOURS, addr: 0x02, width: 1, endian: be, access: rw,
+    source: unix_time, calendar: hour, write_mask: 0x3F,
+    encode: { bcd: true } }
+```
+
+Without the write half a `source`d register is read-only and `RTClib::adjust()`
+— the first call almost every RTC sketch makes — does nothing at all. Without
+the read half the seven registers are seven independent bytes that can disagree
+with each other about what day it is. The arithmetic is Hinnant's
+civil-from-days / days-from-civil pair, UTC, no leap seconds.
+
+⚠️ `input(KEY)` **skips** a `calendar:` register when it looks for the encoding
+to report a channel through: such a register reports a FIELD, not the value, so
+a rule asking for `input(unix_time)` gets the truncated engineering value.
+
+### `encode: { clamp_from: [...] }` — a field-driven saturation window
+
+The mirror of `scale_from`. The window is read from another register's
+bit-field instead of being a constant, because on many parts the saturation
+point is something firmware chose.
+
+```yaml
+# ADXL345 DATAX0. FULL_RES (bit 3) and the range bits (1:0) are not contiguous,
+# so one mask picks all three and the map is keyed by the combination.
+- name: DATAX0
+  addr: 0x32
+  width: 2
+  endian: le
+  access: r
+  signed: true
+  source: x
+  scale_from: { register: DATA_FORMAT, mask: 0x0B,
+                map: { 0x00: 256.0, 0x03: 32.0, 0x0B: 256.0 } }
+  encode:
+    clamp_from:
+      - register: DATA_FORMAT
+        mask: 0x0B
+        map:
+          0x00: { min: -512.0,  max: 512.0 }
+          0x03: { min: -512.0,  max: 512.0 }
+          0x0B: { min: -4096.0, max: 4096.0 }
+```
+
+A field value absent from `map` leaves the constant window (or none) in force —
+the same "unmapped ⇒ neutral" rule `scale_from` has. Several entries INTERSECT,
+each narrowing the window. A constant `clamp_max` here would be right for
+exactly one of eight settings and would silently stop the part saturating at
+the other seven.
+
+### `encode: { round: floor | ceil | trunc | nearest }`
+
+How the encoded value becomes an integer count. `nearest` (`f64::round`) is the
+default and is what every descriptor written before the key existed means.
+
+## Stimulus-channel keys
+
+### `noise_sigma_key` — one `config:` value over a channel SET
+
+A channel's `noise_sigma` is a property of the part; `noise_sigma_key` names the
+`config:` key a PLACEMENT can set to override it. Spelled once per channel, so
+one key reaches a whole set:
+
+```yaml
+metadata:
+  config_keys:
+    - { name: noise_sigma, ty: float,
+        doc: "Gaussian noise sigma in channel units (g accel, °/s gyro)." }
+  inputs:
+    - { key: ax, label: "Accel X", unit: g, min: -16, max: 16,
+        noise_sigma_key: noise_sigma }
+    - { key: ay, label: "Accel Y", unit: g, min: -16, max: 16,
+        noise_sigma_key: noise_sigma }
+    # …and the other four motion axes. `temp` deliberately does NOT carry it:
+    # the documented sigma is in g and °/s.
+```
+
+Per channel rather than as a group so a part whose axes have genuinely different
+figures can still say so, and so reading one channel's entry tells you
+everything that moves it. The key must also appear in `metadata.config_keys` to
+be advertised in the peripheral manifest.
+
+### `expr_scale` — counts per engineering unit, for a rule expression
+
+The rule language is integers. On a register device `input(KEY)` is already the
+value the register reports, so a rule comparing it against `reg(DATA)` compares
+like with like. A pins-only part has no register to borrow an encoding from, so
+it states the same thing directly:
+
+```yaml
+# HX711: the channel is grams and the frame is 24 bits at 100 counts per gram.
+- { key: weight, label: "Weight", unit: g, min: -50000, max: 50000,
+    default: 0, expr_scale: 100.0 }
+```
+
+Without it `input(weight)` truncates to whole grams and a load cell loses
+exactly the digits it exists to measure — silently, because 10 g and 10.5 g
+would shift out the same word.
+
+## Edge-driven `gpio_device` parts
+
+A `gpio_device` is serviced on the peripheral tick. That is right for a part
+sampled on a schedule and **wrong for a part clocked by firmware**: a
+`digitalWrite(SCK, HIGH); digitalWrite(SCK, LOW)` pair is two MMIO stores inside
+one tick interval, so a tick-only pass samples the pad after both and sees no
+change. A 24-bit shift-out clocked by 48 stores would deliver one edge, or none.
+
+A descriptor whose `rules:` listen for a pin EDGE is therefore serviced
+synchronously inside the MMIO write path, and nothing extra is declared to get
+it — the engine reads the rules:
+
+```yaml
+behavior:
+  primitive: gpio_device
+  pins:    { SCK: sck_pin }      # observed: pads the MCU drives
+  outputs: [DOUT]                # driven: pads the MCU samples
+  output_pins: { DOUT: dt_pin }
+  rules:
+    - on: { pin: SCK, edge: rising }   # ⇐ this makes the part edge-driven
+      when: "var(shifting) && var(bit_index) < 24"
+      do:
+        - { var: { name: dout_level, value: "(var(raw) >> (23 - var(bit_index))) & 1" } }
+        - { var: { name: bit_index, value: "var(bit_index) + 1" } }
+        - { pin: DOUT, level: "var(dout_level)" }
+```
+
+⚠️ **Rule order is load-bearing.** Rules fire in declaration order and each
+`do:` runs to completion, so a later rule sees what an earlier one assigned. In
+`hx711.yaml` the rule that CLOSES the frame is declared before the rule that
+shifts a bit: the other way round, the 24th edge would set `bit_index` to 24 and
+the close rule would fire in the SAME event, dropping DOUT before the master
+sampled the last bit. The frame reads one bit short, in the low bit only, every
+time.
+
+The pads such a part drives still go out through the narrowed `DevicePins` port,
+exactly as on the tick pass — this changes WHEN `service` runs, not what it may
+touch.
+
 ## What a pack cannot do
 
 A pack is data interpreted by a **primitive** — `i2c_device`, `spi_device`,
-`analog_source`, `display`, `quadrature`, `matrix`, `one_wire`, `pulse_echo`.
+`analog_source`, `display`, `gpio_device`, `quadrature`, `matrix`, `one_wire`,
+`pulse_echo`.
 Those primitives are the irreducible timing algorithms, and they live in Rust in
 this repository.
 

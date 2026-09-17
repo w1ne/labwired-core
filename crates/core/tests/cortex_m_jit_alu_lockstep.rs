@@ -920,6 +920,10 @@ fn vstr_f32_compiles_and_matches_interpreter() {
 
 // S2 <- S0 op S1: the destination is NOT a source, so the hot loop
 // re-computes the same value and the expected result is stable.
+fn vadd_s2_s0_s1() -> (u16, u16) {
+    (0xEE30, 0x1A20)
+}
+
 fn vsub_s2_s0_s1() -> (u16, u16) {
     (0xEE30, 0x1A60)
 }
@@ -1029,6 +1033,120 @@ fn vmov_f32_reg_matches_interpreter() {
     assert!(engine.stats().block_runs > 0);
     assert_eq!(interp.cpu.fpu_s[1], jit.cpu.fpu_s[1]);
     assert_eq!(jit.cpu.fpu_s[1], bits, "S1 must receive S0's bits");
+}
+
+/// VADD/VSUB/VMUL/VDIV S2 <- S0 op S1 hot loop under a seeded FPSCR, run
+/// through the full lockstep harness (which compares `fpu_s` at every unit).
+/// Returns the interpreter's and the compiled lane's raw S2 bits.
+fn vfp_fpscr_lockstep(op: (u16, u16), a_bits: u32, b_bits: u32, fpscr: u32) -> (u32, u32) {
+    let mut prog = Vec::new();
+    for _ in 0..4 {
+        h(&mut prog, 0xBF00);
+    }
+    h(&mut prog, op.0);
+    h(&mut prog, op.1);
+    let from = prog.len() as i32;
+    h(&mut prog, b_to(from, 0));
+
+    let probe = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+    engine.try_compile_from_bus(0, &probe.bus);
+    assert_eq!(
+        engine.ready_instr_count(0),
+        Some(6),
+        "S-ALU op must compile into the block: {:?}",
+        engine.stats()
+    );
+
+    let (interp, jit, engine) = lockstep_until_compiled(&prog, |m| {
+        m.cpu.fpu_s[0] = a_bits;
+        m.cpu.fpu_s[1] = b_bits;
+        m.cpu.fpscr = fpscr;
+    });
+    assert!(engine.stats().block_runs > 0);
+    (interp.cpu.fpu_s[2], jit.cpu.fpu_s[2])
+}
+
+#[test]
+fn vfp_fz_flushes_denormal_inputs_lockstep() {
+    // 2^-149 + 2^-148 = 0x0000_0003 with FZ off; both inputs are denormal
+    // and flush to +0 with FZ on. VADD S2, S0, S1.
+    let denorm_min = 0x0000_0001u32;
+    let denorm_two = 0x0000_0002u32;
+    let (i_off, j_off) = vfp_fpscr_lockstep(vadd_s2_s0_s1(), denorm_min, denorm_two, 0);
+    assert_eq!(i_off, 0x0000_0003, "interpreter, FZ off");
+    assert_eq!(j_off, 0x0000_0003, "compiled lane, FZ off");
+    assert_eq!(i_off, j_off);
+
+    let (i_on, j_on) = vfp_fpscr_lockstep(vadd_s2_s0_s1(), denorm_min, denorm_two, 1 << 24);
+    assert_eq!(i_on, 0x0000_0000, "interpreter must flush denormal inputs");
+    assert_eq!(
+        j_on, 0x0000_0000,
+        "compiled lane must flush denormal inputs"
+    );
+}
+
+#[test]
+fn vfp_fz_flushes_denormal_results_lockstep() {
+    // 2^-64 * 2^-85 = 2^-149 = 0x0000_0001 (denormal) with FZ off; the
+    // denormal result flushes to +0 with FZ on. VMUL S2, S0, S1.
+    let two_pow_m64 = 0x1F80_0000u32;
+    let two_pow_m85 = 0x1500_0000u32;
+    let (i_off, j_off) = vfp_fpscr_lockstep(vmul_s2_s0_s1(), two_pow_m64, two_pow_m85, 0);
+    assert_eq!(i_off, 0x0000_0001, "interpreter keeps the denormal result");
+    assert_eq!(
+        j_off, 0x0000_0001,
+        "compiled lane keeps the denormal result"
+    );
+    assert_eq!(i_off, j_off);
+
+    let (i_on, j_on) = vfp_fpscr_lockstep(vmul_s2_s0_s1(), two_pow_m64, two_pow_m85, 1 << 24);
+    assert_eq!(i_on, 0x0000_0000, "interpreter must flush denormal results");
+    assert_eq!(
+        j_on, 0x0000_0000,
+        "compiled lane must flush denormal results"
+    );
+}
+
+#[test]
+fn vfp_dn_defaults_nan_results_lockstep() {
+    // VADD with a quiet NaN carrying a payload. DN off: the payload
+    // propagates. DN on: the ARM default NaN, payload discarded.
+    let qnan = 0x7FC0_AAAAu32;
+    let one = (1.0f32).to_bits();
+    let (i_off, j_off) = vfp_fpscr_lockstep(vadd_s2_s0_s1(), qnan, one, 0);
+    assert_eq!(i_off, qnan, "interpreter propagates the NaN payload");
+    assert_eq!(j_off, qnan, "compiled lane propagates the NaN payload");
+    assert_eq!(i_off, j_off);
+
+    let (i_on, j_on) = vfp_fpscr_lockstep(vadd_s2_s0_s1(), qnan, one, 1 << 25);
+    assert_eq!(i_on, 0x7FC0_0000, "interpreter must emit the default NaN");
+    assert_eq!(j_on, 0x7FC0_0000, "compiled lane must emit the default NaN");
+}
+
+#[test]
+fn vfp_nan_payload_is_identical_across_lanes() {
+    // Signaling NaN operand quieted, payload preserved.
+    let snan = 0x7F80_0001u32;
+    let (i, j) = vfp_fpscr_lockstep(vadd_s2_s0_s1(), snan, (1.0f32).to_bits(), 0);
+    assert_eq!(i, 0x7FC0_0001);
+    assert_eq!(j, 0x7FC0_0001);
+
+    // Invalid operation with no NaN operand: both lanes land on the ARM
+    // default NaN, not the host FPU's synthesized payload.
+    let (i, j) = vfp_fpscr_lockstep(
+        vmul_s2_s0_s1(),
+        (0.0f32).to_bits(),
+        f32::INFINITY.to_bits(),
+        0,
+    );
+    assert_eq!(i, 0x7FC0_0000, "0 * inf is the default NaN");
+    assert_eq!(j, 0x7FC0_0000);
+
+    // Two NaN operands: the first one wins, deterministically, in both lanes.
+    let (i, j) = vfp_fpscr_lockstep(vadd_s2_s0_s1(), 0x7FC0_1111, 0x7FC0_2222, 0);
+    assert_eq!(i, 0x7FC0_1111);
+    assert_eq!(j, 0x7FC0_1111);
 }
 
 #[test]
