@@ -1463,9 +1463,17 @@ boards:
     # binary built from 80c01390d. The digest moves because it hashes whole
     # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-17
-    drift_ack_digest: 9391634fbc6084eeac47d85e20f265d51b8a07c98bf3b16ea23e63e77bc20a9c
+    # 2026-09-17 (riscv exec split): no model change, pure move of `step`'s
+    # match arms out of `cpu/riscv.rs` into `cpu/riscv/exec/*` (per-class
+    # `exec_*` methods; every moved line accounted for by a line-multiset
+    # diff), and `cpu/riscv` added to `models` so the moved arms stay
+    # watched. The digest moves because it hashes whole files. This is an
+    # ACK, NOT A CAPTURE.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 3efeb99a0c5473d737516b35ed09cdbdf6890db52940b35cca318b9709298622
     models:
       - crates/core/src/cpu/riscv.rs
+      - crates/core/src/cpu/riscv
       - crates/core/src/decoder/riscv.rs
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
@@ -5172,6 +5180,7 @@ boards:
     note: "Synthetic RV32I fixture used only to exercise the RISC-V core in firmware_survival::riscv_ci_fixture; not a real board, no silicon claim of any kind."
     models:
       - crates/core/src/cpu/riscv.rs
+      - crates/core/src/cpu/riscv
       - crates/core/src/decoder/riscv.rs
       - configs/chips/ci-fixture-riscv.yaml
 

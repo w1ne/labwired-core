@@ -12,7 +12,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf52840` | 🟢 silicon-verified | 2026-08-09 | `1dda54187125e15d` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-08-09 | `1dda54187125e15d` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-08-10 | `b8d57755c47475ce` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `9391634fbc6084ee` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-08-09 | `3efeb99a0c5473d7` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-08-09 | `9122bfc896e3dd24` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-08-09 | `043068b366c697e6` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-08-09 | `37546c976097d8dd` | ⚠ drift acked 2026-09-17, expires 2026-10-17 (re-capture pending) |
@@ -33,7 +33,7 @@ The models column is a content digest over everything that board's `models` list
 | `nrf54l15` | 🔵 sim-validated (deep model, no HW diff) | — | `f385b577b85a0a50` | no silicon capture |
 | `stm32g474re` | 🔵 sim-validated (deep model, no HW diff) | — | `e576fab001c7d39e` | no silicon capture |
 | `stm32wb55` | 🔵 sim-validated (deep model, no HW diff) | — | `b82d03916621ecc0` | no silicon capture |
-| `ci-fixture-riscv` | ⚪ structural | — | `3273a7b8da7f6255` | no silicon capture |
+| `ci-fixture-riscv` | ⚪ structural | — | `79efa91f4e871740` | no silicon capture |
 | `nano-33-iot` | 🟡 smoke-manual | — | `318c352c9fa23c2b` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `bb62a2a4587c14fc` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `b6b52b2c1fa5452c` | no silicon capture |
