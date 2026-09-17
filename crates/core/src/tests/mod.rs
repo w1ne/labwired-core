@@ -18,6 +18,8 @@ pub mod cortex_m_jit_batch_gates;
 pub mod cortex_m_memory_contract;
 #[cfg(test)]
 pub mod device_identity_one_home;
+#[cfg(test)]
+pub mod device_time_derived;
 
 /// Row 6.5: the runtime-downcast count may not grow.
 #[cfg(test)]
@@ -60,6 +62,8 @@ pub mod nrf52_nvmc;
 pub mod one_arch_policy;
 #[cfg(test)]
 pub mod one_arduino_boot_path;
+#[cfg(test)]
+pub mod out_of_line_test_modules;
 #[cfg(test)]
 pub mod peripheral_reachability;
 #[cfg(test)]

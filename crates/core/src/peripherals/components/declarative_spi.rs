@@ -51,6 +51,15 @@ pub struct GenericSpiDevice {
     /// lab asked for edge-accurate sampling (`config.spi_mode`), so every
     /// existing manifest keeps the byte-level path it always had.
     sampling: SpiSampling,
+    /// Simulated microseconds this device has been told have elapsed, summed
+    /// from [`SpiDevice::advance_time_us`].
+    ///
+    /// Phase A wires the CLOCK, not yet the behaviour: nothing in this model
+    /// reads the field, so a declarative SPI device's transcript is byte-for-byte
+    /// what it was (`declarative_device_byte_parity` is the proof). Phase B's
+    /// `data_ready` / busy-line timers on the SPI side read it, exactly the way
+    /// `declarative_i2c`'s `elapsed_us` already does.
+    elapsed_us: u64,
 }
 
 /// Validate the static descriptor contract for the `spi_device` primitive.
@@ -142,6 +151,7 @@ impl GenericSpiDevice {
             channels,
             component_id: None,
             sampling: SpiSampling::Byte,
+            elapsed_us: 0,
         })
     }
 
@@ -235,11 +245,23 @@ impl GenericSpiDevice {
     pub fn input_value(&self, key: &str) -> Option<f64> {
         self.slots.get(key).copied()
     }
+
+    /// Simulated microseconds this device has been told have elapsed. Read by
+    /// tests that prove the central device-time drive actually reaches SPI.
+    pub fn elapsed_us(&self) -> u64 {
+        self.elapsed_us
+    }
 }
 
 impl SpiDevice for GenericSpiDevice {
     fn sampling(&self) -> SpiSampling {
         self.sampling
+    }
+
+    /// Record elapsed simulated time. Deliberately has NO effect on the wire
+    /// yet — see the field's note.
+    fn advance_time_us(&mut self, us: u64) {
+        self.elapsed_us = self.elapsed_us.saturating_add(us);
     }
 
     fn cs_pin(&self) -> &str {
