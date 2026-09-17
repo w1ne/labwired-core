@@ -179,6 +179,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/ili9341.yaml"),
     ),
     (
+        &["amoled-rm67162"],
+        include_str!("../../../configs/devices/rm67162.yaml"),
+    ),
+    (
+        &["apa102"],
+        include_str!("../../../configs/devices/apa102.yaml"),
+    ),
+    (
+        &["neopixel", "ws2812"],
+        include_str!("../../../configs/devices/ws2812.yaml"),
+    ),
+    (
         &["gp2y0a21"],
         include_str!("../../../configs/devices/gp2y0a21.yaml"),
     ),

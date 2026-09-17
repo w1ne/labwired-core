@@ -50,6 +50,7 @@ mod display_oracle;
 use common::transcript::{dc_command, dc_data, run_i2c, run_spi, script, Step, Transcript};
 use display_oracle::ili9341::Ili9341 as OldIli9341;
 use display_oracle::pcd8544::Pcd8544 as OldPcd8544;
+use display_oracle::rm67162::Rm67162 as OldRm67162;
 use display_oracle::sh1107::Sh1107 as OldSh1107;
 use display_oracle::ssd1306::Ssd1306 as OldSsd1306;
 use display_oracle::st7789::St7789 as OldSt7789;
@@ -1594,4 +1595,478 @@ fn ili9341_artifact_keeps_its_published_shape() {
         "this panel publishes no `lit`"
     );
     assert!(art.meta.get("awake").is_none());
+}
+
+// ─── RM67162 ───────────────────────────────────────────────────────────────
+//
+// THE AMOLED. What this panel forced into the primitive is not a command table:
+// it is `lit_requires` (a numeric var folded into `lit`), `dc.source: hw_dcx`
+// (the controller's own DCX line as an alternative to a firmware GPIO), and
+// `artifact_meta` entries that publish a VAR — raw for `brightness`, hex for
+// `colmod` and `madctl`. Each has a test below and a negative control in
+// `declarative_display.rs`.
+
+fn new_rm67162() -> GenericDisplay {
+    labwired_core::peripherals::components::rm67162_hw_dcx(CS)
+}
+
+fn old_rm67162() -> OldRm67162 {
+    OldRm67162::with_controller_dc(CS)
+}
+
+fn drive_both_rm67162(steps: &[Step<'_>]) -> (OldRm67162, GenericDisplay, Transcript, Transcript) {
+    let mut old = old_rm67162();
+    let mut new = new_rm67162();
+    let t_old = run_spi(&mut old, steps);
+    let t_new = run_spi(&mut new, steps);
+    (old, new, t_old, t_new)
+}
+
+fn rm_window(cs: u16, ce: u16, rs: u16, re: u16) -> Vec<Step<'static>> {
+    script([
+        dc_command(
+            0x2A,
+            &[(cs >> 8) as u8, cs as u8, (ce >> 8) as u8, ce as u8],
+        ),
+        dc_command(
+            0x2B,
+            &[(rs >> 8) as u8, rs as u8, (re >> 8) as u8, re as u8],
+        ),
+    ])
+}
+
+fn rm_pixels(px: &[u16]) -> Vec<Step<'static>> {
+    let mut bytes = Vec::with_capacity(px.len() * 2);
+    for p in px {
+        bytes.extend_from_slice(&p.to_be_bytes());
+    }
+    script([dc_command(0x2C, &[]), dc_data(&bytes)])
+}
+
+/// The init a Lilygo T-Display-S3 AMOLED driver sends, vendor commands and all.
+/// 0xFE / 0xC4 / 0x35 / 0x44 are NOT in the command table and take no parameter
+/// count: each is consumed, closes the stream, and its parameters then arrive
+/// with nothing open. That is exactly what makes an unmodelled init command
+/// harmless on a D/C-framed panel.
+fn rm_init() -> Vec<Step<'static>> {
+    script([
+        dc_command(0xFE, &[0x00]),
+        dc_command(0xC4, &[0x80]),
+        dc_command(0x3A, &[0x55]),
+        dc_command(0x35, &[0x00]),
+        dc_command(0x44, &[0x01, 0x66]),
+        dc_command(0x36, &[0x00]),
+        dc_command(0x11, &[]),
+        dc_command(0x29, &[]),
+    ])
+}
+
+#[test]
+fn rm67162_stock_init_and_a_frame_are_byte_identical() {
+    // One colour deliberately dominant: an all-distinct frame ties every count
+    // at 1, and a tie is the one place these two models disagree on purpose —
+    // see `rm67162_top_colour_resolves_a_tie_deterministically`.
+    let px: Vec<u16> = (0..1024u32)
+        .map(|i| {
+            if i % 2 == 0 {
+                0x07E0
+            } else {
+                (i.wrapping_mul(2087) ^ 0x1234) as u16 | 0x8000
+            }
+        })
+        .collect();
+    let steps = script([
+        vec![Step::CsSelect],
+        rm_init(),
+        dc_command(0x51, &[0xFF]),
+        rm_window(0, 31, 0, 31),
+        rm_pixels(&px),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, t_old, t_new) = drive_both_rm67162(&steps);
+    assert_eq!(t_old, t_new, "wire transcript");
+    assert_eq!(
+        old.framebuffer(),
+        new.framebuffer(),
+        "frame memory differs after the stock init and a 32x32 blit"
+    );
+    // Not a tautology: the blit really landed.
+    assert!(
+        new.framebuffer().iter().filter(|&&b| b != 0).count() > 1000,
+        "the blit landed"
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+        &SpiDevice::artifacts(&new, "amoled", &opts())[0],
+        "rm67162 stock init + frame",
+    );
+}
+
+/// THE AMOLED ASSERTION, carried across the port.
+///
+/// A driver ported from a backlit TFT does everything right except write
+/// brightness, because on a TFT brightness is a separate backlight pin that is
+/// not the controller's business. On an AMOLED that firmware displays nothing.
+/// `lit_requires: [{ var: brightness, min: 1 }]` is the descriptor key that
+/// says so, and both models must agree that the pixels landed and the glass is
+/// still dark.
+#[test]
+fn rm67162_dispon_without_brightness_is_not_lit() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x11, &[]),
+        dc_command(0x29, &[]),
+        rm_window(0, 9, 0, 0),
+        rm_pixels(&[0xF800; 10]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_rm67162(&steps);
+    let a_old = &SpiDevice::artifacts(&old, "amoled", &opts())[0];
+    let a_new = &SpiDevice::artifacts(&new, "amoled", &opts())[0];
+    assert_eq!(a_new.meta["display_on"], true, "DISPON was sent");
+    assert_eq!(a_new.meta["brightness"], 0, "WRDISBV was never written");
+    assert_eq!(
+        a_new.meta["lit"], false,
+        "an emissive panel at brightness 0 shows nothing, whatever DISPON says"
+    );
+    // Not a case of nothing happening: the pixels really did land.
+    assert_ne!(
+        new.framebuffer().iter().filter(|&&b| b != 0).count(),
+        0,
+        "frame memory must still hold what was written"
+    );
+    assert_same_artifact(a_old, a_new, "rm67162 DISPON without brightness");
+}
+
+/// The three states between "on" and "visible", each checked against the old
+/// model: awake alone, bright alone, and both plus DISPON.
+#[test]
+fn rm67162_lit_needs_dispon_awake_and_brightness() {
+    for (name, prelude) in [
+        ("SLPOUT only", vec![dc_command(0x11, &[])]),
+        (
+            "SLPOUT + brightness, no DISPON",
+            vec![dc_command(0x11, &[]), dc_command(0x51, &[0x7F])],
+        ),
+        (
+            "DISPON + brightness, still asleep",
+            vec![dc_command(0x29, &[]), dc_command(0x51, &[0x7F])],
+        ),
+        (
+            "all three",
+            vec![
+                dc_command(0x11, &[]),
+                dc_command(0x51, &[0x01]),
+                dc_command(0x29, &[]),
+            ],
+        ),
+    ] {
+        let steps = script([vec![Step::CsSelect], script(prelude), vec![Step::CsRelease]]);
+        let (old, new, _, _) = drive_both_rm67162(&steps);
+        assert_eq!(
+            old.is_lit(),
+            new.lit(),
+            "{name}: the two models disagree about `lit`"
+        );
+        assert_same_artifact(
+            &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+            &SpiDevice::artifacts(&new, "amoled", &opts())[0],
+            &format!("rm67162 {name}"),
+        );
+    }
+    // Not vacuous: the last case IS lit and the first three are not.
+    let all = script([
+        vec![Step::CsSelect],
+        dc_command(0x11, &[]),
+        dc_command(0x51, &[0x01]),
+        dc_command(0x29, &[]),
+        vec![Step::CsRelease],
+    ]);
+    let (_, new, _, _) = drive_both_rm67162(&all);
+    assert!(new.lit(), "brightness 1 with DISPON and SLPOUT is lit");
+}
+
+/// Seven MADCTL encodings, each with a window that only makes sense in that
+/// orientation. MV changes what a legal column IS (0..239 vs 0..535), so it
+/// moves the clamp as well as the pixel map.
+#[test]
+fn rm67162_madctl_orientation_matches() {
+    for madctl in [0x00u8, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0] {
+        let steps = script([
+            vec![Step::CsSelect],
+            dc_command(0x36, &[madctl]),
+            dc_command(0x51, &[0xFF]),
+            rm_window(0, 15, 0, 15),
+            // One colour dominant on purpose: an all-distinct frame ties every
+            // count at 1, and a tie is the one thing these two models resolve
+            // differently — see
+            // `rm67162_top_colour_resolves_a_tie_deterministically`.
+            rm_pixels(
+                &(0..256u32)
+                    .map(|i| {
+                        if i % 2 == 0 {
+                            0x07E0
+                        } else {
+                            0x8000 | i as u16
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            vec![Step::CsRelease],
+        ]);
+        let (old, new, _, _) = drive_both_rm67162(&steps);
+        assert_eq!(
+            old.framebuffer(),
+            new.framebuffer(),
+            "MADCTL 0x{madctl:02X}: frame memory"
+        );
+        assert_same_artifact(
+            &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+            &SpiDevice::artifacts(&new, "amoled", &opts())[0],
+            &format!("rm67162 MADCTL 0x{madctl:02X}"),
+        );
+    }
+}
+
+/// A landscape window at column 300 is legal only once MV is set — 300 is past
+/// the portrait width of 240. Folding it back into portrait would move a whole
+/// picture.
+#[test]
+fn rm67162_landscape_window_is_not_folded_into_portrait() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x36, &[0x20]),
+        dc_command(0x51, &[0xFF]),
+        rm_window(300, 331, 0, 15),
+        rm_pixels(&[0x1F; 512]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_rm67162(&steps);
+    assert_eq!(
+        old.framebuffer(),
+        new.framebuffer(),
+        "landscape frame memory"
+    );
+    assert!(
+        new.framebuffer().iter().filter(|&&b| b != 0).count() > 400,
+        "the landscape blit landed; a window folded to portrait would clamp it \
+         onto one column"
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+        &SpiDevice::artifacts(&new, "amoled", &opts())[0],
+        "rm67162 landscape window",
+    );
+}
+
+/// SWRESET on this controller CLEARS FRAME MEMORY as well as the control state
+/// — the opposite of the MIPI reading the ST7789V (§9.1.22) and the ILI9341
+/// (§8.2.2) state, where the frame memory is unaffected. That is why
+/// `reset_control` and `clear_ram` are two actions in the descriptor and
+/// neither implies the other.
+#[test]
+fn rm67162_swreset_clears_frame_memory_unlike_the_mipi_panels() {
+    let steps = script([
+        vec![Step::CsSelect],
+        rm_init(),
+        dc_command(0x51, &[0xFF]),
+        rm_window(0, 15, 0, 15),
+        rm_pixels(&[0xFFFF; 256]),
+        dc_command(0x01, &[]),
+        vec![Step::CsRelease],
+    ]);
+    let (old, new, _, _) = drive_both_rm67162(&steps);
+    assert_eq!(
+        new.framebuffer().iter().filter(|&&b| b != 0).count(),
+        0,
+        "SWRESET clears frame memory on the RM67162"
+    );
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let a_new = &SpiDevice::artifacts(&new, "amoled", &opts())[0];
+    assert_eq!(
+        a_new.meta["brightness"], 0,
+        "SWRESET resets WRDISBV to 0x00"
+    );
+    assert_eq!(a_new.meta["colmod"], "0x55", "and COLMOD to RGB565");
+    assert_eq!(a_new.meta["madctl"], "0x00");
+    assert_eq!(a_new.meta["display_on"], false);
+    assert_eq!(a_new.meta["asleep"], true);
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+        a_new,
+        "rm67162 after SWRESET",
+    );
+    // The negative half: without the SWRESET the same script leaves a painted,
+    // bright, awake panel. Deleting `clear_ram` from the descriptor has to
+    // fail this.
+    let without = script([
+        vec![Step::CsSelect],
+        rm_init(),
+        dc_command(0x51, &[0xFF]),
+        rm_window(0, 15, 0, 15),
+        rm_pixels(&[0xFFFF; 256]),
+        vec![Step::CsRelease],
+    ]);
+    let (_, painted, _, _) = drive_both_rm67162(&without);
+    assert_eq!(
+        painted.framebuffer().iter().filter(|&&b| b != 0).count(),
+        512,
+        "the same script without SWRESET leaves 256 white pixels"
+    );
+}
+
+/// The two D/C wirings are both real hardware and the artifact says which one
+/// this placement uses. A panel that framed nothing and a panel that was never
+/// sent anything are indistinguishable without it.
+#[test]
+fn rm67162_publishes_which_dc_wiring_drives_it() {
+    let (old, new, _, _) = drive_both_rm67162(&[]);
+    assert_eq!(
+        SpiDevice::artifacts(&new, "amoled", &opts())[0].meta["dc_source"],
+        "controller_dcx"
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+        &SpiDevice::artifacts(&new, "amoled", &opts())[0],
+        "rm67162 hw dcx",
+    );
+
+    let mut old_gpio = OldRm67162::with_gpio_dc(CS, DC);
+    let mut new_gpio = labwired_core::peripherals::components::rm67162_gpio_dc(CS, DC);
+    let steps = script([
+        vec![Step::CsSelect],
+        rm_init(),
+        dc_command(0x51, &[0x40]),
+        rm_window(0, 3, 0, 0),
+        rm_pixels(&[0xF81F; 4]),
+        vec![Step::CsRelease],
+    ]);
+    assert_eq!(
+        run_spi(&mut old_gpio, &steps),
+        run_spi(&mut new_gpio, &steps)
+    );
+    assert_eq!(old_gpio.framebuffer(), new_gpio.framebuffer());
+    let a = &SpiDevice::artifacts(&new_gpio, "amoled", &opts())[0];
+    assert_eq!(a.meta["dc_source"], "gpio");
+    assert_eq!(a.meta["lit"], true);
+    assert_eq!(a.meta["brightness"], 0x40);
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old_gpio, "amoled", &opts())[0],
+        a,
+        "rm67162 gpio dc",
+    );
+}
+
+/// ── A DELIBERATE DIFFERENCE, asserted in both directions ────────────────────
+///
+/// The old model counted colours in a `HashMap` and resolved a tie by hash
+/// iteration order — not stable between runs, between native and wasm, or
+/// between machines, in a field the browser prints as the dominant colour. The
+/// descriptor counts in a `BTreeMap`, so a tie resolves to the highest RGB565
+/// value identically everywhere. Untied frames — every real picture, which has
+/// a background — are unchanged, which is why every other test above compares
+/// the two artifacts field for field and passes. Same change the ST7789 and
+/// ILI9341 ports made.
+#[test]
+fn rm67162_top_colour_resolves_a_tie_deterministically() {
+    let steps = script([
+        vec![Step::CsSelect],
+        dc_command(0x29, &[]),
+        rm_window(0, 3, 0, 0),
+        rm_pixels(&[0x07E0, 0x07E0, 0xF800, 0xF800]),
+        vec![Step::CsRelease],
+    ]);
+    let (_, new, _, _) = drive_both_rm67162(&steps);
+    let art = &SpiDevice::artifacts(&new, "amoled", &opts())[0];
+    assert_eq!(
+        art.meta["top_colour"], "0xF800",
+        "a tie resolves to the highest RGB565 value, on every machine"
+    );
+    assert_eq!(art.meta["top_colour_pixels"], 2);
+}
+
+/// An unpowered module refuses the bus, so every flag stays at its
+/// power-on-dark value by construction rather than by masking at report time.
+#[test]
+fn rm67162_unpowered_module_matches() {
+    let steps = script([
+        vec![Step::CsSelect],
+        rm_init(),
+        dc_command(0x51, &[0xFF]),
+        rm_window(0, 3, 0, 0),
+        rm_pixels(&[0xFFFF; 4]),
+        vec![Step::CsRelease],
+    ]);
+    let mut old = old_rm67162().with_powered(false);
+    let mut new = new_rm67162();
+    new.set_powered(false);
+    assert_eq!(run_spi(&mut old, &steps), run_spi(&mut new, &steps));
+    assert_eq!(old.framebuffer(), new.framebuffer());
+    let art = &SpiDevice::artifacts(&new, "amoled", &opts())[0];
+    assert_eq!(art.meta["powered"], false);
+    assert_eq!(art.meta["lit"], false);
+    assert_eq!(
+        art.meta["asleep"], true,
+        "an unpowered panel was never woken"
+    );
+    assert_eq!(art.meta["brightness"], 0);
+    assert_eq!(art.meta["painted_bytes"], 0);
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+        art,
+        "rm67162 unpowered",
+    );
+}
+
+/// The artifact's published shape, key for key. These names are the contract
+/// the browser overlay and the CLI read; a port that renamed `asleep` to
+/// `awake` or turned `colmod` from `"0x55"` into `85` would break a consumer
+/// silently.
+#[test]
+fn rm67162_artifact_keeps_its_published_shape() {
+    let (old, new, _, _) = drive_both_rm67162(&[]);
+    let art = &SpiDevice::artifacts(&new, "amoled", &opts())[0];
+    assert_eq!(art.meta["format"], "rgb565_be");
+    assert_eq!(art.meta["w"], 240);
+    assert_eq!(art.meta["h"], 536);
+    assert_eq!(art.meta["total_bytes"], 240 * 536 * 2);
+    assert_eq!(
+        art.meta["colmod"], "0x55",
+        "hex-formatted, not the number 85"
+    );
+    assert_eq!(art.meta["madctl"], "0x00");
+    assert_eq!(art.meta["brightness"], 0, "raw, not hex");
+    assert!(
+        art.meta.get("awake").is_none(),
+        "this panel publishes `asleep`, not `awake`"
+    );
+    assert!(art.meta.get("inverted").is_none());
+    let mut keys: Vec<&String> = art.meta.as_object().expect("object").keys().collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        [
+            "asleep",
+            "brightness",
+            "colmod",
+            "dc_source",
+            "display_on",
+            "format",
+            "generation",
+            "h",
+            "lit",
+            "madctl",
+            "painted_bytes",
+            "powered",
+            "top_colour",
+            "top_colour_pixels",
+            "total_bytes",
+            "w",
+        ]
+    );
+    assert_same_artifact(
+        &SpiDevice::artifacts(&old, "amoled", &opts())[0],
+        art,
+        "rm67162 power-on artifact",
+    );
 }

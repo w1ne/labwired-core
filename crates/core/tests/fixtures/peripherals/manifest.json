@@ -1015,7 +1015,7 @@
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the panel then ignores its bus entirely and reports `lit: false`, `painted_bytes: 0`, which is what the part does on a bench."
         }
       ],
       "labs": [],
@@ -2440,7 +2440,7 @@
         {
           "name": "powered",
           "ty": "bool",
-          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
+          "doc": "Whether the strip's supply pins (5V, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the strip then ignores its bus entirely and latches nothing, which is what the part does on a bench."
         }
       ],
       "labs": [],

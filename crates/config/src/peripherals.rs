@@ -1863,6 +1863,10 @@ pub struct DeviceBehavior {
     /// framing and the command table. Absent for non-display primitives.
     #[serde(default)]
     pub display: Option<DisplaySpec>,
+    /// For the `led_strip` primitive: an addressable LED strip's wire protocol
+    /// and artifact contract. Absent for every other primitive.
+    #[serde(default)]
+    pub led_strip: Option<LedStripSpec>,
     /// For the `uart_device` primitive: the part's frame shape, its command
     /// table and what it says unprompted. See [`UartSpec`]. Absent for every
     /// other primitive.
@@ -2241,6 +2245,30 @@ pub struct DisplaySpec {
     /// and `generation` are always present because they describe the payload
     /// itself; everything else is listed here.
     pub artifact_meta: Vec<DisplayMetaField>,
+    /// Extra conditions, beyond DISPON and awake, that must hold for the panel
+    /// to emit light.
+    ///
+    /// Forced by the RM67162, and general to every emissive panel. A backlit
+    /// TFT's brightness is a separate pin the controller knows nothing about,
+    /// so `display_on AND awake` is the whole truth there. An AMOLED has no
+    /// backlight: brightness lives INSIDE the controller (`WRDISBV`, DCS 0x51)
+    /// and its reset value is 0x00, i.e. black. Firmware ported from a TFT
+    /// sends a perfect init and a full frame, never writes 0x51, and shows
+    /// nothing on the bench. Without this a model would report that firmware
+    /// `lit` and flatter a driver that cannot work.
+    #[serde(default)]
+    pub lit_requires: Vec<DisplayLitRequirement>,
+}
+
+/// One clause of [`DisplaySpec::lit_requires`]: a declared var that must be at
+/// least `min` for the panel to be lit.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DisplayLitRequirement {
+    /// Name of the var (see [`DisplaySpec::vars`]).
+    pub var: String,
+    /// The smallest value that still emits light. `1` for a brightness whose
+    /// reset value is 0.
+    pub min: u32,
 }
 
 /// What a CS assert does to a stream that is already open.
@@ -2289,13 +2317,59 @@ pub enum DisplayMetaField {
         #[serde(rename = "as")]
         published_as: String,
     },
+    /// The CURRENT VALUE OF A DECLARED VAR, raw or hex-formatted.
+    ///
+    /// Written `- { var: brightness }` or `- { var: colmod, format: hex8 }`.
+    /// Forced by the RM67162, whose artifact has always carried `brightness`
+    /// as a number and `colmod` / `madctl` as `"0x55"`-style strings. The
+    /// formatting is part of the published contract — a consumer that parsed
+    /// `"0x55"` reads `85` if the key silently becomes a number — so it is
+    /// stated per entry rather than guessed from the value.
+    Var {
+        var: String,
+        /// Publish under this key instead of the var's own name.
+        #[serde(default, rename = "as")]
+        published_as: Option<String>,
+        #[serde(default)]
+        format: DisplayMetaFormat,
+    },
+}
+
+/// How a [`DisplayMetaField::Var`] renders into the artifact's `meta`.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayMetaFormat {
+    /// A JSON number.
+    #[default]
+    Raw,
+    /// `"0xNN"` — two hex digits, upper case.
+    Hex8,
+    /// `"0xNNNN"` — four hex digits, upper case.
+    Hex16,
 }
 
 impl DisplayMetaField {
-    pub fn flag(&self) -> DisplayMetaFlag {
+    /// The flag this entry publishes, or `None` for a var entry.
+    pub fn flag(&self) -> Option<DisplayMetaFlag> {
         match self {
-            Self::Flag(f) => *f,
-            Self::Renamed { flag, .. } => *flag,
+            Self::Flag(f) => Some(*f),
+            Self::Renamed { flag, .. } => Some(*flag),
+            Self::Var { .. } => None,
+        }
+    }
+
+    /// The var this entry reads, or `None` for a flag entry.
+    pub fn var(&self) -> Option<&str> {
+        match self {
+            Self::Var { var, .. } => Some(var),
+            _ => None,
+        }
+    }
+
+    pub fn format(&self) -> DisplayMetaFormat {
+        match self {
+            Self::Var { format, .. } => *format,
+            _ => DisplayMetaFormat::Raw,
         }
     }
 
@@ -2304,6 +2378,15 @@ impl DisplayMetaField {
         match self {
             Self::Flag(f) => f.default_key(),
             Self::Renamed { published_as, .. } => published_as,
+            Self::Var {
+                var,
+                published_as: None,
+                ..
+            } => var,
+            Self::Var {
+                published_as: Some(k),
+                ..
+            } => k,
         }
     }
 }
@@ -2335,6 +2418,17 @@ pub enum DisplayMetaFlag {
     Powered,
     /// Inversion flag. Recorded, never applied to the stored bytes.
     Inverted,
+    /// The COMPLEMENT of `awake`, ungated by the supply — the name the RM67162
+    /// artifact has always published. Not a rename of `awake`: `awake` is
+    /// supply-gated (`powered && awake`) and this is the raw sleep flag, so an
+    /// unpowered panel reports `asleep: true` rather than `awake: false`, and
+    /// the two would disagree for a panel that had been woken and then lost its
+    /// rail.
+    Asleep,
+    /// Which of the two real D/C wirings this placement uses: `"gpio"` when
+    /// firmware toggles a pin, `"controller_dcx"` when the SPI controller
+    /// drives the line itself. A string, because it is a choice and not a flag.
+    DcSource,
 }
 
 impl DisplayMetaFlag {
@@ -2351,6 +2445,172 @@ impl DisplayMetaFlag {
             Self::Lit => "lit",
             Self::Powered => "powered",
             Self::Inverted => "inverted",
+            Self::Asleep => "asleep",
+            Self::DcSource => "dc_source",
+        }
+    }
+}
+
+// ─── the `led_strip` primitive ──────────────────────────────────────────────
+//
+// An addressable LED strip is a PER-LED COLOUR ARRAY clocked by a wire
+// protocol. It is not a framebuffer panel: there is no address counter, no
+// command table, no window, and no frame memory that a later command re-reads.
+// Writing it as a `display` would have meant inventing all four.
+//
+// What is data: the strip's colour order on the wire, how many LEDs, which
+// protocol clocks them in, and — for the single-wire parts — the bit-timing
+// table the datasheet states in nanoseconds. What is engine: the two decoders,
+// and the artifact.
+//
+// WHAT IS DELIBERATELY NOT HERE, on both wires: power draw and daisy-chain
+// propagation delay. Neither is observable in the colour array, which is the
+// only thing this primitive claims to reproduce.
+
+/// The `behavior.led_strip` section: one addressable strip, entirely as data.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LedStripSpec {
+    /// How bytes reach the strip.
+    pub wire: LedStripWire,
+    /// `crate::inspect::artifact_format` name the artifact carries, so a
+    /// consumer decoding the bytes reads the same string it always did. It is
+    /// also what states the payload's BYTE ORDER (`APA102_RGB` vs
+    /// `ws2812_grb`) — there is no second key repeating that fact, because two
+    /// keys for one fact is how a descriptor starts lying.
+    pub artifact_format: String,
+    /// Default strip length when the placement states no `num_pixels`.
+    pub default_pixels: u32,
+    /// Whether this strip's supply connection is modelled: the engine exposes a
+    /// `powered` config key, refuses the wire when it is explicitly `false`,
+    /// and reports `powered` in the artifact.
+    ///
+    /// TRUE for the APA102, which is the clearest case in the tree: the LEDs
+    /// draw every milliamp from the rail and none from the data lines, so a
+    /// diagram wiring only CLK/DATA/CS is completely dark on a bench.
+    #[serde(default)]
+    pub supply_gated: bool,
+    /// Which facts the artifact's `meta` carries. `w`, `h`, `format` and
+    /// `generation` are always present because they describe the payload;
+    /// everything else is listed here, for the same reason a display's is.
+    pub artifact_meta: Vec<LedStripMetaField>,
+    /// `nrz_gpio` only: the bit-timing table, in nanoseconds.
+    #[serde(default)]
+    pub timing: Option<LedStripTiming>,
+    /// `spi_frames` only: the framing of one SPI transaction.
+    #[serde(default)]
+    pub spi_frames: Option<LedStripSpiFrames>,
+}
+
+/// Which wire protocol clocks a strip's colours in.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LedStripWire {
+    /// Clocked SPI: a start frame, one fixed-size frame per LED, an end frame.
+    /// The strip latches when CS is released (APA102 / DotStar).
+    SpiFrames,
+    /// ONE self-clocked data wire carrying an NRZ stream, decoded from GPIO
+    /// EDGE TIMING: every bit is a HIGH pulse whose DURATION is the bit value.
+    /// A long LOW gap latches the frame (WS2812 / WS2812B / SK6812).
+    NrzGpio,
+}
+
+/// The single-wire bit timing, IN NANOSECONDS, as the datasheet states it.
+///
+/// Stated rather than hard-coded because it is the part's own number: a SK6812
+/// and a WS2812B share this decoder and differ here. The engine scales these to
+/// simulated cycles with the firmware's clock, so the decode tracks the same
+/// time base the edges were scheduled on.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct LedStripTiming {
+    /// HIGH duration, in ns, separating a `0` (short high) from a `1` (long
+    /// high). The mid-point between T0H and T1H.
+    pub high_threshold_ns: u64,
+    /// LOW-gap duration, in ns, that ends a frame and displays it. The
+    /// datasheet minimum is the reset time; a detector below it must still be
+    /// far above any inter-bit low.
+    pub reset_threshold_ns: u64,
+    /// Bits per LED. 24 for an RGB part.
+    pub bits_per_pixel: u32,
+}
+
+/// The framing of one clocked-SPI transaction.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct LedStripSpiFrames {
+    /// Bytes that must open the transaction, matched exactly. A transaction
+    /// that does not start with them latches NOTHING — a glitchy transfer must
+    /// not blank a strip.
+    pub start_frame: Vec<u8>,
+    /// Size of one LED frame, in bytes.
+    pub frame_bytes: u32,
+    /// Mask applied to an LED frame's first byte, and the value that mask must
+    /// equal for the frame to be an LED frame. Anything else is the end frame
+    /// or garbage and STOPS the decode.
+    pub header_mask: u8,
+    pub header_value: u8,
+    /// Mask selecting the global-brightness field out of that same first byte.
+    /// Absent ⇒ this strip has no per-LED brightness field.
+    #[serde(default)]
+    pub brightness_mask: Option<u8>,
+    /// Index, within one LED frame, of each colour byte in `colour_order`.
+    pub colour_bytes: Vec<u8>,
+}
+
+/// A fact about a clocked strip that the artifact's `meta` can carry.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LedStripMetaFlag {
+    /// Per-LED global brightness, as an array. `spi_frames` only.
+    Brightness,
+    /// How many LEDs the decoder actually reconstructed.
+    PixelsDecoded,
+    /// How many of them carry a non-zero colour.
+    LitPixels,
+    /// The strip's supply pins are connected in the design.
+    Powered,
+    /// The chip-select pad label. `spi_frames` only.
+    CsPin,
+    /// The data pad number. `nrz_gpio` only.
+    DataPin,
+}
+
+impl LedStripMetaFlag {
+    pub fn default_key(self) -> &'static str {
+        match self {
+            Self::Brightness => "brightness",
+            Self::PixelsDecoded => "pixels_decoded",
+            Self::LitPixels => "lit_pixels",
+            Self::Powered => "powered",
+            Self::CsPin => "cs_pin",
+            Self::DataPin => "data_pin",
+        }
+    }
+}
+
+/// One entry of [`LedStripSpec::artifact_meta`], optionally renamed. Same shape
+/// and the same reason as [`DisplayMetaField`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum LedStripMetaField {
+    Flag(LedStripMetaFlag),
+    Renamed {
+        flag: LedStripMetaFlag,
+        #[serde(rename = "as")]
+        published_as: String,
+    },
+}
+
+impl LedStripMetaField {
+    pub fn flag(&self) -> LedStripMetaFlag {
+        match self {
+            Self::Flag(f) => *f,
+            Self::Renamed { flag, .. } => *flag,
+        }
+    }
+
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Flag(f) => f.default_key(),
+            Self::Renamed { published_as, .. } => published_as,
         }
     }
 }
@@ -2454,6 +2714,19 @@ pub enum DisplayDcSource {
     /// of it. Command PARAMETERS then arrive on the command stream, and every
     /// data-stream byte is frame memory.
     ControlByte,
+    /// A D/C line that the SPI **controller** may drive itself — the nRF54L
+    /// SPIM's `PSEL.DCX` + `DCXCNT`, which holds D/C low for the first DCXCNT
+    /// bytes of a transfer and high for the rest, with no firmware pin write
+    /// anywhere.
+    ///
+    /// The byte-level framing is identical to [`Self::Pin`]: the device latches
+    /// a level and reads it before each transfer. What differs is ATTACH. A
+    /// `pin` panel demands `dc_pin` and resolves it to a GPIO output register;
+    /// an `hw_dcx` panel accepts EITHER `dc_pin` (an nRF52-era or STM32 board,
+    /// where firmware toggles the line) OR `hw_dcx: true` (the controller
+    /// drives it), and requires exactly one of them. Neither is inference: both
+    /// are wires, and which one is connected is a fact about the board.
+    HwDcx,
 }
 
 /// Which addressing modes the controller implements and which one it powers on

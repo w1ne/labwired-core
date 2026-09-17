@@ -1,0 +1,77 @@
+# APA102 / DotStar — clocked-SPI addressable RGB LED strip. Declarative
+# `led_strip` primitive.
+#
+# A strip is NOT a framebuffer panel, which is why it is not a `display`: there
+# is no address counter, no command table, no window and no frame memory a
+# later command re-reads. What a DotStar datasheet states is the FRAMING of one
+# transaction, and that is what this file carries.
+#
+# THE FRAME. A transaction is a 32-bit start frame of zeros, then one 32-bit
+# frame per LED -- `[0xE0 | brightness5, blue, green, red]` -- then enough
+# end-frame clocks to shift the last LED down the chain. The strip latches on
+# CS RELEASE. A transaction that does not open with the start frame, or that is
+# shorter than the start frame plus one LED frame, latches NOTHING: a glitchy
+# transfer must not blank a strip that is already showing a picture.
+#
+# THE HEADER IS A MARKER, NOT A COUNT. `header_mask`/`header_value` say that an
+# LED frame's first byte has its top three bits set. A byte that fails the test
+# STOPS the decode; without the marker at all, whatever follows the last LED
+# decodes as one more pixel and every strip grows by a phantom LED.
+#
+# ⚠️ THE MARKER DOES NOT CATCH EVERY END FRAME, and that is the datasheet, not
+# an oversight. The APA102 end frame is 32 clocks whose level the datasheet
+# leaves to the driver: Adafruit_DotStar clocks ZEROS, which fail the marker and
+# stop the decode, while FastLED clocks ONES, and 0xFF & 0xE0 == 0xE0 PASSES.
+# A ones end frame therefore decodes as one more white LED, and `num_pixels` is
+# what bounds the strip. The deleted Rust model tested the identical
+# `header & 0xE0 != 0xE0`; `led_strip_migration_parity.rs` pins both to it.
+#
+# BRIGHTNESS is the low five bits of that same header byte, which is why
+# `brightness_mask` must not overlap `header_mask` -- the engine refuses a
+# descriptor where it does, because the same bits would be both the frame
+# marker and the brightness.
+#
+# SUPPLY IS MODELLED, and this is the clearest case in the tree: an APA102
+# draws every milliamp of LED current from the rail and none from the data
+# lines, so a diagram wiring only CLK/DATA/CS produces a strip that emits
+# nothing at all on a bench while a twin that ignored the rail reported latched
+# colours.
+#
+# NOT modelled, deliberately: power draw and daisy-chain propagation delay.
+# Neither is observable in the colour array, which is the only thing this part
+# claims to reproduce.
+type: apa102
+
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: spi_frames
+    artifact_format: APA102_RGB
+    default_pixels: 8
+    supply_gated: true
+    spi_frames:
+      start_frame: [0x00, 0x00, 0x00, 0x00]
+      frame_bytes: 4
+      header_mask: 0xE0
+      header_value: 0xE0
+      brightness_mask: 0x1F
+      # Byte 0 is the header; the colour bytes arrive B, G, R and the artifact
+      # publishes R, G, B.
+      colour_bytes: [3, 2, 1]
+    artifact_meta: [brightness, powered, cs_pin]
+
+metadata:
+  label: "APA102 DotStar Strip"
+  summary: "SPI-clocked addressable RGB LED strip (write-only sink)."
+  detail: "APA102/DotStar, 32-bit frames with 5-bit global brightness. Latches on CS release. Power and daisy-chain delay not modelled."
+  category: spi
+  config_keys:
+    - name: cs_pin
+      ty: str
+      doc: "Chip-select pin label the firmware drives (e.g. \"PA4\")."
+    - name: num_pixels
+      ty: int
+      doc: "Strip length in LEDs. Defaults to 8."
+    - name: powered
+      ty: bool
+      doc: "Whether the strip's supply pins (5V, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the strip then ignores its bus entirely and latches nothing, which is what the part does on a bench."
