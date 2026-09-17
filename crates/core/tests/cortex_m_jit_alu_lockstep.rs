@@ -14,7 +14,7 @@ use labwired_core::cpu::jit_framework::cortex_m::{
     differential_cycle_ignore_indices, snapshot_state, CortexMFrontend, CortexMJitEngine,
     CortexMWasmJit, MIN_PROFITABLE_BLOCK_INSTRS,
 };
-use labwired_core::cpu::jit_framework::differential::{compare, DiffPolicy};
+use labwired_core::cpu::jit_framework::differential::{compare, compare_memory, DiffPolicy};
 use labwired_core::cpu::jit_framework::frontend::IsaFrontend;
 use labwired_core::cpu::jit_framework::CodeView;
 use labwired_core::cpu::CortexM;
@@ -134,6 +134,13 @@ fn alu_hot_loop_is_byte_identical_and_compiles() {
                 interp.cpu.pc, interp.cpu.r0, interp.cpu.xpsr, jit.cpu.pc, jit.cpu.r0, jit.cpu.xpsr
             );
         }
+        if let Some(d) = compare_memory(units, interp.cpu.pc, &interp.bus, &jit.bus) {
+            panic!(
+                "JIT diverged from interpreter in RAM at unit {units} (retired {retired}): \
+                 addr={:#x} interp={:#04x} jit={:#04x} pc={:#x}",
+                d.address, d.interp, d.jit, d.pc
+            );
+        }
     }
 
     let stats = engine.stats();
@@ -195,6 +202,13 @@ fn eight_insn_loop_compiles_when_min_profitable_is_4() {
             &policy,
         ) {
             panic!("8-insn loop diverged at unit {units}: {d:?}");
+        }
+        if let Some(d) = compare_memory(units, interp.cpu.pc, &interp.bus, &jit.bus) {
+            panic!(
+                "8-insn loop diverged in RAM at unit {units}: addr={:#x} interp={:#04x} \
+                 jit={:#04x} pc={:#x}",
+                d.address, d.interp, d.jit, d.pc
+            );
         }
         if retired > 400 {
             break;
@@ -1237,6 +1251,13 @@ fn lockstep_until_compiled(
                 jit.cpu.xpsr
             );
         }
+        if let Some(d) = compare_memory(units, interp.cpu.pc, &interp.bus, &jit.bus) {
+            panic!(
+                "JIT diverged from interpreter in RAM at unit {units} (retired {retired}): \
+                 addr={:#x} interp={:#04x} jit={:#04x} pc={:#x}",
+                d.address, d.interp, d.jit, d.pc
+            );
+        }
         if engine.stats().block_runs > 0 && retired > 32 {
             break;
         }
@@ -1585,6 +1606,13 @@ fn pop_pc_terminator_matches_interpreter() {
                 interp.cpu.pc, interp.cpu.sp, jit.cpu.pc, jit.cpu.sp
             );
         }
+        if let Some(d) = compare_memory(units, interp.cpu.pc, &interp.bus, &jit.bus) {
+            panic!(
+                "POP PC diverged in RAM at unit {units} (retired {retired}): addr={:#x} \
+                 interp={:#04x} jit={:#04x} pc={:#x}",
+                d.address, d.interp, d.jit, d.pc
+            );
+        }
         if engine.stats().block_runs > 0 && retired > 32 {
             break;
         }
@@ -1916,4 +1944,52 @@ fn ldr_w_postindex_sp_matches_interpreter() {
     assert!(engine.stats().block_runs > 0);
     assert_eq!(interp.cpu.r0, jit.cpu.r0);
     assert_eq!(interp.cpu.sp, jit.cpu.sp);
+}
+
+/// Negative control: prove the RAM diff actually bites. Registers/flags can
+/// agree while a store still lands at the wrong address or with the wrong
+/// value — that class of bug is invisible to `compare(..)` on the
+/// [`StateVec`] alone, because RAM is not part of it. Corrupt one byte in
+/// the JIT lane's RAM after a comparison point and confirm `compare_memory`
+/// reports the exact address, even though CPU state is untouched.
+#[test]
+fn compare_memory_catches_a_corrupted_jit_ram_byte() {
+    let prog = alu_loop_program();
+    let mut interp = build_machine(&prog);
+    let mut jit = build_machine(&prog);
+    let mut engine = CortexMJitEngine::new(4);
+
+    // Advance both lanes past one comparison point where they still agree.
+    let n = engine.step_unit(&mut jit);
+    assert!(n > 0, "jit machine halted unexpectedly");
+    for _ in 0..n {
+        interp.step().expect("interpreter must not fault");
+    }
+    assert!(
+        compare_memory(1, interp.cpu.pc, &interp.bus, &jit.bus).is_none(),
+        "lanes must agree before the injected corruption"
+    );
+
+    // A wrong store under the JIT: corrupt one byte deep in RAM. Registers,
+    // flags and FPU state are all untouched, so `compare(..)` on the
+    // StateVec alone would see nothing wrong.
+    let ram_base = jit.bus.ram.base_addr;
+    let corrupt_offset: u64 = 0x100;
+    let corrupt_addr = ram_base + corrupt_offset;
+    jit.bus.ram.data[corrupt_offset as usize] ^= 0xFF;
+
+    assert_eq!(
+        snapshot_state(&interp.cpu),
+        snapshot_state(&jit.cpu),
+        "corrupting RAM must not perturb CPU state; this proves the StateVec \
+         compare alone cannot see the bug"
+    );
+
+    let d = compare_memory(2, interp.cpu.pc, &interp.bus, &jit.bus)
+        .expect("compare_memory must catch the corrupted RAM byte");
+    assert_eq!(
+        d.address, corrupt_addr,
+        "must report the exact corrupted address"
+    );
+    assert_ne!(d.interp, d.jit, "must report differing byte values");
 }
