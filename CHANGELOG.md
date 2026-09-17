@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-16
+
+### Added
+- Five Playground-ready maker chips (#1124): ATSAMD21, ATSAMD51, RA4M1,
+  IMXRT1064 and STM32F746, with new peripheral types `sam_pm`, `sam_mclk`,
+  `ra_sysc`, `imx_ccm`.
+- `labwired-cli` Session API: `Session::open/run_for/expect`, `SessionMachine`
+  type erasure, `from_chip_name` over the config catalog, observe/stimulus
+  surface (symbols, memory, frames, pins, snapshot), `inject_can` for
+  bxCAN/FDCAN (#1123, #1106).
+- Python Sim SDK backed by Session, with pytest integration (#1115).
+- In-core analog engine: SPICE netlist parser, MNA transient solver
+  (backward Euler + trapezoidal), co-simulation adapter and trace ring,
+  ngspice wrapper, WASM accessors and `--analog-trace` export (#1109, #1103,
+  #1111).
+- Cortex-M wasm JIT: Thumb JIT parity with the interpreter at tick 512,
+  SysTick countdown clamp matching RISC-V mtime, browser step_batch on the
+  advance tick contract, VFP S-ALU/LDR.W PC/chaining follow-ups (#1120,
+  #1126, #1128, #1125, #1127).
+- Arduino Uno R3 board manifest, golden blink/Serial smoke, full I/O on the
+  twin plus onboarding pack (#1107, #1112).
+- Capacitive touch lab and rc-oscilloscope-lab (STM32F401 RC low-pass over
+  analog cosim) example apps (#1113, #1105).
+- SPI opt-in edge-accurate slave sampling for STM32 and ESP32-C3 GP-SPI
+  (#932).
+- Host time mode: max-speed vs realtime, guest clock stays Hz (#1122).
+- Chip YAML wiring sugar: `irq nvic@2`, instance keys, `include` (#1119).
+
+### Fixed
+- AVR machine clock now runs on datasheet cycles, not an approximation
+  (`core: an AVR machine's clock is its datasheet cycles`).
+- `StdHostClock` no longer calls `Instant::now()` on wasm32 (#1130).
+- Cortex-M ROM boot on non-Cortex-M refused instead of mis-booting
+  (core-full builds the thumbv6m release CI fixture).
+- Session routes explicitly selected UART input to one port.
+- ngspice wrapper steps to `time_ns` (step end), matching `CosimRunner`.
+- Level-sensitive NVIC pending follows the line down; ADC held-channel
+  injection reaches the wasm bridge (#1073).
+
+### Changed
+- `build_machine` builder ports every architecture constructor (AVR, ARM,
+  ESP32/ESP32-S3, RISC-V plain/flash-fastboot/rom-boot) off the old wasm
+  path; Xtensa refusals no longer carry a tracker link.
+- Every trigger and limit in the test runner runs on the machine clock.
+- Validation drift acks renewed for stm32h735, stm32f411ceu6, mkw41z4, and
+  re-stamped after the ADC channel-count accessor, GPIO direction routing,
+  and F103/F407 analog_pins metadata changes.
+
 ## [0.23.0] - 2026-09-11
 
 ### Added

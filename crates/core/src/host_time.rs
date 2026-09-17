@@ -62,14 +62,23 @@ pub trait HostClock: Send {
 }
 
 /// `std::time::Instant` clock. Origin is construction of this value.
+///
+/// wasm32-unknown-unknown has NO monotonic time: `Instant::now()` panics with
+/// "time not implemented on this platform". The browser builds every machine
+/// with this clock, so the `now()`/`sleep()` pair must be wasm-safe — sleeping
+/// was already cfg-gated, and the origin/elapsed side is gated the same way.
+/// On wasm `now()` is always zero, which makes Realtime pacing a no-op instead
+/// of a trap (there is no wall clock to pace against in the browser anyway).
 #[derive(Debug, Clone, Copy)]
 pub struct StdHostClock {
+    #[cfg(not(target_arch = "wasm32"))]
     origin: std::time::Instant,
 }
 
 impl StdHostClock {
     pub fn new() -> Self {
         Self {
+            #[cfg(not(target_arch = "wasm32"))]
             origin: std::time::Instant::now(),
         }
     }
@@ -83,7 +92,14 @@ impl Default for StdHostClock {
 
 impl HostClock for StdHostClock {
     fn now(&self) -> Duration {
-        self.origin.elapsed()
+        #[cfg(target_arch = "wasm32")]
+        {
+            Duration::ZERO
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.origin.elapsed()
+        }
     }
 
     fn sleep(&self, duration: Duration) {

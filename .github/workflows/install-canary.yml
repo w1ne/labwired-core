@@ -111,9 +111,12 @@ jobs:
 
       - name: Install the way the README says
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = (Invoke-RestMethod 'https://api.github.com/repos/w1ne/labwired-core/releases/latest').tag_name
+          # Authenticated: the shared-runner IP exhausts the anonymous 60/h quota.
+          $tag = (Invoke-RestMethod 'https://api.github.com/repos/w1ne/labwired-core/releases/latest' -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }).tag_name
           Write-Host "latest release: $tag"
           $asset = "labwired-$tag-windows-x86_64.tar.gz"
           Invoke-WebRequest "https://github.com/w1ne/labwired-core/releases/download/$tag/$asset" -OutFile labwired.tar.gz
