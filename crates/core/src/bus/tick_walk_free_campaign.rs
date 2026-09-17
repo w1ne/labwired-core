@@ -1,4 +1,3 @@
-
 //! Pins the walk-free STM32 campaign's *remaining surface* on the L476
 //! nokia5110-invaders bus as it is actually executed (`from_config` +
 //! `configure_cortex_m`, exactly how every e2e/capture harness builds it).

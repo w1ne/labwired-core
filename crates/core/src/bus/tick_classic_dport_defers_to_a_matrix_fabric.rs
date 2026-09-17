@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::peripherals::esp32::dport::{Dport, DPORT_PRO_MAC_INTR_MAP_REG_OFFSET};
 

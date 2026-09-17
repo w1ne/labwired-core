@@ -1,4 +1,3 @@
-
 use super::SystemBus;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::{

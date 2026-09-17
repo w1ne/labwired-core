@@ -1,4 +1,3 @@
-
 use super::*;
 
 fn chip(flash: &str, ram: &str) -> Result<ChipDescriptor, serde_yaml::Error> {

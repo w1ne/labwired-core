@@ -1,4 +1,3 @@
-
 use super::*;
 
 /// Silicon capture 2026-08-02: the whole window reads `00000000` at

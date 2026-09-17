@@ -1,4 +1,3 @@
-
 use crate::bus::SystemBus;
 use crate::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac;
 use crate::{Bus, Peripheral};

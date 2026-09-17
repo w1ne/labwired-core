@@ -1,4 +1,3 @@
-
 use crate::bus::SystemBus;
 use crate::peripherals::esp32c3::ledc::{Esp32c3Ledc, LEDC_BASE, LEDC_INTR_SOURCE_ID};
 use crate::Bus;

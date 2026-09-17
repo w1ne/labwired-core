@@ -1,4 +1,3 @@
-
 use super::L4I2c;
 
 // I2C v2 register map (RM0367 §26.7 / RM0351 §39.7).

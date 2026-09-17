@@ -1,4 +1,3 @@
-
 use crate::bus::SystemBus;
 use crate::peripherals::esp32c3::apb_saradc::{Esp32c3ApbSarAdc, APB_SARADC_INTR_SOURCE_ID};
 use crate::peripherals::esp32c3::spi::{Esp32c3Spi, SPI2_INTR_SOURCE_ID, TRANS_DONE};

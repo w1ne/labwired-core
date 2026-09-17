@@ -1,4 +1,3 @@
-
 use super::*;
 
 fn sta_mac(n: u8) -> [u8; 6] {

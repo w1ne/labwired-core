@@ -1,4 +1,3 @@
-
 use super::*;
 
 /// SYSCOUNTER[0].SYSCOUNTERL / .SYSCOUNTERH.

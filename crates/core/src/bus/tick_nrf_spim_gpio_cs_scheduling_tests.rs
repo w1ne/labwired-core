@@ -1,4 +1,3 @@
-
 use super::SystemBus;
 use crate::peripherals::{
     gpio::{GpioPort, GpioRegisterLayout},

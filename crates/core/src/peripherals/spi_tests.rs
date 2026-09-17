@@ -1,4 +1,3 @@
-
 /// The named accessors index `PadLines` by `SpiSignal as usize`. Reordering
 /// either the enum or `SPI_LINES` alone would silently publish MOSI's level
 /// on the SCK lane — a waveform that looks plausible and is wrong.

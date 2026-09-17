@@ -1,4 +1,3 @@
-
 use super::{I2c, I2cDevice, KinetisI2c, KI_C1_MST, KI_C1_TX};
 use crate::Peripheral;
 use std::sync::{

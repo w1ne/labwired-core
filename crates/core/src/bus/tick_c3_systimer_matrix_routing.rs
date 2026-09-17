@@ -1,4 +1,3 @@
-
 use crate::bus::SystemBus;
 use crate::peripherals::esp32s3::systimer::Systimer;
 use crate::Bus;

@@ -1,4 +1,3 @@
-
 use super::*;
 
 fn script(schema: &str, block: &str) -> String {

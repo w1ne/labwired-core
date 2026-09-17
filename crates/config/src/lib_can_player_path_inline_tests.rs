@@ -1,4 +1,3 @@
-
 use super::*;
 
 /// `SystemManifest::from_file` inlines a `can-player` device's `path:`

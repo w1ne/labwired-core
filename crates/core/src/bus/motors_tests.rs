@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::peripherals::timer::{
     TimerChannelOutputMode, TimerChannelOutputSnapshot, TimerOutputSnapshot,

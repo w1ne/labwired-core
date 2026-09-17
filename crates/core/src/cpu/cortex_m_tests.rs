@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::{DmaRequest, Machine, SimulationConfig};
 use std::collections::HashMap;
