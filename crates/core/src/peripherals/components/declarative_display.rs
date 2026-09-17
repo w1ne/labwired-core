@@ -49,8 +49,9 @@ use std::collections::BTreeMap;
 use anyhow::{bail, Context, Result};
 use labwired_config::{
     DeviceDescriptor, DisplayAction, DisplayAddressingMode, DisplayAxis, DisplayCommand,
-    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayMetaFlag, DisplayPageWrap,
-    DisplayPixelFormat, DisplayRamLayout, DisplayRamStream, DisplaySpec, DisplayValue,
+    DisplayCsSelect, DisplayCursorPart, DisplayDcSource, DisplayMetaFlag, DisplayMetaFormat,
+    DisplayPageWrap, DisplayPixelFormat, DisplayRamLayout, DisplayRamStream, DisplaySpec,
+    DisplayValue,
 };
 
 use crate::peripherals::i2c::I2cDevice;
@@ -65,6 +66,27 @@ pub struct GlassWindow {
     pub row_offset: u16,
     pub cols: u16,
     pub rows: u16,
+}
+
+/// Which of the two real D/C wirings a placement uses. Only `hw_dcx` panels
+/// have a choice; a `pin` panel is always [`DcWiring::Gpio`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DcWiring {
+    /// A GPIO the firmware toggles between transfers; the bus latches that
+    /// pin's output register.
+    Gpio,
+    /// The SPI controller's own DCX line (nRF54L `PSEL.DCX` + `DCXCNT`).
+    ControllerDcx,
+}
+
+impl DcWiring {
+    /// The string the artifact publishes. The RM67162's contract.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Gpio => "gpio",
+            Self::ControllerDcx => "controller_dcx",
+        }
+    }
 }
 
 /// Where the next wire byte goes.
@@ -101,6 +123,7 @@ pub struct GenericDisplay {
     dc_pin: Option<String>,
     dc_source: Option<(u64, u8)>,
     dc_level: bool,
+    dc_wiring: DcWiring,
     component_id: Option<String>,
 
     // ── supply ──────────────────────────────────────────────────────────
@@ -163,6 +186,7 @@ impl std::fmt::Debug for GenericDisplay {
             .field("display_on", &self.display_on)
             .field("awake", &self.awake)
             .field("inverted", &self.inverted)
+            .field("dc_wiring", &self.dc_wiring)
             .field("mode", &self.mode)
             .field("vars", &self.vars)
             .field("cursor", &(self.col, self.row, self.page))
@@ -251,7 +275,7 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
     }
 
     match spec.dc.source {
-        DisplayDcSource::Pin => {
+        DisplayDcSource::Pin | DisplayDcSource::HwDcx => {
             if spec.dc.command_level > 1 {
                 bail!("dc.command_level {} is not a level", spec.dc.command_level);
             }
@@ -310,7 +334,9 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                      table declares a `ram_write` — one of the two is describing a different part"
                 );
             }
-            if spec.dc.source == DisplayDcSource::Pin && spec.commands.iter().any(|c| c.args > 0) {
+            if spec.dc.source != DisplayDcSource::ControlByte
+                && spec.commands.iter().any(|c| c.args > 0)
+            {
                 bail!(
                     "a D/C-pad panel whose data line is ALWAYS frame memory has nowhere to put a \
                      command's parameters: command 0x{:02X} declares {} of them",
@@ -337,6 +363,23 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
         }
     }
 
+    for req in &spec.lit_requires {
+        if !spec.vars.contains_key(&req.var) {
+            bail!(
+                "lit_requires reads var '{}', which is not declared — the clause would read a \
+                 cell nothing can write, so the panel would be dark for every firmware",
+                req.var
+            );
+        }
+        if req.min == 0 {
+            bail!(
+                "lit_requires '{}' min: 0 — every value satisfies it, so the clause gates \
+                 nothing while reading as if it did",
+                req.var
+            );
+        }
+    }
+
     if spec.artifact_meta.is_empty() {
         bail!(
             "artifact_meta is empty: the paint artifact would carry pixels and no panel state, \
@@ -353,8 +396,17 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
             bail!("artifact_meta publishes '{key}' twice");
         }
         meta_keys.push(key);
+        if let Some(var) = field.var() {
+            if !spec.vars.contains_key(var) {
+                bail!(
+                    "artifact_meta publishes var '{var}', which is not declared — the key would \
+                     read a cell nothing can write and report a constant forever"
+                );
+            }
+            continue;
+        }
         match field.flag() {
-            DisplayMetaFlag::InkBytes | DisplayMetaFlag::LitPixels
+            Some(DisplayMetaFlag::InkBytes) | Some(DisplayMetaFlag::LitPixels)
                 if spec.pixel_format != DisplayPixelFormat::MonoPage =>
             {
                 bail!(
@@ -362,12 +414,19 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                     spec.pixel_format
                 );
             }
-            DisplayMetaFlag::TopColour | DisplayMetaFlag::TopColourPixels
+            Some(DisplayMetaFlag::TopColour) | Some(DisplayMetaFlag::TopColourPixels)
                 if spec.pixel_format != DisplayPixelFormat::Rgb565 =>
             {
                 bail!(
                     "artifact_meta '{key}' reads a 16-bit pixel, but this panel is {:?}",
                     spec.pixel_format
+                );
+            }
+            Some(DisplayMetaFlag::DcSource) if spec.dc.source != DisplayDcSource::HwDcx => {
+                bail!(
+                    "artifact_meta 'dc_source' names WHICH of two wirings drives D/C, and \
+                     dc.source {:?} admits only one — the key would be a constant",
+                    spec.dc.source
                 );
             }
             _ => {}
@@ -566,6 +625,7 @@ impl GenericDisplay {
             dc_pin: None,
             dc_source: None,
             dc_level: false,
+            dc_wiring: DcWiring::Gpio,
             component_id: None,
             powered: true,
             display_on: spec.power_on.display_on,
@@ -690,10 +750,28 @@ impl GenericDisplay {
         self.powered && self.awake
     }
 
-    /// What a camera would see: DISPON **and** awake. A panel that got DISPON
-    /// but never SLPOUT is dark on the bench however full frame memory is.
+    /// What a camera would see: DISPON, awake, and every `lit_requires` clause
+    /// satisfied. A panel that got DISPON but never SLPOUT is dark on the bench
+    /// however full frame memory is — and an emissive panel whose firmware
+    /// never wrote a brightness is dark even with both.
     pub fn lit(&self) -> bool {
-        self.powered && self.display_on && self.awake
+        self.powered
+            && self.display_on
+            && self.awake
+            && self
+                .spec
+                .lit_requires
+                .iter()
+                .all(|r| self.vars.get(&r.var).copied().unwrap_or(0) >= r.min)
+    }
+
+    /// Which of the two real D/C wirings this placement uses.
+    pub fn dc_wiring(&self) -> DcWiring {
+        self.dc_wiring
+    }
+
+    pub fn set_dc_wiring(&mut self, wiring: DcWiring) {
+        self.dc_wiring = wiring;
     }
 
     pub fn inverted(&self) -> bool {
@@ -960,7 +1038,7 @@ impl GenericDisplay {
     /// True when command PARAMETERS ride the data line — the 4-wire SPI panel,
     /// whose D/C pad goes high for a command's arguments as much as for pixels.
     fn args_on_data_stream(&self) -> bool {
-        self.spec.dc.source == DisplayDcSource::Pin
+        self.spec.dc.source != DisplayDcSource::ControlByte
     }
 
     fn ram_byte(&mut self, byte: u8) {
@@ -1132,7 +1210,18 @@ impl GenericDisplay {
         };
 
         for field in &self.spec.artifact_meta {
-            let value = match field.flag() {
+            if let Some(var) = field.var() {
+                let n = self.vars.get(var).copied().unwrap_or(0);
+                let value = match field.format() {
+                    DisplayMetaFormat::Raw => serde_json::json!(n),
+                    DisplayMetaFormat::Hex8 => serde_json::json!(format!("0x{n:02X}")),
+                    DisplayMetaFormat::Hex16 => serde_json::json!(format!("0x{n:04X}")),
+                };
+                meta.insert(field.key().to_string(), value);
+                continue;
+            }
+            let Some(flag) = field.flag() else { continue };
+            let value = match flag {
                 DisplayMetaFlag::InkBytes => {
                     serde_json::json!(fb.iter().filter(|b| **b != 0).count())
                 }
@@ -1150,6 +1239,10 @@ impl GenericDisplay {
                 DisplayMetaFlag::Lit => serde_json::json!(self.lit()),
                 DisplayMetaFlag::Powered => serde_json::json!(self.powered),
                 DisplayMetaFlag::Inverted => serde_json::json!(self.inverted),
+                // The RAW sleep flag, not `!awake()`. See the enum's note: an
+                // unpowered panel has never been woken, so it is asleep.
+                DisplayMetaFlag::Asleep => serde_json::json!(!self.awake),
+                DisplayMetaFlag::DcSource => serde_json::json!(self.dc_wiring.as_str()),
             };
             meta.insert(field.key().to_string(), value);
         }
@@ -1424,7 +1517,7 @@ fn leak_metadata(descriptor: &DeviceDescriptor) -> &'static KitMetadata {
     );
     let (transport, category) = match spec.dc.source {
         DisplayDcSource::ControlByte => (Transport::I2c, Category::I2c),
-        DisplayDcSource::Pin => (Transport::Spi, Category::Spi),
+        DisplayDcSource::Pin | DisplayDcSource::HwDcx => (Transport::Spi, Category::Spi),
     };
     Box::leak(Box::new(KitMetadata {
         device_type: leak(descriptor.r#type.clone()),
@@ -1453,37 +1546,61 @@ impl PeripheralKit for DeclarativeDisplayKit {
                 dev.set_address(address);
                 ctx.attach_i2c_device(Box::new(dev))
             }
-            DisplayDcSource::Pin => {
+            DisplayDcSource::Pin | DisplayDcSource::HwDcx => {
                 dev.set_cs_pin(ctx.config_str("cs_pin").unwrap_or("").to_string());
-                let dc = ctx
-                    .config_str("dc_pin")
-                    .map(|s| s.to_string())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} '{}': no `dc_pin`. This panel frames commands from the D/C line \
-                             and has no infer-from-byte-values fallback: that inference decodes a \
-                             parameter byte 0x2C as RAMWR and writes the remaining init bytes \
-                             into the framebuffer as pixels, leaving a blank screen and a \
-                             blameless firmware.",
-                            self.descriptor.r#type,
-                            ctx.device_id(),
-                        )
-                    })?;
-                // Resolving the pin to its GPIO output register is the half that
-                // makes D/C real: the bus samples that register before each
-                // transfer. Declaring the pin without this leaves D/C stuck low,
-                // every byte frames as a command, and the panel renders blank
-                // with no error.
-                let (odr_addr, bit) = ctx.resolve_pin_odr(&dc).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "{} '{}': D/C pin '{}' does not resolve to a driveable GPIO output.",
+                let dc_pin = ctx.config_str("dc_pin").map(|s| s.to_string());
+                // `hw_dcx` is only ever read for a panel that declares the
+                // source. Reading it on a `pin` panel would let a descriptor
+                // that never modelled the controller-driven line silently accept
+                // a board wired that way and then never frame a command.
+                let hw_dcx = spec.dc.source == DisplayDcSource::HwDcx
+                    && ctx.config_bool("hw_dcx") == Some(true);
+                match (dc_pin, hw_dcx) {
+                    (Some(_), true) => anyhow::bail!(
+                        "{} '{}': `dc_pin` and `hw_dcx` are mutually exclusive. Either the \
+                         firmware drives D/C on a GPIO or the controller drives it from \
+                         PSEL.DCX -- on real hardware only one line is connected.",
                         self.descriptor.r#type,
                         ctx.device_id(),
-                        dc,
-                    )
-                })?;
-                dev.set_dc_pin(dc);
-                SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
+                    ),
+                    (None, false) => anyhow::bail!(
+                        "{} '{}': no D/C source. {}This panel frames commands from the D/C line \
+                         and has no infer-from-byte-values fallback: that inference decodes a \
+                         parameter byte 0x2C as RAMWR and writes the remaining init bytes into \
+                         the framebuffer as pixels, leaving a blank screen and a blameless \
+                         firmware.",
+                        self.descriptor.r#type,
+                        ctx.device_id(),
+                        if spec.dc.source == DisplayDcSource::HwDcx {
+                            "Set `dc_pin` for a firmware-driven GPIO, or `hw_dcx: true` when the                              SPI controller drives D/C itself (nRF54L SPIM PSEL.DCX). "
+                        } else {
+                            "Set `dc_pin`. "
+                        },
+                    ),
+                    (None, true) => {
+                        dev.set_dc_wiring(DcWiring::ControllerDcx);
+                    }
+                    (Some(dc), false) => {
+                        // Resolving the pin to its GPIO output register is the
+                        // half that makes D/C real: the bus samples that
+                        // register before each transfer. Declaring the pin
+                        // without this leaves D/C stuck low, every byte frames
+                        // as a command, and the panel renders blank with no
+                        // error.
+                        let (odr_addr, bit) = ctx.resolve_pin_odr(&dc).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "{} '{}': D/C pin '{}' does not resolve to a driveable GPIO \
+                                 output.",
+                                self.descriptor.r#type,
+                                ctx.device_id(),
+                                dc,
+                            )
+                        })?;
+                        dev.set_dc_pin(dc);
+                        SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
+                        dev.set_dc_wiring(DcWiring::Gpio);
+                    }
+                }
 
                 if spec.supply_gated && ctx.config_bool("powered") == Some(false) {
                     dev.set_powered(false);
@@ -1610,6 +1727,11 @@ display_kit!(
     ILI9341_KIT,
     "ili9341"
 );
+display_kit!(
+    /// Raydium RM67162, 240×536 RGB565 AMOLED (`rm67162.yaml`).
+    RM67162_KIT,
+    "amoled-rm67162"
+);
 
 /// The SSD1306 128×64 model, built from its embedded descriptor. The shape the
 /// in-crate tests used to get from `Ssd1306::new`.
@@ -1653,6 +1775,25 @@ pub fn ili9341(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
     dev
 }
 
+/// The RM67162 model driven by the SPI controller's own DCX line, which is how
+/// `examples/nrf54lm20a-snake` wires it. The shape the in-crate tests used to
+/// get from `Rm67162::with_controller_dc`.
+pub fn rm67162_hw_dcx(cs_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("amoled-rm67162").expect("amoled-rm67162 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev.set_dc_wiring(DcWiring::ControllerDcx);
+    dev
+}
+
+/// The RM67162 model with a firmware-driven D/C GPIO.
+pub fn rm67162_gpio_dc(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
+    let mut dev = embedded("amoled-rm67162").expect("amoled-rm67162 descriptor builds");
+    dev.set_cs_pin(cs_pin);
+    dev.set_dc_pin(dc_pin);
+    dev.set_dc_wiring(DcWiring::Gpio);
+    dev
+}
+
 /// The ST7789 model with its two pins wired, for tests that drive the wire
 /// directly rather than through a manifest.
 pub fn st7789(cs_pin: &str, dc_pin: &str) -> GenericDisplay {
@@ -1676,6 +1817,7 @@ mod tests {
         "oled-sh1107",
         "pcd8544",
         "ili9341",
+        "amoled-rm67162",
     ];
 
     #[test]
@@ -1893,6 +2035,111 @@ mod tests {
             4,
             "closes_stream: the resumed half of the blit is dropped"
         );
+    }
+
+    // ── `lit_requires`, `hw_dcx` and var meta: the RM67162's keys ──────────
+
+    /// THE NEGATIVE CONTROL FOR `lit_requires`. Deleting the clause from the
+    /// RM67162 descriptor must light a panel whose firmware never wrote a
+    /// brightness. If this passes with the clause gone, the key is not wired to
+    /// `lit` and `rm67162_dispon_without_brightness_is_not_lit` is proving
+    /// nothing.
+    #[test]
+    fn deleting_lit_requires_lights_a_panel_at_zero_brightness() {
+        let yaml = labwired_config::embedded_device_yaml("amoled-rm67162").expect("embedded");
+        let without = yaml.replace("    lit_requires: [{ var: brightness, min: 1 }]\n", "");
+        assert_ne!(without, yaml, "the sabotage did not apply");
+
+        let lit = |desc: &str| -> bool {
+            let mut d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            let cmd = |d: &mut GenericDisplay, op: u8| {
+                SpiDevice::set_dc_level(d, false);
+                SpiDevice::transfer(d, op);
+                SpiDevice::set_dc_level(d, true);
+            };
+            SpiDevice::cs_select(&mut d);
+            cmd(&mut d, 0x11); // SLPOUT
+            cmd(&mut d, 0x29); // DISPON — and no WRDISBV anywhere
+            d.lit()
+        };
+        assert!(
+            !lit(yaml),
+            "with the clause, brightness 0 is dark — the AMOLED assertion"
+        );
+        assert!(
+            lit(&without),
+            "without the clause the same firmware reads lit, which is the bug \
+             the key exists to prevent"
+        );
+    }
+
+    /// A `lit_requires` clause naming an undeclared var would read a cell
+    /// nothing can write, so the panel would be dark for every firmware.
+    #[test]
+    fn lit_requires_on_an_undeclared_var_is_refused() {
+        let yaml = labwired_config::embedded_device_yaml("amoled-rm67162").expect("embedded");
+        let broken = yaml.replace("var: brightness, min: 1", "var: backlight, min: 1");
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("backlight"), "got: {err:#}");
+    }
+
+    /// `min: 0` is satisfied by every value, so the clause gates nothing while
+    /// reading as if it did.
+    #[test]
+    fn a_lit_requires_min_of_zero_is_refused() {
+        let yaml = labwired_config::embedded_device_yaml("amoled-rm67162").expect("embedded");
+        let broken = yaml.replace("var: brightness, min: 1", "var: brightness, min: 0");
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("gates nothing"), "got: {err:#}");
+    }
+
+    /// An `artifact_meta` var entry must name a declared var, or the key would
+    /// report a constant forever.
+    #[test]
+    fn an_artifact_meta_var_that_is_not_declared_is_refused() {
+        let yaml = labwired_config::embedded_device_yaml("amoled-rm67162").expect("embedded");
+        let broken = yaml.replace(
+            "- { var: colmod, format: hex8 }",
+            "- { var: gamma, format: hex8 }",
+        );
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("gamma"), "got: {err:#}");
+    }
+
+    /// `format:` is a published contract, not cosmetics: a consumer that parsed
+    /// `"0x55"` reads `85` if the key silently becomes a number. The sabotage
+    /// must change what the artifact carries.
+    #[test]
+    fn a_var_meta_format_changes_the_published_value() {
+        let yaml = labwired_config::embedded_device_yaml("amoled-rm67162").expect("embedded");
+        let raw = yaml.replace("- { var: colmod, format: hex8 }", "- { var: colmod }");
+        assert_ne!(raw, yaml, "the sabotage did not apply");
+        let colmod = |desc: &str| -> serde_json::Value {
+            let d = GenericDisplay::from_yaml(desc).expect("descriptor builds");
+            SpiDevice::artifacts(&d, "amoled", &crate::inspect::InspectOpts::default())[0].meta
+                ["colmod"]
+                .clone()
+        };
+        assert_eq!(colmod(yaml), serde_json::json!("0x55"));
+        assert_eq!(colmod(&raw), serde_json::json!(0x55));
+    }
+
+    /// `dc_source` names WHICH of two wirings drives D/C. On a panel whose
+    /// descriptor admits only one, the key would be a constant dressed as a
+    /// measurement.
+    #[test]
+    fn dc_source_meta_on_a_single_wiring_panel_is_refused() {
+        let yaml = labwired_config::embedded_device_yaml("ili9341").expect("embedded");
+        let broken = yaml.replace(
+            "artifact_meta: [display_on,",
+            "artifact_meta: [dc_source, display_on,",
+        );
+        assert_ne!(broken, yaml, "the sabotage did not apply");
+        let err = GenericDisplay::from_yaml(&broken).expect_err("must be refused");
+        assert!(format!("{err:#}").contains("dc_source"), "got: {err:#}");
     }
 
     /// `ram.stream` and the command table must agree. `always` means every data

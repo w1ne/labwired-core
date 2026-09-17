@@ -744,8 +744,8 @@ because that is an outside event.
 ## What a pack cannot do
 
 A pack is data interpreted by a **primitive** — `i2c_device`, `spi_device`,
-`analog_source`, `display`, `gpio_device`, `uart_device`, `quadrature`,
-`matrix`, `one_wire`, `pulse_echo`.
+`analog_source`, `display`, `led_strip`, `gpio_device`, `uart_device`,
+`quadrature`, `matrix`, `one_wire`, `pulse_echo`.
 Those primitives are the irreducible timing algorithms, and they live in Rust in
 this repository.
 
@@ -766,6 +766,62 @@ are never transformed: contrast, gamma and inversion are reported as flags, so
 what the artifact holds is what firmware wrote and a photograph of the glass can
 be compared against it. The proof parts are `ssd1306.yaml` (I²C, page-major
 1 bpp) and `st7789.yaml` (SPI, row-major RGB565 with MADCTL orientation).
+
+`led_strip` is the primitive for addressable LED strips, and it is separate from
+`display` on purpose: a strip is a per-LED COLOUR ARRAY clocked by a wire
+protocol, with no address counter, no command table, no window and no frame
+memory a later command re-reads — the four things `display` exists to interpret.
+Expressing a strip as a display would mean inventing all four and then declaring
+in every descriptor that none of them moves.
+
+The descriptor says which wire clocks the LEDs in, and the engine owns the two
+decoders:
+
+```yaml
+# configs/devices/apa102.yaml — the clocked wire
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: spi_frames
+    artifact_format: APA102_RGB
+    default_pixels: 8
+    supply_gated: true
+    spi_frames:
+      start_frame: [0x00, 0x00, 0x00, 0x00]
+      frame_bytes: 4
+      header_mask: 0xE0      # an LED frame's first byte has its top 3 bits set
+      header_value: 0xE0     # a byte that fails this STOPS the decode
+      brightness_mask: 0x1F  # must not overlap header_mask — the engine refuses it
+      colour_bytes: [3, 2, 1]  # the wire carries B,G,R; the artifact publishes R,G,B
+    artifact_meta: [brightness, powered, cs_pin]
+```
+
+```yaml
+# configs/devices/ws2812.yaml — the single wire
+behavior:
+  primitive: led_strip
+  led_strip:
+    wire: nrz_gpio
+    artifact_format: ws2812_grb
+    default_pixels: 1
+    timing:
+      high_threshold_ns: 500    # a HIGH longer than this is a 1 bit
+      reset_threshold_ns: 40000 # a LOW longer than this latches the frame
+      bits_per_pixel: 24
+    artifact_meta: [pixels_decoded, lit_pixels, data_pin]
+```
+
+`wire: spi_frames` attaches as an SPI device and latches on CS RELEASE, which is
+what silicon does: a transaction shorter than a start frame plus one LED frame
+leaves the previous colours untouched, so a glitchy transfer cannot blank a
+strip. `wire: nrz_gpio` attaches as a GPIO observer on ONE pad and decodes real
+edge times — every bit is a HIGH pulse whose DURATION is the bit value, and a
+long LOW gap latches the frame. Nothing about the byte stream is inferred.
+
+The artifact is the LED colour array in wire order plus the `meta` keys the
+descriptor lists, so what the browser's strip overlay reads is the descriptor's
+contract rather than a house style. The proof parts are `apa102.yaml` (clocked)
+and `ws2812.yaml` (single-wire).
 
 So: a part whose datasheet behaviour is a register map, a command/response
 protocol, a framebuffer command table, or one of the pin-timing shapes above is

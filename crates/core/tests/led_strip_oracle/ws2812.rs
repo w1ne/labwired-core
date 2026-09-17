@@ -26,10 +26,10 @@
 //! ## How it is driven
 //!
 //! On the ESP32-S3 the pad is driven by the RMT peripheral's timed playback
-//! (see [`crate::peripherals::esp32s3::rmt`]), which flips the routed GPIO pad
-//! through [`Esp32s3Gpio::drive_pad_output`](crate::peripherals::esp32s3::gpio::Esp32s3Gpio::drive_pad_output).
+//! (see `peripherals::esp32s3::rmt`), which flips the routed GPIO pad
+//! through `Esp32s3Gpio::drive_pad_output`.
 //! This component registers as an S3
-//! [`GpioObserver`](crate::peripherals::device::GpioObserver) and decodes
+//! [`GpioObserver`](labwired_core::peripherals::device::GpioObserver) and decodes
 //! purely from the `(pin, from, to, sim_cycle)` callbacks — accumulating each
 //! bit's HIGH duration, shifting it into a 24-bit register, and pushing a pixel
 //! every 24 bits.
@@ -201,7 +201,7 @@ impl Ws2812 {
 
 // Bridge into the ESP32-S3 GPIO observer protocol (the chip whose RMT drives the
 // pad today). `from` is unused — only the new level and the sim cycle matter.
-impl crate::peripherals::device::GpioObserver for Ws2812 {
+impl labwired_core::peripherals::device::GpioObserver for Ws2812 {
     fn on_pin_change(&self, pin: u8, _from: bool, to: bool, sim_cycle: u64) {
         self.on_edge(pin, to, sim_cycle);
     }
@@ -214,245 +214,27 @@ impl crate::peripherals::device::GpioObserver for Ws2812 {
 /// The pixels are whatever the decoder reconstructed from real edge timing on
 /// the data pad; a strip that never saw an edge reports zero lit pixels, not a
 /// plausible pattern. Bytes are the decoded frame in wire (GRB) order.
-impl crate::inspect::DeviceEvidence for Ws2812 {
+impl labwired_core::inspect::DeviceEvidence for Ws2812 {
     fn artifacts(
         &self,
         id: &str,
-        opts: &crate::inspect::InspectOpts,
-    ) -> Vec<crate::inspect::Artifact> {
+        opts: &labwired_core::inspect::InspectOpts,
+    ) -> Vec<labwired_core::inspect::Artifact> {
         let pixels = self.pixels();
         let flat: Vec<u8> = pixels.iter().flatten().copied().collect();
-        vec![crate::inspect::Artifact {
+        vec![labwired_core::inspect::Artifact {
             kind: "framebuffer".to_string(),
             id: id.to_string(),
             meta: serde_json::json!({
                 "w": self.num_pixels(),
                 "h": 1,
-                "format": crate::inspect::artifact_format::WS2812_GRB,
-                "generation": crate::inspect::artifact_generation(&flat),
+                "format": labwired_core::inspect::artifact_format::WS2812_GRB,
+                "generation": labwired_core::inspect::artifact_generation(&flat),
                 "pixels_decoded": pixels.len(),
                 "lit_pixels": pixels.iter().filter(|p| p.iter().any(|&c| c != 0)).count(),
                 "data_pin": self.pin(),
             }),
-            bytes: crate::inspect::artifact_bytes(&flat, opts),
+            bytes: labwired_core::inspect::artifact_bytes(&flat, opts),
         }]
-    }
-}
-
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
-};
-
-/// WS2812 / Neopixel kit — single-wire edge decoder on one GPIO.
-pub struct Ws2812Kit;
-pub static WS2812_KIT: Ws2812Kit = Ws2812Kit;
-
-static WS2812_METADATA: KitMetadata = KitMetadata {
-    inputs: &[],
-    device_type: "neopixel",
-    label: "WS2812 / Neopixel strip",
-    summary: "Addressable RGB LED strip on one data pin (edge-timed bit stream).",
-    detail: "Attaches as a GPIO observer on data_pin. On ESP32-S3 the RMT + GPIO matrix \
-             drive real edges; elsewhere the strip is held for readback until edges appear. \
-             Alias type `ws2812` resolves to this kit.",
-    transport: Transport::GpioGroup,
-    category: Category::Gpio,
-    config_keys: &[
-        ConfigKey {
-            name: "data_pin",
-            ty: ConfigType::Str,
-            doc: "Data line GPIO (e.g. \"GPIO48\"). Defaults to GPIO48.",
-        },
-        ConfigKey {
-            name: "num_pixels",
-            ty: ConfigType::Int,
-            doc: "Number of LEDs on the strip. Defaults to 1.",
-        },
-        ConfigKey {
-            name: "cpu_hz",
-            ty: ConfigType::Int,
-            doc: "Simulated CPU Hz for edge timing. Defaults to the system's \
-                  clock (the manifest's `cpu_hz:`, else the chip descriptor's).",
-        },
-    ],
-    labs: &[],
-};
-
-impl PeripheralKit for Ws2812Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &WS2812_METADATA
-    }
-
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let data = ctx.config_str("data_pin").unwrap_or("GPIO48");
-        let num_pixels = ctx.config_i64("num_pixels").unwrap_or(1).max(1) as usize;
-        // Same order as the declarative devices: the placed part's own
-        // `cpu_hz` first, then the system's clock (manifest override, else the
-        // chip descriptor), and only then the historical C3 literal — which is
-        // what every board used to get, S3 and ATmega included.
-        let cpu_hz = ctx
-            .config_i64("cpu_hz")
-            .map(|v| v as u64)
-            .or_else(|| Some(ctx.bus.cpu_hz).filter(|hz| *hz > 0))
-            .unwrap_or(160_000_000);
-        let pin = ctx.parse_gpio_pin(data).ok_or_else(|| {
-            anyhow::anyhow!(
-                "neopixel '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",
-                ctx.device_id(),
-                data
-            )
-        })?;
-        let strip = std::sync::Arc::new(
-            Ws2812::new(pin, num_pixels, cpu_hz).with_component_id(ctx.device_id().to_string()),
-        );
-        // Classic ESP32 + S3 GPIO observers (same choke as motors / parallel TFT).
-        ctx.install_gpio_observer(strip.clone());
-        ctx.bus.observe_device(strip);
-        Ok(())
-    }
-}
-
-/// A strip is held by the bus purely so the UI/oracle can read the decoded
-/// pixels back, and it IS a display, so it reports its own framebuffer as
-/// evidence. When no `component:` id was stamped it answers to its part name —
-/// the same fallback the old per-type walk arm used.
-impl crate::bus::ObservedDevice for Ws2812 {
-    fn manifest_id(&self) -> &str {
-        self.component_id().unwrap_or("ws2812")
-    }
-
-    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
-        Some(self)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_arc_any(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
-        self
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-
-    /// 8 MHz test clock: HIGH threshold = 4 cycles, reset threshold = 320.
-    const CPU_HZ: u64 = 8_000_000;
-    const PIN: u8 = 48;
-    /// Short high (bit 0) and long high (bit 1), straddling the 4-cycle
-    /// threshold, plus a short inter-bit low.
-    const T0H: u64 = 2;
-    const T1H: u64 = 6;
-    const TLOW: u64 = 2;
-
-    /// Drive one WS2812 bit onto the strip starting at `cycle`; returns the
-    /// cycle after the bit's low gap.
-    fn feed_bit(s: &Ws2812, bit: bool, cycle: u64) -> u64 {
-        let high = if bit { T1H } else { T0H };
-        s.on_edge(PIN, true, cycle); // rising
-        s.on_edge(PIN, false, cycle + high); // falling after HIGH
-        cycle + high + TLOW
-    }
-
-    /// Feed a 24-bit GRB pixel MSB-first starting at `cycle`; returns next cycle.
-    fn feed_pixel(s: &Ws2812, grb: u32, mut cycle: u64) -> u64 {
-        for i in (0..24).rev() {
-            cycle = feed_bit(s, (grb >> i) & 1 != 0, cycle);
-        }
-        cycle
-    }
-
-    #[test]
-    fn thresholds_scale_with_cpu_hz() {
-        let s = Ws2812::new(PIN, 1, CPU_HZ);
-        assert_eq!(s.high_threshold_cycles, 4, "0.5us @ 8MHz = 4 cycles");
-        assert_eq!(s.reset_threshold_cycles, 320, "40us @ 8MHz = 320 cycles");
-        // Stock S3 clock: 0.5us @160MHz = 80, 40us = 6400.
-        let s160 = Ws2812::new(PIN, 1, 160_000_000);
-        assert_eq!(s160.high_threshold_cycles, 80);
-        assert_eq!(s160.reset_threshold_cycles, 6400);
-    }
-
-    #[test]
-    fn decodes_single_green_pixel() {
-        let s = Ws2812::new(PIN, 1, CPU_HZ);
-        // Green = G:0xFF R:0x00 B:0x00 → 24-bit GRB 0xFF0000.
-        feed_pixel(&s, 0x00FF_0000 & 0x00FF_FFFF, 0);
-        assert_eq!(s.pixels(), vec![[0xFF, 0x00, 0x00]], "green pixel (GRB)");
-    }
-
-    #[test]
-    fn decodes_rgb_bytes_in_grb_order() {
-        let s = Ws2812::new(PIN, 1, CPU_HZ);
-        // GRB = G:0x12 R:0x34 B:0x56 → 0x123456.
-        feed_pixel(&s, 0x0012_3456, 0);
-        assert_eq!(s.pixels(), vec![[0x12, 0x34, 0x56]]);
-    }
-
-    #[test]
-    fn edges_on_other_pins_are_ignored() {
-        let s = Ws2812::new(PIN, 1, CPU_HZ);
-        // Noise on a different pin must not shift any bits.
-        s.on_edge(7, true, 0);
-        s.on_edge(7, false, 100);
-        feed_pixel(&s, 0x0000_00FF, 0); // blue
-        assert_eq!(s.pixels(), vec![[0x00, 0x00, 0xFF]]);
-    }
-
-    #[test]
-    fn decodes_multi_pixel_frame() {
-        let s = Ws2812::new(PIN, 3, CPU_HZ);
-        let mut c = 0;
-        c = feed_pixel(&s, 0x0000_00FF, c); // blue  → [0,0,255]
-        c = feed_pixel(&s, 0x00FF_0000, c); // green → [255,0,0]
-        feed_pixel(&s, 0x0000_FF00, c); // red   → [0,255,0]
-        assert_eq!(
-            s.pixels(),
-            vec![[0x00, 0x00, 0xFF], [0xFF, 0x00, 0x00], [0x00, 0xFF, 0x00]]
-        );
-    }
-
-    #[test]
-    fn caps_frame_at_num_pixels() {
-        let s = Ws2812::new(PIN, 1, CPU_HZ);
-        let mut c = 0;
-        c = feed_pixel(&s, 0x00FF_0000, c); // pixel 0 (kept)
-        feed_pixel(&s, 0x0000_00FF, c); // pixel 1 (dropped — strip is 1 long)
-        assert_eq!(s.pixels(), vec![[0xFF, 0x00, 0x00]], "extra pixel dropped");
-    }
-
-    #[test]
-    fn reset_gap_latches_frame_and_starts_next() {
-        let s = Ws2812::new(PIN, 1, CPU_HZ);
-        // Frame 1: one green pixel.
-        let c = feed_pixel(&s, 0x00FF_0000, 0);
-        assert_eq!(s.pixels(), vec![[0xFF, 0x00, 0x00]], "in-progress frame 1");
-        // A reset gap (> 320 cycles low) then frame 2's first rising edge
-        // latches frame 1 and begins frame 2.
-        let reset_start = c; // last falling edge cycle
-        let frame2 = reset_start + s.reset_threshold_cycles + 10;
-        feed_pixel(&s, 0x0000_00FF, frame2); // blue
-                                             // The displayed (latched) frame is frame 1 until the NEXT reset.
-        assert_eq!(
-            s.pixels(),
-            vec![[0xFF, 0x00, 0x00]],
-            "reset latched frame 1 for display"
-        );
-    }
-
-    #[test]
-    fn registers_as_s3_gpio_observer() {
-        use crate::peripherals::device::GpioObserver;
-        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
-        let strip = Arc::new(Ws2812::new(PIN, 1, CPU_HZ));
-        let mut g = Esp32s3Gpio::new();
-        g.add_observer(strip.clone() as Arc<dyn GpioObserver>);
-        // Sanity: the Arc bridge compiles and the observer path is wired.
-        assert_eq!(strip.pin(), PIN);
     }
 }

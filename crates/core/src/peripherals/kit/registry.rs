@@ -48,7 +48,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_display::SSD1306_128X32_KIT,
     &components::declarative_display::SH1107_KIT,
     &components::declarative_display::ILI9341_KIT,
-    &components::rm67162::RM67162_KIT,
+    &components::declarative_display::RM67162_KIT,
     &components::declarative_display::ST7789_KIT,
     &components::inmp441::INMP441_KIT,
     &components::ili9341_parallel::ILI9341_PARALLEL_KIT,
@@ -122,7 +122,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,
     &components::declarative_spi::MAX31855_KIT,
-    &components::apa102::APA102_KIT,
+    &components::declarative_led_strip::APA102_KIT,
     // Migrated from i2c_factory-only → universal kit attach (any MCU).
     &components::bmi270::BMI270_KIT,
     &components::max30102::MAX30102_KIT,
@@ -131,7 +131,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::mlx90640::MLX90640_KIT,
     // GPIO-group actuators migrated off from_config residual arms.
     &components::servo::SERVO_KIT,
-    &components::ws2812::WS2812_KIT,
+    &components::declarative_led_strip::WS2812_KIT,
     &components::step_dir_motor::STEP_DIR_MOTOR_KIT,
     &components::h_bridge_motor::H_BRIDGE_MOTOR_KIT,
     &components::unipolar_stepper::UNIPOLAR_STEPPER_KIT,

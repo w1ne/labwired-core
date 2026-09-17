@@ -34,6 +34,7 @@
 
 pub mod ili9341;
 pub mod pcd8544;
+pub mod rm67162;
 pub mod sh1107;
 pub mod ssd1306;
 pub mod st7789;
