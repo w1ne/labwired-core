@@ -1890,6 +1890,27 @@ impl WasmSimulator {
             .unwrap_or(0)
     }
 
+    /// Number of compiled blocks the browser JIT has installed.
+    ///
+    /// `jit_hits()` proves a compiled block RAN; this proves one was BUILT.
+    /// An end-to-end gate needs both: a run where the emit walk refuses
+    /// every block has zero hits too, so a hit-only check cannot tell "the
+    /// JIT is off" from "the JIT compiled nothing". Zero after a batch that
+    /// went through the opt-in path fails the gate.
+    ///
+    /// Returns `Result` even though the answer is always available: every
+    /// other accessor at this boundary hands back `Result<T, JsValue>` so a
+    /// caller can never read a fabricated value as data (see
+    /// `error_boundary_ratchet.rs`).
+    #[wasm_bindgen]
+    pub fn jit_compiled_blocks(&self) -> Result<u64, JsValue> {
+        Ok(self
+            .jit_browser_cache
+            .as_ref()
+            .map(|c| c.compiled_blocks())
+            .unwrap_or(0))
+    }
+
     /// Total number of JIT refusals (host bus errors, JS-side
     /// dispatch failures). Surfaced for the bench harness so it can
     /// distinguish "JIT was tried and rejected" from "JIT was never
