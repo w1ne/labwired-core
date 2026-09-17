@@ -238,6 +238,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
             last_gap: Cell::new(None),
+            extra_mem_gap: Cell::new(None),
             last_gpio_in: None,
             gpio_port_idx: None,
             current_cycle: 0,

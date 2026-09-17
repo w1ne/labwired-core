@@ -342,6 +342,27 @@ pub struct SystemBus {
     /// clears `last_route`). Same staleness contract as `last_route`: cleared
     /// on range rebuild.
     last_gap: Cell<Option<(u64, u64)>>,
+    /// Negative cache for the linear `extra_mem` probe: a `[start, end)`
+    /// address gap proven to contain NO `extra_mem` window, paired with the
+    /// `extra_mem.len()` it was derived from.
+    ///
+    /// Every accessor walks `extra_mem` in registration order and takes the
+    /// first window covering the access. A chip with several CPU-visible
+    /// windows — the ESP32-C3 declares five (iram, drom, rtc_fast, rom,
+    /// rom_data) — pays a bounds test per window on every access that lands
+    /// somewhere else, and instruction fetch out of `flash` (0x4200_0000)
+    /// lands somewhere else on EVERY instruction: ~85 Ir per instruction of
+    /// inlined bounds maths and slice iteration inside `read_u32`
+    /// (docs/performance/2026-09-17-bus-scheduler-pass.md).
+    ///
+    /// The gap is derived exactly as `last_gap` is: after a probe misses, the
+    /// floor is the greatest END among windows starting at or below the
+    /// address, the ceiling the least BASE among those starting above it, so
+    /// no window covers any byte in between — an access wholly inside the gap
+    /// MUST miss. That is what makes the skip byte-identical rather than a
+    /// heuristic. The stored length invalidates the cache if a window is added
+    /// afterwards (`boot::esp32c3_rom` pushes two before the run starts).
+    extra_mem_gap: Cell<Option<(u64, u64, usize)>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
     /// registered (`None` otherwise — the common case, incl. every ESP32-S3
     /// bus). Recomputed in `rebuild_peripheral_ranges` on each peripheral
