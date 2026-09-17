@@ -2175,3 +2175,190 @@ fn armv7m_branch_wraps_at_the_signed_pc_boundary() {
         assert_eq!(cpu.pc, expected, "{name} must wrap to {expected:#010x}");
     }
 }
+
+    #[test]
+    fn test_vfp_fpscr_fz_flushes_denormal_inputs_and_results() {
+        // 2^-64 and 2^-85 are both normal; their product is exactly 2^-149,
+        // the smallest positive denormal (0x0000_0001).
+        let two_pow_m64 = 0x1F80_0000u32;
+        let two_pow_m85 = 0x1500_0000u32;
+        // Actual denormal operands: 2^-149 and 2^-148.
+        let denorm_min = 0x0000_0001u32;
+        let denorm_two = 0x0000_0002u32;
+
+        // FZ off: denormal inputs survive and the denormal result is exact.
+        assert_eq!(
+            vfp_binop(VfpBinOp::Mul, two_pow_m64, two_pow_m85, 0),
+            0x0000_0001,
+            "2^-64 * 2^-85 = 2^-149 (denormal) with FZ off"
+        );
+        // FZ on: denormal result flushed to +0.
+        assert_eq!(
+            vfp_binop(VfpBinOp::Mul, two_pow_m64, two_pow_m85, FPSCR_FZ),
+            0x0000_0000,
+            "denormal result flushes to zero under FZ"
+        );
+        // FZ off: denormal inputs add exactly.
+        assert_eq!(
+            vfp_binop(VfpBinOp::Add, denorm_min, denorm_two, 0),
+            0x0000_0003,
+            "2^-149 + 2^-148 with FZ off"
+        );
+        // FZ on: denormal *inputs* flush before the op, so the sum is +0
+        // rather than 0x0000_0003.
+        assert_eq!(
+            vfp_binop(VfpBinOp::Add, denorm_min, denorm_two, FPSCR_FZ),
+            0x0000_0000,
+            "denormal inputs flush before the add under FZ"
+        );
+        // The flush keeps the operand's sign.
+        assert_eq!(
+            vfp_binop(
+                VfpBinOp::Add,
+                denorm_min | 0x8000_0000,
+                denorm_two | 0x8000_0000,
+                FPSCR_FZ
+            ),
+            0x8000_0000,
+            "flushed denormals keep their sign"
+        );
+        // Normal operands/results are untouched by FZ.
+        assert_eq!(
+            vfp_binop(
+                VfpBinOp::Add,
+                (1.5f32).to_bits(),
+                (2.25f32).to_bits(),
+                FPSCR_FZ
+            ),
+            (3.75f32).to_bits()
+        );
+    }
+
+    #[test]
+    fn test_vfp_fpscr_dn_and_nan_payload_canonicalization() {
+        let qnan_aa = 0x7FC0_AAAAu32;
+        let qnan_bb = 0x7FC0_BBBBu32;
+        let snan = 0x7F80_0001u32;
+        let one = (1.0f32).to_bits();
+
+        // Default: the first NaN operand wins, quieted, payload preserved.
+        assert_eq!(
+            vfp_binop(VfpBinOp::Add, qnan_aa, qnan_bb, 0),
+            qnan_aa,
+            "first NaN operand propagates"
+        );
+        assert_eq!(
+            vfp_binop(VfpBinOp::Add, qnan_bb, qnan_aa, 0),
+            qnan_bb,
+            "operand order decides, not the payload value"
+        );
+        assert_eq!(
+            vfp_binop(VfpBinOp::Mul, snan, one, 0),
+            0x7FC0_0001,
+            "a signaling NaN is quieted, payload preserved"
+        );
+        assert_eq!(
+            vfp_binop(VfpBinOp::Sub, one, snan, 0),
+            0x7FC0_0001,
+            "the second operand propagates when the first is not NaN"
+        );
+
+        // DN: every NaN result becomes the ARM default NaN.
+        assert_eq!(
+            vfp_binop(VfpBinOp::Add, qnan_aa, qnan_bb, FPSCR_DN),
+            VFP_DEFAULT_NAN
+        );
+        assert_eq!(
+            vfp_binop(VfpBinOp::Mul, snan, one, FPSCR_DN),
+            VFP_DEFAULT_NAN
+        );
+
+        // Invalid operation with no NaN input: default quiet NaN (sign
+        // clear). Host FPUs may synthesize 0xFFC0_0000 here; the model must
+        // not leak that.
+        assert_eq!(
+            vfp_binop(
+                VfpBinOp::Mul,
+                (0.0f32).to_bits(),
+                f32::INFINITY.to_bits(),
+                0
+            ),
+            VFP_DEFAULT_NAN,
+            "0 * inf is an invalid op with no NaN operand"
+        );
+        assert_eq!(
+            vfp_binop(
+                VfpBinOp::Sub,
+                f32::INFINITY.to_bits(),
+                f32::INFINITY.to_bits(),
+                0
+            ),
+            VFP_DEFAULT_NAN,
+            "inf - inf is an invalid op with no NaN operand"
+        );
+    }
+
+    #[test]
+    fn test_vfp_fma_honors_fz_and_dn() {
+        // Normal operands whose fused product is the smallest denormal.
+        let two_pow_m64 = 0x1F80_0000u32;
+        let two_pow_m85 = 0x1500_0000u32;
+        let one = (1.0f32).to_bits();
+
+        // Fused (2^-64 * 2^-85) + 0 = 2^-149 with FZ off.
+        assert_eq!(
+            vfp_fma(two_pow_m64, two_pow_m85, 0, false, false, 0),
+            0x0000_0001
+        );
+        // FZ on: the denormal product flushes to zero before the addend.
+        assert_eq!(
+            vfp_fma(two_pow_m64, two_pow_m85, 0, false, false, FPSCR_FZ),
+            0x0000_0000
+        );
+        // DN on: NaN operand result is the default NaN.
+        assert_eq!(
+            vfp_fma(0x7FC0_1234, one, one, false, false, FPSCR_DN),
+            VFP_DEFAULT_NAN
+        );
+    }
+
+    #[test]
+    fn test_thumb2_vfp_fpscr_modes_apply_to_instructions() {
+        // VADD.F32 S2, S0, S1 with FPSCR.FZ/DN written straight into the
+        // core state. Pins the interpreter wiring, not just the helper.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.fpu_s[0] = 0x0000_0001; // 2^-149 (denormal)
+        cpu.fpu_s[1] = 0x0000_0002; // 2^-148 (denormal)
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE30, 2, 0, 1, 0),
+            true,
+        );
+        assert_eq!(
+            cpu.fpu_s[2], 0x0000_0003,
+            "VADD without FZ: exact denormal sum"
+        );
+
+        cpu.fpu_s[2] = 0;
+        cpu.fpscr = FPSCR_FZ;
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE30, 2, 0, 1, 0),
+            true,
+        );
+        assert_eq!(cpu.fpu_s[2], 0, "VADD with FZ: denormal inputs flush");
+
+        cpu.fpu_s[0] = 0x7FC0_AAAA;
+        cpu.fpu_s[1] = (1.0f32).to_bits();
+        cpu.fpscr = FPSCR_DN;
+        run_test_instr(
+            &mut cpu,
+            &mut bus,
+            vfp_arith_encoding(0xEE30, 2, 0, 1, 0),
+            true,
+        );
+        assert_eq!(cpu.fpu_s[2], VFP_DEFAULT_NAN, "VADD with DN: default NaN");
+    }
