@@ -559,6 +559,11 @@ impl Peripheral for Esp32s3I2c {
         self.core.advance_time_us(us);
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        self.core.drain_pin_drives(out);
+    }
+
     fn for_each_attached_sim_input(
         &mut self,
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
@@ -1006,10 +1011,10 @@ mod tests {
     /// asserting the bytes are the real ones written, not a blank/zero fill.
     #[test]
     fn ssd1306_gddram_is_readable_through_esp32s3_i2c() {
-        use crate::peripherals::components::Ssd1306;
+        use crate::peripherals::components::{ssd1306, GenericDisplay};
 
         let mut p = Esp32s3I2c::new();
-        p.push_slave(Box::new(Ssd1306::new(0x3C)));
+        p.push_slave(Box::new(ssd1306(0x3C)));
 
         // Single I²C write to the OLED: RSTART; WRITE 6; STOP.
         // TX = [addr+W, control=0x40 (data stream), then four GDDRAM bytes].
@@ -1038,7 +1043,7 @@ mod tests {
             .attached_slaves()
             .iter()
             .filter(|d| d.address() == 0x3C)
-            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
             .expect("an SSD1306 must be reachable at 0x3C through Esp32s3I2c");
 
         let fb = oled.framebuffer();

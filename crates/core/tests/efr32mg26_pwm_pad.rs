@@ -20,12 +20,13 @@
 //! So this drives the SHIPPED `from_config` bus through MMIO, the way firmware
 //! does, and reads the pad through `read_gpio_pad`.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::logic_capture::LogicSource;
 use labwired_core::{Bus, Machine};
-use std::path::PathBuf;
 
 /// TIMER1 — the instance `analogWrite` uses (`wiring.cpp`'s `pwm_start`).
 const TIMER1: u64 = 0x4004_C000;
@@ -55,12 +56,6 @@ const PORT_MODEH: u64 = 0x0C;
 
 const CC_MODE_PWM: u32 = 0x3;
 const PWM_TOP: u32 = 255;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// The SHIPPED bus — `from_config` on the committed yaml, with no wiring call
 /// of this file's own. A gate that wired its own pads would prove the mechanism

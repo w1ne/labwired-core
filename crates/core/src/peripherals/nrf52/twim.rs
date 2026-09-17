@@ -688,6 +688,32 @@ impl Nrf52Twim {
 }
 
 impl Peripheral for Nrf52Twim {
+    /// This controller hosts attachable I²C slaves, so it opts into the
+    /// machine's central device-time drive. Before Phase A the drive had no
+    /// source on this family and the opt-in would have been inert, which is why
+    /// it was missing; with the derived `cpu_hz` clock it is load-bearing —
+    /// without it every `data_ready` / `delay_us` device on this chip stays
+    /// always-ready.
+    fn drives_central_i2c_time(&self) -> bool {
+        true
+    }
+
+    fn advance_attached_i2c_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for cell in &self.attached_devices {
+            cell.borrow_mut().advance_time_us(us);
+        }
+    }
+
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for cell in &self.attached_devices {
+            crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
+        }
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         TWIM_LINES
     }

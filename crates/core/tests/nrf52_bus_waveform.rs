@@ -32,6 +32,8 @@
 //! decoder were derived from each other, both could be wrong together and this
 //! file would assert nothing.
 
+mod common;
+use common::root;
 use labwired_core::logic_capture::LogicSource;
 
 use labwired_config::{ChipDescriptor, SystemManifest};
@@ -40,7 +42,6 @@ use labwired_core::logic_capture::LogicEdge;
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::{Bus, Machine};
-use std::path::PathBuf;
 
 // ── The nRF52840 memory map, as configs/chips/nrf52840.yaml declares it ──────
 const UARTE0: u64 = 0x4000_2000;
@@ -96,12 +97,6 @@ const UARTE_TXD_MAXCNT: u64 = 0x548;
 const UARTE_BAUD_115200: u32 = 0x01D6_0000;
 
 const SLAVE_ADDR: u8 = 0x76;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// The same minimal manifest `bus_visibility.rs` and `chip_conformance.rs`
 /// use — chip only, so the construction path under test is the shipped one and

@@ -1,0 +1,156 @@
+# NXP PCF8574 — 8-bit quasi-bidirectional I²C I/O expander.
+#
+# This is a TIER-2 part: its whole point is that an I²C write moves PINS, which
+# no register map alone can express. The register half is `pointer_bytes: 0`
+# (below); the pin half is eight `outputs:` roles driven by eight rules.
+#
+# ── The wire, exactly ───────────────────────────────────────────────────────
+#
+# Datasheet (PCF8574, NXP, rev. 5, §8.2 "Writing to the port" / §8.3 "Reading
+# from the port"): after the address byte the master sends ONE data byte and
+# that byte IS the port. There is no register pointer to write and none to read
+# past — a read returns the port and keeps returning it for every further byte
+# of the same transaction.
+#
+# That is why this descriptor sets `pointer_bytes: 0`. A model that insisted on
+# the usual pointer byte would swallow the port value as an address and then
+# wait for a data byte that a one-byte write never sends, so the port would
+# never change at all — the part would attach, ACK, and do nothing.
+#
+# Power-on: §8.1, "the I/O port is set to logic 1" — reset 0xFF.
+#
+# ── Quasi-bidirectional, stated plainly ─────────────────────────────────────
+#
+# Each pin is a strong pull-down plus a weak (~100 µA) pull-up, so:
+#
+#   write 0 → the pin is driven LOW, hard. It is an output.
+#   write 1 → the pin is released to the weak pull-up. It reads high UNLESS
+#             something external pulls it low, which is exactly how the part is
+#             used as an INPUT: the datasheet's own instruction is "a 1 must
+#             first be written to the pin to use it as an input".
+#
+# The rules below drive each pad to the bit firmware wrote, which models both
+# directions correctly for a pin nothing external contends: a 0 pulls the pad
+# low, a 1 lets it float high. One `level:` expression per bit rather than a
+# `set`/`clear` pair, because a pin level IS a value.
+#
+# ⚠️ WHAT IS NOT MODELLED, and it is half the part.
+#
+# The INPUT half: an external edge on a pad does NOT update the readable port
+# here, and the interrupt output (INT, open-drain, asserted on any change of an
+# input pin) is not modelled at all. Both need something this engine does not
+# have — an I²C device that OBSERVES pads, not just drives them. A read
+# therefore returns the last value firmware wrote (or the host drove through
+# the `port` stimulus channel), which is what the hand-written model this
+# replaces also did. Firmware that writes 0xFF and then expects to read a
+# button pulling P4 low will read 0xFF here and a 0 on silicon.
+#
+# The `port` stimulus channel is the honest stand-in in the meantime: a host or
+# a test drives the whole port byte, and a read sees it.
+#
+# ── Placement ───────────────────────────────────────────────────────────────
+#
+# Address 0x20..0x27, strapped by A2/A1/A0 (the PCF8574A is 0x38..0x3F).
+# Each `p0_pin` … `p7_pin` config key is OPTIONAL: an expander wired for four
+# LEDs binds four of them, and a role with no pad simply drives nothing.
+type: pcf8574
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x20
+    # See the header: the PCF8574 has no register pointer.
+    pointer_bytes: 0
+    registers:
+      - name: PORT
+        addr: 0x00
+        width: 1
+        endian: be
+        access: rw
+        reset: 0xFF
+        bits:
+          - { name: P0, shift: 0 }
+          - { name: P1, shift: 1 }
+          - { name: P2, shift: 2 }
+          - { name: P3, shift: 3 }
+          - { name: P4, shift: 4 }
+          - { name: P5, shift: 5 }
+          - { name: P6, shift: 6 }
+          - { name: P7, shift: 7 }
+
+  # The eight pads. Each binds to a `config:` key; an unbound role drives nothing.
+  outputs: [P0, P1, P2, P3, P4, P5, P6, P7]
+  output_pins:
+    P0: p0_pin
+    P1: p1_pin
+    P2: p2_pin
+    P3: p3_pin
+    P4: p4_pin
+    P5: p5_pin
+    P6: p6_pin
+    P7: p7_pin
+
+  rules:
+    # A write to the port moves every pad to its bit. `level:` is an
+    # expression, so this is eight rules rather than sixteen set/clear pairs.
+    - { on: { write: PORT }, do: [ { pin: P0, level: "field(PORT.P0)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P1, level: "field(PORT.P1)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P2, level: "field(PORT.P2)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P3, level: "field(PORT.P3)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P4, level: "field(PORT.P4)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P5, level: "field(PORT.P5)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P6, level: "field(PORT.P6)" } ] }
+    - { on: { write: PORT }, do: [ { pin: P7, level: "field(PORT.P7)" } ] }
+
+    # The `port` stimulus channel is the host's way to pose the port. It writes
+    # the SAME register firmware writes — that is the behaviour the model this
+    # replaces had, where `set_input` and `write` both assigned one field — and
+    # then moves the pads, so a host-driven port is visible on the pins too.
+    - { on: { input: port }, do: [ { write: { register: PORT, value: "input(port)" } } ] }
+    - { on: { input: port }, do: [ { pin: P0, level: "field(PORT.P0)" } ] }
+    - { on: { input: port }, do: [ { pin: P1, level: "field(PORT.P1)" } ] }
+    - { on: { input: port }, do: [ { pin: P2, level: "field(PORT.P2)" } ] }
+    - { on: { input: port }, do: [ { pin: P3, level: "field(PORT.P3)" } ] }
+    - { on: { input: port }, do: [ { pin: P4, level: "field(PORT.P4)" } ] }
+    - { on: { input: port }, do: [ { pin: P5, level: "field(PORT.P5)" } ] }
+    - { on: { input: port }, do: [ { pin: P6, level: "field(PORT.P6)" } ] }
+    - { on: { input: port }, do: [ { pin: P7, level: "field(PORT.P7)" } ] }
+
+metadata:
+  label: "PCF8574 I/O Expander"
+  summary: "NXP PCF8574 8-bit I²C quasi-bidirectional port expander."
+  detail: "NXP PCF8574 at 0x20 (A2/A1/A0 select 0x20-0x27; the PCF8574A variant is 0x38-0x3F). Every byte on the wire is the port - there is no register pointer - and the port powers up at 0xFF, all pins released to their weak pull-ups. Writing a bit low drives that pad hard low; writing it high releases the pad, which is also how the datasheet says to use a pin as an input. The eight pads are bound through the optional p0_pin..p7_pin config keys, so an expander wired for four LEDs binds four. NOT modelled: the input direction (an external edge on a pad does not update the readable port) and the open-drain INT output; a read returns the last value written or driven through the `port` stimulus channel."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27, and the PCF8574A variant uses 0x38-0x3F."
+    - name: port
+      ty: float
+      doc: "Initial port byte (0-255). Default 255, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+    - name: p0_pin
+      ty: str
+      doc: "Pad P0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+    - name: p1_pin
+      ty: str
+      doc: "Pad P1 drives. Optional."
+    - name: p2_pin
+      ty: str
+      doc: "Pad P2 drives. Optional."
+    - name: p3_pin
+      ty: str
+      doc: "Pad P3 drives. Optional."
+    - name: p4_pin
+      ty: str
+      doc: "Pad P4 drives. Optional."
+    - name: p5_pin
+      ty: str
+      doc: "Pad P5 drives. Optional."
+    - name: p6_pin
+      ty: str
+      doc: "Pad P6 drives. Optional."
+    - name: p7_pin
+      ty: str
+      doc: "Pad P7 drives. Optional."
+  inputs:
+    - { key: port, label: "Port", unit: byte, min: 0, max: 255, default: 255 }

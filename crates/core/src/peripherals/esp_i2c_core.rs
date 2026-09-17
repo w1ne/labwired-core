@@ -276,6 +276,13 @@ impl EspI2cCore {
 
     /// Advance every attached device's own clock. The ESP controllers drive
     /// central I²C time, so this is how a sensor's conversion time passes.
+    /// Tier 2: collect every attached slave's queued pin drives.
+    pub(crate) fn drain_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for slave in self.slaves.iter_mut() {
+            crate::peripherals::device::drain_i2c_pin_drives(&mut **slave, out);
+        }
+    }
+
     pub(crate) fn advance_time_us(&mut self, us: u64) {
         if us == 0 {
             return;

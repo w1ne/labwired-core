@@ -22,10 +22,11 @@
 //! traces back to an alias. [`clr_alias_is_not_the_rp2040_set_alias`] pins the
 //! difference.
 
+mod common;
+use common::root;
 use labwired_config::{AtomicAliasFlavour, ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
-use std::path::PathBuf;
 
 /// GPIOC port struct: `GPIO_S_BASE + 0x30 + 2*0x30` (`efr32mg26_gpio.h`
 /// `GPIO_TypeDef.P[4]`, `efr32mg26_gpio_port.h`). LED0/LED1 are PC08/PC09 on
@@ -39,12 +40,6 @@ const MODEH: u64 = 0x0C;
 const SET: u64 = 0x1000;
 const CLR: u64 = 0x2000;
 const TGL: u64 = 0x3000;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// `CMU_CLKEN0` (absolute) and the GPIO bit in it. Every GPIO probe below
 /// enables this first: since the CMU became a real model the ports are clock-

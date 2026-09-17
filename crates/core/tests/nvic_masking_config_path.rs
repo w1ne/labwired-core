@@ -45,11 +45,12 @@
 //! Both directions are asserted: an ENABLED IRQ must still fire. A regression
 //! that masked everything would pass the negative test alone.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, Cpu, DebugControl, Machine};
-use std::path::PathBuf;
 
 /// ARMv7-M core peripheral bases (ARM DDI 0403 B3.4).
 const NVIC_ISER0: u64 = 0xE000_E100;
@@ -61,12 +62,6 @@ const VECTORS: u32 = 0x0800_0000;
 const MAIN: u32 = 0x0800_0100;
 const HANDLER: u32 = 0x0800_0200;
 const MSP: u32 = 0x2000_8000;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// The shipped `nucleo-f407` machine, built exactly the way the run path builds
 /// it: `SystemBus::from_config` then `configure_cortex_m`.

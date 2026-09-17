@@ -17,8 +17,8 @@
 //!
 //! What is NOT here is any new modelling. A pack names one of the irreducible
 //! primitives (`i2c_device`, `spi_device`, `analog_source`, `quadrature`,
-//! `matrix`, `one_wire`, `pulse_echo`) and this module routes it to the same construction the built-in
-//! parts use. A part with a genuinely new wire protocol needs a new primitive,
+//! `matrix`, `one_wire`, `pulse_echo`, `gpio_device`) and this module routes it to the same
+//! construction the built-in parts use. A part with a genuinely new wire protocol needs a new primitive,
 //! which is a change to this crate — that boundary is real and worth being
 //! straight about.
 //!
@@ -130,7 +130,7 @@ pub(crate) fn validate_manifest(manifest: &SystemManifest) -> Result<()> {
 }
 
 /// Validate one pack against the primitive that will eventually interpret it,
-/// without constructing/interning a runtime kit. The same seven primitive
+/// without constructing/interning a runtime kit. The same eight primitive
 /// names are the public `labwired.part/v1` contract.
 fn validate_runtime_descriptor(pack: &DeviceDescriptor) -> Result<()> {
     let result = match pack.behavior.primitive.as_str() {
@@ -139,12 +139,14 @@ fn validate_runtime_descriptor(pack: &DeviceDescriptor) -> Result<()> {
         "analog_source" => {
             crate::peripherals::components::declarative_analog::validate_descriptor(pack)
         }
-        "quadrature" | "matrix" | "one_wire" | "pulse_echo" => {
+        "display" => crate::peripherals::components::declarative_display::validate_descriptor(pack),
+        "quadrature" | "matrix" | "one_wire" | "pulse_echo" | "gpio_device" => {
             super::declarative_device::validate_descriptor(pack)
         }
         primitive => anyhow::bail!(
             "part pack '{}' names unsupported primitive '{}'. Supported primitives are \
-             i2c_device, spi_device, analog_source, quadrature, matrix, one_wire, pulse_echo",
+             i2c_device, spi_device, analog_source, display, quadrature, matrix, one_wire, \
+             pulse_echo, gpio_device",
             pack.r#type,
             primitive
         ),
@@ -166,6 +168,10 @@ pub(crate) fn kit_for(pack: &DeviceDescriptor) -> Result<Option<&'static dyn Per
         "i2c_device" => Transport::I2c,
         "spi_device" => Transport::Spi,
         "analog_source" => Transport::Analog,
+        // A display is bus-resident too, but which bus it hangs off is decided
+        // by its FRAMING (a D/C pad means SPI, a control byte means I²C), not by
+        // the primitive name — so the one kit covers both and interns once.
+        "display" => Transport::Display,
         _ => return Ok(None),
     };
 
@@ -191,6 +197,10 @@ pub(crate) fn kit_for(pack: &DeviceDescriptor) -> Result<Option<&'static dyn Per
                 format!("part pack '{}' is not a valid analog_source", pack.r#type)
             })?,
         )),
+        Transport::Display => Box::leak(Box::new(
+            crate::peripherals::components::DeclarativeDisplayKit::from_yaml(&key)
+                .with_context(|| format!("part pack '{}' is not a valid display", pack.r#type))?,
+        )),
     };
     interned.insert(key, kit);
     Ok(Some(kit))
@@ -200,6 +210,7 @@ enum Transport {
     I2c,
     Spi,
     Analog,
+    Display,
 }
 
 /// Build the I²C model for `ext` from a manifest-carried pack, if one claims

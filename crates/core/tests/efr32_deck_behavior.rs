@@ -21,6 +21,8 @@
 //! which is not a required PR check. A `behavior_gate` that only runs
 //! elsewhere is not holding anything, so the evidence lives here too.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::cortex_m::CortexM;
@@ -29,12 +31,6 @@ use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::Machine;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// The deck ELF this gate runs.
 ///

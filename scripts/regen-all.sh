@@ -69,6 +69,22 @@ UPDATE_CONFORMANCE_BASELINE=1 cargo test -q -p labwired-core --test chip_conform
 echo "==> UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus_visibility"
 UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -q -p labwired-core --test bus_visibility >/dev/null
 
+# The vendored peripherals manifest the browser/TS layer reads
+# (`crates/core/tests/fixtures/peripherals/manifest.json`), emitted from the
+# `PeripheralKit` registry. `peripheral_kit_gate::manifest_json_matches_registry`
+# compares the committed bytes against what the generator would emit TODAY.
+#
+# It was not in this script, and that is exactly the hole this script exists to
+# close: a change to one kit's metadata — including a part becoming a
+# `configs/devices/*.yaml` descriptor, which moves its label, detail and
+# config_keys wholesale — left the fixture stale, `regen-all.sh` reported a
+# clean tree, and the PR went red in `pr-workspace-tests` on a shard the local
+# reproduction of `pr-gate` does not run. Re-running the whole set and asserting
+# a clean tree only detects staleness for the generators registered here.
+echo "==> cargo run -p labwired-cli --bin gen-peripherals-manifest"
+run cargo run -q -p labwired-cli --bin gen-peripherals-manifest -- \
+  --out crates/core/tests/fixtures/peripherals/manifest.json
+
 echo
 echo "All generated artifacts refreshed."
 echo "If 'git status' is not clean, a committed artifact was stale — commit the result."

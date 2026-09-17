@@ -268,7 +268,7 @@ mod logic_capture_differential_tests {
     /// The ESP32-C3 SSD1306/I²C waveform fixture from
     /// `tests/esp32c3_i2c_waveform.rs`, driven through `Machine::run` batches.
     fn c3_i2c_machine(tick_interval: u32) -> Machine<CortexM> {
-        use crate::peripherals::components::Ssd1306;
+        use crate::peripherals::components::ssd1306;
         let mut bus = crate::bus::SystemBus::new();
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
         bus.add_peripheral(
@@ -289,7 +289,7 @@ mod logic_capture_differential_tests {
             ("sda".to_string(), format!("GPIO{SDA_PIN}")),
             ("scl".to_string(), format!("GPIO{SCL_PIN}")),
         ]);
-        bus.attach_i2c_slave_with_route("i2c0", Box::new(Ssd1306::new(0x3C)), Some(&route))
+        bus.attach_i2c_slave_with_route("i2c0", Box::new(ssd1306(0x3C)), Some(&route))
             .unwrap();
         bus.wire_esp32c3_i2c_pads();
 

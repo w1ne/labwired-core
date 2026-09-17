@@ -13,6 +13,7 @@
 
 #![cfg(feature = "esp32s3-fixtures")]
 
+mod common;
 use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::components::Sh1107;
@@ -20,8 +21,6 @@ use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
 use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
 use labwired_core::{Cpu, SimulationError};
-use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 /// SH1107 address the firmware drives (SA0=high; 0x3C is taken by the S3
@@ -29,32 +28,6 @@ use std::sync::{Arc, Mutex};
 const OLED_ADDR: u8 = 0x3D;
 /// KEY1 sits on GPIO4 (see examples/openai-deck-s3/src/main.rs KEY_PINS).
 const KEY1_GPIO: u8 = 4;
-
-fn firmware_path() -> PathBuf {
-    PathBuf::from(
-        "../../examples/openai-deck-s3/target/xtensa-esp32s3-none-elf/release/openai-deck-s3",
-    )
-}
-
-fn ensure_firmware_built() -> PathBuf {
-    let elf = firmware_path();
-    let src = PathBuf::from("../../examples/openai-deck-s3/src/main.rs");
-    if elf.exists() {
-        if let (Ok(elf_meta), Ok(src_meta)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {
-            if elf_meta.modified().unwrap() >= src_meta.modified().unwrap() {
-                return elf;
-            }
-        }
-    }
-    let status = Command::new("cargo")
-        .args(["+esp", "build", "--release", "--target-dir", "target"])
-        .current_dir("../../examples/openai-deck-s3")
-        .status()
-        .expect("cargo +esp build (is the ESP toolchain installed and ~/export-esp.sh sourced?)");
-    assert!(status.success(), "openai-deck-s3 build failed");
-    assert!(elf.exists(), "ELF not found at {elf:?} after build");
-    elf
-}
 
 /// Read back the SH1107 GDDRAM attached at `OLED_ADDR` on I2C0.
 fn oled_lit_pixels(bus: &SystemBus) -> usize {
@@ -88,7 +61,10 @@ fn set_key(bus: &mut SystemBus, pin: u8, level: bool) {
 
 #[test]
 fn openai_deck_s3_renders_and_reports_key_press() {
-    let elf_path = ensure_firmware_built();
+    let elf_path = common::ensure_esp_firmware_built(
+        "openai-deck-s3",
+        "target/xtensa-esp32s3-none-elf/release/openai-deck-s3",
+    );
     let elf_bytes = std::fs::read(&elf_path).expect("read firmware ELF");
 
     let mut bus = SystemBus::new();

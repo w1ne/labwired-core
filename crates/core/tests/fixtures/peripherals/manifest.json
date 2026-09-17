@@ -418,31 +418,6 @@
       ]
     },
     {
-      "device_type": "as5600",
-      "label": "AS5600 Magnetic Encoder",
-      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
-      "detail": "ams AS5600 (default address 0x36). Host sets angle in degrees; firmware reads RAW_ANGLE / ANGLE (12-bit) and STATUS magnet-detected bit.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x36."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "angle",
-          "label": "Angle",
-          "unit": "deg",
-          "min": 0.0,
-          "max": 360.0
-        }
-      ]
-    },
-    {
       "device_type": "bno055",
       "label": "BNO055 IMU",
       "summary": "9-DoF absolute orientation sensor (Bosch BNO055) over I²C.",
@@ -743,14 +718,59 @@
       "device_type": "pcf8574",
       "label": "PCF8574 I/O Expander",
       "summary": "NXP PCF8574 8-bit I²C quasi-bidirectional port expander.",
-      "detail": "Default address 0x20. Write one byte to latch outputs; read returns the port value (host may override via SimInput port).",
+      "detail": "NXP PCF8574 at 0x20 (A2/A1/A0 select 0x20-0x27; the PCF8574A variant is 0x38-0x3F). Every byte on the wire is the port - there is no register pointer - and the port powers up at 0xFF, all pins released to their weak pull-ups. Writing a bit low drives that pad hard low; writing it high releases the pad, which is also how the datasheet says to use a pin as an input. The eight pads are bound through the optional p0_pin..p7_pin config keys, so an expander wired for four LEDs binds four. NOT modelled: the input direction (an external edge on a pad does not update the readable port) and the open-drain INT output; a read returns the last value written or driven through the `port` stimulus channel.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
         {
           "name": "i2c_address",
           "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x20."
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27, and the PCF8574A variant uses 0x38-0x3F."
+        },
+        {
+          "name": "port",
+          "ty": "float",
+          "doc": "Initial port byte (0-255). Default 255, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+        },
+        {
+          "name": "p0_pin",
+          "ty": "str",
+          "doc": "Pad P0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "p1_pin",
+          "ty": "str",
+          "doc": "Pad P1 drives. Optional."
+        },
+        {
+          "name": "p2_pin",
+          "ty": "str",
+          "doc": "Pad P2 drives. Optional."
+        },
+        {
+          "name": "p3_pin",
+          "ty": "str",
+          "doc": "Pad P3 drives. Optional."
+        },
+        {
+          "name": "p4_pin",
+          "ty": "str",
+          "doc": "Pad P4 drives. Optional."
+        },
+        {
+          "name": "p5_pin",
+          "ty": "str",
+          "doc": "Pad P5 drives. Optional."
+        },
+        {
+          "name": "p6_pin",
+          "ty": "str",
+          "doc": "Pad P6 drives. Optional."
+        },
+        {
+          "name": "p7_pin",
+          "ty": "str",
+          "doc": "Pad P7 drives. Optional."
         }
       ],
       "labs": [],
@@ -776,55 +796,6 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4."
-        }
-      ],
-      "labs": [],
-      "inputs": []
-    },
-    {
-      "device_type": "sht30",
-      "label": "SHT30 Temp/Humidity",
-      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
-      "detail": "Default address 0x44. Single-shot high-repeatability framing with CRC. Host sets temperature (°C) and humidity (%RH).",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x44."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "temperature",
-          "label": "Temperature",
-          "unit": "C",
-          "min": -40.0,
-          "max": 125.0
-        },
-        {
-          "key": "humidity",
-          "label": "Humidity",
-          "unit": "%RH",
-          "min": 0.0,
-          "max": 100.0
-        }
-      ]
-    },
-    {
-      "device_type": "at24c256",
-      "label": "AT24C256 EEPROM",
-      "summary": "I²C 32 KiB EEPROM shell (256-byte sim window).",
-      "detail": "Default address 0x50. Two-byte address pointer then sequential R/W. Simulated memory is 256 bytes wrapping for compactness.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x50."
         }
       ],
       "labs": [],
@@ -2196,6 +2167,110 @@
       ]
     },
     {
+      "device_type": "as5600",
+      "label": "AS5600 Magnetic Encoder",
+      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
+      "detail": "ams AS5600 at default address 0x36, a register-pointer device whose pointer walks one byte per byte read. Host sets shaft angle in degrees; RAW_ANGLE and ANGLE report it as a 12-bit right-aligned big-endian count (4096 per revolution) and STATUS reports the magnet-detected bit. ZPOS / MPOS / MANG / CONF are read/write storage, but the ZPOS/MPOS/MANG output scaling is not applied — ANGLE equals RAW_ANGLE. The ML / MH magnet-placement faults and the one-way BURN command are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the AS5600 fixed address 0x36."
+        },
+        {
+          "name": "angle",
+          "ty": "float",
+          "doc": "Initial shaft angle in degrees. Default 0. Drive it at runtime with the `angle` input channel."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "angle",
+          "label": "Angle",
+          "unit": "deg",
+          "min": 0.0,
+          "max": 360.0
+        }
+      ]
+    },
+    {
+      "device_type": "sht30",
+      "label": "SHT30 Temp/Humidity",
+      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
+      "detail": "Sensirion SHT30 at default address 0x44 (ADDR low; 0x45 with ADDR high). Single-shot and periodic-mode opcodes return a temperature word and a humidity word, each 16-bit big-endian with a Sensirion CRC-8. A single-shot measurement takes the datasheet's 15 ms maximum, after which the frame is readable; a read issued sooner returns 0xFF. Host sets temperature (°C) and relative humidity (%). The periodic-mode cadence, the repeatability grades, the heater and the alert logic are not modelled, and the status register is the power-on constant.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SHT30 address 0x44 (ADDR pin low)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "at24c256",
+      "label": "AT24C256 EEPROM",
+      "summary": "I²C serial EEPROM with a 16-bit address pointer and 64-byte pages.",
+      "detail": "Atmel/Microchip AT24C256 at default address 0x50 (A2:A0 straps to 0x57). Two address bytes select a cell; sequential read rolls over the array and a sequential write wraps inside its 64-byte page, as on silicon. The modelled array is a 256-byte window that repeats every 256 addresses, and the 5 ms write cycle is not modelled — a driver that polls for ready is answered immediately.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the AT24C256 address 0x50 (A2:A0 = GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "tmp117",
+      "label": "TMP117 Temperature",
+      "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
+      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result. CONFIGURATION, both alert limits, TEMP_OFFSET and the EEPROM words are read/write storage; DATA_READY reads set because the part powers up in continuous-conversion mode. The alert comparator and the TEMP_OFFSET addition are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADD0→GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -55.0,
+          "max": 150.0
+        }
+      ]
+    },
+    {
       "device_type": "adxl345_spi",
       "label": "ADXL345 accelerometer",
       "summary": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
@@ -2309,31 +2384,6 @@
       ],
       "labs": [],
       "inputs": []
-    },
-    {
-      "device_type": "tmp117",
-      "label": "TMP117 Temperature",
-      "summary": "TI TMP117 high-accuracy digital temperature sensor over I2C.",
-      "detail": "Pointer-addressed 16-bit registers; TEMP_RESULT at 7.8125 m°C/LSB. Stimulus channel `temperature` (°C) sets the conversion result.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x48 (ADD0→GND)."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "temperature",
-          "label": "Temperature",
-          "unit": "°C",
-          "min": -55.0,
-          "max": 150.0
-        }
-      ]
     },
     {
       "device_type": "bmi270",

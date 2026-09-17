@@ -9,6 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+pub mod expr;
+pub mod rules;
+
+pub use rules::{
+    compile_rules, validate_rule_names, Action, BitFieldSpec, CompiledAction, CompiledRule, Event,
+    FifoOverflow, FifoSpec, FrameSpec, PinEdge, RegBits, Rule, RuleCompileError, RuleNames,
+};
+
 fn deserialize_u64_lax<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -2143,21 +2151,46 @@ pub struct FieldDescriptor {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+/// What a READ of a register does to it, beyond handing back its value.
+///
+/// One vocabulary for the whole engine: the MCU register machine reads it out
+/// of [`SideEffectsDescriptor`], and a device descriptor reads the same enum
+/// out of [`RegisterSpec::on_read`]. SystemRDL names.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ReadAction {
+    #[default]
     None,
+    /// The register reads back its value once and is then zeroed. See
+    /// [`RegisterSpec::on_read`] for exactly when "once" is.
+    #[serde(alias = "readClear", alias = "read_clear", alias = "clear_on_read")]
     Clear,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+/// What a WRITE of a register does to the stored word.
+///
+/// The SystemRDL vocabulary, shared by the MCU register machine
+/// ([`SideEffectsDescriptor`]) and device descriptors
+/// ([`RegisterSpec::on_write`]). Each spelling a datasheet or an SVD might use
+/// is an ALIAS of one value rather than a second value, so `one_to_clear`,
+/// `write_one_to_clear` and `oneToClear` cannot drift apart.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum WriteAction {
+    #[default]
     None,
-    #[serde(alias = "oneToClear")]
+    /// `reg &= !data` — a 1 written clears that bit (the interrupt-acknowledge
+    /// idiom). Restricted to [`RegisterSpec::write_mask`] when one is declared.
+    #[serde(alias = "oneToClear", alias = "one_to_clear", alias = "w1c")]
     WriteOneToClear,
-    #[serde(alias = "zeroToClear")]
+    /// `reg &= data` — a 0 written clears that bit.
+    #[serde(alias = "zeroToClear", alias = "zero_to_clear", alias = "w0c")]
     WriteZeroToClear,
+    /// `reg |= data` — a 1 written sets that bit and a 0 leaves it alone (the
+    /// set/clear register-pair idiom every GPIO port and most interrupt
+    /// enablers use).
+    #[serde(alias = "oneToSet", alias = "write_one_to_set", alias = "w1s")]
+    OneToSet,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -2190,12 +2223,98 @@ pub enum TimingTrigger {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+/// What a timed event does to a register, by NAME.
+///
+/// Shared by the MCU register machine's [`TimingDescriptor`] and a declarative
+/// device's [`DeviceTimer`], so "the silicon changed a register by itself" has
+/// one spelling everywhere.
+///
+/// Accepts BOTH YAML shapes on the way in: the datasheet-shaped single-key map
+/// `{ set_bits: { register: STATUS, bits: 0x01 } }`, and serde_yaml's own
+/// external tag `!set_bits { … }`. The map form is what anyone writing a part
+/// by hand reaches for, and serde_yaml 0.9 rejects it for an externally-tagged
+/// enum — the same reason [`AutoIncrement`] carries a hand-written
+/// `Deserialize`. Serialization emits the derived form.
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TimingAction {
     SetBits { register: String, bits: u32 },
     ClearBits { register: String, bits: u32 },
     WriteValue { register: String, value: u32 },
+}
+
+/// Fields of any [`TimingAction`] variant in the single-key map form.
+#[derive(Deserialize)]
+struct TimingActionFields {
+    register: String,
+    #[serde(default)]
+    bits: Option<u32>,
+    #[serde(default)]
+    value: Option<u32>,
+}
+
+/// The derived shape, used only to accept the `!set_bits` tag form.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TimingActionTagged {
+    SetBits { register: String, bits: u32 },
+    ClearBits { register: String, bits: u32 },
+    WriteValue { register: String, value: u32 },
+}
+
+impl<'de> Deserialize<'de> for TimingAction {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        const VARIANTS: &[&str] = &["set_bits", "clear_bits", "write_value"];
+        let value = serde_yaml::Value::deserialize(deserializer)?;
+        if let serde_yaml::Value::Mapping(m) = &value {
+            if m.len() == 1 {
+                if let Some((key, inner)) = m.iter().next() {
+                    if let Some(key) = key.as_str() {
+                        if VARIANTS.contains(&key) {
+                            let f: TimingActionFields =
+                                serde_yaml::from_value(inner.clone()).map_err(D::Error::custom)?;
+                            let need = |what: &str, v: Option<u32>| {
+                                v.ok_or_else(|| {
+                                    D::Error::custom(format!(
+                                        "timing action '{key}' needs '{what}'"
+                                    ))
+                                })
+                            };
+                            return match key {
+                                "set_bits" => Ok(TimingAction::SetBits {
+                                    register: f.register,
+                                    bits: need("bits", f.bits)?,
+                                }),
+                                "clear_bits" => Ok(TimingAction::ClearBits {
+                                    register: f.register,
+                                    bits: need("bits", f.bits)?,
+                                }),
+                                _ => Ok(TimingAction::WriteValue {
+                                    register: f.register,
+                                    value: need("value", f.value)?,
+                                }),
+                            };
+                        }
+                        return Err(D::Error::unknown_variant(key, VARIANTS));
+                    }
+                }
+            }
+        }
+        // Not a single-key map: fall back to serde_yaml's tagged form.
+        let tagged: TimingActionTagged = serde_yaml::from_value(value).map_err(D::Error::custom)?;
+        Ok(match tagged {
+            TimingActionTagged::SetBits { register, bits } => {
+                TimingAction::SetBits { register, bits }
+            }
+            TimingActionTagged::ClearBits { register, bits } => {
+                TimingAction::ClearBits { register, bits }
+            }
+            TimingActionTagged::WriteValue { register, value } => {
+                TimingAction::WriteValue { register, value }
+            }
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -2490,12 +2609,33 @@ pub struct I2cSpec {
     /// Command set. Present ⇒ this is a command device.
     #[serde(default)]
     pub commands: Vec<I2cCommand>,
+    /// **Register-pointer width in bytes**: how many bytes after START the
+    /// master writes to select an address, big-endian (high byte first — the
+    /// order every 16-bit-addressed I²C part on the market uses). `1` (the
+    /// default) is the ordinary 8-bit pointer every device written before this
+    /// existed has. `2` is the memory-like shape: an AT24C256 EEPROM addresses
+    /// 32 KiB with two address bytes, and a 16-bit-mapped sensor does the same.
+    ///
+    /// Applies to BOTH pointer modes — the named `registers:` map (whose
+    /// [`RegisterSpec::addr`] is a `u16` for exactly this reason) and the
+    /// byte-addressable `register_file:`.
+    #[serde(default = "default_pointer_width")]
+    pub pointer_width: u8,
+    /// **Write page size in bytes** for a memory-like part. A sequential write
+    /// that runs past a page boundary wraps to the START of the same page
+    /// instead of spilling into the next one — the single most surprising real
+    /// EEPROM behaviour, and the reason a driver that writes a 40-byte record
+    /// across a page boundary silently corrupts it on hardware but "worked" in
+    /// a model that just incremented. Reads are NOT paged: sequential read
+    /// rolls over the whole array. Absent ⇒ no page wrap.
+    #[serde(default)]
+    pub write_page: Option<u16>,
     /// Mask applied to the pointer byte the master writes in **register-pointer**
     /// mode (`registers:`). Absent ⇒ `0xFF` (no masking). A part whose pointer is
     /// only a few low bits (TMP102 uses `0x03`) sets it so a write of an
     /// out-of-range pointer aliases into the register file exactly as silicon does.
     #[serde(default)]
-    pub pointer_mask: Option<u8>,
+    pub pointer_mask: Option<u16>,
     /// **Byte-addressable register file** mode. Present ⇒ this is a register-file
     /// device (256 one-byte registers with a write-pointer that walks on
     /// auto-increment, PCA9685-style). Mutually exclusive with `registers:` and
@@ -2556,12 +2696,33 @@ pub struct I2cSpec {
     /// register without one decodes in every bank (the flat, bank-agnostic core
     /// map), so only the addresses that genuinely alias need to say so.
     #[serde(default)]
-    pub page_register: Option<u8>,
+    pub page_register: Option<u16>,
     /// **Indexed readout ports**: an index register + a strobe handshake + a
     /// data register, standing in for storage that is not directly pointer-
     /// addressable (a factory NVM / OTP array). See [`IndexedTable`].
     #[serde(default)]
     pub indexed_tables: Vec<IndexedTable>,
+    /// Width of the register POINTER in bytes. `1` (the default) is the
+    /// ordinary register-pointer part: the first byte of a write selects a
+    /// register, the rest are data.
+    ///
+    /// `0` is the **pointerless** shape: the part has exactly one addressable
+    /// register (declared at `addr: 0`) and EVERY byte on the wire is that
+    /// register's data — there is no pointer to write and none to read past.
+    /// The NXP PCF8574 I/O expander is the canonical one: "the master sends one
+    /// byte, which is the port", and a model that insisted on a pointer byte
+    /// would consume the port value as an address and then latch the NEXT byte,
+    /// which for a single-byte write means the port never changes at all.
+    ///
+    /// Nothing else in the register-pointer engine changes: `write_mask`,
+    /// `bits:`, `source:`, reset values and the Tier-2 rules all behave exactly
+    /// as they do for a pointered part.
+    #[serde(default = "default_pointer_bytes")]
+    pub pointer_bytes: u8,
+}
+
+fn default_pointer_bytes() -> u8 {
+    1
 }
 
 /// One **indexed readout port**: the datasheet shape for reading storage that
@@ -2743,9 +2904,17 @@ pub struct RegisterFileSpec {
     /// Sparse non-zero power-on reset values, keyed by register offset.
     #[serde(default)]
     pub reset: BTreeMap<u8, u8>,
-    /// Mask applied to the pointer byte. Absent ⇒ `0xFF`.
+    /// Mask applied to the pointer. Absent ⇒ `0xFF` (the 8-bit pointer every
+    /// register-file device had before [`I2cSpec::pointer_width`] existed); a
+    /// two-byte-pointer part sets the width its address bus really has.
     #[serde(default = "default_pointer_mask")]
-    pub pointer_mask: u8,
+    pub pointer_mask: u16,
+    /// Value every byte of the file powers up holding, before the sparse
+    /// `reset` entries are stamped over it. Absent ⇒ 0. An erased EEPROM cell
+    /// reads `0xFF`, and a 32 KiB part cannot say that one `reset` entry at a
+    /// time.
+    #[serde(default)]
+    pub fill: Option<u8>,
     /// The first byte written after START selects the pointer. Default true.
     #[serde(default = "default_true")]
     pub first_write_after_start_sets_pointer: bool,
@@ -2754,8 +2923,12 @@ pub struct RegisterFileSpec {
     pub auto_increment: AutoIncrement,
 }
 
-fn default_pointer_mask() -> u8 {
+fn default_pointer_mask() -> u16 {
     0xFF
+}
+
+fn default_pointer_width() -> u8 {
+    1
 }
 
 /// Auto-increment policy for a register-file write-pointer. Checked **live**
@@ -2859,7 +3032,7 @@ pub struct ReadComplete {
     #[serde(default)]
     pub register: Option<String>,
     #[serde(default)]
-    pub pointer: Option<u8>,
+    pub pointer: Option<u16>,
 }
 
 /// What an [`UpdateRule`] does. Currently only `add_wrap`.
@@ -2994,7 +3167,7 @@ fn default_addr_mask() -> u8 {
 }
 
 /// CRC-8 parameters. Sensirion parts use `poly 0x31`, `init 0xFF`, no final XOR.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub struct Crc8Spec {
     pub poly: u8,
     pub init: u8,
@@ -3027,8 +3200,13 @@ pub type I2cAccess = RegisterAccess;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RegisterSpec {
     pub name: String,
-    /// Pointer byte the master writes to select this register.
-    pub addr: u8,
+    /// Pointer the master writes to select this register.
+    ///
+    /// One byte on almost every part; two on a device that declares
+    /// [`I2cSpec::pointer_width`] `2` (an EEPROM-style 16-bit address). The
+    /// field is `u16` so both fit, and a YAML written when it was `u8` parses
+    /// unchanged — `0x75` is the same number either way.
+    pub addr: u16,
     /// Width in bytes streamed on read / accumulated on write.
     pub width: u8,
     pub endian: Endian,
@@ -3115,6 +3293,43 @@ pub struct RegisterSpec {
     /// [`ZeroWhen`] — the VEML7700 `ALS_SD` shutdown bit is the motivating case.
     #[serde(default)]
     pub zero_when: Option<ZeroWhen>,
+    /// NAMED bit-fields, so a Tier-2 rule can say `set: INT_STATUS.DATA_RDY`
+    /// and `field(CONFIG.GAIN)` instead of carrying a hand-computed mask. Pure
+    /// nomenclature: naming bits changes no read or write behaviour, which is
+    /// why adding this to a shipped descriptor cannot move its transcript.
+    ///
+    /// Distinct from [`fields`](Self::fields), which ASSEMBLES a composite
+    /// measurement word out of sourced sub-values. See [`BitFieldSpec`].
+    #[serde(default)]
+    pub bits: Vec<BitFieldSpec>,
+    /// Datasheet side effect of a READ of this register, in the SystemRDL
+    /// vocabulary the MCU register machine already uses ([`ReadAction`]).
+    ///
+    /// `clear` zeroes the stored word once the read **completes**, and
+    /// "completes" is defined to be the exact moment the engine's existing
+    /// [`DataReady::clear_on_read`] acts, so the two primitives can never
+    /// disagree about when a read happened:
+    ///   * register-pointer mode (no `auto_increment`) — when the pointed read
+    ///     LATCHES, i.e. as the first byte of the word is produced. The master
+    ///     still receives the pre-clear bytes; the datasheets word it as "reset
+    ///     when the corresponding result register is read".
+    ///   * byte-wise `auto_increment` mode, and an SPI burst — after the LAST
+    ///     byte of the register's word has been handed to the master, so a
+    ///     2-byte status is not zeroed while the master is still mid-read.
+    ///
+    /// A register with a `source:` reports its measurement, not storage, so a
+    /// clear is observable only through what else reads that stored word
+    /// (`scale_from`, `popcount`, `zero_when`).
+    #[serde(default)]
+    pub on_read: Option<ReadAction>,
+    /// Datasheet side effect of a WRITE to this register ([`WriteAction`]).
+    /// `write_one_to_clear` (`reg &= !data`), `write_zero_to_clear`
+    /// (`reg &= data`) and `one_to_set` (`reg |= data`) all operate only on the
+    /// bits [`RegisterSpec::write_mask`] lets the master touch; bits outside it
+    /// keep their value exactly as they do for a plain store. Absent ⇒ a plain
+    /// store, which is what every descriptor written before this field meant.
+    #[serde(default)]
+    pub on_write: Option<WriteAction>,
 }
 
 /// One sourced bit-field within a composite register word (see
@@ -3165,6 +3380,37 @@ pub struct Encode {
     pub clamp_min: Option<f64>,
     #[serde(default)]
     pub clamp_max: Option<f64>,
+    /// **Modular wrap**, in RAW COUNTS: the encoded count is reduced
+    /// `rem_euclid(wrap)` after rounding, so a register that is a modular
+    /// counter rolls over instead of saturating.
+    ///
+    /// ## Why the counts and not the source value
+    ///
+    /// The AS5600 is the motivating part: a 12-bit magnetic encoder whose
+    /// `RAW_ANGLE` is a 4096-count counter, and 4096 counts is the SAME shaft
+    /// position as 0. The hand-written model expressed that as `deg % 360.0`
+    /// on the stimulus, which is the same behaviour written in the unit the
+    /// host happened to drive. Wrapping the counts is the property the silicon
+    /// actually has — the register is N counts wide and rolls — so it is
+    /// stated once per register and does not have to be restated for every
+    /// unit a channel might carry (degrees, radians, turns). It also cannot
+    /// produce a count the part cannot produce: `rem_euclid(4096)` can never
+    /// yield 4096, whereas `value % 360.0` followed by a multiply can round up
+    /// to exactly full scale.
+    ///
+    /// Applied AFTER `scale`/`offset`, after any `clamp_min`/`clamp_max`, and
+    /// after rounding to an integer count — rounding first is what stops
+    /// 359.99° (4095.99 counts) from being wrapped as 4095.99 and then rounded
+    /// UP to an out-of-range 4096. A part that wraps normally declares no
+    /// clamp: the two say opposite things about what happens at the end of the
+    /// range, and `wrap` is the one a counter does.
+    ///
+    /// `NonZeroU32` rather than `u32` so `wrap: 0` is a load error naming the
+    /// field instead of a silently ignored key — a modulus of zero has no
+    /// meaning, and a typo that quietly disables a datasheet behaviour is the
+    /// failure mode this schema is written to refuse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrap: Option<std::num::NonZeroU32>,
 }
 
 fn one_f64() -> f64 {
@@ -3338,6 +3584,124 @@ pub struct DeviceBehavior {
     /// primitives.
     #[serde(default)]
     pub analog: Option<AnalogSpec>,
+    /// For the `display` primitive: the datasheet-shaped description of a
+    /// framebuffer panel — geometry, pixel format, RAM layout, command/data
+    /// framing and the command table. Absent for non-display primitives.
+    #[serde(default)]
+    pub display: Option<DisplaySpec>,
+
+    // ── Tier 2 (`crates/config/src/rules.rs`) ──────────────────────────────
+    //
+    // Every field below is optional and defaults to empty, so a Tier-1
+    // descriptor deserialises byte for byte as it did before they existed.
+    /// Declared states. The FIRST is the reset state. Empty ⇒ the part has one
+    /// implicit state named `""` and `state == …` is never true.
+    #[serde(default)]
+    pub states: Vec<String>,
+    /// Integer variables and their reset values. The scratch a rule needs that
+    /// is not a register the master can see — a bit counter, a latched opcode.
+    #[serde(default)]
+    pub vars: BTreeMap<String, i64>,
+    /// Sample queues (see [`FifoSpec`]).
+    #[serde(default)]
+    pub fifos: Vec<FifoSpec>,
+    /// Pin ROLES this part drives. Each binds to a pad through a `config:` key
+    /// exactly as [`pins`](Self::pins) does — the key is the role name unless
+    /// [`output_pins`](Self::output_pins) maps it to a different one.
+    #[serde(default)]
+    pub outputs: Vec<String>,
+    /// Optional role → `config:` key map for [`outputs`](Self::outputs), for a
+    /// part whose config key is not simply the role name (`INT` → `int_pin`).
+    #[serde(default)]
+    pub output_pins: BTreeMap<String, String>,
+    /// Message framing for a command-shell part (see [`FrameSpec`]).
+    #[serde(default)]
+    pub frames: Option<FrameSpec>,
+    /// The rules themselves (see [`Rule`]). Fire in declaration order.
+    #[serde(default)]
+    pub rules: Vec<Rule>,
+    /// **Free-running device timers** — the part's own clock, not the bus's.
+    /// Each fires [`TimingAction`]s into the register file after a delay
+    /// (`after_us`) or on a period (`period_us`), advanced by the device's
+    /// `advance_time_us` hook. See [`DeviceTimer`]. Empty ⇒ the device has no
+    /// clock of its own, which is every descriptor written before this existed.
+    #[serde(default)]
+    pub timers: Vec<DeviceTimer>,
+}
+
+/// One free-running timer owned by a declarative device.
+///
+/// This is the datasheet shape for everything a part does on its OWN schedule
+/// rather than in answer to a bus transaction: a continuous-conversion sensor
+/// that refreshes a data register every N µs, a one-shot whose result appears
+/// `after_us` after firmware wrote the start bit, a watchdog that sets a fault
+/// flag. [`DataReady`] covers the narrow start-bit → status-bit case; a timer
+/// covers the rest, and both are driven by the same simulated µs.
+///
+/// **Exactly one** of `period_us` (repeating) and `after_us` (one-shot) is
+/// declared, and it must be non-zero — a zero-period timer would fire an
+/// unbounded number of times in one `advance_time_us` call.
+///
+/// **Ordering.** When several timers come due inside one time advance they
+/// fire in ascending deadline order, ties broken by declaration order, and a
+/// periodic timer that is due more than once fires once per elapsed period.
+/// The sequence is therefore a pure function of (elapsed µs, declaration
+/// order) — identical on native and wasm.
+///
+/// ⚠️ A timer only advances on a bus that drives the device's `advance_time_us`
+/// hook. On a chip with no absolute-µs source the device's clock never moves
+/// and no timer ever fires — the same holdout [`DataReady`] documents.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DeviceTimer {
+    /// Diagnostic name. Not addressable from the bus.
+    pub name: String,
+    /// Repeating period in µs. Mutually exclusive with `after_us`.
+    #[serde(default)]
+    pub period_us: Option<u64>,
+    /// One-shot delay in µs, measured from the moment the timer starts.
+    /// Mutually exclusive with `period_us`.
+    #[serde(default)]
+    pub after_us: Option<u64>,
+    /// When the timer starts running. [`TimerStart::OnReset`] (the default) is
+    /// a part that free-runs from power-on; [`TimerStart::Manual`] waits for
+    /// `start_on_write`.
+    #[serde(default)]
+    pub start: TimerStart,
+    /// A write that (re)starts this timer. Present ⇒ the timer restarts from
+    /// the moment of that write, whatever `start` says.
+    #[serde(default)]
+    pub start_on_write: Option<TimerStartOnWrite>,
+    /// What firing does, by register NAME — the same [`TimingAction`] the MCU
+    /// register machine's [`TimingDescriptor`] uses, so there is one vocabulary
+    /// for "the device changed a register by itself". The device owns these
+    /// writes, so `write_mask` (which protects silicon's bits from FIRMWARE)
+    /// does not restrict them.
+    #[serde(default)]
+    pub on_fire: Vec<TimingAction>,
+}
+
+/// When a [`DeviceTimer`] begins running.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TimerStart {
+    /// Free-running from reset (power-on).
+    #[default]
+    OnReset,
+    /// Idle until something starts it — today, a `start_on_write`.
+    Manual,
+}
+
+/// The write that starts a [`DeviceTimer`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct TimerStartOnWrite {
+    /// Register whose write starts the timer.
+    pub register: String,
+    /// Bits that must be left SET by the write for it to start (level, not
+    /// edge — a driver re-issues the same on-demand bit for every reading,
+    /// exactly as [`DataReady::start_mask`] documents). Absent ⇒ ANY write to
+    /// the register starts it, which is the "write anything to trigger" idiom.
+    #[serde(default)]
+    pub mask: Option<u32>,
 }
 
 /// The `behavior.analog` section of a declarative `analog_source` — a
@@ -3383,6 +3747,384 @@ pub struct AnalogAboveLast {
     pub floor_mv: Option<f32>,
 }
 
+// ─── the `display` primitive ────────────────────────────────────────────────
+//
+// A framebuffer panel is not a register file, which is why it needed a
+// primitive of its own rather than another `spi_device` with a long register
+// list. What a display controller datasheet actually states is: the frame
+// memory's extent and pixel format, how a byte on the wire is told apart from
+// a command (a D/C pad on SPI, a control byte on I²C), which opcodes move the
+// address counters, and how those counters wrap. All five are data. The engine
+// (`peripherals/components/declarative_display.rs`) is the only place that
+// knows what "wrap into the next page" means.
+//
+// WHAT IS DELIBERATELY NOT HERE: pixel-value transforms. The model stores what
+// firmware wrote, byte for byte. Gamma, colour inversion and contrast are
+// recorded as panel FLAGS in the artifact's meta, never applied to the stored
+// bytes — a twin that pre-rendered its own idea of the picture could not be
+// compared against a photograph of the glass.
+
+/// The `behavior.display` section: one framebuffer panel, entirely as data.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySpec {
+    /// Frame-memory width in pixels. THE CONTROLLER'S frame memory, not the
+    /// glass — a 170×320 module is a smaller glass wired to a subset of a
+    /// 240-column controller, and firmware picks the strip with the window
+    /// commands. Use `glass_crop` to expose the crop as `config:` keys.
+    pub width: u16,
+    /// Frame-memory height in pixels.
+    pub height: u16,
+    pub pixel_format: DisplayPixelFormat,
+    /// `crate::inspect::artifact_format` name the paint artifact carries, so a
+    /// consumer decoding the bytes reads the same string it always did.
+    pub artifact_format: String,
+    pub ram: DisplayRam,
+    /// How a command byte is told apart from a data byte.
+    pub dc: DisplayDc,
+    #[serde(default)]
+    pub addressing: DisplayAddressing,
+    /// Power-on window, when it is not simply the whole frame memory.
+    #[serde(default)]
+    pub window: DisplayWindow,
+    /// MADCTL-style orientation bits, for controllers whose frame memory is
+    /// addressed in a rotated coordinate system. Absent ⇒ no rotation.
+    #[serde(default)]
+    pub orientation: Option<DisplayOrientation>,
+    /// Named integer cells a command can store into (`set_var`) and the
+    /// orientation reads. Values are the power-on / reset contents.
+    #[serde(default)]
+    pub vars: std::collections::BTreeMap<String, u32>,
+    /// I²C slave address, for a panel framed by a control byte. Ignored for a
+    /// D/C-pin panel, which is selected by CS.
+    #[serde(default)]
+    pub default_address: Option<u8>,
+    /// This module's supply connection is modelled: the engine exposes a
+    /// `powered` config key, refuses the bus when it is explicitly `false`, and
+    /// reports `powered` in the artifact. See the ST7789 descriptor for why an
+    /// ABSENT key means powered.
+    #[serde(default)]
+    pub supply_gated: bool,
+    /// The glass may show a strip of the frame memory: the engine exposes
+    /// `col_offset` / `row_offset` / `cols` / `rows` config keys, all-or-nothing,
+    /// and crops the artifact to that fixed physical window.
+    #[serde(default)]
+    pub glass_crop: bool,
+    /// The command table. An opcode with no entry here is consumed and ignored,
+    /// which is what a controller does with a command it does not implement.
+    #[serde(default)]
+    pub commands: Vec<DisplayCommand>,
+}
+
+/// How the frame memory encodes a pixel.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayPixelFormat {
+    /// 1 bpp, one byte = 8 vertically-stacked pixels of one page (SSD1306,
+    /// SH1107, PCD8544). The write unit is one byte.
+    MonoPage,
+    /// 16 bpp, big-endian on the wire (ST7789, ILI9341). The write unit is two
+    /// bytes, high byte first.
+    Rgb565,
+    /// 24 bpp, one byte per channel.
+    Rgb888,
+    /// Two 1 bpp planes, black then red (tri-colour e-paper).
+    Tricolor,
+}
+
+impl DisplayPixelFormat {
+    /// Bytes the controller accumulates before it commits one write unit and
+    /// advances the address counters.
+    pub fn write_unit_bytes(self) -> usize {
+        match self {
+            Self::MonoPage | Self::Tricolor => 1,
+            Self::Rgb565 => 2,
+            Self::Rgb888 => 3,
+        }
+    }
+}
+
+/// Frame-memory shape.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayRam {
+    /// Page count for a page-major panel (height / 8). Absent for row-major.
+    #[serde(default)]
+    pub pages: Option<u16>,
+    /// Total frame-memory size. Stated so the descriptor says what the
+    /// controller holds; the engine CHECKS it against the geometry rather than
+    /// trusting it, so the two cannot drift apart.
+    pub bytes: u32,
+    pub layout: DisplayRamLayout,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayRamLayout {
+    /// `byte(page × width + column)` — the paged OLED/LCD GDDRAM.
+    PageMajor,
+    /// `pixel(row × width + column)` — the linear TFT frame memory.
+    RowMajor,
+}
+
+/// Where the command/data distinction comes from.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayDc {
+    pub source: DisplayDcSource,
+    /// `pin` only: the abstract pin role, resolved to a pad through the
+    /// `dc_pin` config key. Named for symmetry with `behavior.pins`.
+    #[serde(default)]
+    pub pin_role: Option<String>,
+    /// `pin` only: the D/C level that frames a COMMAND (0 for every MIPI DCS
+    /// panel). A data byte is the other level.
+    #[serde(default)]
+    pub command_level: u8,
+    /// `control_byte` only: the control-byte value that opens a COMMAND
+    /// stream. Any other value opens the data stream — which is what the
+    /// SSD1306 does with Co/D̄C̄ (0x00 vs 0x40).
+    #[serde(default)]
+    pub command_value: Option<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayDcSource {
+    /// A dedicated D/C pad sampled at transfer time (4-wire SPI).
+    Pin,
+    /// The first byte of each I²C transaction selects the stream for the rest
+    /// of it. Command PARAMETERS then arrive on the command stream, and every
+    /// data-stream byte is frame memory.
+    ControlByte,
+}
+
+/// Which addressing modes the controller implements and which one it powers on
+/// in.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayAddressing {
+    #[serde(default)]
+    pub modes: Vec<DisplayAddressingMode>,
+    #[serde(default)]
+    pub default: DisplayAddressingMode,
+}
+
+impl Default for DisplayAddressing {
+    fn default() -> Self {
+        Self {
+            modes: vec![DisplayAddressingMode::Horizontal],
+            default: DisplayAddressingMode::Horizontal,
+        }
+    }
+}
+
+/// How the address counters advance after a write unit is committed.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayAddressingMode {
+    /// Column first; past the column end, back to the column start and on to
+    /// the next page/row; past that end too, back to the start of both.
+    #[default]
+    Horizontal,
+    /// Page first; past the page end, back to the page start and on to the next
+    /// column. Page-major panels only.
+    Vertical,
+    /// Column only, clamped at the last column of the frame memory: the page
+    /// never changes and nothing wraps. Page-major panels only.
+    Page,
+}
+
+/// Power-on window, where it is not the whole frame memory. Each absent bound
+/// defaults to the last column / row / page the geometry allows, which is what
+/// every panel here powers on with.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DisplayWindow {
+    #[serde(default)]
+    pub col_end: Option<u16>,
+    #[serde(default)]
+    pub row_end: Option<u16>,
+    #[serde(default)]
+    pub page_end: Option<u16>,
+}
+
+/// MADCTL-style orientation: which bits of which var swap and mirror the axes.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayOrientation {
+    /// Name of the var (see [`DisplaySpec::vars`]) holding the orientation byte.
+    pub var: String,
+    /// Exchange page and column address order (MADCTL MV). Changes what a legal
+    /// column IS, so it also moves the window clamp.
+    pub swap_bit: u8,
+    /// Mirror the column address order (MADCTL MX).
+    pub mirror_x_bit: u8,
+    /// Mirror the page address order (MADCTL MY).
+    pub mirror_y_bit: u8,
+}
+
+/// One entry of the controller's command table.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayCommand {
+    pub opcode: u8,
+    /// Inclusive end of an opcode RANGE, for the families that encode an
+    /// argument in the opcode's low bits (SSD1306 `0xB0..=0xB7` = set page).
+    /// Absent ⇒ this entry is the single `opcode`.
+    #[serde(default)]
+    pub opcode_end: Option<u8>,
+    /// Datasheet mnemonic. Carried for error messages and review; nothing
+    /// dispatches on it.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Parameter bytes this command consumes before its actions run.
+    #[serde(default)]
+    pub args: u8,
+    #[serde(default, rename = "do")]
+    pub actions: Vec<DisplayAction>,
+}
+
+/// What a command does when its parameters are complete.
+///
+/// Written in YAML as a ONE-KEY MAP — `{ set_window: { … } }`, `{ invert: true }`,
+/// `{ reset_control: true }` — which is the shape the rest of the part schema
+/// uses and the shape an LLM writes without being told. It is a struct of
+/// optional fields rather than a Rust enum because `serde_yaml` renders an
+/// externally-tagged enum as a YAML `!tag`, and a schema whose action syntax is
+/// `!set_window` in one place and `{ key: value }` everywhere else is a schema
+/// people get wrong. Exactly one field must be set; the engine's descriptor
+/// validation refuses zero or two, so a typo'd action name is a load error that
+/// names the command rather than a silent no-op.
+///
+/// These are the DISPLAY-SPECIFIC actions, and they exist because the Phase C
+/// rule vocabulary (`set`/`clear` bits, `write REG = expr`, `goto`, `timer`,
+/// `push`/`pop`, `pin`) has no word for an address window or a RAM stream.
+/// Everything a controller command does to a framebuffer is one of these nine.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DisplayAction {
+    /// Set one axis's window `[start, end]` and move that axis's cursor to the
+    /// start (CASET / RASET / SSD1306 0x21 / 0x22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_window: Option<DisplaySetWindow>,
+    /// Move one axis's cursor without touching its window (SSD1306 set-page and
+    /// the two column-nibble commands).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_cursor: Option<DisplaySetCursor>,
+    /// Select the addressing mode by index into `addressing.modes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_mode: Option<DisplayValue>,
+    /// Store an integer into a named var (MADCTL).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_var: Option<DisplaySetVar>,
+    /// Open the RAM write stream; subsequent data bytes are pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ram_write: Option<DisplayRamWrite>,
+    /// DISPON / DISPOFF.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_on: Option<bool>,
+    /// SLPOUT / SLPIN. A panel that never woke is dark whatever is in memory,
+    /// so this is reported beside `display_on` rather than folded into it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub awake: Option<bool>,
+    /// INVON / INVOFF. Recorded, never applied to the stored bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invert: Option<bool>,
+    /// Software reset: control state (flags, vars, window, cursors) returns to
+    /// power-on. FRAME MEMORY IS NOT CLEARED — ST7789V §9.1.22 p.202,
+    /// "Contents of memory is not cleared" — so a painted frame survives.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reset_control: bool,
+}
+
+impl DisplayAction {
+    /// How many of the mutually exclusive action fields this entry sets.
+    /// Anything but 1 is a descriptor error.
+    pub fn arms_set(&self) -> usize {
+        self.set_window.is_some() as usize
+            + self.set_cursor.is_some() as usize
+            + self.set_mode.is_some() as usize
+            + self.set_var.is_some() as usize
+            + self.ram_write.is_some() as usize
+            + self.display_on.is_some() as usize
+            + self.awake.is_some() as usize
+            + self.invert.is_some() as usize
+            + self.reset_control as usize
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySetWindow {
+    pub axis: DisplayAxis,
+    pub start: DisplayValue,
+    pub end: DisplayValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySetCursor {
+    pub axis: DisplayAxis,
+    #[serde(default)]
+    pub part: DisplayCursorPart,
+    pub value: DisplayValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySetVar {
+    pub name: String,
+    pub value: DisplayValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayRamWrite {
+    /// Reset the cursors to the window start (RAMWR, 0x2C). `false` continues
+    /// from where the last write stopped (WRMEMC, 0x3C — §9.1.33 p.225).
+    #[serde(default = "default_true")]
+    pub reset_cursor: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayAxis {
+    Col,
+    Row,
+    Page,
+}
+
+/// Which part of a cursor a `set_cursor` replaces. The SSD1306 sets a column
+/// in two halves (0x00..0x0F low nibble, 0x10..0x1F high nibble), so a
+/// read-modify-write on the cursor is part of the command set, not a quirk.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayCursorPart {
+    #[default]
+    All,
+    LowNibble,
+    HighNibble,
+}
+
+/// Where a command action's integer comes from. EXACTLY ONE source field must
+/// be set; the mask and the clamp are applied after it, in that order.
+///
+/// Masking and clamping are both here and both explicit because the two panels
+/// ported first disagree about which they do, and the difference is visible:
+/// the SSD1306 MASKS a column bound (`0x21` keeps the low 7 bits, so 200
+/// becomes 72) while the ST7789 CLAMPS it (`.min(239)`, so 200 stays 200 and
+/// 300 becomes 239). A schema that offered only one of the two would have
+/// silently moved one panel's pixels.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DisplayValue {
+    /// Source: a constant.
+    #[serde(default)]
+    pub value: Option<u32>,
+    /// Source: `(opcode & opcode_mask) >> opcode_shift`, for an opcode range.
+    #[serde(default)]
+    pub opcode_mask: Option<u8>,
+    #[serde(default)]
+    pub opcode_shift: u8,
+    /// Source: these parameter-byte indices, most-significant first.
+    #[serde(default)]
+    pub args: Option<Vec<u8>>,
+    /// Applied to the source value.
+    #[serde(default)]
+    pub mask: Option<u32>,
+    /// Clamp to the last legal index on the action's axis, in the CURRENT
+    /// orientation (the swap bit changes what a legal column is).
+    #[serde(default)]
+    pub clamp_axis_max: bool,
+}
+
 impl DeviceDescriptor {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         serde_yaml::from_str(yaml).context("Failed to parse Device Descriptor")
@@ -3423,7 +4165,15 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "mcp9808" => Some(include_str!("../../../configs/devices/mcp9808.yaml")),
         "pca9685" => Some(include_str!("../../../configs/devices/pca9685.yaml")),
         "vcnl4010" => Some(include_str!("../../../configs/devices/vcnl4010.yaml")),
+        "pcf8574" => Some(include_str!("../../../configs/devices/pcf8574.yaml")),
         "vl53l0x" => Some(include_str!("../../../configs/devices/vl53l0x.yaml")),
+        "as5600" => Some(include_str!("../../../configs/devices/as5600.yaml")),
+        "sht30" => Some(include_str!("../../../configs/devices/sht30.yaml")),
+        "at24c256" => Some(include_str!("../../../configs/devices/at24c256.yaml")),
+        "tmp117" => Some(include_str!("../../../configs/devices/tmp117.yaml")),
+        "oled-ssd1306" => Some(include_str!("../../../configs/devices/ssd1306.yaml")),
+        "oled-ssd1306-128x32" => Some(include_str!("../../../configs/devices/ssd1306_128x32.yaml")),
+        "st7789-170x320" => Some(include_str!("../../../configs/devices/st7789.yaml")),
         "gp2y0a21" => Some(include_str!("../../../configs/devices/gp2y0a21.yaml")),
         "dc-motor" | "dc_motor" => Some(include_str!("../../../configs/devices/dc_motor.yaml")),
         "bldc-motor" | "bldc_motor" => {
@@ -5443,2088 +6193,33 @@ pub fn parse_size(size_str: &str) -> Result<u64> {
 }
 
 #[cfg(test)]
-mod parse_size_tests {
-    use super::parse_size;
-
-    #[test]
-    fn bare_integers_are_byte_counts() {
-        assert_eq!(parse_size("1048576").unwrap(), 1_048_576);
-        assert_eq!(parse_size("262144").unwrap(), 262_144);
-        assert_eq!(parse_size("  4096  ").unwrap(), 4096);
-    }
-
-    #[test]
-    fn unit_suffixes_still_parse() {
-        assert_eq!(parse_size("512KB").unwrap(), 524_288);
-        assert_eq!(parse_size("1564672B").unwrap(), 1_564_672);
-        assert_eq!(parse_size("1KB").unwrap(), 1024);
-    }
-
-    #[test]
-    fn garbage_still_errors() {
-        assert!(parse_size("not-a-size").is_err());
-    }
-}
+#[path = "lib_parse_size_tests.rs"]
+mod parse_size_tests;
 
 #[cfg(test)]
-mod stimuli_tests {
-    use super::*;
-
-    fn script(schema: &str, stimuli_block: &str) -> String {
-        format!(
-            r#"
-schema_version: "{schema}"
-inputs:
-  firmware: "cow.elf"
-  system: "sys.yaml"
-limits:
-  max_steps: 1000
-{stimuli_block}
-"#
-        )
-    }
-
-    #[test]
-    fn stimuli_parse_and_validate_on_1_2() {
-        let yaml = script(
-            "1.2",
-            r#"stimuli:
-  - target: { component: fxos8700, channel: x }
-    trigger: !after_cycles { cycles: 800000 }
-    value: 2.0
-  - target: { channel: z }
-    value: 1.0
-"#,
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        s.validate().unwrap();
-        assert_eq!(s.stimuli.len(), 2);
-        let target = s.stimuli[0].input_target().expect("an input stimulus");
-        assert_eq!(target.channel, "x");
-        assert_eq!(target.component.as_deref(), Some("fxos8700"));
-        assert_eq!(s.stimuli[0].value(), 2.0);
-        // Default trigger is at_start.
-        assert!(matches!(s.stimuli[1].trigger, FaultTrigger::AtStart));
-    }
-
-    #[test]
-    fn stimuli_require_schema_1_2() {
-        for schema in ["1.0", "1.1"] {
-            let yaml = script(
-                schema,
-                "stimuli:\n  - target: { channel: x }\n    value: 1.0\n",
-            );
-            let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-            let err = s.validate().unwrap_err().to_string();
-            assert!(err.contains("require schema_version '1.2'"), "{err}");
-        }
-    }
-
-    #[test]
-    fn empty_channel_rejected() {
-        let yaml = script(
-            "1.2",
-            "stimuli:\n  - target: { channel: \"\" }\n    value: 1.0\n",
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        assert!(s
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("channel cannot be empty"));
-    }
-
-    /// `cosim_signal: { path, value }` is a stimulus like any other: same list,
-    /// same trigger forms, same schema gate.
-    #[test]
-    fn cosim_signal_stimuli_parse_with_the_existing_trigger_forms() {
-        let yaml = script(
-            "1.2",
-            r#"stimuli:
-  - cosim_signal: { path: ui.touch.pressed, value: 1 }
-    trigger: !after_cycles { cycles: 8000000 }
-  - cosim_signal: { path: ui.knob.volts, value: 2.5 }
-  - target: { channel: x }
-    value: 1.0
-"#,
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        s.validate().unwrap();
-        assert_eq!(
-            s.stimuli[0].action,
-            StimulusAction::CosimSignal(CosimSignalStimulus {
-                path: "ui.touch.pressed".to_string(),
-                value: 1.0,
-            })
-        );
-        assert_eq!(
-            s.stimuli[0].trigger,
-            FaultTrigger::AfterCycles { cycles: 8_000_000 }
-        );
-        assert_eq!(s.stimuli[1].trigger, FaultTrigger::AtStart);
-        assert_eq!(s.stimuli[1].value(), 2.5);
-        assert!(s.stimuli[1].input_target().is_none());
-        assert!(s.stimuli[2].input_target().is_some());
-
-        // Both shapes serialize back to the keys they were written with.
-        let round_trip: Vec<StimulusSpec> =
-            serde_yaml::from_str(&serde_yaml::to_string(&s.stimuli).unwrap()).unwrap();
-        assert_eq!(round_trip, s.stimuli);
-        let text = serde_yaml::to_string(&s.stimuli[2]).unwrap();
-        assert!(!text.contains("cosim_signal"), "{text}");
-    }
-
-    #[test]
-    fn a_stimulus_is_exactly_one_shape() {
-        for (block, expected) in [
-            (
-                "stimuli:\n  - cosim_signal: { path: ui.a.b, value: 1 }\n    value: 1.0\n",
-                "cannot also set",
-            ),
-            (
-                "stimuli:\n  - cosim_signal: { path: ui.a.b, value: 1 }\n    target: { channel: x }\n",
-                "cannot also set",
-            ),
-            ("stimuli:\n  - trigger: at_start\n", "a stimulus needs"),
-            ("stimuli:\n  - target: { channel: x }\n", "missing field `value`"),
-            ("stimuli:\n  - cosim_signal: { path: ui.a.b }\n", "value"),
-        ] {
-            let err = serde_yaml::from_str::<TestScript>(&script("1.2", block))
-                .expect_err(block)
-                .to_string();
-            assert!(err.contains(expected), "{block}: {err}");
-        }
-    }
-
-    #[test]
-    fn cosim_signal_needs_a_path_and_a_finite_value() {
-        let empty = script(
-            "1.2",
-            "stimuli:\n  - cosim_signal: { path: \"\", value: 1 }\n",
-        );
-        let s: TestScript = serde_yaml::from_str(&empty).unwrap();
-        let err = s.validate().unwrap_err().to_string();
-        assert!(err.contains("cosim_signal.path cannot be empty"), "{err}");
-
-        let infinite = script(
-            "1.2",
-            "stimuli:\n  - cosim_signal: { path: ui.a.b, value: .inf }\n",
-        );
-        let s: TestScript = serde_yaml::from_str(&infinite).unwrap();
-        let err = s.validate().unwrap_err().to_string();
-        assert!(err.contains("finite"), "{err}");
-
-        let on_write = script(
-            "1.2",
-            "stimuli:\n  - cosim_signal: { path: ui.a.b, value: 1 }\n    trigger: !on_write { register: \"FOO\" }\n",
-        );
-        let s: TestScript = serde_yaml::from_str(&on_write).unwrap();
-        let err = s.validate().unwrap_err().to_string();
-        assert!(err.contains("not yet supported for stimuli"), "{err}");
-    }
-
-    #[test]
-    fn register_triggers_rejected_for_stimuli() {
-        let yaml = script(
-            "1.2",
-            r#"stimuli:
-  - target: { channel: x }
-    trigger: !on_write { register: "FOO" }
-    value: 1.0
-"#,
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        assert!(s
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("not yet supported for stimuli"));
-    }
-}
+#[path = "lib_stimuli_tests.rs"]
+mod stimuli_tests;
 
 #[cfg(test)]
-mod uart_injection_tests {
-    use super::*;
-
-    fn script(schema: &str, block: &str) -> String {
-        format!(
-            r#"
-schema_version: "{schema}"
-inputs:
-  firmware: "cow.elf"
-  system: "sys.yaml"
-limits:
-  max_steps: 1000
-{block}
-"#
-        )
-    }
-
-    #[test]
-    fn parses_text_and_raw_bytes_on_1_2() {
-        let yaml = script(
-            "1.2",
-            r#"uart_injections:
-  - uart: "uart1"
-    bytes: "AB"
-    trigger: !after_cycles { cycles: 500 }
-  - uart: "uart2"
-    bytes: [0x51, 0x00, 0xFF]
-"#,
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        s.validate().unwrap();
-        assert_eq!(s.uart_injections.len(), 2);
-        assert_eq!(s.uart_injections[0].uart, "uart1");
-        assert_eq!(s.uart_injections[0].bytes.as_bytes(), b"AB".to_vec());
-        assert!(matches!(
-            s.uart_injections[0].trigger,
-            FaultTrigger::AfterCycles { cycles: 500 }
-        ));
-        // Default trigger is at_start.
-        assert!(matches!(
-            s.uart_injections[1].trigger,
-            FaultTrigger::AtStart
-        ));
-        assert_eq!(
-            s.uart_injections[1].bytes.as_bytes(),
-            vec![0x51, 0x00, 0xFF]
-        );
-    }
-
-    #[test]
-    fn requires_schema_1_2() {
-        for schema in ["1.0", "1.1"] {
-            let yaml = script(
-                schema,
-                "uart_injections:\n  - uart: \"uart1\"\n    bytes: \"A\"\n",
-            );
-            let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-            let err = s.validate().unwrap_err().to_string();
-            assert!(err.contains("require schema_version '1.2'"), "{err}");
-        }
-    }
-
-    #[test]
-    fn empty_uart_id_rejected() {
-        let yaml = script(
-            "1.2",
-            "uart_injections:\n  - uart: \"\"\n    bytes: \"A\"\n",
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        assert!(s
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("'uart' cannot be empty"));
-    }
-
-    #[test]
-    fn empty_bytes_rejected() {
-        let yaml = script(
-            "1.2",
-            "uart_injections:\n  - uart: \"uart1\"\n    bytes: \"\"\n",
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        assert!(s
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("'bytes' cannot be empty"));
-    }
-
-    #[test]
-    fn register_triggers_rejected() {
-        let yaml = script(
-            "1.2",
-            r#"uart_injections:
-  - uart: "uart1"
-    bytes: "A"
-    trigger: !on_write { register: "FOO" }
-"#,
-        );
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        assert!(s
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("not yet supported for uart_injections"));
-    }
-
-    #[test]
-    fn malformed_bytes_rejected_at_parse() {
-        // `bytes` must be either a string or an array of numbers; a mapping
-        // matches neither untagged variant and fails to parse.
-        let yaml = script(
-            "1.2",
-            "uart_injections:\n  - uart: \"uart1\"\n    bytes: { nope: true }\n",
-        );
-        assert!(serde_yaml::from_str::<TestScript>(&yaml).is_err());
-    }
-
-    #[test]
-    fn absent_field_parses_and_behaves_like_before() {
-        // A script written before this field existed must still parse, with
-        // `uart_injections` defaulting to empty (schema unaffected).
-        let yaml = script("1.0", "assertions: []");
-        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
-        s.validate().unwrap();
-        assert!(s.uart_injections.is_empty());
-    }
-
-    fn display_script(body: &str) -> TestScript {
-        serde_yaml::from_str(&script("1.0", body)).expect("display_region must parse")
-    }
-
-    #[test]
-    fn display_region_parses_flat_with_defaults() {
-        let s = display_script(
-            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.5\n",
-        );
-        s.validate().unwrap();
-        let TestAssertion::DisplayRegion(a) = &s.assertions[0] else {
-            panic!(
-                "expected a display_region assertion, got {:?}",
-                s.assertions[0]
-            );
-        };
-        let d = &a.display_region;
-        assert_eq!(d.id, "tft");
-        assert_eq!((d.x, d.y), (0, 0), "origin defaults to the top-left");
-        assert_eq!(
-            (d.w, d.h),
-            (None, None),
-            "an absent size means the rest of the panel, decided against real geometry"
-        );
-        assert_eq!(d.max_ink, None);
-    }
-
-    /// The guard that stops this assertion from becoming decoration. `min_ink:
-    /// 0.0` with no ceiling admits every framebuffer, including one the firmware
-    /// never wrote — it would read as display coverage while proving nothing.
-    #[test]
-    fn display_region_without_a_bound_is_rejected_as_vacuous() {
-        let s = display_script(
-            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.0\n",
-        );
-        let err = s.validate().unwrap_err().to_string();
-        assert!(
-            err.contains("accepts every possible framebuffer"),
-            "unexpected error: {err}"
-        );
-
-        // The same region WITH a ceiling is a real claim ("this stayed clear").
-        let ok = display_script(
-            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.0\n      max_ink: 0.0\n",
-        );
-        ok.validate().unwrap();
-    }
-
-    #[test]
-    fn display_region_rejects_impossible_bounds() {
-        for (body, needle) in [
-            (
-                "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 1.5\n",
-                "fraction in 0.0..=1.0",
-            ),
-            (
-                "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.9\n      max_ink: 0.2\n",
-                "is below min_ink",
-            ),
-            (
-                "assertions:\n  - display_region:\n      id: \"\"\n      min_ink: 0.5\n",
-                "id cannot be empty",
-            ),
-        ] {
-            let err = display_script(body).validate().unwrap_err().to_string();
-            assert!(err.contains(needle), "expected {needle:?}, got: {err}");
-        }
-    }
-
-    /// `deny_unknown_fields` plus the untagged enum means a typo'd key does not
-    /// quietly become some other assertion variant.
-    #[test]
-    fn display_region_typo_does_not_parse_as_something_else() {
-        let yaml = script(
-            "1.0",
-            "assertions:\n  - display_region:\n      id: \"tft\"\n      min_ink: 0.5\n      mn_ink: 0.9\n",
-        );
-        assert!(serde_yaml::from_str::<TestScript>(&yaml).is_err());
-    }
-}
+#[path = "lib_uart_injection_tests.rs"]
+mod uart_injection_tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn test_valid_script() {
-        let yaml = r#"
-schema_version: "1.0"
-inputs:
-  firmware: "path/to/fw.elf"
-  system: "path/to/sys.yaml"
-limits:
-  max_steps: 1000
-  wall_time_ms: 5000
-assertions:
-  - uart_contains: "Hello"
-  - expected_stop_reason: halt
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        assert!(script.validate().is_ok());
-        assert_eq!(script.inputs.firmware, "path/to/fw.elf");
-        assert_eq!(script.limits.max_steps, 1000);
-        assert_eq!(script.assertions.len(), 2);
-        // stack_paint defaults to true when omitted
-        assert!(script.stack_paint);
-    }
-
-    #[test]
-    fn parses_resource_budget_and_stack_paint() {
-        let yaml = r#"
-schema_version: "1.0"
-inputs:
-  firmware: "path/to/fw.elf"
-  system: "path/to/sys.yaml"
-limits:
-  max_steps: 1000
-stack_paint: false
-assertions:
-  - resource_budget:
-      max_main_stack_bytes: 512
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        script.validate().unwrap();
-        assert!(!script.stack_paint);
-        assert_eq!(script.assertions.len(), 1);
-        let TestAssertion::ResourceBudget(a) = &script.assertions[0] else {
-            panic!(
-                "expected resource_budget assertion, got {:?}",
-                script.assertions[0]
-            );
-        };
-        assert_eq!(a.resource_budget.max_main_stack_bytes, Some(512));
-        assert!(a.resource_budget.max_flash_bytes.is_none());
-        assert!(a.resource_budget.max_ram_static_bytes.is_none());
-    }
-
-    #[test]
-    fn motor_showcase_assertions_parse_with_typed_payloads() {
-        let yaml = r#"
-schema_version: "1.2"
-inputs: { firmware: "motor.elf" }
-limits: { max_steps: 1000 }
-stimuli:
-  - target: { component: drive, channel: stall }
-    trigger: !after_cycles { cycles: 500 }
-    value: 1.0
-assertions:
-  - uart_ordered: ["READY", "TARGET", "FAULT", "OFF"]
-  - motor_speed_reached: { id: drive, min_abs_rpm: 100.0, max_abs_rpm: 4000.0 }
-  - motor_state: { id: drive, control_state: "off:external-enable", fault_contains: stalled }
-  - shutdown_latency:
-      from_stimulus: { component: drive, channel: stall }
-      to_uart: "OFF"
-      max_cycles: 300000
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        script.validate().unwrap();
-        assert!(matches!(
-            &script.assertions[0],
-            TestAssertion::UartOrdered(a) if a.uart_ordered.len() == 4
-        ));
-        assert!(matches!(
-            &script.assertions[1],
-            TestAssertion::MotorSpeedReached(a)
-                if a.motor_speed_reached.min_abs_rpm == 100.0
-        ));
-        assert!(matches!(
-            &script.assertions[2],
-            TestAssertion::MotorState(a)
-                if a.motor_state.control_state == "off:external-enable"
-        ));
-        assert!(matches!(
-            &script.assertions[3],
-            TestAssertion::ShutdownLatency(a)
-                if a.shutdown_latency.max_cycles == 300_000
-                    && a.shutdown_latency.stimulus_occurrence == 1
-                    && a.shutdown_latency.uart_occurrence == 1
-        ));
-    }
-
-    #[test]
-    fn test_fault_injection_script_roundtrips() {
-        let yaml = r#"
-schema_version: "1.1"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 1000
-faults:
-  - id: usart1_no_clock
-    kind: missing_clock
-    target: { peripheral: usart1 }
-  - id: sr_stuck
-    kind: stuck_at_bit
-    target: { peripheral: usart1, register: sr, bit: 7 }
-    level: 1
-    trigger: at_start
-verdict:
-  safe_when:
-    - uart_contains: "FAULT_HANDLED"
-  require_fault_fired: true
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        script.validate().expect("valid 1.1 fault script");
-        assert_eq!(script.faults.len(), 2);
-        assert_eq!(script.faults[0].kind, FaultKind::MissingClock);
-        assert!(script.verdict.as_ref().unwrap().require_fault_fired);
-    }
-
-    /// A fault trigger the runner does not evaluate is refused, not silently
-    /// applied at start.
-    #[test]
-    fn test_fault_triggers_other_than_at_start_are_refused() {
-        for trigger in [
-            "!after_cycles { cycles: 1000 }",
-            "!on_write { register: \"CR1\" }",
-            "!on_read { register: \"SR\" }",
-        ] {
-            let yaml = format!(
-                r#"
-schema_version: "1.1"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 100
-faults:
-  - id: late_clock
-    kind: missing_clock
-    target: {{ peripheral: usart1 }}
-    trigger: {trigger}
-"#
-            );
-            let script: TestScript = serde_yaml::from_str(&yaml).unwrap();
-            let err = script.validate().unwrap_err().to_string();
-            assert!(err.contains("late_clock"), "{trigger}: {err}");
-            assert!(
-                err.contains("not yet supported for faults"),
-                "{trigger}: {err}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_faults_require_v1_1() {
-        let yaml = r#"
-schema_version: "1.0"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 100
-faults:
-  - id: x
-    kind: missing_clock
-    target: { peripheral: usart1 }
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        let err = script.validate().unwrap_err();
-        assert!(err.to_string().contains("require schema_version '1.1'"));
-    }
-
-    #[test]
-    fn test_fault_missing_required_param_rejected() {
-        // stuck_at_bit without a level.
-        let yaml = r#"
-schema_version: "1.1"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 100
-faults:
-  - id: bad
-    kind: stuck_at_bit
-    target: { peripheral: usart1, register: sr, bit: 7 }
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        let err = script.validate().unwrap_err();
-        assert!(err.to_string().contains("level"));
-    }
-
-    #[test]
-    fn test_duplicate_fault_id_rejected() {
-        let yaml = r#"
-schema_version: "1.1"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 100
-faults:
-  - id: dup
-    kind: missing_clock
-    target: { peripheral: a }
-  - id: dup
-    kind: missing_clock
-    target: { peripheral: b }
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        let err = script.validate().unwrap_err();
-        assert!(err.to_string().contains("Duplicate fault id"));
-    }
-
-    #[test]
-    fn test_v1_0_script_still_valid_without_faults() {
-        let yaml = r#"
-schema_version: "1.0"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 100
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        assert!(script.validate().is_ok());
-        assert!(script.faults.is_empty());
-    }
-
-    #[test]
-    fn test_invalid_version() {
-        let yaml = r#"
-schema_version: "2.0"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 100
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        let err = script.validate().unwrap_err();
-        assert!(err.to_string().contains("Unsupported schema_version"));
-    }
-
-    #[test]
-    fn test_invalid_max_steps() {
-        let yaml = r#"
-schema_version: "1.0"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 0
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        let err = script.validate().unwrap_err();
-        assert!(err.to_string().contains("max_steps"));
-    }
-
-    #[test]
-    fn test_empty_firmware_is_permitted_for_rom_boot() {
-        // An empty `inputs.firmware` is now VALID at the schema level: the
-        // faithful ESP32-C3 rom-boot path carries no debug ELF, so the builder
-        // emits `firmware: ""`. `labwired test` decides whether that is the
-        // ELF-less rom-boot path (--rom-boot on an esp32c3) or a config error.
-        let yaml = r#"
-schema_version: "1.0"
-inputs:
-  firmware: ""
-limits:
-  max_steps: 100
-"#;
-        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
-        assert!(script.validate().is_ok());
-    }
-
-    #[test]
-    fn test_system_manifest_accepts_uart_device_board_io_kind() {
-        let yaml = r#"
-name: "uart-device-smoke"
-chip: "inline"
-board_io:
-  - id: "iolink_master"
-    kind: "uart_device"
-    peripheral: "uart2"
-    pin: 2
-    signal: "output"
-    active_high: true
-"#;
-
-        let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(manifest.board_io[0].kind, BoardIoKind::UartDevice);
-    }
-
-    #[test]
-    fn test_external_device_preserves_target_neutral_bus_signal_route() {
-        let yaml = r#"
-name: "stm32-i2c-route-shape"
-chip: "inline"
-external_devices:
-  - id: "oled"
-    type: "oled-ssd1306-128x32"
-    connection: "i2c1"
-    route:
-      sda: "PB7"
-      scl: "PB6"
-    config:
-      i2c_address: 0x3c
-"#;
-
-        let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
-        let route = &manifest.external_devices[0].route;
-        assert_eq!(route.get("sda").map(String::as_str), Some("PB7"));
-        assert_eq!(route.get("scl").map(String::as_str), Some("PB6"));
-
-        let round_trip = serde_yaml::to_string(&manifest).unwrap();
-        assert!(round_trip.contains("route:"));
-        assert!(round_trip.contains("sda: PB7"));
-        assert!(round_trip.contains("scl: PB6"));
-    }
-
-    fn write_temp_file(prefix: &str, contents: &str) -> std::path::PathBuf {
-        let mut dir = std::env::temp_dir();
-        dir.push("labwired-config-tests");
-        let _ = std::fs::create_dir_all(&dir);
-
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path = dir.join(format!("{}-{}.yaml", prefix, nonce));
-        std::fs::write(&path, contents).expect("Failed to write temp file");
-        path
-    }
-
-    #[test]
-    fn test_load_legacy_v1_script() {
-        let script_path = write_temp_file(
-            "legacy-v1",
-            r#"
-schema_version: 1
-max_steps: 0
-assertions: []
-"#,
-        );
-
-        let loaded = load_test_script(&script_path).unwrap();
-        assert!(matches!(loaded, LoadedTestScript::LegacyV1(_)));
-    }
-
-    #[test]
-    fn legacy_script_rejects_node_qualified_memory_assertions() {
-        for (name, node) in [("legacy-node", "tester"), ("legacy-null-node", "null")] {
-            let script_path = write_temp_file(
-                name,
-                &format!(
-                    r#"
-schema_version: 1
-max_steps: 10
-assertions:
-  - memory_value:
-      node: {node}
-      address: 0x20010000
-      expected_value: 1
-"#
-                ),
-            );
-
-            let err = load_test_script(&script_path).unwrap_err().to_string();
-            assert!(err.contains("node"), "unexpected error: {err}");
-            assert!(err.contains("legacy"), "unexpected error: {err}");
-        }
-    }
-
-    #[test]
-    fn legacy_explicit_null_memory_node_round_trips_as_invalid() {
-        let script: LegacyTestScriptV1 = serde_yaml::from_str(
-            r#"
-schema_version: 1
-max_steps: 10
-assertions:
-  - memory_value:
-      node: null
-      address: 0x20010000
-      expected_value: 1
-"#,
-        )
-        .unwrap();
-        let err = script.validate().unwrap_err().to_string();
-        assert!(err.contains("legacy"), "unexpected error: {err}");
-
-        let serialized = serde_yaml::to_string(&script).unwrap();
-        assert!(
-            serialized.contains("node: null"),
-            "explicit null node was lost during serialization: {serialized}"
-        );
-        let round_tripped: LegacyTestScriptV1 = serde_yaml::from_str(&serialized).unwrap();
-        let err = round_tripped.validate().unwrap_err().to_string();
-        assert!(err.contains("legacy"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn load_env_script_selects_env_variant_and_preserves_allowed_fields() {
-        let script_path = write_temp_file(
-            "env-script",
-            r#"
-schema_version: "1.0"
-inputs:
-  env: "twonode-env.yaml"
-limits:
-  max_steps: 50000
-  max_cycles: 75000
-  max_uart_bytes: 2048
-  wall_time_ms: 3000
-assertions:
-  - memory_value:
-      node: tester
-      address: 0x20010000
-      expected_value: 0xA5
-      size: 1
-"#,
-        );
-
-        let loaded = load_test_script(&script_path).unwrap();
-        match loaded {
-            LoadedTestScript::Env(script) => {
-                assert_eq!(script.inputs.env, "twonode-env.yaml");
-                assert_eq!(script.limits.max_steps, 50_000);
-                assert_eq!(script.limits.max_cycles, Some(75_000));
-                assert_eq!(script.limits.max_uart_bytes, Some(2_048));
-                assert_eq!(script.limits.wall_time_ms, Some(3_000));
-                let TestAssertion::MemoryValue(assertion) = &script.assertions[0] else {
-                    panic!("expected memory_value assertion");
-                };
-                assert_eq!(assertion.memory_value.node.as_deref(), Some("tester"));
-            }
-            other => panic!("expected environment script, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn env_script_serialization_does_not_introduce_unsupported_runner_options() {
-        let script: EnvTestScript = serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits:
-  max_steps: 10
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap();
-        script.validate().unwrap();
-
-        let serialized = serde_yaml::to_string(&script).unwrap();
-        for option in [
-            "no_progress_steps",
-            "max_vcd_bytes",
-            "stop_when_assertions_pass",
-            "stop_when_assertions_pass_settle_steps",
-            "stop_when_assertions_pass_min_steps",
-            "faults:",
-            "verdict:",
-            "stimuli:",
-        ] {
-            assert!(
-                !serialized.contains(option),
-                "unexpected serialized script: {serialized}"
-            );
-        }
-
-        let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
-        round_tripped.validate().unwrap();
-    }
-
-    #[test]
-    fn env_script_accepts_and_round_trips_assertion_completion_limits() {
-        let script: EnvTestScript = serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits:
-  max_steps: 10
-  stop_when_assertions_pass: true
-  stop_when_assertions_pass_settle_steps: 7
-  stop_when_assertions_pass_min_steps: 3
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap();
-
-        script.validate().unwrap();
-        assert!(script.limits.stop_when_assertions_pass);
-        assert_eq!(script.limits.stop_when_assertions_pass_settle_steps, 7);
-        assert_eq!(script.limits.stop_when_assertions_pass_min_steps, 3);
-
-        let serialized = serde_yaml::to_string(&script).unwrap();
-        for field in [
-            "stop_when_assertions_pass: true",
-            "stop_when_assertions_pass_settle_steps: 7",
-            "stop_when_assertions_pass_min_steps: 3",
-        ] {
-            assert!(serialized.contains(field), "missing {field}: {serialized}");
-        }
-        let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
-        round_tripped.validate().unwrap();
-        assert_eq!(
-            round_tripped.limits.stop_when_assertions_pass,
-            script.limits.stop_when_assertions_pass
-        );
-        assert_eq!(
-            round_tripped.limits.stop_when_assertions_pass_settle_steps,
-            script.limits.stop_when_assertions_pass_settle_steps
-        );
-        assert_eq!(
-            round_tripped.limits.stop_when_assertions_pass_min_steps,
-            script.limits.stop_when_assertions_pass_min_steps
-        );
-    }
-
-    #[test]
-    fn env_script_preserves_explicit_assertion_completion_defaults() {
-        let script: EnvTestScript = serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits:
-  max_steps: 10
-  stop_when_assertions_pass: false
-  stop_when_assertions_pass_settle_steps: 100000
-  stop_when_assertions_pass_min_steps: 0
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap();
-
-        script.validate().unwrap();
-        let serialized = serde_yaml::to_string(&script).unwrap();
-        for field in [
-            "stop_when_assertions_pass: false",
-            "stop_when_assertions_pass_settle_steps: 100000",
-            "stop_when_assertions_pass_min_steps: 0",
-        ] {
-            assert!(serialized.contains(field), "missing {field}: {serialized}");
-        }
-
-        let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
-        round_tripped.validate().unwrap();
-        assert!(!round_tripped.limits.stop_when_assertions_pass);
-        assert_eq!(
-            round_tripped.limits.stop_when_assertions_pass_settle_steps,
-            100_000
-        );
-        assert_eq!(round_tripped.limits.stop_when_assertions_pass_min_steps, 0);
-    }
-
-    #[test]
-    fn env_script_rejects_null_assertion_completion_limits() {
-        for (name, extra, field) in [
-            (
-                "early-pass-null",
-                "  stop_when_assertions_pass: null",
-                "stop_when_assertions_pass",
-            ),
-            (
-                "early-pass-settle-null",
-                "  stop_when_assertions_pass_settle_steps: null",
-                "stop_when_assertions_pass_settle_steps",
-            ),
-            (
-                "early-pass-minimum-null",
-                "  stop_when_assertions_pass_min_steps: null",
-                "stop_when_assertions_pass_min_steps",
-            ),
-        ] {
-            let script_path = write_temp_file(
-                name,
-                &format!(
-                    r#"
-schema_version: "1.0"
-inputs: {{ env: "twonode-env.yaml" }}
-limits:
-  max_steps: 10
-{extra}
-assertions:
-  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
-"#
-                ),
-            );
-            let err = load_test_script(&script_path).unwrap_err().to_string();
-            assert!(err.contains(field), "unexpected error: {err}");
-            assert!(err.contains("must not be null"), "unexpected error: {err}");
-        }
-    }
-
-    #[test]
-    fn env_script_preserves_invalid_null_assertion_completion_limits() {
-        for (field, value) in [
-            ("stop_when_assertions_pass", "null"),
-            ("stop_when_assertions_pass_settle_steps", "null"),
-            ("stop_when_assertions_pass_min_steps", "null"),
-        ] {
-            let script: EnvTestScript = serde_yaml::from_str(&format!(
-                r#"
-schema_version: "1.0"
-inputs: {{ env: "twonode-env.yaml" }}
-limits:
-  max_steps: 10
-  {field}: {value}
-assertions:
-  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
-"#
-            ))
-            .unwrap();
-
-            let serialized = serde_yaml::to_string(&script).unwrap();
-            assert!(
-                serialized.contains(&format!("{field}: {value}")),
-                "explicit null {field} was lost during serialization: {serialized}"
-            );
-            let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
-            let err = round_tripped.validate().unwrap_err().to_string();
-            assert!(err.contains(field), "unexpected error: {err}");
-            assert!(err.contains("must not be null"), "unexpected error: {err}");
-        }
-    }
-
-    fn valid_env_script_for_mutation() -> EnvTestScript {
-        serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits:
-  max_steps: 10
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn env_validation_and_serialization_reject_publicly_mutated_unsupported_values() {
-        macro_rules! assert_rejected_and_round_trips_invalid {
-            ($field:literal, $mutate:expr) => {{
-                let mut script = valid_env_script_for_mutation();
-                $mutate(&mut script);
-
-                let err = script.validate().unwrap_err().to_string();
-                assert!(err.contains($field), "unexpected error: {err}");
-
-                let serialized = serde_yaml::to_string(&script).unwrap();
-                assert!(
-                    serialized.contains(&format!("{}:", $field)),
-                    "missing unsupported field after serialization: {serialized}"
-                );
-                let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
-                let err = round_tripped.validate().unwrap_err().to_string();
-                assert!(err.contains($field), "unexpected error: {err}");
-            }};
-        }
-
-        assert_rejected_and_round_trips_invalid!(
-            "no_progress_steps",
-            |script: &mut EnvTestScript| script.limits.no_progress_steps = Some(1)
-        );
-        assert_rejected_and_round_trips_invalid!("max_vcd_bytes", |script: &mut EnvTestScript| {
-            script.limits.max_vcd_bytes = Some(1)
-        });
-        assert_rejected_and_round_trips_invalid!("faults", |script: &mut EnvTestScript| {
-            script.faults.push(
-                serde_yaml::from_str(
-                    r#"
-id: unsupported
-kind: missing_clock
-"#,
-                )
-                .unwrap(),
-            )
-        });
-        assert_rejected_and_round_trips_invalid!("verdict", |script: &mut EnvTestScript| {
-            script.verdict = Some(serde_yaml::from_str("{}").unwrap())
-        });
-        assert_rejected_and_round_trips_invalid!("stimuli", |script: &mut EnvTestScript| {
-            script.stimuli.push(
-                serde_yaml::from_str(
-                    r#"
-target: { channel: x }
-value: 1.0
-"#,
-                )
-                .unwrap(),
-            )
-        });
-        assert_rejected_and_round_trips_invalid!(
-            "uart_injections",
-            |script: &mut EnvTestScript| {
-                script.uart_injections.push(
-                    serde_yaml::from_str(
-                        r#"
-uart: "uart1"
-bytes: "A"
-"#,
-                    )
-                    .unwrap(),
-                )
-            }
-        );
-    }
-
-    #[test]
-    fn explicitly_unsupported_env_fields_round_trip_as_invalid() {
-        for (limits_extra, top_level_extra, expected_serialized, diagnostic) in [
-            (
-                "  no_progress_steps: null",
-                "",
-                "no_progress_steps: null",
-                "no_progress_steps",
-            ),
-            (
-                "  max_vcd_bytes: null",
-                "",
-                "max_vcd_bytes: null",
-                "max_vcd_bytes",
-            ),
-            ("", "faults: null", "faults: null", "faults"),
-            ("", "faults: []", "faults: []", "faults"),
-            ("", "verdict: null", "verdict: null", "verdict"),
-            ("", "stimuli: null", "stimuli: null", "stimuli"),
-            ("", "stimuli: []", "stimuli: []", "stimuli"),
-            (
-                "",
-                "uart_injections: null",
-                "uart_injections: null",
-                "uart_injections",
-            ),
-            (
-                "",
-                "uart_injections: []",
-                "uart_injections: []",
-                "uart_injections",
-            ),
-        ] {
-            let yaml = format!(
-                r#"
-schema_version: "1.0"
-inputs: {{ env: "twonode-env.yaml" }}
-limits:
-  max_steps: 10
-{limits_extra}
-assertions:
-  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
-{top_level_extra}
-"#
-            );
-            let script: EnvTestScript = serde_yaml::from_str(&yaml).unwrap();
-
-            let err = script.validate().unwrap_err().to_string();
-            assert!(err.contains(diagnostic), "unexpected error: {err}");
-
-            let serialized = serde_yaml::to_string(&script).unwrap();
-            assert!(
-                serialized.contains(expected_serialized),
-                "missing explicit unsupported field after serialization: {serialized}"
-            );
-            let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
-            let err = round_tripped.validate().unwrap_err().to_string();
-            assert!(err.contains(diagnostic), "unexpected error: {err}");
-        }
-    }
-
-    #[test]
-    fn single_node_and_legacy_validation_reject_public_memory_node_mutations() {
-        let mut single_node: TestScript = serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { firmware: "fw.elf" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap();
-        {
-            let TestAssertion::MemoryValue(assertion) = &mut single_node.assertions[0] else {
-                panic!("expected memory_value assertion");
-            };
-            assertion.memory_value.node = Some("tester".to_string());
-        }
-        let err = single_node.validate().unwrap_err().to_string();
-        assert!(err.contains("single-node"), "unexpected error: {err}");
-
-        let mut legacy: LegacyTestScriptV1 = serde_yaml::from_str(
-            r#"
-schema_version: 1
-max_steps: 10
-assertions:
-  - memory_value: { address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap();
-        {
-            let TestAssertion::MemoryValue(assertion) = &mut legacy.assertions[0] else {
-                panic!("expected memory_value assertion");
-            };
-            assertion.memory_value.node = Some("tester".to_string());
-        }
-        let err = legacy.validate().unwrap_err().to_string();
-        assert!(err.contains("legacy"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn load_single_node_script_still_selects_v1_0_variant() {
-        let script_path = write_temp_file(
-            "single-node-script",
-            r#"
-schema_version: "1.0"
-inputs:
-  firmware: "fw.elf"
-  system: "system.yaml"
-limits:
-  max_steps: 1000
-"#,
-        );
-
-        assert!(matches!(
-            load_test_script(&script_path).unwrap(),
-            LoadedTestScript::V1_0(_)
-        ));
-    }
-
-    #[test]
-    fn single_node_script_rejects_node_qualified_memory_assertions() {
-        let script_path = write_temp_file(
-            "single-node-memory-node",
-            r#"
-schema_version: "1.0"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 1000
-assertions:
-  - memory_value:
-      node: tester
-      address: 0x20010000
-      expected_value: 1
-"#,
-        );
-
-        let err = load_test_script(&script_path).unwrap_err().to_string();
-        assert!(err.contains("node"), "unexpected error: {err}");
-        assert!(err.contains("single-node"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn single_node_script_rejects_explicit_null_memory_node() {
-        let script_path = write_temp_file(
-            "single-node-memory-null-node",
-            r#"
-schema_version: "1.0"
-inputs:
-  firmware: "fw.elf"
-limits:
-  max_steps: 1000
-assertions:
-  - memory_value:
-      node: null
-      address: 0x20010000
-      expected_value: 1
-"#,
-        );
-
-        let err = load_test_script(&script_path).unwrap_err().to_string();
-        assert!(err.contains("node"), "unexpected error: {err}");
-        assert!(err.contains("single-node"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn single_node_explicit_null_memory_node_round_trips_as_invalid() {
-        let script: TestScript = serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { firmware: "fw.elf" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value:
-      node: null
-      address: 0x20010000
-      expected_value: 1
-"#,
-        )
-        .unwrap();
-        let err = script.validate().unwrap_err().to_string();
-        assert!(err.contains("single-node"), "unexpected error: {err}");
-
-        let serialized = serde_yaml::to_string(&script).unwrap();
-        assert!(
-            serialized.contains("node: null"),
-            "explicit null node was lost during serialization: {serialized}"
-        );
-        let round_tripped: TestScript = serde_yaml::from_str(&serialized).unwrap();
-        let err = round_tripped.validate().unwrap_err().to_string();
-        assert!(err.contains("single-node"), "unexpected error: {err}");
-    }
-
-    #[test]
-    fn ordinary_memory_assertion_without_node_round_trips_without_node_key() {
-        let script: TestScript = serde_yaml::from_str(
-            r#"
-schema_version: "1.0"
-inputs: { firmware: "fw.elf" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { address: 0x20010000, expected_value: 1 }
-"#,
-        )
-        .unwrap();
-        script.validate().unwrap();
-
-        let serialized = serde_yaml::to_string(&script).unwrap();
-        assert!(
-            !serialized.contains("node:"),
-            "unexpected serialized script: {serialized}"
-        );
-
-        let round_tripped: TestScript = serde_yaml::from_str(&serialized).unwrap();
-        round_tripped.validate().unwrap();
-    }
-
-    #[test]
-    fn env_script_rejects_missing_or_blank_env_path() {
-        for (name, yaml) in [
-            (
-                "blank-env",
-                r#"
-schema_version: "1.0"
-inputs: { env: "   " }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-            ),
-            (
-                "missing-env",
-                r#"
-schema_version: "1.0"
-inputs: {}
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-            ),
-        ] {
-            let script_path = write_temp_file(name, yaml);
-            let err = load_test_script(&script_path).unwrap_err().to_string();
-            assert!(err.contains("env"), "unexpected error: {err}");
-        }
-    }
-
-    #[test]
-    fn env_script_requires_schema_v1_0_and_positive_step_limit() {
-        for (name, yaml, diagnostic) in [
-            (
-                "wrong-env-schema",
-                r#"
-schema_version: "1.1"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-                "schema_version",
-            ),
-            (
-                "zero-env-steps",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 0 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-                "max_steps",
-            ),
-        ] {
-            let script_path = write_temp_file(name, yaml);
-            let err = load_test_script(&script_path).unwrap_err().to_string();
-            assert!(err.contains(diagnostic), "unexpected error: {err}");
-        }
-    }
-
-    #[test]
-    fn env_script_requires_memory_assertions_with_nodes() {
-        for (name, yaml, diagnostic) in [
-            (
-                "missing-node",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { address: 0x20010000, expected_value: 1 }
-"#,
-                "node",
-            ),
-            (
-                "blank-node",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: " ", address: 0x20010000, expected_value: 1 }
-"#,
-                "node",
-            ),
-            (
-                // Still unsupported, and still refused: the world runner has no
-                // per-node stop reason to compare against. The refusal must
-                // survive UART assertions becoming legal, or admitting those
-                // would have quietly admitted everything.
-                "unsupported-assertion",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - expected_stop_reason: max_steps
-"#,
-                "cannot observe",
-            ),
-        ] {
-            let script_path = write_temp_file(name, yaml);
-            let err = load_test_script(&script_path).unwrap_err().to_string();
-            assert!(err.contains(diagnostic), "unexpected error: {err}");
-        }
-    }
-
-    /// UART assertions carry no node id, so the node rules above do not apply
-    /// to them; they are satisfied by any node printing the text. They load
-    /// alone and alongside a node-qualified `memory_value`.
-    #[test]
-    fn env_script_accepts_uart_assertions() {
-        for (name, yaml) in [
-            (
-                "uart-only",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - uart_contains: "PASS"
-  - uart_regex: "PA+SS"
-  - uart_ordered: ["boot", "PASS"]
-"#,
-            ),
-            (
-                "uart-and-memory",
-                r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-  - uart_contains: "PASS"
-"#,
-            ),
-        ] {
-            let script_path = write_temp_file(name, yaml);
-            let script = load_test_script(&script_path)
-                .unwrap_or_else(|error| panic!("{name} must load: {error}"));
-            assert!(
-                matches!(script, LoadedTestScript::Env(_)),
-                "{name} must load as an environment script"
-            );
-        }
-    }
-
-    #[test]
-    fn env_script_may_assert_nothing_and_still_load() {
-        // An observational world run: it reports what each node printed and
-        // whether anything faulted, with no author oracle. `status` then rests
-        // on the safety stop alone, which is exactly the claim a hosted verify
-        // makes ("every chip compiled and the world ran without faulting").
-        // A script that DOES carry assertions is still held to every rule
-        // above, so a gate cannot quietly weaken itself into a green.
-        let script_path = write_temp_file(
-            "observational-env",
-            r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml" }
-limits: { max_steps: 10 }
-assertions: []
-"#,
-        );
-        let script = load_test_script(&script_path).expect("observational env script must load");
-        let LoadedTestScript::Env(env) = script else {
-            panic!("expected an environment script");
-        };
-        assert!(env.assertions.is_empty());
-    }
-
-    #[test]
-    fn env_script_rejects_combined_firmware_and_env_inputs() {
-        let script_path = write_temp_file(
-            "combined-inputs",
-            r#"
-schema_version: "1.0"
-inputs: { env: "twonode-env.yaml", firmware: "fw.elf" }
-limits: { max_steps: 10 }
-assertions:
-  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
-"#,
-        );
-
-        let err = load_test_script(&script_path).unwrap_err().to_string();
-        assert!(err.contains("both") && err.contains("env") && err.contains("firmware"));
-    }
-
-    #[test]
-    fn env_script_rejects_runner_options_it_cannot_honor() {
-        for (name, extra, diagnostic) in [
-            ("no-progress", "  no_progress_steps: 5", "no_progress_steps"),
-            (
-                "no-progress-null",
-                "  no_progress_steps: null",
-                "no_progress_steps",
-            ),
-            ("vcd", "  max_vcd_bytes: 1024", "max_vcd_bytes"),
-            ("vcd-null", "  max_vcd_bytes: null", "max_vcd_bytes"),
-            (
-                "faults",
-                "faults:\n  - id: x\n    kind: missing_clock",
-                "faults",
-            ),
-            ("faults-empty", "faults: []", "faults"),
-            ("faults-null", "faults: null", "faults"),
-            ("verdict", "verdict: {}", "verdict"),
-            ("verdict-null", "verdict: null", "verdict"),
-            (
-                "stimuli",
-                "stimuli:\n  - target: { channel: x }\n    value: 1.0",
-                "stimuli",
-            ),
-            ("stimuli-empty", "stimuli: []", "stimuli"),
-            ("stimuli-null", "stimuli: null", "stimuli"),
-            (
-                "uart-injections",
-                "uart_injections:\n  - uart: uart1\n    bytes: \"A\"",
-                "uart_injections",
-            ),
-            (
-                "uart-injections-empty",
-                "uart_injections: []",
-                "uart_injections",
-            ),
-            (
-                "uart-injections-null",
-                "uart_injections: null",
-                "uart_injections",
-            ),
-        ] {
-            let script_path = write_temp_file(
-                name,
-                &format!(
-                    r#"
-schema_version: "1.0"
-inputs: {{ env: "twonode-env.yaml" }}
-limits:
-  max_steps: 10
-{extra}
-assertions:
-  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
-"#
-                ),
-            );
-
-            let err = load_test_script(&script_path).unwrap_err().to_string();
-            assert!(err.contains(diagnostic), "unexpected error: {err}");
-        }
-    }
-
-    #[test]
-    fn test_peripheral_descriptor_parsing() {
-        let yaml = r#"
-peripheral: "SPI"
-version: "1.0"
-registers:
-  - id: "CR1"
-    address_offset: 0x00
-    size: 16
-    access: "R/W"
-    reset_value: 0x0000
-    fields:
-      - name: "SPE"
-        bit_range: [6, 6]
-        description: "SPI Enable"
-  - id: "DR"
-    address_offset: 0x0C
-    size: 16
-    access: "R/W"
-    reset_value: 0x0000
-    side_effects:
-      on_read: "clear_rxne"
-      on_write: "start_tx"
-"#;
-        let desc = PeripheralDescriptor::from_yaml(yaml).unwrap();
-        assert_eq!(desc.peripheral, "SPI");
-        assert_eq!(desc.registers.len(), 2);
-        assert_eq!(desc.registers[0].id, "CR1");
-        assert_eq!(desc.registers[0].access, Access::ReadWrite);
-        assert_eq!(
-            desc.registers[1].side_effects.as_ref().unwrap().on_read,
-            Some("clear_rxne".to_string())
-        );
-    }
-
-    #[test]
-    fn uds_tester_assertion_parses_result_done() {
-        let yaml = r#"
-- uds_tester:
-    id: "uds-tester"
-    result: done
-"#;
-        let assertions: Vec<TestAssertion> = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(assertions.len(), 1);
-        match &assertions[0] {
-            TestAssertion::UdsTester(a) => {
-                assert_eq!(a.uds_tester.id, "uds-tester");
-                assert!(matches!(a.uds_tester.result, UdsTesterResult::Done));
-            }
-            other => panic!("expected UdsTester variant, got {:?}", other),
-        }
-    }
-}
+#[path = "lib_tests.rs"]
+mod tests;
 
 #[cfg(test)]
-mod memory_size_tests {
-    use super::*;
-
-    fn chip(flash: &str, ram: &str) -> Result<ChipDescriptor, serde_yaml::Error> {
-        serde_yaml::from_str(&format!(
-            "name: t\narch: arm\nflash: {{ base: 0, size: \"{flash}\" }}\n\
-             ram: {{ base: 0x20000000, size: \"{ram}\" }}\nperipherals: []\n"
-        ))
-    }
-
-    /// The wire format is unchanged: every spelling the chip yamls use still loads.
-    #[test]
-    fn the_human_forms_still_load() {
-        assert_eq!(chip("64KB", "16KiB").unwrap().flash.size, 64 * 1024);
-        assert_eq!(chip("64KB", "16KiB").unwrap().ram.size, 16 * 1024);
-        assert_eq!(chip("1MiB", "131072").unwrap().flash.size, 1024 * 1024);
-        assert_eq!(chip("1MiB", "131072").unwrap().ram.size, 131_072);
-    }
-
-    /// KB is BINARY and MB is DECIMAL, in the same parser. Pinned here because
-    /// it is the opposite of what the spelling suggests and nothing else states
-    /// it.
-    ///
-    /// No committed chip relies on the `MB` arm any more. Nine of them used to,
-    /// and every one modelled less flash than its part has; esp32s3 was
-    /// rewritten to `"16384KB"` first, and the remaining eight (esp32c3,
-    /// rp2040, rp2350, stm32f103/f405/f407/f767/l476, plus the C3's DROM
-    /// window) followed. The multipliers still cannot move — they are the wire
-    /// format every out-of-tree descriptor and every hosted manifest was
-    /// written against — so the spelling is policed instead, over the shipped
-    /// corpus, by `labwired_core::tests::chip_memory_sizes`.
-    #[test]
-    fn kb_is_1024_and_mb_is_1000000() {
-        assert_eq!(chip("1KB", "1KB").unwrap().flash.size, 1024);
-        assert_eq!(chip("1MB", "1KB").unwrap().flash.size, 1_000_000);
-        assert_eq!(chip("1MiB", "1KB").unwrap().flash.size, 1_048_576);
-    }
-
-    /// The point of moving the parse to the boundary: a size that does not
-    /// parse is now a load error. It used to be stored verbatim and then hit
-    /// `parse_size(..).unwrap_or(0)` at the point of use — so a typo'd unit
-    /// gave the machine ZERO bytes of RAM and ran anyway.
-    #[test]
-    fn an_unparseable_size_fails_the_load_instead_of_becoming_zero() {
-        let err = chip("64K", "16KB").expect_err("a bare `K` is not a unit human_size accepts");
-        let msg = err.to_string();
-        assert!(
-            msg.contains("flash"),
-            "the error must name the field: {msg}"
-        );
-        assert!(
-            msg.contains("Invalid size format"),
-            "the error must say what was wrong: {msg}"
-        );
-    }
-
-    /// Sizes round-trip through serde without changing value. They serialise as
-    /// a bare byte count precisely so this holds — re-rendering `1048576` as
-    /// `1MB` would read back as 1_000_000.
-    #[test]
-    fn a_size_round_trips_without_shrinking() {
-        let c = chip("1MiB", "192KB").unwrap();
-        let back: ChipDescriptor =
-            serde_yaml::from_str(&serde_yaml::to_string(&c).unwrap()).unwrap();
-        assert_eq!(back.flash.size, c.flash.size);
-        assert_eq!(back.ram.size, c.ram.size);
-        assert_eq!(back.flash.size, 1_048_576);
-    }
-}
+#[path = "lib_memory_size_tests.rs"]
+mod memory_size_tests;
 
 #[cfg(test)]
-mod pin_map_tests {
-    use super::*;
-
-    #[test]
-    fn chip_descriptor_parses_pins_and_ignores_extra_fields() {
-        let yaml = r#"
-name: "test-chip"
-arch: "arm"
-flash: { base: 0, size: "64KB" }
-ram: { base: 0x20000000, size: "16KB" }
-peripherals: []
-pins:
-  PC0: { gpio: gpioc, bit: 0, functions: [{ type: gpio, peripheral: gpioc }] }
-  PB6: { gpio: gpioc, bit: 2 }
-"#;
-        let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse chip with pins");
-        assert_eq!(chip.pins.len(), 2);
-        assert_eq!(chip.pins["PC0"].gpio, "gpioc");
-        assert_eq!(chip.pins["PC0"].bit, 0);
-        // `functions:` in the YAML is ignored by PinLoc (serde ignores unknown fields).
-        assert_eq!(chip.pins["PB6"].gpio, "gpioc");
-        assert_eq!(chip.pins["PB6"].bit, 2);
-    }
-
-    #[test]
-    fn chip_without_pins_defaults_to_empty() {
-        let yaml = r#"
-name: "no-pins"
-arch: "arm"
-flash: { base: 0, size: "64KB" }
-ram: { base: 0x20000000, size: "16KB" }
-peripherals: []
-"#;
-        let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse");
-        assert!(chip.pins.is_empty());
-    }
-}
+#[path = "lib_pin_map_tests.rs"]
+mod pin_map_tests;
 
 #[cfg(test)]
-mod can_player_path_inline_tests {
-    use super::*;
-
-    /// `SystemManifest::from_file` inlines a `can-player` device's `path:`
-    /// (resolved relative to the system yaml on disk) into `data:`, so the
-    /// sim core itself only ever consumes inline text (keeps `std::fs` out
-    /// of the wasm-safe core).
-    #[test]
-    fn from_file_inlines_can_player_path_into_data() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("s.log"), "(1.0) can0 123#11\n").unwrap();
-        let yaml = r#"
-name: "t"
-chip: "chip.yaml"
-external_devices:
-  - type: "can-player"
-    id: "p"
-    connection: "bxcan1"
-    config:
-      path: "./s.log"
-board_io: []
-"#;
-        let sys_path = dir.path().join("system.yaml");
-        std::fs::write(&sys_path, yaml).unwrap();
-        let m = SystemManifest::from_file(&sys_path).unwrap();
-        let cfg = &m.external_devices[0].config;
-        assert!(cfg.get("path").is_none());
-        assert_eq!(
-            cfg.get("data").unwrap().as_str().unwrap(),
-            "(1.0) can0 123#11\n"
-        );
-    }
-
-    /// Setting both `path:` and `data:` on a `can-player` device is
-    /// ambiguous — silently letting `path` overwrite `data` (the prior
-    /// behavior) hides a config mistake. Must error naming the device id
-    /// and both keys.
-    #[test]
-    fn from_file_errors_when_both_path_and_data_set() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("s.log"), "(1.0) can0 123#11\n").unwrap();
-        let yaml = r#"
-name: "t"
-chip: "chip.yaml"
-external_devices:
-  - type: "can-player"
-    id: "p"
-    connection: "bxcan1"
-    config:
-      path: "./s.log"
-      data: "(1.0) can0 123#11\n"
-board_io: []
-"#;
-        let sys_path = dir.path().join("system.yaml");
-        std::fs::write(&sys_path, yaml).unwrap();
-        let err = SystemManifest::from_file(&sys_path).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("'p'"), "unexpected error: {msg}");
-        assert!(msg.contains("path"), "unexpected error: {msg}");
-        assert!(msg.contains("data"), "unexpected error: {msg}");
-    }
-
-    /// A `path:` pointing at a file that doesn't exist fails with an error
-    /// that names the (resolved) path, not just an opaque io::Error.
-    #[test]
-    fn from_file_errors_on_nonexistent_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let yaml = r#"
-name: "t"
-chip: "chip.yaml"
-external_devices:
-  - type: "can-player"
-    id: "p"
-    connection: "bxcan1"
-    config:
-      path: "./missing.log"
-board_io: []
-"#;
-        let sys_path = dir.path().join("system.yaml");
-        std::fs::write(&sys_path, yaml).unwrap();
-        let err = SystemManifest::from_file(&sys_path).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("missing.log"), "unexpected error: {msg}");
-    }
-
-    /// A non-string `path:` value fails with an error naming the device id.
-    #[test]
-    fn from_file_errors_on_non_string_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let yaml = r#"
-name: "t"
-chip: "chip.yaml"
-external_devices:
-  - type: "can-player"
-    id: "p"
-    connection: "bxcan1"
-    config:
-      path: 123
-board_io: []
-"#;
-        let sys_path = dir.path().join("system.yaml");
-        std::fs::write(&sys_path, yaml).unwrap();
-        let err = SystemManifest::from_file(&sys_path).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("'p'"), "unexpected error: {msg}");
-    }
-
-    #[test]
-    fn spi_device_descriptor_parses_framing_and_registers() {
-        let yaml = r#"
-type: test_spi
-behavior:
-  primitive: spi_device
-  spi:
-    framing: { command_bytes: 1, rw_bit: 7, rw_read_high: true, addr_mask: 0x3F, auto_increment: true }
-    registers:
-      - { name: WHOAMI, addr: 0x00, width: 1, endian: le, access: r, reset: 0xE5 }
-      - { name: DATA, addr: 0x32, width: 2, endian: le, access: r, source: accel }
-metadata:
-  inputs:
-    - { key: accel, label: "Accel X", unit: g, min: -16, max: 16, default: 0 }
-"#;
-        let d = DeviceDescriptor::from_yaml(yaml).unwrap();
-        let spi = d.behavior.spi.as_ref().expect("behavior.spi present");
-        assert_eq!(spi.framing.command_bytes, 1);
-        assert_eq!(spi.framing.rw_bit, Some(7));
-        assert_eq!(spi.registers.len(), 2);
-        assert_eq!(spi.registers[0].reset, 0xE5);
-    }
-
-    #[test]
-    fn spi_framing_defaults_are_adxl_shaped() {
-        let f = SpiFraming::default();
-        assert_eq!(f.command_bytes, 1);
-        assert_eq!(f.rw_bit, Some(7));
-        assert!(f.rw_read_high);
-        assert_eq!(f.addr_mask, 0x3F);
-        assert_eq!(f.addr_shift, 0);
-        assert!(f.auto_increment);
-    }
-
-    #[test]
-    fn i2c_register_alias_still_names_the_shared_struct() {
-        // The rename must not break existing I2c-named references.
-        let _r: I2cRegister = RegisterSpec {
-            name: "R".into(),
-            addr: 0,
-            width: 1,
-            endian: Endian::Le,
-            access: I2cAccess::R,
-            write_mask: None,
-            reset: 0,
-            source: None,
-            encode: None,
-            scale_from: vec![],
-            source_scale: None,
-            resolution: None,
-            signed: false,
-            fields: vec![],
-            page: None,
-            self_clearing: None,
-            popcount: None,
-            zero_when: None,
-        };
-    }
-}
+#[path = "lib_can_player_path_inline_tests.rs"]
+mod can_player_path_inline_tests;
 
 #[cfg(test)]
-mod builtin_chip_tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn a_bare_name_resolves_to_the_bundled_descriptor() {
-        let chip = ChipDescriptor::resolve("stm32f103", Path::new("/nonexistent"))
-            .expect("built-in chip resolves without touching the filesystem");
-        assert_eq!(chip.name, "stm32f103c8");
-    }
-
-    /// Guards the drift between `BUILTIN_CHIP_NAMES` and the `include_str!`
-    /// arms: a name advertised in an error message must actually load.
-    #[test]
-    fn every_advertised_builtin_name_loads_and_parses() {
-        for name in BUILTIN_CHIP_NAMES {
-            ChipDescriptor::resolve(name, Path::new("/nonexistent"))
-                .unwrap_or_else(|e| panic!("built-in chip '{name}' failed to load: {e:#}"));
-        }
-    }
-
-    #[test]
-    fn a_path_still_resolves_relative_to_the_manifest() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("custom.yaml"),
-            embedded_chip_yaml("stm32f103").unwrap(),
-        )
-        .unwrap();
-        let chip = ChipDescriptor::resolve("./custom.yaml", dir.path()).unwrap();
-        assert_eq!(chip.name, "stm32f103c8");
-    }
-
-    #[test]
-    fn an_unknown_builtin_names_the_available_ones() {
-        let err = ChipDescriptor::resolve("stm32f999", Path::new(".")).unwrap_err();
-        let msg = format!("{err:#}");
-        assert!(msg.contains("unknown built-in chip 'stm32f999'"), "{msg}");
-        assert!(msg.contains("stm32f103"), "{msg}");
-    }
-
-    #[test]
-    fn a_yaml_extension_is_treated_as_a_path_not_a_builtin() {
-        assert!(!is_builtin_chip_spec("stm32f103.yaml"));
-        assert!(!is_builtin_chip_spec("chips/stm32f103"));
-        assert!(is_builtin_chip_spec("stm32f103"));
-    }
-
-    #[test]
-    fn resolve_with_falls_back_to_plugin_chips() {
-        let yaml = "name: \"secret1\"\narch: \"arm\"\ncore: \"cortex-m0+\"\n\
-                    flash: { base: 0, size: \"4KB\" }\n\
-                    ram: { base: 0x20000000, size: \"1KB\" }\nperipherals: []\n";
-        let d = ChipDescriptor::resolve_with("secret1", Path::new("."), &|name| {
-            (name == "secret1").then_some(yaml)
-        })
-        .unwrap();
-        assert_eq!(d.name, "secret1");
-    }
-
-    #[test]
-    fn resolve_with_prefers_builtins_over_plugin_chips() {
-        // A complete, valid descriptor: if precedence inverted, this parses and
-        // the assert below fails on the name — not on a parse panic.
-        let impostor = "name: \"impostor\"\narch: \"arm\"\ncore: \"cortex-m0+\"\n\
-                        flash: { base: 0, size: \"4KB\" }\n\
-                        ram: { base: 0x20000000, size: \"1KB\" }\nperipherals: []\n";
-        let d =
-            ChipDescriptor::resolve_with("stm32f103", Path::new("."), &|_| Some(impostor)).unwrap();
-        assert_eq!(d.name, "stm32f103c8");
-    }
-
-    #[test]
-    fn resolve_with_keeps_the_unknown_chip_error_without_a_plugin_match() {
-        let err = ChipDescriptor::resolve_with("stm32f999", Path::new("."), &|_| None).unwrap_err();
-        let msg = format!("{err:#}");
-        assert!(msg.contains("unknown built-in chip 'stm32f999'"), "{msg}");
-        assert!(msg.contains("stm32f103"), "{msg}");
-    }
-
-    #[test]
-    fn resolve_with_still_loads_paths_from_file() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("custom.yaml"),
-            embedded_chip_yaml("stm32f103").unwrap(),
-        )
-        .unwrap();
-        let chip = ChipDescriptor::resolve_with("./custom.yaml", dir.path(), &|_| None).unwrap();
-        assert_eq!(chip.name, "stm32f103c8");
-    }
-
-    // The `MOVED_CHIP_NAMES` tombstone branch in `resolve_with` is exercised
-    // once the first chip migrates to the private `labwired-ip` repo; until
-    // then the list is empty and there is nothing to resolve against.
-    #[test]
-    fn no_chips_have_migrated_yet() {
-        assert!(MOVED_CHIP_NAMES.is_empty());
-    }
-
-    fn script_with_inputs(inputs: &str) -> Result<TestScript> {
-        let yaml = format!(
-            "schema_version: \"1.2\"\ninputs:\n{inputs}limits:\n  max_steps: 10\nassertions: []\n"
-        );
-        let script: TestScript = serde_yaml::from_str(&yaml)?;
-        script.validate()?;
-        Ok(script)
-    }
-
-    #[test]
-    fn chip_alone_is_accepted() {
-        let script = script_with_inputs("  firmware: \"fw.elf\"\n  chip: \"stm32f103\"\n").unwrap();
-        assert_eq!(script.inputs.chip.as_deref(), Some("stm32f103"));
-        assert!(script.inputs.system.is_none());
-    }
-
-    #[test]
-    fn chip_and_system_together_are_rejected() {
-        let err = script_with_inputs(
-            "  firmware: \"fw.elf\"\n  chip: \"stm32f103\"\n  system: \"./system.yaml\"\n",
-        )
-        .unwrap_err();
-        assert!(format!("{err:#}").contains("not both"), "{err:#}");
-    }
-
-    #[test]
-    fn a_path_in_inputs_chip_is_rejected() {
-        let err =
-            script_with_inputs("  firmware: \"fw.elf\"\n  chip: \"./chip.yaml\"\n").unwrap_err();
-        assert!(format!("{err:#}").contains("built-in chip name"), "{err:#}");
-    }
-
-    #[test]
-    fn an_unknown_chip_in_inputs_is_rejected_before_the_run() {
-        let err =
-            script_with_inputs("  firmware: \"fw.elf\"\n  chip: \"stm32f999\"\n").unwrap_err();
-        assert!(
-            format!("{err:#}").contains("unknown built-in chip"),
-            "{err:#}"
-        );
-    }
-
-    #[test]
-    fn the_synthetic_manifest_has_nothing_attached() {
-        let m = ResolvedSystem::from_builtin_chip("stm32f103")
-            .unwrap()
-            .manifest;
-        assert_eq!(m.chip, "stm32f103");
-        assert!(m.external_devices.is_empty());
-        assert!(m.board_io.is_empty());
-        assert!(!m.schema_version.is_empty());
-    }
-}
+#[path = "lib_builtin_chip_tests.rs"]
+mod builtin_chip_tests;

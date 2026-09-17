@@ -24,12 +24,21 @@
 //! accumulation and read-back (the `write_mask` path), pointer masking,
 //! self-driving `updates`, `delay_us` gating, CRC framing, register-file
 //! auto-increment, and SPI burst auto-increment.
+//!
+//! The script runner itself now lives in `tests/common/transcript.rs` — see
+//! that module's note. THIS FILE IS THE PROOF THAT THE LIFT CHANGED NOTHING:
+//! every golden constant below is byte-identical across the refactor, so if the
+//! shared harness framed a conversation even slightly differently, these
+//! assertions say so.
 
+mod common;
+
+use common::transcript::{
+    read_reg, read_stream, run_i2c, run_spi, script, send_cmd16, send_cmd8, spi_xfer, write_reg,
+    Step,
+};
 use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
 use labwired_core::peripherals::components::declarative_spi::GenericSpiDevice;
-use labwired_core::peripherals::i2c::I2cDevice;
-use labwired_core::peripherals::spi::SpiDevice;
-use labwired_core::sim_input::SimInput;
 
 // ─── device construction ───────────────────────────────────────────────────
 
@@ -45,73 +54,20 @@ fn spi_device(ty: &str) -> GenericSpiDevice {
     GenericSpiDevice::from_yaml(yaml, "CS").unwrap_or_else(|e| panic!("{ty}.yaml must parse: {e}"))
 }
 
-// ─── script helpers ────────────────────────────────────────────────────────
-
-/// Point at `reg`, repeated-START into the read phase, read `n` bytes.
-fn read_reg(d: &mut dyn I2cDevice, reg: u8, n: usize) -> Vec<u8> {
-    d.start();
-    d.write(reg);
-    d.start();
-    let out: Vec<u8> = (0..n).map(|_| d.read()).collect();
-    d.stop();
-    out
-}
-
-/// Write `bytes` into `reg` (pointer first), framed START … STOP.
-fn write_reg(d: &mut dyn I2cDevice, reg: u8, bytes: &[u8]) {
-    d.start();
-    d.write(reg);
-    for &b in bytes {
-        d.write(b);
-    }
-    d.stop();
-}
-
-/// Send a 16-bit big-endian opcode.
-fn send_cmd16(d: &mut dyn I2cDevice, code: u16) {
-    d.start();
-    d.write((code >> 8) as u8);
-    d.write((code & 0xFF) as u8);
-    d.stop();
-}
-
-/// Send a single-byte opcode.
-fn send_cmd8(d: &mut dyn I2cDevice, code: u8) {
-    d.start();
-    d.write(code);
-    d.stop();
-}
-
-/// Read `n` bytes from a fresh read phase (command devices have no pointer).
-fn read_stream(d: &mut dyn I2cDevice, n: usize) -> Vec<u8> {
-    d.start();
-    let out: Vec<u8> = (0..n).map(|_| d.read()).collect();
-    d.stop();
-    out
-}
-
-/// Clock `mosi` through a full CS-framed SPI transfer, collecting MISO.
-fn spi_xfer(d: &mut dyn SpiDevice, mosi: &[u8]) -> Vec<u8> {
-    d.cs_select();
-    let out: Vec<u8> = mosi.iter().map(|&b| d.transfer(b)).collect();
-    d.cs_release();
-    out
-}
-
-/// Render a transcript as the literal that belongs in the golden table, so a
-/// deliberate change is a copy-paste rather than a hand edit.
-fn show(name: &str, bytes: &[u8]) {
-    let hex: Vec<String> = bytes.iter().map(|b| format!("0x{b:02X}")).collect();
-    println!("{name}: &[{}],", hex.join(", "));
-}
+// ─── transcript assertion ──────────────────────────────────────────────────
 
 /// Assert a transcript against its golden, printing it either way so a
 /// `--nocapture` run of this file regenerates the whole table.
 fn check(name: &str, got: &[u8], want: &[u8]) {
-    show(name, got);
+    let t = common::transcript::Transcript {
+        bytes: got.to_vec(),
+    };
+    println!("{name}: {},", t.as_literal());
     assert_eq!(
-        got, want,
-        "{name}: the shared declarative engine changed this device's bytes"
+        got,
+        want,
+        "{name}: the shared declarative engine changed this device's bytes\n{}",
+        t.render()
     );
 }
 
@@ -120,23 +76,27 @@ fn check(name: &str, got: &[u8], want: &[u8]) {
 #[test]
 fn tmp102_transcript_is_unchanged() {
     let mut d = i2c_device("tmp102");
-    let mut t = Vec::new();
-    // Power-on registers, then four consecutive TEMP reads (each fires the
-    // +0.5 °C add_wrap update), then the aliasing pointer (0x05 & 0x03 == 0x01).
-    t.extend(read_reg(&mut d, 0x01, 2));
-    t.extend(read_reg(&mut d, 0x02, 2));
-    t.extend(read_reg(&mut d, 0x03, 2));
+    let mut steps = script([
+        // Power-on registers, then four consecutive TEMP reads (each fires the
+        // +0.5 °C add_wrap update), then the aliasing pointer (0x05 & 0x03 == 0x01).
+        read_reg(0x01, 2),
+        read_reg(0x02, 2),
+        read_reg(0x03, 2),
+    ]);
     for _ in 0..4 {
-        t.extend(read_reg(&mut d, 0x00, 2));
+        steps.extend(read_reg(0x00, 2));
     }
-    t.extend(read_reg(&mut d, 0x05, 2));
-    // TEMP is read-only: a write must be absorbed, not stored.
-    write_reg(&mut d, 0x00, &[0xDE, 0xAD]);
-    t.extend(read_reg(&mut d, 0x00, 2));
-    // A short read (one byte of a two-byte word) must not fire the update.
-    t.extend(read_reg(&mut d, 0x00, 1));
-    t.extend(read_reg(&mut d, 0x00, 2));
-    check("tmp102", &t, TMP102_GOLDEN);
+    steps.extend(script([
+        read_reg(0x05, 2),
+        // TEMP is read-only: a write must be absorbed, not stored.
+        write_reg(0x00, &[0xDE, 0xAD]),
+        read_reg(0x00, 2),
+        // A short read (one byte of a two-byte word) must not fire the update.
+        read_reg(0x00, 1),
+        read_reg(0x00, 2),
+    ]));
+    let t = run_i2c(&mut d, &steps);
+    check("tmp102", &t.bytes, TMP102_GOLDEN);
 }
 
 const TMP102_GOLDEN: &[u8] = &[
@@ -149,35 +109,39 @@ const TMP102_GOLDEN: &[u8] = &[
 #[test]
 fn veml7700_transcript_is_unchanged() {
     let mut d = i2c_device("veml7700");
-    let mut t = Vec::new();
-    // Power-on ALS/WHITE. The part boots SHUT DOWN (ALS_CONF resets to 0x0001,
-    // ALS_SD set — datasheet Rev. 1.8 p7), so both read 0x0000 despite the
-    // default 450 lux scene. The four bytes below used to be 0x85,0x1E /
-    // 0x18,0x23 — a light reading from a sensor that had never been powered on.
-    t.extend(read_reg(&mut d, 0x04, 2));
-    t.extend(read_reg(&mut d, 0x05, 2));
-    // Program every rw register and read each back — the write path this
-    // change touched. ALS_CONF = gain ×2 (bits 12:11 = 01), IT 200 ms. Bit 0
-    // (ALS_SD) is clear in 0x0840, so this write also POWERS THE PART ON, which
-    // is why every byte from here on is unchanged by the shutdown gate.
-    write_reg(&mut d, 0x00, &[0x40, 0x08]);
-    write_reg(&mut d, 0x01, &[0x34, 0x12]);
-    write_reg(&mut d, 0x02, &[0x78, 0x56]);
-    write_reg(&mut d, 0x03, &[0x03, 0x00]);
+    let mut steps = script([
+        // Power-on ALS/WHITE. The part boots SHUT DOWN (ALS_CONF resets to 0x0001,
+        // ALS_SD set — datasheet Rev. 1.8 p7), so both read 0x0000 despite the
+        // default 450 lux scene. The four bytes below used to be 0x85,0x1E /
+        // 0x18,0x23 — a light reading from a sensor that had never been powered on.
+        read_reg(0x04, 2),
+        read_reg(0x05, 2),
+        // Program every rw register and read each back — the write path this
+        // change touched. ALS_CONF = gain ×2 (bits 12:11 = 01), IT 200 ms. Bit 0
+        // (ALS_SD) is clear in 0x0840, so this write also POWERS THE PART ON, which
+        // is why every byte from here on is unchanged by the shutdown gate.
+        write_reg(0x00, &[0x40, 0x08]),
+        write_reg(0x01, &[0x34, 0x12]),
+        write_reg(0x02, &[0x78, 0x56]),
+        write_reg(0x03, &[0x03, 0x00]),
+    ]);
     for reg in [0x00u8, 0x01, 0x02, 0x03] {
-        t.extend(read_reg(&mut d, reg, 2));
+        steps.extend(read_reg(reg, 2));
     }
-    // The reprogrammed resolution must change the counts.
-    t.extend(read_reg(&mut d, 0x04, 2));
-    t.extend(read_reg(&mut d, 0x05, 2));
-    // Read-only ALS_INT, and an undeclared pointer (zero word).
-    t.extend(read_reg(&mut d, 0x06, 2));
-    t.extend(read_reg(&mut d, 0x7E, 2));
-    // Drive the measurement channel and re-read.
-    d.set_input("lux", 13.5).unwrap();
-    t.extend(read_reg(&mut d, 0x04, 2));
-    t.extend(read_reg(&mut d, 0x05, 2));
-    check("veml7700", &t, VEML7700_GOLDEN);
+    steps.extend(script([
+        // The reprogrammed resolution must change the counts.
+        read_reg(0x04, 2),
+        read_reg(0x05, 2),
+        // Read-only ALS_INT, and an undeclared pointer (zero word).
+        read_reg(0x06, 2),
+        read_reg(0x7E, 2),
+        // Drive the measurement channel and re-read.
+        vec![Step::Input("lux", 13.5)],
+        read_reg(0x04, 2),
+        read_reg(0x05, 2),
+    ]));
+    let t = run_i2c(&mut d, &steps);
+    check("veml7700", &t.bytes, VEML7700_GOLDEN);
 }
 
 /// Regenerated (via this file's own `--nocapture` self-print, never hand-typed)
@@ -201,22 +165,26 @@ const VEML7700_GOLDEN: &[u8] = &[
 #[test]
 fn bh1750_transcript_is_unchanged() {
     let mut d = i2c_device("bh1750");
-    let mut t = Vec::new();
-    // Write-only opcodes queue nothing (reads must be 0xFF).
-    send_cmd8(&mut d, 0x01); // power_on
-    t.extend(read_stream(&mut d, 2));
-    send_cmd8(&mut d, 0x07); // reset
-    t.extend(read_stream(&mut d, 2));
+    let mut steps = script([
+        // Write-only opcodes queue nothing (reads must be 0xFF).
+        send_cmd8(0x01), // power_on
+        read_stream(2),
+        send_cmd8(0x07), // reset
+        read_stream(2),
+    ]);
     for code in [0x10u8, 0x11, 0x13, 0x20, 0x21, 0x23] {
-        send_cmd8(&mut d, code);
-        t.extend(read_stream(&mut d, 2));
+        steps.extend(send_cmd8(code));
+        steps.extend(read_stream(2));
     }
-    send_cmd8(&mut d, 0xAB); // unknown opcode
-    t.extend(read_stream(&mut d, 2));
-    d.set_input("lux", 1234.0).unwrap();
-    send_cmd8(&mut d, 0x10);
-    t.extend(read_stream(&mut d, 3)); // one byte past the response
-    check("bh1750", &t, BH1750_GOLDEN);
+    steps.extend(script([
+        send_cmd8(0xAB), // unknown opcode
+        read_stream(2),
+        vec![Step::Input("lux", 1234.0)],
+        send_cmd8(0x10),
+        read_stream(3), // one byte past the response
+    ]));
+    let t = run_i2c(&mut d, &steps);
+    check("bh1750", &t.bytes, BH1750_GOLDEN);
 }
 
 const BH1750_GOLDEN: &[u8] = &[
@@ -229,25 +197,31 @@ const BH1750_GOLDEN: &[u8] = &[
 #[test]
 fn sht31_transcript_is_unchanged() {
     let mut d = i2c_device("sht31");
-    let mut t = Vec::new();
-    send_cmd16(&mut d, 0xF32D); // read_status, no delay
-    t.extend(read_stream(&mut d, 3));
-    send_cmd16(&mut d, 0x30A2); // soft_reset, write-only
-    t.extend(read_stream(&mut d, 3));
-    // A 15 ms delayed measurement: not ready, still not ready one µs short,
-    // then ready. This is the `advance_time_us` path the primitive shares.
-    send_cmd16(&mut d, 0x2400);
-    t.extend(read_stream(&mut d, 6));
-    d.advance_time_us(14_999);
-    t.extend(read_stream(&mut d, 6));
-    d.advance_time_us(1);
-    t.extend(read_stream(&mut d, 6));
-    d.set_input("temperature", -12.5).unwrap();
-    d.set_input("humidity", 88.0).unwrap();
-    send_cmd16(&mut d, 0x2C06);
-    d.advance_time_us(20_000);
-    t.extend(read_stream(&mut d, 6));
-    check("sht31", &t, SHT31_GOLDEN);
+    let steps = script([
+        send_cmd16(0xF32D), // read_status, no delay
+        read_stream(3),
+        send_cmd16(0x30A2), // soft_reset, write-only
+        read_stream(3),
+        // A 15 ms delayed measurement: not ready, still not ready one µs short,
+        // then ready. This is the `advance_time_us` path the primitive shares —
+        // the same call the machine's central device-time drive now makes on
+        // every chip, not just the ones with a SYSTIMER.
+        send_cmd16(0x2400),
+        read_stream(6),
+        vec![Step::AdvanceUs(14_999)],
+        read_stream(6),
+        vec![Step::AdvanceUs(1)],
+        read_stream(6),
+        vec![
+            Step::Input("temperature", -12.5),
+            Step::Input("humidity", 88.0),
+        ],
+        send_cmd16(0x2C06),
+        vec![Step::AdvanceUs(20_000)],
+        read_stream(6),
+    ]);
+    let t = run_i2c(&mut d, &steps);
+    check("sht31", &t.bytes, SHT31_GOLDEN);
 }
 
 const SHT31_GOLDEN: &[u8] = &[
@@ -260,15 +234,9 @@ const SHT31_GOLDEN: &[u8] = &[
 #[test]
 fn pca9685_transcript_is_unchanged() {
     let mut d = i2c_device("pca9685");
-    let mut t = Vec::new();
     // Power-on MODE1 (0x11 = SLEEP | ALLCALL), read without auto-increment:
     // the pointer must NOT walk, so both bytes are MODE1.
-    d.start();
-    d.write(0x00);
-    d.start();
-    t.push(d.read());
-    t.push(d.read());
-    d.stop();
+    let mut steps = read_reg(0x00, 2);
     // The rest of the documented power-on state (datasheet Rev. 4), still with
     // auto-increment off so each read re-selects its pointer. Pinned here so a
     // shared-engine change that drops the register-file `reset` map shows up in
@@ -281,24 +249,17 @@ fn pca9685_transcript_is_unchanged() {
         0xFB,   // ALL_LED_ON_H  — 0x00 on purpose (vendor contradicts itself)
         0xFE,   // PRE_SCALE  0x1E  200 Hz
     ] {
-        d.start();
-        d.write(reg);
-        d.start();
-        t.push(d.read());
-        d.stop();
+        steps.extend(read_reg(reg, 1));
     }
-    // Enable AI, then block-write channel 0's four LED registers in one frame.
-    write_reg(&mut d, 0x00, &[0x21]);
-    write_reg(&mut d, 0x06, &[0x00, 0x00, 0x29, 0x01]);
-    // Read the block back — the pointer walks now.
-    d.start();
-    d.write(0x06);
-    d.start();
-    for _ in 0..4 {
-        t.push(d.read());
-    }
-    d.stop();
-    check("pca9685", &t, PCA9685_GOLDEN);
+    steps.extend(script([
+        // Enable AI, then block-write channel 0's four LED registers in one frame.
+        write_reg(0x00, &[0x21]),
+        write_reg(0x06, &[0x00, 0x00, 0x29, 0x01]),
+        // Read the block back — the pointer walks now.
+        read_reg(0x06, 4),
+    ]));
+    let t = run_i2c(&mut d, &steps);
+    check("pca9685", &t.bytes, PCA9685_GOLDEN);
     // The observable derived from the file (engineering units, not bytes) —
     // OFF = 0x129 (297 counts) is the ~90° servo position.
     let angle = d.observable("servo_angle", 0).expect("channel 0 written");
@@ -333,21 +294,28 @@ const PCA9685_GOLDEN: &[u8] = &[
 #[test]
 fn adxl345_spi_transcript_is_unchanged() {
     let mut d = spi_device("adxl345_spi");
-    let mut t = Vec::new();
-    // DEVID read (bit 7 = read).
-    t.extend(spi_xfer(&mut d, &[0x80, 0x00]));
-    // Write POWER_CTL = 0x08 and DATA_FORMAT = 0x0B, then read both back.
-    spi_xfer(&mut d, &[0x2D, 0x08]);
-    spi_xfer(&mut d, &[0x31, 0x0B]);
-    t.extend(spi_xfer(&mut d, &[0xAD, 0x00]));
-    t.extend(spi_xfer(&mut d, &[0xB1, 0x00]));
-    // Six-byte burst read from DATAX0 (0x32 | read | multi-byte).
-    t.extend(spi_xfer(&mut d, &[0xF2, 0, 0, 0, 0, 0, 0]));
-    // Negative g on X, positive on Y — two's complement little-endian.
-    d.set_input("accel_x", -0.5).unwrap();
-    d.set_input("accel_y", 0.25).unwrap();
-    t.extend(spi_xfer(&mut d, &[0xF2, 0, 0, 0, 0, 0, 0]));
-    check("adxl345_spi", &t, ADXL345_GOLDEN);
+    // Write POWER_CTL = 0x08 and DATA_FORMAT = 0x0B. Driven as their own script
+    // and DISCARDED: a write frame's MISO bytes were never part of this
+    // device's golden, and folding them in would move it — which is exactly the
+    // kind of silent transcript change this file exists to refuse.
+    run_spi(
+        &mut d,
+        &script([spi_xfer(&[0x2D, 0x08]), spi_xfer(&[0x31, 0x0B])]),
+    );
+    let steps = script([
+        // DEVID read (bit 7 = read).
+        spi_xfer(&[0x80, 0x00]),
+        // Read POWER_CTL and DATA_FORMAT back.
+        spi_xfer(&[0xAD, 0x00]),
+        spi_xfer(&[0xB1, 0x00]),
+        // Six-byte burst read from DATAX0 (0x32 | read | multi-byte).
+        spi_xfer(&[0xF2, 0, 0, 0, 0, 0, 0]),
+        // Negative g on X, positive on Y — two's complement little-endian.
+        vec![Step::Input("accel_x", -0.5), Step::Input("accel_y", 0.25)],
+        spi_xfer(&[0xF2, 0, 0, 0, 0, 0, 0]),
+    ]);
+    let t = run_spi(&mut d, &steps);
+    check("adxl345_spi", &t.bytes, ADXL345_GOLDEN);
 }
 
 const ADXL345_GOLDEN: &[u8] = &[
@@ -360,15 +328,21 @@ const ADXL345_GOLDEN: &[u8] = &[
 #[test]
 fn max31855_transcript_is_unchanged() {
     let mut d = spi_device("max31855");
-    let mut t = Vec::new();
-    t.extend(spi_xfer(&mut d, &[0, 0, 0, 0]));
-    d.set_input("temperature", 1372.0).unwrap();
-    d.set_input("internal", -40.0).unwrap();
-    t.extend(spi_xfer(&mut d, &[0, 0, 0, 0]));
-    d.set_input("temperature", -270.0).unwrap();
-    d.set_input("internal", 125.0).unwrap();
-    t.extend(spi_xfer(&mut d, &[0, 0, 0, 0]));
-    check("max31855", &t, MAX31855_GOLDEN);
+    let steps = script([
+        spi_xfer(&[0, 0, 0, 0]),
+        vec![
+            Step::Input("temperature", 1372.0),
+            Step::Input("internal", -40.0),
+        ],
+        spi_xfer(&[0, 0, 0, 0]),
+        vec![
+            Step::Input("temperature", -270.0),
+            Step::Input("internal", 125.0),
+        ],
+        spi_xfer(&[0, 0, 0, 0]),
+    ]);
+    let t = run_spi(&mut d, &steps);
+    check("max31855", &t.bytes, MAX31855_GOLDEN);
 }
 
 const MAX31855_GOLDEN: &[u8] = &[

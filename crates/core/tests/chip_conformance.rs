@@ -28,6 +28,8 @@
 //! "Are the gates enough?" is now a number per chip on the board — and missing
 //! coverage is a visible red cell, not a silent gap.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
@@ -456,12 +458,6 @@ fn excluded_reason(name: &str, addr: u64) -> Option<&'static str> {
         .iter()
         .find(|(lo, hi, _)| addr >= *lo && addr <= *hi)
         .map(|(_, _, why)| *why)
-}
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
 }
 
 // ---------------------------------------------------------------------------

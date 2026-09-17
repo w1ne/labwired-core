@@ -1,0 +1,143 @@
+# Sensirion SHT30 temperature + humidity sensor — declarative I²C command
+# device. The master writes a 16-bit big-endian opcode; the response is a
+# temperature word and a humidity word, each 16-bit big-endian followed by a
+# Sensirion CRC-8 (poly 0x31, init 0xFF).
+#
+# Migrated from `peripherals/components/sht30.rs`, which is deleted with this
+# descriptor; `tests/sht30_migration_parity.rs` drives that model and this one
+# through the same I²C script.
+#
+# Datasheet encodings (SHT3x-DIS datasheet §4.13, inverted):
+#   raw_T  = (T_c + 45) / 175 * 65535  ⇒  scale = 65535/175 = 374.485714…,
+#                                          offset = 45 * 65535/175 = 16851.857142…
+#   raw_RH = RH% / 100 * 65535         ⇒  scale = 65535/100 = 655.35
+# Same formula as `sht31.yaml`: the SHT30 and SHT31 differ in accuracy grade,
+# not in wire protocol or conversion.
+#
+# The offset literal is the DOUBLE that reproduces `(T + 45) × 65535 / 175`
+# exactly — `encode:` multiplies and adds where the datasheet formula adds and
+# then multiplies, and the two orders round apart by one LSB at values such as
+# −27.5 °C, where the product lands on 6553.5. Swept over the whole declared
+# channel range in `sht30_migration_parity.rs`, so a future edit to this number
+# fails rather than drifting the last bit of the word.
+#
+# ── Three deliberate CHANGES from the model this replaces ────────────────
+#
+# 1. The hand model ignored the opcode entirely: ANY two bytes written — a soft
+#    reset, a status read, a heater command, a typo — were answered with the
+#    temperature/humidity frame. This descriptor answers the declared opcodes
+#    and only those; an undeclared opcode queues no response and reads 0xFF,
+#    the same answer the shared engine gives every other Sensirion part. A
+#    driver that sends a measurement command is unaffected; a driver that reads
+#    the status register now gets a status word instead of a temperature that
+#    was never measured. Pinned by name in `sht30_migration_parity.rs`.
+#
+# 2. The status word is real (0x8010, the power-on default of SHT3x status:
+#    alert pending, reset detected) instead of a temperature frame.
+#
+# 3. The single-shot conversion takes 15 ms. The hand model answered instantly,
+#    so a driver that read before its own measurement could possibly be done
+#    passed — the exact shortcut a faithful twin exists to expose.
+#
+#    `delay_us` is an UNCONDITIONAL gate: it withholds the response until the
+#    device's simulated clock reaches the deadline, so on a chip with no clock
+#    at all the response would never arrive and every read would be 0xFF. That
+#    is why this is declared only now — device time reaches every chip as of
+#    the Phase A change this branch merges (an absolute-µs counter where one is
+#    modelled, otherwise a clock derived from cycles and `cpu_hz`). 15 000 µs is
+#    the SHT3x datasheet's MAXIMUM for high repeatability (§2.2, table 4), the
+#    "guaranteed complete" bound firmware waits for; the same value `sht31.yaml`
+#    uses. Repeatability does not shorten it here, because the shorter medium /
+#    low durations are not modelled.
+#
+#    FETCH_DATA is NOT gated: in periodic mode the measurement has already run,
+#    and the part answers at once.
+type: sht30
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x44
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      # ── Single-shot measurement ──────────────────────────────────────────
+      # Clock stretching DISABLED (0x24xx) and ENABLED (0x2Cxx), at each of the
+      # three repeatability levels. All six return the same frame: repeatability
+      # trades measurement duration against noise, and neither is modelled.
+      - name: single_shot_high_no_stretch
+        code: 0x2400
+        delay_us: 15000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: single_shot_medium_no_stretch
+        code: 0x240B
+        delay_us: 15000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: single_shot_low_no_stretch
+        code: 0x2416
+        delay_us: 15000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: single_shot_high_stretch
+        code: 0x2C06
+        delay_us: 15000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: single_shot_medium_stretch
+        code: 0x2C0D
+        delay_us: 15000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: single_shot_low_stretch
+        code: 0x2C10
+        delay_us: 15000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      # ── Periodic mode ────────────────────────────────────────────────────
+      # The mode-select opcodes are accepted and queue no response (the part
+      # answers them with an ACK only); FETCH_DATA returns the latest frame.
+      # The periodic CADENCE is not modelled — every fetch reads the current
+      # stimulus — so a driver that fetches faster than the configured rate
+      # gets fresh data where silicon would NACK. Stated, not hidden.
+      - { name: periodic_0_5mps_high, code: 0x2032 }
+      - { name: periodic_1mps_high, code: 0x2130 }
+      - { name: periodic_2mps_high, code: 0x2236 }
+      - { name: periodic_4mps_high, code: 0x2334 }
+      - { name: periodic_10mps_high, code: 0x2737 }
+      - name: fetch_data
+        code: 0xE000
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857145 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - { name: break_periodic, code: 0x3093 }
+      # ── Housekeeping ─────────────────────────────────────────────────────
+      - { name: soft_reset, code: 0x30A2 }
+      - { name: heater_enable, code: 0x306D }
+      - { name: heater_disable, code: 0x3066 }
+      - { name: clear_status, code: 0x3041 }
+      # Status register: the SHT3x power-on default 0x8010 (alert pending +
+      # reset detected). A constant — no alert condition is modelled.
+      - name: read_status
+        code: 0xF32D
+        response:
+          - { const: 0x8010, width: 2 }
+
+metadata:
+  label: "SHT30 Temp/Humidity"
+  summary: "Sensirion SHT30 I²C temperature and humidity sensor."
+  detail: "Sensirion SHT30 at default address 0x44 (ADDR low; 0x45 with ADDR high). Single-shot and periodic-mode opcodes return a temperature word and a humidity word, each 16-bit big-endian with a Sensirion CRC-8. A single-shot measurement takes the datasheet's 15 ms maximum, after which the frame is readable; a read issued sooner returns 0xFF. Host sets temperature (°C) and relative humidity (%). The periodic-mode cadence, the repeatability grades, the heater and the alert logic are not modelled, and the status register is the power-on constant."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the SHT30 address 0x44 (ADDR pin low)."
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 125, default: 25 }
+    - { key: humidity, label: "Relative humidity", unit: "%", min: 0, max: 100, default: 50 }

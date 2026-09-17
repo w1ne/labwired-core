@@ -36,11 +36,12 @@
 //!   * `PM.APBCMASK` resets to 0x0001_0000 (ADC only) straight from the SVD —
 //!     so SERCOM0's bit 2 really is off until firmware sets it.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, Cpu, Machine};
-use std::path::PathBuf;
 
 // ── Addresses under test (all from ATSAMD21G18A.svd, Microchip, Apache-2.0) ──
 const PM: u64 = 0x4000_0400;
@@ -78,12 +79,6 @@ const PCLKSR_OSC8MRDY: u32 = 1 << 3;
 const PCLKSR_DFLLRDY: u32 = 1 << 4;
 /// Bits that must NOT be set: asserting a fault that never happened.
 const PCLKSR_FAULTS: u32 = (1 << 5) | (1 << 8) | (1 << 10) | (1 << 17);
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Build the part the way every production entry point does.
 fn machine() -> Machine<impl Cpu> {

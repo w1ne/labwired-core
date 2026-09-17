@@ -13,6 +13,8 @@
 //! The firmware is the committed NUCLEO-F401RE Arduino blink image. At 84 MHz a
 //! 100 us model period is 8400 cycles.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, CosimAdapter, CosimModelConfig, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::routing::cycles_to_ns;
@@ -21,7 +23,7 @@ use labwired_core::cpu::CortexM;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{AdvanceRequest, AdvanceStop, Bus, Machine};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const STEP_NS: u64 = 100_000;
 const BOUNDARY_CYCLES: u64 = 8_400;
@@ -30,12 +32,6 @@ const BOUNDARY_CYCLES: u64 = 8_400;
 /// `Machine::advance`). Generous: the point is "on the boundary, not a period
 /// past it".
 const BOUNDARY_SLACK: u64 = 64;
-
-fn root(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 fn f401_machine() -> Machine<CortexM> {
     let chip_path = root("configs/chips/stm32f401.yaml");

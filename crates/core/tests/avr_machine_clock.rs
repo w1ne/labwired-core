@@ -11,19 +11,14 @@
 //! `millis()`, an analog circuit and an `after_cycles` stimulus would each run
 //! on a different time base.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::avr::{strip_avr_data_bias, Avr, SRAM_START};
 use labwired_core::{AdvanceRequest, AdvanceStop, Cpu, Machine};
-use std::path::{Path, PathBuf};
 
 const CPU_HZ: u64 = 16_000_000;
-
-fn root(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 fn nano_elf() -> Vec<u8> {
     std::fs::read(root("tests/fixtures/avr/arduino-nano-blinky.elf")).expect("Nano blink fixture")

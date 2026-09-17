@@ -47,6 +47,12 @@ pub(crate) fn lookup(device_type: &str) -> Result<Option<DeviceDescriptor>> {
 /// is part of the pack. Checking it here lets manifest preflight reject an
 /// incomplete private GPIO leaf even when no current canvas references it.
 pub(crate) fn validate_descriptor(desc: &DeviceDescriptor) -> Result<()> {
+    // The `gpio_device` primitive has no fixed role list — its roles ARE its
+    // `pins:` / `outputs:` keys — so it validates itself, rule expressions and
+    // all, rather than being checked against a table it does not have.
+    if desc.behavior.primitive == "gpio_device" {
+        return crate::peripherals::components::declarative_gpio::validate_descriptor(desc);
+    }
     let required_roles: &[&str] = match desc.behavior.primitive.as_str() {
         "quadrature" => &["a", "b"],
         "matrix" => &["rows", "cols"],
@@ -97,12 +103,111 @@ impl SystemBus {
             "matrix" => self.attach_matrix(ext, desc),
             "one_wire" => self.attach_one_wire(ext, desc),
             "pulse_echo" => self.attach_pulse_echo(ext, desc),
+            "gpio_device" => self.attach_gpio_device(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
                 other
             )),
         }
+    }
+
+    /// `gpio_device` primitive → [`DeclarativeGpioDevice`]. The pins-only
+    /// Tier-2 part: everything about it is data.
+    ///
+    /// Role binding follows the same rule the other primitives use — a role
+    /// name resolves through `behavior.pins[role]` (or
+    /// `behavior.output_pins[role]`) to a `config:` key that carries the pad
+    /// label — with one split that matters:
+    ///
+    /// * `pins:` are pads the MCU DRIVES and the part observes, so they resolve
+    ///   to the output register (ODR). That is the same open-drain
+    ///   approximation the DHT22 and TM1637 models make: firmware releases a
+    ///   line either by driving it high or by switching the pin to input, and
+    ///   the bit-bang drivers in the wild do the former.
+    /// * `outputs:` are pads the PART drives and the MCU samples, so they
+    ///   resolve to the input register (IDR).
+    ///
+    /// There is no default pad for either. A `pulse_echo` falling back to PA9
+    /// was tolerable because that model predates the config key; a part whose
+    /// whole behaviour is which pin moved must not silently attach to a pin the
+    /// author did not choose.
+    fn attach_gpio_device(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
+        use crate::peripherals::components::declarative_gpio::{BoundPin, DeclarativeGpioDevice};
+
+        let cpu_hz = param_cpu_hz(desc, ext, self.cpu_hz);
+        let pad = |role: &str, key: &str| -> Result<String> {
+            ext.config
+                .get(key)
+                .and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.as_i64().map(|n| n.to_string()))
+                        .or_else(|| v.as_u64().map(|n| n.to_string()))
+                })
+                .ok_or_else(|| {
+                    anyhow!(
+                        "gpio_device '{}' pin role '{}' needs config key '{}', which this \
+                         placement does not set",
+                        ext.id,
+                        role,
+                        key
+                    )
+                })
+        };
+
+        let mut observed = Vec::new();
+        for (role, key) in &desc.behavior.pins {
+            let label = pad(role, key)?;
+            let (addr, bit) = Self::resolve_pin_odr(self, &label).ok_or_else(|| {
+                anyhow!(
+                    "gpio_device '{}' pin '{}' ({}) could not be resolved to a GPIO output",
+                    ext.id,
+                    role,
+                    label
+                )
+            })?;
+            observed.push(BoundPin {
+                role: role.clone(),
+                addr,
+                bit,
+            });
+        }
+
+        let mut driven = Vec::new();
+        for role in &desc.behavior.outputs {
+            let key = desc
+                .behavior
+                .output_pins
+                .get(role)
+                .cloned()
+                .unwrap_or_else(|| role.clone());
+            let label = pad(role, &key)?;
+            let (addr, bit) = Self::resolve_pin_idr(self, &label).ok_or_else(|| {
+                anyhow!(
+                    "gpio_device '{}' output '{}' ({}) could not be resolved to a GPIO input",
+                    ext.id,
+                    role,
+                    label
+                )
+            })?;
+            driven.push(BoundPin {
+                role: role.clone(),
+                addr,
+                bit,
+            });
+        }
+
+        let channels = crate::peripherals::components::declarative_i2c::leak_channels(desc);
+        let mut device =
+            DeclarativeGpioDevice::new(ext.id.clone(), desc, observed, driven, cpu_hz, channels)?;
+        for ch in channels {
+            if let Some(v) = ext.config.get(ch.key).and_then(|v| v.as_f64()) {
+                device.seed_input(ch.key, v);
+            }
+        }
+        self.gpio_devices.push(Box::new(device));
+        Ok(())
     }
 
     /// `pulse_echo` primitive → [`HcSr04`]. Reproduces the former `"hc-sr04"`/
