@@ -40,6 +40,10 @@ pub mod hcsr04_event_tick_differential;
 pub mod i2c_central_time_drive;
 #[cfg(test)]
 pub mod integration;
+
+/// Every decoded instruction is JIT-translated or explicitly interpreter-only.
+#[cfg(test)]
+pub mod jit_translate_coverage_ratchet;
 #[cfg(test)]
 pub mod logic_capture;
 #[cfg(test)]
