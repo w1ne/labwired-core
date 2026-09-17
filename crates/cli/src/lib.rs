@@ -1509,8 +1509,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         firmware_bytes,
         uart_tx,
         rtt_tx,
-        // Load/reset failed before the run loop, so no RTT model was ever
-        // attached: there is no stream and no diagnostics to report.
+        // No bus exists on the load-error path, so RTT status is unavailable.
         None,
         cpu,
         firmware_path,
@@ -1564,7 +1563,7 @@ pub(crate) fn uart_assertion_passes(assertion: &TestAssertion, uart_text: &str) 
 /// this stream" and sends the caller on to the machine. The RTT capture is a
 /// separate buffer from UART on purpose — mixing them would let an
 /// `rtt_contains` token match a UART banner and vice versa.
-pub(crate) fn rtt_assertion_passes(assertion: &TestAssertion, rtt_text: &str) -> Option<bool> {
+fn rtt_assertion_passes(assertion: &TestAssertion, rtt_text: &str) -> Option<bool> {
     Some(match assertion {
         TestAssertion::RttContains(a) => rtt_text.contains(&a.rtt_contains),
         _ => return None,
@@ -3310,10 +3309,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
         if !passed {
             all_passed = false;
+            let captured_len = if matches!(assertion, TestAssertion::RttContains(_)) {
+                rtt_text.len()
+            } else {
+                uart_text.len()
+            };
             error!(
                 "Assertion failed: {:?} (captured len={})",
-                assertion,
-                uart_text.len()
+                assertion, captured_len
             );
         }
 
@@ -4584,6 +4587,25 @@ mod tests {
             vec![application(100, 1.0, 1)],
         )]);
         assert!(shutdown_latency_passes(&details, &stimuli, &uart));
+    }
+
+    #[test]
+    fn rtt_assertion_passes_only_decides_rtt_contains() {
+        let rtt = TestAssertion::RttContains(labwired_config::RttContainsAssertion {
+            rtt_contains: "RTT hello".to_owned(),
+        });
+        assert_eq!(
+            rtt_assertion_passes(&rtt, "RTT hello from labwired"),
+            Some(true)
+        );
+        assert_eq!(rtt_assertion_passes(&rtt, "nothing here"), Some(false));
+
+        // A UART assertion is not decided by the RTT stream; it must return
+        // `None` so the caller keeps matching against the other stream.
+        let uart = TestAssertion::UartContains(labwired_config::UartContainsAssertion {
+            uart_contains: "hello".to_owned(),
+        });
+        assert_eq!(rtt_assertion_passes(&uart, "hello"), None);
     }
 
     /// A display is polled on the batch grid rather than per instruction, and
