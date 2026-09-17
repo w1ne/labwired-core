@@ -295,6 +295,7 @@ pub struct RiscvJitEngine {
     jit: RiscvWasmJit,
     cache: BlockCache<CompiledBlock>,
     stats: EngineStats,
+    min_profitable: u32,
 }
 
 impl std::fmt::Debug for RiscvJitEngine {
@@ -316,7 +317,21 @@ impl RiscvJitEngine {
             jit: RiscvWasmJit::new(),
             cache: BlockCache::new(hot_threshold),
             stats: EngineStats::default(),
+            min_profitable: MIN_PROFITABLE_BLOCK_INSTRS,
         }
+    }
+
+    /// Override the compile-worthiness floor (guest instructions per block).
+    ///
+    /// Production dispatch keeps the default [`MIN_PROFITABLE_BLOCK_INSTRS`]
+    /// (real firmware is full of 1–4 instruction basic blocks that regress
+    /// ~20× if compiled). Differential/lockstep fixtures intentionally use
+    /// short synthetic loop bodies to keep the byte-identical comparison
+    /// cheap per unit, so they lower the floor to exercise the compiled path
+    /// without changing production behaviour. Mirrors
+    /// [`CortexMJitEngine::set_min_profitable`](super::super::cortex_m::exec::CortexMJitEngine::set_min_profitable).
+    pub fn set_min_profitable(&mut self, n: u32) {
+        self.min_profitable = n.max(1);
     }
 
     /// Accumulated statistics.
@@ -418,7 +433,7 @@ impl RiscvJitEngine {
         // Only install blocks long enough that the compiled path amortizes.
         // Synthetic hot-loop benches (dozens of sequential ALU ops) still clear
         // this bar; short blocks stay interpreted (byte-identical semantics).
-        if plan.instr_count < MIN_PROFITABLE_BLOCK_INSTRS {
+        if plan.instr_count < self.min_profitable {
             return;
         }
         if let Some(block) = self.jit.compile(&plan, binding) {
