@@ -10,6 +10,7 @@ pub mod esp32_boot_state;
 pub mod fuzz;
 pub mod machine;
 pub mod run;
+pub mod run_system;
 pub mod snapshot;
 pub mod svd;
 pub mod test;
