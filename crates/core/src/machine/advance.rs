@@ -132,7 +132,17 @@ impl<C: Cpu> Machine<C> {
         mut run_window: Option<&mut WindowRunner<'_, C>>,
     ) -> SimResult<AdvanceReport> {
         let start_cycles = self.total_cycles;
-        let start_wall = self.host_clock.now();
+        // Read the wall origin only when something will consume it:
+        // `pace_realtime` returns immediately outside `Realtime`, and the CLI's
+        // single-step loop issues one `advance` per simulated instruction, so an
+        // unconditional `Instant::elapsed()` here is a per-instruction cost —
+        // 91 Ir/step under callgrind, +8.5% on every ARM board that no engine
+        // change earned.
+        let start_wall = if self.config.host_time_mode == HostTimeMode::Realtime {
+            self.host_clock.now()
+        } else {
+            Duration::ZERO
+        };
         let mut state = AdvanceState::default();
 
         loop {

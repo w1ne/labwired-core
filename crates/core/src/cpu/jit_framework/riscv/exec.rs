@@ -253,7 +253,8 @@ impl RiscvWasmJit {
     }
 }
 
-/// Minimum basic-block length (guest instructions) worth compiling.
+/// Minimum basic-block length (guest instructions) worth compiling on the
+/// **production** install path ([`RiscvJitEngine::try_compile_from_bus`]).
 ///
 /// Below this, the wasmtime register-file sync + call overhead dominates the
 /// work the block would do, so real C3 firmware (dense branches/CSR/MMIO cuts)
@@ -264,6 +265,12 @@ impl RiscvWasmJit {
 /// Fidelity-neutral: short blocks stay on the interpreter; long blocks run
 /// the same semantics as before (lockstep gates unchanged for profitable
 /// blocks).
+///
+/// The differential [`RiscvJitEngine::step_unit`] path deliberately does
+/// **not** apply this floor (it installs any emittable block): its lockstep
+/// gates must exercise the compiled branch/memory/combined codegen even on
+/// the short probe blocks those gates are built from, or their anti-vacuity
+/// assertions would have nothing to count.
 pub const MIN_PROFITABLE_BLOCK_INSTRS: u32 = 16;
 
 /// Run counters for a [`RiscvJitEngine`] session.
@@ -391,7 +398,22 @@ impl RiscvJitEngine {
     /// the [`SystemBus`]'s MMU/XIP-aware code fetch and binding its guest-RAM
     /// window, installing the block on success. Any refusal leaves the PC on
     /// the interpreter — never an error.
+    ///
+    /// This is the **production** install path (called by
+    /// [`RiscV::run_jit_loop`](crate::cpu::RiscV)), so it enforces the
+    /// [`MIN_PROFITABLE_BLOCK_INSTRS`] floor: short blocks cost more to run
+    /// compiled than interpreted. The differential [`step_unit`](Self::step_unit)
+    /// path bypasses the floor.
     pub fn try_compile_from_bus(&mut self, pc: Pc, bus: &SystemBus) {
+        self.try_compile_from_bus_min(pc, bus, MIN_PROFITABLE_BLOCK_INSTRS);
+    }
+
+    /// Shared translation + install body of the two promotion paths.
+    ///
+    /// `min_instrs` is the profitability floor: the caller's policy, not a
+    /// codegen limit. Production passes [`MIN_PROFITABLE_BLOCK_INSTRS`]; the
+    /// differential path passes `1` so every emittable block installs.
+    fn try_compile_from_bus_min(&mut self, pc: Pc, bus: &SystemBus, min_instrs: u32) {
         // Bind the machine's current guest-RAM window so loads/stores can take
         // the inline fast path (out-of-window accesses side-exit to the
         // interpreter's bus, which owns all MMIO).
@@ -418,7 +440,7 @@ impl RiscvJitEngine {
         // Only install blocks long enough that the compiled path amortizes.
         // Synthetic hot-loop benches (dozens of sequential ALU ops) still clear
         // this bar; short blocks stay interpreted (byte-identical semantics).
-        if plan.instr_count < MIN_PROFITABLE_BLOCK_INSTRS {
+        if plan.instr_count < min_instrs {
             return;
         }
         if let Some(block) = self.jit.compile(&plan, binding) {
@@ -485,10 +507,14 @@ impl RiscvJitEngine {
     }
 
     /// Translate + instantiate the block at `pc`, installing it on success.
-    /// Any refusal (non-ALU entry → stub, out-of-flash PC, instantiate
-    /// failure) leaves the PC on the interpreter — never an error.
+    /// Any refusal (non-emittable entry → all-bail stub, out-of-flash PC,
+    /// instantiate failure) leaves the PC on the interpreter — never an error.
+    ///
+    /// The differential path promotes **any** emittable block: the
+    /// profitability floor is a production-dispatch policy, and applying it
+    /// here would leave every short-block lockstep gate vacuously green.
     fn try_compile(&mut self, machine: &Machine<RiscV>, pc: Pc) {
-        self.try_compile_from_bus(pc, &machine.bus);
+        self.try_compile_from_bus_min(pc, &machine.bus, 1);
     }
 }
 
@@ -506,6 +532,17 @@ mod tests {
 
     fn enc_addi(rd: u32, rs1: u32, imm: i32) -> u32 {
         ((imm as u32 & 0xFFF) << 20) | (rs1 << 15) | (rd << 7) | 0x13
+    }
+
+    /// A machine whose flash holds `prog` at address 0.
+    fn machine_of(prog: &[u32]) -> Machine<RiscV> {
+        let mut bus = SystemBus::new();
+        bus.flash.data = words(prog);
+        bus.flash.base_addr = 0;
+        let mut cpu = RiscV::new();
+        cpu.pc = 0;
+        cpu.mtimecmp = u64::MAX; // keep the CLINT timer from ever firing
+        Machine::new(cpu, bus)
     }
 
     #[test]
@@ -529,5 +566,56 @@ mod tests {
         assert_eq!(x[2], 10);
         assert_eq!(x[0], 0, "x0 stays zero");
         assert_eq!(exit, SideExit::Chain { next_pc: 8 });
+    }
+
+    #[test]
+    fn differential_step_unit_compiles_short_branch_block() {
+        // `jal x0, 0` — a one-instruction self-loop terminator, far below the
+        // production profitability floor. The differential dispatcher must
+        // still install and run it: every branch/memory lockstep gate proves
+        // codegen on exactly this kind of short probe block, so a floor here
+        // makes those gates vacuously green (the chunk-D/E integration gates
+        // did exactly that until this test pinned it).
+        let mut machine = machine_of(&[0x0000_006f]);
+        let mut engine = RiscvJitEngine::new(1);
+
+        // Unit 1: cold hit crosses the threshold, compiles, interprets once.
+        assert_eq!(engine.step_unit(&mut machine), 1);
+        assert_eq!(
+            engine.stats().compiled,
+            1,
+            "short branch block must install on the differential path: {:?}",
+            engine.stats()
+        );
+        // Later units: the same PC is now a ready compiled block that chains
+        // back to itself.
+        for _ in 0..3 {
+            assert_eq!(
+                engine.step_unit(&mut machine),
+                1,
+                "self-loop retires one/unit"
+            );
+        }
+        assert!(
+            engine.stats().block_runs >= 3,
+            "compiled self-loop never ran: {:?}",
+            engine.stats()
+        );
+    }
+
+    #[test]
+    fn production_floor_still_refuses_short_block() {
+        // The *production* install path (used by `run_jit_loop`) keeps the
+        // chunk-H floor: a one-instruction block is not worth a wasm call.
+        // Pin it so making the differential path compile short blocks cannot
+        // silently drop the production policy.
+        let machine = machine_of(&[0x0000_006f]);
+        let mut engine = RiscvJitEngine::new(1);
+        engine.try_compile_from_bus(0, &machine.bus);
+        assert_eq!(
+            engine.stats().compiled,
+            0,
+            "floor must refuse a 1-instruction production block"
+        );
     }
 }
