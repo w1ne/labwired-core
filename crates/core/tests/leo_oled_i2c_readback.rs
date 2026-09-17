@@ -20,7 +20,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Ssd1306;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
 use std::path::PathBuf;
 
@@ -52,7 +52,7 @@ fn leo_oled_is_readable_through_esp32c3_i2c() {
         .attached_slaves()
         .iter()
         .filter(|d| d.address() == 0x3C)
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("an SSD1306 must be attached at 0x3C on the C3 i2c0 bus");
 
     // Framebuffer is readable (128x64 -> 1024 bytes, page-major). Blank at boot

@@ -184,12 +184,19 @@ impl I2cDevice for UnpoweredI2cDevice {
         // oscillator; with no supply it does not run, so an unpowered sensor
         // must not accrue FIFO samples while the CPU is busy elsewhere.
     }
+
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        // NOT forwarded either, and for the same reason: an unpowered part
+        // cannot assert an interrupt line. Returning nothing leaves the pad
+        // wherever the board's pull leaves it, which is what a dead chip does.
+        Vec::new()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::ssd1306;
 
     /// The POSITIVE control for the decorator itself: the very same model,
     /// unwrapped, answers its address and takes bytes. Without this, "an
@@ -197,7 +204,7 @@ mod tests {
     /// everything.
     #[test]
     fn a_powered_i2c_device_answers_its_address_and_latches_bytes() {
-        let mut dev = Ssd1306::new(0x3C);
+        let mut dev = ssd1306(0x3C);
         assert!(dev.claims_address(0x3C), "a powered panel ACKs its address");
         dev.start();
         dev.write(0x40); // Co=0, D/C=1 → data
@@ -211,7 +218,7 @@ mod tests {
     /// The FIX: no supply, no ACK. A scan finds nothing at the address.
     #[test]
     fn an_unpowered_i2c_device_nacks_every_address() {
-        let dev = UnpoweredI2cDevice::new(Box::new(Ssd1306::new(0x3C)));
+        let dev = UnpoweredI2cDevice::new(Box::new(ssd1306(0x3C)));
         assert!(
             !dev.claims_address(0x3C),
             "an unpowered chip does not pull SDA low for its own address",
@@ -228,7 +235,7 @@ mod tests {
     /// resolved some other way) must not change anything.
     #[test]
     fn an_unpowered_i2c_device_never_accumulates_paint() {
-        let mut dev = UnpoweredI2cDevice::new(Box::new(Ssd1306::new(0x3C)));
+        let mut dev = UnpoweredI2cDevice::new(Box::new(ssd1306(0x3C)));
         for _ in 0..5 {
             dev.start();
             dev.write(0x40);
@@ -247,7 +254,7 @@ mod tests {
     /// The evidence must survive the wrapper, and must say WHY it is blank.
     #[test]
     fn an_unpowered_i2c_device_still_reports_evidence_marked_unpowered() {
-        let dev = UnpoweredI2cDevice::new(Box::new(Ssd1306::new(0x3C)));
+        let dev = UnpoweredI2cDevice::new(Box::new(ssd1306(0x3C)));
         let art = dev.artifacts("oled", &InspectOpts::default());
         assert_eq!(art.len(), 1, "artifacts must be forwarded, never swallowed");
         assert_eq!(art[0].meta["powered"], false);
@@ -257,7 +264,7 @@ mod tests {
     /// An idle bus is held high by its pull-ups.
     #[test]
     fn an_unpowered_i2c_device_reads_as_an_idle_bus() {
-        let mut dev = UnpoweredI2cDevice::new(Box::new(Ssd1306::new(0x3C)));
+        let mut dev = UnpoweredI2cDevice::new(Box::new(ssd1306(0x3C)));
         assert_eq!(dev.read(), 0xFF, "pull-ups, not a valid all-zero register");
     }
 

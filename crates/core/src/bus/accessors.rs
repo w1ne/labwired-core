@@ -129,10 +129,21 @@ impl crate::Bus for SystemBus {
                 self.note_memory_read();
                 return Ok(val);
             }
-            for mem in &self.extra_mem {
-                if let Some(val) = mem.read_u8(addr) {
-                    self.note_memory_read();
-                    return Ok(val);
+            if !self.extra_mem_surely_misses(addr, 1) {
+                // Negative cache — see `SystemBus::extra_mem_gap`.
+                let mut hit = None;
+                for mem in &self.extra_mem {
+                    if let Some(val) = mem.read_u8(addr) {
+                        hit = Some(val);
+                        break;
+                    }
+                }
+                match hit {
+                    Some(val) => {
+                        self.note_memory_read();
+                        return Ok(val);
+                    }
+                    None => self.note_extra_mem_miss(addr),
                 }
             }
             if let Some(val) = flash_alias(self) {
@@ -165,10 +176,21 @@ impl crate::Bus for SystemBus {
                 self.note_memory_read();
                 return Ok(val);
             }
-            for mem in &self.extra_mem {
-                if let Some(val) = mem.read_u8(addr) {
-                    self.note_memory_read();
-                    return Ok(val);
+            if !self.extra_mem_surely_misses(addr, 1) {
+                // Negative cache — see `SystemBus::extra_mem_gap`.
+                let mut hit = None;
+                for mem in &self.extra_mem {
+                    if let Some(val) = mem.read_u8(addr) {
+                        hit = Some(val);
+                        break;
+                    }
+                }
+                match hit {
+                    Some(val) => {
+                        self.note_memory_read();
+                        return Ok(val);
+                    }
+                    None => self.note_extra_mem_miss(addr),
                 }
             }
             if let Some(val) = flash_alias(self) {
@@ -408,11 +430,18 @@ impl crate::Bus for SystemBus {
             None
         };
         let extra_mem_half = |s: &Self| -> Option<u16> {
+            // Negative cache: skip the per-window bounds tests when this
+            // address is in a proven hole between windows. See
+            // `SystemBus::extra_mem_gap`.
+            if s.extra_mem_surely_misses(addr, 2) {
+                return None;
+            }
             for mem in &s.extra_mem {
                 if let Some(val) = mem.read_u16(addr) {
                     return Some(val);
                 }
             }
+            s.note_extra_mem_miss(addr);
             None
         };
         if self.config.optimized_bus_access {
@@ -520,11 +549,19 @@ impl crate::Bus for SystemBus {
             None
         };
         let extra_mem_word = |s: &Self| -> Option<u32> {
+            // Negative cache — see `extra_mem_half` in `read_u16` above. This
+            // is the one that matters most: on the ESP32-C3 every instruction
+            // fetch lands in `flash` at 0x4200_0000 and probes all five
+            // declared windows on the way there.
+            if s.extra_mem_surely_misses(addr, 4) {
+                return None;
+            }
             for mem in &s.extra_mem {
                 if let Some(val) = mem.read_u32(addr) {
                     return Some(val);
                 }
             }
+            s.note_extra_mem_miss(addr);
             None
         };
         if self.config.optimized_bus_access {

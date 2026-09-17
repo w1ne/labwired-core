@@ -17,12 +17,15 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
-use labwired_config::{DeviceDescriptor, RegisterAccess, RegisterSpec, SpiFraming};
+use labwired_config::{
+    DeviceDescriptor, Event, FrameSpec, RegisterAccess, RegisterSpec, SpiFraming,
+};
 
 use super::declarative_regs::{
-    apply_timing_action, apply_write, leak_labs, read_clears, register_read_bytes, unpack,
-    validate_timers, TimerBank,
+    apply_timing_action, apply_write, encode_raw, leak_labs, read_clears, register_read_bytes,
+    unpack, validate_timers, TimerBank,
 };
+use super::rule_machine::{RuleCtx, RuleMachine};
 use crate::peripherals::spi::{SpiDevice, SpiSampling};
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -71,6 +74,16 @@ pub struct GenericSpiDevice {
     /// Free-running device timers (`behavior.timers`). Empty ⇒ every timer
     /// code path short-circuits, so a device without one is unchanged.
     timers: TimerBank,
+
+    /// **Tier 2**: states, variables, FIFOs and output pins. `None` ⇒ the
+    /// descriptor declares none, and every rule path short-circuits. It holds
+    /// no timer state: `timers` above is the ONE clock.
+    rules: Option<RuleMachine>,
+    /// Message framing, when the part declares any.
+    frames: Option<FrameSpec>,
+    /// MOSI bytes clocked since the last `frame` event, for a [`FrameSpec`]
+    /// with a fixed `length`.
+    frame_bytes: u16,
 }
 
 /// Validate the static descriptor contract for the `spi_device` primitive.
@@ -130,7 +143,16 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         }
     }
     let names: Vec<String> = spec.registers.iter().map(|r| r.name.clone()).collect();
-    validate_timers(&descriptor.behavior.timers, &names)?;
+    validate_timers(
+        &descriptor.behavior.timers,
+        &names,
+        &descriptor.behavior.rules,
+    )?;
+    // Tier 2: the same load-time strictness the I²C primitive applies — every
+    // expression parses, every name a rule mentions is declared.
+    labwired_config::compile_rules(&descriptor.behavior.rules)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    super::declarative_gpio::validate_rule_names(descriptor)?;
     Ok(())
 }
 
@@ -177,6 +199,9 @@ impl GenericSpiDevice {
             sampling: SpiSampling::Byte,
             elapsed_us: 0,
             timers: TimerBank::new(&descriptor.behavior.timers),
+            rules: RuleMachine::from_behavior(&descriptor.behavior)?,
+            frames: descriptor.behavior.frames.clone(),
+            frame_bytes: 0,
         })
     }
 
@@ -292,6 +317,112 @@ impl GenericSpiDevice {
     }
 }
 
+// ─── Tier 2: the rule machine's view of this device ────────────────────────
+
+/// The [`RuleCtx`] a declarative SPI device hands its [`RuleMachine`]. Same
+/// shape as the I²C one — the rule vocabulary is transport-agnostic on purpose,
+/// so the SAME `rules:` block ports between an I²C and a SPI variant of a part
+/// (ADXL345 is both) without a word changing.
+struct SpiRuleCtx<'a> {
+    registers: &'a [RegisterSpec],
+    reg_values: &'a mut HashMap<String, u32>,
+    slots: &'a HashMap<String, f64>,
+}
+
+impl RuleCtx for SpiRuleCtx<'_> {
+    fn reg(&self, name: &str) -> Option<u32> {
+        self.reg_values.get(name).copied()
+    }
+    fn set_reg(&mut self, name: &str, value: u32) {
+        self.reg_values.insert(name.to_string(), value);
+    }
+    fn field_bits(&self, register: &str, field: &str) -> Option<(u8, u32)> {
+        let reg = self.registers.iter().find(|r| r.name == register)?;
+        let f = reg.bits.iter().find(|b| b.name == field)?;
+        Some((f.shift, f.mask()))
+    }
+    fn input(&self, key: &str) -> i64 {
+        let raw = self.slots.get(key).copied().unwrap_or(0.0);
+        match self
+            .registers
+            .iter()
+            .find(|r| r.source.as_deref() == Some(key))
+        {
+            Some(reg) => {
+                let encoded = encode_raw(
+                    raw,
+                    reg.encode.as_ref(),
+                    reg.source_scale.unwrap_or(1.0),
+                    reg.width,
+                    reg.signed,
+                );
+                if reg.signed {
+                    let bits = 8 * u32::from(reg.width);
+                    if bits < 32 && encoded & (1 << (bits - 1)) != 0 {
+                        return i64::from(encoded as i32 | !((1i32 << bits) - 1));
+                    }
+                }
+                i64::from(encoded)
+            }
+            None => raw as i64,
+        }
+    }
+}
+
+impl GenericSpiDevice {
+    /// Raise a Tier-2 event; no-op for a descriptor with no rules.
+    fn raise(&mut self, event: Event, written: i64) {
+        let Some(mut machine) = self.rules.take() else {
+            return;
+        };
+        {
+            let mut ctx = SpiRuleCtx {
+                registers: &self.registers,
+                reg_values: &mut self.reg_values,
+                slots: &self.slots,
+            };
+            machine.fire(&event, written, &mut ctx);
+        }
+        self.rules = Some(machine);
+    }
+
+    /// Fire a Tier-2 event and immediately apply any `timer:` action it queued.
+    /// See the I²C twin for why the timer drive uses bare `raise` instead.
+    fn raise_and_settle(&mut self, event: Event, written: i64) {
+        self.raise(event, written);
+        self.drain_timer_requests();
+    }
+
+    /// Let the rule machine record the elapsed µs. It schedules nothing: the
+    /// device's [`TimerBank`] is the one clock and raises `Event::Timer`.
+    fn advance_rule_time(&mut self, us: u64) {
+        if let Some(m) = self.rules.as_mut() {
+            m.advance_time_us(us);
+        }
+    }
+
+    /// Apply whatever `timer:` actions the rules queued to the ONE bank.
+    fn drain_timer_requests(&mut self) {
+        let Some(m) = self.rules.as_mut() else { return };
+        let requests = m.take_timer_requests();
+        if requests.is_empty() {
+            return;
+        }
+        for (name, start) in requests {
+            if start {
+                self.timers.start_named(&name, self.elapsed_us);
+            } else {
+                self.timers.stop_named(&name);
+            }
+        }
+    }
+
+    /// Read-only view of the rule machine, for tests and diagnostics.
+    pub fn rule_machine(&self) -> Option<&RuleMachine> {
+        self.rules.as_ref()
+    }
+}
+
 impl SpiDevice for GenericSpiDevice {
     fn sampling(&self) -> SpiSampling {
         self.sampling
@@ -299,12 +430,30 @@ impl SpiDevice for GenericSpiDevice {
 
     /// Record elapsed simulated time and age the part's own timers on it.
     /// A device that declares none is untouched.
+    ///
+    /// ONE clock, two consumers: each due timer runs its `on_fire` register
+    /// actions and then raises a Tier-2 `timer:<name>` event, in that order, so
+    /// a rule sees the registers the same firing already changed. The rule
+    /// machine holds no timer state of its own — it could not drift from this
+    /// one if it tried.
     fn advance_time_us(&mut self, us: u64) {
         self.elapsed_us = self.elapsed_us.saturating_add(us);
+        self.advance_rule_time(us);
         if !self.timers.is_empty() {
-            for action in self.timers.due(self.elapsed_us) {
-                apply_timing_action(&action, &mut self.reg_values);
+            for (name, actions) in self.timers.due_by_timer(self.elapsed_us) {
+                for action in &actions {
+                    apply_timing_action(action, &mut self.reg_values);
+                }
+                self.raise(Event::Timer { name }, 0);
             }
+        }
+    }
+
+    /// Tier 2: hand the bus whatever pin transitions the rules queued.
+    fn take_pin_drives(&mut self) -> Vec<(String, bool)> {
+        match self.rules.as_mut() {
+            Some(m) => m.take_pin_drives(),
+            None => Vec::new(),
         }
     }
 
@@ -326,14 +475,56 @@ impl SpiDevice for GenericSpiDevice {
             self.is_read = Some(true);
             self.cur_addr = Some(0);
         }
+        self.raise_and_settle(Event::CsSelect, 0);
     }
 
     fn cs_release(&mut self) {
         self.cs_held = false;
         self.write_acc.clear();
+        self.raise_and_settle(Event::CsRelease, 0);
+        // CS↑ always closes a frame, the SPI twin of the I²C STOP: a short
+        // message is delivered rather than swallowed.
+        if self.frames.is_some() {
+            self.frame_bytes = 0;
+            self.raise_and_settle(Event::Frame, 0);
+        }
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
+        // Framing: close the frame the moment the declared length is clocked,
+        // without waiting for CS↑. Same contract as the I²C side.
+        let mut close_frame = false;
+        if let Some(length) = self.frames.as_ref().and_then(|f| f.length) {
+            if length > 0 {
+                self.frame_bytes = self.frame_bytes.saturating_add(1);
+                if self.frame_bytes >= length {
+                    self.frame_bytes = 0;
+                    close_frame = true;
+                }
+            }
+        }
+        let miso = self.transfer_inner(mosi);
+        if close_frame {
+            self.raise_and_settle(Event::Frame, i64::from(mosi));
+        }
+        miso
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        Some(self)
+    }
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn SimInput> {
+        Some(self)
+    }
+}
+
+impl GenericSpiDevice {
+    /// The wire exchange itself, split out so the framing counter above can
+    /// raise `frame` once the byte has been processed.
+    fn transfer_inner(&mut self, mosi: u8) -> u8 {
         // Soft-CS / matrix path: when CS was never held (or has been released),
         // enter the read-only data phase and re-frame after a full word so a
         // CS-high dummy flush does not permanently desync multi-byte reads.
@@ -372,8 +563,13 @@ impl SpiDevice for GenericSpiDevice {
         let write = matches!(self.is_read, Some(false));
         if write {
             self.write_acc.push(mosi);
-            if let Some(reg) = self.find_register(addr).cloned() {
-                if reg.access == RegisterAccess::Rw && self.write_acc.len() == reg.width as usize {
+            // The completed write is computed under a CLONED register so the
+            // Tier-2 event below can take `&mut self`.
+            let completed: Option<(String, u32)> = match self.find_register(addr).cloned() {
+                Some(reg)
+                    if reg.access == RegisterAccess::Rw
+                        && self.write_acc.len() == reg.width as usize =>
+                {
                     let written = unpack(&self.write_acc, reg.endian);
                     // `write_mask` (shared with the I²C engine) keeps the bits
                     // silicon owns; absent ⇒ the whole word is replaced. What
@@ -391,7 +587,19 @@ impl SpiDevice for GenericSpiDevice {
                             self.cur_addr = Some(next);
                         }
                     }
+                    Some((reg.name.clone(), written))
                 }
+                _ => None,
+            };
+            if let Some((name, written)) = completed {
+                // Tier 2 LAST, so a rule sees the post-write register.
+                self.raise_and_settle(
+                    Event::Write {
+                        register: name,
+                        field: None,
+                    },
+                    i64::from(written),
+                );
             }
             return 0x00;
         }
@@ -401,6 +609,10 @@ impl SpiDevice for GenericSpiDevice {
             self.read_buf = buf;
             self.read_ends = ends;
             self.latched = true;
+            // The read event fires as the word LATCHES, matching the I²C side.
+            if let Some(name) = self.find_register(addr).map(|r| r.name.clone()) {
+                self.raise_and_settle(Event::Read { register: name }, 0);
+            }
         }
         let byte = self.read_buf.get(self.read_idx).copied().unwrap_or(0xFF);
         // `on_read: clear` fires as the register's LAST byte leaves — the burst
@@ -410,16 +622,6 @@ impl SpiDevice for GenericSpiDevice {
         }
         self.read_idx += 1;
         byte
-    }
-
-    fn as_any(&self) -> Option<&dyn Any> {
-        Some(self)
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
-        Some(self)
-    }
-    fn as_sim_input_mut(&mut self) -> Option<&mut dyn SimInput> {
-        Some(self)
     }
 }
 
@@ -533,6 +735,9 @@ impl PeripheralKit for DeclarativeSpiKit {
                 .map_err(|_| anyhow::anyhow!("spi_mode {mode} is not a SPI mode (0..=3)"))?;
             device.set_spi_mode(m)?;
         }
+        // Tier 2: bind `outputs:` roles to pads (the DRDY/IRQ twin of the I²C
+        // INT line) before the device goes in.
+        ctx.bind_output_pins(&self.descriptor)?;
         ctx.attach_spi_device(Box::new(device))
     }
 }

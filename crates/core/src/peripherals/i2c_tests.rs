@@ -12,10 +12,10 @@ use std::sync::{
 #[test]
 fn inspect_emits_ssd1306_framebuffer_artifact() {
     use crate::inspect::InspectOpts;
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::ssd1306;
 
     let mut i2c = I2c::new();
-    i2c.push_slave(Box::new(Ssd1306::new(0x3C)));
+    i2c.push_slave(Box::new(ssd1306(0x3C)));
 
     // Summary mode: metadata present, bytes omitted.
     let summary = i2c.inspect(0x4000_5400, "i2c1", &InspectOpts::default());

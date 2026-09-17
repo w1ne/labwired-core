@@ -15,7 +15,7 @@ mod esp32c3_i2c_waveform_tests {
     use crate::cpu::CortexM;
     use crate::logic_capture::LogicEdge;
     use crate::logic_capture::LogicSource;
-    use crate::peripherals::components::Ssd1306;
+    use crate::peripherals::components::ssd1306;
     use crate::{Bus, Machine};
     use std::collections::BTreeMap;
 
@@ -76,7 +76,7 @@ mod esp32c3_i2c_waveform_tests {
             ("sda".to_string(), format!("GPIO{SDA_PIN}")),
             ("scl".to_string(), format!("GPIO{SCL_PIN}")),
         ]);
-        bus.attach_i2c_slave_with_route("i2c0", Box::new(Ssd1306::new(0x3C)), Some(&route))
+        bus.attach_i2c_slave_with_route("i2c0", Box::new(ssd1306(0x3C)), Some(&route))
             .unwrap();
         bus.wire_esp32c3_i2c_pads();
 

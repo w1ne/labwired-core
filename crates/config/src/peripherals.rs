@@ -577,6 +577,27 @@ pub struct I2cSpec {
     /// addressable (a factory NVM / OTP array). See [`IndexedTable`].
     #[serde(default)]
     pub indexed_tables: Vec<IndexedTable>,
+    /// Width of the register POINTER in bytes. `1` (the default) is the
+    /// ordinary register-pointer part: the first byte of a write selects a
+    /// register, the rest are data.
+    ///
+    /// `0` is the **pointerless** shape: the part has exactly one addressable
+    /// register (declared at `addr: 0`) and EVERY byte on the wire is that
+    /// register's data — there is no pointer to write and none to read past.
+    /// The NXP PCF8574 I/O expander is the canonical one: "the master sends one
+    /// byte, which is the port", and a model that insisted on a pointer byte
+    /// would consume the port value as an address and then latch the NEXT byte,
+    /// which for a single-byte write means the port never changes at all.
+    ///
+    /// Nothing else in the register-pointer engine changes: `write_mask`,
+    /// `bits:`, `source:`, reset values and the Tier-2 rules all behave exactly
+    /// as they do for a pointered part.
+    #[serde(default = "default_pointer_bytes")]
+    pub pointer_bytes: u8,
+}
+
+pub(crate) fn default_pointer_bytes() -> u8 {
+    1
 }
 
 /// One **indexed readout port**: the datasheet shape for reading storage that
@@ -1021,7 +1042,7 @@ pub(crate) fn default_addr_mask() -> u8 {
 }
 
 /// CRC-8 parameters. Sensirion parts use `poly 0x31`, `init 0xFF`, no final XOR.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub struct Crc8Spec {
     pub poly: u8,
     pub init: u8,
@@ -1147,6 +1168,15 @@ pub struct RegisterSpec {
     /// [`ZeroWhen`] — the VEML7700 `ALS_SD` shutdown bit is the motivating case.
     #[serde(default)]
     pub zero_when: Option<ZeroWhen>,
+    /// NAMED bit-fields, so a Tier-2 rule can say `set: INT_STATUS.DATA_RDY`
+    /// and `field(CONFIG.GAIN)` instead of carrying a hand-computed mask. Pure
+    /// nomenclature: naming bits changes no read or write behaviour, which is
+    /// why adding this to a shipped descriptor cannot move its transcript.
+    ///
+    /// Distinct from [`fields`](Self::fields), which ASSEMBLES a composite
+    /// measurement word out of sourced sub-values. See [`BitFieldSpec`].
+    #[serde(default)]
+    pub bits: Vec<BitFieldSpec>,
     /// Datasheet side effect of a READ of this register, in the SystemRDL
     /// vocabulary the MCU register machine already uses ([`ReadAction`]).
     ///
@@ -1429,6 +1459,42 @@ pub struct DeviceBehavior {
     /// primitives.
     #[serde(default)]
     pub analog: Option<AnalogSpec>,
+    /// For the `display` primitive: the datasheet-shaped description of a
+    /// framebuffer panel — geometry, pixel format, RAM layout, command/data
+    /// framing and the command table. Absent for non-display primitives.
+    #[serde(default)]
+    pub display: Option<DisplaySpec>,
+
+    // ── Tier 2 (`crates/config/src/rules.rs`) ──────────────────────────────
+    //
+    // Every field below is optional and defaults to empty, so a Tier-1
+    // descriptor deserialises byte for byte as it did before they existed.
+    /// Declared states. The FIRST is the reset state. Empty ⇒ the part has one
+    /// implicit state named `""` and `state == …` is never true.
+    #[serde(default)]
+    pub states: Vec<String>,
+    /// Integer variables and their reset values. The scratch a rule needs that
+    /// is not a register the master can see — a bit counter, a latched opcode.
+    #[serde(default)]
+    pub vars: BTreeMap<String, i64>,
+    /// Sample queues (see [`FifoSpec`]).
+    #[serde(default)]
+    pub fifos: Vec<FifoSpec>,
+    /// Pin ROLES this part drives. Each binds to a pad through a `config:` key
+    /// exactly as [`pins`](Self::pins) does — the key is the role name unless
+    /// [`output_pins`](Self::output_pins) maps it to a different one.
+    #[serde(default)]
+    pub outputs: Vec<String>,
+    /// Optional role → `config:` key map for [`outputs`](Self::outputs), for a
+    /// part whose config key is not simply the role name (`INT` → `int_pin`).
+    #[serde(default)]
+    pub output_pins: BTreeMap<String, String>,
+    /// Message framing for a command-shell part (see [`FrameSpec`]).
+    #[serde(default)]
+    pub frames: Option<FrameSpec>,
+    /// The rules themselves (see [`Rule`]). Fire in declaration order.
+    #[serde(default)]
+    pub rules: Vec<Rule>,
     /// **Free-running device timers** — the part's own clock, not the bus's.
     /// Each fires [`TimingAction`]s into the register file after a delay
     /// (`after_us`) or on a period (`period_us`), advanced by the device's
@@ -1554,6 +1620,384 @@ pub struct AnalogAboveLast {
     /// hold the last curve point's voltage.
     #[serde(default)]
     pub floor_mv: Option<f32>,
+}
+
+// ─── the `display` primitive ────────────────────────────────────────────────
+//
+// A framebuffer panel is not a register file, which is why it needed a
+// primitive of its own rather than another `spi_device` with a long register
+// list. What a display controller datasheet actually states is: the frame
+// memory's extent and pixel format, how a byte on the wire is told apart from
+// a command (a D/C pad on SPI, a control byte on I²C), which opcodes move the
+// address counters, and how those counters wrap. All five are data. The engine
+// (`peripherals/components/declarative_display.rs`) is the only place that
+// knows what "wrap into the next page" means.
+//
+// WHAT IS DELIBERATELY NOT HERE: pixel-value transforms. The model stores what
+// firmware wrote, byte for byte. Gamma, colour inversion and contrast are
+// recorded as panel FLAGS in the artifact's meta, never applied to the stored
+// bytes — a twin that pre-rendered its own idea of the picture could not be
+// compared against a photograph of the glass.
+
+/// The `behavior.display` section: one framebuffer panel, entirely as data.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySpec {
+    /// Frame-memory width in pixels. THE CONTROLLER'S frame memory, not the
+    /// glass — a 170×320 module is a smaller glass wired to a subset of a
+    /// 240-column controller, and firmware picks the strip with the window
+    /// commands. Use `glass_crop` to expose the crop as `config:` keys.
+    pub width: u16,
+    /// Frame-memory height in pixels.
+    pub height: u16,
+    pub pixel_format: DisplayPixelFormat,
+    /// `crate::inspect::artifact_format` name the paint artifact carries, so a
+    /// consumer decoding the bytes reads the same string it always did.
+    pub artifact_format: String,
+    pub ram: DisplayRam,
+    /// How a command byte is told apart from a data byte.
+    pub dc: DisplayDc,
+    #[serde(default)]
+    pub addressing: DisplayAddressing,
+    /// Power-on window, when it is not simply the whole frame memory.
+    #[serde(default)]
+    pub window: DisplayWindow,
+    /// MADCTL-style orientation bits, for controllers whose frame memory is
+    /// addressed in a rotated coordinate system. Absent ⇒ no rotation.
+    #[serde(default)]
+    pub orientation: Option<DisplayOrientation>,
+    /// Named integer cells a command can store into (`set_var`) and the
+    /// orientation reads. Values are the power-on / reset contents.
+    #[serde(default)]
+    pub vars: std::collections::BTreeMap<String, u32>,
+    /// I²C slave address, for a panel framed by a control byte. Ignored for a
+    /// D/C-pin panel, which is selected by CS.
+    #[serde(default)]
+    pub default_address: Option<u8>,
+    /// This module's supply connection is modelled: the engine exposes a
+    /// `powered` config key, refuses the bus when it is explicitly `false`, and
+    /// reports `powered` in the artifact. See the ST7789 descriptor for why an
+    /// ABSENT key means powered.
+    #[serde(default)]
+    pub supply_gated: bool,
+    /// The glass may show a strip of the frame memory: the engine exposes
+    /// `col_offset` / `row_offset` / `cols` / `rows` config keys, all-or-nothing,
+    /// and crops the artifact to that fixed physical window.
+    #[serde(default)]
+    pub glass_crop: bool,
+    /// The command table. An opcode with no entry here is consumed and ignored,
+    /// which is what a controller does with a command it does not implement.
+    #[serde(default)]
+    pub commands: Vec<DisplayCommand>,
+}
+
+/// How the frame memory encodes a pixel.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayPixelFormat {
+    /// 1 bpp, one byte = 8 vertically-stacked pixels of one page (SSD1306,
+    /// SH1107, PCD8544). The write unit is one byte.
+    MonoPage,
+    /// 16 bpp, big-endian on the wire (ST7789, ILI9341). The write unit is two
+    /// bytes, high byte first.
+    Rgb565,
+    /// 24 bpp, one byte per channel.
+    Rgb888,
+    /// Two 1 bpp planes, black then red (tri-colour e-paper).
+    Tricolor,
+}
+
+impl DisplayPixelFormat {
+    /// Bytes the controller accumulates before it commits one write unit and
+    /// advances the address counters.
+    pub fn write_unit_bytes(self) -> usize {
+        match self {
+            Self::MonoPage | Self::Tricolor => 1,
+            Self::Rgb565 => 2,
+            Self::Rgb888 => 3,
+        }
+    }
+}
+
+/// Frame-memory shape.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayRam {
+    /// Page count for a page-major panel (height / 8). Absent for row-major.
+    #[serde(default)]
+    pub pages: Option<u16>,
+    /// Total frame-memory size. Stated so the descriptor says what the
+    /// controller holds; the engine CHECKS it against the geometry rather than
+    /// trusting it, so the two cannot drift apart.
+    pub bytes: u32,
+    pub layout: DisplayRamLayout,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayRamLayout {
+    /// `byte(page × width + column)` — the paged OLED/LCD GDDRAM.
+    PageMajor,
+    /// `pixel(row × width + column)` — the linear TFT frame memory.
+    RowMajor,
+}
+
+/// Where the command/data distinction comes from.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayDc {
+    pub source: DisplayDcSource,
+    /// `pin` only: the abstract pin role, resolved to a pad through the
+    /// `dc_pin` config key. Named for symmetry with `behavior.pins`.
+    #[serde(default)]
+    pub pin_role: Option<String>,
+    /// `pin` only: the D/C level that frames a COMMAND (0 for every MIPI DCS
+    /// panel). A data byte is the other level.
+    #[serde(default)]
+    pub command_level: u8,
+    /// `control_byte` only: the control-byte value that opens a COMMAND
+    /// stream. Any other value opens the data stream — which is what the
+    /// SSD1306 does with Co/D̄C̄ (0x00 vs 0x40).
+    #[serde(default)]
+    pub command_value: Option<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayDcSource {
+    /// A dedicated D/C pad sampled at transfer time (4-wire SPI).
+    Pin,
+    /// The first byte of each I²C transaction selects the stream for the rest
+    /// of it. Command PARAMETERS then arrive on the command stream, and every
+    /// data-stream byte is frame memory.
+    ControlByte,
+}
+
+/// Which addressing modes the controller implements and which one it powers on
+/// in.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayAddressing {
+    #[serde(default)]
+    pub modes: Vec<DisplayAddressingMode>,
+    #[serde(default)]
+    pub default: DisplayAddressingMode,
+}
+
+impl Default for DisplayAddressing {
+    fn default() -> Self {
+        Self {
+            modes: vec![DisplayAddressingMode::Horizontal],
+            default: DisplayAddressingMode::Horizontal,
+        }
+    }
+}
+
+/// How the address counters advance after a write unit is committed.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayAddressingMode {
+    /// Column first; past the column end, back to the column start and on to
+    /// the next page/row; past that end too, back to the start of both.
+    #[default]
+    Horizontal,
+    /// Page first; past the page end, back to the page start and on to the next
+    /// column. Page-major panels only.
+    Vertical,
+    /// Column only, clamped at the last column of the frame memory: the page
+    /// never changes and nothing wraps. Page-major panels only.
+    Page,
+}
+
+/// Power-on window, where it is not the whole frame memory. Each absent bound
+/// defaults to the last column / row / page the geometry allows, which is what
+/// every panel here powers on with.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DisplayWindow {
+    #[serde(default)]
+    pub col_end: Option<u16>,
+    #[serde(default)]
+    pub row_end: Option<u16>,
+    #[serde(default)]
+    pub page_end: Option<u16>,
+}
+
+/// MADCTL-style orientation: which bits of which var swap and mirror the axes.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayOrientation {
+    /// Name of the var (see [`DisplaySpec::vars`]) holding the orientation byte.
+    pub var: String,
+    /// Exchange page and column address order (MADCTL MV). Changes what a legal
+    /// column IS, so it also moves the window clamp.
+    pub swap_bit: u8,
+    /// Mirror the column address order (MADCTL MX).
+    pub mirror_x_bit: u8,
+    /// Mirror the page address order (MADCTL MY).
+    pub mirror_y_bit: u8,
+}
+
+/// One entry of the controller's command table.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayCommand {
+    pub opcode: u8,
+    /// Inclusive end of an opcode RANGE, for the families that encode an
+    /// argument in the opcode's low bits (SSD1306 `0xB0..=0xB7` = set page).
+    /// Absent ⇒ this entry is the single `opcode`.
+    #[serde(default)]
+    pub opcode_end: Option<u8>,
+    /// Datasheet mnemonic. Carried for error messages and review; nothing
+    /// dispatches on it.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Parameter bytes this command consumes before its actions run.
+    #[serde(default)]
+    pub args: u8,
+    #[serde(default, rename = "do")]
+    pub actions: Vec<DisplayAction>,
+}
+
+/// What a command does when its parameters are complete.
+///
+/// Written in YAML as a ONE-KEY MAP — `{ set_window: { … } }`, `{ invert: true }`,
+/// `{ reset_control: true }` — which is the shape the rest of the part schema
+/// uses and the shape an LLM writes without being told. It is a struct of
+/// optional fields rather than a Rust enum because `serde_yaml` renders an
+/// externally-tagged enum as a YAML `!tag`, and a schema whose action syntax is
+/// `!set_window` in one place and `{ key: value }` everywhere else is a schema
+/// people get wrong. Exactly one field must be set; the engine's descriptor
+/// validation refuses zero or two, so a typo'd action name is a load error that
+/// names the command rather than a silent no-op.
+///
+/// These are the DISPLAY-SPECIFIC actions, and they exist because the Phase C
+/// rule vocabulary (`set`/`clear` bits, `write REG = expr`, `goto`, `timer`,
+/// `push`/`pop`, `pin`) has no word for an address window or a RAM stream.
+/// Everything a controller command does to a framebuffer is one of these nine.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DisplayAction {
+    /// Set one axis's window `[start, end]` and move that axis's cursor to the
+    /// start (CASET / RASET / SSD1306 0x21 / 0x22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_window: Option<DisplaySetWindow>,
+    /// Move one axis's cursor without touching its window (SSD1306 set-page and
+    /// the two column-nibble commands).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_cursor: Option<DisplaySetCursor>,
+    /// Select the addressing mode by index into `addressing.modes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_mode: Option<DisplayValue>,
+    /// Store an integer into a named var (MADCTL).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_var: Option<DisplaySetVar>,
+    /// Open the RAM write stream; subsequent data bytes are pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ram_write: Option<DisplayRamWrite>,
+    /// DISPON / DISPOFF.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_on: Option<bool>,
+    /// SLPOUT / SLPIN. A panel that never woke is dark whatever is in memory,
+    /// so this is reported beside `display_on` rather than folded into it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub awake: Option<bool>,
+    /// INVON / INVOFF. Recorded, never applied to the stored bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invert: Option<bool>,
+    /// Software reset: control state (flags, vars, window, cursors) returns to
+    /// power-on. FRAME MEMORY IS NOT CLEARED — ST7789V §9.1.22 p.202,
+    /// "Contents of memory is not cleared" — so a painted frame survives.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reset_control: bool,
+}
+
+impl DisplayAction {
+    /// How many of the mutually exclusive action fields this entry sets.
+    /// Anything but 1 is a descriptor error.
+    pub fn arms_set(&self) -> usize {
+        self.set_window.is_some() as usize
+            + self.set_cursor.is_some() as usize
+            + self.set_mode.is_some() as usize
+            + self.set_var.is_some() as usize
+            + self.ram_write.is_some() as usize
+            + self.display_on.is_some() as usize
+            + self.awake.is_some() as usize
+            + self.invert.is_some() as usize
+            + self.reset_control as usize
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySetWindow {
+    pub axis: DisplayAxis,
+    pub start: DisplayValue,
+    pub end: DisplayValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySetCursor {
+    pub axis: DisplayAxis,
+    #[serde(default)]
+    pub part: DisplayCursorPart,
+    pub value: DisplayValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplaySetVar {
+    pub name: String,
+    pub value: DisplayValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayRamWrite {
+    /// Reset the cursors to the window start (RAMWR, 0x2C). `false` continues
+    /// from where the last write stopped (WRMEMC, 0x3C — §9.1.33 p.225).
+    #[serde(default = "default_true")]
+    pub reset_cursor: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayAxis {
+    Col,
+    Row,
+    Page,
+}
+
+/// Which part of a cursor a `set_cursor` replaces. The SSD1306 sets a column
+/// in two halves (0x00..0x0F low nibble, 0x10..0x1F high nibble), so a
+/// read-modify-write on the cursor is part of the command set, not a quirk.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayCursorPart {
+    #[default]
+    All,
+    LowNibble,
+    HighNibble,
+}
+
+/// Where a command action's integer comes from. EXACTLY ONE source field must
+/// be set; the mask and the clamp are applied after it, in that order.
+///
+/// Masking and clamping are both here and both explicit because the two panels
+/// ported first disagree about which they do, and the difference is visible:
+/// the SSD1306 MASKS a column bound (`0x21` keeps the low 7 bits, so 200
+/// becomes 72) while the ST7789 CLAMPS it (`.min(239)`, so 200 stays 200 and
+/// 300 becomes 239). A schema that offered only one of the two would have
+/// silently moved one panel's pixels.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DisplayValue {
+    /// Source: a constant.
+    #[serde(default)]
+    pub value: Option<u32>,
+    /// Source: `(opcode & opcode_mask) >> opcode_shift`, for an opcode range.
+    #[serde(default)]
+    pub opcode_mask: Option<u8>,
+    #[serde(default)]
+    pub opcode_shift: u8,
+    /// Source: these parameter-byte indices, most-significant first.
+    #[serde(default)]
+    pub args: Option<Vec<u8>>,
+    /// Applied to the source value.
+    #[serde(default)]
+    pub mask: Option<u32>,
+    /// Clamp to the last legal index on the action's axis, in the CURRENT
+    /// orientation (the swap bit changes what a legal column is).
+    #[serde(default)]
+    pub clamp_axis_max: bool,
 }
 
 impl PeripheralDescriptor {

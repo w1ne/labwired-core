@@ -630,6 +630,13 @@ impl Peripheral for Esp32Spi {
         }
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for dev in &mut self.attached_devices {
+            crate::peripherals::device::drain_spi_pin_drives(&mut **dev, out);
+        }
+    }
+
     /// This model needs the walk EXACTLY when it is not on the scheduler.
     ///
     /// ⚠️ It used to be a flat `false` under the note "inert walk: SPI

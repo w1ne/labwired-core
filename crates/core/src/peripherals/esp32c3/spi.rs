@@ -448,6 +448,13 @@ impl Peripheral for Esp32c3Spi {
         }
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for dev in &mut self.attached_devices {
+            crate::peripherals::device::drain_spi_pin_drives(&mut **dev, out);
+        }
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         crate::peripherals::esp_gpspi_wire::SPI_LINES
     }

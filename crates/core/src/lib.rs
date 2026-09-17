@@ -1116,6 +1116,29 @@ pub trait Peripheral: std::fmt::Debug + Send {
         self.advance_attached_i2c_us(us);
     }
 
+    /// **Tier 2 pin drive.** Collect `(device id, pin role, level)` from every
+    /// off-chip device this controller hosts and clear their queues.
+    ///
+    /// The controller half of the same seam
+    /// [`for_each_attached_sim_input`](Self::for_each_attached_sim_input) is: an
+    /// I²C slave or SPI device is owned by its CONTROLLER, so a walk over
+    /// `SystemBus::peripherals` alone cannot see it, and a declarative part's
+    /// INT line would be unreachable from the bus that has to put it on a pad.
+    ///
+    /// Implementations forward to
+    /// [`crate::peripherals::device::drain_i2c_pin_drives`] /
+    /// [`drain_spi_pin_drives`](crate::peripherals::device::drain_spi_pin_drives)
+    /// rather than reading the device themselves, so the id resolution stays in
+    /// one place. Default: nothing, which is correct for every non-controller.
+    ///
+    /// ⚠️ A controller that hosts attachable devices and does NOT implement this
+    /// silently subtracts every Tier-2 pin those devices drive — the same
+    /// invisible-device failure the sim-input seam was introduced for. The
+    /// rule of thumb is identical: if a type appears in
+    /// [`crate::bus::SystemBus::attach_i2c_slave`] or `attach_spi_device`, it
+    /// owes an implementation here.
+    fn drain_attached_pin_drives(&mut self, _out: &mut Vec<(String, String, bool)>) {}
+
     fn dma_request(&mut self, _request_id: u32) {}
     fn snapshot(&self) -> serde_json::Value {
         serde_json::Value::Null

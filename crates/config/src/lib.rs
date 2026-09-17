@@ -42,6 +42,14 @@ pub use peripherals::*;
 pub use size::*;
 pub use test_script::*;
 
+pub mod expr;
+pub mod rules;
+
+pub use rules::{
+    compile_rules, validate_rule_names, Action, BitFieldSpec, CompiledAction, CompiledRule, Event,
+    FifoOverflow, FifoSpec, FrameSpec, PinEdge, RegBits, Rule, RuleCompileError, RuleNames,
+};
+
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;

@@ -707,6 +707,13 @@ impl Peripheral for Nrf52Twim {
         }
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for cell in &self.attached_devices {
+            crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
+        }
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         TWIM_LINES
     }

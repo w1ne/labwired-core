@@ -16,7 +16,8 @@ const PAGES: usize = 16; // 128 rows / 8 rows per page
 /// vertical-(column-)addressing modes. Control bytes 0x00 (command stream) and
 /// 0x40 (data stream) are honoured; unsupported commands are silently ignored.
 ///
-/// The SH1107 differs from the [`super::ssd1306::Ssd1306`] in three ways that
+/// The SH1107 differs from the SSD1306 (`configs/devices/ssd1306.yaml`, read by
+/// the [`super::declarative_display`] engine) in three ways that
 /// matter for the framebuffer: 16 pages instead of 8 (128 rows), a 7-bit column
 /// address (higher-nibble commands 0x10–0x17), and single-byte addressing-mode
 /// selects (0x20 = page, 0x21 = vertical) rather than the SSD1306's

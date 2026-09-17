@@ -23,7 +23,7 @@
 //! as both the S3 I2C oracle and the S3 display differential.
 
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::Ssd1306;
+use labwired_core::peripherals::components::GenericDisplay;
 use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
 use labwired_core::Bus;
@@ -79,7 +79,7 @@ external_devices:
     bus
 }
 
-fn read_ssd1306(bus: &SystemBus) -> &Ssd1306 {
+fn read_ssd1306(bus: &SystemBus) -> &GenericDisplay {
     let idx = bus
         .find_peripheral_index_by_name("i2c0")
         .expect("S3 bus exposes i2c0");
@@ -92,7 +92,7 @@ fn read_ssd1306(bus: &SystemBus) -> &Ssd1306 {
         .attached_slaves()
         .iter()
         .filter(|s| s.address() == SSD1306_ADDR)
-        .find_map(|s| s.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+        .find_map(|s| s.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("SSD1306 attached @ 0x3C")
 }
 

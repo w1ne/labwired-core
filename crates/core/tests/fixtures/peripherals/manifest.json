@@ -718,14 +718,59 @@
       "device_type": "pcf8574",
       "label": "PCF8574 I/O Expander",
       "summary": "NXP PCF8574 8-bit I²C quasi-bidirectional port expander.",
-      "detail": "Default address 0x20. Write one byte to latch outputs; read returns the port value (host may override via SimInput port).",
+      "detail": "NXP PCF8574 at 0x20 (A2/A1/A0 select 0x20-0x27; the PCF8574A variant is 0x38-0x3F). Every byte on the wire is the port - there is no register pointer - and the port powers up at 0xFF, all pins released to their weak pull-ups. Writing a bit low drives that pad hard low; writing it high releases the pad, which is also how the datasheet says to use a pin as an input. The eight pads are bound through the optional p0_pin..p7_pin config keys, so an expander wired for four LEDs binds four. NOT modelled: the input direction (an external edge on a pad does not update the readable port) and the open-drain INT output; a read returns the last value written or driven through the `port` stimulus channel.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
         {
           "name": "i2c_address",
           "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x20."
+          "doc": "7-bit slave address. Defaults to 0x20; A2/A1/A0 select 0x20-0x27, and the PCF8574A variant uses 0x38-0x3F."
+        },
+        {
+          "name": "port",
+          "ty": "float",
+          "doc": "Initial port byte (0-255). Default 255, the datasheet power-on state. Drive it at runtime with the `port` input channel."
+        },
+        {
+          "name": "p0_pin",
+          "ty": "str",
+          "doc": "Pad P0 drives (e.g. \"PC0\"). Optional - an unbound pin drives nothing."
+        },
+        {
+          "name": "p1_pin",
+          "ty": "str",
+          "doc": "Pad P1 drives. Optional."
+        },
+        {
+          "name": "p2_pin",
+          "ty": "str",
+          "doc": "Pad P2 drives. Optional."
+        },
+        {
+          "name": "p3_pin",
+          "ty": "str",
+          "doc": "Pad P3 drives. Optional."
+        },
+        {
+          "name": "p4_pin",
+          "ty": "str",
+          "doc": "Pad P4 drives. Optional."
+        },
+        {
+          "name": "p5_pin",
+          "ty": "str",
+          "doc": "Pad P5 drives. Optional."
+        },
+        {
+          "name": "p6_pin",
+          "ty": "str",
+          "doc": "Pad P6 drives. Optional."
+        },
+        {
+          "name": "p7_pin",
+          "ty": "str",
+          "doc": "Pad P7 drives. Optional."
         }
       ],
       "labs": [],

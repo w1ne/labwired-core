@@ -163,6 +163,49 @@ impl SystemBus {
     /// drive DISJOINT pins, so merging their passes into one insertion-ordered
     /// pass leaves every register's final value unchanged. The HC-SR04 keeps its
     /// own `service_hcsr04` because it also rides the event-scheduler path.
+    /// **Tier-2 device pin drive.** Collect every declarative I²C / SPI device's
+    /// queued `(role, level)` transitions and put them on their pads.
+    ///
+    /// Two phases on purpose. Phase one walks the controllers, which each hand
+    /// back what their attached devices queued; phase two writes the pads. They
+    /// cannot be one loop because both borrow the bus — and keeping them apart
+    /// is also what makes the pad write go through the ordinary
+    /// [`DevicePins`](crate::bus::DevicePins) methods rather than a second,
+    /// wider path into the peripheral table.
+    ///
+    /// Early-outs on a bus with no such device, which is almost every bus.
+    pub(crate) fn service_device_pin_drives(&mut self) {
+        if self.device_pin_pads.is_empty() {
+            return;
+        }
+        let mut drives: Vec<(String, String, bool)> = Vec::new();
+        for entry in self.peripherals.iter_mut() {
+            entry.dev.drain_attached_pin_drives(&mut drives);
+        }
+        if drives.is_empty() {
+            return;
+        }
+        for (device_id, role, level) in drives {
+            let Some(pad) = self
+                .device_pin_pads
+                .iter()
+                .find(|p| p.device_id == device_id && p.role == role)
+                .cloned()
+            else {
+                // A role with no pad is a part wired for an interrupt line the
+                // placement did not connect. That is a real board, not a bug:
+                // the rule still ran, the line simply goes nowhere.
+                continue;
+            };
+            // ⚠️ BOTH SEAMS — see `rotary_encoder.rs`. `drive_idr_bit` lands
+            // only where a store to the input register lands (STM32);
+            // `drive_input_bit` is the external-world seam the read-only-IN
+            // models (EFR32, SAM, ESP32-C3) actually sample.
+            let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, level);
+            crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, level);
+        }
+    }
+
     pub(crate) fn service_gpio_devices(&mut self) {
         if self.gpio_devices.is_empty() {
             return;

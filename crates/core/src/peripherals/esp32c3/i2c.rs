@@ -1054,6 +1054,11 @@ impl Peripheral for Esp32c3I2c {
         self.core.advance_time_us(us);
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        self.core.drain_pin_drives(out);
+    }
+
     fn for_each_attached_sim_input(
         &mut self,
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,

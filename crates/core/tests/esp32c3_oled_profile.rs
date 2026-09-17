@@ -14,7 +14,7 @@ use labwired_core::boot::esp32s3_rom::RomImages;
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::RiscV;
 use labwired_core::memory::ProgramImage;
-use labwired_core::peripherals::components::Ssd1306;
+use labwired_core::peripherals::components::{ssd1306, GenericDisplay};
 use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
 use labwired_core::{Arch, Bus, Cpu, DebugControl, Machine, SimulationObserver};
 use std::collections::HashMap;
@@ -155,7 +155,7 @@ fn ssd1306_framebuffer(machine: &Machine<RiscV>) -> Vec<u8> {
         .attached_slaves()
         .iter()
         .filter(|d| d.address() == 0x3C)
-        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<GenericDisplay>()))
         .expect("SSD1306 attached at 0x3C")
         .framebuffer()
         .to_vec()

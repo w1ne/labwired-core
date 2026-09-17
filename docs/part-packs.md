@@ -155,9 +155,9 @@ clear both.
 ## What a pack cannot do
 
 A pack is data interpreted by a **primitive** — `i2c_device`, `spi_device`,
-`analog_source`, `quadrature`, `matrix`, `one_wire`, `pulse_echo`. Those
-primitives are the irreducible timing algorithms, and they live in Rust in this
-repository.
+`analog_source`, `display`, `quadrature`, `matrix`, `one_wire`, `pulse_echo`.
+Those primitives are the irreducible timing algorithms, and they live in Rust in
+this repository.
 
 `analog_source` is the primitive for parts whose whole interface is one
 analogue voltage (a Sharp IR ranger's `Vo`, an MQ-x module's `AOUT`): the
@@ -166,9 +166,20 @@ stated out-of-band rules (`below_first: clamp`, `above_last.floor_mv`), and the
 engine owns the rest (SimInput plumbing, mV→ADC count, attach). The proof part
 is `gp2y0a21.yaml`.
 
+`display` is the primitive for framebuffer panels. The descriptor carries the
+frame memory's geometry and pixel format, how a command byte is told apart from
+a data byte (a D/C pad on 4-wire SPI, a control byte on I²C), the command table
+as `{ opcode, args, do }`, and how the address counters wrap per addressing
+mode. The engine owns the counter arithmetic, the window wrap, the orientation
+map and the paint artifact — one implementation for every panel. Pixel VALUES
+are never transformed: contrast, gamma and inversion are reported as flags, so
+what the artifact holds is what firmware wrote and a photograph of the glass can
+be compared against it. The proof parts are `ssd1306.yaml` (I²C, page-major
+1 bpp) and `st7789.yaml` (SPI, row-major RGB565 with MADCTL orientation).
+
 So: a part whose datasheet behaviour is a register map, a command/response
-protocol, or one of the pin-timing shapes above is pure data and needs nothing
-from us. A part with a genuinely new wire protocol needs a new primitive, which
+protocol, a framebuffer command table, or one of the pin-timing shapes above is
+pure data and needs nothing from us. A part with a genuinely new wire protocol needs a new primitive, which
 is a change to this crate. That boundary is honest and worth stating to a
 customer up front: we can onboard your sensor catalogue without seeing it, but a
 novel protocol is engineering, not configuration.

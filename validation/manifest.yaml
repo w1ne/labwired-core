@@ -421,7 +421,24 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: 553ae45a4d0a0a0eba9c4566cda7a36f56d6ce10ca9d883e2566b47384bc7d9d
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 5a97d359d7c1cbc832237ecf6b16d29780bdc7c19ac41afd3e8f3837dd9e297a
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -700,7 +717,24 @@ boards:
     # golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
     # matches. No other pinned firmware on any board reaches the encoding, so
     # nothing a silicon capture asserts moved. No live re-capture is evidenced here.
-    drift_ack_digest: 553ae45a4d0a0a0eba9c4566cda7a36f56d6ce10ca9d883e2566b47384bc7d9d
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 5a97d359d7c1cbc832237ecf6b16d29780bdc7c19ac41afd3e8f3837dd9e297a
     models:
       - crates/core/src/cpu/cortex_m.rs
       - crates/core/src/decoder/arm.rs
@@ -1137,7 +1171,24 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: 138a55449bf51fcba4c7a4d807fe2da35e8af161179b14c7ae56ce623f73f57f
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 8954741ebf82c07cf152ebe782b419e0ddc7cbb8d8fb1ab44ddbc8e5e4f8dccc
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -1383,7 +1434,24 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: 526abebc48a8c683b6a94f8a821973be645767ff2ff95be5b2a97d3b84fe4be8
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 9391634fbc6084eeac47d85e20f265d51b8a07c98bf3b16ea23e63e77bc20a9c
     models:
       - crates/core/src/cpu/riscv.rs
       - crates/core/src/decoder/riscv.rs
@@ -2420,7 +2488,24 @@ boards:
     # idr_pin_level_tests (3), all green. This is an ACK, NOT A CAPTURE — a live
     # re-capture on this board is still owed.
     drift_ack: 2026-08-24
-    drift_ack_digest: 8526c7c4a93bb3877cf00548b4737d2d7d4d09e85138a0122cdd6937284b3253
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 940cf3646af29feae568e9f006610220667c32348393eaa2b3054cf0751671af
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -2901,7 +2986,24 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: 81da638fac713516cab1a0680ecf75150b7da7eb173a05e6af6340c010b763c6
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: dd97a77fc712a24ebceb322529b17b22d6c6286e9f29dc8ec1299bc2637a6345
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3404,7 +3506,24 @@ boards:
     # Offline session_can (5) and fdcan (4) tests pass. No physical-board
     # re-capture was performed. Keep the existing ack date and deadline;
     # this digest records the reviewed source, not new silicon evidence.
-    drift_ack_digest: c15672d2caebd93604c5f93620a20c82f99ca9f334473b75608f83caec5c810b
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 85a3b558de29c3b9695a4daf2ee42266d83f9698930346f3fcab34574e0f2f37
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     models:
       - crates/core/src/cpu/cortex_m.rs
@@ -3905,7 +4024,24 @@ boards:
     # this board's own conformance/oracle sim arms and gpio's own suites.
     # This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
     drift_ack: 2026-09-01
-    drift_ack_digest: ccc6b826ca034ca2e5ad2416f4ff9e8f929e388075173557341e7eff2bb7233b
+    # 2026-09-17 (perf/bus-scheduler-pass): per-instruction COST only, no model
+    # change. Three edits: `CortexM::step_execute` asks "is anything pending"
+    # before ranking exceptions (the ranking it now skips returned `None`, and
+    # the `exception_num != 0` arm already made the block dead); `SystemBus`
+    # negative-caches the hole between `extra_mem` windows, which an access
+    # wholly inside provably misses; and `RiscV` remembers an aligned fetch
+    # window base whose refill just failed instead of re-deriving the same
+    # failure every instruction (the fetch still falls through to
+    # `bus.read_u32`, the path it was already taking). No register map, reset
+    # value, timing or IRQ route is touched.
+    # EVIDENCE: seven runs of five firmwares at --max-steps 5000000 (nrf52840
+    # Zephyr step+batch, nrf52840 tier1, stm32f405 tier1 step+batch, esp32c3
+    # tier1, esp32c3 demo) hash 21/21 IDENTICAL over stdout, the cycle-stamped
+    # `--bus-trace-out` event list and the `[batched]` summary, against a
+    # binary built from 80c01390d. The digest moves because it hashes whole
+    # files. This is an ACK, NOT A CAPTURE — a live re-capture is still owed.
+    drift_ack: 2026-09-17
+    drift_ack_digest: 970341ad1513c7c05693912b7544299c264fa9041ce3db06ad73859d6e10d66c
     # 2026-08-05: deterministic motor plants (DC/BLDC physics + bus service) land; shared timer/bus paths may be watched for this board. Additive plant models; no live re-capture this session — tracked.
     # 2026-08-12: chip yaml adds bxcan1 (type bxcan @ 0x40006400, APB1ENR bit 25) for
     # Arduino matrix L8 loopback. Existing BxCan model; no register-map change to
@@ -4516,7 +4652,7 @@ boards:
       # changes. Behaviour-preserving extraction, not a model correction —
       # `pr-workspace-tests` green on all shards is what exercises this peripheral,
       # so nothing the silicon capture asserts changed and the capture stands.
-    drift_ack_digest: f161f882818714410cb4b04f37fe6ba0c3dadcd327d46b6ff05096998d61e06f
+    drift_ack_digest: 63503e5fbb189eba9682cfb3f1022dfc6c7da4f8df183fa9191aef60de57c49e
     models:
       - crates/core/src/cpu/xtensa_lx7.rs
       - crates/core/src/decoder/xtensa.rs

@@ -146,6 +146,16 @@ impl Peripheral for Nrf52SerialInstance {
         }
     }
 
+    /// Tier 2: collect this controller's attached devices' pin drives.
+    fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
+        for cell in self.twim.attached_devices() {
+            crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
+        }
+        for dev in &mut self.spim.attached_devices {
+            crate::peripherals::device::drain_spi_pin_drives(&mut **dev, out);
+        }
+    }
+
     /// ONE MMIO window, two personalities, two independent wires — so the
     /// probeable line names are the ones `ENABLE` has actually selected.
     ///
