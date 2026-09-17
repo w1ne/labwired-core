@@ -62,8 +62,8 @@
 use js_sys::{Array, Function, Object, Reflect, Uint8Array, WebAssembly};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::jit_framework::cortex_m::emit::{
-    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT, WIRE_CHAIN_DYNAMIC,
-    WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
+    FAULT_PC_SLOT, FAULT_RETIRED_SLOT, IT_STATE_SLOT, NEXT_PC_SLOT, RES_FLAG_SLOT,
+    WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT, WIRE_UNSUPPORTED,
 };
 use labwired_core::cpu::jit_framework::cortex_m::host::{pack_regs, unpack_regs};
 use labwired_core::cpu::jit_framework::cortex_m::CortexMFrontend;
@@ -318,6 +318,16 @@ impl BrowserJitCache {
     /// Mirrors `JitCache::total_hits` on the native side.
     pub fn total_hits(&self) -> u64 {
         self.total_hits
+    }
+
+    /// Number of compiled blocks currently installed, across both runtime
+    /// adapters (the Xtensa and Cortex-M maps). Exposed to JS as
+    /// `WasmSimulator::jit_compiled_blocks()` so the browser-layer gate can
+    /// distinguish "the emit walk installed a block" from "every dispatch
+    /// was refused" — `total_hits` alone cannot, since a cache that never
+    /// compiled has no hits either.
+    pub fn compiled_blocks(&self) -> u64 {
+        (self.compiled.len() + self.compiled_thumb.len()) as u64
     }
 
     /// Compile an [`EmittedBlock`] and install it under `(pc, ps_bits)`.
@@ -609,7 +619,9 @@ extern "C" {
 
 const THUMB_MIN_PROFITABLE: u32 = 4;
 const THUMB_CODE_WINDOW: usize = 4096;
-const THUMB_REG_BYTES: usize = 80;
+/// Register file + the control slots the emitted body writes (through
+/// [`IT_STATE_SLOT`]), rounded up so the IT slot is inside the read-back.
+const THUMB_REG_BYTES: usize = 96;
 
 type ThumbLoadClosure = Closure<dyn FnMut(i32, i32, i32) -> i32>;
 type ThumbStoreClosure = Closure<dyn FnMut(i32, i32, i32)>;
@@ -742,11 +754,14 @@ impl CortexMBrowserBlock {
         })
     }
 
+    /// Returns `(wire, next_pc, clear_exclusive, fault_pc, fault_retired,
+    /// fault_it_state)`; the last is the pre-fault IT state the caller must
+    /// reinstall before the interpreter resumes mid-IT.
     fn run(
         &mut self,
         cpu: &mut CortexM,
         ram: &mut [u8],
-    ) -> Result<(i32, u32, bool, u32, u32), JsValue> {
+    ) -> Result<(i32, u32, bool, u32, u32, u8), JsValue> {
         let mut x = [0u32; 16];
         pack_regs(cpu, &mut x);
         let mut bytes = [0u8; THUMB_REG_BYTES];
@@ -804,7 +819,15 @@ impl CortexMBrowserBlock {
                 bytes[RES_FLAG_SLOT as usize + 2],
                 bytes[RES_FLAG_SLOT as usize + 3],
             ]) != 0;
-        Ok((wire, next_pc, clear_exclusive, fault_pc, fault_retired))
+        let fault_it_state = bytes[IT_STATE_SLOT as usize];
+        Ok((
+            wire,
+            next_pc,
+            clear_exclusive,
+            fault_pc,
+            fault_retired,
+            fault_it_state,
+        ))
     }
 }
 
@@ -892,8 +915,15 @@ fn thumb_vfp_set(host: &ThumbHost, sd: i32, bits: i32) {
     }
 }
 
-/// Run one compiled Thumb block at `cpu.pc`. Returns guest insns retired
-/// (0 = fall back to the interpreter).
+/// Run one compiled Thumb block at `cpu.pc`.
+///
+/// Returns the number of guest instructions the block committed before it
+/// finished or faulted; `0` means the block committed nothing and the caller
+/// should interpret one instruction. A non-zero return from a block that
+/// stopped on a fault is still charged — the native `run_jit_loop` consumes
+/// `actual_n` before it interprets, and dropping the pre-fault instructions
+/// makes every fault in a compiled block free of charge, a cycle-accounting
+/// divergence from the interpreter.
 pub(crate) fn try_browser_cortex_m_jit_step(
     cpu: &mut CortexM,
     bus: &mut SystemBus,
@@ -965,13 +995,14 @@ pub(crate) fn try_browser_cortex_m_jit_step(
         let instr_count = block.instr_count;
         let end_pc = block.end_pc;
         block.run(cpu, &mut bus.ram.data).map(
-            |(wire, next_pc, clear_exclusive, fault_pc, fault_retired)| {
+            |(wire, next_pc, clear_exclusive, fault_pc, fault_retired, fault_it_state)| {
                 (
                     wire,
                     next_pc,
                     clear_exclusive,
                     fault_pc,
                     fault_retired,
+                    fault_it_state,
                     instr_count,
                     end_pc,
                 )
@@ -979,19 +1010,39 @@ pub(crate) fn try_browser_cortex_m_jit_step(
         )
     };
     match ran {
-        Ok((wire, next_pc, clear_exclusive, fault_pc, fault_retired, instr_count, end_pc)) => {
+        Ok((
+            wire,
+            next_pc,
+            clear_exclusive,
+            fault_pc,
+            fault_retired,
+            fault_it_state,
+            instr_count,
+            end_pc,
+        )) => {
             if clear_exclusive {
                 cpu.clear_exclusive_monitor();
             }
             let (n, cont, needs_interp) = match wire {
                 WIRE_FALL_THROUGH => (instr_count, end_pc, false),
                 WIRE_CHAIN_DYNAMIC => (instr_count, next_pc, false),
-                WIRE_MEM_FAULT | WIRE_UNSUPPORTED => (fault_retired, fault_pc, true),
+                WIRE_MEM_FAULT | WIRE_UNSUPPORTED => {
+                    // Mid-IT resume: the interpreter must see the IT state as
+                    // of before the faulting instruction, not a cleared one.
+                    cpu.it_state = fault_it_state;
+                    (fault_retired, fault_pc, true)
+                }
                 _ => (instr_count, end_pc, true),
             };
             cpu.pc = cont;
-            if n == 0 || needs_interp {
+            if needs_interp {
                 cache.refusals = cache.refusals.saturating_add(1);
+                // The instructions before the fault are still retired and
+                // must be charged; only the instruction now at `cpu.pc` needs
+                // the interpreter, so return them and let the caller decide.
+                return n;
+            }
+            if n == 0 {
                 return 0;
             }
             cache.bump_hit();
@@ -1019,6 +1070,15 @@ pub(crate) fn try_browser_cortex_m_jit_step(
 /// fast forward, work accounting) is core's
 /// `Machine::advance_with_window_runner`, so a compiled window and an
 /// interpreted window are the same machine cycles.
+///
+/// Every retirement also advances `bus.current_cycle` in place, because a
+/// window is not a machine boundary: models that sync lazily off that
+/// accumulator mid-window — SysTick, nRF timers, DWT — read it for every
+/// instruction, and the interpreter's `step_batch` (issue #842) and the
+/// in-tree `run_jit_loop` both bump it after each retirement. Without the
+/// bump a compiled window freezes every one of them for the window's whole
+/// duration, which is exactly the JIT-vs-interpreter divergence the
+/// browser-layer gate caught on the L476 six-step firmware.
 pub(crate) fn run_browser_cortex_m_jit_window(
     cpu: &mut CortexM,
     bus: &mut SystemBus,
@@ -1027,8 +1087,14 @@ pub(crate) fn run_browser_cortex_m_jit_window(
     cache: &mut BrowserJitCache,
     max_n: u32,
 ) -> SimResult<u32> {
+    // Same shape as `CortexM::run_jit_loop`: 0 at interval 1, where a window
+    // is one instruction and the boundary commit already refreshes the
+    // accumulator. Computed outside the loop; the bump stays a no-op write.
+    let live_step = u64::from(config.peripheral_tick_interval.max(1) > 1);
+
     let mut retired = 0u32;
     while retired < max_n {
+        let n;
         if cpu.jit_takeable_exception() {
             // Match interpreter `step_batch`: at zero progress the exception
             // is dispatched by `step`; after progress the window ends so the
@@ -1038,21 +1104,30 @@ pub(crate) fn run_browser_cortex_m_jit_window(
                 break;
             }
             cpu.step(bus, observers, config)?;
-            retired += 1;
-            continue;
-        }
-        if cpu.it_state != 0 {
+            n = 1;
+        } else if cpu.it_state != 0 {
             cpu.step(bus, observers, config)?;
-            retired += 1;
-            continue;
-        }
-        let n = try_browser_cortex_m_jit_step(cpu, bus, cache, max_n - retired);
-        if n == 0 {
-            cpu.step(bus, observers, config)?;
-            retired += 1;
+            n = 1;
         } else {
-            retired += n;
+            let block_n = try_browser_cortex_m_jit_step(cpu, bus, cache, max_n - retired);
+            n = if block_n > 0 {
+                // Compiled instructions skip the interpreter's per-step
+                // SysTick consume, so hand the block's cycles to it directly
+                // (mirrors `run_jit_loop`). A partial block that stopped on a
+                // fault is charged its pre-fault instructions here too; the
+                // faulting instruction is left at `cpu.pc` for the next
+                // iteration, exactly as `run_jit_loop` leaves it.
+                bus.systick_consume_cycles(u64::from(block_n));
+                block_n
+            } else {
+                cpu.step(bus, observers, config)?;
+                1
+            };
+        };
+        if live_step != 0 {
+            bus.current_cycle += live_step * u64::from(n);
         }
+        retired += n;
         if cpu.sysreset_latched() {
             break;
         }

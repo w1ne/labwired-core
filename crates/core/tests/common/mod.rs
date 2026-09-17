@@ -4,15 +4,59 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! Fixture loading shared by the `session_*` integration tests.
+//! Shared test support for the `labwired-core` integration tests.
+//!
+//! Two things live here: fixture loading for the `session_*` tests (below), and
+//! the [`transcript`] device-script harness every byte-parity proof drives its
+//! device with.
 
 // Each test binary compiles this module separately and uses a subset of it.
 #![allow(dead_code)]
+
+pub mod transcript;
 
 use std::path::{Path, PathBuf};
 
 pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// A path relative to the repo root, from a test binary running with
+/// `CARGO_MANIFEST_DIR` set to `crates/core`. The single point of duplication
+/// across ~35 integration tests (`fn root(rel: &str) -> PathBuf`); every copy
+/// was byte-identical modulo `PathBuf::from`/`Path::new` spelling.
+pub fn root(rel: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(rel)
+}
+
+/// Build one of the `+esp` Xtensa example firmwares if its ELF is missing or
+/// stale relative to `src/main.rs`, mirroring the four `e2e_*`/`openai_deck_*`
+/// tests that each hand-rolled this build-or-skip dance for their own example.
+///
+/// `example_dir` is the directory under `examples/` (e.g. `"esp32s3-blinky"`);
+/// `elf_rel` is the built ELF's path relative to the example dir (e.g.
+/// `"target/xtensa-esp32s3-none-elf/release/esp32s3-blinky"`).
+pub fn ensure_esp_firmware_built(example_dir: &str, elf_rel: &str) -> PathBuf {
+    let example = format!("../../examples/{example_dir}");
+    let elf = Path::new(&example).join(elf_rel);
+    let src = Path::new(&example).join("src/main.rs");
+    if elf.exists() {
+        if let (Ok(elf_meta), Ok(src_meta)) = (std::fs::metadata(&elf), std::fs::metadata(&src)) {
+            if elf_meta.modified().unwrap() >= src_meta.modified().unwrap() {
+                return elf;
+            }
+        }
+    }
+    let status = std::process::Command::new("cargo")
+        .args(["+esp", "build", "--release", "--target-dir", "target"])
+        .current_dir(&example)
+        .status()
+        .expect("cargo +esp build (is the ESP toolchain installed and ~/export-esp.sh sourced?)");
+    assert!(status.success(), "{example_dir} build failed");
+    assert!(elf.exists(), "ELF not found at {elf:?} after build");
+    elf
 }
 
 /// A script's `inputs.firmware` is relative to the script and names

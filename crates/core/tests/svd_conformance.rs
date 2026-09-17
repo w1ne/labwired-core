@@ -22,13 +22,9 @@
 //! deviation is the failure mode this file exists to prevent, so the allow-list
 //! is deliberately annoying to extend.
 
+mod common;
+use common::root;
 use std::collections::{HashMap, HashSet};
-
-fn root(rel: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// `configs/chips/<stem>.yaml` → vendored SVD. A chip with no SVD is simply not
 /// covered; `every_svd_backed_chip_is_checked` below keeps that list honest so a

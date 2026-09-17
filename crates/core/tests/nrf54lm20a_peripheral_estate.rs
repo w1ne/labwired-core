@@ -33,11 +33,12 @@
 //! `the_gpio_ports_are_not_each_other` writes one port and requires the other
 //! not to move. It is written to FAIL on the arrangement the sibling chip uses.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, Cpu, Machine};
-use std::path::PathBuf;
 
 // ── Addresses under test (all from nrf54lm20a_application.svd) ──────────────
 const SPIM22: u64 = 0x500C_8000; // nordic_expansion_spi -- the display bus
@@ -60,12 +61,6 @@ const GPIO_OUT: u64 = 0x000;
 const GPIO_DIR: u64 = 0x010;
 const GPIO_DIRSET: u64 = 0x014;
 const GPIO_PIN_CNF0: u64 = 0x080;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Build the part the way every production entry point does.
 fn machine() -> Machine<impl Cpu> {

@@ -1,0 +1,80 @@
+# Atmel/Microchip AT24C256 32 KiB I²C serial EEPROM — declarative
+# byte-addressable memory with a 16-bit address pointer.
+#
+# Migrated from `peripherals/components/at24c256.rs`, which is deleted with this
+# descriptor; `tests/at24c256_migration_parity.rs` drives that model and this
+# one through the same I²C script.
+#
+# This descriptor is what Tier-1 `pointer_width` and `write_page` exist for. An
+# EEPROM is the one I²C shape a register map cannot express: there are no named
+# registers, the address is TWO bytes, and a sequential write wraps inside a
+# page instead of running on.
+#
+# ── Wire protocol (AT24C256 datasheet, Atmel 0670S) ──────────────────────
+#
+#   BYTE WRITE       START, addr_hi, addr_lo, data, STOP
+#   PAGE WRITE       START, addr_hi, addr_lo, data × ≤64, STOP
+#   RANDOM READ      START, addr_hi, addr_lo, repeated START, data…, STOP
+#   SEQUENTIAL READ  continues from the pointer, rolling over the whole array
+#
+# `pointer_width: 2` is the two address bytes, high byte first. The device
+# addresses 0x0000..0x7FFF on silicon; `pointer_mask: 0xFFFF` keeps the whole
+# 16-bit space the master can name, and the pointer then wraps into the modelled
+# window (below) exactly as the hand model's `ptr % MEM_SIZE` did.
+#
+# ── Two stated approximations ────────────────────────────────────────────
+#
+# 1. **A 256-byte window, not 32 KiB.** Carried over unchanged from the model
+#    this replaces: the array wraps every 256 bytes, so address 0x0110 is the
+#    same cell as 0x0010. A sketch that stores a handful of records sees a real
+#    EEPROM; a sketch that walks the whole part sees the wrap. Kept because it
+#    is what shipped, and widening it is a memory-footprint decision for every
+#    wasm build, not a fidelity fix to smuggle into a migration.
+#
+# 2. **No write cycle time.** A real AT24C256 NACKs its own address for up to
+#    5 ms after a write while the page programs, which is how `while
+#    (!eeprom.isReady())` polling loops terminate. Not modelled here and not
+#    modelled before: the engine has no way to NACK an address. A driver that
+#    polls sees the part ready immediately.
+#
+# ── One deliberate CHANGE from the model this replaces ───────────────────
+#
+# `write_page: 64` is new. The hand model let a sequential write run straight
+# through the array, so a driver that wrote a 40-byte record starting at, say,
+# 0x30 stored it contiguously — and then read the same bytes back and passed.
+# Real silicon wraps that write to the start of the 64-byte page, corrupting
+# the record's tail over its own head, and the driver only finds out on
+# hardware. This is exactly the bug class a faithful twin exists to catch, so
+# the page wrap is modelled and the difference is pinned by name in
+# `at24c256_migration_parity.rs`. Reads are unaffected: sequential read rolls
+# over the whole array, as the datasheet says.
+type: at24c256
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x50
+    # Two address bytes, high byte first.
+    pointer_width: 2
+    # Sequential writes wrap inside a 64-byte page (datasheet "Page Write").
+    write_page: 64
+    register_file:
+      # The modelled window (see approximation 1 above).
+      size: 256
+      # An erased EEPROM cell reads 0xFF. Without this the array would power up
+      # all-zero, which is a value a blank part never reads.
+      fill: 0xFF
+      # The master may name any 16-bit address; it folds into the window.
+      pointer_mask: 0xFFFF
+      # Every data byte advances the pointer — that IS sequential access.
+      auto_increment: always
+
+metadata:
+  label: "AT24C256 EEPROM"
+  summary: "I²C serial EEPROM with a 16-bit address pointer and 64-byte pages."
+  detail: "Atmel/Microchip AT24C256 at default address 0x50 (A2:A0 straps to 0x57). Two address bytes select a cell; sequential read rolls over the array and a sequential write wraps inside its 64-byte page, as on silicon. The modelled array is a 256-byte window that repeats every 256 addresses, and the 5 ms write cycle is not modelled — a driver that polls for ready is answered immediately."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the AT24C256 address 0x50 (A2:A0 = GND)."

@@ -28,7 +28,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::ads1115::ADS1115_KIT,
     &components::ds3231::DS3231_KIT,
     &components::hx711::HX711_KIT,
-    &components::as5600::AS5600_KIT,
     &components::bno055::BNO055_KIT,
     &components::hc05::HC05_KIT,
     &components::nrf24l01::NRF24L01_KIT,
@@ -41,8 +40,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bmp280::BMP280_KIT,
     &components::pcf8574::PCF8574_KIT,
     &components::rc522::RC522_KIT,
-    &components::sht30::SHT30_KIT,
-    &components::at24c256::AT24C256_KIT,
     &components::atecc608a::ATECC608A_KIT,
     &components::pn532::PN532_KIT,
     &components::lora_sx1278::LORA_SX1278_KIT,
@@ -98,6 +95,14 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // an oracle — its ready flag latched forever with no conversion time, so an
     // oracle would be asserting the bug. See vl53l0x_migration_parity.rs.
     &components::declarative_i2c::VL53L0X_KIT,
+    // AS5600 / SHT30 / AT24C256: Tier-1 migrations. Each hand-written model is
+    // DELETED, not kept as an oracle — every one of them had a behaviour the
+    // descriptor deliberately changes (configuration writes that vanished, an
+    // opcode that was never decoded, a page write that never wrapped). See the
+    // `*_migration_parity.rs` tests.
+    &components::declarative_i2c::AS5600_KIT,
+    &components::declarative_i2c::SHT30_KIT,
+    &components::declarative_i2c::AT24C256_KIT,
     // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,

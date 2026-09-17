@@ -517,6 +517,13 @@ impl SpiDevice for TracingSpiDevice {
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> crate::SimResult<()> {
         self.inner.restore_runtime_snapshot(bytes)
     }
+    /// Same transparency requirement as the I²C wrapper above: swallowing this
+    /// would leave every trace-wrapped SPI device — which is every device
+    /// attached through `SystemBus::attach_spi_device` — frozen in time while
+    /// the machine believed it was driving them.
+    fn advance_time_us(&mut self, us: u64) {
+        self.inner.advance_time_us(us);
+    }
 }
 
 #[cfg(test)]

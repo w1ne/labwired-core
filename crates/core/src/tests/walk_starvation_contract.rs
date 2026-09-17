@@ -72,6 +72,8 @@
 //! next offender to hide under.
 
 use std::collections::BTreeSet;
+
+use super::out_of_line_test_modules::out_of_line_cfg_test_files;
 use std::path::{Path, PathBuf};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,8 +373,12 @@ fn parse_peripheral_impls() -> Vec<PeripheralImpl> {
     let root = src_root();
     let mut files = Vec::new();
     rust_files(&root, &mut files);
+    let out_of_line_tests = out_of_line_cfg_test_files(&files);
     let mut impls = Vec::new();
     for path in files {
+        if out_of_line_tests.contains(&path) {
+            continue;
+        }
         let rel = path
             .strip_prefix(&root)
             .unwrap_or(&path)
@@ -674,12 +680,16 @@ fn walk_deletion_is_derived_not_asserted() {
     let root = src_root();
     let mut files = Vec::new();
     rust_files(&root, &mut files);
+    let out_of_line_tests = out_of_line_cfg_test_files(&files);
     let pending: BTreeSet<&str> = RULE_C_PENDING_FIX.iter().map(|(f, _)| *f).collect();
     let mut pending_seen: BTreeSet<String> = BTreeSet::new();
     let mut violations = Vec::new();
     let mut scanned_any = false;
 
     for path in files {
+        if out_of_line_tests.contains(&path) {
+            continue;
+        }
         let rel = path
             .strip_prefix(&root)
             .unwrap_or(&path)

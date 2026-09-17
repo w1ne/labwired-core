@@ -418,31 +418,6 @@
       ]
     },
     {
-      "device_type": "as5600",
-      "label": "AS5600 Magnetic Encoder",
-      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
-      "detail": "ams AS5600 (default address 0x36). Host sets angle in degrees; firmware reads RAW_ANGLE / ANGLE (12-bit) and STATUS magnet-detected bit.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x36."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "angle",
-          "label": "Angle",
-          "unit": "deg",
-          "min": 0.0,
-          "max": 360.0
-        }
-      ]
-    },
-    {
       "device_type": "bno055",
       "label": "BNO055 IMU",
       "summary": "9-DoF absolute orientation sensor (Bosch BNO055) over I²C.",
@@ -776,55 +751,6 @@
           "name": "cs_pin",
           "ty": "str",
           "doc": "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4."
-        }
-      ],
-      "labs": [],
-      "inputs": []
-    },
-    {
-      "device_type": "sht30",
-      "label": "SHT30 Temp/Humidity",
-      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
-      "detail": "Default address 0x44. Single-shot high-repeatability framing with CRC. Host sets temperature (°C) and humidity (%RH).",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x44."
-        }
-      ],
-      "labs": [],
-      "inputs": [
-        {
-          "key": "temperature",
-          "label": "Temperature",
-          "unit": "C",
-          "min": -40.0,
-          "max": 125.0
-        },
-        {
-          "key": "humidity",
-          "label": "Humidity",
-          "unit": "%RH",
-          "min": 0.0,
-          "max": 100.0
-        }
-      ]
-    },
-    {
-      "device_type": "at24c256",
-      "label": "AT24C256 EEPROM",
-      "summary": "I²C 32 KiB EEPROM shell (256-byte sim window).",
-      "detail": "Default address 0x50. Two-byte address pointer then sequential R/W. Simulated memory is 256 bytes wrapping for compactness.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to 0x50."
         }
       ],
       "labs": [],
@@ -2194,6 +2120,85 @@
           "max": 2000.0
         }
       ]
+    },
+    {
+      "device_type": "as5600",
+      "label": "AS5600 Magnetic Encoder",
+      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
+      "detail": "ams AS5600 at default address 0x36, a register-pointer device whose pointer walks one byte per byte read. Host sets shaft angle in degrees; RAW_ANGLE and ANGLE report it as a 12-bit right-aligned big-endian count (4096 per revolution) and STATUS reports the magnet-detected bit. ZPOS / MPOS / MANG / CONF are read/write storage, but the ZPOS/MPOS/MANG output scaling is not applied — ANGLE equals RAW_ANGLE. The ML / MH magnet-placement faults and the one-way BURN command are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the AS5600 fixed address 0x36."
+        },
+        {
+          "name": "angle",
+          "ty": "float",
+          "doc": "Initial shaft angle in degrees. Default 0. Drive it at runtime with the `angle` input channel."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "angle",
+          "label": "Angle",
+          "unit": "deg",
+          "min": 0.0,
+          "max": 360.0
+        }
+      ]
+    },
+    {
+      "device_type": "sht30",
+      "label": "SHT30 Temp/Humidity",
+      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
+      "detail": "Sensirion SHT30 at default address 0x44 (ADDR low; 0x45 with ADDR high). Single-shot and periodic-mode opcodes return a temperature word and a humidity word, each 16-bit big-endian with a Sensirion CRC-8. A single-shot measurement takes the datasheet's 15 ms maximum, after which the frame is readable; a read issued sooner returns 0xFF. Host sets temperature (°C) and relative humidity (%). The periodic-mode cadence, the repeatability grades, the heater and the alert logic are not modelled, and the status register is the power-on constant.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SHT30 address 0x44 (ADDR pin low)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "at24c256",
+      "label": "AT24C256 EEPROM",
+      "summary": "I²C serial EEPROM with a 16-bit address pointer and 64-byte pages.",
+      "detail": "Atmel/Microchip AT24C256 at default address 0x50 (A2:A0 straps to 0x57). Two address bytes select a cell; sequential read rolls over the array and a sequential write wraps inside its 64-byte page, as on silicon. The modelled array is a 256-byte window that repeats every 256 addresses, and the 5 ms write cycle is not modelled — a driver that polls for ready is answered immediately.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the AT24C256 address 0x50 (A2:A0 = GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     },
     {
       "device_type": "adxl345_spi",

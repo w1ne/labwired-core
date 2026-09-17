@@ -49,6 +49,8 @@
 //! UPDATE_BUS_VISIBILITY_BASELINE=1 cargo test -p labwired-core --test bus_visibility
 //! ```
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
@@ -57,7 +59,6 @@ use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::{Bus, Machine};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -275,12 +276,6 @@ fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {
 }
 
 // ── Paths / fleet ───────────────────────────────────────────────────────────
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 /// Minimal manifest naming only the chip — same shape as `chip_conformance.rs`,
 /// so both boards measure the same construction path.

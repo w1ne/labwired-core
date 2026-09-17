@@ -159,6 +159,7 @@ pub(crate) struct FakeClock {
 struct FakeClockInner {
     now: Duration,
     sleeps: Vec<Duration>,
+    now_calls: usize,
 }
 
 #[cfg(test)]
@@ -168,6 +169,7 @@ impl FakeClock {
             inner: std::sync::Arc::new(std::sync::Mutex::new(FakeClockInner {
                 now: Duration::ZERO,
                 sleeps: Vec::new(),
+                now_calls: 0,
             })),
         }
     }
@@ -175,12 +177,21 @@ impl FakeClock {
     pub(crate) fn sleeps(&self) -> Vec<Duration> {
         self.inner.lock().expect("fake clock").sleeps.clone()
     }
+
+    /// How many times the machine asked for wall time. MaxSpeed must never
+    /// ask: the read is a clock_gettime-class call, and the single-step loop
+    /// makes one `advance` call per instruction.
+    pub(crate) fn now_calls(&self) -> usize {
+        self.inner.lock().expect("fake clock").now_calls
+    }
 }
 
 #[cfg(test)]
 impl HostClock for FakeClock {
     fn now(&self) -> Duration {
-        self.inner.lock().expect("fake clock").now
+        let mut inner = self.inner.lock().expect("fake clock");
+        inner.now_calls += 1;
+        inner.now
     }
 
     fn sleep(&self, duration: Duration) {

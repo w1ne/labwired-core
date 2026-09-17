@@ -21,12 +21,13 @@
 //! and the pend evaporates. A SOFTWARE pend (ISPR write) is different — it
 //! fires once even on a low line. Both directions are asserted here.
 
+mod common;
+use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::{Bus, DebugControl, Machine};
-use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 const RCC_APB1ENR: u64 = 0x4002_1000 + 0x1C;
@@ -38,12 +39,6 @@ const TIM2_PSC: u64 = TIM2 + 0x28;
 const TIM2_ARR: u64 = TIM2 + 0x2C;
 /// tim2's NVIC position in configs/chips/stm32f103.yaml.
 const TIM2_IRQ: u32 = 28;
-
-fn root(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(rel)
-}
 
 fn f103_bus() -> SystemBus {
     let chip_path = root("configs/chips/stm32f103.yaml");

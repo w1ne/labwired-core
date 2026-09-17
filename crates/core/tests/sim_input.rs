@@ -491,3 +491,54 @@ fn external_device_id_works_as_component() {
     let mm = with_device::<Vl53l1x, _>(&mut bus, "i2c1", |tof| tof.distance_mm());
     assert_eq!(mm, 777);
 }
+
+#[test]
+fn resolve_input_returns_metadata_without_applying() {
+    let mut bus = kw41z_lcd_bus();
+    // Latch a fixed pose first: the FXOS8700's built-in animation advances on
+    // every OUT_X_MSB burst read, so an unlatched `read_axis` is not
+    // idempotent and could not witness read-only resolution.
+    bus.set_input(None, "x", 1.0).expect("latch x");
+    let before = read_axis(&mut bus, 0x01);
+
+    let ch = bus.resolve_input(None, "x").expect("resolve x");
+    assert_eq!(ch.key, "x");
+    assert_eq!(ch.unit, "g");
+    assert_eq!((ch.min, ch.max), (-8.0, 8.0));
+
+    // Resolution is read-only: the device's pose must be untouched.
+    assert_eq!(read_axis(&mut bus, 0x01), before);
+
+    match bus.resolve_input(None, "nope") {
+        Err(SimInputError::NoDevice(c)) => assert_eq!(c, "nope"),
+        other => panic!("expected NoDevice, got {other:?}"),
+    }
+}
+
+#[test]
+fn resolve_input_accepts_both_component_aliases() {
+    let mut bus = f103_input_matrix_bus();
+
+    // "distance" lives on both the VL53L1X (i2c1) and the HC-SR04 (sonar).
+    match bus.resolve_input(None, "distance") {
+        Err(SimInputError::Ambiguous { matches, .. }) => assert_eq!(matches, 2),
+        other => panic!("expected Ambiguous, got {other:?}"),
+    }
+
+    // The peripheral bus name and the external-device id must both resolve.
+    let by_bus = bus
+        .resolve_input(Some("i2c1"), "distance")
+        .expect("resolve by bus name");
+    assert_eq!(by_bus.key, "distance");
+    assert!(!by_bus.unit.is_empty());
+    let by_id = bus
+        .resolve_input(Some("tof"), "distance")
+        .expect("resolve by device id");
+    assert_eq!(by_id.key, "distance");
+
+    // A component that doesn't own the channel is a NoDevice, not a fallback.
+    match bus.resolve_input(Some("uart1"), "temperature") {
+        Err(SimInputError::NoDevice(m)) => assert_eq!(m, "uart1/temperature"),
+        other => panic!("expected NoDevice, got {other:?}"),
+    }
+}
