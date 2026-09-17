@@ -141,9 +141,52 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::can_testers::CAN_LOG_PLAYER_KIT,
 ];
 
+/// Every kit: the hand-written [`KITS`] above, plus one derived automatically
+/// from each `configs/devices/*.yaml` descriptor that [`KITS`] does not already
+/// cover.
+///
+/// The second half is the part that matters. A descriptor attaches without a
+/// kit — `bus::external_devices` finds it on its own — so a part ported to a
+/// declarative primitive used to RUN while being absent from
+/// `peripherals-manifest.json`, which is the only thing the browser palette
+/// reads. Nothing failed: the six parts that sat in that hole
+/// (`keypad`, `dht22`, `rotary_encoder`, `hc-sr04`, `dc-motor`, `bldc-motor`)
+/// each passed every test they had. `hx711` was in the manifest only because
+/// somebody hand-wrote a wrapper for it.
+///
+/// Deriving the entry instead of hand-writing it means a new YAML part cannot
+/// fall out again: it is in the manifest by being a descriptor, not by
+/// somebody remembering the second step.
+///
+/// De-duplication is by `device_type`, and [`KITS`] WINS. A part that already
+/// has a hand-written kit (every declarative I²C / SPI / display device does)
+/// keeps it, so its manifest bytes and its position in the manifest array are
+/// unchanged — only genuinely unrepresented descriptors are appended.
+static ALL_KITS: std::sync::LazyLock<Vec<&'static dyn PeripheralKit>> =
+    std::sync::LazyLock::new(|| {
+        let mut out: Vec<&'static dyn PeripheralKit> = KITS.to_vec();
+        let mut seen: std::collections::HashSet<&'static str> =
+            out.iter().map(|k| k.metadata().device_type).collect();
+        for yaml in labwired_config::embedded_device_yamls() {
+            // A descriptor that does not parse is a build-breaking bug in an
+            // in-tree file, not a runtime condition to route around: the
+            // `every_embedded_descriptor_is_a_kit` gate would report it as a
+            // missing part with no way to see why. Say which file, and stop.
+            let kit = super::declarative::kit_for_descriptor(
+                &labwired_config::DeviceDescriptor::from_yaml(yaml)
+                    .expect("in-tree configs/devices descriptor must parse"),
+            )
+            .expect("in-tree configs/devices descriptor must yield a kit");
+            if seen.insert(kit.metadata().device_type) {
+                out.push(kit);
+            }
+        }
+        out
+    });
+
 /// Borrow the registry slice.
 pub fn kits() -> &'static [&'static dyn PeripheralKit] {
-    KITS
+    &ALL_KITS
 }
 
 /// Legacy `type:` spellings that predate the canonical `device_type` and are
@@ -201,7 +244,7 @@ pub fn canonical_device_type(device_type: &str) -> &str {
 /// Every `device_type` spelling the engine accepts — canonical kit types plus
 /// the legacy aliases. Ordered and de-duplicated.
 pub fn known_device_types() -> Vec<String> {
-    let mut out: Vec<String> = KITS
+    let mut out: Vec<String> = kits()
         .iter()
         .map(|k| k.metadata().device_type.to_string())
         .chain(TYPE_ALIASES.iter().map(|(alias, _)| alias.to_string()))
@@ -214,7 +257,8 @@ pub fn known_device_types() -> Vec<String> {
 /// Lookup a kit by the `device_type` string used in `system.yaml`.
 pub fn lookup(device_type: &str) -> Option<&'static dyn PeripheralKit> {
     let canonical = canonical_device_type(device_type);
-    KITS.iter()
+    kits()
+        .iter()
         .copied()
         .find(|k| k.metadata().device_type == canonical)
 }

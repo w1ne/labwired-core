@@ -31,9 +31,11 @@
 //! kit usable from headless CI / wasm builds where no UI exists.
 
 mod ctx;
+pub mod declarative;
 pub mod registry;
 
 pub use ctx::AttachCtx;
+pub use declarative::DeclarativeDeviceKit;
 
 use anyhow::Result;
 

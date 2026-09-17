@@ -2900,6 +2900,111 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "rotary_encoder",
+      "label": "Rotary encoder",
+      "summary": "Incremental quadrature knob (EC11)",
+      "detail": "Incremental quadrature knob (EC11)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "position",
+          "label": "Position",
+          "unit": "detents",
+          "min": -1000.0,
+          "max": 1000.0
+        }
+      ]
+    },
+    {
+      "device_type": "keypad",
+      "label": "Matrix keypad",
+      "summary": "4×4 membrane keypad (row-drive / column-read)",
+      "detail": "4×4 membrane keypad (row-drive / column-read)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "key",
+          "label": "Key",
+          "unit": "index",
+          "min": -1.0,
+          "max": 15.0
+        }
+      ]
+    },
+    {
+      "device_type": "dht22",
+      "label": "DHT22 / AM2302",
+      "summary": "One-wire temperature + humidity sensor",
+      "detail": "One-wire temperature + humidity sensor",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 80.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "hc-sr04",
+      "label": "HC-SR04",
+      "summary": "Ultrasonic distance sensor (trigger / echo)",
+      "detail": "Ultrasonic distance sensor (trigger / echo)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "unit": "cm",
+          "min": 2.0,
+          "max": 400.0
+        }
+      ]
+    },
+    {
+      "device_type": "dc-motor",
+      "label": "Brushed DC motor",
+      "summary": "Configurable deterministic brushed DC motor plant",
+      "detail": "Configurable deterministic brushed DC motor plant",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "bldc-motor",
+      "label": "Brushless DC motor",
+      "summary": "Configurable deterministic three-phase BLDC motor plant",
+      "detail": "Configurable deterministic three-phase BLDC motor plant",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
     }
   ]
 }
