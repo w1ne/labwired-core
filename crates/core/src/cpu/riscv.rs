@@ -84,6 +84,24 @@ pub struct RiscV {
     fetch_len: u16,
     fetch_bytes: [u8; FETCH_WINDOW_BYTES],
 
+    /// Aligned window base that [`RiscV::refill_fetch_window`] last failed to
+    /// fill, so the same failure is not re-derived on the next instruction.
+    ///
+    /// The window only fills from a `FlashXipPeripheral` or from `extra_mem`.
+    /// A chip whose code sits in a plain `flash` region — which is what
+    /// `configs/chips/esp32c3.yaml` declares at 0x4200_0000 — matches neither,
+    /// so `fetch_len` stays 0 and the refill is attempted again on the very
+    /// next instruction: a `find_peripheral_index` call plus a downcast plus a
+    /// walk of every `extra_mem` window, measured at ~20 Ir per instruction of
+    /// routing alone (docs/performance/2026-09-17-bus-scheduler-pass.md).
+    ///
+    /// Remembering the failing base costs one compare and cannot change what
+    /// is fetched: the skipped call only reads side-effect-free memory, and
+    /// the fetch still falls through to `bus.read_u32` exactly as it did
+    /// before. It is cleared the moment a refill succeeds, and the base is
+    /// window-aligned, so crossing into a new 256-byte line always re-asks.
+    fetch_refill_failed_base: Option<u32>,
+
     /// Chunk H: opt-in RV32IMC wasm-JIT fast path. Mirrors Xtensa's
     /// `self.jit_enabled`; synced from [`crate::SimulationConfig::riscv_jit_enabled`]
     /// on each `step_batch` entry. Off by default — the interpreter is the
@@ -134,6 +152,7 @@ impl RiscV {
             fetch_base: 0,
             fetch_len: 0,
             fetch_bytes: [0; FETCH_WINDOW_BYTES],
+            fetch_refill_failed_base: None,
             #[cfg(feature = "jit")]
             jit_enabled: false,
             #[cfg(feature = "jit")]
@@ -178,7 +197,25 @@ impl RiscV {
                 return Err(crate::SimulationError::MemoryViolation(pc as u64));
             }
         }
-        self.refill_fetch_window(bus, pc);
+        // Skip a refill that just failed for this same window line — see
+        // `fetch_refill_failed_base`. Byte-identical: the call only reads
+        // side-effect-free memory, and the fall-through below is unchanged.
+        let window_base = pc & !((FETCH_WINDOW_BYTES as u32) - 1);
+        // The memo is only ever set by a refill that left the window empty,
+        // and any later successful refill clears it, so a remembered failure
+        // cannot let a stale window serve bytes from a different line.
+        debug_assert!(
+            self.fetch_refill_failed_base.is_none() || self.fetch_len == 0,
+            "remembered refill failure with a live fetch window"
+        );
+        if self.fetch_refill_failed_base != Some(window_base) {
+            self.refill_fetch_window(bus, pc);
+            self.fetch_refill_failed_base = if self.fetch_len == 0 {
+                Some(window_base)
+            } else {
+                None
+            };
+        }
         let off = pc.wrapping_sub(self.fetch_base);
         if (off as u64) < self.fetch_len as u64 && (off as u64) + 4 <= self.fetch_len as u64 {
             let i = off as usize;
