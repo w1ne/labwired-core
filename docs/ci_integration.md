@@ -1,6 +1,6 @@
 # CI integration
 
-Run the **same** `labwired test` command on your laptop and in GitHub Actions or GitLab. Pin a CLI release so firmware changes are judged by a fixed simulator version.
+Run the **same** `labwired test` command on your laptop and in GitHub Actions, GitLab, or Azure Pipelines. Pin a CLI release so firmware changes are judged by a fixed simulator version.
 
 Default pin used in examples: **v0.23.0**.
 
@@ -100,6 +100,38 @@ test:firmware:
   script:
     - labwired test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
 ```
+
+---
+
+## Azure Pipelines
+
+Install the pinned release on the agent, then publish the CLI's JUnit into the
+Tests tab:
+
+```yaml
+- script: |
+    curl -fsSL https://github.com/w1ne/labwired-core/releases/download/v0.23.0/labwired-v0.23.0-linux-x86_64.tar.gz \
+      | tar -xz -C "$AGENT_TEMPDIRECTORY"
+    echo "##vso[task.prependpath]$AGENT_TEMPDIRECTORY"
+  displayName: Install LabWired CLI
+
+- script: labwired test --script tests/firmware-test.yaml --output-dir out/labwired --junit out/labwired/junit.xml --no-uart-stdout
+  displayName: Run LabWired tests
+  continueOnError: true
+
+- task: PublishTestResults@2
+  displayName: Publish LabWired results
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFormat: JUnit
+    testResultsFiles: '**/junit.xml'
+    searchFolder: out/labwired
+    failTaskOnFailedTests: false
+```
+
+For the full example — build summary, build tag, one upserted pull request
+comment, and the unproven gate — copy the `azure/` directory from
+[LabWired/firmware-test](https://github.com/LabWired/firmware-test/tree/main/azure).
 
 ---
 
