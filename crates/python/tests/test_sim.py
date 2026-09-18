@@ -119,14 +119,14 @@ def test_smart_ring_real_bus_input_and_pin(tmp_path):
                       system=system) as s:
         s.set_input('pressed', 1.0)
         s.run_for('1us')
-        assert s.read_u32(0x500D7CFC + 0x510) & (1 << 13)
+        assert s.read_u32(0x500D8200 + 0x00C) & (1 << 13)
         s.set_inputs({'pressed': 0.0})
         s.run_for('1us')
-        assert not s.read_u32(0x500D7CFC + 0x510) & (1 << 13)
+        assert not s.read_u32(0x500D8200 + 0x00C) & (1 << 13)
         s.set_pin('touch', True)
-        assert s.read_u32(0x500D7CFC + 0x510) & (1 << 13)
+        assert s.read_u32(0x500D8200 + 0x00C) & (1 << 13)
         s.set_pin('touch', False)
-        assert not s.read_u32(0x500D7CFC + 0x510) & (1 << 13)
+        assert not s.read_u32(0x500D8200 + 0x00C) & (1 << 13)
         s.expect('probe done', timeout='20ms')
         transcript = s.uart_transcript()
         assert 'id=0x24 ack=Y [OK]' in transcript

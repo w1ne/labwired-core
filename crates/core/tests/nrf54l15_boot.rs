@@ -32,14 +32,12 @@ use labwired_core::Bus;
 // Peripherals at the secure alias the cpuapp DT uses by default.
 const UARTE20: u64 = 0x500C_6000;
 const UARTE30: u64 = 0x5010_4000;
-// GPIO mapped bases = MDK NRF_Pn_S_BASE - 0x504, so the gpio model's
-// nRF52-relative offsets land on the real registers. On THIS family
-// NRF_GPIO_Type has OUT at +0x000 (nRF52840: +0x504, nRF5340: +0x004), so
-// e.g. P2 OUT ends up at 0x5005_0400 = NRF_P2_S_BASE. See the comment in
-// configs/chips/nrf54l15.yaml.
-const GPIO_P0: u64 = 0x5010_9AFC;
-const GPIO_P1: u64 = 0x500D_7CFC;
-const GPIO_P2: u64 = 0x5004_FEFC;
+// GPIO ports sit at the MDK/SVD NRF_Pn_S_BASE with `profile: nrf54l`, so the
+// model decodes this family's real offsets (OUT 0x000, PIN_CNF 0x080) — no
+// back-offset. See the comment in configs/chips/nrf54l15.yaml.
+const GPIO_P0: u64 = 0x5010_A000;
+const GPIO_P1: u64 = 0x500D_8200;
+const GPIO_P2: u64 = 0x5005_0400;
 const TIMER20: u64 = 0x500C_A000;
 const GRTC: u64 = 0x500E_2000;
 const TEMP: u64 = 0x500D_7000;
@@ -57,10 +55,10 @@ const UARTE_PSEL_TXD: u64 = 0x604;
 const UARTE_BAUDRATE: u64 = 0x524;
 const UARTE_ENABLE_UARTE: u32 = 8;
 
-// GPIO (nRF52 profile), peripheral-base-relative.
-const GPIO_OUT: u64 = 0x504;
-const GPIO_OUTSET: u64 = 0x508;
-const GPIO_DIRSET: u64 = 0x518;
+// GPIO (nRF54L profile), peripheral-base-relative.
+const GPIO_OUT: u64 = 0x000;
+const GPIO_OUTSET: u64 = 0x004;
+const GPIO_DIRSET: u64 = 0x014;
 
 fn nrf54l15_chip_path() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/nrf54l15.yaml")
@@ -153,9 +151,9 @@ fn all_three_gpio_ports_are_mapped_and_independent() {
     let mut bus = nrf54l15_bus();
 
     // DK LED0 is P2.09, LED1 is P1.10 — the split across ports is the point.
-    // These land on the absolute addresses the MDK advertises:
-    // P2 OUT    = 0x5004_FEFC + 0x504 = 0x5005_0400 = NRF_P2_S_BASE + 0x000
-    // P2 OUTSET = 0x5004_FEFC + 0x508 = 0x5005_0404 = NRF_P2_S_BASE + 0x004
+    // These land on the absolute addresses the MDK and the SVD advertise:
+    // P2 OUT    = 0x5005_0400 + 0x000 = NRF_P2_S_BASE
+    // P2 OUTSET = 0x5005_0400 + 0x004 = NRF_P2_S_BASE + 0x004
     bus.write_u32(GPIO_P2 + GPIO_DIRSET, 1 << 9).unwrap();
     bus.write_u32(GPIO_P2 + GPIO_OUTSET, 1 << 9).unwrap();
     assert_ne!(
