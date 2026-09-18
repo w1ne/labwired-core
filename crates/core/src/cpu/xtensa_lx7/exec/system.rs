@@ -32,7 +32,7 @@ impl XtensaLx7 {
                 "ROM thunk at 0x{pc:08x} not registered (BREAK 1,14 with no thunk)"
             )));
         }
-        return Err(SimulationError::BreakpointHit(self.pc));
+        Err(SimulationError::BreakpointHit(self.pc))
     }
 
     #[inline(always)]
@@ -138,7 +138,7 @@ impl XtensaLx7 {
         _bus: &mut dyn Bus,
         _len: u32,
     ) -> SimResult<()> {
-        return self.vector_exception(1);
+        self.vector_exception(1)
     }
 
     #[inline(always)]
@@ -252,6 +252,6 @@ impl XtensaLx7 {
         _bus: &mut dyn Bus,
         _len: u32,
     ) -> SimResult<()> {
-        return self.raise_general_exception(0);
+        self.raise_general_exception(0)
     }
 }
