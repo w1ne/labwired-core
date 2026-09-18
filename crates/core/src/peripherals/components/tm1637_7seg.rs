@@ -9,12 +9,20 @@
 //! The TM1637 (e.g. the RobotDyn 4-digit clock module) is not on a hardware bus:
 //! the MCU bit-bangs two GPIO lines, `CLK` and `DIO`, with an I²C-like — but
 //! **LSB-first and address-less** — protocol. Because both lines are MCU
-//! outputs while the host writes display data, the model observes them exactly
-//! the way [`HcSr04`](crate::peripherals::hc_sr04::HcSr04) observes its TRIG
-//! line: the [`SystemBus`](crate::bus::SystemBus) re-reads the two GPIO output
-//! bits after every MMIO write that touches the hosting port and feeds the
-//! `(clk, dio)` levels to [`Tm1637::observe_lines`]. No polling, no timers — the
-//! state machine advances on the same edges the firmware produces.
+//! outputs while the host writes display data, the model observes them through
+//! the GENERIC edge-serviced resident-device path: it is one
+//! [`BusResidentDevice`](crate::bus::BusResidentDevice) on
+//! [`SystemBus::gpio_devices`](crate::bus::SystemBus), it names its two ODR
+//! addresses in [`edge_service_addrs`](crate::bus::BusResidentDevice::edge_service_addrs),
+//! and the bus re-reads both output bits inside the MMIO write path — the same
+//! hook the HX711 descriptor uses. No polling, no timers; the state machine
+//! advances on the same edges the firmware produces.
+//!
+//! It used to reach the machine a different way: `SystemBus` carried a typed
+//! `tm1637: Vec<Tm1637>` field driven by a bespoke `maybe_clock_tm1637` write
+//! hook that cached the two GPIO peripheral indices by hand. That hook was one
+//! part's private copy of `maybe_service_edge_driven_gpio_devices`, and the
+//! typed field was why a display could not be a descriptor.
 //!
 //! Protocol decoded:
 //!   * **Start** — `DIO` falls while `CLK` is high.
@@ -44,12 +52,13 @@ pub struct Tm1637 {
     /// Absolute address + bit of the `DIO` GPIO **output** register (ODR).
     pub dio_odr_addr: u64,
     pub dio_bit: u8,
-    /// Cached peripheral indices of the GPIO ports hosting CLK / DIO, resolved
-    /// lazily on first use by the bus write-hook. `None` until resolved.
+    /// The two ODR addresses, sorted and deduped, as
+    /// [`BusResidentDevice::edge_service_addrs`](crate::bus::BusResidentDevice::edge_service_addrs)
+    /// must hand them back by reference. The bus decides which peripheral hosts
+    /// each one — this model no longer caches peripheral indices, because it no
+    /// longer has a private hook to cache them in.
     #[serde(skip)]
-    clk_peripheral_idx: Option<usize>,
-    #[serde(skip)]
-    dio_peripheral_idx: Option<usize>,
+    edge_addrs: Vec<u64>,
 
     // ─── Line-level protocol state ───
     prev_clk: bool,
@@ -82,8 +91,12 @@ impl Tm1637 {
             clk_bit,
             dio_odr_addr,
             dio_bit,
-            clk_peripheral_idx: None,
-            dio_peripheral_idx: None,
+            edge_addrs: {
+                let mut a = vec![clk_odr_addr, dio_odr_addr];
+                a.sort_unstable();
+                a.dedup();
+                a
+            },
             // Idle bus is both lines high.
             prev_clk: true,
             prev_dio: true,
@@ -98,19 +111,6 @@ impl Tm1637 {
             brightness: 0,
             grids: [0; GRIDS],
         }
-    }
-
-    pub(crate) fn clk_peripheral_idx(&self) -> Option<usize> {
-        self.clk_peripheral_idx
-    }
-    pub(crate) fn set_clk_peripheral_idx(&mut self, idx: usize) {
-        self.clk_peripheral_idx = Some(idx);
-    }
-    pub(crate) fn dio_peripheral_idx(&self) -> Option<usize> {
-        self.dio_peripheral_idx
-    }
-    pub(crate) fn set_dio_peripheral_idx(&mut self, idx: usize) {
-        self.dio_peripheral_idx = Some(idx);
     }
 
     /// Raw latched segment byte for GRID `i` (`0b0gfedcba`, dp = bit 7).
@@ -292,10 +292,84 @@ impl PeripheralKit for Tm16377SegKit {
             )
         })?;
         let id = ctx.device_id().to_string();
-        ctx.bus
-            .tm1637
-            .push(Tm1637::new(id, clk_addr, clk_bit, dio_addr, dio_bit));
+        ctx.bus.gpio_devices.push(Box::new(Tm1637::new(
+            id, clk_addr, clk_bit, dio_addr, dio_bit,
+        )));
         Ok(())
+    }
+}
+
+/// The TM1637 on the generic resident-device path.
+///
+/// It DRIVES nothing — the ACK the chip pulls low on the ninth clock is not
+/// modelled — so `service` only reads, through the narrowed
+/// [`DevicePins`](crate::bus::DevicePins) port. Everything else about this
+/// model is unchanged from the version the bespoke hook drove; the levels it
+/// gets and the order it gets them in are the same, which is what
+/// `tm1637_migration_parity` holds it to.
+impl crate::bus::BusResidentDevice for Tm1637 {
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, _now: u64) {
+        // ⚠️ `unwrap_or(true)` — an ODR that does not read back is an IDLE
+        // (released, pulled-up) line on this two-wire bus, and the deleted
+        // `maybe_clock_tm1637` defaulted the same way. Defaulting to `false`
+        // would synthesise a START the firmware never sent.
+        let clk = pins
+            .output_bit(self.clk_odr_addr, self.clk_bit)
+            .unwrap_or(true);
+        let dio = pins
+            .output_bit(self.dio_odr_addr, self.dio_bit)
+            .unwrap_or(true);
+        self.observe_lines(clk, dio);
+    }
+
+    fn as_sim_input(&mut self) -> &mut dyn crate::sim_input::SimInput {
+        self
+    }
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Both lines are MCU OUTPUTS, so the only thing that can move them is a
+    /// store to a GPIO output register — which `edge_service_addrs` already
+    /// services synchronously. This model owns no timer and drives no pad, so a
+    /// per-cycle pass would resample two bits that cannot have changed. Saying
+    /// so is what keeps a TM1637 board on the walk-free fast path, exactly as
+    /// it was when the display sat on its own typed bus field.
+    fn needs_per_cycle_service(&self) -> bool {
+        false
+    }
+
+    fn edge_service_addrs(&self) -> &[u64] {
+        &self.edge_addrs
+    }
+
+    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// A display has nothing a host can pose: what it shows comes from the wire.
+/// It still answers to its system.yaml id, so `inspect`'s stimulus walk reports
+/// the same owner name for it as every other resident device.
+impl crate::sim_input::SimInput for Tm1637 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        &[]
+    }
+    fn set_input(&mut self, key: &str, _value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        Err(crate::sim_input::SimInputError::UnknownChannel(
+            key.to_string(),
+        ))
+    }
+    fn component_id(&self) -> Option<&str> {
+        Some(&self.id)
     }
 }
 
@@ -430,12 +504,13 @@ mod tests {
             None,
             Box::new(GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2)),
         );
-        bus.tm1637
-            .push(Tm1637::new("seg".into(), ODR, CLK, ODR, DIO));
+        bus.gpio_devices
+            .push(Box::new(Tm1637::new("seg".into(), ODR, CLK, ODR, DIO)));
 
         // Drive the lines through BSRR (atomic set/reset), the way real GPIO
         // bit-bang code does. Writes go through the `Bus` trait method — the
-        // same path CPU MMIO takes — so the maybe_clock_tm1637 write-hook fires.
+        // same path CPU MMIO takes — so the GENERIC edge-service hook
+        // (`maybe_service_edge_driven_gpio_devices`) fires.
         use crate::Bus;
         let set = |bus: &mut SystemBus, clk: bool, dio: bool| {
             let bit = |b: u8, hi: bool| if hi { 1u32 << b } else { 1u32 << (b + 16) };
@@ -468,7 +543,12 @@ mod tests {
         set(&mut bus, true, false);
         set(&mut bus, true, true); // stop
 
-        assert_eq!(bus.tm1637[0].chars()[0], '5');
+        let shown = bus
+            .gpio_devices_of::<Tm1637>()
+            .next()
+            .expect("the TM1637 is on the generic resident-device list")
+            .chars()[0];
+        assert_eq!(shown, '5');
     }
 
     #[test]

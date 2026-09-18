@@ -512,6 +512,76 @@ The pads such a part drives still go out through the narrowed `DevicePins` port,
 exactly as on the tick pass — this changes WHEN `service` runs, not what it may
 touch.
 
+### The same hook is what a bus-resident Rust model uses
+
+`edge_service_addrs` is a `BusResidentDevice` method, not a descriptor feature.
+Any model on `SystemBus::gpio_devices` — Rust or YAML — names the OUTPUT
+registers whose writes must service it, and the bus does the rest.
+
+That matters because it is the only reason `SystemBus` no longer carries a
+typed field per bit-banged part. It used to carry three:
+
+| gone | what it was | what replaced it |
+|---|---|---|
+| `hx711: Vec<Hx711>` + `maybe_clock_hx711` | a 24-bit shift-out clocked by SCK | `hx711.yaml`, a `gpio_device` |
+| `tm1637: Vec<Tm1637>` + `maybe_clock_tm1637` | an I²C-like 2-wire display, framed by CLK/DIO edges | the model itself, as one `BusResidentDevice` |
+| `seven_segment: Vec<SevenSegment>` + `maybe_sample_seven_segment` | nine pads, combinational | likewise |
+
+Each hook was one part's private copy of
+`maybe_service_edge_driven_gpio_devices`, complete with its own cache of
+resolved GPIO peripheral indices, called from three places in
+`bus/accessors.rs`. **The bus now has no typed display field at all**, and
+`no_typed_display_field_on_the_bus` in
+`crates/core/tests/bus_resident_device_port.rs` fails if one comes back.
+
+Two facts a bus-resident display states, and both are load-bearing:
+
+* `edge_service_addrs()` — the ODR addresses, sorted and **deduped**. The bus
+  consults this on every MMIO write, so a duplicate is a cost paid per store.
+  Nine 7-segment pads on one port are ONE address.
+* `needs_per_cycle_service()` → `false`. A device whose pads move only when
+  firmware stores to a GPIO output register, that owns no timer and drives no
+  pad, is already serviced inside the write path; a tick pass would resample
+  bits that cannot have moved. Saying so is what keeps such a board on the
+  walk-free fast path and off `max_safe_tick_interval() == 1`. ⚠️ A
+  `gpio_device` descriptor with `timers:` must NOT say this — its clock only
+  advances on the tick.
+
+A bus-resident display also reports through `BusResidentDevice::evidence()`,
+which is what lets it publish artifacts without a typed bus field and an arm of
+its own in `for_each_bus_resident_device`.
+
+## Parallel (8080) panels: the `I80Panel` seam
+
+`Esp32s3LcdCam` drives an i80 panel with exactly one operation — a bus word and
+a D/C level, after `LCD_USER`'s byte- and bit-order bits have been applied. It
+used to hold `Vec<Arc<Ili9341Parallel>>`: a chip peripheral naming a part, and
+the reason the parallel ILI9341 could not become a descriptor — port it and the
+engine has no type to hold.
+
+It now holds `Vec<Arc<dyn I80Panel>>`:
+
+```rust
+pub trait I80Panel: std::fmt::Debug + Send + Sync {
+    fn i80_write_word(&self, dc_high: bool, word: u16);
+}
+```
+
+`&self`, because a panel is shared between the GPIO observer watching its pads
+and the peripheral strobing its bus. One method, because a second one is how a
+controller learns about a part again — `i80_panel_seam_stays_narrow` in
+`crates/core/tests/esp32s3_lcd_i80_pixels.rs` reads the trait's body and fails
+on it, the same way `resident_device_port_stays_narrow` guards `DevicePins`.
+
+⚠️ **Read a panel by FORMAT, never by concrete type.**
+`bus.observed_of::<Ili9341Parallel>()` answers an empty iterator for a panel of
+any other type — including the same panel the day it becomes a descriptor — so
+a test written that way turns green by measuring nothing. Use
+`SystemBus::display_artifacts_of_format(&[artifact_format::RGB565_BE], &opts)`
+or `SystemBus::display_artifact(id, &opts)`: `meta.w`/`meta.h` are the logical
+extents, `meta.painted_bytes` the non-zero BYTE count (not lit pixels), and the
+payload is the oriented framebuffer.
+
 ## `logic_gate` — 74-series logic, as a truth table
 
 A gate has **no bus**. No address, no register file, nothing to write and

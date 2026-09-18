@@ -222,9 +222,10 @@ impl SystemBus {
     /// than by the tick: after an MMIO write to peripheral `idx`, service every
     /// device that named an output-register address this peripheral hosts.
     ///
-    /// This is the generic form of `maybe_clock_hx711` / `maybe_clock_tm1637` —
-    /// each of those was one part's private copy of this hook, with its own
-    /// `Vec` on the bus and its own state machine. See
+    /// This is the generic form of the three bespoke hooks that preceded it —
+    /// `maybe_clock_hx711`, `maybe_clock_tm1637` and `maybe_sample_seven_segment`,
+    /// each one part's private copy of it, with its own typed `Vec` on the bus.
+    /// All three are gone; see
     /// [`BusResidentDevice::edge_service_addrs`] for why a tick-only pass loses
     /// edges: the device sees the pad after firmware has already moved it back.
     ///
@@ -370,138 +371,6 @@ impl SystemBus {
             if let Some(s) = self.gpio_devices[i].as_any_mut().downcast_mut::<Dht22>() {
                 s.observe_line(host_high, now);
             }
-        }
-    }
-
-    /// Write-hook sibling of [`maybe_arm_hcsr04`](Self::maybe_arm_hcsr04) for
-    /// bit-banged TM1637 displays: after an MMIO write to peripheral `idx`, if
-    /// that peripheral hosts a display's CLK or DIO line, re-read both output
-    /// bits and feed the `(clk, dio)` levels to the display's protocol state
-    /// machine. Both lines are MCU outputs while writing, so every edge the
-    /// firmware bit-bangs arrives as one of these write-hook calls — no polling.
-    pub(crate) fn maybe_clock_tm1637(&mut self, idx: usize) {
-        if self.tm1637.is_empty() {
-            return;
-        }
-        for i in 0..self.tm1637.len() {
-            // Resolve & cache the CLK / DIO GPIO peripheral indices on first use.
-            let clk_idx = match self.tm1637[i].clk_peripheral_idx() {
-                Some(t) => t,
-                None => {
-                    let addr = self.tm1637[i].clk_odr_addr;
-                    match self.find_peripheral_index(addr) {
-                        Some(t) => {
-                            self.tm1637[i].set_clk_peripheral_idx(t);
-                            t
-                        }
-                        None => continue,
-                    }
-                }
-            };
-            let dio_idx = match self.tm1637[i].dio_peripheral_idx() {
-                Some(t) => t,
-                None => {
-                    let addr = self.tm1637[i].dio_odr_addr;
-                    match self.find_peripheral_index(addr) {
-                        Some(t) => {
-                            self.tm1637[i].set_dio_peripheral_idx(t);
-                            t
-                        }
-                        None => continue,
-                    }
-                }
-            };
-            // Only react when this write actually touched the CLK or DIO port.
-            if clk_idx != idx && dio_idx != idx {
-                continue;
-            }
-            let clk_addr = self.tm1637[i].clk_odr_addr;
-            let clk_bit = self.tm1637[i].clk_bit;
-            let dio_addr = self.tm1637[i].dio_odr_addr;
-            let dio_bit = self.tm1637[i].dio_bit;
-            let clk = self
-                .read_u32(clk_addr)
-                .map(|v| (v >> clk_bit) & 1 != 0)
-                .unwrap_or(true);
-            let dio = self
-                .read_u32(dio_addr)
-                .map(|v| (v >> dio_bit) & 1 != 0)
-                .unwrap_or(true);
-            self.tm1637[i].observe_lines(clk, dio);
-        }
-    }
-
-    /// Write-hook sibling of [`maybe_clock_tm1637`](Self::maybe_clock_tm1637)
-    /// for direct-drive 7-segment digits: after an MMIO write to peripheral
-    /// `idx`, if that peripheral hosts any of the display's nine pins, re-read
-    /// all eight segment output bits plus COM and recompute the lit segments.
-    ///
-    /// Unlike the TM1637 there is no protocol here — the digit is combinational
-    /// logic, so the hook simply resamples. COM polarity (low = common cathode,
-    /// high = common anode) is resolved inside
-    /// [`SevenSegment::observe_levels`](crate::peripherals::components::seven_segment::SevenSegment::observe_levels).
-    pub(crate) fn maybe_sample_seven_segment(&mut self, idx: usize) {
-        if self.seven_segment.is_empty() {
-            return;
-        }
-        for i in 0..self.seven_segment.len() {
-            // Resolve & cache the nine GPIO peripheral indices on first use.
-            let mut relevant = false;
-            let mut resolved = true;
-            for s in 0..crate::peripherals::components::seven_segment::SEGMENTS {
-                let seg_idx = match self.seven_segment[i].seg_peripheral_idx(s) {
-                    Some(t) => t,
-                    None => {
-                        let addr = self.seven_segment[i].seg_odr[s].0;
-                        match self.find_peripheral_index(addr) {
-                            Some(t) => {
-                                self.seven_segment[i].set_seg_peripheral_idx(s, t);
-                                t
-                            }
-                            None => {
-                                resolved = false;
-                                break;
-                            }
-                        }
-                    }
-                };
-                relevant |= seg_idx == idx;
-            }
-            if !resolved {
-                continue;
-            }
-            let com_idx = match self.seven_segment[i].com_peripheral_idx() {
-                Some(t) => t,
-                None => {
-                    let addr = self.seven_segment[i].com_odr_addr;
-                    match self.find_peripheral_index(addr) {
-                        Some(t) => {
-                            self.seven_segment[i].set_com_peripheral_idx(t);
-                            t
-                        }
-                        None => continue,
-                    }
-                }
-            };
-            relevant |= com_idx == idx;
-            // Only react when this write actually touched one of the pins' ports.
-            if !relevant {
-                continue;
-            }
-            let read_pin = |bus: &Self, addr: u64, bit: u8| {
-                bus.read_u32(addr)
-                    .map(|v| (v >> bit) & 1 != 0)
-                    .unwrap_or(false)
-            };
-            let seg_odr = self.seven_segment[i].seg_odr;
-            let levels: [bool; crate::peripherals::components::seven_segment::SEGMENTS] =
-                std::array::from_fn(|s| read_pin(self, seg_odr[s].0, seg_odr[s].1));
-            let com = read_pin(
-                self,
-                self.seven_segment[i].com_odr_addr,
-                self.seven_segment[i].com_bit,
-            );
-            self.seven_segment[i].observe_levels(levels, com);
         }
     }
 

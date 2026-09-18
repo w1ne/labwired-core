@@ -67,11 +67,12 @@ impl SystemBus {
         // busy-loops whose MMIO is SideEffectFree — so timer-poll idle
         // fast-forward would leap over the whole frame while the pad stays
         // frozen, and every freehand DHT read returns NaN (ESP32-C3, 2026-08-11).
-        // Buttons opt out via `is_level_driven_on_stimulus` and do not force this.
+        // Buttons and the edge-serviced bit-banged displays opt out via
+        // `needs_per_cycle_service` and do not force this.
         let gpio_timing_devices = self
             .gpio_devices
             .iter()
-            .any(|d| !d.is_level_driven_on_stimulus());
+            .any(|d| d.needs_per_cycle_service());
         hcsr04_needs_cycle_accurate || self.flash_models_ops || gpio_timing_devices
     }
 
@@ -106,7 +107,7 @@ impl SystemBus {
         if self
             .gpio_devices
             .iter()
-            .any(|d| !d.is_level_driven_on_stimulus())
+            .any(|d| d.needs_per_cycle_service())
         {
             return 1;
         }
@@ -223,6 +224,6 @@ impl SystemBus {
     fn no_gpio_device_needs_service(&self) -> bool {
         self.gpio_devices
             .iter()
-            .all(|d| d.is_level_driven_on_stimulus())
+            .all(|d| !d.needs_per_cycle_service())
     }
 }

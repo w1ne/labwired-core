@@ -87,6 +87,12 @@ const EXCLUDED: &[(&str, &str)] = &[
         "rule_machine.rs",
         "the Tier-2 rule ENGINE every declarative part's `rules:` runs on, not a part",
     ),
+    (
+        "i80_panel.rs",
+        "the ONE-METHOD 8080-parallel seam `Esp32s3LcdCam` strobes — a trait \
+         declaration with no model behind it, and the thing that lets the \
+         parallel panel become a descriptor at all",
+    ),
 ];
 
 /// The declarative ENGINE itself (`declarative_*.rs`): the primitives every

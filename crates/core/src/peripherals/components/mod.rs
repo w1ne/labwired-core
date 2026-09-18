@@ -28,6 +28,7 @@ pub mod h_bridge_motor;
 pub mod hc595;
 pub mod hc595_7seg;
 pub mod i2c_factory;
+pub mod i80_panel;
 pub mod ili9341_parallel;
 pub mod inmp441;
 pub mod iolink_master;
@@ -104,6 +105,7 @@ pub use i2c_factory::{
     build_external_i2c_device, build_i2c_device, build_i2c_tree, i2c_mux_child_ids,
     is_i2c_mux_type, validate_i2c_mux_topology,
 };
+pub use i80_panel::I80Panel;
 pub use ili9341_parallel::{Ili9341Parallel, ParallelPins};
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,

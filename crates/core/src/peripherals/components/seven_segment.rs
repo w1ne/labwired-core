@@ -15,9 +15,18 @@
 //! write that touches a hosting port.
 //!
 //! The model observes the pins exactly the way
-//! [`Tm1637`](super::tm1637_7seg::Tm1637) observes CLK/DIO: the
-//! [`SystemBus`](crate::bus::SystemBus) re-reads the nine output bits after
-//! every write to a relevant GPIO port and calls [`SevenSegment::observe_levels`].
+//! [`Tm1637`](super::tm1637_7seg::Tm1637) observes CLK/DIO, and now through the
+//! same generic door: one [`BusResidentDevice`](crate::bus::BusResidentDevice)
+//! on [`SystemBus::gpio_devices`](crate::bus::SystemBus) that names its nine
+//! ODR addresses in
+//! [`edge_service_addrs`](crate::bus::BusResidentDevice::edge_service_addrs),
+//! so the bus re-reads the nine output bits inside the MMIO write path and
+//! calls [`SevenSegment::observe_levels`].
+//!
+//! It used to sit on a typed `seven_segment: Vec<SevenSegment>` field on the
+//! bus, resampled by a bespoke `maybe_sample_seven_segment` hook that cached
+//! nine GPIO peripheral indices by hand. Nothing about the sampling changed —
+//! only which door it comes through.
 //!
 //! ## COM polarity
 //!
@@ -51,12 +60,12 @@ pub struct SevenSegment {
     /// Absolute address + bit of the `COM` pin's ODR.
     pub com_odr_addr: u64,
     pub com_bit: u8,
-    /// Cached peripheral indices of the GPIO ports hosting each pin, resolved
-    /// lazily on first use by the bus write-hook. `None` until resolved.
+    /// The nine ODR addresses, sorted and deduped — commonly ONE, because the
+    /// nine pins usually share a port. Held as a `Vec` because
+    /// [`BusResidentDevice::edge_service_addrs`](crate::bus::BusResidentDevice::edge_service_addrs)
+    /// hands back a slice by reference.
     #[serde(skip)]
-    seg_peripheral_idx: [Option<usize>; SEGMENTS],
-    #[serde(skip)]
-    com_peripheral_idx: Option<usize>,
+    edge_addrs: Vec<u64>,
 
     /// Currently **lit** segments, `0b0gfedcba` with dp on bit 7. Polarity has
     /// already been folded in, so this is what a human sees.
@@ -75,8 +84,13 @@ impl SevenSegment {
             seg_odr,
             com_odr_addr,
             com_bit,
-            seg_peripheral_idx: [None; SEGMENTS],
-            com_peripheral_idx: None,
+            edge_addrs: {
+                let mut a: Vec<u64> = seg_odr.iter().map(|(addr, _)| *addr).collect();
+                a.push(com_odr_addr);
+                a.sort_unstable();
+                a.dedup();
+                a
+            },
             lit: 0,
         }
     }
@@ -113,21 +127,6 @@ impl SevenSegment {
     /// True when the decimal-point segment is lit.
     pub fn decimal_point(&self) -> bool {
         self.lit & 0x80 != 0
-    }
-
-    // ─── Cached GPIO peripheral indices (used by the bus write-hook) ───
-
-    pub(crate) fn seg_peripheral_idx(&self, i: usize) -> Option<usize> {
-        self.seg_peripheral_idx[i]
-    }
-    pub(crate) fn set_seg_peripheral_idx(&mut self, i: usize, idx: usize) {
-        self.seg_peripheral_idx[i] = Some(idx);
-    }
-    pub(crate) fn com_peripheral_idx(&self) -> Option<usize> {
-        self.com_peripheral_idx
-    }
-    pub(crate) fn set_com_peripheral_idx(&mut self, idx: usize) {
-        self.com_peripheral_idx = Some(idx);
     }
 }
 
@@ -250,9 +249,75 @@ impl PeripheralKit for SevenSegmentKit {
         })?;
         let id = ctx.device_id().to_string();
         ctx.bus
-            .seven_segment
-            .push(SevenSegment::new(id, seg_odr, com_addr, com_bit));
+            .gpio_devices
+            .push(Box::new(SevenSegment::new(id, seg_odr, com_addr, com_bit)));
         Ok(())
+    }
+}
+
+/// The direct-drive digit on the generic resident-device path. It drives
+/// nothing and remembers nothing: `service` resamples nine bits and recomputes
+/// the mask, which is what "combinational" means here.
+impl crate::bus::BusResidentDevice for SevenSegment {
+    fn service(&mut self, pins: &mut dyn crate::bus::DevicePins, _now: u64) {
+        // ⚠️ `unwrap_or(false)` — the OPPOSITE default to the TM1637's, and
+        // deliberately so: this is not a pulled-up two-wire bus, it is nine
+        // push-pull LED pins, and an ODR that does not read back is a segment
+        // nobody is driving. The deleted `maybe_sample_seven_segment` defaulted
+        // the same way; flipping it would light every segment of an unresolved
+        // digit on a common-anode wiring.
+        let levels: [bool; SEGMENTS] = std::array::from_fn(|s| {
+            pins.output_bit(self.seg_odr[s].0, self.seg_odr[s].1)
+                .unwrap_or(false)
+        });
+        let com = pins
+            .output_bit(self.com_odr_addr, self.com_bit)
+            .unwrap_or(false);
+        self.observe_levels(levels, com);
+    }
+
+    fn as_sim_input(&mut self) -> &mut dyn crate::sim_input::SimInput {
+        self
+    }
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Nine MCU outputs and no state: nothing but a store can change what this
+    /// digit shows, and `edge_service_addrs` already services those stores.
+    fn needs_per_cycle_service(&self) -> bool {
+        false
+    }
+
+    fn edge_service_addrs(&self) -> &[u64] {
+        &self.edge_addrs
+    }
+
+    fn evidence(&self) -> Option<&dyn crate::inspect::DeviceEvidence> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// Nothing to pose — see the TM1637's twin impl.
+impl crate::sim_input::SimInput for SevenSegment {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        &[]
+    }
+    fn set_input(&mut self, key: &str, _value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        Err(crate::sim_input::SimInputError::UnknownChannel(
+            key.to_string(),
+        ))
+    }
+    fn component_id(&self) -> Option<&str> {
+        Some(&self.id)
     }
 }
 
@@ -384,8 +449,8 @@ mod tests {
         );
         // Segments A..DP on bits 0..7, COM on bit 8 — all one port.
         let seg = std::array::from_fn(|i| (ODR, i as u8));
-        bus.seven_segment
-            .push(SevenSegment::new("seg", seg, ODR, 8));
+        bus.gpio_devices
+            .push(Box::new(SevenSegment::new("seg", seg, ODR, 8)));
 
         // Common cathode: hold COM low, drive the '0' pattern high.
         let set = |bus: &mut SystemBus, segs: u8, com: bool| {
@@ -401,16 +466,23 @@ mod tests {
             Bus::write_u32(bus, BSRR, v).unwrap();
         };
 
+        let digit = |bus: &SystemBus| -> (char, u8) {
+            let d = bus
+                .gpio_devices_of::<SevenSegment>()
+                .next()
+                .expect("the digit is on the generic resident-device list");
+            (d.ch(), d.segments())
+        };
+
         set(&mut bus, 0x3F, false);
-        assert_eq!(bus.seven_segment[0].ch(), '0');
-        assert_eq!(bus.seven_segment[0].segments(), 0x3F);
+        assert_eq!(digit(&bus), ('0', 0x3F));
 
         // Changing the pins updates the readback on the next write.
         set(&mut bus, 0x06, false);
-        assert_eq!(bus.seven_segment[0].ch(), '1');
+        assert_eq!(digit(&bus).0, '1');
 
         // Flip to common anode: COM high, pins inverted → same glyph.
         set(&mut bus, !0x06, true);
-        assert_eq!(bus.seven_segment[0].ch(), '1');
+        assert_eq!(digit(&bus).0, '1');
     }
 }

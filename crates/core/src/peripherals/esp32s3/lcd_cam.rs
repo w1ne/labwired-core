@@ -256,7 +256,13 @@ pub struct Esp32s3LcdCam {
     /// 8080 parallel panels this controller drives. Attached by the
     /// `ili9341-16bit` kit when the manifest declares one; empty otherwise
     /// (the register model then behaves exactly as before).
-    panels: Vec<std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>>,
+    ///
+    /// ⚠️ `dyn I80Panel`, NOT a concrete panel type. This field used to be
+    /// `Vec<Arc<Ili9341Parallel>>` — a chip peripheral naming a part, which is
+    /// what kept the parallel panel in Rust: port it to a descriptor and the
+    /// engine has nothing to hold. The controller needs one strobe and knows
+    /// nothing else about what is on the far end.
+    panels: Vec<std::sync::Arc<dyn crate::peripherals::components::I80Panel>>,
 
     /// Bus-published cycle clock (walk-free deferred work).
     clock: Option<CycleClock>,
@@ -302,9 +308,13 @@ impl Esp32s3LcdCam {
 
     /// Attach an 8080 parallel panel for the i80 pixel path. Called by the
     /// `ili9341-16bit` kit at manifest-attach time.
+    ///
+    /// Takes ANY [`I80Panel`](crate::peripherals::components::I80Panel). What
+    /// the kit hands over is a part's business; what this controller does with
+    /// it is strobe it.
     pub fn attach_panel(
         &mut self,
-        panel: std::sync::Arc<crate::peripherals::components::ili9341_parallel::Ili9341Parallel>,
+        panel: std::sync::Arc<dyn crate::peripherals::components::I80Panel>,
     ) {
         self.panels.push(panel);
     }

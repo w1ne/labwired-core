@@ -253,3 +253,247 @@ fn resident_device_port_stays_narrow() {
         }
     }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// The two bit-banged DISPLAYS, on the same port.
+//
+// `SystemBus` used to carry `tm1637: Vec<Tm1637>` and
+// `seven_segment: Vec<SevenSegment>` as typed fields, each driven by a bespoke
+// MMIO write hook (`maybe_clock_tm1637`, `maybe_sample_seven_segment`) that
+// cached GPIO peripheral indices by hand and was called from three places in
+// `bus/accessors.rs`. Both hooks were one part's private copy of
+// `maybe_service_edge_driven_gpio_devices`, and the typed fields were the
+// reason a display could not be a descriptor: the bus had to be edited to add
+// one.
+//
+// Both models are now `BusResidentDevice`s on `gpio_devices`. The tests below
+// are the two halves of that claim — the behaviour reached through the narrow
+// port, and the structural guard that the fields cannot come back.
+// ───────────────────────────────────────────────────────────────────────────
+
+use labwired_core::bus::BusResidentDevice;
+use labwired_core::peripherals::components::seven_segment::{SevenSegment, SEGMENTS};
+use labwired_core::peripherals::components::tm1637_7seg::Tm1637;
+
+const CLK_ADDR: u64 = 0x4800_0014;
+const CLK_BIT: u8 = 8;
+const DIO_BIT: u8 = 9;
+
+/// Bit-bang one TM1637 byte, LSB first, plus the ACK clock — through the PORT,
+/// servicing the model after every pad move exactly as the bus's write hook
+/// does after every MMIO store.
+fn tm1637_byte(dev: &mut Tm1637, pins: &mut FakePins, byte: u8, now: &mut u64) {
+    let mut step = |pins: &mut FakePins, dev: &mut Tm1637, clk: bool, dio: bool| {
+        pins.drive_out(CLK_ADDR, CLK_BIT, clk);
+        pins.drive_out(CLK_ADDR, DIO_BIT, dio);
+        *now += 1;
+        BusResidentDevice::service(dev, pins, *now);
+    };
+    for i in 0..8 {
+        let bit = (byte >> i) & 1 != 0;
+        step(pins, dev, false, bit);
+        step(pins, dev, true, bit);
+    }
+    step(pins, dev, false, true); // ACK clock
+    step(pins, dev, true, true);
+    step(pins, dev, false, true);
+}
+
+/// A real TM1637 decodes a real frame with no `SystemBus` anywhere in the test.
+///
+/// Before this port the model could only be driven through
+/// `SystemBus::maybe_clock_tm1637`, so this test could not have been written:
+/// its existence is the measurement. The protocol is the genuine one — START,
+/// data command, STOP, START, address command, two grid bytes, STOP.
+#[test]
+fn a_tm1637_decodes_a_frame_with_no_bus_in_sight() {
+    let mut pins = FakePins::default();
+    let mut dev = Tm1637::new("seg".to_string(), CLK_ADDR, CLK_BIT, CLK_ADDR, DIO_BIT);
+    let mut now = 0u64;
+
+    let lines = |pins: &mut FakePins, dev: &mut Tm1637, clk: bool, dio: bool, now: &mut u64| {
+        pins.drive_out(CLK_ADDR, CLK_BIT, clk);
+        pins.drive_out(CLK_ADDR, DIO_BIT, dio);
+        *now += 1;
+        BusResidentDevice::service(dev, pins, *now);
+    };
+
+    lines(&mut pins, &mut dev, true, true, &mut now); // idle
+    lines(&mut pins, &mut dev, true, false, &mut now); // START
+    lines(&mut pins, &mut dev, false, false, &mut now);
+    tm1637_byte(&mut dev, &mut pins, 0x40, &mut now); // auto-increment data cmd
+    lines(&mut pins, &mut dev, true, false, &mut now);
+    lines(&mut pins, &mut dev, true, true, &mut now); // STOP
+
+    lines(&mut pins, &mut dev, true, false, &mut now); // START
+    lines(&mut pins, &mut dev, false, false, &mut now);
+    tm1637_byte(&mut dev, &mut pins, 0xC0, &mut now); // address 0
+    tm1637_byte(&mut dev, &mut pins, 0x06, &mut now); // '1'
+    tm1637_byte(&mut dev, &mut pins, 0x5B, &mut now); // '2'
+    lines(&mut pins, &mut dev, true, false, &mut now);
+    lines(&mut pins, &mut dev, true, true, &mut now); // STOP
+
+    lines(&mut pins, &mut dev, true, false, &mut now); // START
+    lines(&mut pins, &mut dev, false, false, &mut now);
+    tm1637_byte(&mut dev, &mut pins, 0x8F, &mut now); // display ON, brightness 7
+    lines(&mut pins, &mut dev, true, false, &mut now);
+    lines(&mut pins, &mut dev, true, true, &mut now); // STOP
+
+    assert_eq!(&dev.text()[..2], "12", "decoded grids: {:?}", dev.text());
+    assert!(dev.display_on());
+    assert_eq!(dev.brightness(), 7);
+
+    // A DISPLAY drives nothing. Both halves of the driving port must stay
+    // untouched — a model that wrote a pad here would be inventing a level the
+    // firmware never sampled.
+    assert!(
+        pins.idr_writes.is_empty() && pins.input_writes.is_empty(),
+        "a TM1637 only observes: {:?} {:?}",
+        pins.idr_writes,
+        pins.input_writes
+    );
+}
+
+/// The direct-drive digit is combinational: nine pads in, one mask out, no
+/// history. Both COM polarities, through the port.
+#[test]
+fn a_seven_segment_digit_reads_nine_pads_with_no_bus_in_sight() {
+    const ODR: u64 = 0x4800_0014;
+    let mut pins = FakePins::default();
+    let seg = std::array::from_fn(|i| (ODR, i as u8));
+    let mut dev = SevenSegment::new("digit", seg, ODR, 8);
+
+    let show = |pins: &mut FakePins, dev: &mut SevenSegment, segs: u8, com: bool| {
+        for i in 0..SEGMENTS {
+            pins.drive_out(ODR, i as u8, (segs >> i) & 1 != 0);
+        }
+        pins.drive_out(ODR, 8, com);
+        BusResidentDevice::service(dev, pins, 0);
+        (dev.ch(), dev.segments())
+    };
+
+    // Common cathode (COM low): a segment lights when its pin is HIGH.
+    assert_eq!(show(&mut pins, &mut dev, 0x3F, false), ('0', 0x3F));
+    assert_eq!(show(&mut pins, &mut dev, 0x06, false), ('1', 0x06));
+    // Common anode (COM high): the same glyph, every pin inverted.
+    assert_eq!(show(&mut pins, &mut dev, !0x06, true), ('1', 0x06));
+
+    assert!(
+        pins.idr_writes.is_empty() && pins.input_writes.is_empty(),
+        "a 7-segment digit only observes"
+    );
+}
+
+/// Each display must name the output registers whose writes service it, and
+/// must say it needs NO per-cycle pass — the two facts that together replace
+/// its deleted private hook and keep its board on the walk-free fast path.
+///
+/// The keypad is the positive control: a scanned device DOES need the tick, and
+/// names no edge address. Without it this test would pass on a build where
+/// every device answered the same way.
+#[test]
+fn the_displays_are_edge_serviced_and_the_keypad_is_not() {
+    let tm = Tm1637::new("seg".to_string(), 0x4800_0014, 8, 0x4800_0414, 9);
+    assert_eq!(
+        tm.edge_service_addrs(),
+        &[0x4800_0014u64, 0x4800_0414],
+        "both ODR addresses, sorted"
+    );
+    assert!(!tm.needs_per_cycle_service());
+
+    // Two pads on ONE port dedupe to one address: the bus consults this on
+    // every MMIO write, so a duplicate would be a cost paid per store.
+    let one_port = Tm1637::new("seg".to_string(), 0x4800_0014, 8, 0x4800_0014, 9);
+    assert_eq!(one_port.edge_service_addrs(), &[0x4800_0014u64]);
+
+    let seg = SevenSegment::new(
+        "digit",
+        std::array::from_fn(|i| (0x4800_0014u64, i as u8)),
+        0x4800_0414,
+        0,
+    );
+    assert_eq!(
+        seg.edge_service_addrs(),
+        &[0x4800_0014u64, 0x4800_0414],
+        "nine pads across two ports dedupe to two addresses"
+    );
+    assert!(!seg.needs_per_cycle_service());
+
+    let pad = wired_keypad();
+    assert!(
+        pad.edge_service_addrs().is_empty(),
+        "a scanned keypad is tick-driven; naming an edge address would service \
+         it twice per store"
+    );
+    assert!(
+        pad.needs_per_cycle_service(),
+        "positive control: a device that IS scanned per tick must say so, or \
+         this test would pass on a build where every device answered `false`"
+    );
+}
+
+/// `SystemBus` must carry NO typed display field, and neither bespoke write
+/// hook may come back.
+///
+/// The type system cannot catch this: adding `pub tm1637: Vec<Tm1637>` back to
+/// the struct and a `self.maybe_clock_tm1637(idx)` line to `accessors.rs`
+/// compiles and passes every behavioural test in the tree — the display would
+/// work, through plumbing that exists for one part. That is exactly how the
+/// field got there the first time, so the guard is a source read.
+#[test]
+fn no_typed_display_field_on_the_bus() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("bus");
+    let mod_rs = std::fs::read_to_string(dir.join("mod.rs")).expect("read bus/mod.rs");
+    let accessors =
+        std::fs::read_to_string(dir.join("accessors.rs")).expect("read bus/accessors.rs");
+    let hooks =
+        std::fs::read_to_string(dir.join("device_hooks.rs")).expect("read bus/device_hooks.rs");
+
+    // Anti-vacuity FIRST: the scan must be reading the real struct. If these
+    // disappear, every assertion below passes by measuring nothing.
+    for present in [
+        "pub gpio_devices: Vec<Box<dyn BusResidentDevice>>",
+        "pub observed: Vec<std::sync::Arc<dyn ObservedDevice>>",
+    ] {
+        assert!(
+            mod_rs.contains(present),
+            "field scan lost `{present}` — it is reading the wrong file, so \
+             this test would pass by finding no fields at all"
+        );
+    }
+    assert!(
+        accessors.contains("maybe_service_edge_driven_gpio_devices"),
+        "accessors.rs no longer calls the GENERIC edge hook — without it the \
+         displays are not serviced at all and this test is measuring nothing"
+    );
+
+    for banned in [
+        "tm1637_7seg::Tm1637",
+        "seven_segment::SevenSegment",
+        "pub tm1637",
+        "pub seven_segment",
+    ] {
+        assert!(
+            !mod_rs.contains(banned),
+            "`{banned}` is back on SystemBus. A display binds on PINS: it is a \
+             `BusResidentDevice` on `gpio_devices` and reports through \
+             `BusResidentDevice::evidence`. A typed field per part is the \
+             plumbing this port removed."
+        );
+    }
+
+    for banned in ["maybe_clock_tm1637", "maybe_sample_seven_segment"] {
+        assert!(
+            !accessors.contains(&format!("self.{banned}")),
+            "`bus/accessors.rs` calls `{banned}` again — that is a bespoke \
+             per-part MMIO write hook, and `maybe_service_edge_driven_gpio_\
+             devices` already does the job for every resident device."
+        );
+        assert!(
+            !hooks.contains(&format!("fn {banned}")),
+            "`{banned}` is defined again in bus/device_hooks.rs"
+        );
+    }
+}

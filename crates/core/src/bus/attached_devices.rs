@@ -142,7 +142,12 @@ impl SystemBus {
             self.emit_resident(f, Resident::gpio(&dev.id, None));
         }
         for dev in &self.gpio_devices {
-            self.emit_resident(f, Resident::gpio(dev.id(), None));
+            // `evidence()` is what lets a bus-resident DISPLAY report at all.
+            // The TM1637 and the direct-drive 7-segment digit used to need a
+            // typed `SystemBus` field and an arm of their own here precisely
+            // because this list could not carry their artifacts; now they are
+            // two more entries in it.
+            self.emit_resident(f, Resident::gpio(dev.id(), dev.evidence()));
         }
         for dev in &self.observed {
             // ONE arm for every model the bus holds and does nothing with —
@@ -155,14 +160,6 @@ impl SystemBus {
                 r = r.instance(model);
             }
             self.emit_resident(f, r);
-        }
-        for dev in &self.tm1637 {
-            // A bus-resident DISPLAY: it reports evidence directly, because it
-            // has no controller trait to hang it on.
-            self.emit_resident(f, Resident::gpio(&dev.id, Some(dev)));
-        }
-        for dev in &self.seven_segment {
-            self.emit_resident(f, Resident::gpio(&dev.id, Some(dev)));
         }
         for dev in &self.analog_inputs {
             // An analog source has no `Any` view, so it is listed but not read:
@@ -252,6 +249,38 @@ impl SystemBus {
             .artifacts
             .into_iter()
             .find(crate::inspect::is_display_artifact)
+    }
+
+    /// Every display artifact on this machine whose `meta.format` is one of
+    /// `formats`, in walk order.
+    ///
+    /// The format-keyed twin of [`Self::display_artifact`], for callers that
+    /// know WHAT they are looking for but not what the author called it — the
+    /// `--display-out` exporter, and the byte-exact i80 tests.
+    ///
+    /// ⚠️ This replaced `bus.observed_of::<Ili9341Parallel>()` at every site
+    /// that asked "what did the panel paint". A concrete-type lookup answers
+    /// `0` for a panel of any other type — including the SAME panel once it
+    /// becomes a descriptor — so a test written that way turns green by
+    /// measuring nothing the day the model is ported. Asking for a FORMAT
+    /// cannot: `rgb565_be` is what the panel says it holds, in its own words,
+    /// and a panel that stopped reporting is a missing artifact rather than a
+    /// silent zero.
+    pub fn display_artifacts_of_format(
+        &self,
+        formats: &[&str],
+        opts: &crate::inspect::InspectOpts,
+    ) -> Vec<crate::inspect::Artifact> {
+        self.join_devices(None, None, opts)
+            .into_iter()
+            .flat_map(|d| d.artifacts)
+            .filter(|a| {
+                a.meta
+                    .get("format")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|f| formats.contains(&f))
+            })
+            .collect()
     }
 
     /// The join behind [`Self::inspect_devices`] and [`Self::display_artifact`].

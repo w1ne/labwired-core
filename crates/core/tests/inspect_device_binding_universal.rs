@@ -221,13 +221,14 @@ fn attached_device_walk_covers_every_bus_collection() {
         // ili9341_parallel / unipolar_steppers) collapsed into ONE list of
         // `dyn ObservedDevice`, walked by ONE arm.
         "observed",
-        "tm1637",
-        // `hx711` was one of these until it became a `configs/devices/*.yaml`
-        // `gpio_device` — its private `Vec` AND its private MMIO write hook are
-        // both gone, replaced by `BusResidentDevice::edge_service_addrs`, so it
-        // is walked as one of `gpio_devices` now. The list shrinking is the
-        // point of that port, not a hole in this scan.
-        "seven_segment",
+        // `hx711`, `tm1637` and `seven_segment` were each one of these until
+        // their private `Vec` AND their private MMIO write hook were replaced
+        // by `BusResidentDevice::edge_service_addrs`. All three are walked as
+        // `gpio_devices` now, and `SystemBus` carries no typed display field at
+        // all. The list shrinking is the point of those ports, not a hole in
+        // this scan — which is why the anti-vacuity guard below still names
+        // seven collections, and why `no_typed_display_field_on_the_bus` in
+        // `bus_resident_device_port.rs` fails if one comes back.
         "analog_inputs",
         "can_diagnostic_testers",
         "can_uds_testers",
