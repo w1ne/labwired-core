@@ -149,7 +149,15 @@ const MAX_MODEL_SITES: usize = 180;
 /// `#![cfg(all(feature = "jit", feature = "event-scheduler"))]`. It is in
 /// `pr-scheduler-observable` (and the core-integrity jit+scheduler backstop),
 /// so the vacuous-target hole is closed; this is the matching harness count.
-const MAX_HARNESS_SITES: usize = 77;
+///
+/// 77 → 78: `e2e_segger_rtt` gains one inner module gated
+/// `#[cfg(all(feature = "jit", feature = "event-scheduler"))]` — the RTT
+/// blocking-overflow test that pins byte-exact output across wide JIT windows.
+/// Same permanent JIT-window fork `cortex_m_jit_nrf_differential` already
+/// carries; the file's plain e2e test stays ungated, so the target is not
+/// vacuous. Registered cross-build-excluded for PR shards (it cross-builds the
+/// fixture), so core-full/nightly is where it runs.
+const MAX_HARNESS_SITES: usize = 78;
 
 // ---------------------------------------------------------------------------
 // The counter. A pure function over source text, so its definition is testable
